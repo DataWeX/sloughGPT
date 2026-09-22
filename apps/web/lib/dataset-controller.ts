@@ -71,6 +71,26 @@ export interface Dataset {
   }
 }
 
+/** Training selects corpora: hide adapter/system/media (untagged = legacy, keep). */
+export function isTrainingCorpus(ds: Pick<Dataset, 'kind'>): boolean {
+  return ds.kind == null || ds.kind === 'dataset'
+}
+
+/** Chip/select label: normalize separators, strip storage-backend suffixes, title-case. */
+export function humanizeDatasetName(name: string): string {
+  const normalized = name
+    .replace(/[_\s]+/g, ' ')
+    .replace(/-/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const base = normalized.replace(/\s+(json|mogdb|db|sqlite|ndjson)$/i, '').trim()
+  if (!base) return name
+  return base
+    .split(' ')
+    .map((w) => (w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+    .join(' ')
+}
+
 export interface GitHubRepo {
   id: string
   name: string

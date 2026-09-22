@@ -21,6 +21,7 @@ import { SectionHeader } from '@sloughgpt/strui'
 import { FoldSection } from '@sloughgpt/strui'
 import { DatasetSelector } from '@/components/training/DatasetSelector'
 import { datasetController } from '@/lib/controllers'
+import { humanizeDatasetName, isTrainingCorpus } from '@/lib/dataset-controller'
 import type { Dataset } from '@/lib/dataset-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
@@ -66,7 +67,14 @@ function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
 
   return (
     <div className="space-y-1.5 max-w-[240px]">
-      <div className="font-medium text-foreground text-[11px]">{dataset.name}</div>
+      <div className="font-medium text-foreground text-[11px]">
+        {humanizeDatasetName(dataset.name)}
+      </div>
+      {dataset.name !== humanizeDatasetName(dataset.name) && (
+        <div className="text-[10px] text-muted-foreground/60 font-mono">
+          {dataset.id || dataset.name}
+        </div>
+      )}
       <div className="flex flex-wrap gap-1">
         {dataset.source && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0">
@@ -97,7 +105,9 @@ function DatasetTooltipContent({ dataset }: { dataset: Dataset }) {
         {hasTags && (
           <>
             <span>Tags</span>
-            <span className="text-right truncate max-w-[120px]">{dataset.tags!.slice(0, 3).join(', ')}</span>
+            <span className="text-right truncate max-w-[120px]">
+              {dataset.tags!.slice(0, 3).join(', ')}
+            </span>
           </>
         )}
       </div>
@@ -131,16 +141,19 @@ function DatasetChip({
         <button
           type="button"
           onClick={() => onSelect(dataset.id)}
+          aria-label={dataset.id || dataset.name}
+          title={dataset.id || dataset.name}
           className={`
             inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px]
             transition-all duration-150
-            ${selected
-              ? 'bg-primary/15 text-primary border border-primary/30'
-              : 'bg-muted/40 text-muted-foreground border border-border/60 hover:bg-muted/70 hover:text-foreground hover:border-border'
+            ${
+              selected
+                ? 'bg-primary/15 text-primary border border-primary/30'
+                : 'bg-muted/40 text-muted-foreground border border-border/60 hover:bg-muted/70 hover:text-foreground hover:border-border'
             }
           `}
         >
-          <span className="truncate max-w-[120px]">{dataset.name}</span>
+          <span className="truncate max-w-[120px]">{humanizeDatasetName(dataset.name)}</span>
           {dataset.samples != null && dataset.samples > 0 && (
             <span className="text-[9px] opacity-60 font-numeric">
               {dataset.samples.toLocaleString()}
@@ -161,50 +174,62 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
   const [importingHF, setImportingHF] = useState<string | null>(null)
   const [search, setSearch] = useState('')
 
+  const corpusDatasets = useMemo(
+    () => datasets.datasets.filter(isTrainingCorpus),
+    [datasets.datasets],
+  )
+
   const filteredDatasets = useMemo(() => {
-    if (!search.trim()) return datasets.datasets
+    if (!search.trim()) return corpusDatasets
     const q = search.toLowerCase()
-    return datasets.datasets.filter(
-      ds =>
+    return corpusDatasets.filter(
+      (ds) =>
         ds.name.toLowerCase().includes(q) ||
+        ds.id.toLowerCase().includes(q) ||
         ds.source?.toLowerCase().includes(q) ||
-        ds.tags?.some(t => t.toLowerCase().includes(q)),
+        ds.tags?.some((t) => t.toLowerCase().includes(q)),
     )
-  }, [datasets.datasets, search])
+  }, [corpusDatasets, search])
 
-  const handleQuickKaggle = useCallback(async (datasetId: string) => {
-    setImportingKaggle(datasetId)
-    try {
-      const result = await datasetController.importFromKaggle({
-        dataset: datasetId,
-        name: datasetId.split('/').pop() || datasetId,
-      })
-      addToast?.(`Imported ${datasetId}`, 'success')
-      await datasets.fetchDatasets()
-      datasets.setSelectedDataset(result.dataset_id)
-    } catch {
-      addToast?.(`Could not import ${datasetId}`, 'error')
-    } finally {
-      setImportingKaggle(null)
-    }
-  }, [addToast, datasets])
+  const handleQuickKaggle = useCallback(
+    async (datasetId: string) => {
+      setImportingKaggle(datasetId)
+      try {
+        const result = await datasetController.importFromKaggle({
+          dataset: datasetId,
+          name: datasetId.split('/').pop() || datasetId,
+        })
+        addToast?.(`Imported ${datasetId}`, 'success')
+        await datasets.fetchDatasets()
+        datasets.setSelectedDataset(result.dataset_id)
+      } catch {
+        addToast?.(`Could not import ${datasetId}`, 'error')
+      } finally {
+        setImportingKaggle(null)
+      }
+    },
+    [addToast, datasets],
+  )
 
-  const handleQuickHF = useCallback(async (datasetId: string) => {
-    setImportingHF(datasetId)
-    try {
-      const result = await datasetController.importFromHuggingFace({
-        dataset_id: datasetId,
-        name: datasetId.split('/').pop() || datasetId,
-      })
-      addToast?.(`Imported ${datasetId}`, 'success')
-      await datasets.fetchDatasets()
-      datasets.setSelectedDataset(result.dataset_id)
-    } catch {
-      addToast?.(`Could not import ${datasetId}`, 'error')
-    } finally {
-      setImportingHF(null)
-    }
-  }, [addToast, datasets])
+  const handleQuickHF = useCallback(
+    async (datasetId: string) => {
+      setImportingHF(datasetId)
+      try {
+        const result = await datasetController.importFromHuggingFace({
+          dataset_id: datasetId,
+          name: datasetId.split('/').pop() || datasetId,
+        })
+        addToast?.(`Imported ${datasetId}`, 'success')
+        await datasets.fetchDatasets()
+        datasets.setSelectedDataset(result.dataset_id)
+      } catch {
+        addToast?.(`Could not import ${datasetId}`, 'error')
+      } finally {
+        setImportingHF(null)
+      }
+    },
+    [addToast, datasets],
+  )
 
   return (
     <Card>
@@ -213,7 +238,8 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-[10px] text-muted-foreground/60">
-          Choose a dataset or paste text to train on. Conversation-format data (JSONL) trains better than plain text.
+          Choose a dataset or paste text to train on. Conversation-format data (JSONL) trains better
+          than plain text.
         </p>
 
         <DatasetSelector
@@ -227,7 +253,11 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
           <div className="space-y-3">
             <SectionHeader
               title="Your Datasets"
-              description={`${datasets.datasets.length} dataset${datasets.datasets.length !== 1 ? 's' : ''} available`}
+              description={
+                corpusDatasets.length > 0
+                  ? `${corpusDatasets.length} dataset${corpusDatasets.length !== 1 ? 's' : ''} available`
+                  : 'System stores hidden — no training corpora yet'
+              }
               action={
                 <SearchInput
                   value={search}
@@ -243,9 +273,13 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
               <div className="text-xs text-muted-foreground py-2">
                 No datasets match &ldquo;{search}&rdquo;
               </div>
+            ) : filteredDatasets.length === 0 ? (
+              <div className="text-xs text-muted-foreground py-2">
+                Only system stores found — import a corpus to train.
+              </div>
             ) : (
               <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto overscroll-contain pr-1">
-                {filteredDatasets.map(ds => (
+                {filteredDatasets.map((ds) => (
                   <DatasetChip
                     key={ds.id}
                     dataset={ds}
@@ -275,7 +309,9 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
           <FoldSection
             heading={
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground uppercase tracking-wider">Quick Import</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                  Quick Import
+                </span>
                 <Badge variant="outline" className="text-[10px] px-1.5 py-0">
                   Kaggle &middot; HuggingFace
                 </Badge>
@@ -284,9 +320,11 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
           >
             <div className="space-y-4">
               <div className="space-y-2">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Kaggle</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  Kaggle
+                </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {POPULAR_KAGGLE.map(ds => (
+                  {POPULAR_KAGGLE.map((ds) => (
                     <Tooltip key={ds.id} delayDuration={200}>
                       <TooltipTrigger asChild>
                         <Button
@@ -313,9 +351,11 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
               </div>
 
               <div className="space-y-2">
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">HuggingFace</div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                  HuggingFace
+                </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {POPULAR_HF.map(ds => (
+                  {POPULAR_HF.map((ds) => (
                     <Tooltip key={ds.id} delayDuration={200}>
                       <TooltipTrigger asChild>
                         <Button
@@ -325,9 +365,7 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
                           disabled={importingHF === ds.id}
                           onClick={() => handleQuickHF(ds.id)}
                         >
-                          {importingHF === ds.id ? (
-                            <Spinner className="h-2.5 w-2.5 mr-1" />
-                          ) : null}
+                          {importingHF === ds.id ? <Spinner className="h-2.5 w-2.5 mr-1" /> : null}
                           {importingHF === ds.id ? 'Importing...' : ds.label}
                         </Button>
                       </TooltipTrigger>
@@ -350,24 +388,34 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mb-1.5">
               <div>
                 <span className="text-muted-foreground/60">Samples: </span>
-                <span className="font-numeric tabular-nums">{(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}</span>
+                <span className="font-numeric tabular-nums">
+                  {(datasets.datasetPreview.total_samples ?? 0).toLocaleString()}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground/60">Characters: </span>
-                <span className="font-numeric tabular-nums">{(datasets.datasetPreview.total_chars ?? 0).toLocaleString()}</span>
+                <span className="font-numeric tabular-nums">
+                  {(datasets.datasetPreview.total_chars ?? 0).toLocaleString()}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground/60">Avg: </span>
                 <span className="font-numeric tabular-nums">
                   {(datasets.datasetPreview.total_samples ?? 0) > 0
-                    ? Math.round((datasets.datasetPreview.total_chars ?? 0) / (datasets.datasetPreview.total_samples ?? 1)).toLocaleString()
-                    : 0} chars
+                    ? Math.round(
+                        (datasets.datasetPreview.total_chars ?? 0) /
+                          (datasets.datasetPreview.total_samples ?? 1),
+                      ).toLocaleString()
+                    : 0}{' '}
+                  chars
                 </span>
               </div>
             </div>
             <div className="space-y-0.5 font-numeric text-muted-foreground/60 border-t border-border/30 pt-1.5">
               {datasets.datasetPreview.samples.slice(0, 3).map((sample, i) => (
-                <div key={i} className="truncate">{sample.content}</div>
+                <div key={i} className="truncate">
+                  {sample.content}
+                </div>
               ))}
             </div>
           </div>
@@ -378,7 +426,9 @@ export function DataStep({ form, datasets, onNext, addToast }: StepProps) {
             Next: Configure
           </Button>
           {!datasets.selectedDataset && (
-            <span className="text-[10px] text-muted-foreground/60">Select a dataset or switch to paste text in the next step</span>
+            <span className="text-[10px] text-muted-foreground/60">
+              Select a dataset or switch to paste text in the next step
+            </span>
           )}
         </div>
       </CardContent>

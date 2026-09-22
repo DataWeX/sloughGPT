@@ -3,6 +3,7 @@
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { DatasetImportDialog } from '@/components/DatasetImportDialog'
+import { isTrainingCorpus } from '@/lib/dataset-controller'
 import type { Dataset } from '@/lib/dataset-controller'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
 
@@ -41,9 +42,7 @@ export function DatasetSelector({
 }) {
   // Training selects corpora: hide adapter/system/media entries tagged by the
   // just-cache classifier. Untagged entries (older backends/mocks) still show.
-  const visible = showAllKinds
-    ? datasets.datasets
-    : datasets.datasets.filter((ds) => ds.kind == null || ds.kind === 'dataset')
+  const visible = showAllKinds ? datasets.datasets : datasets.datasets.filter(isTrainingCorpus)
   return (
     <div className="flex items-center gap-1.5">
       {visible.length === 0 ? (
