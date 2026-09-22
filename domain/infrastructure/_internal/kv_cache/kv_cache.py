@@ -1,6 +1,6 @@
 """Unified session + paged KV cache.
 
-``KVCacheBase`` owns exactly two concerns:
+``KVCache`` owns exactly two concerns:
 
   1. Paged mode — block-sliced K/V storage for incremental decoding
   2. Session mode — cross-turn prefix caching with LRU eviction + TTL
@@ -19,10 +19,10 @@ from typing import Any
 
 import numpy as np
 
-# ── KVCacheBase (session + paged) ───────────────────────────────────────────
+# ── KVCache (session + paged) ─────────────────────────────────────────────────
 
 
-class KVCacheBase:
+class KVCache:
     """Per-layer key-value cache — session + paged only.
 
     Two modes, shared storage:
@@ -102,7 +102,7 @@ class KVCacheBase:
         """
         if not self._paged:
             raise ValueError(
-                "KVCacheBase is session+paged only; concat access lives in "
+                "KVCache is session+paged only; concat access lives in "
                 "NativeKVCache (C backend with numpy fallback)"
             )
         self._write_block(layer_idx, k, v)

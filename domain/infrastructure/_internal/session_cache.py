@@ -1,6 +1,6 @@
 """Thread-safe per-session KV cache for incremental cross-turn decoding.
 
-Thin facade over the unified ``KVCacheBase`` session mode — all storage,
+Thin facade over the unified ``KVCache`` session mode — all storage,
 LRU eviction and TTL logic lives once in ``domain.infrastructure._internal.kv_cache``.
 """
 
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from domain.infrastructure._internal.kv_cache.base import KVCacheBase
+from domain.infrastructure._internal.kv_cache.kv_cache import KVCache
 
 
 class SessionKVCache:
@@ -18,13 +18,13 @@ class SessionKVCache:
     messages can skip re-encoding the shared prompt prefix.
 
     Cache entries expire after ``ttl`` seconds and at most ``max_sessions``
-    entries are kept (LRU eviction). Backed by ``KVCacheBase``.
+    entries are kept (LRU eviction). Backed by ``KVCache``.
     """
 
     def __init__(self, max_sessions: int = 20, ttl: float = 600.0):
         self._max_sessions = max_sessions
         self._ttl = ttl
-        self._kv = KVCacheBase(n_layers=1, max_sessions=max_sessions, ttl=ttl)
+        self._kv = KVCache(n_layers=1, max_sessions=max_sessions, ttl=ttl)
 
     def get(self, session_id: str, current_ids: list[int]):
         """Return the cached ``past_key_values`` if ``current_ids`` shares a

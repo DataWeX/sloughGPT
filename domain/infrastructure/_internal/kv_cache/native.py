@@ -12,7 +12,7 @@ decoding. Two backends, one API:
 
 When the C library is absent or unloadable (it ships as a macOS dylib next
 to ``domain.inference._internal.native.bindings``), the numpy backend serves
-the same API. Concatenated access lives here — ``KVCacheBase`` is session +
+the same API. Concatenated access lives here — ``KVCache`` is session +
 paged only.
 """
 
