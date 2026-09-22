@@ -1,80 +1,39 @@
-"""KV cache base — C-backed with paged + session support."""
+"""Unified session + paged KV cache.
+
+``KVCacheBase`` owns exactly two concerns:
+
+  1. Paged mode — block-sliced K/V storage for incremental decoding
+  2. Session mode — cross-turn prefix caching with LRU eviction + TTL
+
+The concatenating path and the C backend live in :mod:`native`
+(NativeKVCache — ctypes with a numpy fallback). This class deliberately
+has no ``get()``: growing one array with ``np.concatenate`` every step is
+O(n^2), so forward passes consume blocks via ``get_blocks()``.
+"""
 
 from __future__ import annotations
 
-import ctypes
-import logging
-import os
 import time
-from pathlib import Path
 from threading import Lock
 from typing import Any
 
 import numpy as np
 
-logger = logging.getLogger("slo.kv_cache")
-
-# ── C library loading ───────────────────────────────────────────────────────
-
-_C_LIB = None
-_HAS_C = False
-
-
-def _load_c_lib():
-    global _C_LIB, _HAS_C
-    if _C_LIB is not None:
-        return _C_LIB
-
-    candidates = [
-        Path(__file__).parent.parent.parent.parent
-        / "inference"
-        / "_internal"
-        / "native"
-        / "libtransformer_forward.dylib",
-        Path(__file__).parent.parent.parent.parent
-        / "inference"
-        / "_internal"
-        / "native"
-        / "libtransformer_forward.so",
-    ]
-    env_path = os.environ.get("MAN_TRANSFORMER_LIB", "")
-    if env_path:
-        candidates.append(Path(env_path))
-
-    for p in candidates:
-        if p.exists():
-            try:
-                _C_LIB = ctypes.CDLL(str(p))
-                _HAS_C = True
-                logger.info("Loaded C KV cache backend: %s", p, extra={"tag": "KV"})
-                return _C_LIB
-            except OSError:
-                continue
-
-    _HAS_C = False
-    logger.info("C KV cache unavailable, using numpy fallback", extra={"tag": "KV"})
-    return None
-
-
-# ── KVCacheBase ─────────────────────────────────────────────────────────────
+# ── KVCacheBase (session + paged) ───────────────────────────────────────────
 
 
 class KVCacheBase:
-    """Per-layer key-value cache with C backend.
+    """Per-layer key-value cache — session + paged only.
 
-    Supports three modes:
-      1. Concat mode: update() + get() — returns concatenated K/V
-      2. Paged mode: update() + get_blocks() — returns block refs, no alloc
-      3. Session mode: cross-turn prefix caching with LRU eviction
+    Two modes, shared storage:
+      1. Paged mode: update() + get_blocks() — block refs, no concat
+      2. Session mode: cross-turn prefix caching with LRU eviction + TTL
 
-    All modes share the same storage. Switch via API call.
+    For concatenated K/V access use ``NativeKVCache`` (C + numpy).
     """
 
     __slots__ = (
         "_n_layers",
-        "_k",
-        "_v",
-        "_use_c",
         "_paged",
         "_block_size",
         "_k_blocks",
@@ -97,9 +56,6 @@ class KVCacheBase:
         ttl: float = 600.0,
     ):
         self._n_layers = n_layers
-        self._k: list[np.ndarray | None] = [None] * n_layers
-        self._v: list[np.ndarray | None] = [None] * n_layers
-        self._use_c = _HAS_C or (_load_c_lib() is not None)
 
         # Paged state (active when n_heads > 0)
         self._paged = n_heads > 0
@@ -124,9 +80,9 @@ class KVCacheBase:
 
     @property
     def seq_len(self) -> int:
-        if self._k[0] is None:
+        if not self._paged:
             return 0
-        return self._k[0].shape[1]
+        return self._paged_len
 
     @property
     def block_size(self) -> int:
@@ -136,37 +92,26 @@ class KVCacheBase:
     def is_paged(self) -> bool:
         return self._paged
 
-    # ── Core: update / get / reset ───────────────────────────────────────
+    # ── Paged: update / reset ─────────────────────────────────────────────
 
-    def update(self, layer_idx: int, k: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Append new K, V to cache, return full (K, V)."""
-        k_prev = self._k[layer_idx]
-        if k_prev is None:
-            self._k[layer_idx] = k
-            self._v[layer_idx] = v
-        else:
-            self._k[layer_idx] = np.concatenate([k_prev, k], axis=1)
-            self._v[layer_idx] = np.concatenate([self._v[layer_idx], v], axis=1)
+    def update(self, layer_idx: int, k: np.ndarray, v: np.ndarray) -> None:
+        """Append new K, V to the block list. No concat — no return value.
 
-        if self._paged:
-            self._write_block(layer_idx, k, v)
-
-        return self._k[layer_idx], self._v[layer_idx]
-
-    def get(self, layer_idx: int) -> tuple[np.ndarray, np.ndarray] | None:
-        """Return concatenated (K, V) for layer_idx, or None."""
-        if self._k[layer_idx] is None:
-            return None
-        return self._k[layer_idx], self._v[layer_idx]
+        Requires paged mode (n_heads > 0). Concatenated access is provided
+        by NativeKVCache.
+        """
+        if not self._paged:
+            raise ValueError(
+                "KVCacheBase is session+paged only; concat access lives in "
+                "NativeKVCache (C backend with numpy fallback)"
+            )
+        self._write_block(layer_idx, k, v)
 
     def reset(self) -> None:
-        """Clear all cached data."""
-        self._k = [None] * self._n_layers
-        self._v = [None] * self._n_layers
-        if self._paged:
-            self._k_blocks = [[] for _ in range(self._n_layers)]
-            self._v_blocks = [[] for _ in range(self._n_layers)]
-            self._paged_len = 0
+        """Clear all paged blocks."""
+        self._k_blocks = [[] for _ in range(self._n_layers)]
+        self._v_blocks = [[] for _ in range(self._n_layers)]
+        self._paged_len = 0
 
     # ── Paged: write_block / get_blocks ──────────────────────────────────
 
@@ -207,13 +152,10 @@ class KVCacheBase:
         """Return (k_blocks, v_blocks, n_valid_tokens) — no concat.
 
         Blocks are raw tensor refs from model forward, stored directly.
+        Requires paged mode.
         """
         if not self._paged:
-            k, v = self.get(layer_idx)
-            if k is None:
-                return [], [], 0
-            return [k], [v], k.shape[1]
-
+            return [], [], 0
         return self._k_blocks[layer_idx], self._v_blocks[layer_idx], self._paged_len
 
     # ── Session: prefix caching with LRU ─────────────────────────────────

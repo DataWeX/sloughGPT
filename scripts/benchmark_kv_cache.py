@@ -8,31 +8,6 @@ from domain.infrastructure._internal.kv_cache.base import KVCacheBase
 from domain.infrastructure._internal.session_cache import SessionKVCache
 
 
-def bench_numpy_kv_cache(
-    n_layers=12, n_heads=12, head_dim=64, seq_lens=(1, 64, 256, 1024), n_iters=1000
-):
-    """Benchmark KVCacheBase concat mode."""
-    results = {}
-    for seq_len in seq_lens:
-        cache = KVCacheBase(n_layers)
-        k = np.random.randn(1, seq_len, n_heads, head_dim).astype(np.float32)
-        v = np.random.randn(1, seq_len, n_heads, head_dim).astype(np.float32)
-
-        start = time.perf_counter()
-        for _ in range(n_iters):
-            for layer_idx in range(n_layers):
-                cache.update(layer_idx, k, v)
-            cache.reset()
-        elapsed = time.perf_counter() - start
-        ops = n_iters * n_layers
-        results[seq_len] = {
-            "total_s": round(elapsed, 4),
-            "ops_per_sec": round(ops / elapsed, 1),
-            "us_per_op": round(elapsed / ops * 1e6, 2),
-        }
-    return results
-
-
 def bench_session_cache(n_sessions=100, prefix_len=100, new_tokens=10, n_iters=500):
     """Benchmark legacy SessionKVCache."""
     cache = SessionKVCache(max_sessions=n_sessions, ttl=3600.0)
@@ -162,14 +137,9 @@ if __name__ == "__main__":
     r2 = bench_base_session()
     print(f"  {r2['us_per_op']:.2f} us/op  ({r2['ops_per_sec']:.1f} ops/s)")
 
-    print("\n--- Inline Concat (slonet raw tuples) ---")
+    print("\n--- Inline Concat (numpy path reference) ---")
     r3 = bench_inline_concat()
     for sl, m in r3.items():
-        print(f"  seq_len={sl:>5}: {m['us_per_op']:>8.2f} us/op  ({m['ops_per_sec']:>10.1f} ops/s)")
-
-    print("\n--- KVCacheBase concat mode ---")
-    r4 = bench_numpy_kv_cache()
-    for sl, m in r4.items():
         print(f"  seq_len={sl:>5}: {m['us_per_op']:>8.2f} us/op  ({m['ops_per_sec']:>10.1f} ops/s)")
 
     print("\n--- KVCacheBase paged mode (get_blocks, no alloc) ---")
@@ -177,5 +147,5 @@ if __name__ == "__main__":
     print(f"  {r5['us_per_op']:.2f} us/op  ({r5['ops_per_sec']:.1f} ops/s)")
 
     print("\n" + "=" * 70)
-    print("All modes in one class. Remove paged.py, session.py.")
+    print("base = session + paged. native = C + numpy (concat).")
     print("=" * 70)

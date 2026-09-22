@@ -1,8 +1,8 @@
-"""Direct contract tests for the unified KVCacheBase (canonical KV cache).
+"""Direct contract tests for the unified KVCacheBase (session + paged).
 
-Everything session-related funnels through KVCacheBase now (SessionKVCache
-facade + model_server + benchmark), so the canonical class needs its own
-lock on concat, paged and session modes.
+Session caching funnels through KVCacheBase now (SessionKVCache facade,
+SessionKVManager, model_server), and paged block access is the forward
+path. Concat is deliberately absent here — that lives in NativeKVCache.
 """
 
 from __future__ import annotations
@@ -19,64 +19,6 @@ def _kv(seq_len: int, n_heads: int = 8, head_dim: int = 16, batch: int = 1) -> n
     return np.random.randn(batch, seq_len, n_heads, head_dim).astype(np.float32)
 
 
-# ── Concat mode ──────────────────────────────────────────────────────────────
-
-
-class TestConcatMode:
-    def test_init(self):
-        cache = KVCacheBase(4)
-        assert cache.n_layers == 4
-        assert cache.seq_len == 0
-        assert cache.is_paged is False
-        assert cache.block_size == 64
-
-    def test_get_empty_is_none(self):
-        cache = KVCacheBase(2)
-        assert cache.get(0) is None
-
-    def test_update_copies_first_tensor(self):
-        cache = KVCacheBase(1)
-        k, v = _kv(3), _kv(3)
-        k_out, v_out = cache.update(0, k, v)
-        assert k_out is k
-        assert v_out is v
-        assert cache.seq_len == 3
-
-    def test_update_concatenates_along_seq(self):
-        cache = KVCacheBase(1)
-        cache.update(0, _kv(3), _kv(3))
-        k2, v2 = _kv(2), _kv(2)
-        k_out, v_out = cache.update(0, k2, v2)
-        assert k_out.shape[1] == 5
-        assert v_out.shape[1] == 5
-        np.testing.assert_array_equal(k_out[:, 3:5], k2)
-
-    def test_get_returns_concatenated(self):
-        cache = KVCacheBase(2)
-        cache.update(0, _kv(2), _kv(2))
-        k, v = cache.get(0)
-        assert k.shape[1] == 2
-        assert cache.get(1) is None
-
-    def test_reset_clears(self):
-        cache = KVCacheBase(1)
-        cache.update(0, _kv(4), _kv(4))
-        assert cache.seq_len == 4
-        cache.reset()
-        assert cache.seq_len == 0
-        assert cache.get(0) is None
-
-    def test_layers_independent(self):
-        cache = KVCacheBase(3)
-        cache.update(0, _kv(5), _kv(5))
-        assert cache.seq_len == 5
-        k1, _ = cache.update(1, _kv(2), _kv(2))
-        assert k1.shape[1] == 2
-        # seq_len reflects layer 0 only
-        assert cache.seq_len == 5
-        assert cache.get(2) is None
-
-
 # ── Paged mode ───────────────────────────────────────────────────────────────
 
 
@@ -85,6 +27,12 @@ class TestPagedMode:
         cache = KVCacheBase(2, n_heads=8, head_dim=16, block_size=4)
         assert cache.is_paged is True
         assert cache.block_size == 4
+
+    def test_update_requires_paged(self):
+        cache = KVCacheBase(1)
+        assert cache.is_paged is False
+        with pytest.raises(ValueError):
+            cache.update(0, _kv(2, n_heads=0), _kv(2, n_heads=0))
 
     def test_get_blocks_after_single_update(self):
         cache = KVCacheBase(1, n_heads=8, head_dim=16, block_size=4)
@@ -101,13 +49,19 @@ class TestPagedMode:
         assert n_valid == 9
         assert [b.shape[1] for b in k_blocks] == [4, 4, 1]
 
-    def test_get_blocks_non_paged_falls_back_to_concat(self):
+    def test_non_paged_returns_empty_blocks(self):
         cache = KVCacheBase(1)
-        cache.update(0, _kv(2), _kv(2))
         k_blocks, v_blocks, n_valid = cache.get_blocks(0)
-        assert n_valid == 2
-        assert len(k_blocks) == 1
-        assert k_blocks[0].shape[1] == 2
+        assert k_blocks == []
+        assert v_blocks == []
+        assert n_valid == 0
+
+    def test_seq_len_tracks_paged_len(self):
+        cache = KVCacheBase(1, n_heads=8, head_dim=16, block_size=4)
+        assert cache.seq_len == 0
+        cache.update(0, _kv(3), _kv(3))
+        cache.update(0, _kv(2), _kv(2))
+        assert cache.seq_len == 5
 
     def test_paged_reset_clears_blocks(self):
         cache = KVCacheBase(1, n_heads=8, head_dim=16, block_size=4)
