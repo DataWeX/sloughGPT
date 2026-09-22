@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { Skeleton, cn, Tabs, TabsList, TabsTrigger, TabsContent } from '@sloughgpt/strui'
+import { Skeleton, cn, Tabs, TabsList, TabsTrigger, TabsContent, StatusDot } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { TerminalPanel } from '@/components/shell/TerminalPanel'
 import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
@@ -71,7 +71,7 @@ export default function DeveloperPage() {
         <div className="flex items-center gap-3">
           {startupStage && startupStage !== 'ready' && startupStage !== 'background' && (
             <div className="flex items-center gap-2 rounded-lg border border-warning/20 bg-warning/[0.06] px-3 py-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+              <StatusDot tone="warning" pulse />
               <span className="text-[10px] font-medium text-warning uppercase tracking-wider">
                 {startupStage} {startupElapsed > 0 && `· ${startupElapsed.toFixed(0)}s`}
               </span>
@@ -79,7 +79,7 @@ export default function DeveloperPage() {
           )}
           {startupStage === 'ready' && (
             <div className="flex items-center gap-2 rounded-lg border border-success/20 bg-success/[0.06] px-3 py-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-success" />
+              <StatusDot tone="success" />
               <span className="text-[10px] font-medium text-success uppercase tracking-wider">
                 Ready
               </span>
@@ -314,12 +314,7 @@ function VoiceTab() {
           ) : status ? (
             <div className="space-y-2.5">
               <div className="flex items-center gap-2.5">
-                <span
-                  className={cn(
-                    'w-2 h-2 rounded-full',
-                    status.server_tts ? 'bg-success' : 'bg-destructive',
-                  )}
-                />
+                <StatusDot tone={status.server_tts ? 'success' : 'destructive'} />
                 <span className="text-[12px] text-muted-foreground">
                   {status.server_tts ? 'TTS Available' : 'TTS Unavailable'}
                 </span>
@@ -732,7 +727,7 @@ function QuickActionsTab() {
               <span className="text-sm font-medium text-border">{action.label}</span>
               {running === action.label && (
                 <span className="ml-auto flex items-center gap-1.5 text-[10px] text-warning">
-                  <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+                  <StatusDot tone="warning" pulse />
                   running
                 </span>
               )}
@@ -890,12 +885,7 @@ function StartupTab() {
                   : 'border-warning/20 bg-warning/[0.06]',
               )}
             >
-              <span
-                className={cn(
-                  'w-2 h-2 rounded-full shrink-0',
-                  alert.severity === 'error' ? 'bg-destructive' : 'bg-warning',
-                )}
-              />
+              <StatusDot tone={alert.severity === 'error' ? 'destructive' : 'warning'} />
               <div className="flex-1 min-w-0">
                 <span
                   className={cn(
@@ -922,15 +912,14 @@ function StartupTab() {
           <div className="divide-y divide-white/[0.04]">
             {suggestions.map((suggestion, i) => (
               <div key={`${suggestion.type}-${i}`} className="px-4 py-3 flex items-start gap-3">
-                <span
-                  className={cn(
-                    'w-2 h-2 rounded-full shrink-0 mt-1',
+                <StatusDot
+                  tone={
                     suggestion.severity === 'error'
-                      ? 'bg-destructive'
+                      ? 'destructive'
                       : suggestion.severity === 'warning'
-                        ? 'bg-warning'
-                        : 'bg-info',
-                  )}
+                        ? 'warning'
+                        : 'primary'
+                  }
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -1107,15 +1096,15 @@ function StartupTab() {
             {Object.entries(stages).map(([stage, data]) => (
               <div key={stage} className="px-4 py-3 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      'w-2 h-2 rounded-full',
+                  <StatusDot
+                    tone={
                       stage === startupStage
-                        ? 'bg-info animate-pulse'
+                        ? 'primary'
                         : data.time !== null
-                          ? 'bg-success'
-                          : 'bg-muted/20',
-                    )}
+                          ? 'success'
+                          : 'muted'
+                    }
+                    pulse={stage === startupStage}
                   />
                   <span className="text-[12px] font-medium text-muted-foreground capitalize">{stage}</span>
                   <span className="text-[10px] text-muted-foreground/60 font-mono">
@@ -1142,12 +1131,7 @@ function StartupTab() {
               {Object.entries(stageStats).map(([stage, data]) => (
                 <div key={stage} className="rounded-lg border border-white/[0.04] bg-muted/20 p-3">
                   <div className="flex items-center gap-2 mb-2">
-                    <div
-                      className={cn(
-                        'w-2 h-2 rounded-full',
-                        stage === startupStage ? 'bg-info' : 'bg-success',
-                      )}
-                    />
+                    <StatusDot tone={stage === startupStage ? 'primary' : 'success'} />
                     <span className="text-[11px] font-medium text-muted-foreground capitalize">
                       {stage}
                     </span>
@@ -1190,11 +1174,14 @@ function StartupTab() {
             {Object.values(hooks).map((hook) => (
               <div key={hook.name} className="px-4 py-2.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      'w-1.5 h-1.5 rounded-full',
-                      HOOK_STATUS_COLORS[hook.status] ?? 'text-muted-foreground/60',
-                    )}
+                  <StatusDot
+                    tone={
+                      hook.status === 'ok' ? 'success'
+                      : hook.status === 'running' ? 'warning'
+                      : hook.status === 'error' || hook.status === 'timeout' ? 'destructive'
+                      : 'muted'
+                    }
+                    pulse={hook.status === 'running'}
                   />
                   <span className="text-[11px] font-mono text-muted-foreground">{hook.name}</span>
                   <span className="text-[9px] text-muted-foreground/60 uppercase">{hook.stage}</span>
