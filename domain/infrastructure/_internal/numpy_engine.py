@@ -35,6 +35,7 @@ import numpy as np
 
 from .arch_config import build_arch
 from .compression import CompressedWeight, LRUCache
+from .kv_cache.native import NativeKVState
 from .numpy_forward import forward_cached
 from .numpy_ops import softmax
 
@@ -91,54 +92,17 @@ def _load_weights(model_id: str) -> tuple[dict, dict]:
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-class KVCache:
+class KVCache(NativeKVState):
     """Per-layer key-value cache for incremental decoding.
 
-    Stores K and V tensors from previous tokens so we only need to process
-    the new token on each step (instead of recomputing the full sequence).
+    A thin delegate onto ``NativeKVState``'s numpy backend: ``numpy_engine``
+    feeds 3D ``(n_heads, seq_len, head_dim)`` tensors, which never match the
+    C buffer layout gate, so the numpy concat path serves the same
+    ``update``/``get``/``reset``/``seq_len`` API. No own implementation.
     """
 
     def __init__(self, n_layers: int):
-        self.n_layers = n_layers
-        self._k: list[np.ndarray | None] = [None] * n_layers
-        self._v: list[np.ndarray | None] = [None] * n_layers
-
-    def update(self, layer_idx: int, k: np.ndarray, v: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Update cache for a layer and return concatenated K, V.
-
-        Args:
-            layer_idx: Layer index to update.
-            k: New key tensor (n_heads, seq_len, head_dim).
-            v: New value tensor (n_heads, seq_len, head_dim).
-
-        Returns:
-            (k_cat, v_cat) — concatenated cached + new K, V.
-        """
-        if self._k[layer_idx] is None:
-            self._k[layer_idx] = k
-            self._v[layer_idx] = v
-        else:
-            self._k[layer_idx] = np.concatenate([self._k[layer_idx], k], axis=1)
-            self._v[layer_idx] = np.concatenate([self._v[layer_idx], v], axis=1)
-        return self._k[layer_idx], self._v[layer_idx]
-
-    def get(self, layer_idx: int) -> tuple[np.ndarray, np.ndarray] | None:
-        """Get cached K, V for a layer."""
-        if self._k[layer_idx] is None:
-            return None
-        return self._k[layer_idx], self._v[layer_idx]
-
-    def reset(self):
-        """Clear all cached K, V."""
-        self._k = [None] * self.n_layers
-        self._v = [None] * self.n_layers
-
-    @property
-    def seq_len(self) -> int:
-        """Current cached sequence length."""
-        if self._k[0] is None:
-            return 0
-        return self._k[0].shape[1]
+        super().__init__(n_layers, n_kv_heads=0, head_dim=0)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

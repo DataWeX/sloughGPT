@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from domain.infrastructure._internal.kv_cache import NativeKVState
-from domain.infrastructure._internal.kv_cache.native import _NumpyState
+from domain.infrastructure._internal.kv_cache.native import _NumpyBackend
 
 
 def _kv(seq_len: int, n_kv_heads: int = 4, head_dim: int = 8) -> np.ndarray:
@@ -29,18 +29,18 @@ def native_cache() -> NativeKVState:
 
 class TestNumpyBackend:
     def test_init_empty(self):
-        cache = _NumpyState(2)
+        cache = _NumpyBackend(2)
         assert cache.seq_len == 0
         assert cache.get(0) is None
 
     def test_update_returns_full_tensor(self):
-        cache = _NumpyState(1)
+        cache = _NumpyBackend(1)
         k, v = cache.update(0, _kv(3), _kv(3))
         assert k.shape == (1, 3, 4, 8)
         assert v.shape == (1, 3, 4, 8)
 
     def test_update_concatenates_along_seq(self):
-        cache = _NumpyState(1)
+        cache = _NumpyBackend(1)
         cache.update(0, _kv(2), _kv(2))
         k, v = cache.update(0, _kv(4), _kv(4))
         assert k.shape == (1, 6, 4, 8)
@@ -48,17 +48,17 @@ class TestNumpyBackend:
         assert np.allclose(k[:, :2], cache.get(0)[0][:, :2])
 
     def test_layers_independent(self):
-        cache = _NumpyState(2)
+        cache = _NumpyBackend(2)
         cache.update(0, _kv(3), _kv(3))
         assert cache.get(0) is not None
         assert cache.get(1) is None
 
     def test_get_returns_none_before_first_update(self):
-        cache = _NumpyState(1)
+        cache = _NumpyBackend(1)
         assert cache.get(0) is None
 
     def test_reset_clears(self):
-        cache = _NumpyState(1)
+        cache = _NumpyBackend(1)
         cache.update(0, _kv(3), _kv(3))
         cache.reset()
         assert cache.seq_len == 0

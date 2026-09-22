@@ -22,7 +22,7 @@ import ctypes
 import numpy as np
 
 
-class _NumpyState:
+class _NumpyBackend:
     """Internal numpy concatenating backend (batch-1) for NativeKVState."""
 
     __slots__ = ("_n_layers", "_k", "_v")
@@ -91,7 +91,7 @@ class NativeKVState:
         self._lens = [0] * n_layers
         self._lib = None
         self._cache = None
-        self._fallback = _NumpyState(n_layers)
+        self._fallback = _NumpyBackend(n_layers)
 
         try:
             from domain.inference._internal.native.bindings import load_lib
