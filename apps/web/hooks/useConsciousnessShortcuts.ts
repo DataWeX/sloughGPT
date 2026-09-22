@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import { useToastStore } from '@/lib/toast-store'
 
-type ActionName = 'toggle' | 'reflect' | 'dashboard' | 'personality' | 'quickactions' | null
+type ActionName = 'toggle' | 'dashboard' | 'personality' | 'quickactions' | null
 
 export function useConsciousnessShortcuts(enabled: boolean = true) {
   const router = useRouter()
@@ -29,8 +29,10 @@ export function useConsciousnessShortcuts(enabled: boolean = true) {
       if (!ctrl || !e.shiftKey) return
       if (isInput) return
 
+      // Ctrl+Shift+R is Chrome's hard-reload shortcut — never intercept it
+      if (e.key === 'R') return
+
       const action: ActionName = e.key === 'C' ? 'toggle'
-        : e.key === 'R' ? 'reflect'
         : e.key === 'D' ? 'dashboard'
         : e.key === 'P' ? 'personality'
         : e.key === 'Q' ? 'quickactions'
@@ -56,17 +58,6 @@ export function useConsciousnessShortcuts(enabled: boolean = true) {
           })
           .catch(() => {
             addToast('Failed to toggle consciousness', 'error')
-          })
-      }
-
-      if (action === 'reflect') {
-        addToast('Triggering reflection...', 'info')
-        consciousnessController.reflect()
-          .then(() => {
-            addToast('Reflection triggered', 'success')
-          })
-          .catch(() => {
-            addToast('Failed to trigger reflection', 'error')
           })
       }
 
