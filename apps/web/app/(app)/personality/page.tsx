@@ -325,7 +325,7 @@ export default function PersonalityPage() {
   if (loading) {
     return (
       <PageContainer title="Personality">
-        <div className="space-y-6 p-6">
+        <div className="space-y-4">
           <Skeleton className="h-32" />
           <Skeleton className="h-48" />
           <Skeleton className="h-48" />
@@ -338,7 +338,7 @@ export default function PersonalityPage() {
 
   return (
     <PageContainer title="Personality">
-      <div className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+      <div className="space-y-4">
         {/* Header with save/reset */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>

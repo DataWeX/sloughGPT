@@ -383,7 +383,7 @@ export default function ConsciousnessStatisticsPage() {
 
   return (
     <PageContainer title={t('consciousness_statistics.page_title')}>
-      <div className="space-y-6 p-6">
+      <div className="space-y-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">{t('consciousness_statistics.health_score')}</CardTitle>

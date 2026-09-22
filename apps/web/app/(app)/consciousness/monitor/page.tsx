@@ -268,7 +268,7 @@ export default function ConsciousnessMonitorPage() {
 
   return (
     <PageContainer title={t('consciousness_monitor.page_title')}>
-      <div className="space-y-4 p-4 sm:p-6">
+      <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Switch checked={!paused} onCheckedChange={(v) => setPaused(!v)} />
