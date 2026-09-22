@@ -277,6 +277,59 @@ class TestMatrixSummary:
         assert out["most_energetic"] == []
 
 
+class TestManagerResultCache:
+    def test_similar_is_memoized(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.similar("quick")
+        assert mgr.similar("quick") is first
+
+    def test_embedding_info_is_memoized(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.embedding_info("quick")
+        assert mgr.embedding_info("quick") is first
+
+    def test_matrix_summary_is_memoized(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.matrix_summary(top_k=4)
+        assert mgr.matrix_summary(top_k=4) is first
+
+    def test_top_k_is_part_of_the_key(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        assert mgr.matrix_summary(top_k=2) is not mgr.matrix_summary(top_k=4)
+
+    def test_training_a_new_tree_drops_cache(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.similar("quick")
+        mgr.train(["apple banana apple banana"], vocab_size=32, embed_dim=8)
+        second = mgr.similar("apple")
+        assert first is not second
+        assert mgr._result_cache_tree_id == id(mgr.get_tree())
+
+    def test_unknown_token_is_not_cached(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        with pytest.raises(KeyError):
+            mgr.similar("zzz-no-such-token")
+        with pytest.raises(KeyError):
+            mgr.similar("zzz-no-such-token")
+        assert all("zzz-no-such-token" not in k for k in mgr._result_cache)
+
+    def test_lru_evicts_beyond_cap(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        mgr._result_cache_max = 2
+        mgr.similar("quick")
+        mgr.similar("quick", top_k=3)
+        mgr.similar("quick", top_k=5)
+        similar_keys = [k for k in mgr._result_cache if k.startswith("similar:")]
+        assert len(similar_keys) == 2
+
+
 class TestTopMerges:
     def test_top_merges_ranked(self):
         mgr = TokenTreeManager.get_instance()

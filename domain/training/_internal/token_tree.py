@@ -66,6 +66,8 @@ logger = logging.getLogger("slo.token_tree")
 SPECIAL_TOKENS = ["<PAD>", "<UNK>", "<BOS>", "<EOS>"]
 WORD_SUFFIX = "</w>"
 _MULTI_PIECES = sorted(SPECIAL_TOKENS + [WORD_SUFFIX], key=len, reverse=True)
+# Cap for the memoized embedding matrix (~64MB of float32 at 16M elements).
+_EMBEDDING_MATRIX_CACHE_MAX_ELEMENTS = 16_000_000
 
 
 @dataclass
@@ -109,11 +111,15 @@ class TokenTree:
         self._trained: bool = False
         self._ranked_merges_cache: list[dict] | None = None
         self._library_stats_cache: dict | None = None
+        self._embedding_matrix_cache: np.ndarray | None = None
+        self._embedding_matrix_cached: bool = False
 
     def _invalidate_caches(self) -> None:
         """Drop memoized aggregates; call whenever the tree is (re)built."""
         self._ranked_merges_cache = None
         self._library_stats_cache = None
+        self._embedding_matrix_cache = None
+        self._embedding_matrix_cached = False
 
     # ------------------------------------------------------------------
     # Special ids / interface
@@ -589,6 +595,8 @@ class TokenTree:
 
         Each row is produced by ``Point.generate`` (embeddings are not
         stored as values), matching the way ModelTree generates weights.
+        The result is memoized for the lifetime of the tree (Points are
+        immutable after training) unless it exceeds the element cap.
 
         Returns:
             float32 ``(vocab_size, embed_dim)`` matrix with L2-normalized
@@ -596,11 +604,17 @@ class TokenTree:
         """
         if self._embed_dim <= 0:
             return None
+        if self._embedding_matrix_cached:
+            return self._embedding_matrix_cache
         rows: list[np.ndarray] = []
         for tid in range(len(self.vocab)):
             v = self.embedding(tid)
             rows.append(v if v is not None else np.zeros(self._embed_dim, dtype=np.float32))
-        return np.stack(rows)
+        mat = np.stack(rows)
+        if len(self.vocab) * self._embed_dim <= _EMBEDDING_MATRIX_CACHE_MAX_ELEMENTS:
+            self._embedding_matrix_cache = mat
+            self._embedding_matrix_cached = True
+        return mat
 
     def embedding_matrix_stats(self, top_n: int = 8) -> dict[str, Any]:
         """Summarize the full embedding matrix in one shot.

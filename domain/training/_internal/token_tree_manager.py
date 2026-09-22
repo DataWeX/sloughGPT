@@ -19,7 +19,8 @@ from __future__ import annotations
 import json
 import re
 import threading
-from collections.abc import Sequence
+from collections import OrderedDict
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -57,6 +58,9 @@ class TokenTreeManager:
         """Initialize an empty manager (tree trained on first access)."""
         self._tree: TokenTree | None = None
         self._lock = threading.Lock()
+        self._result_cache: OrderedDict[str, dict] = OrderedDict()
+        self._result_cache_tree_id: int | None = None
+        self._result_cache_max = 64
 
     @classmethod
     def get_instance(cls) -> TokenTreeManager:
@@ -234,18 +238,23 @@ class TokenTreeManager:
         Raises:
             KeyError: when the token is not in the vocabulary.
         """
-        tree = self.get_tree()
-        token_id = tree.resolve_token(token)
-        query = tree.itos.get(token_id, str(token_id))
-        neighbors = [
-            {
-                "id": tid,
-                "token": tree.itos.get(tid, "?"),
-                "score": round(score, 6),
+
+        def compute(tree: TokenTree) -> dict:
+            token_id = tree.resolve_token(token)
+            query = tree.itos.get(token_id, str(token_id))
+            return {
+                "query": query,
+                "neighbors": [
+                    {
+                        "id": tid,
+                        "token": tree.itos.get(tid, "?"),
+                        "score": round(score, 6),
+                    }
+                    for tid, score in tree.similar(token_id, top_k=top_k)
+                ],
             }
-            for tid, score in tree.similar(token_id, top_k=top_k)
-        ]
-        return {"query": query, "neighbors": neighbors}
+
+        return self._cached_result("similar", f"{token}:{top_k}", compute)
 
     def embedding_info(self, token: str, top_k: int = 8) -> dict:
         """Inspect a token's generated embedding vector.
@@ -262,21 +271,24 @@ class TokenTreeManager:
             KeyError: when the token is not in the vocabulary.
             ValueError: when embeddings are disabled (embed_dim = 0).
         """
-        tree = self.get_tree()
-        token_id = tree.resolve_token(token)
-        vec = tree.embedding(token_id)
-        if vec is None:
-            raise ValueError("Token embeddings are not enabled (embed_dim = 0)")
-        top_idx = np.argsort(-np.abs(vec))[: max(top_k, 1)]
-        return {
-            "token": tree.itos.get(token_id, str(token_id)),
-            "id": token_id,
-            "dim": int(vec.shape[0]),
-            "norm": round(float(np.linalg.norm(vec)), 6),
-            "top": [[int(i), round(float(vec[i]), 6)] for i in top_idx],
-            "embedding_points": tree.embedding_points(),
-            "compression_ratio": round(tree.embedding_compression_ratio(), 2),
-        }
+
+        def compute(tree: TokenTree) -> dict:
+            token_id = tree.resolve_token(token)
+            vec = tree.embedding(token_id)
+            if vec is None:
+                raise ValueError("Token embeddings are not enabled (embed_dim = 0)")
+            top_idx = np.argsort(-np.abs(vec))[: max(top_k, 1)]
+            return {
+                "token": tree.itos.get(token_id, str(token_id)),
+                "id": token_id,
+                "dim": int(vec.shape[0]),
+                "norm": round(float(np.linalg.norm(vec)), 6),
+                "top": [[int(i), round(float(vec[i]), 6)] for i in top_idx],
+                "embedding_points": tree.embedding_points(),
+                "compression_ratio": round(tree.embedding_compression_ratio(), 2),
+            }
+
+        return self._cached_result("embedding", f"{token}:{top_k}", compute)
 
     def matrix_summary(self, top_k: int = 8) -> dict:
         """Summarize the full embedding matrix.
@@ -289,8 +301,42 @@ class TokenTreeManager:
             "dead_tokens", "live_tokens", "most_energetic",
             "least_energetic"}`` — see ``TokenTree.embedding_matrix_stats``.
         """
+
+        def compute(tree: TokenTree) -> dict:
+            return tree.embedding_matrix_stats(top_n=top_k)
+
+        return self._cached_result("matrix", str(top_k), compute)
+
+    def _cached_result(self, method: str, key: str, compute: Callable[[TokenTree], dict]) -> dict:
+        """Memoize a response shaped by the current tree.
+
+        Results are keyed per tree identity, so training/adopting/loading a
+        new tree (which replaces the object) drops the cache automatically.
+        A small LRU bound keeps memory flat for token-parameterized queries
+        (``similar``/``embedding_info``).
+
+        Args:
+            method: cache namespace (e.g. ``"similar"``).
+            key: query-specific part of the cache key.
+            compute: builds the result from the live tree.
+
+        Returns:
+            the cached (or freshly computed) result dict.
+        """
         tree = self.get_tree()
-        return tree.embedding_matrix_stats(top_n=top_k)
+        if self._result_cache_tree_id != id(tree):
+            self._result_cache_tree_id = id(tree)
+            self._result_cache.clear()
+        cache_key = f"{method}:{key}"
+        try:
+            self._result_cache.move_to_end(cache_key)
+            return self._result_cache[cache_key]
+        except KeyError:
+            result = compute(tree)
+            self._result_cache[cache_key] = result
+            if len(self._result_cache) > self._result_cache_max:
+                self._result_cache.popitem(last=False)
+            return result
 
     def encode(self, text: str) -> dict:
         """Tree-walk encode text into tokens and ids.

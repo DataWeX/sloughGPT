@@ -211,3 +211,52 @@ class TestAggregateCaching:
         assert bare.search_merges("a", limit=5) == []
         bare.stats()
         assert bare._library_stats_cache is not None
+
+
+class TestEmbeddingMatrixCaching:
+    _CORPUS = ["the quick brown fox jumps over the lazy dog"] * 4
+
+    @pytest.fixture(autouse=True)
+    def _trained_tree(self):
+        self.tree = TokenTree()
+        self.tree.train(self._CORPUS, vocab_size=64, embed_dim=8)
+        return self.tree
+
+    def test_embedding_matrix_is_memoized(self):
+        first = self.tree.embedding_matrix()
+        assert first is not None
+        assert self.tree.embedding_matrix() is first
+
+    def test_matrix_stats_reuses_cached_matrix(self):
+        self.tree.embedding_matrix()
+        assert self._matrix_cached() is True
+        self.tree.embedding_matrix_stats(top_n=4)
+        assert self._matrix_cached() is True
+
+    def test_similar_reuses_cached_matrix(self):
+        self.tree.similar(self.tree.stoi[" the</w>"], top_k=3)
+        assert self._matrix_cached() is True
+
+    def test_cap_disables_cache_for_large_matrices(self, monkeypatch):
+        import domain.training._internal.token_tree as tt
+
+        monkeypatch.setattr(tt, "_EMBEDDING_MATRIX_CACHE_MAX_ELEMENTS", 4)
+        mat = self.tree.embedding_matrix()
+        assert mat is not None
+        assert self._matrix_cached() is False
+
+    def test_retrain_invalidates_cached_matrix(self):
+        first = self.tree.embedding_matrix()
+        assert self._matrix_cached() is True
+        self.tree.train(["apple banana apple banana"], vocab_size=32, embed_dim=8)
+        assert self._matrix_cached() is False
+        second = self.tree.embedding_matrix()
+        assert second is not first
+
+    def test_disabled_embeddings_never_cache(self):
+        bare = TokenTree()
+        assert bare.embedding_matrix() is None
+        assert bare._embedding_matrix_cached is False
+
+    def _matrix_cached(self) -> bool:
+        return self.tree._embedding_matrix_cached

@@ -105,6 +105,24 @@ def main() -> int:
             "top_merges(20) warm (memoized)", measure(lambda: mgr.top_merges(20), args.iterations)
         )
     )
+    results.append(
+        _summarize(
+            "matrix_summary(8) warm (memoized)",
+            measure(lambda: mgr.matrix_summary(8), args.iterations),
+        )
+    )
+    results.append(
+        _summarize(
+            "similar('quick') warm (memoized)",
+            measure(lambda: mgr.similar("quick"), args.iterations),
+        )
+    )
+    results.append(
+        _summarize(
+            "embedding_info('quick') warm (memoized)",
+            measure(lambda: mgr.embedding_info("quick"), args.iterations),
+        )
+    )
 
     # Scaling: large user-trained trees recompute rankings with no cache.
     import random
