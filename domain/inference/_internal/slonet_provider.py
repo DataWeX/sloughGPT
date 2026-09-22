@@ -30,6 +30,7 @@ from typing import Any
 
 import numpy as np
 
+from domain.inference._internal.session_kv_manager import SessionKVManager
 from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
 from domain.infrastructure._internal.structured_log import StructuredLogger
 
@@ -837,13 +838,11 @@ class SloNetChatProvider:
         )
 
         # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
-        instance._kv_states: dict[str, Any] = {}
-        instance._kv_last_access: dict[str, float] = {}  # session_id → monotonic timestamp
-        instance._kv_ttl: float = 3600.0  # 1 hour default TTL for idle sessions
-        instance._kv_max_sessions: int = kv_max_sessions  # LRU cap on concurrent sessions
-        # Guard for the session KV map — mutated from to_thread workers and
-        # API routes concurrently, so check-then-set races must be serialized.
-        instance._kv_lock = threading.Lock()
+        instance._kv_manager = SessionKVManager(
+            kv_ttl=3600.0,  # 1 hour default TTL for idle sessions
+            kv_max_sessions=kv_max_sessions,  # LRU cap on concurrent sessions
+            state_factory=instance._make_kv_state,
+        )
 
         # Record dashboard event
         try:
@@ -949,11 +948,11 @@ class SloNetChatProvider:
             "has_tokenizer": instance._tokenizer is not None,
             "lazy": True,
         }
-        instance._kv_states: dict[str, Any] = {}
-        instance._kv_last_access: dict[str, float] = {}
-        instance._kv_ttl: float = 3600.0
-        instance._kv_max_sessions: int = kv_max_sessions
-        instance._kv_lock = threading.Lock()
+        instance._kv_manager = SessionKVManager(
+            kv_ttl=3600.0,
+            kv_max_sessions=kv_max_sessions,
+            state_factory=instance._make_kv_state,
+        )
 
         logger.info(
             "SloNetChatProvider.lazy_from_slnc: %s (%.1f MB file, %d params) — weights deferred",
@@ -1061,11 +1060,11 @@ class SloNetChatProvider:
         )
 
         # Cross-turn KV cache state
-        instance._kv_states: dict[str, Any] = {}
-        instance._kv_last_access: dict[str, float] = {}
-        instance._kv_ttl: float = 3600.0
-        instance._kv_max_sessions: int = kv_max_sessions
-        instance._kv_lock = threading.Lock()
+        instance._kv_manager = SessionKVManager(
+            kv_ttl=3600.0,
+            kv_max_sessions=kv_max_sessions,
+            state_factory=instance._make_kv_state,
+        )
 
         return instance
 
@@ -1184,25 +1183,7 @@ class SloNetChatProvider:
         Returns:
             Dict with active session count, TTL, and memory estimate.
         """
-        with self._kv_lock:
-            n_sessions = len(self._kv_states)
-            total_tokens = 0
-            for state in self._kv_states.values():
-                kv = getattr(state, "kv_len", None)
-                if isinstance(kv, (list, tuple)):
-                    total_tokens += sum(kv)
-                elif kv is not None:
-                    total_tokens += kv
-            return {
-                "active_sessions": n_sessions,
-                "max_sessions": self._kv_max_sessions,
-                "ttl_seconds": self._kv_ttl,
-                "cached_tokens": total_tokens,
-                "oldest_session_age": max(self._kv_last_access.values())
-                - min(self._kv_last_access.values())
-                if len(self._kv_last_access) > 1
-                else 0.0,
-            }
+        return self._kv_manager.session_summary()
 
     def clear_session(self, session_id: str) -> bool:
         """Drop the cross-turn KV state for a single session.
@@ -1216,9 +1197,7 @@ class SloNetChatProvider:
         Returns:
             True if a state existed and was removed, False otherwise.
         """
-        with self._kv_lock:
-            existed = self._kv_states.pop(session_id, None) is not None
-            self._kv_last_access.pop(session_id, None)
+        existed = self._kv_manager.remove_session(session_id)
         if existed:
             logger.debug("Cleared KV state for session %s", session_id, extra={"tag": "MODEL"})
         return existed
@@ -1232,10 +1211,7 @@ class SloNetChatProvider:
         Returns:
             Number of sessions cleared.
         """
-        with self._kv_lock:
-            n = len(self._kv_states)
-            self._kv_states.clear()
-            self._kv_last_access.clear()
+        n = self._kv_manager.clear_all()
         if n:
             logger.info("Cleared KV state for %d sessions", n, extra={"tag": "MODEL"})
         return n
@@ -1334,11 +1310,7 @@ class SloNetChatProvider:
             self._model = eager._model
             self._parser = eager._parser
             self._quant_engine = eager._quant_engine
-            self._kv_states = eager._kv_states
-            self._kv_last_access = eager._kv_last_access
-            self._kv_ttl = eager._kv_ttl
-            self._kv_max_sessions = eager._kv_max_sessions
-            self._kv_lock = eager._kv_lock
+            self._kv_manager = eager._kv_manager
             self._loaded = True
             if self._meta is not None:
                 self._meta["quantized"] = eager._quant_engine is not None
@@ -1373,11 +1345,7 @@ class SloNetChatProvider:
             self._model = eager._model
             self._parser = eager._parser
             self._quant_engine = eager._quant_engine
-            self._kv_states = eager._kv_states
-            self._kv_last_access = eager._kv_last_access
-            self._kv_ttl = eager._kv_ttl
-            self._kv_max_sessions = eager._kv_max_sessions
-            self._kv_lock = eager._kv_lock
+            self._kv_manager = eager._kv_manager
             self._loaded = True
             if self._meta is not None:
                 self._meta["quantized"] = eager._quant_engine is not None
@@ -1415,9 +1383,7 @@ class SloNetChatProvider:
             self._model = None
             self._parser = None
             self._quant_engine = None
-            with self._kv_lock:
-                self._kv_states.clear()
-                self._kv_last_access.clear()
+            self._kv_manager.clear_all()
             self._loaded = False
         try:
             import gc as _gc
@@ -1531,64 +1497,15 @@ class SloNetChatProvider:
             session_id=kwargs.get("session_id"),
         )
 
-    def _evict_stale_sessions(self):
-        """Remove KV states for sessions idle longer than _kv_ttl seconds."""
-        import time as _time
-
-        now = _time.monotonic()
-        with self._kv_lock:
-            stale = [sid for sid, ts in self._kv_last_access.items() if now - ts > self._kv_ttl]
-            for sid in stale:
-                self._kv_states.pop(sid, None)
-                self._kv_last_access.pop(sid, None)
-        if stale:
-            logger.info(
-                "Evicted %d stale KV sessions (TTL=%.0fs)",
-                len(stale),
-                self._kv_ttl,
-                extra={"tag": "INF"},
-            )
+    def _make_kv_state(self):
+        """State factory for the KV manager: fresh per-session KV cache."""
+        return self._get_model().new_kv_state()
 
     def _resolve_session_kv(self, session_id):
         """Resolve KV state for a session, creating if needed, with TTL eviction."""
-        import time as _time
-
         if session_id is None:
             return None
-        self._evict_stale_sessions()
-        with self._kv_lock:
-            kv_state = self._kv_states.get(session_id)
-            if kv_state is None:
-                kv_state = self._get_model().new_kv_state()
-                self._kv_states[session_id] = kv_state
-                self._evict_lru_session(session_id)
-            self._kv_last_access[session_id] = _time.monotonic()
-        return kv_state
-
-    def _evict_lru_session(self, keep_session_id):
-        """Evict the least-recently-used session when over the session cap.
-
-        Must be called with self._kv_lock held. The session being resolved is
-        never evicted (it has no timestamp yet), so LRU is chosen among the
-        remaining entries.
-
-        Args:
-            keep_session_id: The session that is being resolved/created.
-        """
-        if len(self._kv_states) <= self._kv_max_sessions:
-            return
-        evictable = {sid: ts for sid, ts in self._kv_last_access.items() if sid != keep_session_id}
-        if not evictable:
-            return
-        lru_id = min(evictable, key=evictable.get)
-        self._kv_states.pop(lru_id, None)
-        self._kv_last_access.pop(lru_id, None)
-        logger.info(
-            "Evicted least-recently-used KV session %s (max=%d)",
-            lru_id,
-            self._kv_max_sessions,
-            extra={"tag": "INF"},
-        )
+        return self._kv_manager.get_or_create(session_id)
 
     def _generate_sync(
         self,

@@ -12,7 +12,7 @@ import time
 import numpy as np
 import pytest
 
-from domain.inference._internal.slonet_provider import SloNetChatProvider
+from domain.inference._internal.session_kv_manager import SessionKVManager
 from domain.training._internal.slonet import (
     NumpyKVState,
     SloTransformer,
@@ -34,6 +34,70 @@ def tiny_model():
     return net
 
 
+class _ProviderStub:
+    """Minimal provider-like object backed by a real SessionKVManager.
+
+    Exposes the legacy _kv_* attribute surface (via write-through properties)
+    plus the public methods tests exercise, so no MethodType binding onto the
+    real SloNetChatProvider internals is needed.
+    """
+
+    def __init__(self, model, ttl_seconds=3600.0, kv_max_sessions=64):
+        self._model = model
+        self._get_model = lambda: self._model
+        self._kv_manager = SessionKVManager(
+            kv_ttl=ttl_seconds,
+            kv_max_sessions=kv_max_sessions,
+            state_factory=model.new_kv_state,
+        )
+
+    @property
+    def _kv_states(self):
+        return self._kv_manager.kv_states
+
+    @property
+    def _kv_last_access(self):
+        return self._kv_manager.kv_last_access
+
+    @property
+    def _kv_ttl(self):
+        return self._kv_manager.kv_ttl
+
+    @_kv_ttl.setter
+    def _kv_ttl(self, value):
+        self._kv_manager.kv_ttl = value
+
+    @property
+    def _kv_max_sessions(self):
+        return self._kv_manager.kv_max_sessions
+
+    @_kv_max_sessions.setter
+    def _kv_max_sessions(self, value):
+        self._kv_manager.kv_max_sessions = value
+
+    def _resolve_session_kv(self, session_id):
+        if session_id is None:
+            return None
+        return self._kv_manager.get_or_create(session_id)
+
+    def _evict_stale_sessions(self):
+        return self._kv_manager.evict_stale_sessions()
+
+    def session_stats(self):
+        return self._kv_manager.session_summary()
+
+    def clear_session(self, session_id):
+        return self._kv_manager.remove_session(session_id)
+
+    def clear_all_sessions(self):
+        return self._kv_manager.clear_all()
+
+
+def _make_provider_stub(model, ttl_seconds=3600.0, kv_max_sessions=64):
+    """Module-level factory for _ProviderStub."""
+    return _ProviderStub(model, ttl_seconds=ttl_seconds, kv_max_sessions=kv_max_sessions)
+
+
 class TestSessionTTL:
     """Tests for _evict_stale_sessions and _resolve_session_kv."""
 
@@ -44,25 +108,7 @@ class TestSessionTTL:
         just the _kv_states / _kv_last_access / _evict_stale_sessions /
         _resolve_session_kv attributes and methods.
         """
-
-        class _Stub:
-            pass
-
-        stub = _Stub()
-        stub._model = model
-        stub._get_model = lambda: stub._model
-        stub._kv_states = {}
-        stub._kv_last_access = {}
-        stub._kv_ttl = 60.0  # 60s default
-        stub._kv_max_sessions = 64
-        stub._kv_lock = threading.Lock()
-
-        from types import MethodType
-
-        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
-        return stub
+        return _make_provider_stub(model, ttl_seconds=60.0)
 
     def test_resolve_creates_new_state(self, tiny_model):
         stub = self._make_provider_stub(tiny_model)
@@ -198,25 +244,7 @@ class TestSessionStats:
     """Tests for session_stats() observability report."""
 
     def _make_provider_stub(self, model):
-        class _Stub:
-            pass
-
-        stub = _Stub()
-        stub._model = model
-        stub._get_model = lambda: stub._model
-        stub._kv_states = {}
-        stub._kv_last_access = {}
-        stub._kv_ttl = 3600.0
-        stub._kv_max_sessions = 64
-        stub._kv_lock = threading.Lock()
-
-        from types import MethodType
-
-        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
-        stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
-        return stub
+        return _make_provider_stub(model)
 
     def test_empty_stats(self, tiny_model):
         """Empty provider reports zero sessions and zero cached tokens."""
@@ -262,26 +290,7 @@ class TestSessionClear:
     """Tests for clear_session and clear_all_sessions."""
 
     def _make_provider_stub(self, model):
-        class _Stub:
-            pass
-
-        stub = _Stub()
-        stub._model = model
-        stub._get_model = lambda: stub._model
-        stub._kv_states = {}
-        stub._kv_last_access = {}
-        stub._kv_ttl = 3600.0
-        stub._kv_max_sessions = 64
-        stub._kv_lock = threading.Lock()
-
-        from types import MethodType
-
-        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
-        stub.clear_session = MethodType(SloNetChatProvider.clear_session, stub)
-        stub.clear_all_sessions = MethodType(SloNetChatProvider.clear_all_sessions, stub)
-        return stub
+        return _make_provider_stub(model)
 
     def test_clear_removes_existing_session(self, tiny_model):
         stub = self._make_provider_stub(tiny_model)
@@ -316,9 +325,6 @@ class TestSessionClear:
 
     def test_clear_stats_reflect_removal(self, tiny_model):
         stub = self._make_provider_stub(tiny_model)
-        from types import MethodType
-
-        stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
         stub._resolve_session_kv("a")
         stub._resolve_session_kv("b")
         stub.clear_session("a")
@@ -329,25 +335,7 @@ class TestKvSessionCap:
     """LRU cap: the session KV map never exceeds max_sessions entries."""
 
     def _make_provider_stub(self, model, max_sessions=2):
-        class _Stub:
-            pass
-
-        stub = _Stub()
-        stub._model = model
-        stub._get_model = lambda: stub._model
-        stub._kv_states = {}
-        stub._kv_last_access = {}
-        stub._kv_ttl = 3600.0
-        stub._kv_max_sessions = max_sessions
-        stub._kv_lock = threading.Lock()
-
-        from types import MethodType
-
-        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
-        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
-        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
-        stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
-        return stub
+        return _make_provider_stub(model, kv_max_sessions=max_sessions)
 
     def test_no_eviction_below_cap(self, tiny_model):
         stub = self._make_provider_stub(tiny_model, max_sessions=3)
@@ -400,26 +388,7 @@ class TestKvConcurrency:
     """Thread-safety of the session KV map under concurrent resolution."""
 
     def _make_provider_stub(self, model):
-        class _Stub:
-            pass
-
-        stub = _Stub()
-        stub._model = model
-        stub._get_model = lambda: stub._model
-        stub._kv_states = {}
-        stub._kv_last_access = {}
-        stub._kv_ttl = 3600.0
-        stub._kv_max_sessions = 64
-        stub._kv_lock = threading.Lock()
-
-        from types import MethodType
-
-        stub._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, stub)
-        stub._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, stub)
-        stub._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, stub)
-        stub.clear_session = MethodType(SloNetChatProvider.clear_session, stub)
-        stub.session_stats = MethodType(SloNetChatProvider.session_stats, stub)
-        return stub
+        return _make_provider_stub(model)
 
     def test_concurrent_resolve_single_state(self, tiny_model):
         """Concurrent resolution of the same session yields one shared state."""
@@ -452,11 +421,12 @@ class TestKvConcurrency:
         n_threads = 8
         barrier = threading.Barrier(n_threads)
         ids = set()
+        ids_lock = threading.Lock()
 
         def resolve(i):
             barrier.wait()
             state = stub._resolve_session_kv(f"sess-{i}")
-            with stub._kv_lock:
+            with ids_lock:
                 ids.add(id(state))
 
         threads = [threading.Thread(target=resolve, args=(i,)) for i in range(n_threads)]
