@@ -79,6 +79,44 @@ class TestTokenTreeTrain:
         text = tree.decode(ids)
         assert isinstance(text, str)
 
+    def test_decode_preserves_word_boundary_when_token_lacks_leading_space(self):
+        tree = TokenTree()
+        # Repeats the words so both the space-less position-0 form ("hello</w>")
+        # and the spaced continuation form (" world</w>") materialize in vocab.
+        tree.train(
+            ["hello world this", "hello world that", "the world turns"],
+            vocab_size=200,
+        )
+        hello = tree.stoi.get("hello</w>")
+        world = tree.stoi.get(" world</w>")
+        assert hello is not None, "vocab should contain the space-less pos-0 form"
+        assert world is not None, "vocab should contain the spaced continuation form"
+        # LM emitted the space-less form right after a word boundary — decode
+        # must materialize the </w> boundary as a space instead of gluing.
+        assert tree.decode(tree.encode("the") + [hello]) == "the hello"
+
+    def test_decode_glued_head_round_trips_once_spacing_resumes(self):
+        tree = TokenTree()
+        tree.train(
+            ["hello world this", "hello world this too", "the world turns"],
+            vocab_size=200,
+        )
+        # Simulate a model answer that starts with the space-less pos-0 form,
+        # then continues with normally-spaced continuation tokens: the head must
+        # not glue to the prior token, and the rest must stay byte-identical.
+        enc = tree.encode("the world")
+        assert tree.stoi.get(" this</w>"), "spaced continuation token should exist"
+        answer = [tree.stoi["hello</w>"], tree.stoi[" world</w>"], tree.stoi[" this</w>"]]
+        assert tree.decode(enc + answer) == "the world hello world this"
+
+    def test_decode_round_trip_preserved(self):
+        tree = TokenTree()
+        tree.train(["the quick brown fox", "lazy dog", "fox jumps"], vocab_size=200)
+        text = "the quick brown fox"
+        ids = tree.encode(text)
+        assert tree.decode(ids) == text
+        assert tree.decode([]) == ""
+
     def test_encode_empty(self):
         tree = TokenTree()
         tree.train(["hello"], vocab_size=32)
