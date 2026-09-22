@@ -17,10 +17,10 @@ const HOOK_LABELS: Record<string, string> = {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  init: '#636366',
-  critical: '#febc2e',
-  ready: '#0a7aff',
-  background: '#28c840',
+  init: 'hsl(var(--muted-foreground))',
+  critical: 'hsl(var(--warning))',
+  ready: 'hsl(var(--info))',
+  background: 'hsl(var(--success))',
 }
 
 interface TimelineBarProps {
@@ -34,29 +34,29 @@ function TimelineBar({ hook, maxDuration, startOffset }: TimelineBarProps) {
   const left = maxDuration > 0 ? (startOffset / maxDuration) * 100 : 0
 
   const statusColors: Record<string, string> = {
-    pending: '#2c2c2e',
-    running: '#febc2e',
-    ok: '#28c840',
-    timeout: '#ff5f57',
-    error: '#ff5f57',
+    pending: 'hsl(var(--muted))',
+    running: 'hsl(var(--warning))',
+    ok: 'hsl(var(--success))',
+    timeout: 'hsl(var(--destructive))',
+    error: 'hsl(var(--destructive))',
   }
 
   return (
     <div className="flex items-center gap-3 py-1">
-      <div className="w-24 text-[10px] text-[#8e8e93] truncate text-right">
+      <div className="w-24 text-[10px] text-muted-foreground truncate text-right">
         {HOOK_LABELS[hook.name] ?? hook.name}
       </div>
-      <div className="flex-1 h-4 bg-[#1c1c1e] rounded relative overflow-hidden">
+      <div className="flex-1 h-4 bg-muted rounded relative overflow-hidden">
         <div
           className="absolute h-full rounded transition-all duration-300"
           style={{
             left: `${left}%`,
             width: `${Math.max(2, width)}%`,
-            backgroundColor: statusColors[hook.status] ?? '#2c2c2e',
+            backgroundColor: statusColors[hook.status] ?? 'hsl(var(--muted))',
           }}
         />
       </div>
-      <div className="w-16 text-[10px] font-mono text-[#636366] text-right">
+      <div className="w-16 text-[10px] font-mono text-muted-foreground text-right">
         {hook.duration_seconds > 0 ? `${hook.duration_seconds}s` : '—'}
       </div>
     </div>
@@ -85,10 +85,10 @@ export function StartupTimeline() {
   })).filter(g => g.hooks.length > 0)
 
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-      <div className="h-9 px-4 bg-[#1c1c1e] border-b border-white/[0.06] flex items-center justify-between">
-        <span className="text-[11px] font-medium text-[#8e8e93]">Startup Timeline</span>
-        <span className="text-[10px] text-[#636366] font-mono">{startupElapsed.toFixed(1)}s total</span>
+    <div className="rounded-xl border border-border/10 bg-card overflow-hidden">
+      <div className="h-9 px-4 bg-muted/50 border-b border-border/10 flex items-center justify-between">
+        <span className="text-[11px] font-medium text-muted-foreground">Startup Timeline</span>
+        <span className="text-[10px] text-muted-foreground font-mono">{startupElapsed.toFixed(1)}s total</span>
       </div>
       <div className="p-4 space-y-4">
         {grouped.map(({ stage, hooks: stageHooks }) => (
@@ -98,7 +98,7 @@ export function StartupTimeline() {
                 className="w-2 h-2 rounded-full"
                 style={{ backgroundColor: STAGE_COLORS[stage] }}
               />
-              <span className="text-[10px] text-[#8e8e93] uppercase tracking-wider">{stage}</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{stage}</span>
             </div>
             <div className="space-y-0.5">
               {stageHooks.map((hook: HookStatus) => (

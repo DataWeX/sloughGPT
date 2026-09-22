@@ -67,7 +67,7 @@ function TimeDomainCanvas({ data, width = 400, height = 80 }: { data: Float32Arr
     if (!ctx) return
 
     ctx.clearRect(0, 0, width, height)
-    ctx.strokeStyle = '#8b5cf6'
+    ctx.strokeStyle = `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--primary').trim()})`
     ctx.lineWidth = 1.5
     ctx.beginPath()
 

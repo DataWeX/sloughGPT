@@ -46,7 +46,7 @@ function BucketsToSparkline({ entries, bucketCount = 20 }: { entries: FeedbackEn
     return result
   }, [entries, bucketCount])
 
-  return <SimpleSparkline values={buckets} color="#8b5cf6" />
+  return <SimpleSparkline values={buckets} color="hsl(var(--primary))" />
 }
 
 function formatTimeAgo(ts: string): string {
@@ -126,7 +126,7 @@ export function SentimentTrendCard({ history }: SentimentTrendCardProps) {
           <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500"
-              style={{ width: `${stats!.ratio * 100}%`, backgroundColor: stats!.ratio >= 0.6 ? '#22c55e' : stats!.ratio >= 0.4 ? '#f59e0b' : '#ef4444' }}
+              style={{ width: `${stats!.ratio * 100}%`, backgroundColor: stats!.ratio >= 0.6 ? 'hsl(var(--success))' : stats!.ratio >= 0.4 ? 'hsl(var(--warning))' : 'hsl(var(--destructive))' }}
             />
           </div>
           <p className="text-[9px] text-muted-foreground mt-0.5">{(stats!.ratio * 100).toFixed(1)}% positive</p>
