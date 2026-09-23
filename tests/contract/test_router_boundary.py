@@ -70,31 +70,17 @@ TESTS_DIR = Path(__file__).resolve().parents[2] / "apps" / "api" / "server" / "t
 # as part of the on-going legacy sweep.
 _LEGACY_PATCH_TARGETS: frozenset[str] = frozenset(
     {
-        'test_agents_router.py|patch("domains.agents.system.AgentSystem.execute"',
-        'test_cloud_training_router.py|patch("domains.training.cloud.get_provider"',
-        'test_feedback_controller_wiring.py|patch("domains.training.service.get_state"',
-        'test_infer_router.py|patch("domains.models.provider.get_provider"',
         'test_kb_router.py|patch("domains.cognitive.rag_service.get_rag_service"',
-        'test_learner_router.py|patch("domains.learner.get_learner"',
-        'test_lora_eval_router.py|patch("domains.feedback.lora_eval.get_lora_evaluator"',
-        'test_lora_eval_router.py|patch("domains.feedback.per_user_lora.get_per_user_lora"',
-        'test_meta_weights_router.py|patch("domains.feedback.get_meta_weight_manager"',
-        'test_multimodal_router.py|patch("domains.training.executor.get_training_executor"',
-        'test_multimodal_router.py|patch("domains.training.video_trainer.list_video_checkpoints"',
-        'test_plugins_router.py|patch("domains.plugins.get_plugin_manager"',
-        'test_process_guard_controller.py|patch("domains.infrastructure.model_registry.get_model_registry"',
-        'test_process_guard_controller.py|patch("domains.infrastructure.model_resolver.get_model_dir"',
-        'test_process_guard_controller.py|patch("domains.infrastructure.process_guard.ProcessGuard"',
-        'test_registry_router.py|patch("domains.infrastructure.model_registry.get_model_registry"',
-        'test_souls_router.py|patch("domains.context.managers.get_trait_config"',
-        'test_souls_router.py|patch("domains.inference.slo_manager.get_slo_manager"',
-        'test_unified_training_routes.py|patch("domains.training.service.get_turbo_status"',
-        'test_unified_training_routes.py|patch("domains.training.service.run_turbo_worker"',
-        'test_vector_router.py|patch("domains.inference.vector_store.create_vector_store"',
-        'test_workflow_router.py|patch("domains.feedback.get_feedback_workflow"',
-        'test_world_render_router.py|patch("domains.shell.simulation.Simulation"',
-        'test_world_render_router.py|patch("domains.shell.world_render.NeuralRenderBridge"',
-        'test_world_render_router.py|patch("domains.shell.world_render.RenderBridge"',
+        'test_kb_router.py|patch("domains.infrastructure.truth_labeler.get_truth_labeler"',
+        'test_unified_training_routes.py|patch("domains.training.service.checkpoint_info"',
+        'test_unified_training_routes.py|patch("domains.training.service.delete_checkpoint"',
+        'test_unified_training_routes.py|patch("domains.training.service.download_checkpoint_path"',
+        'test_unified_training_routes.py|patch("domains.training.service.get_all_checkpoint_data"',
+        'test_unified_training_routes.py|patch("domains.training.service.get_log"',
+        'test_unified_training_routes.py|patch("domains.training.service.list_checkpoints"',
+        'test_unified_training_routes.py|patch("domains.training.service.load_checkpoint"',
+        'test_unified_training_routes.py|patch("domains.training.service.start_from_sessions_training"',
+        'test_unified_training_routes.py|patch("domains.training.service.start_turbo_training"',
     }
 )
 
@@ -107,9 +93,11 @@ def test_no_new_legacy_domains_patch_targets() -> None:
     baseline below may only shrink; adding a target is a contract violation.
     """
     targets = {
-        f"{py.name}|{t}"
+        f"{py.name}|{re.sub(r'patch\(\s*"', 'patch("', t)}"
         for py in TESTS_DIR.glob("test_*.py")
-        for t in re.findall(r'patch\("domains\.[^"]*"', py.read_text(encoding="utf-8"))
+        for t in re.findall(
+            r'patch\(\s*"domains\.[^"]*"', py.read_text(encoding="utf-8"), re.DOTALL
+        )
     }
     violations = sorted(targets - _LEGACY_PATCH_TARGETS)
     assert not violations, (
