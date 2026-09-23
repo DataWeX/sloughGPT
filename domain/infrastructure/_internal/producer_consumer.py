@@ -110,6 +110,11 @@ class ProducerConsumerQueue[T]:
         self._drain_event = threading.Event()
         self._drain_event.set()  # starts drained
 
+        # Pending (enqueued-but-unfinished) work counter. Drain is signalled
+        # only when this reaches zero, i.e. every handler call has completed.
+        self._pending = 0
+        self._pending_lock = threading.Lock()
+
         # Consumer threads
         self._consumers: list[threading.Thread] = []
         self._consumer_active = [False] * num_consumers
@@ -148,6 +153,9 @@ class ProducerConsumerQueue[T]:
                 self._queue.put(item, timeout=timeout, block=True)
             with self._metrics_lock:
                 self._enqueued += 1
+            with self._pending_lock:
+                self._pending += 1
+            self._drain_event.clear()
             return True
         except queue.Full:
             with self._metrics_lock:
@@ -187,6 +195,17 @@ class ProducerConsumerQueue[T]:
             self._queue.task_done()
         except (ValueError, OSError):
             pass
+
+    def wait_drained(self, timeout: float | None = None) -> bool:
+        """Block until all enqueued items have been processed, or timeout.
+
+        Returns True if drained before the timeout (or nothing was pending).
+        """
+        with self._pending_lock:
+            if self._pending <= 0:
+                return True
+            event = self._drain_event
+        return event.wait(timeout=timeout)
 
     # ── Async API ─────────────────────────────────────────────────────
 
@@ -298,6 +317,11 @@ class ProducerConsumerQueue[T]:
                     )
                 finally:
                     self.task_done()
+                    with self._pending_lock:
+                        self._pending -= 1
+                        if self._pending <= 0:
+                            self._pending = 0
+                            self._drain_event.set()
         finally:
             self._consumer_active[consumer_id] = False
 

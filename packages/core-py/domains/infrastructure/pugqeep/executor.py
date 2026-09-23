@@ -56,7 +56,7 @@ class ParallelExecutor:
         try:
             for item in items:
                 q.put(item)
-            q._drain_event.wait(timeout=self._timeout)
+            q.wait_drained(timeout=self._timeout)
         finally:
             q.stop(timeout=self._timeout)
 
