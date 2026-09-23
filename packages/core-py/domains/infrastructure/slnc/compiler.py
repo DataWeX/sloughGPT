@@ -22,6 +22,7 @@ Usage:
 import json
 import logging
 import struct
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -138,7 +139,7 @@ class SLNCCompiler:
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors for {model_id}")
 
-        weights = self._read_weights(safetensors_path)
+        weights = self.read_weights(safetensors_path)
 
         if output is None:
             repo_root = find_repo_root(Path(__file__).resolve())
@@ -180,23 +181,40 @@ class SLNCCompiler:
         safetensors_path = _find_safetensors(directory)
         if safetensors_path is None:
             raise FileNotFoundError(f"No .safetensors in {model_dir}")
-        weights = self._read_weights(safetensors_path)
+        weights = self.read_weights(safetensors_path)
 
         out_path = Path(output)
         out_path.parent.mkdir(parents=True, exist_ok=True)
         return self.compile_from_dict(config, weights, str(out_path), quantize=quantize)
 
-    def _read_weights(self, safetensors_path: Path) -> dict[str, np.ndarray]:
-        """Read all weight arrays from a safetensors file."""
+    def read_weights(
+        self,
+        safetensors_path: Path,
+        on_tensor: Callable[[str, int, int], None] | None = None,
+    ) -> dict[str, np.ndarray]:
+        """Read all weight arrays from a safetensors file.
+
+        Args:
+            safetensors_path: Path to the ``model.safetensors`` file.
+            on_tensor: Optional callback ``(name, read_count, total)`` invoked
+                after each tensor is read (used to drive progress bars).
+
+        Returns:
+            Dict mapping tensor names to numpy arrays. BF16/F16 are widened
+            to float32; I64/I32 are preserved for integer tensors.
+        """
         import json as _json
 
-        weights = {}
+        weights: dict[str, np.ndarray] = {}
+        read_count = 0
         with open(str(safetensors_path), "rb") as f:
             header_len = struct.unpack("<Q", f.read(8))[0]
             header = _json.loads(f.read(header_len))
+            total = sum(1 for k in header if not k.startswith("__"))
             for key, info in header.items():
                 if key.startswith("__"):
                     continue
+                read_count += 1
                 dtype_str = info["dtype"]
                 offsets = info["data_offsets"]
                 f.seek(8 + header_len + offsets[0])
@@ -214,8 +232,14 @@ class SLNCCompiler:
                         .reshape(info["shape"])
                         .astype(np.float32)
                     )
+                elif dtype_str == "I64":
+                    weights[key] = np.frombuffer(raw, dtype=np.int64).reshape(info["shape"])
+                elif dtype_str == "I32":
+                    weights[key] = np.frombuffer(raw, dtype=np.int32).reshape(info["shape"])
                 else:
                     weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
+                if on_tensor is not None and total > 0:
+                    on_tensor(key, read_count, total)
         return weights
 
     def compile_from_dict(

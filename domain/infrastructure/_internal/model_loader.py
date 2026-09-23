@@ -323,9 +323,6 @@ class ModelLoader:
         Handles bfloat16 weights by reading raw bytes and converting to float32.
         """
         try:
-            import json as _json
-            import struct
-
             from .conversion_tracker import ConversionStage, get_tracker
             from .model_resolver import find_safetensors, load_model_config
 
@@ -345,47 +342,17 @@ class ModelLoader:
 
             config = load_model_config(model_id)
 
-            weights = {}
-            with open(str(st_path), "rb") as f:
-                header_len = struct.unpack("<Q", f.read(8))[0]
-                header = _json.loads(f.read(header_len))
-                total_tensors = len([k for k in header if not k.startswith("__")])
-                for i, (key, info) in enumerate(header.items()):
-                    if key.startswith("__"):
-                        continue
-                    dtype_str = info["dtype"]
-                    offsets = info["data_offsets"]
-                    f.seek(8 + header_len + offsets[0])
-                    raw = f.read(offsets[1] - offsets[0])
-
-                    if dtype_str == "BF16":
-                        arr = np.frombuffer(raw, dtype=np.uint16)
-                        f32 = np.zeros(len(arr), dtype=np.float32)
-                        f32.view(np.uint32)[:][:] = arr.astype(np.uint32) << 16
-                        weights[key] = f32.reshape(info["shape"])
-                    elif dtype_str == "F32":
-                        weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-                    elif dtype_str == "F16":
-                        weights[key] = (
-                            np.frombuffer(raw, dtype=np.float16)
-                            .reshape(info["shape"])
-                            .astype(np.float32)
-                        )
-                    elif dtype_str == "I64":
-                        weights[key] = np.frombuffer(raw, dtype=np.int64).reshape(info["shape"])
-                    elif dtype_str == "I32":
-                        weights[key] = np.frombuffer(raw, dtype=np.int32).reshape(info["shape"])
-                    else:
-                        weights[key] = np.frombuffer(raw, dtype=np.float32).reshape(info["shape"])
-                    # Update progress based on tensors read
-                    if total_tensors > 0:
-                        tracker.update(
-                            model_id, progress=(i + 1) / total_tensors * 0.7
-                        )  # 70% for reading
-
             from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
 
             compiler = SLNCCompiler()
+
+            weights = compiler.read_weights(
+                st_path,
+                on_tensor=lambda name, done, total: tracker.update(
+                    model_id, progress=done / total * 0.7
+                ),
+            )
+
             tracker.update(model_id, message="Writing .slnc format...")
             compiler.compile_from_dict(config, weights, str(slnc_path))
             tracker.update(model_id, progress=0.85)
