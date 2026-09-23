@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import json
 import hashlib
-import numpy as np
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Iterator
 
-from .sources import Record, Source
-from .stores import Store, MemoryStore
+import numpy as np
+
 from .collector import Collector
+from .sources import Record, Source
 
 
 @dataclass
@@ -58,7 +57,9 @@ class TrainingDataAdapter:
         self.stats["accepted"] += 1
         return record.content
 
-    def records_to_training_data(self, records: list[Record]) -> tuple[np.ndarray, dict[str, int], dict[int, str]]:
+    def records_to_training_data(
+        self, records: list[Record]
+    ) -> tuple[np.ndarray, dict[str, int], dict[int, str]]:
         text = self.records_to_text(records)
         chars = sorted(set(text))
         stoi = {c: i for i, c in enumerate(chars)}

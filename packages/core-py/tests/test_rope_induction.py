@@ -28,11 +28,10 @@ if _core_dir not in sys.path:
 from domain.infrastructure._internal.rope import (
     rope_apply,
     rope_frequencies,
-    rope_rotation,
 )
 
-
 # ── Rotation matrix construction ──────────────────────────────────────────────
+
 
 def rotation_matrix(pos: int, dim: int, base: float = 10000.0) -> np.ndarray:
     """Construct the full D×D rotation matrix R(m·Θ).
@@ -51,10 +50,10 @@ def rotation_matrix(pos: int, dim: int, base: float = 10000.0) -> np.ndarray:
     for i, freq in enumerate(freqs):
         angle = pos * freq
         c, s = np.cos(angle), np.sin(angle)
-        R[2*i, 2*i] = c
-        R[2*i, 2*i+1] = -s
-        R[2*i+1, 2*i] = s
-        R[2*i+1, 2*i+1] = c
+        R[2 * i, 2 * i] = c
+        R[2 * i, 2 * i + 1] = -s
+        R[2 * i + 1, 2 * i] = s
+        R[2 * i + 1, 2 * i + 1] = c
     return R
 
 
@@ -86,6 +85,7 @@ def rotation_matrix_split_half(pos: int, dim: int, base: float = 10000.0) -> np.
 
 # ── Induction proof ───────────────────────────────────────────────────────────
 
+
 class TestInductionBaseCase:
     """Base case: position 0 is identity.
 
@@ -97,24 +97,27 @@ class TestInductionBaseCase:
         """R(0) must equal the identity matrix."""
         for dim in [2, 4, 8, 16, 64]:
             R = rotation_matrix(0, dim)
-            np.testing.assert_allclose(R, np.eye(dim), atol=1e-6,
-                err_msg=f"R(0) != I for dim={dim}")
+            np.testing.assert_allclose(
+                R, np.eye(dim), atol=1e-6, err_msg=f"R(0) != I for dim={dim}"
+            )
 
     def test_rope_apply_at_zero_is_identity(self):
         """rope_apply(x[0], 0) must equal x[0] — position 0 is identity."""
         for dim in [4, 8, 64]:
             x = np.random.randn(dim).astype(np.float32)
             result = rope_apply(x, pos=0, dim=dim)
-            np.testing.assert_allclose(result, x, atol=1e-6,
-                err_msg=f"rope_apply(x, 0) != x for dim={dim}")
+            np.testing.assert_allclose(
+                result, x, atol=1e-6, err_msg=f"rope_apply(x, 0) != x for dim={dim}"
+            )
 
     def test_rope_apply_sequence_first_token_is_identity(self):
         """In a sequence starting at pos=0, the first token is unmodified."""
         for dim in [4, 8, 64]:
             x = np.random.randn(10, dim).astype(np.float32)
             result = rope_apply(x, pos=0, dim=dim)
-            np.testing.assert_allclose(result[0], x[0], atol=1e-6,
-                err_msg=f"First token modified for dim={dim}")
+            np.testing.assert_allclose(
+                result[0], x[0], atol=1e-6, err_msg=f"First token modified for dim={dim}"
+            )
 
     def test_dot_product_at_zero(self):
         """q_0 · k_0 = q · k (base case of relative position theorem)."""
@@ -157,8 +160,9 @@ class TestInductionStep:
             R_b = rotation_matrix_split_half(b, dim)
             R_ab = rotation_matrix_split_half(a + b, dim)
             product = R_a @ R_b
-            np.testing.assert_allclose(product, R_ab, atol=1e-5,
-                err_msg=f"R({a})·R({b}) != R({a+b})")
+            np.testing.assert_allclose(
+                product, R_ab, atol=1e-5, err_msg=f"R({a})·R({b}) != R({a + b})"
+            )
 
     def test_rotation_orthogonality(self):
         """R(θ)^T · R(θ) = I — rotations preserve dot product."""
@@ -166,8 +170,9 @@ class TestInductionStep:
         for pos in [0, 1, 10, 100]:
             R = rotation_matrix_split_half(pos, dim)
             product = R.T @ R
-            np.testing.assert_allclose(product, np.eye(dim), atol=1e-5,
-                err_msg=f"R({pos})^T·R({pos}) != I")
+            np.testing.assert_allclose(
+                product, np.eye(dim), atol=1e-5, err_msg=f"R({pos})^T·R({pos}) != I"
+            )
 
     def test_inductive_step_explicit(self):
         """Direct verification: R(m+1)·q · R(n)·k satisfies the theorem."""
@@ -186,8 +191,9 @@ class TestInductionStep:
                 k_nm = rope_apply(k, n - m, dim)
                 rhs = np.dot(q, k_nm)
 
-                assert lhs == pytest.approx(rhs, rel=1e-4), \
+                assert lhs == pytest.approx(rhs, rel=1e-4), (
                     f"Failed at m={m}, n={n}: {lhs} != {rhs}"
+                )
 
 
 class TestFullInduction:

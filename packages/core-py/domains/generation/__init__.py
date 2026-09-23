@@ -24,10 +24,16 @@ Public API:
     ChatProcessor, MessageHandler
 """
 
+from domain.context import (
+    PersonalityManager as ContextPersonalityManager,
+)
+from domain.context import (
+    TraitWeightsConfig,
+)
 from domain.inference import (
-    VectorStore,
     InMemoryVectorStore,
     VectorEntry,
+    VectorStore,
     simple_embed,
 )
 from domain.models import (
@@ -40,10 +46,6 @@ from domain.multimodal import (
 )
 from domain.voice import (
     VoiceEngine,
-)
-from domain.context import (
-    TraitWeightsConfig,
-    PersonalityManager as ContextPersonalityManager,
 )
 
 __all__ = [

@@ -69,14 +69,17 @@ def bench_one(compressor: PointCompressor, weights: np.ndarray, name: str, metho
 
     n = min(len(flat), len(decompressed))
     mse = float(np.mean((flat[:n] - decompressed[:n]) ** 2))
-    cos_sim = float(np.dot(flat[:n], decompressed[:n]) / (np.linalg.norm(flat[:n]) * np.linalg.norm(decompressed[:n]) + 1e-10))
+    cos_sim = float(
+        np.dot(flat[:n], decompressed[:n])
+        / (np.linalg.norm(flat[:n]) * np.linalg.norm(decompressed[:n]) + 1e-10)
+    )
 
     # Serialize roundtrip (only for block types — cluster uses Huffman bitstream)
     ser_ms = 0.0
     if method in ("block_q4", "block_q8"):
         t0 = time.perf_counter()
         data = point.to_bytes()
-        point2 = Point.from_bytes(data, identity="bench")
+        Point.from_bytes(data, identity="bench")
         ser_ms = (time.perf_counter() - t0) * 1000
 
     return {
@@ -116,11 +119,15 @@ def run_benchmark():
             all_results.append(r)
 
     # Print results
-    print(f"{'Layer':<25} {'Method':<12} {'Ratio':>7} {'Cosine':>8} {'MSE':>10} {'Comp ms':>8} {'Decomp ms':>9} {'Ser ms':>7} {'Acc':>6}")
+    print(
+        f"{'Layer':<25} {'Method':<12} {'Ratio':>7} {'Cosine':>8} {'MSE':>10} {'Comp ms':>8} {'Decomp ms':>9} {'Ser ms':>7} {'Acc':>6}"
+    )
     print("-" * 110)
 
     for r in all_results:
-        print(f"{r['layer']:<25} {r['method']:<12} {r['ratio']:>6.1f}x {r['cosine']:>8.5f} {r['mse']:>10.2e} {r['compress_ms']:>7.1f} {r['decompress_ms']:>8.1f} {r['serialize_ms']:>6.1f} {r['accuracy']:>5.3f}")
+        print(
+            f"{r['layer']:<25} {r['method']:<12} {r['ratio']:>6.1f}x {r['cosine']:>8.5f} {r['mse']:>10.2e} {r['compress_ms']:>7.1f} {r['decompress_ms']:>8.1f} {r['serialize_ms']:>6.1f} {r['accuracy']:>5.3f}"
+        )
 
     # Summary
     print("\n" + "=" * 110)
@@ -134,7 +141,9 @@ def run_benchmark():
         avg_comp = np.mean([r["compress_ms"] for r in subset])
         avg_decomp = np.mean([r["decompress_ms"] for r in subset])
         avg_ser = np.mean([r["serialize_ms"] for r in subset])
-        print(f"{method:<12} ratio={avg_ratio:.1f}x  cosine={avg_cosine:.5f}  mse={avg_mse:.2e}  compress={avg_comp:.1f}ms  decompress={avg_decomp:.1f}ms  serialize={avg_ser:.1f}ms")
+        print(
+            f"{method:<12} ratio={avg_ratio:.1f}x  cosine={avg_cosine:.5f}  mse={avg_mse:.2e}  compress={avg_comp:.1f}ms  decompress={avg_decomp:.1f}ms  serialize={avg_ser:.1f}ms"
+        )
 
 
 if __name__ == "__main__":

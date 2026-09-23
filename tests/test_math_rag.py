@@ -6,19 +6,17 @@ to validate retrieval quality, extraction accuracy, and scoring correctness.
 """
 
 import pytest
-import numpy as np
 
 from domain.cognition._internal.math_rag import (
     BM25,
-    TFIDFIndex,
-    ExtractionRule,
-    RuleEngine,
-    MathRAG,
     Chunk,
+    ExtractionRule,
+    MathRAG,
+    RuleEngine,
+    TFIDFIndex,
     _tokenize,
     _tokenize_raw,
 )
-
 
 # ─── Real-World Test Documents ────────────────────────────────────────────────
 
@@ -61,6 +59,7 @@ DOCS = [DOC_PYTHON, DOC_EINSTEIN, DOC_CHEMISTRY]
 
 # ─── Tokenizer Tests ─────────────────────────────────────────────────────────
 
+
 class TestTokenizer:
     def test_tokenize_removes_stop_words(self):
         tokens = _tokenize("The quick brown fox is jumping")
@@ -89,6 +88,7 @@ class TestTokenizer:
 
 
 # ─── BM25 Tests ──────────────────────────────────────────────────────────────
+
 
 class TestBM25:
     def _build_bm25(self, docs: list[str]) -> BM25:
@@ -153,6 +153,7 @@ class TestBM25:
 
 # ─── TF-IDF Tests ────────────────────────────────────────────────────────────
 
+
 class TestTFIDF:
     def _build_tfidf(self, docs: list[str]) -> TFIDFIndex:
         chunks = [Chunk(id=str(i), content=doc) for i, doc in enumerate(docs)]
@@ -197,6 +198,7 @@ class TestTFIDF:
 
 # ─── Rule Engine Tests ───────────────────────────────────────────────────────
 
+
 class TestRuleEngine:
     def setup_method(self):
         self.engine = RuleEngine()
@@ -232,8 +234,7 @@ class TestRuleEngine:
     def test_extract_confidence_ordering(self):
         """Higher-confidence facts should come first."""
         facts = self.engine.extract(
-            "Python is a programming language. "
-            "It can be used for web development."
+            "Python is a programming language. It can be used for web development."
         )
         if len(facts) >= 2:
             # is_a (0.9) should come before can (0.8)
@@ -256,6 +257,7 @@ class TestRuleEngine:
     def test_custom_rule(self):
         """Test adding a custom rule."""
         import re
+
         custom = ExtractionRule(
             name="invented_by",
             pattern=re.compile(r"([A-Z][\w]+)\s+was\s+invented\s+by\s+(.+)", re.I),
@@ -271,6 +273,7 @@ class TestRuleEngine:
 
 
 # ─── MathRAG Integration Tests ───────────────────────────────────────────────
+
 
 class TestMathRAG:
     def setup_method(self):
@@ -368,11 +371,13 @@ class TestMathRAG:
 
 # ─── Benchmark: MathRAG vs ProductionRAG ─────────────────────────────────────
 
+
 class TestBenchmark:
     """Compare MathRAG against ProductionRAG on the same documents."""
 
     def _build_prod_rag(self, docs: list[str]):
         from domain.cognition._internal.rag import ProductionRAG
+
         rag = ProductionRAG()
         for doc in docs:
             rag.add_document(doc, metadata={"source": "test"})
@@ -401,7 +406,9 @@ class TestBenchmark:
             math_result = math_rag.query(query, top_k=1)
 
             # ProductionRAG returns dicts, MathRAG returns ScoredChunks — just check both return results
-            assert len(prod_result.get("results", [])) > 0, f"ProductionRAG found no results for '{query}'"
+            assert len(prod_result.get("results", [])) > 0, (
+                f"ProductionRAG found no results for '{query}'"
+            )
             assert len(math_result["results"]) > 0, f"MathRAG found no results for '{query}'"
 
     def test_math_rag_deterministic(self):

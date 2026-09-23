@@ -86,7 +86,6 @@ class TestRotation:
 
     def test_rotation_preserves_norm(self):
         """Rotation must not change vector length."""
-        freqs = rope_frequencies(8)
         rng = np.random.default_rng(42)
         x = rng.standard_normal(8).astype(np.float32)
         norm_before = np.linalg.norm(x)

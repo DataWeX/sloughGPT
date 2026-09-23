@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -94,7 +93,9 @@ class TestReflectWithEpisodes:
             exp = {
                 "input_text": overrides.get("input_text", f"question {i}?"),
                 "response": overrides.get("response", f"answer {i}" * (i + 1)),
-                "qualia": overrides.get("qualia", {"novelty": 0.5, "valence": 0.0, "coherence": 0.5}),
+                "qualia": overrides.get(
+                    "qualia", {"novelty": 0.5, "valence": 0.0, "coherence": 0.5}
+                ),
             }
             if "feedback_rating" in overrides:
                 exp["feedback_rating"] = overrides["feedback_rating"]

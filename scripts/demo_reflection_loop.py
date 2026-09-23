@@ -18,13 +18,12 @@ sys.path.insert(0, str(_project_root / "packages" / "core-py"))
 
 from domain.consciousness._internal.config import ConsciousnessConfig
 from domain.consciousness._internal.engine import ConsciousnessEngine
-from domain.consciousness._internal.self_model import Reflection
 
 
 def divider(title: str) -> None:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 def show_beliefs(engine: ConsciousnessEngine) -> None:
@@ -48,23 +47,38 @@ def main() -> None:
 
         divider("Processing 5 POSITIVE conversations")
         positive_convos = [
-            ("How do I sort a list in Python?", "Use sorted() or list.sort(). sorted() returns a new list, sort() modifies in place. Both accept a key parameter for custom ordering."),
-            ("Explain machine learning", "ML is a subset of AI where systems learn patterns from data. Supervised learning uses labeled examples. Unsupervised finds hidden structure. Reinforcement learning optimizes through reward signals."),
-            ("What is a neural network?", "A neural network is a computational graph of interconnected nodes organized in layers. Each node applies a weighted sum and activation function. Networks learn by adjusting weights via backpropagation to minimize a loss function."),
-            ("How does caching work?", "Caching stores frequently accessed data in fast storage. LRU eviction removes least recently used items. Cache invalidation ensures data freshness. TTL-based caches expire entries after a set duration."),
-            ("What are design patterns?", "Design patterns are reusable solutions to common software problems. Creational patterns manage object creation (Singleton, Factory). Structural patterns compose classes (Adapter, Decorator). Behavioral patterns define communication (Observer, Strategy)."),
+            (
+                "How do I sort a list in Python?",
+                "Use sorted() or list.sort(). sorted() returns a new list, sort() modifies in place. Both accept a key parameter for custom ordering.",
+            ),
+            (
+                "Explain machine learning",
+                "ML is a subset of AI where systems learn patterns from data. Supervised learning uses labeled examples. Unsupervised finds hidden structure. Reinforcement learning optimizes through reward signals.",
+            ),
+            (
+                "What is a neural network?",
+                "A neural network is a computational graph of interconnected nodes organized in layers. Each node applies a weighted sum and activation function. Networks learn by adjusting weights via backpropagation to minimize a loss function.",
+            ),
+            (
+                "How does caching work?",
+                "Caching stores frequently accessed data in fast storage. LRU eviction removes least recently used items. Cache invalidation ensures data freshness. TTL-based caches expire entries after a set duration.",
+            ),
+            (
+                "What are design patterns?",
+                "Design patterns are reusable solutions to common software problems. Creational patterns manage object creation (Singleton, Factory). Structural patterns compose classes (Adapter, Decorator). Behavioral patterns define communication (Observer, Strategy).",
+            ),
         ]
         for user_msg, ai_response in positive_convos:
             engine.process(user_msg, ai_response)
 
         r = engine.reflect()
-        print(f"\n  After 5 positive conversations:")
+        print("\n  After 5 positive conversations:")
         print(f"  trajectory:  {r.trajectory}")
         print(f"  avg_growth:  {r.avg_growth:+.4f}")
         print(f"  deltas:      {r.belief_deltas}")
         print(f"  strategies:  {r.strategy_notes}")
         print(f"\n  narrative: {r.narrative[:200]}...")
-        print(f"\n  Beliefs after reflection:")
+        print("\n  Beliefs after reflection:")
         show_beliefs(engine)
 
         divider("Processing 3 NEGATIVE conversations (short/wrong answers)")
@@ -75,20 +89,22 @@ def main() -> None:
         ]
         for user_msg, ai_response in negative_convos:
             # Use observe directly since process() doesn't pass feedback_rating
-            engine.self_model.observe({
-                "input_text": user_msg,
-                "response": ai_response,
-                "qualia": {"novelty": 0.2, "valence": -0.4, "coherence": 0.3},
-                "feedback_rating": 1,
-            })
+            engine.self_model.observe(
+                {
+                    "input_text": user_msg,
+                    "response": ai_response,
+                    "qualia": {"novelty": 0.2, "valence": -0.4, "coherence": 0.3},
+                    "feedback_rating": 1,
+                }
+            )
 
         r = engine.reflect()
-        print(f"\n  After 3 negative conversations:")
+        print("\n  After 3 negative conversations:")
         print(f"  trajectory:  {r.trajectory}")
         print(f"  avg_growth:  {r.avg_growth:+.4f}")
         print(f"  deltas:      {r.belief_deltas}")
         print(f"  strategies:  {r.strategy_notes}")
-        print(f"\n  Beliefs after decline:")
+        print("\n  Beliefs after decline:")
         show_beliefs(engine)
 
         divider("Manual belief override via apply_beliefs()")

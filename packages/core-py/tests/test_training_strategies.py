@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -10,23 +9,17 @@ import pytest
 
 from domain.training._internal.training_handler import (
     AccumulationGradientHandler,
-    BatchSampler,
     ChatPairSampler,
-    CheckpointSaver,
     DirectGradientHandler,
     EMALossTracker,
-    GradientHandler,
-    LossTracker,
     NpzCheckpointSaver,
     PermutationSampler,
     RandomBlockSampler,
     RawLossTracker,
-    SoulCheckpointSaver,
     build_char_vocab,
     clip_gradients,
     zero_grads,
 )
-
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -118,9 +111,7 @@ class TestBuildCharVocab:
         assert len(stoi) == len(itos)
 
     def test_special_tokens(self):
-        stoi, itos = build_char_vocab(
-            ["ab"], special_tokens={"<pad>": 0, "<bos>": 1}, offset=2
-        )
+        stoi, itos = build_char_vocab(["ab"], special_tokens={"<pad>": 0, "<bos>": 1}, offset=2)
         assert stoi["<pad>"] == 0
         assert stoi["<bos>"] == 1
         assert stoi["a"] >= 2
@@ -185,8 +176,23 @@ class TestPermutationSampler:
 class TestChatPairSampler:
     def test_len(self):
         pairs = [{"user_msg": "hi", "assistant_msg": "hello"}]
-        stoi = {"h": 1, "i": 2, "e": 3, "l": 4, "o": 5, " ": 6, "\n": 7, "\x00": 0,
-                "U": 8, "s": 9, "e": 3, "r": 10, ":": 11, "A": 12, "a": 13}
+        stoi = {
+            "h": 1,
+            "i": 2,
+            "e": 3,
+            "l": 4,
+            "o": 5,
+            " ": 6,
+            "\n": 7,
+            "\x00": 0,
+            "U": 8,
+            "s": 9,
+            "e": 3,
+            "r": 10,
+            ":": 11,
+            "A": 12,
+            "a": 13,
+        }
         sampler = ChatPairSampler(pairs, stoi, block_size=4)
         assert len(sampler) > 0
 
@@ -322,6 +328,7 @@ class TestNpzCheckpointSaver:
             checkpoint_dir=str(tmp_path),
             filter_fn=lambda name: "lora" in name,
         )
+
         # model with named params
         class _NamedModel:
             def __init__(self):

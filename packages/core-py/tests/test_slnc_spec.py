@@ -8,9 +8,9 @@ import pytest
 from domain.infrastructure._internal.slnc.spec import (
     ALIGNMENT,
     DTYPE_BFLOAT16,
-    DTYPE_INT8,
     DTYPE_FLOAT16,
     DTYPE_FLOAT32,
+    DTYPE_INT8,
     DTYPE_INT32,
     DTYPE_INT64,
     DTYPE_MAP,
