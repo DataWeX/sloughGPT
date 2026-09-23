@@ -17,10 +17,10 @@ if _server_dir not in sys.path:
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-_PM = "domain.consciousness._internal.personality.PersonalityManager"
-_PP = "domain.consciousness._internal.personality.PersonalityProfile"
-_CE = "domain.consciousness._internal.evaluation.ConsciousnessEvaluator"
-_GO = "domain.consciousness.get_consciousness"
+_PM = "domain.cognition._internal.consciousness.personality.PersonalityManager"
+_PP = "domain.cognition._internal.consciousness.personality.PersonalityProfile"
+_CE = "domain.cognition._internal.consciousness.evaluation.ConsciousnessEvaluator"
+_GO = "domain.cognition.get_consciousness"
 
 
 def _mock_engine():
@@ -370,7 +370,15 @@ class TestBackupRestore:
         client = TestClient(_app(engine=_mock_engine()))
         resp = client.post(
             "/consciousness/restore",
-            json={"backup": {"version": 99, "episodes": [], "beliefs": {}, "personality": {}, "config": {}}},
+            json={
+                "backup": {
+                    "version": 99,
+                    "episodes": [],
+                    "beliefs": {},
+                    "personality": {},
+                    "config": {},
+                }
+            },
         )
         assert resp.status_code == 400
 

@@ -19,15 +19,15 @@ _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root))
 sys.path.insert(0, str(_project_root / "packages" / "core-py"))
 
-from domain.consciousness._internal.config import ConsciousnessConfig
-from domain.consciousness._internal.engine import ConsciousnessEngine
+from domain.cognition._internal.consciousness.config import ConsciousnessConfig
+from domain.cognition._internal.consciousness.engine import ConsciousnessEngine
 from domain.infrastructure._internal.numpy_engine import NumpyEngine
 
 
 def divider(title: str) -> None:
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  {title}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
 
 def show_beliefs(beliefs: dict[str, float]) -> None:
@@ -40,13 +40,11 @@ def main() -> None:
     divider("Loading Qwen2.5-0.5B-Instruct")
     t0 = time.time()
     model = NumpyEngine.from_pretrained("Qwen/Qwen2.5-0.5B-Instruct")
-    print(f"  Loaded in {time.time()-t0:.1f}s")
+    print(f"  Loaded in {time.time() - t0:.1f}s")
     print(f"  {model.arch.n_layers} layers, {model.arch.n_head} heads, {model.arch.n_embed}D")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        consciousness = ConsciousnessEngine(
-            ConsciousnessConfig(level=3, store_path=tmpdir)
-        )
+        consciousness = ConsciousnessEngine(ConsciousnessConfig(level=3, store_path=tmpdir))
 
         prompts = [
             "What is 2+2?",
@@ -58,9 +56,9 @@ def main() -> None:
             t1 = time.time()
             response = model.generate(prompt, max_new_tokens=30, temperature=0.7, top_k=40)
             gen_time = time.time() - t1
-            answer = response[len(prompt):].strip()
+            answer = response[len(prompt) :].strip()
             display = answer.split("\n")[0][:100]
-            print(f"  [{i+1}] User: {prompt}")
+            print(f"  [{i + 1}] User: {prompt}")
             print(f"      Qwen ({gen_time:.1f}s): {display}\n")
             consciousness.process(prompt, answer)
 

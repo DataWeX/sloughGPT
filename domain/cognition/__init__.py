@@ -1,18 +1,41 @@
-"""cognition — Reasoning, thinking, creativity, RAG.
+"""cognition — Reasoning, thinking, creativity, RAG, and consciousness.
 
-The model's reasoning engine. Self-awareness and personality live
-in domain.metacognition (separate).
+The model's reasoning and self-awareness engine.
 
 Public API:
     CognitiveDomain, CognitiveException
     CognitiveCore, ThinkingMode, ReasoningType, ThoughtProcess
     CreativeIdea, ReasoningChain, CognitiveProcessor
     RAGService, KGTrainingPipeline, get_rag_service, is_rag_service_ready
+    ConsciousnessConfig, ConsciousnessEngine, ConsciousnessEvaluator, EvaluationReport
+    MetaCognition, MetaCognitiveReport, NarrativeGenerator
+    PersonalityManager, PersonalityProfile, QualiaEngine, QualiaState
+    Reflection, SelfEpisode, SelfIdentity, SelfModel
+    get_consciousness, reset_consciousness
 """
 
 from domain.cognition._internal.base import (
     CognitiveDomain,
     CognitiveException,
+)
+from domain.cognition._internal.consciousness import (
+    ConsciousnessConfig,
+    ConsciousnessEngine,
+    ConsciousnessEvaluator,
+    EvaluationReport,
+    MetaCognition,
+    MetaCognitiveReport,
+    NarrativeGenerator,
+    PersonalityManager,
+    PersonalityProfile,
+    QualiaEngine,
+    QualiaState,
+    Reflection,
+    SelfEpisode,
+    SelfIdentity,
+    SelfModel,
+    get_consciousness,
+    reset_consciousness,
 )
 from domain.cognition._internal.core import (
     CognitiveCore,
@@ -46,4 +69,21 @@ __all__ = [
     "KGTrainingPipeline",
     "get_rag_service",
     "is_rag_service_ready",
+    "ConsciousnessConfig",
+    "ConsciousnessEngine",
+    "ConsciousnessEvaluator",
+    "EvaluationReport",
+    "MetaCognition",
+    "MetaCognitiveReport",
+    "NarrativeGenerator",
+    "PersonalityManager",
+    "PersonalityProfile",
+    "QualiaEngine",
+    "QualiaState",
+    "Reflection",
+    "SelfEpisode",
+    "SelfIdentity",
+    "SelfModel",
+    "get_consciousness",
+    "reset_consciousness",
 ]

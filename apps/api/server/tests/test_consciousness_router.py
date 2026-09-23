@@ -103,7 +103,7 @@ class TestConsciousnessAPI:
         from infrastructure.exception_handlers import register_app_error_handler
 
         from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from domain.consciousness._internal.self_model import SelfEpisode
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         engine = MagicMock()
@@ -290,7 +290,7 @@ class TestConsciousnessAPI:
         mock_eng.config.level = 1
 
         # Create fake episodes with qualia
-        from domain.consciousness._internal.self_model import SelfEpisode
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
 
         episodes = [
             SelfEpisode(
@@ -327,7 +327,7 @@ class TestConsciousnessAPI:
         from infrastructure.exception_handlers import register_app_error_handler
 
         from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from domain.consciousness._internal.self_model import SelfEpisode
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -396,9 +396,9 @@ class TestConsciousnessAPI:
         from infrastructure.exception_handlers import register_app_error_handler
 
         from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from domain.consciousness._internal.config import ConsciousnessConfig
-        from domain.consciousness._internal.qualia import QualiaEngine
-        from domain.consciousness._internal.self_model import SelfModel
+        from domain.cognition._internal.consciousness.config import ConsciousnessConfig
+        from domain.cognition._internal.consciousness.qualia import QualiaEngine
+        from domain.cognition._internal.consciousness.self_model import SelfModel
 
         router_obj = ConsciousnessRouter()
         real_engine = MagicMock()
@@ -473,7 +473,7 @@ class TestConsciousnessAPI:
         from infrastructure.exception_handlers import register_app_error_handler
 
         from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from domain.consciousness._internal.self_model import SelfEpisode
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -827,7 +827,7 @@ class TestConsciousnessStream:
     def test_stream_payload_shape(self):
         import time as _time
 
-        from domain.consciousness._internal.self_model import SelfEpisode
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
 
         router_obj = self._make_router()
         router_obj._engine.self_model.episodes = [
@@ -954,7 +954,7 @@ class TestConsciousnessBatch:
         from infrastructure.exception_handlers import register_app_error_handler
 
         from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from domain.consciousness._internal.self_model import SelfEpisode
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
@@ -1051,7 +1051,7 @@ class TestConsciousnessStats:
         from infrastructure.exception_handlers import register_app_error_handler
 
         from apps.api.server.routers.consciousness import ConsciousnessRouter
-        from domain.consciousness._internal.self_model import SelfEpisode
+        from domain.cognition._internal.consciousness.self_model import SelfEpisode
 
         router_obj = ConsciousnessRouter()
         mock_eng = MagicMock()
