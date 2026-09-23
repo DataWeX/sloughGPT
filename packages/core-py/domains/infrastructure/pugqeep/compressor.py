@@ -554,7 +554,6 @@ class PointCompressor:
         scale = brange / 15.0
         q = (blocks - bmin[:, None]) / scale[:, None]
         q = np.clip(np.round(q), 0, 15).astype(np.uint8)
-        n_blocks * bs
         q_flat = q.ravel()
         packed = q_flat[0::2].astype(np.uint8) | (q_flat[1::2].astype(np.uint8) << 4)
         deq = q.astype(np.float32) * scale[:, None] + bmin[:, None]

@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import threading
 from collections.abc import Callable
 from pathlib import Path
 
@@ -367,7 +368,7 @@ def decompress_tree(tree: Tree, num_workers: int = 0) -> dict[str, np.ndarray]:
     # executor.map() unwraps (key, value) so fn receives just the Point.
     # We need the stripped name, so process directly with executor.run().
     results: dict[str, np.ndarray] = {}
-    lock = __import__("threading").Lock()
+    lock = threading.Lock()
 
     def _decomp(item):
         name, pt = item

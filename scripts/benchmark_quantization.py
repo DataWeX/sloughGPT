@@ -85,8 +85,6 @@ def _list_cached_models() -> list[str]:
     Returns:
         Sorted list of model ids like ``Qwen/Qwen2.5-0.5B-Instruct``.
     """
-    import os
-
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
     hub_dirs = {
         Path(hf_home) / "hub",

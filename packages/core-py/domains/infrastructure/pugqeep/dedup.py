@@ -25,6 +25,8 @@ logger = logging.getLogger("slo.pdqeep")
 class PointDeduplicator:
     """Identifies and merges identical points across multiple libraries."""
 
+    __slots__ = ("_tolerance", "_libraries", "_fingerprints")
+
     def __init__(self, tolerance: float = 1e-6):
         self._tolerance = tolerance
         self._libraries: list[PointLibrary] = []
@@ -120,6 +122,8 @@ class PointDeduplicator:
 
 class PointLibrarySync:
     """Synchronize PointLibraries between instances."""
+
+    __slots__ = ("_dedup",)
 
     def __init__(self):
         self._dedup = PointDeduplicator()
