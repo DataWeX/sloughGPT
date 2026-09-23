@@ -121,10 +121,10 @@ class TestPrepareData:
         monkeypatch.chdir(tmp_path)
         d = tmp_path / "data" / "corpus2"
         d.mkdir(parents=True)
-        (d / "input.txt").write_text("hello world hello", encoding="utf-8")
+        (d / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data("corpus2", block_size=8)
-        assert len(data) == len("hello world hello")
-        assert n_chars == len(set("hello world hello"))
+        assert len(data) == len(DATA_TEXT)
+        assert n_chars == len(set(DATA_TEXT))
 
     def test_list_with_ratios(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -132,19 +132,21 @@ class TestPrepareData:
         b = tmp_path / "data" / "b"
         a.mkdir(parents=True)
         b.mkdir(parents=True)
-        (a / "input.txt").write_text("aaaa", encoding="utf-8")
-        (b / "input.txt").write_text("bbbb", encoding="utf-8")
+        a_text = "".join(chr(65 + i) for i in range(12)) * 40
+        b_text = "".join(chr(75 + i) for i in range(12)) * 40
+        (a / "input.txt").write_text(a_text, encoding="utf-8")
+        (b / "input.txt").write_text(b_text, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data([("a", 0.5), ("b", 1.0)], block_size=8)
-        assert len(data) == 2 + 4
-        assert n_chars == 2
+        assert len(data) == int(len(a_text) * 0.5) + len(b_text)
+        assert n_chars == len(set(a_text + b_text))
 
     def test_list_with_ratios_missing_dataset_warns(self, tmp_path, monkeypatch, caplog):
         monkeypatch.chdir(tmp_path)
         a = tmp_path / "data" / "a"
         a.mkdir(parents=True)
-        (a / "input.txt").write_text("hello there", encoding="utf-8")
+        (a / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data([("a", 1.0), ("missing", 0.5)], block_size=8)
-        assert len(data) == len("hello there")
+        assert len(data) == len(DATA_TEXT)
         assert any("not found" in r.message for r in caplog.records)
 
     def test_list_with_ratios_no_valid_raises(self, tmp_path, monkeypatch):
@@ -158,18 +160,20 @@ class TestPrepareData:
         b = tmp_path / "data" / "b"
         a.mkdir(parents=True)
         b.mkdir(parents=True)
-        (a / "input.txt").write_text("xyz", encoding="utf-8")
-        (b / "input.txt").write_text("uv", encoding="utf-8")
+        a_text = DATA_TEXT
+        b_text = DATA_TEXT[:256]
+        (a / "input.txt").write_text(a_text, encoding="utf-8")
+        (b / "input.txt").write_text(b_text, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data(["a", "b"], block_size=8)
-        assert len(data) == 5
+        assert len(data) == len(a_text) + len(b_text)
 
     def test_plain_list_missing_skipped(self, tmp_path, monkeypatch, caplog):
         monkeypatch.chdir(tmp_path)
         a = tmp_path / "data" / "a"
         a.mkdir(parents=True)
-        (a / "input.txt").write_text("xyz", encoding="utf-8")
+        (a / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data(["a", "nope"], block_size=8)
-        assert len(data) == 3
+        assert len(data) == len(DATA_TEXT)
         assert any("not found" in r.message for r in caplog.records)
 
     def test_feed_source_loads_live_corpus(self, tmp_path, monkeypatch):
@@ -866,7 +870,7 @@ class TestTrainStep:
         assert math.isfinite(m["loss"])
 
     def test_scheduler_steps(self, data_path, tmp_path):
-        t = make_trainer(data_path, tiny_config(tmp_path))
+        t = make_trainer(data_path, tiny_config(tmp_path, warmup_steps=0))
         lr_before = t.scheduler.get_last_lr()[0]
         t.train_step()
         lr_after = t.scheduler.get_last_lr()[0]
@@ -1441,12 +1445,13 @@ class TestSaveCheckpoint:
     def test_rolling_save_keeps_max_checkpoints(self, data_path, tmp_path, monkeypatch):
         t = make_trainer(data_path, tiny_config(tmp_path, max_checkpoints=3))
         self._monotonic_time(monkeypatch, 1_700_000_000)
+        written = []
         for i in range(7):
             t.save_checkpoint({"eval_loss": 1.0 + i})
+            written.append(os.path.basename(t._last_checkpoint_path))
         souls = sorted(p.name for p in (tmp_path / "ckpts").glob("*.soul"))
         assert len(souls) == 3
-        assert souls[0].startswith(f"{tmp_path.name}_1700000004")
-        assert souls[-1].startswith(f"{tmp_path.name}_1700000006")
+        assert souls == sorted(set(written[-3:]))
         metas = list((tmp_path / "ckpts").glob("*.soul.meta.json"))
         assert len(metas) == 3
 
@@ -1459,7 +1464,7 @@ class TestSaveCheckpoint:
         t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
         souls = list((tmp_path / "ckpts").glob("*.soul"))
         assert len(souls) == 1
-        assert souls[0].name.startswith(f"{tmp_path.name}_1700000003")
+        assert souls[0].name == os.path.basename(t._last_checkpoint_path)
         assert os.path.exists(t._last_checkpoint_path)
         assert t._best_model_path == t._last_checkpoint_path
         metas = list((tmp_path / "ckpts").glob("*.soul.meta.json"))
