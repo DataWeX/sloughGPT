@@ -14,7 +14,7 @@
  *   import { logger } from '@/lib/dev-log'
  *
  *   logger.info('message sent', { session_id: 'abc' })
- *   logger.error('Could not stream', { exception: 'AbortError' })
+ *   logger.debug('stream aborted') // intentional aborts are not errors
  *   logger.child('chat').info('user typed')
  */
 

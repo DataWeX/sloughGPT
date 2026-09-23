@@ -1151,7 +1151,12 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Network error'
-      logger.error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
+      const aborted = opts?.signal?.aborted === true || (e instanceof Error && e.name === 'AbortError')
+      if (aborted) {
+        logger.debug(`<<< SSE ${method} ${url} aborted corr=${corrId}`, { corrId, reason: msg })
+      } else {
+        logger.error(`<<< SSE ${method} ${url} FAILED corr=${corrId}: ${msg}`, { corrId })
+      }
       yield { status: 'error', message: `Connection error: ${msg}` }
       return
     }
@@ -1187,6 +1192,10 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
         try {
           chunk = await reader.read()
         } catch (e) {
+          if (opts?.signal?.aborted === true || (e instanceof Error && e.name === 'AbortError')) {
+            yield { status: 'error', message: 'Stream aborted' }
+            return
+          }
           const msg = e instanceof Error ? e.message : 'Read error'
           yield { status: 'error', message: `Stream disconnected: ${msg}` }
           return
