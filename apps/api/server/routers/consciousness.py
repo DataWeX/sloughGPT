@@ -94,18 +94,20 @@ class ConsciousnessRouter:
         return self._engine
 
     def _get_trainer(self):
-        """Lazy-load the consciousness trainer."""
+        """Lazily build the consciousness trainer adapter over the shared training module."""
         if self._trainer is None:
             from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig
 
             engine = self._get_engine()
             config = TrainingConfig(
                 model_path="",
-                rank=engine.config.lora_rank,
+                rank=int(engine.config.lora_rank),
                 alpha=float(engine.config.lora_alpha),
                 min_pairs_for_training=10,
             )
-            self._trainer = ConsciousnessTrainer(config)
+            self._trainer = ConsciousnessTrainer(
+                config, episodes_source=lambda: engine.self_model.episodes
+            )
         return self._trainer
 
     def _register_routes(self):
