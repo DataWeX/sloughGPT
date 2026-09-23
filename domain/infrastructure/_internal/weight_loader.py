@@ -288,7 +288,12 @@ def infer_arch_from_state_dict(state_dict: dict[str, np.ndarray]) -> dict:
 
     # intermediate_size from w1/gate_proj shape
     for key in state_dict:
-        if "mlp.w1.weight" in key or "mlp.gate_proj.weight" in key:
+        if (
+            "mlp.w1.weight" in key
+            or "mlp.gate_proj.weight" in key
+            or "ff.w1.weight" in key
+            or "ff.gate_proj.weight" in key
+        ):
             shape = state_dict[key].shape
             if len(shape) >= 2:
                 result["intermediate_size"] = shape[0]
@@ -409,9 +414,9 @@ def load_into_model(
             continue
         is_bias = arr.ndim == 1
         if is_bias:
-            q, k, v = np.split(arr, 3, axis=0)
+            q, k, v = np.split(arr, 3, axis=-1)
         else:
-            q, k, v = np.split(arr.T, 3, axis=0)
+            q, k, v = np.split(arr.T, 3, axis=-1)
         for pname, chunk in zip(param_names, [q, k, v], strict=False):
             p = param_map.get(pname)
             if p is not None:
@@ -613,12 +618,12 @@ class WeightLoaderRegistry:
         self._default: type | None = None
 
     def register_loader(self, suffix: str, loader_class: type):
-        """Register a loader class for a file suffix."""
-        self._loaders[suffix] = loader_class
+        """Register a loader class for a file suffix (case-insensitive)."""
+        self._loaders[suffix.lower()] = loader_class
         logger.info(
             "Registered weight loader: %s → %s",
             suffix,
-            loader_class.__name__,
+            getattr(loader_class, "__name__", type(loader_class).__name__),
             extra={"tag": "INFRA"},
         )
 
