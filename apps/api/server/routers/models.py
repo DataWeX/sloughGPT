@@ -405,14 +405,7 @@ class ModelsRouter:
     async def unload_model(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Unload current model"""
         ctrl = get_models_controller()
-        model_id = ctrl._current_model
-        if not model_id:
-            try:
-                from domain.infrastructure.model_registry import get_model_registry
-
-                model_id = get_model_registry().default_id
-            except Exception as e:
-                logger.warning("Failed to get default model_id for unload: %s", e)
+        model_id = ctrl.active_model_id()
         result = ctrl.unload_model()
         try:
             from domain.infrastructure.server_state import get_server_state

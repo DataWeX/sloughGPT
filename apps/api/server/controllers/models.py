@@ -465,6 +465,16 @@ class ModelsController:
             logger.warning("server_state.model_type lookup failed: %s", e, extra={"tag": "MODEL"})
         return None
 
+    def active_model_id(self) -> str | None:
+        """Public read-model for the currently active model id.
+
+        Order: controller state, ModelRegistry default (autoload path bypasses
+        the controller), then ``server_state.model_type``. Routers must use
+        this instead of reaching into ``_current_model`` (shared-core
+        contract: read state only through the public read-model).
+        """
+        return self._resolve_active_model_id()
+
     def adopt_process_guard(self, guard: Any, model_id: str | None = None) -> None:
         """Adopt a ProcessGuard created outside this controller (autoload path).
 
@@ -637,7 +647,9 @@ class ModelsController:
                 logger.info(
                     "Compiling fine-tuned model %s to .slnc ...", model_path, extra={"tag": "MODEL"}
                 )
-                SLNCCompiler().compile_from_directory(str(target), output=str(slnc_path))  # float32 file, live quantize
+                SLNCCompiler().compile_from_directory(
+                    str(target), output=str(slnc_path)
+                )  # float32 file, live quantize
 
             if base_model_id is None:
                 base_model_id = self._resolve_base_model_id(target)
