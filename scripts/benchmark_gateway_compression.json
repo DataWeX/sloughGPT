@@ -17,13 +17,8 @@
         "wire_bytes": 766647,
         "ratio": 0.0228,
         "savings_pct": 97.72,
-<<<<<<< HEAD
         "enc_mibs": 159.9,
         "dec_mibs": 496.1
-=======
-        "enc_mibs": 154.0,
-        "dec_mibs": 495.5
->>>>>>> feat/consciousness-to-cognition
       },
       {
         "codec": "zstd-3",
@@ -31,82 +26,9 @@
         "wire_bytes": 287238,
         "ratio": 0.0086,
         "savings_pct": 99.14,
-<<<<<<< HEAD
         "enc_mibs": 1211.9,
         "dec_mibs": 1243.2
       }
     ]
   }
 ]
-=======
-        "enc_mibs": 1439.3,
-        "dec_mibs": 1057.3
-      }
-    ]
-  },
-  {
-    "mib": 32,
-    "results": [
-      {
-        "codec": "identity",
-        "raw_bytes": 33554432,
-        "wire_bytes": 33554432,
-        "ratio": 1.0,
-        "savings_pct": 0.0,
-        "enc_mibs": null,
-        "dec_mibs": null
-      },
-      {
-        "codec": "gzip-6",
-        "raw_bytes": 33554432,
-        "wire_bytes": 766647,
-        "ratio": 0.0228,
-        "savings_pct": 97.72,
-        "enc_mibs": 169.9,
-        "dec_mibs": 522.7
-      },
-      {
-        "codec": "zstd-3",
-        "raw_bytes": 33554432,
-        "wire_bytes": 287238,
-        "ratio": 0.0086,
-        "savings_pct": 99.14,
-        "enc_mibs": 1383.9,
-        "dec_mibs": 1223.0
-      }
-    ]
-  },
-  {
-    "mib": 32,
-    "results": [
-      {
-        "codec": "identity",
-        "raw_bytes": 33554432,
-        "wire_bytes": 33554432,
-        "ratio": 1.0,
-        "savings_pct": 0.0,
-        "enc_mibs": null,
-        "dec_mibs": null
-      },
-      {
-        "codec": "gzip-6",
-        "raw_bytes": 33554432,
-        "wire_bytes": 766647,
-        "ratio": 0.0228,
-        "savings_pct": 97.72,
-        "enc_mibs": 117.4,
-        "dec_mibs": 392.1
-      },
-      {
-        "codec": "zstd-3",
-        "raw_bytes": 33554432,
-        "wire_bytes": 287238,
-        "ratio": 0.0086,
-        "savings_pct": 99.14,
-        "enc_mibs": 1113.9,
-        "dec_mibs": 987.7
-      }
-    ]
-  }
-]
->>>>>>> feat/consciousness-to-cognition
