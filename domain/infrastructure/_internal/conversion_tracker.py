@@ -93,11 +93,15 @@ class ConversionTracker:
         progress: float = None,
         message: str = None,
     ) -> ConversionStatus:
-        """Update conversion status."""
+        """Update conversion status.
+
+        Returns ``None`` when the model is not being tracked (call
+        :meth:`start` first) — consistent with ``finish``/``fail``/``get``.
+        """
         with self._lock:
             status = self._statuses.get(model_id)
             if status is None:
-                status = self.start(model_id, stage or ConversionStage.IDLE)
+                return None
 
             if stage is not None:
                 status.stage = stage
