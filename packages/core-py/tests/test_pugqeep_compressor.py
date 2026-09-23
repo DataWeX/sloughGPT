@@ -301,6 +301,16 @@ class TestPointCompressorGeneral:
         assert c.gap_fill_iterations == 4
         assert c.gap_fill_max_elements == 100_000
 
+    def test_max_fit_samples_defaults_agree(self):
+        assert PointCompressor().max_fit_samples == 500_000
+        assert PointCompressor(config=CompressorConfig()).max_fit_samples == 500_000
+        assert PointCompressor(config=CompressorConfig(max_fit_samples=42)).max_fit_samples == 42
+
+    def test_max_fit_samples_not_aliased_to_gap_fill(self):
+        cfg = CompressorConfig(gap_fill_max_elements=200_000)
+        assert PointCompressor(config=cfg).max_fit_samples == 500_000
+        assert PointCompressor(config=cfg).gap_fill_max_elements == 200_000
+
     def test_residual_threshold_set(self):
         c = PointCompressor(residual_threshold=0.5)
         assert c.residual_threshold == 0.5

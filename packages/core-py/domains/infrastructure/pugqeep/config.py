@@ -28,6 +28,7 @@ class CompressorConfig:
     lloyd_iterations: int = 5
     gap_fill_iterations: int = 4
     gap_fill_max_elements: int = 100_000
+    max_fit_samples: int = 500_000
     method: str = "cluster"
 
 
