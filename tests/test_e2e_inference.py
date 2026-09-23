@@ -371,7 +371,7 @@ class TestRegenerate:
 
     def test_regen_returns_sse_tokens(self, client, model_loaded):
         """Regenerate produces SSE tokens from stored context."""
-        resp = client.post(f"/session/{self.REGEN_SESSION}/regenerate")
+        resp = client.post(f"/chat/{self.REGEN_SESSION}/regenerate")
         assert resp.status_code == 200
         assert "text/event-stream" in resp.headers.get("content-type", "")
         events = _sse_events(resp)
@@ -383,14 +383,14 @@ class TestRegenerate:
 
     def test_regen_has_complete_event(self, client, model_loaded):
         """Regenerate SSE stream ends with complete status."""
-        resp = client.post(f"/session/{self.REGEN_SESSION}/regenerate")
+        resp = client.post(f"/chat/{self.REGEN_SESSION}/regenerate")
         events = _sse_events(resp)
         complete = [e for e in events if e.get("status") == "complete"]
         assert len(complete) >= 1
 
     def test_regen_missing_session_returns_error(self, client, model_loaded):
         """Regenerate for a session with no context returns error event."""
-        resp = client.post("/session/no-such-session/regenerate")
+        resp = client.post("/chat/no-such-session/regenerate")
         assert resp.status_code == 200
         events = _sse_events(resp)
         assert any(e.get("status") == "error" for e in events)
@@ -437,7 +437,7 @@ class TestFullCycle:
 
     def test_cycle_regenerate(self, client, model_loaded):
         """Step 3: Regenerate from saved context."""
-        resp = client.post(f"/session/{self.CYCLE_SESSION}/regenerate")
+        resp = client.post(f"/chat/{self.CYCLE_SESSION}/regenerate")
         assert resp.status_code == 200
         events = _sse_events(resp)
         tokens = "".join(

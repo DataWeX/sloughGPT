@@ -621,7 +621,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // ── Self-hosted remote (SSE streaming) ──────────────────────────────
     try {
       for await (const event of streamSSE(
-        `/session/${sessionId}/regenerate`,
+        `/chat/${sessionId}/regenerate`,
         {messages: contextMessages},
         controller.signal,
       )) {

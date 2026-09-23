@@ -48,7 +48,7 @@ class TestInitVectorStore:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
+    @patch("domain.inference.create_vector_store", new_callable=AsyncMock)
     def test_init_in_memory(self, mock_create):
         mock_create.return_value = _mock_vector_store()
         resp = self.client.post("/vector/init", json={"provider": "in_memory", "dimension": 384})
@@ -57,7 +57,7 @@ class TestInitVectorStore:
         assert data["status"] == "connected"
         assert data["provider"] == "in_memory"
 
-    @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
+    @patch("domain.inference.create_vector_store", new_callable=AsyncMock)
     def test_init_default_provider(self, mock_create):
         mock_create.return_value = _mock_vector_store()
         resp = self.client.post("/vector/init", json={})
@@ -77,7 +77,7 @@ class TestGetStats:
         assert "provider" in data
         assert "count" in data
 
-    @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
+    @patch("domain.inference.create_vector_store", new_callable=AsyncMock)
     def test_stats_with_store(self, mock_create):
         store = _mock_vector_store()
         store.count.return_value = 42
@@ -98,7 +98,7 @@ class TestUpsertVectors:
         resp = self.client.post("/vector/upsert", json={})
         assert resp.status_code == 422
 
-    @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
+    @patch("domain.inference.create_vector_store", new_callable=AsyncMock)
     def test_upsert_with_texts(self, mock_create):
         store = _mock_vector_store()
         mock_create.return_value = store
@@ -112,7 +112,7 @@ class TestUpsertVectors:
         assert data["status"] == "upserted"
         assert data["count"] == 2
 
-    @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
+    @patch("domain.inference.create_vector_store", new_callable=AsyncMock)
     def test_upsert_without_store(self, mock_create):
         mock_create.return_value = _mock_vector_store()
         resp = self.client.post("/vector/upsert", json={"texts": ["hello"]})
@@ -127,7 +127,7 @@ class TestSearchVectors:
         resp = self.client.post("/vector/search", json={})
         assert resp.status_code == 422
 
-    @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
+    @patch("domain.inference.create_vector_store", new_callable=AsyncMock)
     def test_search_with_query(self, mock_create):
         store = _mock_vector_store()
         mock_create.return_value = store
@@ -162,7 +162,7 @@ class TestVectorLifecycle:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.inference.vector_store.create_vector_store", new_callable=AsyncMock)
+    @patch("domain.inference.create_vector_store", new_callable=AsyncMock)
     def test_full_lifecycle(self, mock_create):
         store = _mock_vector_store()
         store.count.return_value = 2

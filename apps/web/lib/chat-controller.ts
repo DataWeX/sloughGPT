@@ -117,7 +117,7 @@ export const chatController = {
   async *regenerateStream(sessionId: string, messages: ChatMessage[]): AsyncGenerator<{ token?: string; done?: boolean; error?: string }> {
     const body = { session_id: sessionId, messages, regenerate: true }
     try {
-      for await (const event of streamSSE(`/session/${sessionId}/regenerate`, { body })) {
+      for await (const event of streamSSE(`/chat/${sessionId}/regenerate`, { body })) {
         if (event.status === 'error') {
           yield { error: event.message || (event.data?.error as string) || 'Stream error' }
           return

@@ -165,7 +165,7 @@ class TestChatLoopE2E:
             mc.return_value = ctrl
 
             resp = client.post(
-                "/session/no-model-test/regenerate",
+                "/chat/no-model-test/regenerate",
                 json={"messages": [{"role": "user", "content": "Hi"}]},
             )
             assert resp.status_code == 200

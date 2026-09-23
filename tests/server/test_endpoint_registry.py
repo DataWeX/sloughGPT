@@ -343,7 +343,7 @@ class TestEndpointRegistry:
     # ── regenerate endpoint (POST with no body) ────────────────────
     def test_regenerate_no_session(self):
         """Returns SSE error gracefully, not 500."""
-        r = client.post("/session/nonexistent_id/regenerate")
+        r = client.post("/chat/nonexistent_id/regenerate")
         assert r.status_code in {200, 404, 422}
 
     # ── learner ─────────────────────────────────────────────────────

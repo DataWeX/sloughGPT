@@ -522,7 +522,7 @@ export class SloughGPTClient {
   }
 
   async *regenerateStream(sessionId: string): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/session/${sessionId}/regenerate`;
+    const url = `${this.baseUrl}/chat/${sessionId}/regenerate`;
     const response = await fetch(url, { method: 'POST', headers: this.headers });
     if (!response.ok) throw new SloughGPTError(`HTTP ${response.status}`, response.status);
 
