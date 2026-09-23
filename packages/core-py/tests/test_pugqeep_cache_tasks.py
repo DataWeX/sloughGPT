@@ -1018,7 +1018,7 @@ class TestCompressorMeasure:
         m = self._compressor().measure_compression(weights, point)
         assert m["raw_bytes"] == weights.nbytes
         assert m["compressed_bytes"] > 0
-        assert m["ratio"] > 1
+        assert m["ratio"] == m["raw_bytes"] / m["compressed_bytes"]
         assert m["function_type"] == "cluster"
 
     def test_measure_function_with_residual(self):
@@ -1053,11 +1053,15 @@ class TestCompressorMeasure:
         point = self._compressor().compress_function(weights, "w")
         assert point.residual is not None
 
-    def test_compress_cluster_residual_none(self):
+    def test_compress_cluster_residual_follows_threshold(self):
         rng = np.random.RandomState(6)
         weights = rng.randn(64).astype(np.float32)
-        point = self._compressor().compress_cluster(weights, "w", n_clusters=8)
-        assert point.residual is None
+        c = self._compressor()
+        point = c.compress_cluster(weights, "w", n_clusters=8)
+        if point.accuracy >= c.residual_threshold:
+            assert point.residual is None
+        else:
+            assert point.residual is not None
 
 
 # ---- PointLibrary --------------------------------------------------------

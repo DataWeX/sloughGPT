@@ -1190,7 +1190,7 @@ class TestModelTreeExtended:
 
 class TestLoadModelToPoints:
     def test_raises_when_model_not_cached(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import load_model_to_points
+        from domain.infrastructure._internal.pugqeep.tree import load_model_to_points
 
         with pytest.raises(FileNotFoundError, match="not cached"):
             load_model_to_points("some_nonexistent_model_xyz")
@@ -1201,7 +1201,7 @@ class TestLoadModelToPoints:
 
 class TestLoadFromPoints:
     def test_load_from_points_basic(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
+        from domain.infrastructure._internal.pugqeep.tree import load_from_points
 
         lib = PointLibrary("test_model")
         lib.add(Point(identity="test_model.w", function_type="linear", params={"a": 1.0, "b": 0.0}))
@@ -1211,13 +1211,13 @@ class TestLoadFromPoints:
         assert tree.is_loaded is True
 
     def test_load_from_points_not_found(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
+        from domain.infrastructure._internal.pugqeep.tree import load_from_points
 
         with pytest.raises(FileNotFoundError):
             load_from_points(str(tmp_path / "nonexistent"))
 
     def test_load_from_points_with_meta(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
+        from domain.infrastructure._internal.pugqeep.tree import load_from_points
 
         lib = PointLibrary("test_model")
         lib.add(Point(identity="test_model.w", function_type="linear", params={"a": 1.0, "b": 0.0}))
@@ -1228,7 +1228,7 @@ class TestLoadFromPoints:
         assert tree._weight_shapes.get("w") == (10,)
 
     def test_load_from_points_no_prefix_match(self, tmp_path):
-        from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
+        from domain.infrastructure._internal.pugqeep.tree import load_from_points
 
         lib = PointLibrary("test_model")
         lib.add(Point(identity="other.w", function_type="linear", params={"a": 1.0, "b": 0.0}))
@@ -1242,7 +1242,7 @@ class TestLoadFromPoints:
 
 class TestDecompressTree:
     def test_decompress_sequential(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import decompress_tree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test", n_clusters=8)
         tree.load_weights({"a": np.ones(50, dtype=np.float32), "b": np.ones(50, dtype=np.float32)})
@@ -1252,14 +1252,14 @@ class TestDecompressTree:
         assert result["a"].shape == (50,)
 
     def test_decompress_tree_empty(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import decompress_tree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test")
         result = decompress_tree(tree)
         assert len(result) == 0
 
     def test_decompress_with_raw_point(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import decompress_tree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test", n_clusters=8, config=None)
         tree.load_weights({"w": np.array([1.0, 2.0, 3.0], dtype=np.float32)})

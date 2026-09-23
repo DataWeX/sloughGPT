@@ -202,7 +202,7 @@ class PointCompressor:
             self.gap_fill_iterations = config.gap_fill_iterations
             self.gap_fill_max_elements = config.gap_fill_max_elements
             self.method = config.method
-            self.max_fit_samples = config.gap_fill_max_elements or 100_000
+            self.max_fit_samples = config.max_fit_samples
         else:
             self.n_clusters = n_clusters
             self.lloyd_iterations = lloyd_iterations
