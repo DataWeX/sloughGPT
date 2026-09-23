@@ -19,6 +19,7 @@ Usage:
 
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -114,9 +115,8 @@ class ModelLoader:
         verify: bool,
     ) -> LoadResult:
         """Internal load implementation (caller holds _load_lock)."""
-        import time as _time
 
-        load_start = _time.monotonic()
+        load_start = time.monotonic()
 
         from .conversion_tracker import ConversionStage, get_tracker
 
@@ -145,7 +145,7 @@ class ModelLoader:
             )
             if verify and result.success:
                 self._verify_model(result)
-            elapsed_ms = (_time.monotonic() - load_start) * 1000
+            elapsed_ms = (time.monotonic() - load_start) * 1000
             logger.info(
                 "model_loader: load complete",
                 extra={
@@ -163,7 +163,7 @@ class ModelLoader:
         if soul_result is not None:
             if verify and soul_result.success:
                 self._verify_model(soul_result)
-            elapsed_ms = (_time.monotonic() - load_start) * 1000
+            elapsed_ms = (time.monotonic() - load_start) * 1000
             logger.info(
                 "model_loader: load complete",
                 extra={
@@ -176,7 +176,7 @@ class ModelLoader:
             tracker.finish(model_id)
             return soul_result
 
-        elapsed_ms = (_time.monotonic() - load_start) * 1000
+        elapsed_ms = (time.monotonic() - load_start) * 1000
         logger.warning(
             "model_loader: load failed",
             extra={
