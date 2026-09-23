@@ -36,7 +36,7 @@ def _make_registry():
 class TestRegistryListModels:
     def test_list_models(self):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure.model_registry.get_model_registry",
             return_value=_make_registry(),
         ):
             client = get_test_client()
@@ -49,7 +49,7 @@ class TestRegistryListModels:
     def test_list_models_empty(self):
         reg = _make_registry()
         reg.list_models.return_value = []
-        with patch("domains.infrastructure.model_registry.get_model_registry", return_value=reg):
+        with patch("domain.infrastructure.model_registry.get_model_registry", return_value=reg):
             client = get_test_client()
             resp = client.get("/registry/models")
             assert resp.status_code == 200
@@ -60,7 +60,7 @@ class TestRegistryListModels:
 class TestRegistryGetModel:
     def test_get_model_found(self):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure.model_registry.get_model_registry",
             return_value=_make_registry(),
         ):
             client = get_test_client()
@@ -71,7 +71,7 @@ class TestRegistryGetModel:
 
     def test_get_model_not_found(self):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure.model_registry.get_model_registry",
             return_value=_make_registry(),
         ):
             client = get_test_client()
@@ -82,7 +82,7 @@ class TestRegistryGetModel:
 class TestRegistryBest:
     def test_best_model(self):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure.model_registry.get_model_registry",
             return_value=_make_registry(),
         ):
             client = get_test_client()
@@ -96,7 +96,7 @@ class TestRegistryBest:
 class TestRegistryStats:
     def test_stats(self):
         with patch(
-            "domains.infrastructure.model_registry.get_model_registry",
+            "domain.infrastructure.model_registry.get_model_registry",
             return_value=_make_registry(),
         ):
             client = get_test_client()

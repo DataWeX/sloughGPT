@@ -111,7 +111,7 @@ def test_status_model_id_falls_back_to_registry_default(tmp_path):
     registry.default_id = "Qwen/Qwen2.5-0.5B-Instruct"
     with (
         patch("config.get_process_guard_enabled", return_value=True),
-        patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry),
+        patch("domain.infrastructure.model_registry.get_model_registry", return_value=registry),
     ):
         status = ctrl.get_process_guard_status()
     assert status["model_id"] == "Qwen/Qwen2.5-0.5B-Instruct"
@@ -158,7 +158,7 @@ def test_enable_builds_guard_for_autoloaded_model(tmp_path):
     with (
         patch("config.set_process_guard_enabled"),
         patch("config.get_process_guard_enabled", return_value=True),
-        patch("domains.infrastructure.model_registry.get_model_registry", return_value=registry),
+        patch("domain.infrastructure.model_registry.get_model_registry", return_value=registry),
         patch.object(ModelsController, "_build_process_guard", new=_fake_build),
     ):
         status = ctrl.set_process_guard_enabled(True)
@@ -183,9 +183,9 @@ def test_build_process_guard_uses_config_not_undefined_var(tmp_path):
         patch("config.get_process_guard_enabled", return_value=True),
         patch("config.ServerConfig.from_env", return_value=cfg),
         patch(
-            "domains.infrastructure.process_guard.ProcessGuard", return_value=fake_guard
+            "domain.infrastructure.process_guard.ProcessGuard", return_value=fake_guard
         ) as pg_cls,
-        patch("domains.infrastructure.model_resolver.get_model_dir", return_value=slnc_dir.parent),
+        patch("domain.infrastructure.model_resolver.get_model_dir", return_value=slnc_dir.parent),
         patch("os.path.exists", return_value=True),
     ):
         guard = ctrl._build_process_guard("Fake/Model")
@@ -233,9 +233,9 @@ def test_build_process_guard_propagates_guard_to_provider_server(tmp_path):
         with (
             patch("config.get_process_guard_enabled", return_value=True),
             patch("config.ServerConfig.from_env", return_value=cfg),
-            patch("domains.infrastructure.process_guard.ProcessGuard", return_value=rebuilt_guard),
+            patch("domain.infrastructure.process_guard.ProcessGuard", return_value=rebuilt_guard),
             patch(
-                "domains.infrastructure.model_resolver.get_model_dir",
+                "domain.infrastructure.model_resolver.get_model_dir",
                 return_value=Path("/tmp/models--Fake--Model"),
             ),
             patch("os.path.exists", return_value=True),
