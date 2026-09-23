@@ -75,11 +75,6 @@ class PriorityRequestQueue:
         self._max_wait_s = 0.0
         self._metrics_lock = Lock()
 
-        # Atomic depth counters (updated under _lock, read under _metrics_lock)
-        self._depth_high = 0
-        self._depth_medium = 0
-        self._depth_low = 0
-
     # --- Public API ---
 
     async def acquire(
@@ -115,13 +110,6 @@ class PriorityRequestQueue:
             )
             self._order_counter += 1
             heapq.heappush(self._heap, item)
-            # Update atomic depth counters
-            if item.priority == 0:
-                self._depth_high += 1
-            elif item.priority == 1:
-                self._depth_medium += 1
-            elif item.priority == 2:
-                self._depth_low += 1
 
         logger.debug(
             "Acquire enqueued",
@@ -178,13 +166,6 @@ class PriorityRequestQueue:
             )
             self._order_counter += 1
             heapq.heappush(self._heap, item)
-            # Update atomic depth counters
-            if item.priority == 0:
-                self._depth_high += 1
-            elif item.priority == 1:
-                self._depth_medium += 1
-            elif item.priority == 2:
-                self._depth_low += 1
 
         logger.debug(
             "Enqueued",
@@ -210,9 +191,6 @@ class PriorityRequestQueue:
         """
         items = list(self._heap)
         self._heap.clear()
-        self._depth_high = 0
-        self._depth_medium = 0
-        self._depth_low = 0
         for item in items:
             if inspect.iscoroutine(item.coro):
                 item.coro.close()
@@ -225,33 +203,39 @@ class PriorityRequestQueue:
         if not self._heap:
             return None
         item = heapq.heappop(self._heap)
-        # Update atomic depth counters
-        if item.priority == 0:
-            self._depth_high -= 1
-        elif item.priority == 1:
-            self._depth_medium -= 1
-        elif item.priority == 2:
-            self._depth_low -= 1
         return item
 
     async def depth(self) -> list[int]:
         """Return queue depth per priority level: [high, medium, low]."""
         async with self._lock:
-            return [self._depth_high, self._depth_medium, self._depth_low]
+            return self._heap_depth()
+
+    def _heap_depth(self) -> list[int]:
+        """Depth per priority derived from the heap (source of truth)."""
+        high = medium = low = 0
+        for item in self._heap:
+            if item.priority == 0:
+                high += 1
+            elif item.priority == 1:
+                medium += 1
+            elif item.priority == 2:
+                low += 1
+        return [high, medium, low]
 
     @property
     def in_flight(self) -> int:
         return self._in_flight
 
     def metrics_snapshot(self) -> QueueMetrics:
-        """Return queue metrics snapshot (thread-safe, no heap iteration)."""
+        """Return queue metrics snapshot (thread-safe, heap-derived depth)."""
         with self._metrics_lock:
             avg = (self._total_wait / max(self._served, 1)) * 1000
+            depth_high, depth_medium, depth_low = self._heap_depth()
             return QueueMetrics(
-                depth_high=self._depth_high,
-                depth_medium=self._depth_medium,
-                depth_low=self._depth_low,
-                total_depth=self._depth_high + self._depth_medium + self._depth_low,
+                depth_high=depth_high,
+                depth_medium=depth_medium,
+                depth_low=depth_low,
+                total_depth=depth_high + depth_medium + depth_low,
                 served=self._served,
                 avg_wait_ms=avg,
                 max_wait_ms=self._max_wait_s * 1000,
