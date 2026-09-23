@@ -222,17 +222,13 @@ class _StackProvider:
     """
 
     def __init__(self, model):
-        import threading
+        from domain.infrastructure._internal.kv_cache.session import SessionKVManager
 
         self._model = model
-        self._kv_states = {}
-        self._kv_last_access = {}
-        self._kv_ttl = 3600.0
-        self._kv_max_sessions = 64
-        self._kv_lock = threading.Lock()
+        self._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=64)
 
     def _cached_tokens(self):
-        return sum(s.kv_len[0] if s.kv_len else 0 for s in self._kv_states.values())
+        return sum(s.kv_len[0] if s.kv_len else 0 for s in self._kv_manager.kv_states.values())
 
     def _get_model(self):
         return self._model
@@ -299,7 +295,7 @@ def benchmark_stack(
 
         # Honest reuse: how many of the current prompt's ids are already
         # cached in the session state's previous full output (prompt + out).
-        state = provider._kv_states.get(session_id)
+        state = provider._kv_manager.kv_states.get(session_id)
         if state is not None and state.prev_ids is not None:
             reused = prefix_match(prompt_ids, state.prev_ids.tolist()[0])
         else:
@@ -339,7 +335,7 @@ def benchmark_stack(
         min_len = min(len(warm_ids), len(cold_ids))
         match = float(np.mean(np.array(warm_ids[:min_len]) == np.array(cold_ids[:min_len]))) * 100
 
-        state = provider._kv_states.get(session_id)
+        state = provider._kv_manager.kv_states.get(session_id)
         kv_mem = 0.0 if state is None else kv_state_memory_kb(state)
 
         rows.append(
@@ -355,10 +351,11 @@ def benchmark_stack(
             }
         )
 
-        # Batch generate() echoes the prompt; streaming yields only new tokens.
-        # Retain the full prior turn (prompt + output) so the next prompt is a
-        # strict extension of the cached sequence and can reuse its K/V.
-        history = (prompt + out_warm) if stream else out_warm
+        # The server returns only new tokens (prompt stripped via
+        # generated_ids) on both batch and stream paths, so retain the full
+        # prior turn (prompt + output) — the next prompt must be a strict
+        # extension of the cached sequence to reuse its K/V.
+        history = prompt + out_warm
 
     total_warm = sum(r["warm_ms"] for r in rows)
     total_cold = sum(r["cold_ms"] for r in rows)
@@ -466,8 +463,9 @@ def _make_stack(model, model_id="bench", quantize_kv=False):
     """Build the serving-stack triple used by the stack benchmark modes.
 
     Wires the provider's session-KV methods (``_resolve_session_kv`` and the
-    TTL/LRU evictors) onto a minimal ``_StackProvider`` so the server can keep
+    TTL evictor) onto a minimal ``_StackProvider`` so the server can keep
     per-session KV state in a thread-safe map, exactly like production.
+    LRU eviction is owned by ``SessionKVManager.set_session`` — no patch.
 
     Args:
         model: SloTransformer instance.
@@ -487,7 +485,6 @@ def _make_stack(model, model_id="bench", quantize_kv=False):
     provider = _StackProvider(model)
     provider._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, provider)
     provider._evict_stale_sessions = MethodType(SloNetChatProvider._evict_stale_sessions, provider)
-    provider._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, provider)
     server = SloNetServer(
         model=model,
         tokenizer=tokenizer,
@@ -550,7 +547,7 @@ def benchmark_sessions(
             prompt_len = len(prompt_ids)
             sid = f"bench-{s}"
 
-            state = provider._kv_states.get(sid)
+            state = provider._kv_manager.kv_states.get(sid)
             if state is not None and state.prev_ids is not None:
                 reused = prefix_match(prompt_ids, state.prev_ids.tolist()[0])
             else:
@@ -593,7 +590,7 @@ def benchmark_sessions(
                 float(np.mean(np.array(warm_ids[:min_len]) == np.array(cold_ids[:min_len]))) * 100
             )
 
-            state = provider._kv_states.get(sid)
+            state = provider._kv_manager.kv_states.get(sid)
             kv_mem = 0.0 if state is None else kv_state_memory_kb(state)
 
             rows.append(
@@ -610,7 +607,7 @@ def benchmark_sessions(
                 }
             )
 
-            histories[s] = (prompt + out_warm) if stream else out_warm
+            histories[s] = prompt + out_warm
 
     isolation_ok = all(
         reuse[0] == 0 and all(b > a for a, b in zip(reuse, reuse[1:], strict=False))
