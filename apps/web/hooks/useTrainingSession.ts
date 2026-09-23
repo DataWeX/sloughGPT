@@ -207,7 +207,13 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             appShellStore.getState().resetTraining()
             useToastStore
               .getState()
-              .addToast('Previous training session expired — server was restarted', 'info')
+              .addToast(
+                'Previous training session expired — server was restarted',
+                'info',
+                undefined,
+                undefined,
+                'training-session-expired',
+              )
             return
           }
 

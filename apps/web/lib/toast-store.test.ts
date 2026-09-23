@@ -74,4 +74,35 @@ describe('toast-store', () => {
     expect(id2).not.toBe(id1)
     expect(useToastStore.getState().toasts).toHaveLength(1)
   })
+
+  it('dedupes by explicit key even when messages differ', () => {
+    const id1 = useToastStore.getState().addToast(
+      'Previous training session expired — server was restarted',
+      'info',
+      undefined,
+      undefined,
+      'training-session-expired',
+    )
+    const id2 = useToastStore.getState().addToast(
+      'Session expired',
+      'info',
+      undefined,
+      undefined,
+      'training-session-expired',
+    )
+    expect(id2).toBe(id1)
+    expect(useToastStore.getState().toasts).toHaveLength(1)
+  })
+
+  it('does not dedupe a keyed toast against an unkeyed toast with the same message', () => {
+    useToastStore.getState().addToast('Session expired', 'info', undefined, undefined, 'k-session')
+    useToastStore.getState().addToast('Session expired', 'info')
+    expect(useToastStore.getState().toasts).toHaveLength(2)
+  })
+
+  it('keeps toasts with the same message but different keys distinct', () => {
+    useToastStore.getState().addToast('Session expired', 'info', undefined, undefined, 'k-a')
+    useToastStore.getState().addToast('Session expired', 'info', undefined, undefined, 'k-b')
+    expect(useToastStore.getState().toasts).toHaveLength(2)
+  })
 })
