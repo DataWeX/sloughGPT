@@ -68,21 +68,7 @@ TESTS_DIR = Path(__file__).resolve().parents[2] / "apps" / "api" / "server" / "t
 # SHRINK (zero new inert patches); every line here is an entry to re-point at
 # the module the router actually binds (``domain.*`` or ``domain.*._internal``)
 # as part of the on-going legacy sweep.
-_LEGACY_PATCH_TARGETS: frozenset[str] = frozenset(
-    {
-        'test_kb_router.py|patch("domains.cognitive.rag_service.get_rag_service"',
-        'test_kb_router.py|patch("domains.infrastructure.truth_labeler.get_truth_labeler"',
-        'test_unified_training_routes.py|patch("domains.training.service.checkpoint_info"',
-        'test_unified_training_routes.py|patch("domains.training.service.delete_checkpoint"',
-        'test_unified_training_routes.py|patch("domains.training.service.download_checkpoint_path"',
-        'test_unified_training_routes.py|patch("domains.training.service.get_all_checkpoint_data"',
-        'test_unified_training_routes.py|patch("domains.training.service.get_log"',
-        'test_unified_training_routes.py|patch("domains.training.service.list_checkpoints"',
-        'test_unified_training_routes.py|patch("domains.training.service.load_checkpoint"',
-        'test_unified_training_routes.py|patch("domains.training.service.start_from_sessions_training"',
-        'test_unified_training_routes.py|patch("domains.training.service.start_turbo_training"',
-    }
-)
+_LEGACY_PATCH_TARGETS: frozenset[str] = frozenset()
 
 
 def test_no_new_legacy_domains_patch_targets() -> None:

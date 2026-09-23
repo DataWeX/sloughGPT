@@ -33,7 +33,7 @@ def _reset():
 class TestTrainingLog:
     def test_delegates_to_core_service(self):
         with patch(
-            "domains.training.service.get_log",
+            "domain.training._internal.service.get_log",
             new_callable=AsyncMock,
             return_value=["line1", "line2"],
         ):
@@ -64,7 +64,7 @@ class TestTrainingTurboStart:
         request_body = {"epochs": 5, "n_embed": 64}
 
         with patch(
-            "domains.training.service.start_turbo_training",
+            "domain.training._internal.service.start_turbo_training",
             return_value={"job_id": "t1", "data_path": "/tmp/data"},
         ):
             with patch("domain.training._internal.service.run_turbo_worker"):
@@ -80,7 +80,7 @@ class TestTrainingTurboStart:
 class TestTrainingCheckpoints:
     def test_list_checkpoints(self):
         with patch(
-            "domains.training.service.list_checkpoints",
+            "domain.training._internal.service.list_checkpoints",
             new_callable=AsyncMock,
             return_value=[{"name": "v1.soul"}],
         ):
@@ -92,7 +92,7 @@ class TestTrainingCheckpoints:
 
     def test_delete_checkpoint(self):
         with patch(
-            "domains.training.service.delete_checkpoint",
+            "domain.training._internal.service.delete_checkpoint",
             new_callable=AsyncMock,
             return_value=["old.soul"],
         ):
@@ -103,7 +103,7 @@ class TestTrainingCheckpoints:
 
     def test_load_checkpoint(self):
         with patch(
-            "domains.training.service.load_checkpoint",
+            "domain.training._internal.service.load_checkpoint",
             new_callable=AsyncMock,
             return_value={"name": "v1.soul", "vocab_size": 100},
         ):
@@ -114,7 +114,7 @@ class TestTrainingCheckpoints:
 
     def test_checkpoint_info(self):
         with patch(
-            "domains.training.service.checkpoint_info",
+            "domain.training._internal.service.checkpoint_info",
             new_callable=AsyncMock,
             return_value={"name": "v1.soul", "loss": 0.42},
         ):
@@ -125,7 +125,7 @@ class TestTrainingCheckpoints:
 
     def test_download_checkpoint(self):
         with patch(
-            "domains.training.service.download_checkpoint_path",
+            "domain.training._internal.service.download_checkpoint_path",
             new_callable=AsyncMock,
             return_value="/fake/path.soul",
         ):
@@ -142,7 +142,7 @@ class TestTrainingCheckpoints:
 class TestTrainingMetricsExport:
     def test_delegates_to_core_service(self):
         with patch(
-            "domains.training.service.get_all_checkpoint_data",
+            "domain.training._internal.service.get_all_checkpoint_data",
             new_callable=AsyncMock,
             return_value=[{"name": "v1.soul"}],
         ):
@@ -187,7 +187,7 @@ class TestFromSessionsStart:
         request_body = {"epochs": 3}
 
         with patch(
-            "domains.training.service.start_from_sessions_training",
+            "domain.training._internal.service.start_from_sessions_training",
             return_value={"method": "from-sessions", "epochs": 3},
         ):
             resp = client.post("/training/from-sessions-start", json=request_body)
