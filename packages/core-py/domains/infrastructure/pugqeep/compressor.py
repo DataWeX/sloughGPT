@@ -144,6 +144,36 @@ class HuffmanTree:
         return {str(k): v for k, v in self.codes.items()}
 
 
+def _unique_random_indices(choice, n: int, k: int) -> np.ndarray:
+    """Pick ``k`` distinct indices from ``range(n)``.
+
+    ``choice`` is either ``np.random.choice`` or ``numpy.random.Generator``'s
+    (identical call signature). For huge ``n`` with small ``k`` the vanilla
+    ``choice(n, k, replace=False)`` materializes an O(n) permutation for every
+    pick; this keeps large-n sampling at O(k) via replacement draws plus
+    rejection, while preserving the exact legacy permutation path for the
+    small / dense-fraction cases.
+    """
+    k = min(k, n)
+    if k <= 0:
+        return np.empty(0, dtype=np.intp)
+    if n > 100_000 and k < n // 2:
+        seen = set()
+        idx = np.empty(k, dtype=np.intp)
+        filled = 0
+        while filled < k:
+            draws = choice(n, size=k - filled, replace=True)
+            for d in draws.tolist():
+                if d not in seen:
+                    seen.add(d)
+                    idx[filled] = d
+                    filled += 1
+                    if filled == k:
+                        break
+        return idx
+    return np.asarray(choice(n, k, replace=False))
+
+
 class PointCompressor:
     """Compresses weight tensors into points (generator functions).
 
@@ -172,12 +202,14 @@ class PointCompressor:
             self.gap_fill_iterations = config.gap_fill_iterations
             self.gap_fill_max_elements = config.gap_fill_max_elements
             self.method = config.method
+            self.max_fit_samples = config.gap_fill_max_elements or 100_000
         else:
             self.n_clusters = n_clusters
             self.lloyd_iterations = lloyd_iterations
             self.gap_fill_iterations = 4
             self.gap_fill_max_elements = 100_000
             self.method = "cluster"
+            self.max_fit_samples = 500_000
         self.residual_threshold = residual_threshold
         self.adaptive_k = adaptive_k
         self.quantize_centroids = quantize_centroids
@@ -229,12 +261,15 @@ class PointCompressor:
 
         nc = n_clusters
 
-        # k-means++ initialization (sample-based for speed)
+        # k-means++ initialization (sample-based for speed). For huge tensors
+        # the plain ``choice(n, k, replace=False)`` allocates an O(n)
+        # permutation of the full array on every centroid pick; the helper
+        # below keeps that cost O(k · log n) (or O(n) once when k ≈ n).
         centroids = np.empty(nc, dtype=np.float32)
         idx = rand_int(n)
         centroids[0] = flat[idx]
         for i in range(1, nc):
-            sample_idx = choice(n, min(1000, n), replace=False)
+            sample_idx = _unique_random_indices(choice, n, min(1000, n))
             sample = flat[sample_idx]
             dists = np.min(np.abs(sample[:, None] - centroids[:i, None].T), axis=1)
             probs = dists**2
@@ -246,22 +281,36 @@ class PointCompressor:
             centroids[i] = sample[choice(len(sample), p=probs)]
         centroids.sort()
 
-        # Lloyd's refinement with early stopping
+        # Lloyd's refinement with early stopping. For tensors larger than
+        # ``max_fit_samples`` the per-iteration scan is bounded to a random
+        # subsample; after the loop the full array is re-assigned exactly so
+        # final assignments always reflect the final centroids.
+        fit = flat
+        fit_idx = None
+        if n > self.max_fit_samples:
+            fit_idx = _unique_random_indices(
+                choice, n, min(self.max_fit_samples, int(n * 0.1) + 1)
+            )
+            fit = flat[fit_idx]
         prev_inertia = float("inf")
         for _ in range(self.lloyd_iterations):
-            assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
-            sums = np.bincount(assignments, weights=flat, minlength=nc)
+            assignments = np.clip(np.searchsorted(centroids, fit), 0, nc - 1).astype(np.uint8)
+            sums = np.bincount(assignments, weights=fit, minlength=nc)
             counts = np.bincount(assignments, minlength=nc).astype(np.float64)
             alive = counts > 0
             centroids[alive] = (sums[alive] / counts[alive]).astype(np.float32)
             # Early stop if converged (skip first pass: prev is inf, inf-inf is nan)
-            inertia = np.sum((flat - centroids[assignments]) ** 2)
+            inertia = np.sum((fit - centroids[assignments]) ** 2)
             if (
                 prev_inertia != float("inf")
                 and abs(prev_inertia - inertia) / (prev_inertia + 1e-10) < 1e-6
             ):
                 break
             prev_inertia = inertia
+        if fit_idx is not None:
+            assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
+        elif n > 0 and self.lloyd_iterations > 0:
+            assignments = np.clip(np.searchsorted(centroids, flat), 0, nc - 1).astype(np.uint8)
 
         # Quantize centroids to int8 if enabled and safe
         centroid_quantized = False

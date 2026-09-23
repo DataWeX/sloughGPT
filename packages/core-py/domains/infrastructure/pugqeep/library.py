@@ -348,9 +348,13 @@ class PointLibrary:
         if point is None:
             return None
         if point.function_type == "cluster":
-            centroids = point.params["centroids"]
-            assignments = point.params["assignments"]
-            result = centroids[assignments]
+            # Route through Point.generate so huffman decoding, centroid
+            # dequantization and residual application stay in one place.
+            if point.shape:
+                n = int(np.prod(point.shape))
+            else:
+                n = len(point.params["assignments"])
+            result = point.generate(n)
         else:
             # Prefer explicit shape, then stored point.shape, else fallback
             if shape is not None:
@@ -358,7 +362,7 @@ class PointLibrary:
             elif point.shape:
                 n = int(np.prod(point.shape))
             else:
-                n = 1000
+                n = 100 * len(point.params)
             result = point.generate(n)
         if shape is not None:
             result = result.reshape(shape)

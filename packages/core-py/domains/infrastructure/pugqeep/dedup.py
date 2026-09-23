@@ -78,15 +78,22 @@ class PointDeduplicator:
 
     def _fingerprint(self, point: Point) -> str:
         if point.function_type == "cluster":
+            # Fingerprint the *materialized* content (dequantized nearest
+            # centroid per element), not the raw parametrization: two
+            # compressions of identical weights can legitimately produce
+            # different (centroids, assignments) pairs yet reconstruct the
+            # same content, and those are the points we want to share.
             cents = point.params["centroids"]
-            assns = point.params["assignments"]
+            if point.params.get("centroid_quantized"):
+                cents = (
+                    cents.astype(np.float64)
+                    - point.params["centroid_zero_point"]
+                ) * point.params["centroid_scale"]
+            recon = cents[point.params["assignments"]].astype(np.float64)
             if self._tolerance > 0:
-                # Quantize centroids to tolerance before hashing
                 step = self._tolerance
-                cents_q = np.round(cents / step) * step
-                data = cents_q.tobytes() + assns.tobytes()
-            else:
-                data = cents.tobytes() + assns.tobytes()
+                recon = np.round(recon / step) * step
+            data = recon.tobytes()
         elif point.function_type == "raw":
             raw = base64.b64decode(point.params["data_b64"])
             if self._tolerance > 0:

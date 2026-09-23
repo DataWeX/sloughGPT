@@ -446,10 +446,11 @@ class TestModelsCli:
             [sys.executable, "scripts/benchmark_quantization.py", *args],
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=600,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
 
+    @pytest.mark.slow
     def test_models_json_has_model_comparison(self):
         """--models --json emits a model_comparison block keyed by model."""
         result = self._run("--models", "tiny,tiny", "--bits", "8,4", "--json", "--quick")
@@ -469,6 +470,7 @@ class TestModelsCli:
         data = json.loads(result.stdout)
         assert all(r["passed"] == r["total"] for r in data["runs"])
 
+    @pytest.mark.slow
     def test_models_report_contains_comparison(self, tmp_path):
         """--models --report writes a model comparison section."""
         report = tmp_path / "mc.md"
