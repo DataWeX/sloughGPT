@@ -421,11 +421,25 @@ class ToolRegistry:
             return {"output": "", "error": str(e)}
 
     async def _run_knowledge_retrieval(self, query: str) -> dict[str, Any]:
-        """Search the knowledge base (docs/*.md, README, etc.)."""
-        import glob
-        import os
-
+        """Search the knowledge base (vector RAG first, docs fallback)."""
+        rag = self._query_knowledge_engine(query)
+        if rag:
+            blocks = []
+            for m in rag:
+                source = m.get("source") or m.get("topic") or "knowledge"
+                blocks.append(
+                    f"**{source}** (topic: {m.get('topic', 'general')}):\n{m['content'][:500]}"
+                )
+            return {
+                "output": f"Found {len(rag)} relevant documents:\n\n"
+                + "\n\n---\n\n".join(blocks[:5]),
+                "engine": "rag",
+                "count": len(rag),
+            }
         try:
+            import glob
+            import os
+
             workspace = os.environ.get("WORKSPACE_ROOT", ".")
             patterns = ["docs/**/*.md", "README*", "*.md", "CHANGELOG*"]
             files = []
@@ -445,11 +459,44 @@ class ToolRegistry:
             if matches:
                 return {
                     "output": f"Found {len(matches)} relevant documents:\n\n"
-                    + "\n\n---\n\n".join(matches[:5])
+                    + "\n\n---\n\n".join(matches[:5]),
+                    "engine": "files",
+                    "count": len(matches),
                 }
-            return {"output": f"No documents found matching '{query}'."}
+            return {
+                "output": f"No documents found matching '{query}'.",
+                "engine": "files",
+                "count": 0,
+            }
         except Exception as e:
             return {"output": "", "error": str(e)}
+
+    def _query_knowledge_engine(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Query the canonical KnowledgeEngine RAG store.
+
+        Returns normalized fact dicts; empty list on any failure so callers
+        can degrade to file-based fallback instead of erroring the tool.
+        """
+        try:
+            from domain.knowledge import get_knowledge_engine
+
+            result = get_knowledge_engine().query(query, top_k=limit)
+            if not result.success or not result.data:
+                return []
+            matches = []
+            for fact in result.data:
+                matches.append(
+                    {
+                        "content": fact.get("content", ""),
+                        "topic": fact.get("topic", "general"),
+                        "source": fact.get("source") or fact.get("url") or fact.get("path") or "",
+                        "score": round(float(fact.get("score", 0.0)), 4),
+                    }
+                )
+            return matches
+        except Exception as e:
+            logger.debug("Knowledge engine query failed, falling back: %s", e)
+            return []
 
     async def _run_image_analysis(self, image_path: str) -> dict[str, Any]:
         """Analyze an image using VisionCNN — embedding, caption, and object detection."""
