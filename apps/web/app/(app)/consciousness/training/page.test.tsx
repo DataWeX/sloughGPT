@@ -185,7 +185,7 @@ describe('ConsciousnessTrainingPage', () => {
   it('displays training history', async () => {
     render(<ConsciousnessTrainingPage />, { wrapper: TestWrapper })
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_training.history_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_training.last_result').length).toBeGreaterThan(0)
     })
   })
 
