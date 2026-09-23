@@ -12,10 +12,9 @@ import threading
 
 import httpx
 import pytest
-
-from app_planner.gui import GuiHandler, GuiServer, GUI_HTML, _bind_server
-from app_planner.core import NoteStore
 from app_planner.cli import cli_main
+from app_planner.core import NoteStore
+from app_planner.gui import GUI_HTML, GuiHandler, GuiServer, _bind_server
 from app_planner.kanban import KanbanStore
 
 BACKENDS = ["file", "mogdb"]
@@ -70,10 +69,15 @@ def test_card_html_note_chip_has_no_tdz_self_reference():
 
 def test_create_list_and_get_note(server):
     with _client() as c:
-        r = c.post(server.base_url + "/api/notes", json={
-            "title": "GUI test note", "tags": ["gui", "test"], "status": "wip",
-            "body": "Some body text",
-        })
+        r = c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "GUI test note",
+                "tags": ["gui", "test"],
+                "status": "wip",
+                "body": "Some body text",
+            },
+        )
         assert r.status_code == 200
         created = r.json()["note"]
         assert created["title"] == "GUI test note"
@@ -97,33 +101,51 @@ def test_create_note_requires_title(server):
 
 def test_create_note_rejects_bad_status(server):
     with _client() as c:
-        r = c.post(server.base_url + "/api/notes", json={
-            "title": "Bad status", "status": "nonsense",
-        })
+        r = c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "Bad status",
+                "status": "nonsense",
+            },
+        )
     assert r.status_code == 400
 
 
 def test_create_note_accepts_todo_status(server):
     with _client() as c:
-        r = c.post(server.base_url + "/api/notes", json={
-            "title": "Backlog", "status": "todo",
-        })
+        r = c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "Backlog",
+                "status": "todo",
+            },
+        )
         assert r.status_code == 200
         assert r.json()["note"]["status"] == "todo"
-        r = c.put(server.base_url + "/api/notes/" + r.json()["note"]["id"],
-                  json={"status": "todo"})
+        r = c.put(server.base_url + "/api/notes/" + r.json()["note"]["id"], json={"status": "todo"})
         assert r.status_code == 200
         assert r.json()["note"]["status"] == "todo"
 
 
 def test_update_note(server):
     with _client() as c:
-        created = c.post(server.base_url + "/api/notes", json={
-            "title": "Before", "tags": ["a"], "status": "open",
-        }).json()["note"]
-        r = c.put(server.base_url + "/api/notes/" + created["id"], json={
-            "title": "After", "status": "done", "tags": ["a", "b"], "body": "updated",
-        })
+        created = c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "Before",
+                "tags": ["a"],
+                "status": "open",
+            },
+        ).json()["note"]
+        r = c.put(
+            server.base_url + "/api/notes/" + created["id"],
+            json={
+                "title": "After",
+                "status": "done",
+                "tags": ["a", "b"],
+                "body": "updated",
+            },
+        )
         assert r.status_code == 200
         note = r.json()["note"]
         assert note["title"] == "After"
@@ -134,14 +156,23 @@ def test_update_note(server):
 
 def test_note_author_and_assignee(server):
     with _client() as c:
-        created = c.post(server.base_url + "/api/notes", json={
-            "title": "Task", "author": "bob", "assignee": "alice",
-        }).json()["note"]
+        created = c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "Task",
+                "author": "bob",
+                "assignee": "alice",
+            },
+        ).json()["note"]
         assert created["author"] == "bob"
         assert created["assignee"] == "alice"
-        r = c.put(server.base_url + "/api/notes/" + created["id"], json={
-            "author": "carol", "assignee": "dave",
-        })
+        r = c.put(
+            server.base_url + "/api/notes/" + created["id"],
+            json={
+                "author": "carol",
+                "assignee": "dave",
+            },
+        )
         assert r.status_code == 200
         note = r.json()["note"]
         assert note["author"] == "carol"
@@ -168,17 +199,31 @@ def test_delete_note(server):
 
 def test_list_filters(server):
     with _client() as c:
-        c.post(server.base_url + "/api/notes", json={
-            "title": "alpha", "tags": ["core"], "status": "wip", "body": "zebra stripes",
-        })
-        c.post(server.base_url + "/api/notes", json={
-            "title": "beta", "tags": ["ui"], "status": "done", "body": "buttons",
-        })
+        c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "alpha",
+                "tags": ["core"],
+                "status": "wip",
+                "body": "zebra stripes",
+            },
+        )
+        c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "beta",
+                "tags": ["ui"],
+                "status": "done",
+                "body": "buttons",
+            },
+        )
         by_tag = c.get(server.base_url + "/api/notes", params={"tag": "core"}).json()["notes"]
         assert [n["title"] for n in by_tag] == ["alpha"]
         by_status = c.get(server.base_url + "/api/notes", params={"status": "done"}).json()["notes"]
         assert [n["title"] for n in by_status] == ["beta"]
-        by_query = c.get(server.base_url + "/api/notes", params={"query": "buttons"}).json()["notes"]
+        by_query = c.get(server.base_url + "/api/notes", params={"query": "buttons"}).json()[
+            "notes"
+        ]
         assert [n["title"] for n in by_query] == ["beta"]
         all_notes = c.get(server.base_url + "/api/notes").json()["notes"]
         assert len(all_notes) == 2
@@ -194,9 +239,14 @@ def test_board_returns_default_columns(server):
 
 def test_sync_creates_cards_for_notes(server):
     with _client() as c:
-        c.post(server.base_url + "/api/notes", json={
-            "title": "Cardable note", "tags": ["x"], "status": "open",
-        })
+        c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "Cardable note",
+                "tags": ["x"],
+                "status": "open",
+            },
+        )
         r = c.post(server.base_url + "/api/sync")
         assert r.status_code == 200
         body = r.json()
@@ -219,9 +269,13 @@ def test_sync_is_idempotent(server):
 
 def test_move_card_syncs_note_status(server):
     with _client() as c:
-        created = c.post(server.base_url + "/api/notes", json={
-            "title": "Drag me to done", "status": "wip",
-        }).json()["note"]
+        created = c.post(
+            server.base_url + "/api/notes",
+            json={
+                "title": "Drag me to done",
+                "status": "wip",
+            },
+        ).json()["note"]
         c.post(server.base_url + "/api/sync")
         card = c.get(server.base_url + "/api/board").json()["board"]["cards"][0]
         assert card["title"] == created["title"]
@@ -289,7 +343,9 @@ def test_cli_gui_subcommand_dispatches():
 def test_python_m_dispatch():
     proc = subprocess.run(
         [sys.executable, "-m", "app_planner", "gui", "--help"],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )
     assert proc.returncode == 0
     assert "Local web interface" in proc.stdout
@@ -297,6 +353,7 @@ def test_python_m_dispatch():
 
 def test_bind_server_steps_past_occupied_port(tmp_path):
     import socket
+
     note_store = NoteStore(notes_dir=tmp_path / "notes", backend="file")
     kanban_store = KanbanStore(board_dir=tmp_path / "kanban")
     blocker = socket.socket()

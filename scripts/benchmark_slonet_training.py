@@ -38,6 +38,22 @@ def main():
 
     configs = [
         {
+            "name": "gate",
+            "n_embed": 64,
+            "n_layer": 1,
+            "n_head": 4,
+            "block_size": 32,
+            "batch_size": 32,
+            "epochs": 200,
+            "learning_rate": 2e-3,
+            "warmup_steps": 20,
+            "min_lr": 1e-6,
+            "weight_decay": 0.0,
+            "min_data_quality": 0.0,
+            "max_toxicity_rate": 1.0,
+            "max_steps": 120,
+        },
+        {
             "name": "tiny",
             "n_embed": 32,
             "n_layer": 1,
@@ -78,6 +94,20 @@ def main():
         print(f"\n{'=' * 60}")
         print(f"  Config: {name}  ({cfg['n_embed']}d / {cfg['n_layer']}L / {cfg['n_head']}H)")
         print(f"{'=' * 60}")
+
+        # Deterministic gate (goal 16): the whole benchmark is reproducible.
+        np.random.seed(0)
+
+        if name == "gate":
+            # Gate corpus: 10-cycle over a 10-char alphabet so next-char is a pure
+            # function of the previous char — a 64-embed 1-layer model can reach
+            # literal near-zero, proving the loop's soundness (no capacity ceiling).
+            cycle = "abcdefgjkl"
+            gate_corpus = "".join(cycle[i % len(cycle)] for i in range(2201))
+            gate_path = "/tmp/slobench-gate-corpus.txt"
+            with open(gate_path, "w") as fh:
+                fh.write(gate_corpus)
+            data_path = gate_path
 
         config = TrainerConfig(
             vocab_size=0,  # auto-detect
@@ -133,6 +163,21 @@ def main():
         # Perplexity from final loss
         perplexity = np.exp(final_loss) if final_loss and final_loss < 10 else float("inf")
 
+        # Goal 16 gate: literal near-zero (<0.01) for the gate config's
+        # deterministic corpus; strong convergence ratio (<10% of initial)
+        # as the general per-config signal.
+        near_zero_threshold = 0.01 if name == "gate" else None
+        initial_loss = loss_values[0] if loss_values else 0.0
+        converged = bool(
+            initial_loss > 0
+            and final_loss is not None
+            and np.isfinite(final_loss)
+            and final_loss > 0
+            and final_loss < initial_loss * 0.10
+            and final_loss < 0.5
+            and (near_zero_threshold is None or final_loss < near_zero_threshold)
+        )
+
         r = {
             "config": name,
             "params": n_params,
@@ -146,6 +191,7 @@ def main():
             "initial_loss": round(loss_values[0], 4) if loss_values else None,
             "final_loss": round(final_loss, 4) if final_loss else None,
             "convergence_ratio": round(convergence, 2),
+            "gate_converged": converged,
             "perplexity": round(perplexity, 2) if perplexity < 1e6 else "inf",
             "peak_memory_mb": round(peak_mem / 1024 / 1024, 1),
             "loss_curve": [
@@ -161,6 +207,13 @@ def main():
             f"{r['steps_per_sec']} steps/s | loss {r['initial_loss']} → {r['final_loss']} | "
             f"ppl {r['perplexity']} | {r['peak_memory_mb']} MB"
         )
+
+        if name == "gate":
+            verdict = "PASS" if converged else "FAIL"
+            print(
+                f"  [GATE goal-16] {verdict}  final={final_loss:.2e} < 0.01 near-zero, "
+                f"< 10% of initial={initial_loss:.4f} in {steps} steps"
+            )
 
     # Summary table
     print(f"\n{'=' * 72}")

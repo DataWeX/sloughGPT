@@ -21,14 +21,12 @@ Usage as a CLI::
 
 from __future__ import annotations
 
-import os
+import logging
 import re
 import sys
-import json
-import logging
-from datetime import datetime, timezone, date
+from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 from pathlib import Path
-from dataclasses import dataclass, field, asdict
 from typing import Any
 
 from . import config
@@ -41,6 +39,7 @@ _MAX_TITLE_SLUG = 60
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class Note:
@@ -137,6 +136,7 @@ class Note:
 # Storage backends
 # ---------------------------------------------------------------------------
 
+
 class _FileBackend:
     def __init__(self, notes_dir: Path):
         self._dir = notes_dir
@@ -162,8 +162,7 @@ class _FileBackend:
 
     def find_by_prefix(self, prefix: str) -> list[str]:
         prefix_lower = prefix.lower()
-        return [p.stem for p in self._dir.glob("*.md")
-                if p.stem.lower().startswith(prefix_lower)]
+        return [p.stem for p in self._dir.glob("*.md") if p.stem.lower().startswith(prefix_lower)]
 
     def rename_id(self, old_id: str, new_id: str) -> None:
         old_path = self._dir / f"{old_id}.md"
@@ -204,6 +203,7 @@ class _MogDBBackend:
     def _ensure(self):
         if self._db is None:
             from mogdb import MogDB
+
             self._db = MogDB(str(self._dir / "store"))
             self._col = self._db.collection("notes")
         return self._col
@@ -288,6 +288,7 @@ class _MogDBBackend:
 # Store
 # ---------------------------------------------------------------------------
 
+
 class NoteStore:
     """Note store with pluggable backends (``file`` or ``mogdb``)."""
 
@@ -299,10 +300,18 @@ class NoteStore:
         else:
             self._bk = _FileBackend(self._dir)
 
-    def create(self, title: str, tags: list[str] | None = None,
-               status: str = "open", author: str = "", sprint: str = "", gh: str = "",
-               assignee: str = "", body: str = "") -> Note:
-        now = datetime.now(timezone.utc)
+    def create(
+        self,
+        title: str,
+        tags: list[str] | None = None,
+        status: str = "open",
+        author: str = "",
+        sprint: str = "",
+        gh: str = "",
+        assignee: str = "",
+        body: str = "",
+    ) -> Note:
+        now = datetime.now(UTC)
         slug = self._title_to_slug(title)
         ts = now.strftime("%Y%m%d_%H%M%S")
         note_id = f"{ts}_{slug}"
@@ -356,7 +365,9 @@ class NoteStore:
                 chosen = candidates[0]
                 logger.warning(
                     "Ambiguous id '%s' (%d matches); using most recently updated: %s",
-                    note_id, len(candidates), chosen.id,
+                    note_id,
+                    len(candidates),
+                    chosen.id,
                 )
                 return chosen
         return None
@@ -369,7 +380,7 @@ class NoteStore:
         for key in ("title", "tags", "status", "author", "sprint", "gh", "assignee", "body"):
             if key in kwargs and kwargs[key] is not None:
                 setattr(note, key, kwargs[key])
-        note.updated_at = datetime.now(timezone.utc).isoformat()
+        note.updated_at = datetime.now(UTC).isoformat()
         new_slug = self._title_to_slug(note.title)
         new_id = f"{note.created_at[:10].replace('-', '')}_{note.created_at[11:19].replace(':', '')}_{new_slug}"
         if new_id != old_id:
@@ -386,9 +397,15 @@ class NoteStore:
         logger.info("Deleted note: %s", matches[0])
         return True
 
-    def list_notes(self, tag: str | None = None, status: str | None = None,
-                   author: str | None = None, sprint: str | None = None, limit: int = 50,
-                   today: bool = False) -> list[Note]:
+    def list_notes(
+        self,
+        tag: str | None = None,
+        status: str | None = None,
+        author: str | None = None,
+        sprint: str | None = None,
+        limit: int = 50,
+        today: bool = False,
+    ) -> list[Note]:
         notes: list[Note] = []
         today_str = date.today().isoformat() if today else ""
         for note in self._bk.all_notes():
@@ -411,10 +428,12 @@ class NoteStore:
         q = query.lower()
         results: list[Note] = []
         for note in self._bk.all_notes():
-            if (q in note.title.lower()
-                    or q in " ".join(note.tags).lower()
-                    or q in note.body.lower()
-                    or q in (note.author or "").lower()):
+            if (
+                q in note.title.lower()
+                or q in " ".join(note.tags).lower()
+                or q in note.body.lower()
+                or q in (note.author or "").lower()
+            ):
                 results.append(note)
                 if len(results) >= limit:
                     break
@@ -455,7 +474,7 @@ class NoteStore:
 
         lines: list[str] = [
             f"# Sprint Report: {sprint_name}",
-            f"**Generated:** {datetime.now(timezone.utc).isoformat()}",
+            f"**Generated:** {datetime.now(UTC).isoformat()}",
             f"**Notes:** {len(notes)}",
             "",
             "---",
@@ -483,8 +502,9 @@ class NoteStore:
 
         return "\n".join(lines)
 
-    def timeline(self, days: int = 7, tag: str | None = None,
-                 status: str | None = None) -> list[tuple[str, list[Note]]]:
+    def timeline(
+        self, days: int = 7, tag: str | None = None, status: str | None = None
+    ) -> list[tuple[str, list[Note]]]:
         """Return notes grouped by day for the last *days* days.
 
         Returns a list of ``(date_str, [notes])`` tuples, newest day first.
@@ -532,8 +552,10 @@ _store: NoteStore | None = None
 def get_note_store(backend: str = "file", notes_dir=None) -> NoteStore:
     """Return the singleton NoteStore, recreating if backend or dir changes."""
     global _store
-    if _store is None or _store._backend != backend or (
-        notes_dir is not None and _store._dir != notes_dir
+    if (
+        _store is None
+        or _store._backend != backend
+        or (notes_dir is not None and _store._dir != notes_dir)
     ):
         _store = NoteStore(notes_dir=notes_dir, backend=backend)
     return _store
@@ -548,9 +570,11 @@ def reset_note_store() -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+
 def cli_main(argv: list[str] | None = None) -> int:
     """Backward-compatible entry point delegating to the unified CLI."""
     from app_planner.cli import cli_main as unified_cli_main
+
     return unified_cli_main(argv)
 
 
