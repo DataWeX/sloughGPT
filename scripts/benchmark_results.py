@@ -37,6 +37,11 @@ REGRESSION_THRESHOLDS = {
         "mean_ms": (20.0, "rel"),
         "p95_ms": (20.0, "rel"),
     },
+    "execution": {
+        # fire-and-forget dispatch / execution-consolidation stage 1
+        "dispatch_us": (50.0, "rel"),
+        "peak_threads": (2, "abs"),
+    },
 }
 
 
@@ -354,7 +359,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
-    p_rec.add_argument("--kind", required=True, choices=["stability", "latency"])
+    p_rec.add_argument("--kind", required=True, choices=["stability", "latency", "execution"])
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
     p_rec.add_argument("--runs", type=int, default=20)
@@ -363,11 +368,11 @@ def main() -> int:
     p_rec.set_defaults(fn=do_record)
 
     p_h = sub.add_parser("history", help="list stored runs")
-    p_h.add_argument("--kind", default=None, choices=["stability", "latency"])
+    p_h.add_argument("--kind", default=None, choices=["stability", "latency", "execution"])
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
-    p_c.add_argument("--kind", default="stability", choices=["stability", "latency"])
+    p_c.add_argument("--kind", default="stability", choices=["stability", "latency", "execution"])
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
 

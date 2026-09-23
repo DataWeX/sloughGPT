@@ -1,5 +1,5 @@
 """
-Tests for cross-turn KV cache reuse via NumpyKVState.
+Tests for cross-turn KV cache reuse via NumpyKVCache.
 
 Verifies that multi-turn generation with prefix reuse produces the same
 output as a full recomputation, and that fallback paths (empty state,
@@ -36,13 +36,13 @@ def tiny_model():
 
 
 # ---------------------------------------------------------------------------
-# NumpyKVState unit tests
+# NumpyKVCache unit tests
 # ---------------------------------------------------------------------------
 
 
-class TestNumpyKVState:
-    def test_new_kv_state_is_empty(self, tiny_model):
-        state = tiny_model.new_kv_state()
+class TestNumpyKVCache:
+    def test_new_kv_cache_is_empty(self, tiny_model):
+        state = tiny_model.new_kv_cache()
         assert state.prev_ids is None
         assert state.capacity == 0
         assert state.kv_len == []
@@ -50,7 +50,7 @@ class TestNumpyKVState:
         assert state.quantize_kv is False
 
     def test_reset_clears_everything(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         state.capacity = 100
         state.kv_buf_k = [np.zeros((1, 10, 2, 64))]
         state.kv_len = [5]
@@ -64,13 +64,13 @@ class TestNumpyKVState:
         assert state.quantize_kv is False
 
     def test_repr_shows_valid(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         assert "valid=False" in repr(state)
         state.prev_ids = np.array([[1, 2, 3]])
         assert "valid=True" in repr(state)
 
     def test_resolve_empty_state_returns_fresh(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         ids = np.array([[10, 20, 30, 40]])
         buf_k, buf_v, sk, sv, kl, s = tiny_model._resolve_kv_state(
             state, 1, 10, [2], 64, False, ids, 4
@@ -83,7 +83,7 @@ class TestNumpyKVState:
         assert state.quantize_kv is False
 
     def test_resolve_mismatched_quantize_falls_back(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         state.quantize_kv = False
         state.prev_ids = np.array([[1, 2]])
         ids = np.array([[1, 2, 3]])
@@ -91,7 +91,7 @@ class TestNumpyKVState:
         assert s == 0
 
     def test_resolve_mismatched_dims_falls_back(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         state.prev_ids = np.array([[1, 2]])
         state.kv_buf_k = [np.zeros((1, 5, 4, 32))]  # wrong nkv and E
         state.quantize_kv = False
@@ -100,7 +100,7 @@ class TestNumpyKVState:
         assert s == 0
 
     def test_resolve_partial_prefix_reuse(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         state.prev_ids = np.array([[1, 2, 3]])
         state.kv_buf_k = [np.zeros((1, 5, 2, 64))]
         state.kv_len = [3]
@@ -112,7 +112,7 @@ class TestNumpyKVState:
         assert kl == [2]
 
     def test_resolve_identical_prompt_falls_back(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         state.prev_ids = np.array([[1, 2, 3]])
         state.kv_buf_k = [np.zeros((1, 5, 2, 64))]
         state.kv_len = [3]
@@ -123,7 +123,7 @@ class TestNumpyKVState:
         assert s == 0  # falls back to fresh
 
     def test_resolve_prefix_reuse(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         state.prev_ids = np.array([[1, 2, 3]])
         state.kv_buf_k = [np.zeros((1, 5, 2, 64))]
         state.kv_len = [3]
@@ -135,7 +135,7 @@ class TestNumpyKVState:
         assert kl == [3]
 
     def test_resolve_grows_buffer_on_resume(self, tiny_model):
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         state.prev_ids = np.array([[1, 2, 3]])
         state.kv_buf_k = [np.zeros((1, 5, 2, 64))]
         state.kv_len = [3]
@@ -180,7 +180,7 @@ class TestCrossTurnGenerateNumpy:
         new_tokens = np.array([[77, 88]])
         ids2 = np.concatenate([turn1, new_tokens], axis=1)
 
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         out_reuse = tiny_model.generate_numpy(
             ids2, max_new_tokens=4, temperature=0.0, kv_state=state
         )
@@ -189,7 +189,7 @@ class TestCrossTurnGenerateNumpy:
 
     def test_state_updated_after_call(self, tiny_model):
         ids = np.array([[10, 20, 30]])
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         out = tiny_model.generate_numpy(ids, max_new_tokens=5, temperature=0.0, kv_state=state)
         np.testing.assert_array_equal(state.prev_ids, out)
         assert state.capacity > 0
@@ -199,7 +199,7 @@ class TestCrossTurnGenerateNumpy:
         """Three successive turns with prefix reuse all agree with fresh calls."""
         ids1 = np.array([[10, 20, 30]])
         kw = {"max_new_tokens": 3, "temperature": 0.0}
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         t1 = tiny_model.generate_numpy(ids1, kv_state=state, **kw)
         t1_fresh = tiny_model.generate_numpy(ids1, **kw)
         np.testing.assert_array_equal(t1, t1_fresh)
@@ -217,7 +217,7 @@ class TestCrossTurnGenerateNumpy:
     def test_stream_cross_turn_matches_fresh(self, tiny_model):
         ids1 = np.array([[10, 20, 30]])
         kw = {"max_new_tokens": 3, "temperature": 0.0}
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         t1 = tiny_model.generate_numpy(ids1, kv_state=state, **kw)
 
         ids2 = np.concatenate([t1, np.array([[77]])], axis=1)
@@ -229,7 +229,7 @@ class TestCrossTurnGenerateNumpy:
         """When reuse produces prefill_len=1 (one new token), single-token step works."""
         ids1 = np.array([[10, 20, 30]])
         kw = {"max_new_tokens": 3, "temperature": 0.0}
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         t1 = tiny_model.generate_numpy(ids1, kv_state=state, **kw)
 
         # New prompt = turn1 output (3 tokens) + 1 new token = prefill_len=1
@@ -242,7 +242,7 @@ class TestCrossTurnGenerateNumpy:
         """Stop token triggers correctly even with prefix reuse."""
         ids1 = np.array([[10, 20, 30]])
         kw = {"max_new_tokens": 3, "temperature": 0.0}
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         t1 = tiny_model.generate_numpy(ids1, kv_state=state, **kw)
         stop_tok = int(t1[0, -1])
         ids2 = np.concatenate([t1, np.array([[77]])], axis=1)
@@ -255,7 +255,7 @@ class TestCrossTurnGenerateNumpy:
         """With explicit quantize_kv=True, reuse equals fresh."""
         ids1 = np.array([[10, 20, 30]])
         kw = {"max_new_tokens": 3, "temperature": 0.0, "quantize_kv": True}
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         t1 = tiny_model.generate_numpy(ids1, kv_state=state, **kw)
         t1_fresh = tiny_model.generate_numpy(ids1, **kw)
         np.testing.assert_array_equal(t1, t1_fresh)
@@ -275,7 +275,7 @@ class TestStreamAbandonment:
     def test_partial_stream_state_valid(self, tiny_model):
         """Generator abandoned mid-yield still has a valid state (no invalidation)."""
         ids = np.array([[10, 20, 30]])
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         gen = tiny_model.generate_numpy_stream(
             ids, max_new_tokens=5, temperature=0.0, kv_state=state
         )
@@ -292,7 +292,7 @@ class TestStreamAbandonment:
     def test_stream_complete_state_valid(self, tiny_model):
         """Generator consumed fully has valid state."""
         ids = np.array([[10, 20, 30]])
-        state = tiny_model.new_kv_state()
+        state = tiny_model.new_kv_cache()
         toks = list(
             tiny_model.generate_numpy_stream(ids, max_new_tokens=5, temperature=0.0, kv_state=state)
         )

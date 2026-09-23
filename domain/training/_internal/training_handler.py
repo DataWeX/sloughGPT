@@ -341,6 +341,12 @@ class SoulCheckpointSaver:
         path = self.checkpoint_dir / f"{name}.soul"
         export_to_sou(model, str(path), metadata=metadata)
         self._rotate()
+        try:
+            from domain.infrastructure._internal.artifact_registry import try_register
+
+            try_register("checkpoint", path, name=name)
+        except Exception:
+            logger.debug("Checkpoint registry update skipped", exc_info=True)
         logger.info("Saved checkpoint: %s", path)
         return str(path)
 
@@ -408,6 +414,12 @@ class NpzCheckpointSaver:
                 state[pname] = param.data if hasattr(param, "data") else param
         if state:
             np.savez(str(path), **state)
+            try:
+                from domain.infrastructure._internal.artifact_registry import try_register
+
+                try_register("checkpoint", path, name=name)
+            except Exception:
+                logger.debug("Checkpoint registry update skipped", exc_info=True)
             logger.info("Saved checkpoint: %s (%d tensors)", path, len(state))
         return str(path)
 

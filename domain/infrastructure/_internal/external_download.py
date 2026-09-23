@@ -254,11 +254,19 @@ class ExternalDownloadBackend(DownloadBackend):
             bytes_done += file_size
             on_file_complete(resource_id, str(dest))
 
+        try:
+            from .artifact_registry import try_register
+
+            artifact = try_register("download", cache_dir, name=resource_id)
+        except Exception:
+            artifact = None
+
         return {
             "status": "completed",
             "cache_dir": str(cache_dir),
             "total_bytes": total_size,
             "files": completed,
+            "artifact": artifact,
         }
 
     def cleanup(self, resource_id: str) -> bool:

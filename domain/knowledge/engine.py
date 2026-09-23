@@ -53,6 +53,10 @@ class KnowledgeEngine:
             self._memory = get_knowledge_memory()
         return self._memory
 
+    def get_memory(self) -> Any:
+        """Return the canonical memory store backing this engine."""
+        return self._get_memory()
+
     def _get_ingestor(self) -> Any:
         if self._ingestor is None:
             from domain.knowledge import get_knowledge_ingestor
@@ -149,7 +153,8 @@ class KnowledgeEngine:
         """
         try:
             memory = self._get_memory()
-            memory.delete(item_id)
+            if not memory.delete(item_id):
+                return KnowledgeResult(success=False, error=f"Item not found: {item_id}")
             return KnowledgeResult(success=True, data={"deleted": True})
         except Exception as e:
             logger.error("Knowledge delete failed: %s", e)
@@ -212,26 +217,45 @@ class KnowledgeEngine:
         """Get knowledge base statistics.
 
         Returns:
-            KnowledgeResult with stats dict.
+            KnowledgeResult with a dict containing ``total_items``, ``topic_count``,
+            ``topics`` (name → count), ``sources`` (name → count), and
+            ``avg_importance``.
         """
         try:
             memory = self._get_memory()
-            stats = memory.stats() if hasattr(memory, "stats") else {}
+            items = memory.list_all(top_k=5000) if hasattr(memory, "list_all") else []
+            topics: dict[str, int] = {}
+            sources: dict[str, int] = {}
+            importance_total = 0.0
+            for item in items:
+                t = item.get("topic") or "general"
+                topics[t] = topics.get(t, 0) + 1
+                s = item.get("source") or "manual"
+                sources[s] = sources.get(s, 0) + 1
+                importance_total += float(item.get("importance") or 0.0)
+            total_items = len(items)
+            stats = {
+                "total_items": total_items,
+                "topic_count": len(topics),
+                "topics": topics,
+                "sources": sources,
+                "avg_importance": round(importance_total / total_items, 4) if total_items else 0.0,
+            }
             return KnowledgeResult(success=True, data=stats)
         except Exception as e:
             logger.error("Knowledge stats failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
 
     def list_topics(self) -> KnowledgeResult:
-        """List all topics with item counts.
+        """Report topics with item counts.
 
         Returns:
-            KnowledgeResult with list of {name, count} dicts.
+            KnowledgeResult with ``{"topics": [{"name", "count"}, ...], "total": n}``.
         """
         try:
             memory = self._get_memory()
             topics = memory.list_topics() if hasattr(memory, "list_topics") else []
-            return KnowledgeResult(success=True, data=topics)
+            return KnowledgeResult(success=True, data={"topics": topics, "total": len(topics)})
         except Exception as e:
             logger.error("Topic listing failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
@@ -332,8 +356,8 @@ class KnowledgeEngine:
             count = 0
             for item_id in item_ids:
                 try:
-                    memory.delete(item_id)
-                    count += 1
+                    if memory.delete(item_id):
+                        count += 1
                 except Exception:
                     pass
             return KnowledgeResult(success=True, data={"deleted": count})
@@ -353,18 +377,28 @@ class KnowledgeEngine:
             top_k: Maximum results.
 
         Returns:
-            KnowledgeResult with matching files.
+            KnowledgeResult with ``{"results": [...], "indexed_files": n}``.
         """
         try:
             from domain.knowledge import FileIndex
 
             index = FileIndex()
-            results = (
-                index.search(query, path=path, extensions=extensions, top_k=top_k)
-                if hasattr(index, "search")
-                else []
+            extensions_set = set(extensions) if extensions else None
+            indexed = (
+                index.index_directory(path, extensions=extensions_set)
+                if hasattr(index, "index_directory")
+                else {}
             )
-            return KnowledgeResult(success=True, data=results)
+            results = index.search(query, top_k=top_k) if hasattr(index, "search") else []
+            return KnowledgeResult(
+                success=True,
+                data={
+                    "results": results,
+                    "indexed_files": len(indexed),
+                    "query": query,
+                    "path": path,
+                },
+            )
         except Exception as e:
             logger.error("File search failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
@@ -377,18 +411,23 @@ class KnowledgeEngine:
             threshold: Similarity threshold (0-1).
 
         Returns:
-            KnowledgeResult with duplicate info.
+            KnowledgeResult with ``{"is_duplicate", "match", "score"}``.
         """
         try:
             from domain.knowledge import DuplicateDetector
 
-            detector = DuplicateDetector()
-            result = (
-                detector.check(content, threshold=threshold)
-                if hasattr(detector, "check")
-                else {"is_duplicate": False}
+            detector = DuplicateDetector(threshold=threshold)
+            memory = self._get_memory()
+            if hasattr(detector, "load_from_store") and hasattr(memory, "_vector_store"):
+                detector.load_from_store(memory._vector_store)
+            if hasattr(detector, "check"):
+                is_dup, match, score = detector.check(content)
+            else:
+                is_dup, match, score = False, None, 0.0
+            return KnowledgeResult(
+                success=True,
+                data={"is_duplicate": bool(is_dup), "match": match, "score": float(score)},
             )
-            return KnowledgeResult(success=True, data=result)
         except Exception as e:
             logger.error("Duplicate check failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
@@ -489,6 +528,87 @@ class KnowledgeEngine:
             return KnowledgeResult(success=True, data=context_items)
         except Exception as e:
             logger.error("Context retrieval failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def categorize_with_store(self, content: str) -> KnowledgeResult:
+        """Auto-categorize content against existing store topics.
+
+        Returns:
+            KnowledgeResult with ``{"topic", "suggestions"}``.
+        """
+        try:
+            from domain.knowledge import AutoCategorizer
+
+            categorizer = AutoCategorizer()
+            memory = self._get_memory()
+            if hasattr(categorizer, "load_from_store") and hasattr(memory, "_vector_store"):
+                categorizer.load_from_store(memory._vector_store)
+            topic = (
+                categorizer.categorize(content) if hasattr(categorizer, "categorize") else "general"
+            )
+            suggestions = []
+            if hasattr(categorizer, "suggest_topics"):
+                suggestions = [
+                    {"topic": t, "score": round(float(s), 4)}
+                    for t, s in categorizer.suggest_topics(content, top_k=3)
+                ]
+            return KnowledgeResult(success=True, data={"topic": topic, "suggestions": suggestions})
+        except Exception as e:
+            logger.error("Categorization with store failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def find_gaps_with_store(self, seed_topics: list[str] | None = None) -> KnowledgeResult:
+        """Find knowledge gaps against the live store.
+
+        Returns:
+            KnowledgeResult with ``{"gaps", "total_facts"}``.
+        """
+        try:
+            from domain.knowledge import KnowledgeGapDetector
+
+            detector = KnowledgeGapDetector()
+            memory = self._get_memory()
+            if hasattr(detector, "load_from_store") and hasattr(memory, "_vector_store"):
+                detector.load_from_store(memory._vector_store)
+            gaps = (
+                detector.find_gaps(seed_topics=seed_topics) if hasattr(detector, "find_gaps") else []
+            )
+            total = len(memory.list_all(top_k=5000)) if hasattr(memory, "list_all") else 0
+            return KnowledgeResult(success=True, data={"gaps": gaps, "total_facts": total})
+        except Exception as e:
+            logger.error("Gap detection with store failed: %s", e)
+            return KnowledgeResult(success=False, error=str(e))
+
+    def bulk_ingest_with_memory(
+        self,
+        items: list[str | dict],
+        topic: str = "imported",
+        source: str = "bulk",
+        dedup_threshold: float = 0.85,
+    ) -> KnowledgeResult:
+        """Bulk-ingest texts through the live memory store.
+
+        Returns:
+            KnowledgeResult with ``{"added", "skipped", "errors"}``.
+        """
+        try:
+            from domain.knowledge import BulkProcessor
+
+            texts = [i["content"] if isinstance(i, dict) and "content" in i else str(i) for i in items]
+            processor = BulkProcessor(knowledge_memory=self._get_memory())
+            report = processor.ingest_texts(
+                texts, topic=topic, source=source, dedup_threshold=dedup_threshold
+            )
+            return KnowledgeResult(
+                success=True,
+                data={
+                    "added": int(report.get("added", 0)),
+                    "skipped": int(report.get("skipped", 0)),
+                    "errors": int(report.get("errors", 0)),
+                },
+            )
+        except Exception as e:
+            logger.error("Bulk ingest with memory failed: %s", e)
             return KnowledgeResult(success=False, error=str(e))
 
 

@@ -452,8 +452,8 @@ def cmd_quick(args):
     """Quick smoke test: train a toy model and generate."""
     sys.path.insert(0, ".")
 
+    from domain.training import SloughGPTTrainer, TrainerConfig
     from domain.training._internal.performance import get_optimal_device
-    from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
 
     log.header("SloughGPT Quick Start")
 
@@ -568,8 +568,8 @@ def cmd_train_native(args):
     """
     sys.path.insert(0, ".")
 
+    from domain.training import SloughGPTTrainer, TrainerConfig
     from domain.training._internal.performance import get_optimal_device
-    from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
 
     checkpoint_dir = getattr(args, "checkpoint_dir", None) or "models/slonet-native"
 
@@ -625,7 +625,7 @@ def cmd_train_native(args):
     tokenizer = None
     tokenizer_kind = getattr(args, "tokenizer", "char") or "char"
     if tokenizer_kind == "token-tree":
-        from domain.training._internal.token_tree import TokenTree
+        from domain.training import TokenTree
 
         corpus_text = Path(dataset).read_text(encoding="utf-8")
         token_vocab_size = getattr(args, "token_vocab_size", 512) or 512

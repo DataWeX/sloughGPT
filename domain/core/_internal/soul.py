@@ -243,7 +243,25 @@ class SloEngine:
 
         # Load BPE tokenizer if available in soul metadata
         metadata = getattr(soul, "metadata", {})
-        tok_config = metadata.get("tokenizer_config") if isinstance(metadata, dict) else None
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        # stoi/itos live in soul.metadata for trainer checkpoints (and sometimes
+        # in explicit state keys). Rehydrate them so char-level generation works.
+        if not self._stoi or not self._itos:
+            self._stoi = metadata.get("stoi", self._stoi)
+            self._itos = metadata.get("itos", self._itos)
+        if not self._stoi or not self._itos:
+            charset = metadata.get("charset") or metadata.get("chars")
+            if isinstance(charset, str):
+                self._stoi = {c: i for i, c in enumerate(charset)}
+                self._itos = {i: c for i, c in enumerate(charset)}
+
+        # JSON metadata stores itos with string keys; normalize to int for lookup.
+        if self._itos:
+            self._itos = {int(k): v for k, v in self._itos.items()}
+
+        tok_config = metadata.get("tokenizer_config")
         if tok_config:
             try:
                 from domain.training._internal.tokenizer import SloBPE

@@ -60,17 +60,35 @@ def train_export_default_stem(model_name: str, dataset_label: str) -> str:
 def local_soul_candidate_paths(
     models_dir: Path, *, default_name: str = "sloughgpt.soul"
 ) -> list[Path]:
+    """Find candidate .soul instances to load.
+
+    Scans ``models_dir`` root and its immediate subdirectories (e.g. the
+    notebook's ``models/auto-training/`` checkpoint area). Real instances
+    carry a companion ``<name>.soul.meta.json``; checkpoints without one are
+    treated as untagged artifacts and skipped. Candidates are sorted by
+    modification time, newest first, with ``models_dir/{default_name}``
+    always winning when present.
+    """
     default = models_dir / default_name
     out: list[Path] = []
     if default.exists():
         out.append(default)
+
+    _junk = re.compile(r"^(tmp_|_test|test_|probe[_-]|bench_|dl_test|nometa|list_test|evil|tiny|dated)", re.I)
+
+    def _valid(p: Path) -> bool:
+        return not _junk.match(p.stem) and Path(f"{p}.meta.json").exists()
+
     if models_dir.is_dir():
-        others = sorted(
-            (p for p in models_dir.glob("*.soul") if p != default),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
-        out.extend(others)
+        dirs = [models_dir]
+        dirs.extend(sorted(p for p in models_dir.iterdir() if p.is_dir()))
+        candidates = []
+        for d in dirs:
+            candidates.extend(
+                p for p in d.glob("*.soul") if p != default and _valid(p)
+            )
+        candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        out.extend(candidates)
     return out
 
 

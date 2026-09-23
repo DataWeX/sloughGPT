@@ -242,9 +242,20 @@ def cmd_generate(args):
         except Exception:
             return False
 
-    for sou_path in local_soul_candidate_paths(models_dir):
-        if _try_load_sou(sou_path):
-            break
+    explicit = getattr(args, "model", None)
+    if isinstance(explicit, str) and explicit.strip():
+        cand = Path(explicit)
+        if not cand.is_file():
+            cand = models_dir / cand
+        if _try_load_sou(cand):
+            log.key_value("Model", str(cand))
+        else:
+            log.warning(f"Could not load explicit model: {explicit}")
+
+    if not loaded:
+        for sou_path in local_soul_candidate_paths(models_dir):
+            if _try_load_sou(sou_path):
+                break
 
     if not loaded:
         log.warning("No model found, using demo mode")

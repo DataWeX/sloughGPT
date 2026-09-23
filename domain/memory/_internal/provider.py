@@ -65,7 +65,7 @@ class KnowledgeMemoryProvider:
         """Resolve the concrete store (injected or module singleton)."""
         if self._store is not None:
             return self._store
-        from domain.knowledge import get_knowledge_memory
+        from domain.memory import get_knowledge_memory
 
         return get_knowledge_memory()
 
@@ -165,7 +165,7 @@ class KnowledgeMemoryProvider:
             return self._get_store().stats()
         except Exception as e:
             logger.warning("Memory stats failed: %s", e, extra={"tag": "INF"})
-            return {"error": str(e), "total_facts": 0}
+            return {}
 
     def list_all(self, limit: int) -> list[dict[str, Any]]:
         """

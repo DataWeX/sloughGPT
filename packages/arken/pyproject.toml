@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "arken-shim"
+version = "0.1.0"
+description = "Back-compat shim: arken was renamed to avion. Install avion instead."
+requires-python = ">=3.11"
+dependencies = ["avion"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

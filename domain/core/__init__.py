@@ -100,6 +100,7 @@ def __getattr__(name):
         "RAGService": "domain.core._internal.rag_service",
         "KGTrainingPipeline": "domain.core._internal.rag_service",
         "SloEngine": "domain.core._internal.soul",
+        "soul": "domain.core._internal.soul",
         # Consciousness
         "ConsciousnessEngine": "domain.consciousness",
         "get_consciousness": "domain.consciousness",
@@ -131,5 +132,7 @@ def __getattr__(name):
     }
     if name in _lazy:
         mod = _importlib.import_module(_lazy[name])
-        return getattr(mod, name)
+        if hasattr(mod, name):
+            return getattr(mod, name)
+        return mod
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

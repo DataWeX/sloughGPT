@@ -14,7 +14,7 @@ from domain.memory._internal.service import MemoryService, get_memory_service
 @pytest.fixture(autouse=True)
 def isolated_paths(tmp_path, monkeypatch):
     """Keep persistence off the real data dir (repo-root anchored)."""
-    from domains.learner import knowledge as K
+    from domain.memory._internal import knowledge_store as K
 
     monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
     monkeypatch.setattr(K, "FEED_STATE_PATH", tmp_path / "feeds.json")
@@ -539,7 +539,7 @@ class TestChatWiring:
 
     def test_router_imports_memory_service(self):
         src = self._ROUTER.read_text()
-        assert "from domain.memory._internal.service import get_memory_service" in src
+        assert "from domain.memory import get_memory_service" in src
 
     def test_router_invokes_remember_facts_in_post_gen(self):
         src = self._ROUTER.read_text()

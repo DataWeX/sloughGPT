@@ -311,48 +311,6 @@ export default function ConsciousnessTrainingPage() {
           </CardContent>
         </Card>
 
-        {trainStatus?.training_runs && trainStatus.training_runs.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('consciousness_training.history_title')}</CardTitle>
-              <CardDescription>{t('consciousness_training.history_desc')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="pb-2 font-medium">{t('consciousness_training.col_timestamp')}</th>
-                      <th className="pb-2 font-medium">{t('consciousness_training.col_status')}</th>
-                      <th className="pb-2 font-medium">{t('consciousness_training.col_pairs')}</th>
-                      <th className="pb-2 font-medium">{t('consciousness_training.col_loss')}</th>
-                      <th className="pb-2 font-medium">{t('consciousness_training.col_elapsed')}</th>
-                      <th className="pb-2 font-medium">{t('consciousness_training.col_adapter')}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {trainStatus.training_runs.map((run, i) => (
-                      <tr key={i} className="border-b last:border-0">
-                        <td className="py-2 text-xs text-muted-foreground">
-                          {new Date(run.timestamp).toLocaleString()}
-                        </td>
-                        <td className="py-2">
-                          <Badge variant={run.status === 'success' ? 'default' : 'secondary'}>
-                            {run.status}
-                          </Badge>
-                        </td>
-                        <td className="py-2 font-mono">{run.pairs_count}</td>
-                        <td className="py-2 font-mono">{run.loss > 0 ? run.loss.toFixed(4) : '—'}</td>
-                        <td className="py-2 font-mono">{run.elapsed_seconds > 0 ? `${run.elapsed_seconds.toFixed(1)}s` : '—'}</td>
-                        <td className="py-2 font-mono text-xs max-w-[200px] truncate">{run.adapter_path || '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
       </div>
     </PageContainer>
   )

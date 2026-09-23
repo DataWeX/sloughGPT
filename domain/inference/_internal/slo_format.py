@@ -750,6 +750,28 @@ def load_soul(sou_path: str):
     )
     soul.__dict__.update(config)
 
+    # config JSON stores structured metadata as plain dicts; rehydrate the
+    # dataclasses so consumers get typed attributes (e.g. soul.personality.warmth).
+    _structured = {
+        "personality": PersonalityCore,
+        "behavior": BehavioralTraits,
+        "cognition": CognitiveSignature,
+        "emotion": EmotionalRange,
+        "generation": GenerationParams,
+        "context": ContextParams,
+    }
+    for _name, _cls in _structured.items():
+        _raw = config.get(_name)
+        if isinstance(_raw, dict):
+            try:
+                _built = _cls(**_raw)
+            except (TypeError, ValueError):
+                logger.debug(
+                    "Failed to rehydrate %s on %s", _name, sou_path, extra={"tag": "INF"}
+                )
+            else:
+                setattr(soul, _name, _built)
+
     return soul, state_dict
 
 

@@ -244,7 +244,7 @@ def cmd_memory_archive(args) -> None:
         - With ``prune_days`` set, rewrites ``facts.jsonl`` keeping only
           records inside the retention window.
     """
-    from domain.memory._internal.task_memory import archive_stats, list_archive, prune_archive
+    from domain.memory import archive_stats, list_archive, prune_archive
 
     prune_days = getattr(args, "prune_days", None)
     if prune_days is not None:

@@ -1,4 +1,4 @@
-"""Unified artifact registry — Stage 1 (read-only index).
+"""Unified artifact registry — Stage 2 (read-only index + write-path hooks).
 
 Single place to list and resolve every artifact kind the server manages:
 ``model``, ``dataset``, ``checkpoint``, ``adapter``, ``weight``,
@@ -322,7 +322,7 @@ def _iter_datasets() -> list[dict[str, Any]]:
 def _iter_checkpoints() -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for root in scan_roots()["checkpoint"]:
-        for fp in sorted(root.glob("*.soul")):
+        for fp in sorted(root.glob("*.soul")) + sorted(root.glob("*.npz")):
             out.append(_record("checkpoint", fp.name, fp, meta={"dir": str(root)}, sniff=True))
     return out
 
@@ -453,6 +453,20 @@ def register(kind: str, path: str | Path, *, name: str | None = None) -> dict[st
     if kind == "dataset" and fp.is_file():
         return _record(kind, fp.parent.name, fp, name=name, sniff=True)
     return _record(kind, fp.name, fp, name=name, sniff=True)
+
+
+def try_register(kind: str, path: str | Path, *, name: str | None = None) -> dict[str, Any] | None:
+    """Best-effort :func:`register` for write paths. Never raises.
+
+    Returns the validated record, or ``None`` when the path is missing or
+    the kind is not registerable (logged at debug). Write hooks call this
+    so a registry failure can never break a download/import/checkpoint.
+    """
+    try:
+        return register(kind, path, name=name)
+    except Exception as exc:
+        logger.debug("Artifact registration skipped (%s %s): %s", kind, path, exc)
+        return None
 
 
 def verify(kind: str | None = None, query: str | None = None) -> dict[str, Any]:

@@ -65,7 +65,7 @@ def prefix_match(a, b):
 
 
 def kv_state_memory_kb(state):
-    """Allocated KV memory held by a ``NumpyKVState``, in KiB.
+    """Allocated KV memory held by a ``NumpyKVCache``, in KiB.
 
     Sums ``nbytes`` over every per-block K/V buffer and, when the state is
     quantized (int8), the per-token-head float32 scale buffers. The buffers
@@ -73,7 +73,7 @@ def kv_state_memory_kb(state):
     committed for the current sequence length — not just the filled portion.
 
     Args:
-        state: A ``NumpyKVState`` (possibly empty — returns 0).
+        state: A ``NumpyKVCache`` (possibly empty — returns 0).
 
     Returns:
         Total allocated bytes / 1024.
@@ -109,14 +109,14 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps, quantize_kv=False
     Returns:
         Dict of per-turn and aggregate metrics.
     """
-    warm_state = model.new_kv_state()
+    warm_state = model.new_kv_cache()
 
     # Warm-up to trigger any lazy compilation / allocation.
     _ = model.generate_numpy(
         np.array([base_ids], dtype=np.int64),
         max_new_tokens=2,
         temperature=0.0,
-        kv_state=model.new_kv_state(),
+        kv_state=model.new_kv_cache(),
         quantize_kv=quantize_kv,
     )
 
@@ -146,7 +146,7 @@ def benchmark(model, base_ids, step, turns, max_tokens, steps, quantize_kv=False
         # Cold: fresh state each step (no reuse).
         cold_ms = []
         for _ in range(steps):
-            fresh = model.new_kv_state()
+            fresh = model.new_kv_cache()
             t0 = time.perf_counter()
             out_cold = model.generate_numpy(
                 ids,
@@ -409,14 +409,14 @@ def compare_kv_quality(model, base_ids, step, turns, max_tokens):
             ids,
             max_new_tokens=max_tokens,
             temperature=0.0,
-            kv_state=model.new_kv_state(),
+            kv_state=model.new_kv_cache(),
             quantize_kv=False,
         )
         out_q = model.generate_numpy(
             ids,
             max_new_tokens=max_tokens,
             temperature=0.0,
-            kv_state=model.new_kv_state(),
+            kv_state=model.new_kv_cache(),
             quantize_kv=True,
         )
         fl, ql = out_f.token_ids[0].tolist(), out_q.token_ids[0].tolist()

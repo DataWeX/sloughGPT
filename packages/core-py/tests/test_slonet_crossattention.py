@@ -1,11 +1,11 @@
-"""Tests for training.slonet — SloCrossAttention and NumpyKVState."""
+"""Tests for training.slonet — SloCrossAttention and NumpyKVCache."""
 
 from __future__ import annotations
 
 import numpy as np
 
 from domain.training._internal.slonet import (
-    NumpyKVState,
+    NumpyKVCache,
     SloCrossAttention,
     Tensor,
     no_grad,
@@ -62,12 +62,12 @@ class TestSloCrossAttention:
         assert out.shape == (1, 5, 64)
 
 
-# ── NumpyKVState ────────────────────────────────────────────────────────────
+# ── NumpyKVCache ────────────────────────────────────────────────────────────
 
 
-class TestNumpyKVState:
+class TestNumpyKVCache:
     def test_init(self):
-        state = NumpyKVState()
+        state = NumpyKVCache()
         assert state.kv_buf_k == []
         assert state.kv_buf_v == []
         assert state.prev_ids is None
@@ -75,7 +75,7 @@ class TestNumpyKVState:
         assert state.capacity == 0
 
     def test_reset(self):
-        state = NumpyKVState()
+        state = NumpyKVCache()
         state.kv_buf_k = [np.ones((1, 10, 4, 8))]
         state.kv_buf_v = [np.ones((1, 10, 4, 8))]
         state.kv_len = [10]
@@ -89,13 +89,13 @@ class TestNumpyKVState:
         assert state.capacity == 0
 
     def test_repr(self):
-        state = NumpyKVState()
+        state = NumpyKVCache()
         r = repr(state)
-        assert "NumpyKVState" in r
+        assert "NumpyKVCache" in r
         assert "capacity=0" in r
 
     def test_repr_with_data(self):
-        state = NumpyKVState()
+        state = NumpyKVCache()
         state.kv_len = [10]
         state.capacity = 100
         state.quantize_kv = True
@@ -106,7 +106,7 @@ class TestNumpyKVState:
         assert "valid=True" in r
 
     def test_repr_empty(self):
-        state = NumpyKVState()
+        state = NumpyKVCache()
         r = repr(state)
         assert "valid=False" in r
 

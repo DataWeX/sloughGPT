@@ -5369,18 +5369,24 @@ def train_char_lstm_from_gpt(
 # =============================================================================
 
 
-class NumpyKVState:
-    """Persistent KV cache state for cross-turn generation.
+class NumpyKVCache:
+    """Persistent KV cache for cross-turn generation.
 
-    Created via ``SloTransformer.new_kv_state()`` and passed to
-    ``generate_numpy`` / ``generate_numpy_stream`` through the ``kv_state``
-    argument. The cache and the last output survive across calls, so a new
-    turn whose token prefix equals the previous output only recomputes the
-    appended suffix (start_pos resume) instead of the whole prompt.
+    This is a *cache*, not a ``Store``: it holds the per-loop K/V buffers and
+    the last output for ``start_pos`` resume, but it does not own persistence.
+    Persistence (save/load, session ownership) lives in the ``SessionKVCache``
+    layer and the ``.npz`` write path.
+
+    Created via ``SloTransformer.new_kv_cache()`` (``new_kv_state()`` is a
+    deprecated alias) and passed to ``generate_numpy`` /
+    ``generate_numpy_stream`` through the ``kv_state`` argument. The cache and
+    the last output survive across calls, so a new turn whose token prefix
+    equals the previous output only recomputes the appended suffix (start_pos
+    resume) instead of the whole prompt.
 
     The object is mutated in place by generation calls: buffers are grown when
     needed and ``prev_ids`` / ``kv_len`` are updated on completion. Callers
-    never construct buffers themselves; ``reset()`` drops all cached state.
+    never construct buffers themselves; ``reset()`` drops all cached data.
 
     Attributes:
         kv_buf_k / kv_buf_v: per-block K/V buffers (``(1, capacity, nkv, E)``).
@@ -5427,9 +5433,12 @@ class NumpyKVState:
     def __repr__(self) -> str:
         filled = self.kv_len[0] if self.kv_len else 0
         return (
-            f"NumpyKVState(capacity={self.capacity}, filled={filled}, "
+            f"NumpyKVCache(capacity={self.capacity}, filled={filled}, "
             f"quantize_kv={self.quantize_kv}, valid={self.prev_ids is not None})"
         )
+
+
+NumpyKVState = NumpyKVCache  # deprecated alias — prefer NumpyKVCache/new_kv_cache
 
 
 class SloTransformer(SloNet):
@@ -5775,15 +5784,19 @@ class SloTransformer(SloNet):
             kv_scale_v = [None] * n_blocks
         return kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, [0] * n_blocks
 
-    def new_kv_state(self) -> NumpyKVState:
-        """Create an empty persistent KV cache state for cross-turn generation.
+    def new_kv_cache(self) -> NumpyKVCache:
+        """Create an empty persistent KV cache for cross-turn generation.
 
         Returns:
-            A fresh ``NumpyKVState`` that can be passed as ``kv_state`` to
+            A fresh ``NumpyKVCache`` that can be passed as ``kv_state`` to
             ``generate_numpy`` / ``generate_numpy_stream`` and reused across
-            calls. The same state object must not be shared across threads.
+            calls. The same cache object must not be shared across threads.
         """
-        return NumpyKVState()
+        return NumpyKVCache()
+
+    def new_kv_state(self) -> NumpyKVCache:
+        """Deprecated alias for :meth:`new_kv_cache`."""
+        return self.new_kv_cache()
 
     def _resolve_kv_state(
         self,
@@ -5880,7 +5893,7 @@ class SloTransformer(SloNet):
         repetition_penalty: float = 1.0,
         eos_token: int | None = None,
         extra_stop_ids: Sequence[int] | None = None,
-        kv_state: NumpyKVState | None = None,
+        kv_state: NumpyKVCache | None = None,
     ) -> np.ndarray:
         """Generation path for LoRA-active models — uses non-inlined forward.
 
@@ -6011,7 +6024,7 @@ class SloTransformer(SloNet):
         eos_token: int | None = None,
         extra_stop_ids: Sequence[int] | None = None,
         quantize_kv: bool | None = None,
-        kv_state: NumpyKVState | None = None,
+        kv_state: NumpyKVCache | None = None,
     ) -> GenerateResult:
         """Fully inlined numpy generation — maximum inference speed.
 
@@ -6043,7 +6056,7 @@ class SloTransformer(SloNet):
             quantize_kv: When True the KV cache is stored as int8 with
                 per-token-head scales (4x memory reduction). When None it
                 auto-enables for quantized models; when False it is float32.
-            kv_state: Optional persistent KV state (from ``new_kv_state()``).
+            kv_state: Optional persistent KV cache (from ``new_kv_cache()``).
                 When the state holds a completed output that is a strict
                 prefix of ``input_ids``, the cached K/V for that prefix is
                 reused and only the appended tokens are computed. The state
@@ -6716,7 +6729,7 @@ class SloTransformer(SloNet):
         top_p: float | None = None,
         repetition_penalty: float = 1.0,
         quantize_kv: bool | None = None,
-        kv_state: NumpyKVState | None = None,
+        kv_state: NumpyKVCache | None = None,
         return_logprobs: bool = False,
     ):
         """Generator version of generate_numpy — yields token ids one at a time.
@@ -6737,7 +6750,7 @@ class SloTransformer(SloNet):
             quantize_kv: When True the KV cache is stored as int8 with
                 per-token-head scales (4x memory reduction). When None it
                 auto-enables for quantized models; when False it is float32.
-            kv_state: Optional persistent KV state (from ``new_kv_state()``).
+            kv_state: Optional persistent KV cache (from ``new_kv_cache()``).
                 When the state holds a completed output that is a strict
                 prefix of ``input_ids``, the cached K/V for that prefix is
                 reused and only the appended tokens are computed. The state

@@ -758,5 +758,6 @@ __all__ = [
     "export_to_gguf",
     "export_to_gguf_fp16",
     "export_to_gguf_q4_k_m",
+    "export_to_sou",
     "list_export_formats",
 ]

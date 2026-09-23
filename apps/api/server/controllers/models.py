@@ -644,6 +644,13 @@ class ModelsController:
             tokenizer_model_id = base_model_id or target.name
             model_id = identity or tokenizer_model_id
 
+            try:
+                from domain.infrastructure._internal.artifact_registry import try_register
+
+                try_register("model", slnc_path, name=model_id)
+            except Exception:
+                logger.debug("Model registry update skipped", exc_info=True)
+
             import state as server_state
 
             server_state.model_type = model_id
