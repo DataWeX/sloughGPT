@@ -175,14 +175,17 @@ class Tree:
         total_done = [0]
         total_count = len(data)
         results: dict[str, tuple] = {}
+        lock = threading.Lock()
 
         def compress_one(item):
             name, raw = item
             point, compressed_bytes = self._compress_item(name, raw, strategy)
-            results[name] = (point, compressed_bytes, raw)
-            total_done[0] += 1
+            with lock:
+                results[name] = (point, compressed_bytes, raw)
+                total_done[0] += 1
+                done = total_done[0]
             if on_progress is not None:
-                on_progress(total_done[0], total_count, name)
+                on_progress(done, total_count, name)
 
         items = list(data.items())
         executor.run(items, compress_one, name=f"load-{self.name}")

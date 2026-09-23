@@ -27,6 +27,8 @@ use tower_http::{
 };
 use tracing::info;
 
+mod compression;
+
 // ── Edge policy (transport only — no model knowledge) ──────────────────────
 
 /// Inbound body cap. Oversize → 413 before Python ever wakes.
@@ -339,10 +341,13 @@ async fn proxy_http(
                 message: "Edge timeout waiting for sidecar".into(),
             })??
     };
-    relay_response(resp).await
+    relay_response(resp, &parts.headers).await
 }
 
-async fn relay_response(resp: reqwest::Response) -> Result<Response, GatewayError> {
+async fn relay_response(
+    resp: reqwest::Response,
+    req_headers: &HeaderMap,
+) -> Result<Response, GatewayError> {
     let status =
         StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
@@ -364,5 +369,11 @@ async fn relay_response(resp: reqwest::Response) -> Result<Response, GatewayErro
     let mut out = Body::from_stream(stream).into_response();
     *out.status_mut() = status;
     out.headers_mut().extend(headers);
+
+    // Stateless edge compression: negotiate from the *client* Accept-Encoding,
+    // stream-encode, identity passthrough on skip rules. No disk, no full-body
+    // buffer — reduces egress without the sidecar knowing.
+    let codec = compression::negotiate(req_headers.get("accept-encoding"));
+    let out = compression::maybe_compress_response(out, codec, req_headers);
     Ok(out)
 }
