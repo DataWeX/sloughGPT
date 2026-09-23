@@ -2,8 +2,8 @@
 
 import pytest
 
-from domain.learner._internal import data_filter as df
-from domain.learner._internal.data_filter import (
+from domain.knowledge._internal import data_filter as df
+from domain.knowledge._internal.data_filter import (
     DEFAULT_CONFIG,
     DataFilter,
     _hashed,
