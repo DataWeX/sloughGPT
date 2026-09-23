@@ -262,11 +262,11 @@ class MobileRouter:
 
     @staticmethod
     def _get_sessions_list():
-        """Get session list directly from the inference router."""
+        """Get session list from the shared inference read-model."""
         try:
-            from routers.inference import _instance
+            from routers.inference import build_session_metadata_index
 
-            return _instance._build_session_metadata_index()
+            return build_session_metadata_index()
         except Exception as exc:
             logger.debug("Session list fallback to SessionCore: %s", exc)
             from domain.infrastructure.session_core import SessionCore
@@ -840,8 +840,7 @@ class MobileRouter:
             Processes queued messages from the offline cache, sends them to the
             chat endpoint, and returns results for each.
             """
-            from routers.inference import ChatRequest, Message
-            from routers.inference import _instance as _inference
+            from routers.inference import ChatRequest, Message, handle_chat
 
             # Cap batch size to prevent DoS via unbounded inference calls
             MAX_SYNC_MESSAGES = 50
@@ -868,7 +867,7 @@ class MobileRouter:
                         messages=[Message(role="user", content=msg.content)],
                         session_id=msg.session_id,
                     )
-                    chat_resp = await _inference.chat(chat_req)
+                    chat_resp = await handle_chat(chat_req)
                     chat_result = (
                         chat_resp.model_dump()
                         if hasattr(chat_resp, "model_dump")

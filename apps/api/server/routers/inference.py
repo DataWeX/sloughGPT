@@ -3477,3 +3477,23 @@ def set_vector_store_ref(ref) -> dict:
 def flush_dirty_sessions() -> dict:
     """flush_dirty_sessions."""
     return _instance.flush_dirty_sessions()
+
+
+def build_session_metadata_index() -> list:
+    """Public facade over the inference router's session-metadata index.
+
+    Lets the mobile BFF reuse the shared chat-session read-model without
+    reaching into router internals (shared-core contract: translate at the
+    edge, never into the core).
+    """
+    return _instance._build_session_metadata_index()
+
+
+async def handle_chat(req: ChatRequest) -> ChatResponse:
+    """Public facade over the shared chat handler.
+
+    Used by in-process consumers (mobile BFF offline sync) so they ride the
+    same chat kernel the web client calls over HTTP, instead of reaching
+    into router internals.
+    """
+    return await _instance.chat(req)
