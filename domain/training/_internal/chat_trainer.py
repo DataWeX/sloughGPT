@@ -27,6 +27,7 @@ from domain.training._internal.slonet import (
     export_to_sou,
     tensor,
 )
+from domain.training._internal.training_handler import clip_gradients, zero_grads
 
 logger = logging.getLogger("slo.training.chat_trainer")
 
@@ -382,25 +383,14 @@ def train_chat_model(
             loss_val = loss.item()
             loss.backward()
 
-            # Clip gradients
+            # Clip gradients then step + zero — shared helpers, single source
+            # of truth (same as SloughGPTTrainer.train_step).
             params = model.parameters()
-            total_norm = 0.0
-            for p in params:
-                if p.grad is not None:
-                    g = p.grad.data if hasattr(p.grad, "data") else p.grad
-                    total_norm += float(np.sum(g**2))
-            total_norm = total_norm**0.5
-            if total_norm > config.grad_clip:
-                scale = config.grad_clip / total_norm
-                for p in params:
-                    if p.grad is not None:
-                        p.grad.data *= scale
+            if config.grad_clip > 0:
+                clip_gradients(params, config.grad_clip)
 
-            # Step
             optimizer.step(params)
-            for p in params:
-                if p.grad is not None:
-                    p.grad.data = np.zeros_like(p.grad.data)
+            zero_grads(params)
 
             step += 1
             bs, sl = x_batch.shape

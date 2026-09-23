@@ -114,6 +114,16 @@ class ChatManager:
         """Drop the cached provider (call on model unload/switch)."""
         self._provider = None
 
+    def last_usage(self) -> dict[str, int] | None:
+        """Latest provider-reported token usage (``usage_tokens`` for API paths)."""
+        provider = self._active_provider()
+        if provider is None:
+            return None
+        usage = getattr(provider, "last_usage", None)
+        if isinstance(usage, dict):
+            return dict(usage)
+        return None
+
     def _track(self, session_id: str, label: str):
         """Register a cancellable op; returns (op_id, stop_event)."""
         stop = threading.Event()

@@ -21,6 +21,7 @@ class FakeProvider:
     def __init__(self, tokens=("he", "llo", " world")):
         self._tokens = list(tokens)
         self.seen = []
+        self.last_usage = None
 
     async def chat(self, messages, max_tokens=512, temperature=0.7, **kwargs):
         self.seen.append((list(messages), kwargs.get("session_id")))
@@ -50,6 +51,22 @@ def fake_provider():
     yield fake
     provmod._providers.clear()
     provmod._providers.update(prev)
+
+
+def test_last_usage_reports_provider_usage(manager, fake_provider):
+    fake_provider.last_usage = {"prompt_tokens": 4, "completion_tokens": 2, "total_tokens": 6}
+    assert manager.last_usage() == {"prompt_tokens": 4, "completion_tokens": 2, "total_tokens": 6}
+
+
+def test_last_usage_none_without_provider():
+    prev = dict(provmod._providers)
+    provmod._providers.clear()
+    try:
+        mgr = ChatManager(domain=ChatDomain())
+        assert mgr.last_usage() is None
+    finally:
+        provmod._providers.clear()
+        provmod._providers.update(prev)
 
 
 @pytest.fixture

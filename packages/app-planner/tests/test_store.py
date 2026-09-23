@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 
@@ -115,6 +116,97 @@ class TestPlannerStore:
         assert stats["total"] == 2
         assert stats["byColumn"]["todo"] == 1
         assert stats["byColumn"]["done"] == 1
+
+
+# ── Surgical JSONL write tests ────────────────────────────────────────────
+
+
+class TestSurgicalBoardUpdates:
+    """Board writes must be surgical: only the touched card's line changes.
+
+    The real board.jsonl contains mixed note-derived lines
+    ({"body","id","priority","status","title"}) and card-schema lines. A full
+    re-serialize re-keys every line, producing whole-file diffs. These tests
+    pin byte-for-byte preservation of untouched lines.
+    """
+
+    def _seed_note_schema(self, store, board_file):
+        """Write two note-derived lines (as the migrated board has), no header."""
+        board_file.write_text(
+            json.dumps({"id": "n1", "title": "One", "body": "b1", "priority": "med"})
+            + "\n"
+            + json.dumps(
+                {"id": "n2", "title": "Two", "body": "b2", "priority": "low", "column": "done"}
+            )
+            + "\n"
+        )
+
+    def test_update_only_rewrites_target_line(self, store):
+        board_file = store._board_file
+        self._seed_note_schema(store, board_file)
+        before = board_file.read_text().splitlines()
+
+        card = store.get_card("n1")
+        assert card is not None
+        store.update_card("n1", column="done")
+
+        after = board_file.read_text().splitlines()
+        assert len(after) == 2
+        # sibling note-schema line preserved byte-for-byte
+        assert after[1] == before[1]
+        assert json.loads(after[1]) == {
+            "id": "n2",
+            "title": "Two",
+            "body": "b2",
+            "priority": "low",
+            "column": "done",
+        }
+        assert store.get_card("n1").column == "done"
+
+    def test_move_only_rewrites_target_line(self, store):
+        board_file = store._board_file
+        self._seed_note_schema(store, board_file)
+        before = board_file.read_text().splitlines()
+
+        store.move_card("n1", "review")
+
+        after = board_file.read_text().splitlines()
+        assert after[1] == before[1]
+        assert store.get_card("n1").column == "review"
+
+    def test_delete_removes_only_target_line(self, store):
+        board_file = store._board_file
+        self._seed_note_schema(store, board_file)
+        before = board_file.read_text().splitlines()
+
+        assert store.delete_card("n1") is True
+
+        after = board_file.read_text().splitlines()
+        assert len(after) == 1
+        assert after[0] == before[1]  # surviving sibling byte-identical
+        assert store.get_card("n2") is not None
+
+    def test_add_appends_without_touching_existing_lines(self, store):
+        board_file = store._board_file
+        store.add_card("Alpha")
+        store.add_card("Beta")
+        before = board_file.read_text().splitlines()
+
+        store.add_card("Gamma")
+
+        after = board_file.read_text().splitlines()
+        assert len(after) == len(before) + 1
+        assert after[: len(before)] == before  # every existing line unchanged
+        assert "Gamma" in after[-1]
+
+    def test_archive_done_preserves_other_lines(self, store):
+        board_file = store._board_file
+        self._seed_note_schema(store, board_file)
+
+        assert store.archive_done() == 1
+        after = board_file.read_text().splitlines()
+        assert len(after) == 1
+        assert json.loads(after[0]) == {"id": "n1", "title": "One", "body": "b1", "priority": "med"}
 
 
 # ── CLI tests ────────────────────────────────────────────────────────────

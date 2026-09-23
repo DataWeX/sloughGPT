@@ -286,7 +286,7 @@ class SloNetBenchmark:
         print("[4] Accelerator Speed")
         print("-" * 40)
 
-        from domain.slolib.gpu import get_accelerator, reset_accelerator
+        from domain.slolib import get_accelerator, reset_accelerator
 
         reset_accelerator()
         acc = get_accelerator()

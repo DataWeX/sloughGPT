@@ -20,6 +20,13 @@ from __future__ import annotations
 
 from domain.memory._internal.config import MemoryConfig
 from domain.memory._internal.consolidation import plan_consolidation
+from domain.memory._internal.knowledge_store import (
+    KnowledgeFact,
+    KnowledgeIngestor,
+    KnowledgeMemory,
+    get_knowledge_ingestor,
+    get_knowledge_memory,
+)
 from domain.memory._internal.maintenance import (
     maintenance_tick,
     start_memory_maintenance,
@@ -45,6 +52,11 @@ __all__ = [
     "MemoryConfig",
     "MemoryProvider",
     "KnowledgeMemoryProvider",
+    "KnowledgeMemory",
+    "KnowledgeIngestor",
+    "KnowledgeFact",
+    "get_knowledge_memory",
+    "get_knowledge_ingestor",
     "MemoryService",
     "get_memory_service",
     "plan_consolidation",

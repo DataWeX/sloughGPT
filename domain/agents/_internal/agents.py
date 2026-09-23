@@ -390,6 +390,33 @@ class ToolRunner:
         except Exception as e:
             return {"error": str(e), "success": False}
 
+    def _query_knowledge_engine(self, query: str, limit: int = 10) -> list[dict[str, Any]]:
+        """Query the canonical KnowledgeEngine RAG store.
+
+        Returns normalized fact dicts; empty list on any failure so callers
+        can degrade to file-based fallback instead of erroring the tool.
+        """
+        try:
+            from domain.knowledge import get_knowledge_engine
+
+            result = get_knowledge_engine().query(query, top_k=limit)
+            if not result.success or not result.data:
+                return []
+            matches = []
+            for fact in result.data:
+                matches.append(
+                    {
+                        "content": fact.get("content", ""),
+                        "topic": fact.get("topic", "general"),
+                        "source": fact.get("source") or fact.get("url") or fact.get("path") or "",
+                        "score": round(float(fact.get("score", 0.0)), 4),
+                    }
+                )
+            return matches
+        except Exception as e:
+            logger.debug("Knowledge engine query failed, falling back: %s", e)
+            return []
+
     async def _run_knowledge_retrieval(
         self,
         args: dict[str, Any],
@@ -399,6 +426,14 @@ class ToolRunner:
         query = args.get("query", "")
         if not query:
             return {"error": "query required", "success": False}
+        rag_matches = self._query_knowledge_engine(query)
+        if rag_matches:
+            return {
+                "success": True,
+                "matches": rag_matches,
+                "count": len(rag_matches),
+                "engine": "rag",
+            }
         try:
             import glob as globmod
 
@@ -422,7 +457,12 @@ class ToolRunner:
                         )
                 except Exception:
                     continue
-            return {"success": True, "matches": matches, "count": len(matches)}
+            return {
+                "success": True,
+                "matches": matches,
+                "count": len(matches),
+                "engine": "files",
+            }
         except Exception as e:
             return {"error": str(e), "success": False}
 

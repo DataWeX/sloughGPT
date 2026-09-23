@@ -178,7 +178,7 @@ class TestGetStore:
 
     def test_falls_back_to_singleton(self):
         p = KnowledgeMemoryProvider(store=None)
-        with patch("domain.knowledge.get_knowledge_memory") as mock_get:
+        with patch("domain.memory.get_knowledge_memory") as mock_get:
             mock_get.return_value = MagicMock()
             store = p._get_store()
             mock_get.assert_called_once()

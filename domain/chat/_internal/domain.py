@@ -39,6 +39,7 @@ class ChatResponse:
     done: bool = True
     tokens_generated: int = 0
     duration_ms: int = 0
+    usage_tokens: dict[str, int] | None = None
 
 
 class ChatDomain:
@@ -63,6 +64,7 @@ class ChatDomain:
         self.log_dir = find_repo_root(Path(__file__).resolve()) / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self._engine = engine
+        self._last_usage: dict[str, int] | None = None
 
     async def respond(
         self,
@@ -116,6 +118,7 @@ class ChatDomain:
             session_id=session_id,
             tokens_generated=tokens,
             duration_ms=duration_ms,
+            usage_tokens=self._last_usage,
         )
 
     def set_engine(self, engine) -> None:
@@ -167,6 +170,11 @@ class ChatDomain:
                 ),
                 timeout=300.0,
             )
+            last_usage = getattr(provider, "last_usage", None)
+            if isinstance(last_usage, dict):
+                self._last_usage = dict(last_usage)
+            else:
+                self._last_usage = None
             return result or ""
 
         except TimeoutError:

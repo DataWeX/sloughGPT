@@ -288,9 +288,7 @@ class PointCompressor:
         fit = flat
         fit_idx = None
         if n > self.max_fit_samples:
-            fit_idx = _unique_random_indices(
-                choice, n, min(self.max_fit_samples, int(n * 0.1) + 1)
-            )
+            fit_idx = _unique_random_indices(choice, n, min(self.max_fit_samples, int(n * 0.1) + 1))
             fit = flat[fit_idx]
         prev_inertia = float("inf")
         for _ in range(self.lloyd_iterations):

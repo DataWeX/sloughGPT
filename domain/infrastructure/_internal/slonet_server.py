@@ -479,7 +479,7 @@ class SloNetServer:
     def _resolve_kv_state(self, session_id: str | None):
         """Resolve cross-turn KV state for a session via the bound provider.
 
-        The provider owns the session → NumpyKVState map (with TTL eviction).
+        The provider owns the session → NumpyKVCache map (with TTL eviction).
         Returns None when no provider is bound or no session_id is given, which
         falls back to a fresh state each call (no cross-turn reuse).
         """

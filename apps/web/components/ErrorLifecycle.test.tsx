@@ -33,9 +33,15 @@ vi.mock('@/lib/toast-store', () => ({
 }))
 
 // Mock error-reporter
+const mockReportError = vi.fn()
 vi.mock('@/lib/error-reporter', () => ({
-  reportError: vi.fn(),
+  reportError: (...args: unknown[]) => mockReportError(...args),
   initErrorReporter: vi.fn(),
+}))
+
+// Mock chatDB (hydration path persists to Dexie)
+vi.mock('@/lib/db', () => ({
+  chatDB: { addError: vi.fn(() => Promise.resolve()) },
 }))
 
 // Mock dev-log
@@ -99,5 +105,59 @@ describe('ErrorLifecycle', () => {
     expect(errorCalls.length).toBe(2)
     expect(errorCalls[0][2]).toBe(true)
     expect(errorCalls[1][2]).toBeUndefined()
+  })
+
+  it('treats minified React #418 as hydration — no fatal toast', () => {
+    render(<ErrorLifecycle />)
+    const msg =
+      'Error: Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message'
+    const event = new ErrorEvent('error', { message: msg, cancelable: true })
+    act(() => {
+      window.dispatchEvent(event)
+    })
+    expect(event.defaultPrevented).toBe(true)
+    const fatalCalls = mockAddToast.mock.calls.filter((c) => c[0] === 'Something went wrong.')
+    expect(fatalCalls).toHaveLength(0)
+    expect(mockReportError).toHaveBeenCalledWith(
+      expect.stringContaining('#418'),
+      'hydration',
+      expect.objectContaining({ metadata: { minified: true } }),
+    )
+    expect(mockAddError).not.toHaveBeenCalled()
+  })
+
+  it('still fatals on a real runtime error', () => {
+    render(<ErrorLifecycle />)
+    const event = new ErrorEvent('error', {
+      message: 'TypeError: Cannot read properties of undefined',
+      cancelable: true,
+    })
+    act(() => {
+      window.dispatchEvent(event)
+    })
+    expect(mockAddToast).toHaveBeenCalledWith('Something went wrong.', 'error', undefined)
+    expect(mockAddError).toHaveBeenCalled()
+  })
+
+  it('classifies #423 and #425 minified hydration codes', () => {
+    render(<ErrorLifecycle />)
+    for (const code of [423, 425]) {
+      mockAddToast.mockClear()
+      mockReportError.mockClear()
+      const event = new ErrorEvent('error', {
+        message: `Minified React error #${code}; visit https://react.dev/errors/${code}`,
+        cancelable: true,
+      })
+      act(() => {
+        window.dispatchEvent(event)
+      })
+      expect(mockReportError).toHaveBeenCalledWith(
+        expect.stringContaining(`#${code}`),
+        'hydration',
+        expect.anything(),
+      )
+      const fatalCalls = mockAddToast.mock.calls.filter((c) => c[0] === 'Something went wrong.')
+      expect(fatalCalls).toHaveLength(0)
+    }
   })
 })

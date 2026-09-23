@@ -326,6 +326,120 @@ class TestToolRunnerCitation:
         assert runner._generate_citations("xyz", [{"text": "abc"}]) == []
 
 
+class TestToolRunnerKnowledgeRetrieval:
+    async def test_missing_query(self):
+        runner = ToolRunner()
+        res = await runner.execute(ToolCapability.KNOWLEDGE_RETRIEVAL.value, {}, make_context())
+        assert res["success"] is False
+        assert "query required" in res["error"]
+
+    async def test_rag_hits(self, monkeypatch):
+        runner = ToolRunner()
+        fact = {
+            "id": "f1",
+            "content": "Deploy uses Argo CD on a staging cluster.",
+            "topic": "deploy",
+            "source": "docs/ops.md",
+            "url": "",
+            "score": 0.87,
+        }
+
+        def fake_engine():
+            return _FakeEngine([fact])
+
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", fake_engine)
+        res = await runner.execute(
+            ToolCapability.KNOWLEDGE_RETRIEVAL.value,
+            {"query": "deploy argocd"},
+            make_context(),
+        )
+        assert res["success"] is True
+        assert res["engine"] == "rag"
+        assert res["count"] == 1
+        match = res["matches"][0]
+        assert match["content"] == fact["content"]
+        assert match["topic"] == "deploy"
+        assert match["source"] == "docs/ops.md"
+        assert match["score"] == 0.87
+
+    async def test_rag_prioritized_over_files(self, monkeypatch):
+        runner = ToolRunner()
+        fact = {
+            "id": "f1",
+            "content": "How to configure the api provider",
+            "topic": "config",
+            "source": "docs/config.md",
+            "url": "",
+            "score": 0.9,
+        }
+
+        def fake_engine():
+            return _FakeEngine([fact])
+
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", fake_engine)
+        monkeypatch.setenv("WORKSPACE_ROOT", "/nonexistent")
+        res = await runner.execute(
+            ToolCapability.KNOWLEDGE_RETRIEVAL.value,
+            {"query": "config provider"},
+            make_context(),
+        )
+        assert res["engine"] == "rag"
+        assert res["matches"][0]["source"] == "docs/config.md"
+
+    async def test_rag_empty_falls_back_to_files(self, monkeypatch, tmp_path):
+        runner = ToolRunner()
+
+        def fake_engine():
+            return _FakeEngine([])
+
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", fake_engine)
+        doc = tmp_path / "docs" / "guide.md"
+        doc.parent.mkdir(parents=True)
+        doc.write_text("redis caching: the tuning harness stores index chunks here.")
+        monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path))
+        res = await runner.execute(
+            ToolCapability.KNOWLEDGE_RETRIEVAL.value,
+            {"query": "redis caching"},
+            make_context(),
+        )
+        assert res["success"] is True
+        assert res["engine"] == "files"
+        assert res["count"] == 1
+        assert "guide.md" in res["matches"][0]["file"]
+
+    async def test_rag_failure_falls_back_to_files(self, monkeypatch, tmp_path):
+        runner = ToolRunner()
+
+        def fake_engine():
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", fake_engine)
+        doc = tmp_path / "docs" / "guide.md"
+        doc.parent.mkdir(parents=True)
+        doc.write_text("redis caching: the tuning harness stores index chunks here.")
+        monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path))
+        res = await runner.execute(
+            ToolCapability.KNOWLEDGE_RETRIEVAL.value,
+            {"query": "redis caching"},
+            make_context(),
+        )
+        assert res["success"] is True
+        assert res["engine"] == "files"
+        assert res["count"] == 1
+
+
+class _FakeEngine:
+    """Minimal engine double — returns canned facts via .query()."""
+
+    def __init__(self, facts):
+        self._facts = facts
+
+    def query(self, search, top_k=10):
+        from domain.knowledge.engine import KnowledgeResult
+
+        return KnowledgeResult(success=True, data=self._facts, metadata={"count": len(self._facts)})
+
+
 # ── Agent: planning ────────────────────────────────────────────────────────
 
 

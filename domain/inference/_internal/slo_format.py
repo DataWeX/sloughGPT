@@ -14,23 +14,60 @@ Trademark (c) 2026 SloughGPT. All rights reserved.
 
 from __future__ import annotations
 
+import datetime
+import hashlib
 import json
 import logging
 import math
 import os
 import struct
-
-logger = logging.getLogger("slo.inference.slo_format")
-import datetime
-import hashlib
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
+
+import numpy as np
+
+logger = logging.getLogger("slo.inference.slo_format")
 
 SOU_MAGIC = b"SOUL"
 SOU_VERSION = 2
 SOU_VERSION_V3 = 3
 SOU_TRADEMARK = "SloughGPT Soul Unit (.soul) - Trademark (c) 2026 SloughGPT"
+
+
+def _write_soul_v3(
+    f,
+    metadata_bytes: bytes,
+    params: list[tuple[str, np.ndarray]],
+    *,
+    include_weights: bool = True,
+) -> None:
+    """Encode the SOUL v3 binary body onto ``f`` (magic + version + JSON + weights).
+
+    Single source of truth for the v3 on-disk layout, shared by ``slonet.export_to_sou``
+    and ``save_soul`` so the two writers cannot drift apart:
+
+        b"SOUL" | <I 3> | <I json_len> | json_bytes | weight table
+
+    Weight table (only when ``include_weights``): ``<I n_params>`` then per param
+    ``<I len(name)> name_bytes <I ndim> <I dim...> arr.tobytes()`` (float32).
+    Metadata JSON is written by the caller so each writer keeps its own schema.
+    """
+    f.write(SOU_MAGIC)
+    f.write(struct.pack("<I", SOU_VERSION_V3))
+    f.write(struct.pack("<I", len(metadata_bytes)))
+    f.write(metadata_bytes)
+    if not include_weights:
+        return
+    f.write(struct.pack("<I", len(params)))
+    for key, arr in params:
+        name_bytes = key.encode()
+        f.write(struct.pack("<I", len(name_bytes)))
+        f.write(name_bytes)
+        f.write(struct.pack("<I", arr.ndim))
+        for dim in arr.shape:
+            f.write(struct.pack("<I", dim))
+        f.write(arr.tobytes())
 
 
 def _soul_json_sanitize(obj: Any) -> Any:
@@ -608,62 +645,48 @@ def save_soul(
     )
     try:
         with os.fdopen(tmp_fd, "wb") as f:
-            f.write(SOU_MAGIC)
-            f.write(struct.pack("<I", SOU_VERSION_V3))
-            f.write(struct.pack("<I", len(config_json)))
-            f.write(config_json.encode("utf-8"))
-
+            params: list[tuple[str, np.ndarray]] = []
             if not weights_only:
-                import numpy as np
-
-                if hasattr(model, "state_dict"):
-                    state = model.state_dict()
-                    params = []
-                    for k, v in state.items():
-                        try:
-                            # SloNet Tensor: has .data attribute that is a numpy ndarray
-                            if hasattr(v, "data") and isinstance(v.data, np.ndarray):
-                                arr = v.data.astype(np.float32)
-                            elif hasattr(v, "numpy"):
-                                # PyTorch tensor
-                                arr = v.cpu().numpy().astype(np.float32)
-                            elif hasattr(v, "detach"):
-                                # PyTorch tensor without .numpy()
-                                arr = v.detach().cpu().numpy().astype(np.float32)
-                            elif isinstance(v, np.ndarray):
-                                arr = v.astype(np.float32)
-                            elif isinstance(v, (list, tuple)):
-                                arr = np.asarray(v, dtype=np.float32)
-                            elif isinstance(v, dict):
-                                logger.debug(
-                                    "Skipping non-tensor state_dict key: %s (dict value)", k
-                                )
-                                continue
-                            else:
-                                arr = np.asarray(v, dtype=np.float32)
-                            params.append((k, arr))
-                        except (TypeError, ValueError) as e:
-                            logger.warning(
-                                "Skipping state_dict key %s: %s", k, e, extra={"tag": "INF"}
-                            )
+                state = model.state_dict() if hasattr(model, "state_dict") else {}
+                for k, v in state.items():
+                    try:
+                        # SloNet Tensor: has .data attribute that is a numpy ndarray
+                        if hasattr(v, "data") and isinstance(v.data, np.ndarray):
+                            arr = v.data.astype(np.float32)
+                        elif hasattr(v, "numpy"):
+                            # PyTorch tensor
+                            arr = v.cpu().numpy().astype(np.float32)
+                        elif hasattr(v, "detach"):
+                            # PyTorch tensor without .numpy()
+                            arr = v.detach().cpu().numpy().astype(np.float32)
+                        elif isinstance(v, np.ndarray):
+                            arr = v.astype(np.float32)
+                        elif isinstance(v, (list, tuple)):
+                            arr = np.asarray(v, dtype=np.float32)
+                        elif isinstance(v, dict):
+                            logger.debug("Skipping non-tensor state_dict key: %s (dict value)", k)
                             continue
-                    if len(params) == 0 and len(state) > 0:
-                        logger.error(
-                            "save_soul: wrote 0 params out of %d state_dict keys — "
-                            "checkpoint will be unusable. Model type: %s",
-                            len(state),
-                            type(model).__name__,
-                            extra={"tag": "INF"},
-                        )
-                    f.write(struct.pack("<I", len(params)))
-                    for key, arr in params:
-                        name_bytes = key.encode()
-                        f.write(struct.pack("<I", len(name_bytes)))
-                        f.write(name_bytes)
-                        f.write(struct.pack("<I", arr.ndim))
-                        for dim in arr.shape:
-                            f.write(struct.pack("<I", dim))
-                        f.write(arr.tobytes())
+                        else:
+                            arr = np.asarray(v, dtype=np.float32)
+                        params.append((k, arr))
+                    except (TypeError, ValueError) as e:
+                        logger.warning("Skipping state_dict key %s: %s", k, e, extra={"tag": "INF"})
+                        continue
+                if len(params) == 0 and len(state) > 0:
+                    logger.error(
+                        "save_soul: wrote 0 params out of %d state_dict keys — "
+                        "checkpoint will be unusable. Model type: %s",
+                        len(state),
+                        type(model).__name__,
+                        extra={"tag": "INF"},
+                    )
+
+            _write_soul_v3(
+                f,
+                config_json.encode("utf-8"),
+                params,
+                include_weights=not weights_only,
+            )
 
         os.rename(tmp_path, output_path)
     except Exception:
@@ -749,6 +772,26 @@ def load_soul(sou_path: str):
         + f"DESCRIPTION {config.get('description', '')}\n"
     )
     soul.__dict__.update(config)
+
+    # config JSON stores structured metadata as plain dicts; rehydrate the
+    # dataclasses so consumers get typed attributes (e.g. soul.personality.warmth).
+    _structured = {
+        "personality": PersonalityCore,
+        "behavior": BehavioralTraits,
+        "cognition": CognitiveSignature,
+        "emotion": EmotionalRange,
+        "generation": GenerationParams,
+        "context": ContextParams,
+    }
+    for _name, _cls in _structured.items():
+        _raw = config.get(_name)
+        if isinstance(_raw, dict):
+            try:
+                _built = _cls(**_raw)
+            except (TypeError, ValueError):
+                logger.debug("Failed to rehydrate %s on %s", _name, sou_path, extra={"tag": "INF"})
+            else:
+                setattr(soul, _name, _built)
 
     return soul, state_dict
 

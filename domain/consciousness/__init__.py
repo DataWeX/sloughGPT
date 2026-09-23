@@ -1,31 +1,34 @@
 """consciousness — Self-awareness, qualia, meta-cognition, narrative.
 
+Backward-compatibility shim — canonical implementation lives in
+``domain.cognition._internal.consciousness``.
+
 Public API:
     ConsciousnessConfig, ConsciousnessEngine, ConsciousnessEvaluator, EvaluationReport
     MetaCognition, MetaCognitiveReport, NarrativeGenerator
     QualiaEngine, QualiaState, SelfEpisode, SelfIdentity, SelfModel
+    PersonalityManager, PersonalityProfile, Reflection
     get_consciousness, reset_consciousness
 """
 
-from domain.consciousness._internal.config import ConsciousnessConfig
-from domain.consciousness._internal.engine import (
+from domain.cognition._internal.consciousness import (  # noqa: F401
+    ConsciousnessConfig,
     ConsciousnessEngine,
-    get_consciousness,
-    reset_consciousness,
-)
-from domain.consciousness._internal.evaluation import ConsciousnessEvaluator, EvaluationReport
-from domain.consciousness._internal.meta_cognition import MetaCognition, MetaCognitiveReport
-from domain.consciousness._internal.narrative import NarrativeGenerator
-from domain.consciousness._internal.personality import (
+    ConsciousnessEvaluator,
+    EvaluationReport,
+    MetaCognition,
+    MetaCognitiveReport,
+    NarrativeGenerator,
     PersonalityManager,
     PersonalityProfile,
-)
-from domain.consciousness._internal.qualia import QualiaEngine, QualiaState
-from domain.consciousness._internal.self_model import (
+    QualiaEngine,
+    QualiaState,
     Reflection,
     SelfEpisode,
     SelfIdentity,
     SelfModel,
+    get_consciousness,
+    reset_consciousness,
 )
 
 __all__ = [

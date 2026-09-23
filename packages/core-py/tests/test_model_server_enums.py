@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure.model_server — Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker, IdleManager, SessionKVCache."""
+"""Tests for domain.infrastructure.model_server — Priority, QueueMetrics, ModelStatus, ModelMetrics, CircuitBreakerState, CircuitBreaker, IdleManager, SessionKVState."""
 
 import time
 
@@ -10,7 +10,7 @@ from domain.infrastructure._internal.model_server import (
     ModelStatus,
     Priority,
     QueueMetrics,
-    SessionKVCache,
+    SessionKVState,
 )
 
 
@@ -475,49 +475,49 @@ class TestIdleManager:
         mgr.shutdown()
 
 
-class TestSessionKVCache:
+class TestSessionKVState:
     def test_store_and_get(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1, 2, 3], "pkv_data")
         pkv, prefix_len = cache.get("s1", [1, 2, 3])
         assert pkv == "pkv_data"
         assert prefix_len == 3
 
     def test_get_miss(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         pkv, prefix_len = cache.get("s1", [1, 2])
         assert pkv is None
         assert prefix_len == 0
 
     def test_partial_prefix(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1, 2, 3, 4], "pkv")
         pkv, prefix_len = cache.get("s1", [1, 2, 99])
         assert prefix_len == 2
 
     def test_no_prefix(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1, 2, 3], "pkv")
         pkv, prefix_len = cache.get("s1", [99, 88])
         assert pkv is None
         assert prefix_len == 0
 
     def test_clear(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1, 2], "pkv")
         cache.clear("s1")
         pkv, _ = cache.get("s1", [1, 2])
         assert pkv is None
 
     def test_lru_eviction(self):
-        cache = SessionKVCache(max_sessions=2)
+        cache = SessionKVState(max_sessions=2)
         cache.store("s1", [1], "pkv1")
         cache.store("s2", [2], "pkv2")
         cache.store("s3", [3], "pkv3")
         assert cache.size <= 2
 
     def test_size(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         assert cache.size == 0
         cache.store("s1", [1], "pkv")
         assert cache.size == 1
@@ -525,21 +525,21 @@ class TestSessionKVCache:
         assert cache.size == 2
 
     def test_stats(self):
-        cache = SessionKVCache(max_sessions=10, ttl=300.0)
+        cache = SessionKVState(max_sessions=10, ttl=300.0)
         s = cache.stats()
         assert s["max_sessions"] == 10
         assert s["ttl_seconds"] == 300.0
         assert s["entries"] == 0
 
     def test_evict_expired(self):
-        cache = SessionKVCache(ttl=0.01)
+        cache = SessionKVState(ttl=0.01)
         cache.store("s1", [1], "pkv")
         time.sleep(0.02)
         cache.evict_expired()
         assert cache.size == 0
 
     def test_overwrite_session(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1, 2], "pkv_v1")
         cache.store("s1", [1, 2, 3], "pkv_v2")
         pkv, prefix_len = cache.get("s1", [1, 2, 3])
@@ -547,7 +547,7 @@ class TestSessionKVCache:
         assert prefix_len == 3
 
     def test_multiple_sessions(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1], "pkv1")
         cache.store("s2", [2], "pkv2")
         pkv1, _ = cache.get("s1", [1])
@@ -556,38 +556,38 @@ class TestSessionKVCache:
         assert pkv2 == "pkv2"
 
     def test_clear_nonexistent(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.clear("nonexistent")
 
     def test_default_ttl(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         assert cache._ttl == 600.0
 
     def test_default_max_sessions(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         assert cache._max_sessions == 20
 
     def test_stats_after_store(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1], "pkv")
         s = cache.stats()
         assert s["entries"] == 1
 
     def test_get_empty_ids(self):
-        cache = SessionKVCache()
+        cache = SessionKVState()
         cache.store("s1", [1, 2, 3], "pkv")
         pkv, prefix_len = cache.get("s1", [])
         assert pkv is None
         assert prefix_len == 0
 
     def test_evict_expired_no_expired(self):
-        cache = SessionKVCache(ttl=300.0)
+        cache = SessionKVState(ttl=300.0)
         cache.store("s1", [1], "pkv")
         cache.evict_expired()
         assert cache.size == 1
 
     def test_lru_evicts_oldest(self):
-        cache = SessionKVCache(max_sessions=2)
+        cache = SessionKVState(max_sessions=2)
         cache.store("s1", [1], "pkv1")
         time.sleep(0.005)
         cache.store("s2", [2], "pkv2")

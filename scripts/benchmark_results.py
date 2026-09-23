@@ -37,6 +37,11 @@ REGRESSION_THRESHOLDS = {
         "mean_ms": (20.0, "rel"),
         "p95_ms": (20.0, "rel"),
     },
+    "execution": {
+        # fire-and-forget dispatch / execution-consolidation stage 1
+        "dispatch_us": (50.0, "rel"),
+        "peak_threads": (2, "abs"),
+    },
 }
 
 
@@ -244,6 +249,12 @@ def do_record(args) -> int:
             data = _run_stability(args.url, args.runs)
         elif kind == "latency":
             data = _run_latency(args.url, args.runs, update_baseline=False)
+        elif kind == "training":
+            print(
+                "[ERR] training kind requires --json-file (from benchmark_slonet_training.py)",
+                file=sys.stderr,
+            )
+            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -300,6 +311,17 @@ def do_history(args) -> int:
                     f"  {stamp}  {model:<24} overall={sc.get('overall', '?'):<4} "
                     f"passed={'✓' if r.get('passed') else '✗'}  {p.name}"
                 )
+            elif kind == "training":
+                ms = r.get("metrics", {})
+                if isinstance(ms, dict):
+                    ms = [ms]
+                for c in ms:
+                    conf = c.get("config") if isinstance(c, dict) else "?"
+                    gate = c.get("gate_converged") if isinstance(c, dict) else None
+                    final = c.get("final_loss") if isinstance(c, dict) else None
+                    print(
+                        f"  {stamp}  {conf:<10} gate={'✓' if gate else '✗'} final={final}  {p.name}"
+                    )
             else:
                 m = r.get("metrics", {})
                 print(
@@ -322,12 +344,34 @@ def do_compare(args) -> int:
     else:
         old = load_result(runs[1])
 
-    deltas = _regression_deltas(args.kind, new, old)
-    regressed = is_regression(args.kind, new, old)
-
     print(
         f"── compare {args.kind}: {old.get('timestamp', '?')[:19]} → {new.get('timestamp', '?')[:19]} ──"
     )
+
+    if args.kind == "training":
+
+        def _best_final(r):
+            ms = r.get("metrics", {})
+            if isinstance(ms, dict):
+                ms = [ms]
+            vals = [
+                float(c.get("final_loss"))
+                for c in ms
+                if isinstance(c, dict) and c.get("final_loss") is not None
+            ]
+            return min(vals) if vals else None
+
+        nf, of = _best_final(new), _best_final(old)
+        print(f"  best_final_loss        {of:<10} → {nf:<10}")
+        if nf is not None and of is not None and nf > of * 1.5:
+            print("  → [FAIL] training final_loss regressed vs prior run")
+            return 1
+        print("  → [OK] no regression vs prior run")
+        return 0
+
+    deltas = _regression_deltas(args.kind, new, old)
+    regressed = is_regression(args.kind, new, old)
+
     for metric, delta in deltas.items():
         nv = _dig(new, metric)
         ov = _dig(old, metric)
@@ -354,7 +398,9 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
-    p_rec.add_argument("--kind", required=True, choices=["stability", "latency"])
+    p_rec.add_argument(
+        "--kind", required=True, choices=["stability", "latency", "execution", "training"]
+    )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
     p_rec.add_argument("--runs", type=int, default=20)
@@ -363,11 +409,15 @@ def main() -> int:
     p_rec.set_defaults(fn=do_record)
 
     p_h = sub.add_parser("history", help="list stored runs")
-    p_h.add_argument("--kind", default=None, choices=["stability", "latency"])
+    p_h.add_argument(
+        "--kind", default=None, choices=["stability", "latency", "execution", "training"]
+    )
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
-    p_c.add_argument("--kind", default="stability", choices=["stability", "latency"])
+    p_c.add_argument(
+        "--kind", default="stability", choices=["stability", "latency", "execution", "training"]
+    )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
 

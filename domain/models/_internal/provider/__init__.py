@@ -6,12 +6,12 @@ Re-exports the public API of the legacy provider.py so
 
 from __future__ import annotations
 
-from .protocols import ChatMessage, MessageProcessor, ModelCapabilities, ModelProvider
 from .processors.knowledge import KnowledgeProcessor
 from .processors.personality import PersonalityProcessor
 from .processors.style import StyleProcessor
 from .processors.tool_use import ToolDef, ToolUseProcessor
 from .processors.vision import VisionProcessor
+from .protocols import ChatMessage, MessageProcessor, ModelCapabilities, ModelProvider
 from .registry import (
     _processors,
     _providers,

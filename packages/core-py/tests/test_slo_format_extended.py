@@ -529,3 +529,54 @@ class TestSloProfileEdgeCases:
     def test_born_at_not_overwritten(self):
         sp = SloProfile(name="fixed", born_at="2025-01-01T00:00:00Z")
         assert sp.born_at == "2025-01-01T00:00:00Z"
+
+
+# ---------------------------------------------------------------------------
+# Single writer verification: slonet.export_to_sou and save_soul must produce
+# the same SOUL v3 envelope so either reader can load either writer's output.
+# ---------------------------------------------------------------------------
+
+
+class TestSharedSoulWriter:
+    """Cross-writer byte compatibility (card 20260923_025)."""
+
+    def test_slonet_writer_readable_by_slo_format_reader(self, tmp_path):
+        from domain.training._internal.slonet import SloTransformer, export_to_sou
+
+        net = SloTransformer(vocab_size=64, n_embed=32, n_layer=1, n_head=4, block_size=16)
+        path = str(tmp_path / "cross_a.soul")
+        export_to_sou(net, path)
+
+        prof, sd = load_soul(path)
+        assert isinstance(prof, SloProfile)
+        assert len(sd) > 0
+        assert all(isinstance(v, np.ndarray) for v in sd.values())
+
+    def test_slo_format_writer_readable_by_slonet_reader(self, tmp_path):
+        from domain.training._internal.slonet import SloTransformer, import_from_sou
+
+        net = SloTransformer(vocab_size=64, n_embed=32, n_layer=1, n_head=4, block_size=16)
+        path = str(tmp_path / "cross_b.soul")
+        save_soul(net, path, weights_only=False)
+
+        loaded = import_from_sou(path)
+        assert isinstance(loaded, SloTransformer)
+        assert len(list(loaded.parameters())) == len(list(net.parameters()))
+
+    def test_slonet_weights_only_matches_save_soul_weights_only(self, tmp_path):
+        from domain.training._internal.slonet import SloTransformer, export_to_sou
+
+        net = SloTransformer(vocab_size=64, n_embed=32, n_layer=1, n_head=4, block_size=16)
+        a = str(tmp_path / "only_a.soul")
+        b = str(tmp_path / "only_b.soul")
+        export_to_sou(net, a, include_weights=False)
+        save_soul(net, b, weights_only=True)
+
+        for p in (a, b):
+            with open(p, "rb") as f:
+                raw = f.read()
+            assert raw[:4] == SOU_MAGIC
+            assert struct.unpack("<I", raw[4:8])[0] == SOU_VERSION_V3
+            json_len = struct.unpack("<I", raw[8:12])[0]
+            # weights-only: magic + version + json and nothing after the payload
+            assert len(raw) == 12 + json_len

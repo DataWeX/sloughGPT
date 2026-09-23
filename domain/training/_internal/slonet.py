@@ -22,8 +22,8 @@ from typing import Any
 
 import numpy as np
 
-from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.shared import find_repo_root  # noqa: F401 — kept for compatibility
 
 logger = logging.getLogger("slo.slonet")
@@ -4963,31 +4963,26 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
     )
     try:
         with os.fdopen(tmp_fd, "wb") as f:
-            f.write(SOU_MAGIC)
-            f.write(struct.pack("<I", 3))
-            f.write(struct.pack("<I", len(json_bytes)))
-            f.write(json_bytes)
+            params: list[tuple[str, np.ndarray]] = []
             if include_weights:
                 if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
                     state_items = list(net.state_dict().items())
                 else:
                     state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
-                # Skip non-tensor state entries (e.g. ``config`` metadata some
-                # models embed in state_dict) — they are not weights.
                 params = [
                     (k, np.asarray(v, dtype=np.float32))
                     for k, v in state_items
                     if not isinstance(v, (dict, list, tuple, str, bytes, bool))
                 ]
-                f.write(struct.pack("<I", len(params)))
-                for key, arr in params:
-                    name_bytes = key.encode()
-                    f.write(struct.pack("<I", len(name_bytes)))
-                    f.write(name_bytes)
-                    f.write(struct.pack("<I", arr.ndim))
-                    for dim in arr.shape:
-                        f.write(struct.pack("<I", dim))
-                    f.write(arr.tobytes())
+            # Envelope owned by slo_format — single writer for the v3 layout.
+            from domain.inference._internal.slo_format import _write_soul_v3
+
+            _write_soul_v3(
+                f,
+                json_bytes,
+                params,
+                include_weights=include_weights,
+            )
         os.rename(tmp_path, path)
     except Exception:
         try:
@@ -5373,11 +5368,17 @@ def train_char_lstm_from_gpt(
 class NumpyKVState(NativeKVState):
     """Persistent KV cache state for cross-turn generation.
 
-    Created via ``SloTransformer.new_kv_state()`` and passed to
-    ``generate_numpy`` / ``generate_numpy_stream`` through the ``kv_state``
-    argument. The cache and the last output survive across calls, so a new
-    turn whose token prefix equals the previous output only recomputes the
-    appended suffix (start_pos resume) instead of the whole prompt.
+    This is a *cache*, not a ``Store``: it holds the per-loop K/V buffers and
+    the last output for ``start_pos`` resume, but it does not own persistence.
+    Persistence (save/load, session ownership) lives in the ``SessionKVCache``
+    layer and the ``.npz`` write path.
+
+    Created via ``SloTransformer.new_kv_cache()`` (``new_kv_state()`` is a
+    deprecated alias) and passed to ``generate_numpy`` /
+    ``generate_numpy_stream`` through the ``kv_state`` argument. The cache and
+    the last output survive across calls, so a new turn whose token prefix
+    equals the previous output only recomputes the appended suffix (start_pos
+    resume) instead of the whole prompt.
 
     This is a thin subclass of :class:`NativeKVState` (the native C+numpy
     engine): storage IS ``NativeKVState``'s preallocated numpy backend, and
@@ -5470,9 +5471,12 @@ class NumpyKVState(NativeKVState):
     def __repr__(self) -> str:
         filled = self.kv_len[0] if self.kv_len else 0
         return (
-            f"NumpyKVState(capacity={self.capacity}, filled={filled}, "
+            f"NumpyKVCache(capacity={self.capacity}, filled={filled}, "
             f"quantize_kv={self.quantize_kv}, valid={self.prev_ids is not None})"
         )
+
+
+NumpyKVCache = NumpyKVState  # backward-compat alias for branch consumers
 
 
 class SloTransformer(SloNet):
@@ -5809,15 +5813,19 @@ class SloTransformer(SloNet):
             state.kv_len,
         )
 
-    def new_kv_state(self) -> NumpyKVState:
-        """Create an empty persistent KV cache state for cross-turn generation.
+    def new_kv_cache(self) -> NumpyKVCache:
+        """Create an empty persistent KV cache for cross-turn generation.
 
         Returns:
-            A fresh ``NumpyKVState`` that can be passed as ``kv_state`` to
+            A fresh ``NumpyKVCache`` that can be passed as ``kv_state`` to
             ``generate_numpy`` / ``generate_numpy_stream`` and reused across
-            calls. The same state object must not be shared across threads.
+            calls. The same cache object must not be shared across threads.
         """
-        return NumpyKVState()
+        return NumpyKVCache()
+
+    def new_kv_state(self) -> NumpyKVCache:
+        """Deprecated alias for :meth:`new_kv_cache`."""
+        return self.new_kv_cache()
 
     def _resolve_kv_state(
         self,
@@ -5876,7 +5884,14 @@ class SloTransformer(SloNet):
             if state is None:
                 state = NumpyKVState()
             state.backend.bind(n_blocks, total_len, nkv, head_dim, use_kvq)
-            return state.kv_buf_k, state.kv_buf_v, state.kv_scale_k, state.kv_scale_v, state.kv_len, 0
+            return (
+                state.kv_buf_k,
+                state.kv_buf_v,
+                state.kv_scale_k,
+                state.kv_scale_v,
+                state.kv_len,
+                0,
+            )
 
         # Resume: reuse cached buffers, growing capacity when required.
         if state.capacity < total_len:
@@ -5901,7 +5916,7 @@ class SloTransformer(SloNet):
         repetition_penalty: float = 1.0,
         eos_token: int | None = None,
         extra_stop_ids: Sequence[int] | None = None,
-        kv_state: NumpyKVState | None = None,
+        kv_state: NumpyKVCache | None = None,
     ) -> np.ndarray:
         """Generation path for LoRA-active models — uses non-inlined forward.
 
@@ -6032,7 +6047,7 @@ class SloTransformer(SloNet):
         eos_token: int | None = None,
         extra_stop_ids: Sequence[int] | None = None,
         quantize_kv: bool | None = None,
-        kv_state: NumpyKVState | None = None,
+        kv_state: NumpyKVCache | None = None,
     ) -> GenerateResult:
         """Fully inlined numpy generation — maximum inference speed.
 
@@ -6064,7 +6079,7 @@ class SloTransformer(SloNet):
             quantize_kv: When True the KV cache is stored as int8 with
                 per-token-head scales (4x memory reduction). When None it
                 auto-enables for quantized models; when False it is float32.
-            kv_state: Optional persistent KV state (from ``new_kv_state()``).
+            kv_state: Optional persistent KV cache (from ``new_kv_cache()``).
                 When the state holds a completed output that is a strict
                 prefix of ``input_ids``, the cached K/V for that prefix is
                 reused and only the appended tokens are computed. The state
@@ -6737,7 +6752,7 @@ class SloTransformer(SloNet):
         top_p: float | None = None,
         repetition_penalty: float = 1.0,
         quantize_kv: bool | None = None,
-        kv_state: NumpyKVState | None = None,
+        kv_state: NumpyKVCache | None = None,
         return_logprobs: bool = False,
     ):
         """Generator version of generate_numpy — yields token ids one at a time.
@@ -6758,7 +6773,7 @@ class SloTransformer(SloNet):
             quantize_kv: When True the KV cache is stored as int8 with
                 per-token-head scales (4x memory reduction). When None it
                 auto-enables for quantized models; when False it is float32.
-            kv_state: Optional persistent KV state (from ``new_kv_state()``).
+            kv_state: Optional persistent KV cache (from ``new_kv_cache()``).
                 When the state holds a completed output that is a strict
                 prefix of ``input_ids``, the cached K/V for that prefix is
                 reused and only the appended tokens are computed. The state

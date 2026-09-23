@@ -143,9 +143,9 @@ class TestGenerate:
         out = model.generate(x, max_new_tokens=3)
         assert out.data.shape[1] == 6
 
-    def test_new_kv_state(self):
+    def test_new_kv_cache(self):
         model = SloTransformer(vocab_size=100, n_embed=32, n_layer=1, n_head=2, max_seq_len=50)
-        state = model.new_kv_state()
+        state = model.new_kv_cache()
         assert isinstance(state, NumpyKVState)
 
 

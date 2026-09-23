@@ -20,7 +20,6 @@ from domain.inference._internal.slonet_provider import (
     _TreeTokenizer,
     convert_hf_to_slonet,
 )
-from domain.infrastructure._internal.kv_cache.session import SessionKVManager
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -130,6 +129,8 @@ from unittest.mock import MagicMock
 
 
 def _make_provider(**overrides):
+    from domain.inference._internal.session_kv_manager import SessionKVManager
+
     p = SloNetChatProvider.__new__(SloNetChatProvider)
     p._hf_model_id = overrides.get("_hf_model_id", "test-model")
     p._model_id = overrides.get("_model_id", "test-model")
@@ -419,7 +420,7 @@ class TestBuildPrompt:
         assert "user: hi" in result
 
     def test_list_of_dicts_fallback_to_last_content(self):
-        """When tokenizer has no apply_chat_template, falls back to last message."""
+        """Without a tokenizer chat template, falls back to the raw last message content."""
         p = _make_provider()
         p._tokenizer = MagicMock(spec=[])  # no apply_chat_template
         msgs = [{"role": "user", "content": "question"}, {"role": "assistant", "content": "answer"}]

@@ -30,6 +30,9 @@ from domain.shell._internal.runtime import (
 from domain.shell._internal.state import (
     ShellState,
 )
+from domain.shell._internal.vm import (
+    X86VirtualSystem,
+)
 
 _dait_instance = None
 
@@ -55,4 +58,5 @@ __all__ = [
     "DaitRuntime",
     "Resource",
     "get_dait_runtime",
+    "X86VirtualSystem",
 ]

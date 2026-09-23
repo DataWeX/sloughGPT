@@ -26,8 +26,8 @@ export interface InfoCardProps {
 const toneClasses = {
   primary: 'text-primary',
   muted: 'text-muted-foreground',
-  success: 'text-green-500',
-  warning: 'text-yellow-500',
+  success: 'text-success',
+  warning: 'text-warning',
   destructive: 'text-destructive',
 }
 
@@ -68,16 +68,10 @@ export function InfoCard({
   return (
     <Card className={cn(sizeClasses[size], className)} data-testid={testId}>
       <div className="flex items-start gap-3">
-        {icon && (
-          <div className={cn('mt-0.5 shrink-0', toneClasses[tone])}>
-            {icon}
-          </div>
-        )}
+        {icon && <div className={cn('mt-0.5 shrink-0', toneClasses[tone])}>{icon}</div>}
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-medium">{title}</h3>
-          {description && (
-            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-          )}
+          {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
           {children && <div className="mt-2">{children}</div>}
         </div>
       </div>

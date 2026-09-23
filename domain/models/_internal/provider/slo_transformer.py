@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import AsyncIterator
-from typing import Any
 
 from .protocols import ModelCapabilities
 
@@ -92,7 +91,7 @@ class SloTransformerProvider:
         return {"model_id": self._model_id_str, "vocab_size": len(self._stoi), "type": "soultransformer", "n_layer": self._model.n_layer, "n_embed": self._model.n_embed, "n_head": self._model.n_head}
 
     @classmethod
-    def load_from_sou(cls, path: str, model_id_str: str = "") -> "SloTransformerProvider":
+    def load_from_sou(cls, path: str, model_id_str: str = "") -> SloTransformerProvider:
         from domain.inference import load_soul
         from domain.infrastructure._internal.weight_loader import infer_arch_from_state_dict
 

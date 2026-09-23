@@ -10,7 +10,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def isolated_knowledge_paths(tmp_path, monkeypatch):
     """Keep KnowledgeMemory persistence off the real data dir."""
-    from domain.knowledge._internal import knowledge as K
+    from domain.memory._internal import knowledge_store as K
 
     monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
     monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")

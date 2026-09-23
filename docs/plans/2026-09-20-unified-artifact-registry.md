@@ -2,7 +2,7 @@
 
 Date: 2026-09-20. Status: Stage 1 built (read-only index +
 `GET /registry/artifacts` + `GET /registry/verify` + content fingerprints);
-stages 2–3 open.
+stage 2 built (write-path hooks via `try_register`); stage 3 open.
 
 ## Problem
 
@@ -64,3 +64,27 @@ New module `domain/infrastructure/_internal/artifact_registry.py`:
   Weights stay loader-internal (`WeightLoaderRegistry`) until stage 2.
 - Who owns `download` records after import converts them (download backend
   vs importer)? Importer registers the converted artifact, links source id.
+
+## Stage 2 — built (write-path hooks)
+
+- New `try_register(kind, path, *, name=None)`: best-effort `register()`
+  that never raises (returns record or `None`), safe for hot write paths.
+- Hooks wired (all guarded through `try_register`):
+  - `external_download.py::ExternalDownloadBackend.download()` → registers
+    `download`, record attached to the completion response as `artifact`.
+  - `training_handler.py::SoulCheckpointSaver.save()` → registers `checkpoint`
+    (`.soul`).
+  - `training_handler.py::SloCheckpointSaver.save()` → registers `checkpoint`
+    (`.npz`); consolidated the ruling on the `.npz` gap by widening
+    `_iter_checkpoints` to scan `*.soul` + `*.npz`.
+  - `datasets.py::DatasetsController.add_data()` → registers `dataset`
+    (corpus file) once data exists (not `create_dataset`, which writes no
+    corpus yet).
+  - `models.py` fine-tune model load → registers `model` for the compiled
+    `model.slnc` (`.slnc` aligns with the model index, not `weight`).
+- No persistence: the filesystem stays the source of truth (per
+  `register()` contract); the index re-scans and picks the new artifacts up.
+- Tests: `packages/core-py/tests/test_artifact_registry_hooks.py` (11) —
+  `try_register` unit behavior + source-presence guards for every site +
+  one live `add_data` → register exercise. Existing registry / download /
+  training-handler suites still green.

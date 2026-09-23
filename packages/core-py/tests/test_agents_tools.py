@@ -424,6 +424,102 @@ class TestToolRegistry:
         reg.register(spec)
         assert reg.get("calculator").description == "Override"
 
+    def test_knowledge_retrieval_rag_hits(self, monkeypatch):
+        reg = ToolRegistry()
+        facts = [
+            {
+                "id": "f1",
+                "content": "Deploy uses Argo CD on a staging cluster.",
+                "topic": "deploy",
+                "source": "docs/ops.md",
+                "url": "",
+                "score": 0.87,
+            }
+        ]
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", lambda: _FakeEngine(facts))
+        result = asyncio.get_event_loop().run_until_complete(
+            reg.execute("knowledge_retrieval", {"query": "deploy argocd"})
+        )
+        assert result.success is True
+        assert result.metadata["engine"] == "rag"
+        assert "docs/ops.md" in result.output
+        assert "deploy" in result.output
+
+    def test_knowledge_retrieval_rag_priority(self, monkeypatch):
+        reg = ToolRegistry()
+        facts = [
+            {
+                "id": "f1",
+                "content": "How to configure the api provider",
+                "topic": "config",
+                "source": "docs/config.md",
+                "url": "",
+                "score": 0.9,
+            }
+        ]
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", lambda: _FakeEngine(facts))
+        monkeypatch.setenv("WORKSPACE_ROOT", "/nonexistent")
+        result = asyncio.get_event_loop().run_until_complete(
+            reg.execute("knowledge_retrieval", {"query": "config provider"})
+        )
+        assert result.metadata["engine"] == "rag"
+        assert "docs/config.md" in result.output
+
+    def test_knowledge_retrieval_rag_empty_falls_back(self, monkeypatch, tmp_path):
+        reg = ToolRegistry()
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", lambda: _FakeEngine([]))
+        doc = tmp_path / "docs" / "guide.md"
+        doc.parent.mkdir(parents=True)
+        doc.write_text("redis caching: the tuning harness stores index chunks here.")
+        monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path))
+        result = asyncio.get_event_loop().run_until_complete(
+            reg.execute("knowledge_retrieval", {"query": "redis caching"})
+        )
+        assert result.success is True
+        assert result.metadata["engine"] == "files"
+        assert "guide.md" in result.output
+
+    def test_knowledge_retrieval_rag_failure_falls_back(self, monkeypatch, tmp_path):
+        reg = ToolRegistry()
+
+        def bad():
+            raise RuntimeError("boom")
+
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", bad)
+        doc = tmp_path / "docs" / "guide.md"
+        doc.parent.mkdir(parents=True)
+        doc.write_text("redis caching: the tuning harness stores index chunks here.")
+        monkeypatch.setenv("WORKSPACE_ROOT", str(tmp_path))
+        result = asyncio.get_event_loop().run_until_complete(
+            reg.execute("knowledge_retrieval", {"query": "redis caching"})
+        )
+        assert result.success is True
+        assert result.metadata["engine"] == "files"
+        assert "guide.md" in result.output
+
+    def test_knowledge_retrieval_rag_no_match(self, monkeypatch):
+        reg = ToolRegistry()
+        monkeypatch.setattr("domain.knowledge.get_knowledge_engine", lambda: _FakeEngine([]))
+        monkeypatch.setenv("WORKSPACE_ROOT", "/nonexistent")
+        result = asyncio.get_event_loop().run_until_complete(
+            reg.execute("knowledge_retrieval", {"query": "zzz nothing"})
+        )
+        assert result.success is True
+        assert result.metadata["engine"] == "files"
+        assert result.metadata["count"] == 0
+
+
+class _FakeEngine:
+    """Minimal engine double — returns canned facts via .query()."""
+
+    def __init__(self, facts):
+        self._facts = facts
+
+    def query(self, search, top_k=10):
+        from domain.knowledge.engine import KnowledgeResult
+
+        return KnowledgeResult(success=True, data=self._facts, metadata={"count": len(self._facts)})
+
 
 class TestGetToolRegistry:
     def test_singleton(self):

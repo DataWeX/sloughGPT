@@ -291,6 +291,16 @@ class TrainingExecutor:
         """Number of currently running jobs."""
         return self._running()
 
+    @property
+    def max_workers(self) -> int:
+        """Configured pool size (workers)."""
+        return self._max_workers
+
+    @property
+    def job_count(self) -> int:
+        """Number of tracked jobs (running/pending/completed)."""
+        return len(self._jobs)
+
     # ── Cancel ────────────────────────────────────────────────────────
 
     def cancel(self, job_id: str) -> bool:

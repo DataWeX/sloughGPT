@@ -60,7 +60,7 @@ def mock_trainer():
         "current_epoch": 0,
         "loss": 0.0,
     }
-    trainer._pairs = list(range(10))
+    trainer.pairs = list(range(10))
     train_result = MagicMock()
     train_result.to_dict.return_value = {"loss": 0.5, "epochs": 1}
     trainer.train.return_value = train_result
@@ -94,6 +94,53 @@ class TestConsciousnessAPI:
         assert data["data"]["enabled"] is True
         assert data["data"]["level"] == 1
         assert "training" in data["data"]
+
+    @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
+    def test_get_status_lazy_trainer_builds_from_episodes(self, _auth):
+        """_get_trainer() builds the domain.consciousness.training adapter over self-model episodes."""
+        import time as _time
+
+        from infrastructure.exception_handlers import register_app_error_handler
+
+        from apps.api.server.routers.consciousness import ConsciousnessRouter
+        from domain.consciousness._internal.self_model import SelfEpisode
+
+        router_obj = ConsciousnessRouter()
+        engine = MagicMock()
+        engine.config.lora_rank = 4
+        engine.config.lora_alpha = 8.0
+        engine.get_status.return_value = {
+            "enabled": True,
+            "level": 1,
+            "current_qualia": {},
+            "beliefs": {},
+            "episodes": 2,
+        }
+        engine.self_model.episodes = [
+            SelfEpisode(
+                timestamp=_time.time() - i,
+                input_text=f"q{i}",
+                response=f"a{i}",
+                qualia={},
+                self_insight="insight",
+                growth_delta=0.07,
+            )
+            for i in range(2)
+        ]
+        router_obj._engine = engine
+        assert router_obj._trainer is None
+
+        app = FastAPI()
+        register_app_error_handler(app)
+        app.include_router(router_obj.router)
+        client = TestClient(app)
+
+        res = client.get("/consciousness/status")
+        assert res.status_code == 200
+        training = res.json()["data"]["training"]
+        assert training["pairs_collected"] == 2
+        assert training["min_pairs"] == 10
+        assert training["is_training"] is False
 
     @patch("apps.api.server.routers.consciousness.require_auth_if_enabled", return_value=None)
     def test_get_self_model(self, _auth, client):
@@ -181,7 +228,7 @@ class TestConsciousnessAPI:
         mock_trainer_insufficient.is_training = False
         mock_trainer_insufficient.should_train.return_value = False
         mock_trainer_insufficient.config.min_pairs_for_training = 5
-        mock_trainer_insufficient._pairs = [1, 2]
+        mock_trainer_insufficient.pairs = [1, 2]
         router_obj._trainer = mock_trainer_insufficient
 
         app = FastAPI()

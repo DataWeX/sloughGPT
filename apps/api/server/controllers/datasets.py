@@ -469,6 +469,13 @@ class DatasetsController:
             for line in data:
                 f.write(json.dumps({"text": line}) + "\n")
                 count += 1
+        if count:
+            try:
+                from domain.infrastructure._internal.artifact_registry import try_register
+
+                try_register("dataset", corpus_file, name=dataset_id)
+            except Exception:
+                logger.debug("Dataset registry update skipped", exc_info=True)
         return count
 
     # --- Versioning helpers -------------------------------------------------

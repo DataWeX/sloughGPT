@@ -7,18 +7,23 @@
 1. **Create a todo on kanban** — log the task before starting work.
 2. **Branch before implementing** — `git checkout -b feat/<name>` for major implementations (new methods, training loops, inference engines, quantization, model architecture changes). Small fixes, config tweaks, and doc edits can go straight to main.
 3. **Do the production workflow** — follow the established dev flow (lint, typecheck, test).
-4. **Ask leading questions** — clarify requirements before writing code.
-5. **Do work in one shot** — make all edits in a single pass, no back-and-forth.
-6. **Check if it's done** — verify the output matches what was asked.
-7. **Clarify** — confirm with user if anything is ambiguous.
-8. **Ask for more info** — if blocked or unclear, ask before guessing.
-9. **Test for bugs or errors** — run lint, typecheck, and tests.
-10. **Benchmark** — run the relevant benchmark. If it regresses or fails, fix or delete the branch and revert: `git checkout main -- <files>` or `git branch -D feat/<name>`. Do not merge broken implementations.
-11. **Merge when green** — `git checkout main && git merge feat/<name>` only after tests + benchmarks pass.
-12. **Submit with a console summary** — commit with a concise summary of what changed.
-13. **Build by user journey** — frame work as user journeys (`docs/UX_FLOWS.md`), not files. Walk each journey click-by-click in the running app; build only what blocks it. A journey passes when a non-technical user can complete it.
-14. **Summarize, don't dump** — UIs and reports show concise summaries (key metrics, highlighted states), never raw thousand-line dumps. Raw logs stay one click away, collapsed by default.
-15. **One global banner** — app-wide alerts go through `useBannerStore` + `<GlobalBanner />` in `AppLayout`, never a per-page banner. Toasts for transient confirmations; banners for journey blockers with actions. Dedupe with `key`.
+4. **Expert review before implementing** — when the user proposes an approach (design, mechanism, invariant, or architecture idea), do not just implement it. Always respond in the expert-review format:
+   - **Verify soundness** — confirm the plan is logically sound, and name the real systems invariant/pattern behind it (cache coherence, MVCC versioning, generation counters, ETags, etc.).
+   - **Affirm what's right** — explicitly list the correct instincts in the proposal (e.g., invalidating at the start of a mutation, matching dependent state to its source).
+   - **Always give two refinements** — (1) a mechanism/placement correction from a systems lens (where the check lives, push vs. lazy invalidation, coupling boundaries, what gets invalidated when), and (2) a scope correction (what must vs. must not be affected, and what the plan does not yet cover).
+   - **Propose concrete implementation** — give step-by-step implementation, then ask for go-ahead before writing code.
+5. **Ask leading questions** — clarify requirements before writing code.
+6. **Do work in one shot** — make all edits in a single pass, no back-and-forth.
+7. **Check if it's done** — verify the output matches what was asked.
+8. **Clarify** — confirm with user if anything is ambiguous.
+9. **Ask for more info** — if blocked or unclear, ask before guessing.
+10. **Test for bugs or errors** — run lint, typecheck, and tests.
+11. **Benchmark** — run the relevant benchmark. If it regresses or fails, fix or delete the branch and revert: `git checkout main -- <files>` or `git branch -D feat/<name>`. Do not merge broken implementations.
+12. **Merge when green** — `git checkout main && git merge feat/<name>` only after tests + benchmarks pass.
+13. **Submit with a console summary** — commit with a concise summary of what changed.
+14. **Build by user journey** — frame work as user journeys (`docs/UX_FLOWS.md`), not files. Walk each journey click-by-click in the running app; build only what blocks it. A journey passes when a non-technical user can complete it.
+15. **Summarize, don't dump** — UIs and reports show concise summaries (key metrics, highlighted states), never raw thousand-line dumps. Raw logs stay one click away, collapsed by default.
+16. **One global banner** — app-wide alerts go through `useBannerStore` + `<GlobalBanner />` in `AppLayout`, never a per-page banner. Toasts for transient confirmations; banners for journey blockers with actions. Dedupe with `key`.
 
 ### Core Rules
 

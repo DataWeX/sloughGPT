@@ -23,7 +23,7 @@ class ProviderRouter:
         self._model_id_str = "router-v1"
         self._max_tool_rounds = 3
 
-    def add_processor(self, processor: MessageProcessor) -> "ProviderRouter":
+    def add_processor(self, processor: MessageProcessor) -> ProviderRouter:
         self._processors.append(processor)
         return self
 

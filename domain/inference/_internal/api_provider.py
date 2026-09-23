@@ -30,6 +30,7 @@ Usage:
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -38,6 +39,8 @@ import httpx
 from domain.models._internal.provider import ModelCapabilities
 
 logger = logging.getLogger("slo.api_provider")
+
+_REASONING_MODEL_PREFIX = re.compile(r"^o\d+")
 
 
 class ApiProvider:
@@ -54,17 +57,73 @@ class ApiProvider:
         model: str = "gpt-4o-mini",
         timeout: float = 60.0,
         max_retries: int = 2,
+        token_param_override: str | None = None,
     ):
         self.api_key = api_key
-        self.api_url = api_url.rstrip("/")
+        self.api_url = self._normalize_base(api_url)
         self.model_name = model
         self.timeout = timeout
         self.max_retries = max_retries
+        self.token_param_override = token_param_override
+        self.last_usage: dict[str, int] | None = None
 
         if not self.api_key:
             raise ValueError("API key required")
         if not self.api_url:
             raise ValueError("API URL required")
+
+    @staticmethod
+    def _normalize_base(api_url: str) -> str:
+        """Normalize a base URL to the OpenAI-compatible ``.../vN`` form.
+
+        - Strips a trailing ``/chat/completions`` (caller pasted the full path).
+        - Appends ``/v1`` when the base is version-less (e.g. ``localhost:11434``).
+        - Preserves an explicit version segment (``/v1``, ``/v2``, ...).
+        """
+        base = api_url.strip()
+        if not base:
+            return base
+        base = base.rstrip("/")
+        if base.endswith("/chat/completions"):
+            base = base[: -len("/chat/completions")]
+        if re.search(r"/v\d+(/|$)", base):
+            return base
+        return f"{base}/v1"
+
+    def _token_param(self) -> str:
+        """Return the max-token field name for this model.
+
+        OpenAI reasoning models (``o1``/``o3``/``o4``-*) require
+        ``max_completion_tokens``; classic models use ``max_tokens``. An
+        explicit ``token_param_override`` wins.
+        """
+        if self.token_param_override in ("max_tokens", "max_completion_tokens"):
+            return self.token_param_override
+        if _REASONING_MODEL_PREFIX.match(self.model_name):
+            return "max_completion_tokens"
+        return "max_tokens"
+
+    def usage_tokens(
+        self,
+        text: str = "",
+        messages: list[dict[str, Any]] | None = None,
+    ) -> dict[str, int]:
+        """Report token usage, preferring the API-provided ``usage`` block.
+
+        Falls back to a character-based estimate (~4 chars/token) when the
+        endpoint does not return usage, so accounting always has a figure.
+        """
+        if self.last_usage:
+            return dict(self.last_usage)
+        estimate_prompt = 0
+        for m in messages or []:
+            estimate_prompt += len(m.get("content", "")) // 4
+        estimate_completion = len(text) // 4
+        return {
+            "prompt_tokens": estimate_prompt,
+            "completion_tokens": estimate_completion,
+            "total_tokens": estimate_prompt + estimate_completion,
+        }
 
     @property
     def model_id(self) -> str:
@@ -76,18 +135,21 @@ class ApiProvider:
             chat=True,
             embedding=False,
             streaming=True,
-            vision=True,
+            vision=False,
             functions=True,
         )
 
     @property
     def metadata(self) -> dict[str, Any]:
-        return {
+        meta = {
             "model_id": self.model_name,
             "provider": "api",
             "api_url": self.api_url,
             "streaming": True,
         }
+        if self.last_usage:
+            meta["last_usage"] = dict(self.last_usage)
+        return meta
 
     async def chat(
         self,
@@ -106,7 +168,7 @@ class ApiProvider:
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "max_tokens": max_tokens,
+            self._token_param(): max_tokens,
             "temperature": temperature,
             "top_p": top_p,
             "stream": False,
@@ -127,6 +189,13 @@ class ApiProvider:
                 )
                 response.raise_for_status()
                 data = response.json()
+                usage = data.get("usage")
+                if isinstance(usage, dict):
+                    self.last_usage = {
+                        "prompt_tokens": int(usage.get("prompt_tokens", 0)),
+                        "completion_tokens": int(usage.get("completion_tokens", 0)),
+                        "total_tokens": int(usage.get("total_tokens", 0)),
+                    }
 
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as e:
@@ -156,10 +225,11 @@ class ApiProvider:
         payload = {
             "model": self.model_name,
             "messages": messages,
-            "max_tokens": max_tokens,
+            self._token_param(): max_tokens,
             "temperature": temperature,
             "top_p": top_p,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
 
         if "top_k" in kwargs and kwargs["top_k"] > 0:
@@ -191,7 +261,15 @@ class ApiProvider:
 
                             try:
                                 data = json.loads(data_str)
-                                delta = data.get("choices", [{}])[0].get("delta", {})
+                                usage = data.get("usage")
+                                if isinstance(usage, dict):
+                                    self.last_usage = {
+                                        "prompt_tokens": int(usage.get("prompt_tokens", 0)),
+                                        "completion_tokens": int(usage.get("completion_tokens", 0)),
+                                        "total_tokens": int(usage.get("total_tokens", 0)),
+                                    }
+                                choices = data.get("choices") or []
+                                delta = choices[0].get("delta", {}) if choices else {}
                                 content = delta.get("content")
                                 if content:
                                     yield content

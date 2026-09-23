@@ -15,6 +15,8 @@ const STAGE_LABELS: Record<StartupStage, string> = {
 
 const STAGE_ORDER: StartupStage[] = ['init', 'critical', 'ready', 'background']
 
+const STUCK_TIMEOUT_MS = 8_000
+
 const HOOK_LABELS: Record<string, string> = {
   db_pool: 'Database',
   model_load: 'AI Model',
@@ -40,7 +42,9 @@ export function StartupOverlay() {
   const [visible, setVisible] = useState(true)
   const [fadeOut, setFadeOut] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
+  const [stuck, setStuck] = useState(false)
 
+  const stageIndex = STAGE_ORDER.indexOf(startupStage)
   const isReady = startupStage === 'background' || startupStage === 'ready'
 
   useEffect(() => {
@@ -51,6 +55,23 @@ export function StartupOverlay() {
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Stuck-connecting watchdog: stage never leaves "unknown" (no health payload).
+  useEffect(() => {
+    if (isReady || stageIndex >= 0) {
+      setStuck(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      setStuck(true)
+      logStateEvent('overlay_stuck', {
+        kind: 'overlay',
+        message: `overlay_stuck stage=${startupStage} after ${STUCK_TIMEOUT_MS}ms`,
+        data: { stage: startupStage, timeout_ms: STUCK_TIMEOUT_MS },
+      })
+    }, STUCK_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [isReady, stageIndex, startupStage])
 
   useEffect(() => {
     if (isReady && connected) {
@@ -67,13 +88,14 @@ export function StartupOverlay() {
 
   if (!visible) return null
 
-  const stageIndex = STAGE_ORDER.indexOf(startupStage)
+  const isIndeterminate = stageIndex < 0 && startupModelProgress <= 0
   const progress =
     startupModelProgress > 0
       ? startupModelProgress
       : stageIndex >= 0
         ? (stageIndex + 1) / STAGE_ORDER.length
         : 0.1
+  const progressPct = Math.min(100, Math.round(progress * 100))
 
   // Get completed hooks for timing breakdown
   const completedHooks = Object.values(startupHooks)
@@ -102,20 +124,31 @@ export function StartupOverlay() {
 
       {/* Stage label */}
       <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-6">
-        {STAGE_LABELS[startupStage] || 'Starting up'}
+        {stuck ? 'Still connecting' : STAGE_LABELS[startupStage] || 'Starting up'}
       </h2>
 
       {/* Progress bar */}
-      <div className="w-48 h-1 rounded-full bg-[#1c1c1e] overflow-hidden mb-3">
-        <div
-          className="h-full rounded-full bg-gradient-to-r from-[#0a7aff] to-[#5856d6] transition-all duration-300 ease-out"
-          style={{ width: `${Math.min(100, progress * 100)}%` }}
-        />
+      <div
+        role="progressbar"
+        aria-label="Startup progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        {...(isIndeterminate ? {} : { 'aria-valuenow': progressPct })}
+        className="w-48 h-1 rounded-full bg-[#1c1c1e] overflow-hidden mb-3"
+      >
+        {isIndeterminate ? (
+          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-gradient-to-r from-[#0a7aff] to-[#5856d6]" />
+        ) : (
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-[#0a7aff] to-[#5856d6] transition-all duration-300 ease-out"
+            style={{ width: `${progressPct}%` }}
+          />
+        )}
       </div>
 
       {/* Progress details */}
-      <div className="flex items-center gap-2 text-[11px] text-[#636366] mb-4">
-        {startupModelProgress > 0 && (
+      <div className="flex items-center gap-2 text-[11px] text-[#636366] mb-4" aria-live="polite">
+        {!isIndeterminate && startupModelProgress > 0 && (
           <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
         )}
         {startupModelProgressMessage && (
@@ -123,6 +156,29 @@ export function StartupOverlay() {
         )}
         {startupElapsed > 0 && <span className="font-mono">{startupElapsed.toFixed(1)}s</span>}
       </div>
+
+      {/* Stuck-connecting recovery */}
+      {stuck && (
+        <div role="alert" className="flex flex-col items-center gap-2 mb-4">
+          <p className="text-[11px] text-[#febc2e]">
+            No response from the server yet — check that the backend is running
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              logStateEvent('overlay_retry', {
+                kind: 'overlay',
+                message: 'overlay_retry reload requested',
+                data: { stage: startupStage },
+              })
+              window.location.reload()
+            }}
+            className="px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Active hooks */}
       {activeHooks.length > 0 && (
@@ -159,21 +215,46 @@ export function StartupOverlay() {
       )}
 
       {/* Stage indicators */}
-      <div className="flex items-center gap-1.5">
-        {STAGE_ORDER.map((stage, i) => (
-          <div
-            key={stage}
-            className={cn(
-              'w-1.5 h-1.5 rounded-full transition-all duration-300',
-              i < stageIndex
-                ? 'bg-[#28c840]'
+      <div role="group" aria-label="Startup stages" className="flex items-center gap-1.5">
+        {STAGE_ORDER.map((stage, i) => {
+          const state =
+            stageIndex < 0
+              ? 'unknown'
+              : i < stageIndex
+                ? 'done'
                 : i === stageIndex
-                  ? 'bg-[#0a7aff] scale-125'
-                  : 'bg-[#2c2c2e]',
-            )}
-          />
-        ))}
+                  ? 'active'
+                  : 'pending'
+          const stateLabel =
+            state === 'done'
+              ? 'done'
+              : state === 'active'
+                ? 'active'
+                : state === 'unknown'
+                  ? 'connecting'
+                  : 'pending'
+          return (
+            <div
+              key={stage}
+              role="img"
+              aria-label={`Stage ${i + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[stage]} (${stateLabel})`}
+              className={cn(
+                'w-1.5 h-1.5 rounded-full transition-all duration-300',
+                state === 'done' && 'bg-[#28c840]',
+                state === 'active' && 'bg-[#0a7aff] scale-125 sl-dot-pulse',
+                state === 'pending' && 'bg-[#2c2c2e]',
+                state === 'unknown' && 'bg-[#0a7aff]/60 sl-dot-wave',
+              )}
+              style={state === 'unknown' ? { animationDelay: `${i * 0.15}s` } : undefined}
+            />
+          )
+        })}
       </div>
+      <span className="sr-only" role="status">
+        {stageIndex < 0
+          ? 'Connecting'
+          : `Stage ${stageIndex + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[startupStage]}`}
+      </span>
     </div>
   )
 }

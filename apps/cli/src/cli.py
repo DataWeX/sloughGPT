@@ -10,10 +10,11 @@ import os
 import sys
 from pathlib import Path
 
-# Ensure both CLI core and core-py domains are on the path
+# Ensure repo root (domain shims), CLI core, and core-py domains are on the path
 _CLI_DIR = Path(__file__).resolve().parent
-_CORE_PY_DIR = _CLI_DIR.parent.parent.parent / "packages" / "core-py"
-for _sys_path in [_CLI_DIR, str(_CORE_PY_DIR)]:
+_ROOT_DIR = _CLI_DIR.parent.parent.parent
+_CORE_PY_DIR = _ROOT_DIR / "packages" / "core-py"
+for _sys_path in [_CLI_DIR, str(_ROOT_DIR), str(_CORE_PY_DIR)]:
     if str(_sys_path) not in sys.path:
         sys.path.insert(0, str(_sys_path))
 

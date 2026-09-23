@@ -278,9 +278,9 @@ def test_quant_reuse_matches_float_reuse():
 
 def test_kv_state_memory_empty():
     """An empty state owns no buffers → 0 KiB."""
-    from domain.training._internal.slonet import NumpyKVState
+    from domain.training._internal.slonet import NumpyKVCache
 
-    assert bk.kv_state_memory_kb(NumpyKVState()) == 0
+    assert bk.kv_state_memory_kb(NumpyKVCache()) == 0
 
 
 def test_kv_state_memory_quantized_is_smaller():
@@ -291,11 +291,11 @@ def test_kv_state_memory_quantized_is_smaller():
     model's E=16 that is 8E vs 2E+8 bytes → a 3.2x reduction."""
     model = bk.create_model()
     base = np.array([[7]], dtype=np.int64)
-    state_f = model.new_kv_state()
+    state_f = model.new_kv_cache()
     model.generate_numpy(
         base, max_new_tokens=4, temperature=0.0, kv_state=state_f, quantize_kv=False
     )
-    state_q = model.new_kv_state()
+    state_q = model.new_kv_cache()
     model.generate_numpy(
         base, max_new_tokens=4, temperature=0.0, kv_state=state_q, quantize_kv=True
     )

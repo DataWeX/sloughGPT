@@ -26,6 +26,10 @@ const _log = logger.child('error-lifecycle')
 
 // ── Non-fatal patterns (merged from all three old components) ─────────
 
+// Production builds only surface minified codes; #418=hydration HTML/text,
+// #423=text content, #425=attributes. Unminified strings never appear.
+const MINIFIED_REACT_HYDRATION = /Minified React error #(418|423|425)\b/i
+
 const NON_FATAL_PATTERNS = [
   /resizeobserver/i,
   /hydration/i,
@@ -33,6 +37,7 @@ const NON_FATAL_PATTERNS = [
   /react-hydration-error/i,
   /text content does not match server-rendered/i,
   /text content did not match/i,
+  MINIFIED_REACT_HYDRATION,
   /aborterror/i,
   /cancelled/i,
   /network error/i,
@@ -52,10 +57,11 @@ function isHydration(message: string, args?: unknown[]): boolean {
   if (
     message.includes('hydrat') ||
     message.includes('did not match') ||
-    message.includes('Text content does not match')
+    message.includes('Text content does not match') ||
+    MINIFIED_REACT_HYDRATION.test(message)
   )
     return true
-  if (args?.[0] instanceof Error && (args[0] as Error).message.includes('hydrat')) return true
+  if (args?.[0] instanceof Error) return isHydration((args[0] as Error).message)
   return false
 }
 
@@ -130,8 +136,29 @@ export function ErrorLifecycle() {
 
     // ── 2. Single window.error listener ──────────────────────────────
     const handleError = (event: ErrorEvent) => {
-      if (event.defaultPrevented) return
       const message = event.message || 'Unknown error'
+
+      // Hydration (incl. minified #418) — report as hydration, never fatal toast.
+      // Checked before defaultPrevented: capture-phase already preventDefault()s
+      // to suppress the Next.js overlay, but we still need the backend report.
+      if (isHydration(message)) {
+        const { file, line, col, stack } = extractStackInfo(event)
+        const source = file ? `${file}:${line}:${col}` : 'client'
+        reportError(message.slice(0, 500), 'hydration', {
+          stack,
+          url: source,
+          line,
+          col,
+          metadata: { minified: MINIFIED_REACT_HYDRATION.test(message) },
+        })
+        chatDB
+          .addError(message.slice(0, 500), 'hydration')
+          .catch(() => /* DB write failed — non-critical */ {})
+        event.preventDefault()
+        return
+      }
+
+      if (event.defaultPrevented) return
 
       if (isNonFatal(message)) {
         addToast(message, 'info')
@@ -203,8 +230,7 @@ export function ErrorLifecycle() {
     // ── 4. Capture-phase hydration suppression (prevents Next.js overlay) ──
     const handleCaptureError = (e: ErrorEvent) => {
       if (e.defaultPrevented) return
-      const msg = (e.message || '').toLowerCase()
-      if (msg.includes('hydrat') || msg.includes('did not match')) {
+      if (isHydration(e.message || '')) {
         e.preventDefault()
       }
     }

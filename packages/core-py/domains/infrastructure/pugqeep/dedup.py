@@ -88,8 +88,7 @@ class PointDeduplicator:
             cents = point.params["centroids"]
             if point.params.get("centroid_quantized"):
                 cents = (
-                    cents.astype(np.float64)
-                    - point.params["centroid_zero_point"]
+                    cents.astype(np.float64) - point.params["centroid_zero_point"]
                 ) * point.params["centroid_scale"]
             recon = cents[point.params["assignments"]].astype(np.float64)
             if self._tolerance > 0:

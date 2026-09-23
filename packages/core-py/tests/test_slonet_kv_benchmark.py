@@ -244,7 +244,7 @@ class TestKVStateBasics:
     def test_kv_state_repr_empty(self, tiny_model):
         state = tiny_model.new_kv_state()
         r = repr(state)
-        assert "NumpyKVState" in r
+        assert "NumpyKVCache" in r
         assert "capacity=0" in r
 
     def test_kv_state_reset(self, tiny_model):
@@ -552,34 +552,27 @@ class TestStackCrossTurn:
         """Minimal provider exposing the session KV map used by the server."""
 
         def __init__(self, model):
-            import threading
+            from domain.inference._internal.session_kv_manager import SessionKVManager
 
             self._model = model
-            self._kv_states = {}
-            self._kv_last_access = {}
-            self._kv_ttl = 3600.0
-            self._kv_max_sessions = 64
-            self._kv_lock = threading.Lock()
+            self._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=64)
+
+        def _resolve_session_kv(self, session_id):
+            if session_id is None:
+                return None
+            return self._kv_manager.get_or_create(session_id, self._model.new_kv_state)
 
         def _cached_tokens(self):
-            return sum(s.kv_len[0] if s.kv_len else 0 for s in self._kv_states.values())
+            return self._kv_manager.get_stats().get("active_sessions", 0)
 
         def _get_model(self):
             return self._model
 
     @pytest.fixture
     def stack(self, tiny_model):
-        from types import MethodType
-
-        from domain.inference._internal.slonet_provider import SloNetChatProvider
         from domain.infrastructure._internal.slonet_server import SloNetServer
 
         provider = self._StubProvider(tiny_model)
-        provider._resolve_session_kv = MethodType(SloNetChatProvider._resolve_session_kv, provider)
-        provider._evict_stale_sessions = MethodType(
-            SloNetChatProvider._evict_stale_sessions, provider
-        )
-        provider._evict_lru_session = MethodType(SloNetChatProvider._evict_lru_session, provider)
         server = SloNetServer(
             model=tiny_model,
             tokenizer=self._CharTokenizer(),
@@ -626,24 +619,24 @@ class TestStackCrossTurn:
         server, provider = stack
         await server.generate("First message", max_new_tokens=4, temperature=0.0, session_id="s-a")
         await server.generate("Second message", max_new_tokens=4, temperature=0.0, session_id="s-b")
-        assert len(provider._kv_states) == 2
-        assert provider._kv_states["s-a"] is not provider._kv_states["s-b"]
+        assert len(provider._kv_manager.kv_states) == 2
+        assert provider._kv_manager.kv_states["s-a"] is not provider._kv_manager.kv_states["s-b"]
 
     @pytest.mark.asyncio
     async def test_no_session_id_is_fresh_each_call(self, stack):
         server, provider = stack
         await server.generate("No session", max_new_tokens=4, temperature=0.0)
-        assert len(provider._kv_states) == 0
+        assert len(provider._kv_manager.kv_states) == 0
 
     @pytest.mark.asyncio
     async def test_same_session_reuses_state(self, stack):
         server, provider = stack
         await server.generate("Hello", max_new_tokens=4, temperature=0.0, session_id="reuse-sess")
-        assert len(provider._kv_states) == 1
+        assert len(provider._kv_manager.kv_states) == 1
         await server.generate(
             "Hello again", max_new_tokens=4, temperature=0.0, session_id="reuse-sess"
         )
-        assert len(provider._kv_states) == 1
+        assert len(provider._kv_manager.kv_states) == 1
 
     @pytest.mark.asyncio
     async def test_server_returns_string(self, stack):

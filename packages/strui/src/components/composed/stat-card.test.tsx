@@ -16,7 +16,9 @@ describe('StatCard', () => {
   })
 
   it('renders icon when provided', () => {
-    const html = renderToStaticMarkup(<StatCard label="Requests" value={1} icon={<svg data-testid="icon" />} />)
+    const html = renderToStaticMarkup(
+      <StatCard label="Requests" value={1} icon={<svg data-testid="icon" />} />,
+    )
     expect(html).toContain('<svg')
   })
 
@@ -26,21 +28,29 @@ describe('StatCard', () => {
   })
 
   it('renders positive trend with plus sign', () => {
-    const html = renderToStaticMarkup(<StatCard label="Requests" value={1} trend={{ value: 12.5, positive: true }} />)
+    const html = renderToStaticMarkup(
+      <StatCard label="Requests" value={1} trend={{ value: 12.5, positive: true }} />,
+    )
     expect(html).toContain('+12.5%')
   })
 
   it('renders negative trend without plus sign', () => {
-    const html = renderToStaticMarkup(<StatCard label="Errors" value={1} trend={{ value: 3, positive: false }} />)
+    const html = renderToStaticMarkup(
+      <StatCard label="Errors" value={1} trend={{ value: 3, positive: false }} />,
+    )
     expect(html).toContain('3%')
     expect(html).not.toContain('+3%')
   })
 
-  it('uses green for positive and red for negative trends', () => {
-    const positive = renderToStaticMarkup(<StatCard label="A" value={1} trend={{ value: 1, positive: true }} />)
-    const negative = renderToStaticMarkup(<StatCard label="B" value={1} trend={{ value: 1, positive: false }} />)
-    expect(positive).toContain('text-green-500')
-    expect(negative).toContain('text-red-500')
+  it('uses success for positive and destructive for negative trends', () => {
+    const positive = renderToStaticMarkup(
+      <StatCard label="A" value={1} trend={{ value: 1, positive: true }} />,
+    )
+    const negative = renderToStaticMarkup(
+      <StatCard label="B" value={1} trend={{ value: 1, positive: false }} />,
+    )
+    expect(positive).toContain('text-success')
+    expect(negative).toContain('text-destructive')
   })
 
   it('omits trend when absent', () => {

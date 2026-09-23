@@ -19,11 +19,12 @@ vi.mock('./error-store', () => ({
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
 
+import { logger } from './dev-log'
 import {
   ApiError, apiGet, apiPost, apiPut, apiDelete, apiPatch, createApiClient,
   InterceptorManager, HttpCache, CircuitBreaker, Throttler,
-  httpClient, createHttpClient,
-  type RequestConfig, type ResponseEnvelope,
+  httpClient, createHttpClient, streamSSE,
+  type RequestConfig, type ResponseEnvelope, type SSEEvent,
 } from './http-client'
 
 function mockOk(body: unknown = { data: 'test' }) {
@@ -44,6 +45,56 @@ function mockError(status: number, body: string = '{"detail":"err"}') {
     headers: { get: () => null },
   }
 }
+
+describe('streamSSE', () => {
+  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset(); mockGetState.mockReturnValue({ token: null }) })
+
+  it('does not log an error when the caller aborts its own stream', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    mockFetch.mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError'))
+
+    const errorSpy = vi.spyOn(logger, 'error')
+    try {
+      const events: SSEEvent[] = []
+      for await (const ev of streamSSE('/system/stream', { method: 'GET', signal: controller.signal })) {
+        events.push(ev)
+      }
+      expect(errorSpy).not.toHaveBeenCalled()
+      expect(events).toHaveLength(1)
+      expect(events[0].status).toBe('error')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('yields a clean abort event when the caller aborts mid-stream', async () => {
+    const reader = {
+      read: vi.fn().mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError')),
+      releaseLock: vi.fn(),
+    }
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: { getReader: () => reader },
+    })
+
+    const errorSpy = vi.spyOn(logger, 'error')
+    try {
+      const events: SSEEvent[] = []
+      for await (const ev of streamSSE('/system/stream', { method: 'GET', signal: new AbortController().signal })) {
+        events.push(ev)
+      }
+      expect(errorSpy).not.toHaveBeenCalled()
+      expect(events).toHaveLength(1)
+      expect(events[0].status).toBe('error')
+      expect(events[0].message).toBe('Stream aborted')
+    } finally {
+      errorSpy.mockRestore()
+    }
+  })
+})
 
 describe('ApiError', () => {
   it('constructor sets message, status, data, name', () => {

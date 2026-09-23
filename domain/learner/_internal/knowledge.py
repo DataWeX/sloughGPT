@@ -5,6 +5,8 @@ from domain.knowledge import (
     KnowledgeFact,
     KnowledgeIngestor,
     KnowledgeMemory,
+    _extract_facts_from_text,
+    _extract_topics,
     get_data_filter,
     get_knowledge_ingestor,
     get_knowledge_memory,
@@ -18,4 +20,6 @@ __all__ = [
     "get_knowledge_ingestor",
     "DataFilter",
     "get_data_filter",
+    "_extract_facts_from_text",
+    "_extract_topics",
 ]
