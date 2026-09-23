@@ -1,18 +1,19 @@
 """Tests for the voice API router (routers/voice.py).
 
 Covers: VoiceRouter TTS and status endpoints.
+All domain calls are mocked; only HTTP-level behavior is tested.
 
-The router reaches the consolidated `domain.voice` facade lazily via
-`VoiceRouter._get_engine()` and caches it at `self._engine` (facade-shaped:
-`.synthesize(text, voice) -> VoiceResult(.success/.error/.data=numpy float
-waveform)` and `.status() -> dict`). All facade calls are mocked; only
-HTTP-level behavior is tested.
+Note: VoiceRouter sets _tts_backend in __init__ as an instance attribute
+on an anonymous instance (router = VoiceRouter().router). We patch
+_TTSBackend to control what __init__ creates, then access the instance
+via the closure or just re-instantiate.
 """
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -21,11 +22,10 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
-from unittest.mock import MagicMock  # noqa: E402
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
-import numpy as np  # noqa: E402
-from fastapi import APIRouter, FastAPI  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
+sys.path.insert(0, _server_dir)
 from routers.voice import VoiceRouter  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -33,46 +33,18 @@ from routers.voice import VoiceRouter  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
-def _mock_engine(**overrides) -> MagicMock:
-    """Create a facade-shaped VoiceEngine mock.
-
-    Seam: prod `VoiceRouter._get_engine()` returns this object and caches it
-    at `vr._engine`. The router calls:
-      - engine.synthesize(text, voice) -> VoiceResult(success, error, data)
-      - engine.status() -> dict with capabilities / server_tts keys
-    """
-    e = MagicMock()
-    e.status.return_value = {
-        "server_tts": overrides.get("status_server_tts", True),
-        "capabilities": overrides.get("capabilities", ["tts", "stt"]),
-        "model": "native-numpy",
-    }
-
-    def _synthesize(text, voice=None):
-        result = MagicMock()
-        result.success = overrides.get("success", True)
-        result.error = overrides.get("error", None)
-        seconds = overrides.get("seconds", 1.0)
-        if result.success:
-            result.data = np.zeros(int(22050 * seconds), dtype=np.float64)
-        else:
-            result.data = None
-        return result
-
-    e.synthesize.side_effect = _synthesize
-    return e
-
-
-def _app_with_engine(engine) -> FastAPI:
-    """Fresh app where the VoiceRouter's `_engine` is the given mock.
-
-    Matches the lazy-cache seam used by prod: `_get_engine()` returns
-    `self._engine` when set, otherwise builds it.
-    """
+def _app_with_backend(backend):
+    """Create a fresh test app with a VoiceRouter using the given backend mock."""
     app = FastAPI()
+    # Create a new VoiceRouter but replace _tts_backend before route registration
     vr = VoiceRouter.__new__(VoiceRouter)
-    vr._engine = engine
+    vr._tts_backend = backend
+    # Re-register routes on a fresh router
+    from fastapi import APIRouter
+
     vr.router = APIRouter(prefix="/voice", tags=["voice"])
+
+    # Register the same endpoints as the real __init__
     vr.router.add_api_route("/tts", vr.text_to_speech, methods=["POST"])
     vr.router.add_api_route("/status", vr.voice_status, methods=["GET"])
     app.include_router(vr.router)
@@ -82,6 +54,18 @@ def _app_with_engine(engine) -> FastAPI:
     return app
 
 
+def _mock_backend(**overrides):
+    """Create a MagicMock that behaves like _TTSBackend."""
+    b = MagicMock()
+    b.load.return_value = overrides.get("load_return", False)
+    b._error = overrides.get("error", None)
+    gen = overrides.get("generate_return", None)
+    if gen is not None and not isinstance(gen, tuple):
+        gen = (gen, 24000)
+    b.generate.return_value = gen
+    return b
+
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -89,37 +73,34 @@ def _app_with_engine(engine) -> FastAPI:
 
 class TestVoiceStatus:
     def test_status_when_unavailable(self):
-        engine = _mock_engine(status_server_tts=False, capabilities=[])
-        client = TestClient(_app_with_engine(engine))
+        backend = _mock_backend(load_return=False, error="engine load failed")
+        client = TestClient(_app_with_backend(backend))
         resp = client.get("/voice/status")
         assert resp.status_code == 200
         data = resp.json()["data"]
-        # Prod hardcodes server_tts True in the envelope; "unavailable" surfaces
-        # via empty capabilities + the engine-facing `loaded` status.
-        assert data["server_tts"] is True
-        assert data["capabilities"] == []
-        assert data["loaded"]["server_tts"] is False
+        assert data["server_tts"] is False
+        assert data["model"] is None
 
     def test_status_when_available(self):
-        engine = _mock_engine(status_server_tts=True, capabilities=["tts"])
-        client = TestClient(_app_with_engine(engine))
+        backend = _mock_backend(load_return=True)
+        client = TestClient(_app_with_backend(backend))
         resp = client.get("/voice/status")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["server_tts"] is True
-        assert data["capabilities"] == ["tts"]
+        assert data["model"] == "native-numpy"
 
 
 class TestTextToSpeech:
     def test_empty_text_returns_400(self):
-        engine = _mock_engine()
-        client = TestClient(_app_with_engine(engine), raise_server_exceptions=False)
+        backend = _mock_backend()
+        client = TestClient(_app_with_backend(backend), raise_server_exceptions=False)
         resp = client.post("/voice/tts", json={"text": "   "})
         assert resp.status_code == 400
 
     def test_backend_unavailable_returns_browser_fallback(self):
-        engine = _mock_engine(success=False, error="engine load failed")
-        client = TestClient(_app_with_engine(engine), raise_server_exceptions=False)
+        backend = _mock_backend(load_return=False, error="not installed")
+        client = TestClient(_app_with_backend(backend))
         resp = client.post("/voice/tts", json={"text": "Hello world"})
         assert resp.status_code == 200
         data = resp.json()
@@ -127,20 +108,35 @@ class TestTextToSpeech:
         assert data["audio"] == ""
 
     def test_backend_generation_error_returns_fallback(self):
-        engine = _mock_engine()
-        engine.synthesize.side_effect = RuntimeError("GPU OOM")
-        client = TestClient(_app_with_engine(engine), raise_server_exceptions=False)
+        backend = _mock_backend(load_return=True)
+        backend.generate.side_effect = RuntimeError("GPU OOM")
+        client = TestClient(_app_with_backend(backend))
         resp = client.post("/voice/tts", json={"text": "Hello"})
         assert resp.status_code == 200
         assert resp.json()["backend"] == "browser-fallback"
 
     def test_successful_generation(self):
-        engine = _mock_engine(seconds=1.0)
-        client = TestClient(_app_with_engine(engine))
+        import io
+        import wave
+
+        import numpy as np
+
+        # Build a minimal WAV file
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            audio_int16 = np.zeros(24000, dtype=np.int16)  # 1 second of silence
+            wf.writeframes(audio_int16.tobytes())
+        wav_bytes = buf.getvalue()
+
+        backend = _mock_backend(load_return=True, generate_return=wav_bytes)
+        client = TestClient(_app_with_backend(backend))
         resp = client.post("/voice/tts", json={"text": "Hello world"})
         assert resp.status_code == 200
         data = resp.json()
-        assert data["backend"] == "voice-engine"
-        assert data["sample_rate"] == 22050
+        assert data["backend"] == "native-numpy"
+        assert data["sample_rate"] == 24000
         assert data["duration_ms"] == 1000
         assert len(data["audio"]) > 0
