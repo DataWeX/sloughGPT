@@ -752,7 +752,62 @@ class TestCmdAiKeywordFallback:
 # ── _cmd_ai LLM execution ────────────────────────────────────────
 
 
+class _FakeHttpResponse:
+    """Minimal requests.Response stand-in consumed by domain.commands._api_*."""
+
+    def __init__(self, payload, status_code=200):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+    @property
+    def text(self):
+        return str(self._payload)
+
+
+class _FakeHttp:
+    """Routes the real generate/command HTTP calls to `repl.os._api` mocks.
+
+    `CommandRunner.generate` bypasses the runtime API abstraction and posts
+    straight to `get_api_base()`; these tests set `repl.os._api` with MagicMock
+    return values, so this shim pulls those values back into the real code
+    path instead of letting a stray server on the shared port hang the run.
+    """
+
+    def __init__(self, repl):
+        self._repl = repl
+
+    def post(self, url, json=None, timeout=None, stream=False, **kwargs):
+        import requests as _requests
+
+        if "/inference/generate" in url:
+            return _FakeHttpResponse(self._repl.os._api.generate())
+        raise _requests.ConnectionError("mocked offline API")
+
+    def get(self, url, timeout=None, **kwargs):
+        import requests as _requests
+
+        raise _requests.ConnectionError("mocked offline API")
+
+    def delete(self, url, timeout=None, **kwargs):
+        import requests as _requests
+
+        raise _requests.ConnectionError("mocked offline API")
+
+
 class TestCmdAiLLMExecution:
+    @pytest.fixture(autouse=True)
+    def _fake_http(self, repl, monkeypatch):
+        import requests as _requests
+
+        fake = _FakeHttp(repl)
+        monkeypatch.setattr(_requests, "get", fake.get)
+        monkeypatch.setattr(_requests, "post", fake.post)
+        monkeypatch.setattr(_requests, "delete", fake.delete)
+        yield
+
     def test_ai_with_result(self, repl):
         mock_api = MagicMock()
         mock_api.status.return_value = {"available": True}
