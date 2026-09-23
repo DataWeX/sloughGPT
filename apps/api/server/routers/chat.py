@@ -156,8 +156,38 @@ class ChatRouter:
                 _start = time.time()
                 _token_count = 0
                 try:
+                    from domain.infrastructure._internal.session_core import SessionCore
+
+                    msgs = SessionCore.get_messages(session_id)
+                    if not msgs:
+                        yield self._sse_error(
+                            "chat",
+                            "REGENERATE",
+                            "No session context found",
+                            code="E_VAL_REQUEST",
+                            http_status=400,
+                        )
+                        return
+
+                    from domain.models._internal.provider import get_provider
+
+                    provider = get_provider("default")
+                    if provider is None:
+                        yield self._sse_error(
+                            "chat",
+                            "REGENERATE",
+                            "Model not loaded",
+                            code="E_INFRA_REGISTRY",
+                            http_status=503,
+                        )
+                        return
+
+                    yield self._sse_event(
+                        "chat", "REGENERATE", "thinking", data={}, message="Regenerating..."
+                    )
+
                     async for token in manager.stream(
-                        messages=[],  # uses stored history
+                        messages=msgs,
                         session_id=session_id,
                     ):
                         if await request.is_disconnected():

@@ -96,7 +96,7 @@ class TestWorldTick:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.shell.simulation.Simulation")
+    @patch("domain.shell._internal.simulation.Simulation")
     def test_tick_returns_success(self, MockSim):
         mock_sim = _mock_simulation()
         MockSim.return_value = mock_sim
@@ -104,7 +104,7 @@ class TestWorldTick:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.shell.simulation.Simulation")
+    @patch("domain.shell._internal.simulation.Simulation")
     def test_tick_has_tick_count(self, MockSim):
         mock_sim = _mock_simulation()
         MockSim.return_value = mock_sim
@@ -113,7 +113,7 @@ class TestWorldTick:
         assert "tick" in data
         assert "babies" in data
 
-    @patch("domains.shell.simulation.Simulation")
+    @patch("domain.shell._internal.simulation.Simulation")
     def test_tick_with_config(self, MockSim):
         mock_sim = _mock_simulation()
         MockSim.return_value = mock_sim
@@ -125,7 +125,7 @@ class TestWorldRender:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_render_returns_success(self, MockBridge):
         mock_bridge = _mock_bridge()
         MockBridge.return_value = mock_bridge
@@ -133,7 +133,7 @@ class TestWorldRender:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_render_has_shapes(self, MockBridge):
         mock_bridge = _mock_bridge()
         MockBridge.return_value = mock_bridge
@@ -143,7 +143,7 @@ class TestWorldRender:
         assert "tensor_keys" in data
         assert "stats" in data
 
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_render_with_custom_config(self, MockBridge):
         mock_bridge = _mock_bridge()
         MockBridge.return_value = mock_bridge
@@ -158,7 +158,7 @@ class TestWorldRenderImage:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.shell.world_render.RenderBridge")
+    @patch("domain.shell._internal.world_render.RenderBridge")
     def test_render_image_returns_png(self, MockBridge):
         mock_bridge = _mock_bridge()
         mock_bridge.render.return_value = np.random.rand(60, 80, 3)
@@ -172,7 +172,7 @@ class TestWorldNeural:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.shell.world_render.NeuralRenderBridge")
+    @patch("domain.shell._internal.world_render.NeuralRenderBridge")
     def test_neural_returns_success(self, MockNeural):
         mock_bridge = _mock_neural_bridge()
         MockNeural.return_value = mock_bridge
@@ -180,7 +180,7 @@ class TestWorldNeural:
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
-    @patch("domains.shell.world_render.NeuralRenderBridge")
+    @patch("domain.shell._internal.world_render.NeuralRenderBridge")
     def test_neural_has_embedding_shape(self, MockNeural):
         mock_bridge = _mock_neural_bridge()
         MockNeural.return_value = mock_bridge
@@ -190,7 +190,7 @@ class TestWorldNeural:
         assert "descriptor" in data
         assert "stats" in data
 
-    @patch("domains.shell.world_render.NeuralRenderBridge")
+    @patch("domain.shell._internal.world_render.NeuralRenderBridge")
     def test_neural_with_config(self, MockNeural):
         mock_bridge = _mock_neural_bridge()
         MockNeural.return_value = mock_bridge

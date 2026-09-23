@@ -144,7 +144,7 @@ export const sessionController = {
   },
 
   async regenerate(sessionId: string): Promise<{ status: string }> {
-    return apiPost<{ status: string }>(`/session/${sessionId}/regenerate`)
+    return apiPost<{ status: string }>(`/chat/${sessionId}/regenerate`)
   },
 
   async forwardMessage(targetSessionId: string, content: string, role: string = 'user'): Promise<void> {

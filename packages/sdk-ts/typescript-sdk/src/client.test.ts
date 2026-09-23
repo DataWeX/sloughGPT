@@ -809,7 +809,7 @@ describe('SloughGPTClient', () => {
         tokens.push(token);
       }
       expect(tokens).toEqual(['regenerated']);
-      expect(mockFetch.mock.calls[0][0]).toContain('/session/sess-1/regenerate');
+      expect(mockFetch.mock.calls[0][0]).toContain('/chat/sess-1/regenerate');
     });
   });
 

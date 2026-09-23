@@ -65,7 +65,7 @@ def _mock_learner():
 def _mock_learner_singleton():
     """Mock the learner singleton for all tests."""
     mock = _mock_learner()
-    with patch("domains.learner.get_learner", return_value=mock):
+    with patch("domain.learner.get_learner", return_value=mock):
         yield mock
 
 

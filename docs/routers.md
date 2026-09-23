@@ -61,7 +61,7 @@ Registered pre-lifespan in `main.py`.
 | `POST` | `/session/create` | Create a new session. |
 | `GET` | `/session/{session_id}` | Get session details. |
 | `DELETE` | `/session/{session_id}` | Delete a session. |
-| `POST` | `/session/{session_id}/regenerate` | Regenerate the last response. |
+| `POST` | `/chat/{session_id}/regenerate` | Regenerate the last response. |
 | `GET` | `/session/{session_id}/suggestions` | Chat suggestions for a session. |
 | `GET` | `/providers` | List model providers. |
 | `GET` | `/operations` | List active operations. |
@@ -152,7 +152,6 @@ Separate inference endpoint backed by the direct model server.
 | `POST` | `/session/{session_id}/context` | Build context for a session. |
 | `GET` | `/session/{session_id}/messages` | List session messages. |
 | `GET` | `/session/{session_id}/inspector` | Inspect session state. |
-| `POST` | `/session/{session_id}/regenerate` | Regenerate last response. |
 
 ## Feedback Router (`/feedback`)
 

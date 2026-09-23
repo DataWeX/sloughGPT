@@ -27,7 +27,7 @@ def test_regenerate_uses_stored_context():
     assert data["status"] == "stored"
 
     # Trigger regeneration – model is likely not loaded in the test env, so we expect a model‑not‑loaded error
-    resp = client.post(f"/session/{session_id}/regenerate", json={})
+    resp = client.post(f"/chat/{session_id}/regenerate", json={})
     assert resp.status_code == 200
 
     # The response is a streaming SSE; collect the first few events

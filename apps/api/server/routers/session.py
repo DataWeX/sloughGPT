@@ -117,7 +117,7 @@ class SessionRouter:
             def _fetch_knowledge():
                 knowledge = {"total_facts": 0, "topics": []}
                 try:
-                    from domain.learner import get_knowledge_memory
+                    from domain.knowledge import get_knowledge_memory
 
                     km = get_knowledge_memory()
                     knowledge["total_facts"] = km.stats().get("total_facts", 0)
