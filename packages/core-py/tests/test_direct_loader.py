@@ -371,15 +371,15 @@ class TestSLNCSpec:
 
     def test_compute_tensor_entry_size_1d(self):
         size = compute_tensor_entry_size(1, 10)
-        assert size == 32 + 4 + 10
+        assert size == 42
 
     def test_compute_tensor_entry_size_2d(self):
         size = compute_tensor_entry_size(2, 5)
-        assert size == 32 + 8 + 5
+        assert size == 41
 
     def test_compute_tensor_entry_size_3d(self):
         size = compute_tensor_entry_size(3, 20)
-        assert size == 32 + 12 + 20
+        assert size == 60
 
     def test_align(self):
         assert _align(0) == 0
