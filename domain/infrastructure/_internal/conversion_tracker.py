@@ -69,7 +69,7 @@ class ConversionTracker:
 
     def __init__(self):
         self._statuses: dict[str, ConversionStatus] = {}
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
 
     def start(
         self, model_id: str, stage: ConversionStage = ConversionStage.IDLE, message: str = ""

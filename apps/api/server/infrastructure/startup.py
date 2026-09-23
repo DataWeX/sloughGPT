@@ -1416,7 +1416,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     import state as server_state
 
     from domain.infrastructure.model_registry import get_model_registry
-    from domain.infrastructure.safetensors_loader import _get_model_dir
+    from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
     from domain.models._internal.provider import setup_providers
 
     registry = get_model_registry()
@@ -1629,7 +1629,7 @@ def _autoload_model(cfg: ServerConfig):
     )
     try:
         from domain.infrastructure.hf_hub import download_hf_model
-        from domain.infrastructure.safetensors_loader import _get_model_dir
+        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         cache_dir = _get_model_dir(model_id)
         logger.info("Downloading %s to %s ...", model_id, cache_dir, extra={"tag": "START"})
@@ -1705,7 +1705,7 @@ def _start_inference_engine(cfg) -> Any | None:
         return None
 
     try:
-        from domain.infrastructure.safetensors_loader import _get_model_dir
+        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         slnc_path = _get_model_dir(model_type) / "model.slnc"
         if not slnc_path.exists():

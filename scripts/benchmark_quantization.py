@@ -182,9 +182,8 @@ class QuantizationBenchmark:
 
     def _load_slnc(self):
         """Load a real model via the SloNetChatProvider .slnc path."""
-        from domain.inference.slonet_provider import SloNetChatProvider
-
-        from domain.infrastructure.safetensors_loader import _get_model_dir
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         print(f"  Loading {self.model_name}...")
         t0 = time.perf_counter()

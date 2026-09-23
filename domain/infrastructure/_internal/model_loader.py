@@ -327,14 +327,11 @@ class ModelLoader:
             import struct
 
             from .conversion_tracker import ConversionStage, get_tracker
-            from .safetensors_loader import (
-                _find_safetensors,
-                load_model_config,
-            )
+            from .model_resolver import find_safetensors, load_model_config
 
             tracker = get_tracker()
 
-            st_path = _find_safetensors(cache_dir)
+            st_path = find_safetensors(cache_dir)
             if st_path is None:
                 return None
 
