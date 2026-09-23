@@ -244,7 +244,7 @@ class TestKVStateBasics:
     def test_kv_state_repr_empty(self, tiny_model):
         state = tiny_model.new_kv_state()
         r = repr(state)
-        assert "NumpyKVState" in r
+        assert "NumpyKVCache" in r
         assert "capacity=0" in r
 
     def test_kv_state_reset(self, tiny_model):
