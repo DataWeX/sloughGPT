@@ -34,6 +34,7 @@ def range_server():
     RangeHandler.payloads = {}
     RangeHandler.content_types = {}
     RangeHandler.head_responses = {}
+    RangeHandler.encodings = {}
     server = HTTPServer(("127.0.0.1", 0), RangeHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

@@ -112,7 +112,11 @@ pub fn should_skip_response(
         return true;
     }
     // Only success bodies benefit; errors stay identity for easy debugging.
-    if !status.is_success() {
+    // 204/205 have no body — compressing would emit a useless empty frame.
+    if !status.is_success()
+        || status == StatusCode::NO_CONTENT
+        || status == StatusCode::RESET_CONTENT
+    {
         return true;
     }
     if let Some(len) = resp_headers
@@ -242,6 +246,13 @@ pub fn maybe_compress_response(
         header::CONTENT_ENCODING,
         HeaderValue::from_str(codec.as_str()).expect("static codec name"),
     );
+    // Advertise identity size so clients can drive progress bars / resume
+    // accounting against the decoded body, not the wire size.
+    if let Some(len) = known_len {
+        if let Ok(v) = HeaderValue::from_str(&len.to_string()) {
+            headers.insert("x-uncompressed-content-length", v);
+        }
+    }
     // Length of the identity body is no longer valid.
     headers.remove(header::CONTENT_LENGTH);
     headers.insert(header::VARY, HeaderValue::from_static("Accept-Encoding"));
@@ -344,6 +355,12 @@ mod tests {
         resp.insert(header::CONTENT_TYPE, hv("application/octet-stream"));
         resp.insert(header::CONTENT_LENGTH, hv("100000"));
         assert!(!should_skip_response(StatusCode::OK, &req, &resp));
+
+        // Empty/204 never benefits from a compressed empty frame.
+        let req = HeaderMap::new();
+        let mut resp = HeaderMap::new();
+        resp.insert(header::CONTENT_TYPE, hv("application/json"));
+        assert!(should_skip_response(StatusCode::NO_CONTENT, &req, &resp));
     }
 
     #[tokio::test]
@@ -415,6 +432,25 @@ mod tests {
         let mut decoded = Vec::new();
         d.read_to_end(&mut decoded).unwrap();
         assert_eq!(decoded, payload);
+    }
+
+    #[tokio::test]
+    async fn compressed_response_advertises_identity_length() {
+        let payload = sample_body();
+        let resp = Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .header(header::CONTENT_LENGTH, payload.len())
+            .body(Body::from(payload.clone()))
+            .unwrap();
+        let req = HeaderMap::new();
+        let out = maybe_compress_response(resp, Some(Codec::Gzip), &req);
+        let hdr = out
+            .headers()
+            .get("x-uncompressed-content-length")
+            .expect("identity length header");
+        assert_eq!(hdr.to_str().unwrap(), payload.len().to_string());
+        assert!(out.headers().get(header::CONTENT_LENGTH).is_none());
     }
 
     #[tokio::test]
