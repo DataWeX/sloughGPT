@@ -217,8 +217,8 @@ class SystemRouter:
             data={
                 "initialized": True,
                 "active_jobs": _instance.active_count(),
-                "max_workers": _instance._max_workers,
-                "total_tracked": len(_instance._jobs),
+                "max_workers": _instance.max_workers,
+                "total_tracked": _instance.job_count,
                 "jobs": _instance.list_jobs(),
             }
         )
