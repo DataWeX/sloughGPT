@@ -640,7 +640,7 @@ class ModelsController:
 
             cfg = ServerConfig.from_env()
 
-            from domain.infrastructure.slnc.compiler import SLNCCompiler
+            from domain.infrastructure._internal.slnc.compiler import SLNCCompiler
 
             slnc_path = target / "model.slnc"
             if not slnc_path.exists():
