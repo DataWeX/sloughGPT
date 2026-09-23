@@ -22,7 +22,11 @@ class TestConversionStage:
 
     def test_is_string_enum(self):
         assert isinstance(ConversionStage.IDLE, str)
-        assert str(ConversionStage.READY) == "ConversionStage.READY"
+        # StrEnum.__str__ returns the member value (not the plain-Enum
+        # "<Class.MEMBER>" repr) — stage serializes as its string value.
+        assert str(ConversionStage.READY) == "ready"
+        assert ConversionStage.READY.value == "ready"
+        assert ConversionStage.READY in {"ready", "error"}
 
 
 class TestConversionStatus:
@@ -118,11 +122,12 @@ class TestConversionTrackerUpdate:
         s = t.update("gpt2", stage=ConversionStage.DOWNLOADING, message="fetching weights")
         assert s.message == "fetching weights"
 
-    def test_update_auto_starts_unknown(self):
+    def test_update_unknown_returns_none(self):
         t = ConversionTracker()
-        s = t.update("unknown", stage=ConversionStage.DOWNLOADING, progress=0.1)
-        assert s.model_id == "unknown"
-        assert s.stage == ConversionStage.DOWNLOADING
+        # update() never fabricates state for untracked models — like
+        # finish()/fail()/get() it returns None unless start() ran first.
+        assert t.update("unknown", stage=ConversionStage.DOWNLOADING, progress=0.1) is None
+        assert len(t.get_all()) == 0
 
     def test_update_sets_elapsed(self):
         t = ConversionTracker()

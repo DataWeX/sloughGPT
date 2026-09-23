@@ -48,8 +48,10 @@ from typing import Any
 
 import numpy as np
 
-# Add core-py to path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "core-py"))
+# Add core-py + repo root to path (root holds the top-level ``domain`` package)
+_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_root / "packages" / "core-py"))
+sys.path.insert(0, str(_root))
 
 # Force single-thread BLAS for best single-core performance
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
@@ -83,8 +85,6 @@ def _list_cached_models() -> list[str]:
     Returns:
         Sorted list of model ids like ``Qwen/Qwen2.5-0.5B-Instruct``.
     """
-    import os
-
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
     hub_dirs = {
         Path(hf_home) / "hub",

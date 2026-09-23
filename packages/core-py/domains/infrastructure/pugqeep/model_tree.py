@@ -17,9 +17,7 @@ from .compressor import PointCompressor
 from .config import TreeConfig
 from .library import PointLibrary
 from .strategies import ClusterStrategy, CompressStrategy, RawStrategy
-from .tree import (
-    Tree,
-)
+from .tree import Tree
 
 
 class ModelTree(Tree):
