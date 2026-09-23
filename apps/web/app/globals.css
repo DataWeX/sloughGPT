@@ -696,6 +696,28 @@ html {
   to { transform: scaleX(1); }
 }
 
+@keyframes sl-bar-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(420%); }
+}
+
+.sl-bar-shimmer {
+  animation: sl-bar-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sl-dot-pulse {
+  0%, 100% { transform: scale(1.25); opacity: 1; }
+  50% { transform: scale(1.55); opacity: 0.65; }
+}
+
+.sl-dot-pulse {
+  animation: sl-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.sl-dot-wave {
+  animation: str-dot-bounce 1.2s ease-in-out infinite;
+}
+
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -800,6 +822,15 @@ html.dark .sl-kanban-tray-surface {
   .str-dot {
     animation: none;
     opacity: 0.75;
+  }
+  .sl-bar-shimmer {
+    animation: none;
+    opacity: 0.55;
+    transform: none;
+  }
+  .sl-dot-pulse,
+  .sl-dot-wave {
+    animation: none;
   }
   .sl-toast {
     animation: none;
