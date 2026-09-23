@@ -95,55 +95,53 @@ class TestSessionKVManager:
             calls.append(1)
             return "kv-state"
 
-        mgr = SessionKVManager(state_factory=factory)
-        state = mgr.get_or_create("s1")
+        mgr = SessionKVManager()
+        state = mgr.get_or_create("s1", factory)
         assert state == "kv-state"
         assert calls == [1]
-        assert mgr.get_or_create("s1") == "kv-state"
+        assert mgr.get_or_create("s1", factory) == "kv-state"
         assert calls == [1]  # hit reuses the cached state, factory not called again
 
-    def test_get_or_create_no_factory_returns_none(self):
+    def test_get_session_miss_returns_none(self):
         mgr = SessionKVManager()
-        assert mgr.get_or_create("s1") is None
         assert mgr.get_session("s1") is None
+        assert mgr.remove_session("s1") is False
 
     def test_get_or_create_evicts_lru_when_over_cap(self):
-        mgr = SessionKVManager(kv_max_sessions=2, state_factory=lambda: "v")
+        mgr = SessionKVManager(kv_max_sessions=2)
         mgr.set_session("s1", "v1")
-        mgr.get_or_create("s2")
-        mgr.get_or_create("s3")  # s1 is now oldest -> evicted
+        mgr.get_or_create("s2", lambda: "v")
+        mgr.get_or_create("s3", lambda: "v")  # s1 is now oldest -> evicted
         assert mgr.get_session("s1") is None
         assert mgr.get_session("s2") == "v"
         assert mgr.get_session("s3") == "v"
 
-    def test_cached_token_count(self):
+    def test_get_stats_reports_state_types(self):
         class State:
-            def __init__(self, kv_len):
-                self.kv_len = kv_len
+            pass
 
         mgr = SessionKVManager()
-        mgr.set_session("a", State([5, 3]))
-        mgr.set_session("b", State(2))
-        mgr.set_session("c", State(None))  # no kv_len is counted as 0
-        assert mgr.cached_token_count() == 10
+        mgr.set_session("a", State())
+        stats = mgr.get_stats()
+        assert stats["session_sizes"]["a"] == {"type": "State"}
+        assert stats["active_sessions"] == 1
 
-    def test_session_summary_shape(self):
-        mgr = SessionKVManager(kv_max_sessions=8, kv_ttl=300, state_factory=lambda: "v")
-        assert mgr.session_summary() == {
+    def test_get_stats_shape(self):
+        mgr = SessionKVManager(kv_max_sessions=8, kv_ttl=300)
+        assert mgr.get_stats() == {
             "active_sessions": 0,
+            "session_sizes": {},
             "max_sessions": 8,
             "ttl_seconds": 300,
-            "cached_tokens": 0,
             "oldest_session_age": 0.0,
         }
         mgr.set_session("a", "v1")
-        summary = mgr.session_summary()
-        assert summary["active_sessions"] == 1
-        assert summary["cached_tokens"] == 0
-        assert set(summary) == {
+        stats = mgr.get_stats()
+        assert stats["active_sessions"] == 1
+        assert set(stats) == {
             "active_sessions",
+            "session_sizes",
             "max_sessions",
             "ttl_seconds",
-            "cached_tokens",
             "oldest_session_age",
         }
