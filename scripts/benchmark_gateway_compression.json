@@ -1,0 +1,34 @@
+[
+  {
+    "mib": 32,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 33554432,
+        "wire_bytes": 33554432,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 33554432,
+        "wire_bytes": 766647,
+        "ratio": 0.0228,
+        "savings_pct": 97.72,
+        "enc_mibs": 159.9,
+        "dec_mibs": 496.1
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 33554432,
+        "wire_bytes": 287238,
+        "ratio": 0.0086,
+        "savings_pct": 99.14,
+        "enc_mibs": 1211.9,
+        "dec_mibs": 1243.2
+      }
+    ]
+  }
+]
