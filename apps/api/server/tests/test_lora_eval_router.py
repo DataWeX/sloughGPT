@@ -60,7 +60,7 @@ class TestRunEval:
         client = get_test_client()
         ev = _mock_evaluator()
         ev.run.side_effect = [MagicMock(to_dict=lambda: {"perplexity": 2.5})]
-        with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
             resp = client.post("/lora-eval/run")
         assert resp.status_code == 200
         data = _data(resp)
@@ -71,7 +71,7 @@ class TestRunEval:
         client = get_test_client()
         ev = _mock_evaluator()
         with (
-            patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev),
+            patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev),
             patch("pathlib.Path.exists", return_value=True),
         ):
             resp = client.post("/lora-eval/run?adapter_path=data/user_adapters/test.npz")
@@ -85,7 +85,7 @@ class TestRunEval:
     def test_run_eval_custom_soul(self):
         client = get_test_client()
         ev = _mock_evaluator()
-        with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
             resp = client.post("/lora-eval/run?soul=custom_soul")
         assert resp.status_code == 200
         ev.run.assert_called()
@@ -95,7 +95,7 @@ class TestEvalHistory:
     def test_get_history(self):
         client = get_test_client()
         ev = _mock_evaluator()
-        with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
             resp = client.get("/lora-eval/history")
         assert resp.status_code == 200
         data = _data(resp)
@@ -105,7 +105,7 @@ class TestEvalHistory:
     def test_get_history_with_limit(self):
         client = get_test_client()
         ev = _mock_evaluator()
-        with patch("domains.feedback.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
             resp = client.get("/lora-eval/history?limit=5")
         assert resp.status_code == 200
         ev.get_history.assert_called_with(limit=5)
@@ -125,7 +125,7 @@ class TestTriggerAggregation:
     def test_aggregation_success(self):
         client = get_test_client()
         store = _mock_per_user_lora()
-        with patch("domains.feedback.per_user_lora.get_per_user_lora", return_value=store):
+        with patch("domain.feedback._internal.per_user_lora.get_per_user_lora", return_value=store):
             resp = client.post("/lora-eval/aggregate?top_k=5&min_feedback=3")
         assert resp.status_code == 200
         data = _data(resp)
@@ -137,7 +137,7 @@ class TestTriggerAggregation:
         client = get_test_client()
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {"error": "no adapters found"}
-        with patch("domains.feedback.per_user_lora.get_per_user_lora", return_value=store):
+        with patch("domain.feedback._internal.per_user_lora.get_per_user_lora", return_value=store):
             resp = client.post("/lora-eval/aggregate")
         assert resp.status_code == 200
         data = _data(resp)
@@ -146,7 +146,7 @@ class TestTriggerAggregation:
     def test_aggregation_params(self):
         client = get_test_client()
         store = _mock_per_user_lora()
-        with patch("domains.feedback.per_user_lora.get_per_user_lora", return_value=store):
+        with patch("domain.feedback._internal.per_user_lora.get_per_user_lora", return_value=store):
             client.post("/lora-eval/aggregate?top_k=10&min_feedback=5&output_name=test_agg")
         store.aggregate_best_adapters.assert_called_once_with(
             top_k=10, min_feedback_count=5, output_name="test_agg", run_eval=True

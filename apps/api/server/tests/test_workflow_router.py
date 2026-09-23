@@ -38,7 +38,7 @@ def _make_workflow():
 
 class TestWorkflowStatus:
     def test_status(self):
-        with patch("domains.feedback.get_feedback_workflow", return_value=_make_workflow()):
+        with patch("domain.feedback.get_feedback_workflow", return_value=_make_workflow()):
             client = get_test_client()
             resp = client.get("/workflow/status")
             assert resp.status_code == 200
@@ -46,7 +46,7 @@ class TestWorkflowStatus:
             assert "running" in data
 
     def test_status_has_stats(self):
-        with patch("domains.feedback.get_feedback_workflow", return_value=_make_workflow()):
+        with patch("domain.feedback.get_feedback_workflow", return_value=_make_workflow()):
             client = get_test_client()
             resp = client.get("/workflow/status")
             data = _data(resp)
@@ -58,7 +58,7 @@ class TestWorkflowStatus:
 class TestWorkflowStartStop:
     def test_start_workflow(self):
         wf = _make_workflow()
-        with patch("domains.feedback.get_feedback_workflow", return_value=wf):
+        with patch("domain.feedback.get_feedback_workflow", return_value=wf):
             client = get_test_client()
             resp = client.post("/workflow/start", json={})
             assert resp.status_code == 200
@@ -68,7 +68,7 @@ class TestWorkflowStartStop:
 
     def test_start_workflow_custom_config(self):
         wf = _make_workflow()
-        with patch("domains.feedback.get_feedback_workflow", return_value=wf):
+        with patch("domain.feedback.get_feedback_workflow", return_value=wf):
             client = get_test_client()
             resp = client.post(
                 "/workflow/start",
@@ -82,7 +82,7 @@ class TestWorkflowStartStop:
 
     def test_stop_workflow(self):
         wf = _make_workflow()
-        with patch("domains.feedback.get_feedback_workflow", return_value=wf):
+        with patch("domain.feedback.get_feedback_workflow", return_value=wf):
             client = get_test_client()
             resp = client.post("/workflow/stop")
             assert resp.status_code == 200
@@ -94,7 +94,7 @@ class TestWorkflowStartStop:
 class TestWorkflowTrigger:
     def test_trigger_aggregate(self):
         wf = _make_workflow()
-        with patch("domains.feedback.get_feedback_workflow", return_value=wf):
+        with patch("domain.feedback.get_feedback_workflow", return_value=wf):
             client = get_test_client()
             resp = client.post("/workflow/trigger/aggregate")
             assert resp.status_code == 200
@@ -102,7 +102,7 @@ class TestWorkflowTrigger:
 
     def test_trigger_prune(self):
         wf = _make_workflow()
-        with patch("domains.feedback.get_feedback_workflow", return_value=wf):
+        with patch("domain.feedback.get_feedback_workflow", return_value=wf):
             client = get_test_client()
             resp = client.post("/workflow/trigger/prune")
             assert resp.status_code == 200
@@ -110,14 +110,14 @@ class TestWorkflowTrigger:
 
     def test_trigger_export(self):
         wf = _make_workflow()
-        with patch("domains.feedback.get_feedback_workflow", return_value=wf):
+        with patch("domain.feedback.get_feedback_workflow", return_value=wf):
             client = get_test_client()
             resp = client.post("/workflow/trigger/export")
             assert resp.status_code == 200
             wf.trigger_export.assert_called_once()
 
     def test_trigger_unknown_action(self):
-        with patch("domains.feedback.get_feedback_workflow", return_value=_make_workflow()):
+        with patch("domain.feedback.get_feedback_workflow", return_value=_make_workflow()):
             client = get_test_client()
             resp = client.post("/workflow/trigger/bogus")
             assert resp.status_code == 400

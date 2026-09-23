@@ -33,7 +33,7 @@ class TestListPlugins:
         mock_pm.list_plugins.return_value = [
             {"name": "test-plugin", "enabled": True, "version": "1.0"},
         ]
-        with patch("domains.plugins.get_plugin_manager", return_value=mock_pm):
+        with patch("domain.plugins.get_plugin_manager", return_value=mock_pm):
             resp = TestClient(_app).get("/plugins")
         assert resp.status_code == 200
         data = resp.json()["data"]
@@ -50,7 +50,7 @@ class TestEnablePlugin:
         mock_pm = MagicMock()
         mock_meta = MagicMock()
         mock_pm._metadata = {"test-plugin": mock_meta}
-        with patch("domains.plugins.get_plugin_manager", return_value=mock_pm):
+        with patch("domain.plugins.get_plugin_manager", return_value=mock_pm):
             resp = TestClient(_app).post("/plugins/test-plugin/enable")
         assert resp.status_code == 200
         assert resp.json()["data"]["enabled"] is True
@@ -65,7 +65,7 @@ class TestDisablePlugin:
         mock_pm = MagicMock()
         mock_meta = MagicMock()
         mock_pm._metadata = {"test-plugin": mock_meta}
-        with patch("domains.plugins.get_plugin_manager", return_value=mock_pm):
+        with patch("domain.plugins.get_plugin_manager", return_value=mock_pm):
             resp = TestClient(_app).post("/plugins/test-plugin/disable")
         assert resp.status_code == 200
         assert resp.json()["data"]["enabled"] is False
@@ -82,7 +82,7 @@ class TestReloadPlugins:
         mock_path = MagicMock()
         mock_path.exists.return_value = True
         with (
-            patch("domains.plugins.get_plugin_manager", return_value=mock_pm),
+            patch("domain.plugins.get_plugin_manager", return_value=mock_pm),
             patch(
                 "routers.plugins.find_repo_root",
                 return_value=MagicMock(__truediv__=lambda self, x: mock_path),
