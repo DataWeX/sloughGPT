@@ -312,6 +312,7 @@ async fn proxy_http(
 
     let mut builder = match method {
         axum::http::Method::GET => state.http.get(&url),
+        axum::http::Method::HEAD => state.http.head(&url),
         axum::http::Method::POST => state.http.post(&url),
         axum::http::Method::PUT => state.http.put(&url),
         axum::http::Method::DELETE => state.http.delete(&url),
@@ -326,6 +327,8 @@ async fn proxy_http(
     if let Some(ct) = content_type {
         builder = builder.header("content-type", ct);
     }
+    // Edge owns compression: sidecar always answers identity (no double-encode).
+    builder = builder.header("accept-encoding", "identity");
     let request = builder.body(body_bytes).build()?;
 
     // Streaming paths (SSE) get no total edge timeout — Python owns
@@ -341,12 +344,13 @@ async fn proxy_http(
                 message: "Edge timeout waiting for sidecar".into(),
             })??
     };
-    relay_response(resp, &parts.headers).await
+    relay_response(resp, &parts.headers, &method).await
 }
 
 async fn relay_response(
     resp: reqwest::Response,
     req_headers: &HeaderMap,
+    req_method: &axum::http::Method,
 ) -> Result<Response, GatewayError> {
     let status =
         StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -373,7 +377,15 @@ async fn relay_response(
     // Stateless edge compression: negotiate from the *client* Accept-Encoding,
     // stream-encode, identity passthrough on skip rules. No disk, no full-body
     // buffer — reduces egress without the sidecar knowing.
-    let codec = compression::negotiate(req_headers.get("accept-encoding"));
+    //
+    // HEAD must stay identity: the body is empty while Content-Length still
+    // advertises the identity size — compressing would either emit a frame
+    // header alone or break zstd's pledged-size check.
+    let codec = if req_method == axum::http::Method::HEAD {
+        None
+    } else {
+        compression::negotiate(req_headers.get("accept-encoding"))
+    };
     let out = compression::maybe_compress_response(out, codec, req_headers);
     Ok(out)
 }
