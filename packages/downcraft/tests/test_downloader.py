@@ -212,7 +212,7 @@ class TestEdgeCompression:
 
     def test_resume_after_compressed_full_download(self, range_server):
         """First GET is compressed; resume Range is identity — offsets match."""
-        content = (b"resume-me-" * 5000)  # 50_000 bytes
+        content = b"resume-me-" * 5000  # 50_000 bytes
         RangeHandler.payloads["/edge.bin"] = content
         RangeHandler.encodings["/edge.bin"] = "zstd"
 
