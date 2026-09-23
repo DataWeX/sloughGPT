@@ -30,8 +30,8 @@ from typing import Any
 
 import numpy as np
 
-from domain.inference._internal.session_kv_manager import SessionKVManager
 from domain.infrastructure._internal.constants import DEFAULT_GENERATE_TIMEOUT
+from domain.infrastructure._internal.kv_cache.session import SessionKVManager
 from domain.infrastructure._internal.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.inference.slonet_provider")
@@ -837,12 +837,8 @@ class SloNetChatProvider:
             extra={"op": "model.load", "model": {"id": model_id, "layers": n_layer}},
         )
 
-        # Cross-turn KV cache state per session (lazy NumpyKVState per session_id)
-        instance._kv_manager = SessionKVManager(
-            kv_ttl=3600.0,  # 1 hour default TTL for idle sessions
-            kv_max_sessions=kv_max_sessions,  # LRU cap on concurrent sessions
-            state_factory=instance._make_kv_state,
-        )
+        # Per-session KV cache: LRU eviction + TTL, thread-safe, canonical.
+        instance._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=kv_max_sessions)
 
         # Record dashboard event
         try:
@@ -948,11 +944,8 @@ class SloNetChatProvider:
             "has_tokenizer": instance._tokenizer is not None,
             "lazy": True,
         }
-        instance._kv_manager = SessionKVManager(
-            kv_ttl=3600.0,
-            kv_max_sessions=kv_max_sessions,
-            state_factory=instance._make_kv_state,
-        )
+        # Per-session KV cache: LRU eviction + TTL, thread-safe, canonical.
+        instance._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=kv_max_sessions)
 
         logger.info(
             "SloNetChatProvider.lazy_from_slnc: %s (%.1f MB file, %d params) — weights deferred",
@@ -1060,11 +1053,8 @@ class SloNetChatProvider:
         )
 
         # Cross-turn KV cache state
-        instance._kv_manager = SessionKVManager(
-            kv_ttl=3600.0,
-            kv_max_sessions=kv_max_sessions,
-            state_factory=instance._make_kv_state,
-        )
+        # Per-session KV cache: LRU eviction + TTL, thread-safe, canonical.
+        instance._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=kv_max_sessions)
 
         return instance
 
@@ -1183,7 +1173,17 @@ class SloNetChatProvider:
         Returns:
             Dict with active session count, TTL, and memory estimate.
         """
-        return self._kv_manager.session_summary()
+        stats = self._kv_manager.get_stats()
+        with self._kv_manager.lock:
+            total_tokens = 0
+            for state in self._kv_manager.kv_states.values():
+                kv = getattr(state, "kv_len", None)
+                if isinstance(kv, (list, tuple)):
+                    total_tokens += sum(kv)
+                elif kv is not None:
+                    total_tokens += kv
+        stats["cached_tokens"] = total_tokens
+        return stats
 
     def clear_session(self, session_id: str) -> bool:
         """Drop the cross-turn KV state for a single session.
@@ -1497,15 +1497,16 @@ class SloNetChatProvider:
             session_id=kwargs.get("session_id"),
         )
 
-    def _make_kv_state(self):
-        """State factory for the KV manager: fresh per-session KV cache."""
-        return self._get_model().new_kv_state()
+    def _evict_stale_sessions(self):
+        """Remove KV states for sessions idle longer than kv_ttl seconds."""
+        self._kv_manager.evict_stale_sessions()
 
     def _resolve_session_kv(self, session_id):
         """Resolve KV state for a session, creating if needed, with TTL eviction."""
         if session_id is None:
             return None
-        return self._kv_manager.get_or_create(session_id)
+        self._evict_stale_sessions()
+        return self._kv_manager.get_or_create(session_id, self._get_model().new_kv_state)
 
     def _generate_sync(
         self,

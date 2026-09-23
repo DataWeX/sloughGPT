@@ -33,7 +33,6 @@ from domain.shell import (
     Kernel,
     NeuralKernel,
     ShellCommands,
-    X86VirtualSystem,
 )
 
 __all__ = [
@@ -94,11 +93,13 @@ __all__ = [
 
 def __getattr__(name):
     _lazy = {
-        # RAG
-        "get_rag_service": "domain.core._internal.rag_service",
-        "is_rag_service_ready": "domain.core._internal.rag_service",
-        "RAGService": "domain.core._internal.rag_service",
-        "KGTrainingPipeline": "domain.core._internal.rag_service",
+        # Shell (heavy: loads the x86 VM lazily)
+        "X86VirtualSystem": "domain.shell._internal.vm",
+        # RAG (canonical module lives under domain.cognition)
+        "get_rag_service": "domain.cognition._internal.rag_service",
+        "is_rag_service_ready": "domain.cognition._internal.rag_service",
+        "RAGService": "domain.cognition._internal.rag_service",
+        "KGTrainingPipeline": "domain.cognition._internal.rag_service",
         "SloEngine": "domain.core._internal.soul",
         "soul": "domain.core._internal.soul",
         # Consciousness

@@ -1416,7 +1416,7 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
     import state as server_state
 
     from domain.infrastructure.model_registry import get_model_registry
-    from domain.infrastructure.safetensors_loader import _get_model_dir
+    from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
     from domain.models._internal.provider import setup_providers
 
     registry = get_model_registry()
@@ -1457,6 +1457,32 @@ def _register_loaded(cfg, process_guard, preloaded_provider=None) -> None:
         quant_bits=cfg.quant_bits,
         quant_mode=cfg.quant_mode,
     )
+
+    # Apply persisted external API provider (OpenRouter / OpenAI-compatible)
+    # so chat can route to it from the first request.
+    try:
+        from domain.inference._internal.api_provider import configure_api_provider
+        from domain.settings._internal.persistent import get_settings as _get_settings
+
+        _p = _get_settings().settings.providers
+        if _p.enabled:
+            _applied = configure_api_provider(
+                True,
+                api_url=_p.api_url,
+                api_key=_p.api_key,
+                model=_p.model,
+                timeout=_p.timeout,
+                max_retries=_p.max_retries,
+            )
+            if _applied.get("registered"):
+                logger.info("Applied external API provider: %s", _p.api_url)
+            else:
+                logger.warning(
+                    "External API provider enabled but not applied: %s",
+                    _applied.get("error"),
+                )
+    except Exception as _e:
+        logger.warning("Failed to apply external API provider at startup: %s", _e)
 
     # Sync state.py writes to the ServerState singleton.
     # state.py.__setattr__ is a no-op for modules (Python stores directly
@@ -1603,7 +1629,7 @@ def _autoload_model(cfg: ServerConfig):
     )
     try:
         from domain.infrastructure.hf_hub import download_hf_model
-        from domain.infrastructure.safetensors_loader import _get_model_dir
+        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         cache_dir = _get_model_dir(model_id)
         logger.info("Downloading %s to %s ...", model_id, cache_dir, extra={"tag": "START"})
@@ -1679,7 +1705,7 @@ def _start_inference_engine(cfg) -> Any | None:
         return None
 
     try:
-        from domain.infrastructure.safetensors_loader import _get_model_dir
+        from domain.infrastructure.model_resolver import get_model_dir as _get_model_dir
 
         slnc_path = _get_model_dir(model_type) / "model.slnc"
         if not slnc_path.exists():

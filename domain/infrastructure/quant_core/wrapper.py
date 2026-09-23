@@ -12,7 +12,7 @@ shadow-copied attributes, which silently broke test patching.)
 
 import sys as _sys
 
-from domains.infrastructure.quant_core.wrapper import *  # noqa: F401,F403
 from domains.infrastructure.quant_core import wrapper as _canonical
+from domains.infrastructure.quant_core.wrapper import *  # noqa: F401,F403
 
 _sys.modules[__name__] = _canonical

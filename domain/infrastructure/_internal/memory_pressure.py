@@ -346,9 +346,9 @@ class MemoryPressureMonitor:
     def _clear_kv_caches(self) -> None:
         """Clear cross-turn KV session caches to free memory."""
         try:
-            from .model_server import SESSION_KV_CACHE
+            from .model_server import SESSION_KV_STATE
 
-            removed = SESSION_KV_CACHE.clear_all()
+            removed = SESSION_KV_STATE.clear_all()
             logger.debug("KV cache cleared: %d sessions dropped", removed)
         except Exception as e:
             logger.debug("KV cache clear failed: %s", e)

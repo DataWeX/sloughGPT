@@ -19,10 +19,9 @@ import math
 import re
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
-
 
 # ─── Data Structures ──────────────────────────────────────────────────────────
 

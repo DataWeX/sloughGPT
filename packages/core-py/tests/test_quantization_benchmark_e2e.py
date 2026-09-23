@@ -617,10 +617,10 @@ class TestCachedModelDiscovery:
         cached = bq._list_cached_models()
         if cached:
             # Every returned id must resolve to an existing model.slnc
-            from domain.infrastructure._internal.safetensors_loader import _get_model_dir
+            from domain.infrastructure._internal.model_resolver import get_model_dir
 
             for mid in cached:
-                assert (_get_model_dir(mid) / "model.slnc").exists(), f"{mid} missing"
+                assert (get_model_dir(mid) / "model.slnc").exists(), f"{mid} missing"
 
 
 class TestWeightCosines:

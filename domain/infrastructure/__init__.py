@@ -47,4 +47,6 @@ __all__ = [
     "AppError",
     "ErrorCode",
     "classify_exception",
+    "get_db",
+    "get_lifecycle_manager",
 ]

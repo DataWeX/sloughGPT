@@ -3,12 +3,12 @@
 import numpy as np
 import pytest
 
+from domain.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
 from domain.infrastructure._internal.numpy_engine import (
     KVCache,
     NumpyEngine,
     _CompressedWeight,
 )
-from domain.infrastructure._internal.safetensors_loader import _find_safetensors, _get_model_dir
 
 QWEN_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -16,11 +16,11 @@ QWEN_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 def _is_cached(model_id: str) -> bool:
     """Whether a model's safetensors are present in the local cache.
 
-    Uses the same resolution the ModelLoader uses (_get_model_dir +
-    _find_safetensors), covering both the standard HF cache layout and
+    Uses the same resolution the ModelLoader uses (get_model_dir +
+    find_safetensors), covering both the standard HF cache layout and
     the flat project-local models/hf-cache/hub layout.
     """
-    return _find_safetensors(_get_model_dir(model_id)) is not None
+    return find_safetensors(get_model_dir(model_id)) is not None
 
 
 @pytest.fixture(scope="session")

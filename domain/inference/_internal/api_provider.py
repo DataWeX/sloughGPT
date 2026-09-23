@@ -331,4 +331,81 @@ class ApiProvider:
             }
 
 
-__all__ = ["ApiProvider"]
+def _native_provider_name(registry: dict[str, Any]) -> str | None:
+    """Return the first registered native text provider name, if any."""
+    for name in ("native-c", "slonet-native"):
+        if name in registry:
+            return name
+    return None
+
+
+def configure_api_provider(
+    enabled: bool,
+    *,
+    api_url: str = "",
+    api_key: str = "",
+    model: str = "gpt-4o-mini",
+    timeout: float = 60.0,
+    max_retries: int = 2,
+) -> dict[str, Any]:
+    """Register ``ApiProvider`` into the runtime registry for live chat routing.
+
+    When ``enabled`` is True and both ``api_url`` and ``api_key`` are present,
+    an ``ApiProvider`` is registered under the name ``"api"`` and the default
+    router's text provider is pointed at it — the processor pipeline
+    (personality/style/tool-use) stays intact. When disabled, ``"api"`` is
+    de-registered and chat falls back to the most recently registered native
+    provider (``native-c`` then ``slonet-native``).
+
+    Returns a status dict with ``registered``, ``text_provider`` and any
+    ``error``. Never raises for missing credentials.
+    """
+    from domain.models._internal.provider.registry import (
+        _providers,
+        register_provider,
+    )
+    from domain.models._internal.provider.router import ProviderRouter
+
+    router = _providers.get("default")
+    current = router._text_name if isinstance(router, ProviderRouter) else None
+
+    if not enabled:
+        _providers.pop("api", None)
+        native = _native_provider_name(_providers)
+        if isinstance(router, ProviderRouter) and native and current == "api":
+            router.set_text_provider(native)
+        return {
+            "enabled": False,
+            "registered": False,
+            "error": None,
+            "text_provider": native if current == "api" else current,
+        }
+
+    if not api_url or not api_key:
+        return {
+            "enabled": True,
+            "registered": False,
+            "error": "api_url and api_key are required",
+            "text_provider": current,
+        }
+
+    provider = ApiProvider(
+        api_key=api_key,
+        api_url=api_url,
+        model=model,
+        timeout=timeout,
+        max_retries=max_retries,
+    )
+    register_provider("api", provider)
+    if isinstance(router, ProviderRouter):
+        router.set_text_provider("api")
+    return {
+        "enabled": True,
+        "registered": True,
+        "error": None,
+        "text_provider": "api",
+        "api": {"model": provider.model_name, "api_url": provider.api_url},
+    }
+
+
+__all__ = ["ApiProvider", "configure_api_provider"]

@@ -6,19 +6,19 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from domain.infrastructure._internal.model_resolver import find_safetensors, get_model_dir
 from domain.infrastructure._internal.point_compressor import (
     ModelTree,
     Point,
     PointCompressor,
     PointLibrary,
 )
-from domain.infrastructure._internal.safetensors_loader import _find_safetensors, _get_model_dir
 
 QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
 
 def _is_cached(model_id: str) -> bool:
-    return _find_safetensors(_get_model_dir(model_id)) is not None
+    return find_safetensors(get_model_dir(model_id)) is not None
 
 
 # ── Fixtures ──

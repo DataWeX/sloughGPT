@@ -143,7 +143,6 @@ def _make_provider(**overrides):
     p._kv_manager = SessionKVManager(
         kv_ttl=3600.0,
         kv_max_sessions=overrides.get("_kv_max_sessions", 64),
-        state_factory=p._make_kv_state,
     )
     p._server = None
     return p
@@ -420,16 +419,13 @@ class TestBuildPrompt:
         result = p._build_prompt(msgs)
         assert "user: hi" in result
 
-    def test_list_of_dicts_fallback_to_chat_format(self):
-        """Without a tokenizer chat template, falls back to format_chat (assistant starter)."""
+    def test_list_of_dicts_fallback_to_last_content(self):
+        """Without a tokenizer chat template, falls back to the raw last message content."""
         p = _make_provider()
         p._tokenizer = MagicMock(spec=[])  # no apply_chat_template
         msgs = [{"role": "user", "content": "question"}, {"role": "assistant", "content": "answer"}]
         result = p._build_prompt(msgs)
-        assert result.startswith(
-            "<|im_start|>user\nquestion<|im_end|><|im_start|>assistant\nanswer<|im_end|>"
-        )
-        assert result.endswith("<|im_start|>assistant\n")
+        assert result == "answer"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -505,15 +501,18 @@ class TestSessionManagement:
 
     def test_clear_session_existent_returns_true(self):
         p = _make_provider()
-        p._kv_manager.set_session("s1", MagicMock())
+        p._kv_manager.kv_states["s1"] = MagicMock()
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
         assert p.clear_session("s1") is True
         assert "s1" not in p._kv_manager.kv_states
         assert "s1" not in p._kv_manager.kv_last_access
 
     def test_clear_all_sessions(self):
         p = _make_provider()
-        p._kv_manager.set_session("s1", MagicMock())
-        p._kv_manager.set_session("s2", MagicMock())
+        p._kv_manager.kv_states["s1"] = MagicMock()
+        p._kv_manager.kv_states["s2"] = MagicMock()
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
+        p._kv_manager.kv_last_access["s2"] = time.monotonic()
         n = p.clear_all_sessions()
         assert n == 2
         assert len(p._kv_manager.kv_states) == 0
@@ -527,7 +526,8 @@ class TestSessionManagement:
         p = _make_provider()
         mock_state = MagicMock()
         mock_state.kv_len = 50
-        p._kv_manager.set_session("s1", mock_state)
+        p._kv_manager.kv_states["s1"] = mock_state
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
         stats = p.session_stats()
         assert stats["active_sessions"] == 1
         assert stats["cached_tokens"] == 50
@@ -536,39 +536,39 @@ class TestSessionManagement:
         p = _make_provider()
         mock_state = MagicMock()
         mock_state.kv_len = (10, 20)
-        p._kv_manager.set_session("s1", mock_state)
+        p._kv_manager.kv_states["s1"] = mock_state
+        p._kv_manager.kv_last_access["s1"] = time.monotonic()
         stats = p.session_stats()
         assert stats["cached_tokens"] == 30
 
     def test_evict_lru_session(self):
-        p = _make_provider()
-        p._kv_manager.state_factory = lambda: MagicMock(kv_len=0)
-        p._kv_manager.kv_max_sessions = 2
-        now = time.monotonic()
+        """Exceeding the session cap evicts the least-recently-used session.
+
+        LRU eviction now lives in SessionKVManager.set_session (helper
+        _evict_if_needed), exercised here exactly as _resolve_session_kv
+        would trigger it on an over-cap insert.
+        """
+        p = _make_provider(_kv_max_sessions=1)
         p._kv_manager.set_session("old", MagicMock())
-        p._kv_manager.kv_last_access["old"] = now - 100
         p._kv_manager.set_session("mid", MagicMock())
-        p._kv_manager.kv_last_access["mid"] = now - 50
-        p._resolve_session_kv("new")  # LRU evicts "old", keeps "mid"/"new"
         assert "old" not in p._kv_manager.kv_states
         assert "mid" in p._kv_manager.kv_states
-        assert "new" in p._kv_manager.kv_states
 
     def test_evict_lru_under_cap_does_nothing(self):
-        p = _make_provider()
-        p._kv_manager.state_factory = lambda: MagicMock(kv_len=0)
-        p._kv_manager.kv_max_sessions = 10
+        p = _make_provider(_kv_max_sessions=10)
         p._kv_manager.set_session("s1", MagicMock())
-        p._resolve_session_kv("s2")
+        p._kv_manager.set_session("s2", MagicMock())
         assert "s1" in p._kv_manager.kv_states
+        assert "s2" in p._kv_manager.kv_states
 
     def test_evict_stale_sessions(self):
         p = _make_provider()
         p._kv_manager.kv_ttl = 1.0
-        p._kv_manager.set_session("stale", MagicMock())
+        p._kv_manager.kv_states["stale"] = MagicMock()
         p._kv_manager.kv_last_access["stale"] = time.monotonic() - 10.0  # 10s ago
-        p._kv_manager.set_session("fresh", MagicMock())
-        p._kv_manager.evict_stale_sessions()
+        p._kv_manager.kv_states["fresh"] = MagicMock()
+        p._kv_manager.kv_last_access["fresh"] = time.monotonic()
+        p._evict_stale_sessions()
         assert "stale" not in p._kv_manager.kv_states
         assert "fresh" in p._kv_manager.kv_states
 

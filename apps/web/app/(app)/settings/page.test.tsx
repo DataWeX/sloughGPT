@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, waitFor } from '@testing-library/react'
 
 const { mockUpdateSettings, mockAddToast, mockSetLocale, mockDeleteKV } = vi.hoisted(() => ({
   mockUpdateSettings: vi.fn(),
@@ -67,6 +67,27 @@ vi.mock('@/lib/system-controller', () => ({
 vi.mock('@/lib/model-controller', () => ({
   modelController: {
     getHealth: vi.fn().mockResolvedValue({ status: 'healthy', model_loaded: true }),
+  },
+}))
+
+vi.mock('@/lib/settings-controller', () => ({
+  settingsController: {
+    getProviderApi: vi.fn().mockResolvedValue({
+      enabled: false,
+      api_url: '',
+      model: 'gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: false,
+    }),
+    updateProviderApi: vi.fn().mockResolvedValue({
+      enabled: false,
+      api_url: '',
+      model: 'gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: false,
+    }),
   },
 }))
 
@@ -163,6 +184,12 @@ describe('SettingsPage', () => {
   it('renders Connection section', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders External model provider card', async () => {
+    render(<SettingsPage />)
+    expect(screen.getAllByText('External model provider').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => expect(screen.getByLabelText('Endpoint URL')).toBeTruthy())
   })
 
   it('renders API URL input with default value', () => {

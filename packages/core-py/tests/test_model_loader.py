@@ -168,7 +168,7 @@ class TestModelLoaderSlncLoad:
         """has_slnc True when model.slnc exists; no tracker.fail on failure."""
         (tmp_path / "model.slnc").write_bytes(b"SLNC")
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
             lambda model_id: tmp_path,
         )
         monkeypatch.setattr(
@@ -187,7 +187,7 @@ class TestModelLoaderSlncLoad:
             raise OSError("boom")
 
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._get_model_dir", _raise
+            "domain.infrastructure._internal.model_resolver.get_model_dir", _raise
         )
         loader = ModelLoader(models_dir=tmp_path)
         result = loader.load("gpt2")
@@ -198,7 +198,7 @@ class TestModelLoaderSlncLoad:
         """Full load() success: slnc exists, provider mocked, verify runs."""
         (tmp_path / "model.slnc").write_bytes(b"SLNC")
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
             lambda model_id: tmp_path,
         )
         fake_model = MagicMock()
@@ -223,7 +223,7 @@ class TestModelLoaderSlncLoad:
     def test_try_load_slnc_returns_none_when_convert_fails(self, tmp_path, monkeypatch):
         """Missing slnc + failed conversion returns None."""
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
             lambda model_id: tmp_path,
         )
         loader = ModelLoader(models_dir=tmp_path)
@@ -233,7 +233,7 @@ class TestModelLoaderSlncLoad:
     def test_try_load_slnc_converts_when_missing(self, tmp_path, monkeypatch):
         """Missing slnc + successful conversion loads the new file."""
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
             lambda model_id: tmp_path,
         )
         converted = tmp_path / "model.slnc"
@@ -255,7 +255,7 @@ class TestModelLoaderSlncLoad:
         """from_slnc raising produces an error LoadResult, not None."""
         (tmp_path / "model.slnc").write_bytes(b"SLNC")
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._get_model_dir",
+            "domain.infrastructure._internal.model_resolver.get_model_dir",
             lambda model_id: tmp_path,
         )
         monkeypatch.setattr(
@@ -273,7 +273,7 @@ class TestModelLoaderConversion:
 
     def test_try_convert_returns_none_when_no_safetensors(self, tmp_path, monkeypatch):
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._find_safetensors",
+            "domain.infrastructure._internal.model_resolver.find_safetensors",
             lambda cache_dir: None,
         )
         loader = ModelLoader()
@@ -295,11 +295,11 @@ class TestModelLoaderConversion:
             metadata={"format": "pt"},
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._find_safetensors",
+            "domain.infrastructure._internal.model_resolver.find_safetensors",
             lambda cache_dir: st_path,
         )
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader.load_model_config",
+            "domain.infrastructure._internal.model_resolver.load_model_config",
             lambda model_id: {"model_type": "gpt2"},
         )
         compiled = {}
@@ -333,7 +333,7 @@ class TestModelLoaderConversion:
         bad = tmp_path / "model.safetensors"
         bad.write_bytes(b"\x00\x00\x00\x00\x00\x00\x00\x00")
         monkeypatch.setattr(
-            "domain.infrastructure._internal.safetensors_loader._find_safetensors",
+            "domain.infrastructure._internal.model_resolver.find_safetensors",
             lambda cache_dir: bad,
         )
         loader = ModelLoader()

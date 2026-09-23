@@ -39,9 +39,9 @@ __all__ = [
     "_extract_topics",
     "DataFilter",
     "get_data_filter",
+    "AutoCategorizer",
     "BulkProcessor",
     "DuplicateDetector",
-    "KnowledgeGapDetector",
     "FileIndex",
-    "AutoCategorizer",
+    "KnowledgeGapDetector",
 ]

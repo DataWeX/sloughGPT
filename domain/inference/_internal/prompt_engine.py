@@ -1,8 +1,10 @@
 """
 PromptEngine — single chat-template renderer.
 
-Wraps MorphTokenizer.apply_chat_template as primary, falls back to
-legacy format_chat (Qwen/LLaMA/GPT2) only when no tokenizer is bound.
+Wraps MorphTokenizer.apply_chat_template as primary; a tokenizer bound
+without a chat template falls back to raw last-message content, and the
+legacy format_chat (Qwen/LLaMA/GPT2) shape is reserved for when no
+tokenizer is bound at all.
 All call sites (NativeEngine, SloNetChatProvider, ChatDomain) delegate
 here so prompt strings stay bit-identical across the stack.
 """
@@ -95,6 +97,16 @@ def render_prompt(
                 exc,
                 extra={"tag": "MODEL"},
             )
+
+    # Tokenizer bound but with no apply_chat_template: emit the last message
+    # content raw, so the prompt text stays aligned with what the tokenizer
+    # can actually encode (never invent a template the tokenizer lacks).
+    if tokenizer is not None:
+        for m in reversed(messages):  # type: ignore[arg-type]
+            content = m.get("content", "")
+            if content:
+                return content
+        return ""
 
     return _fallback_format_chat(messages, model_type, system="")
 

@@ -16,8 +16,17 @@ from domain.consciousness._internal.engine import (
 from domain.consciousness._internal.evaluation import ConsciousnessEvaluator, EvaluationReport
 from domain.consciousness._internal.meta_cognition import MetaCognition, MetaCognitiveReport
 from domain.consciousness._internal.narrative import NarrativeGenerator
+from domain.consciousness._internal.personality import (
+    PersonalityManager,
+    PersonalityProfile,
+)
 from domain.consciousness._internal.qualia import QualiaEngine, QualiaState
-from domain.consciousness._internal.self_model import Reflection, SelfEpisode, SelfIdentity, SelfModel
+from domain.consciousness._internal.self_model import (
+    Reflection,
+    SelfEpisode,
+    SelfIdentity,
+    SelfModel,
+)
 
 __all__ = [
     "ConsciousnessConfig",
@@ -27,6 +36,8 @@ __all__ = [
     "MetaCognition",
     "MetaCognitiveReport",
     "NarrativeGenerator",
+    "PersonalityManager",
+    "PersonalityProfile",
     "QualiaEngine",
     "QualiaState",
     "Reflection",

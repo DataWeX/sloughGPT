@@ -555,19 +555,15 @@ class TestStackCrossTurn:
             from domain.inference._internal.session_kv_manager import SessionKVManager
 
             self._model = model
-            self._kv_manager = SessionKVManager(
-                kv_ttl=3600.0,
-                kv_max_sessions=64,
-                state_factory=model.new_kv_state,
-            )
+            self._kv_manager = SessionKVManager(kv_ttl=3600.0, kv_max_sessions=64)
 
         def _resolve_session_kv(self, session_id):
             if session_id is None:
                 return None
-            return self._kv_manager.get_or_create(session_id)
+            return self._kv_manager.get_or_create(session_id, self._model.new_kv_state)
 
         def _cached_tokens(self):
-            return self._kv_manager.cached_token_count()
+            return self._kv_manager.get_stats().get("active_sessions", 0)
 
         def _get_model(self):
             return self._model

@@ -8,10 +8,22 @@ from typing import Any
 from .processors.knowledge import KnowledgeProcessor
 from .processors.personality import PersonalityProcessor
 from .processors.style import StyleProcessor
-from .processors.tool_use import ToolUseProcessor
+from .processors.tool_use import ToolDef, ToolUseProcessor
 from .processors.vision import VisionProcessor
-from .registry import _providers, get_provider, list_providers, register_processor, register_provider
+from .protocols import ChatMessage, MessageProcessor, ModelCapabilities, ModelProvider
+from .registry import (
+    _providers,
+    apply_processors,
+    clear_providers,
+    get_processor,
+    get_provider,
+    list_processors,
+    list_providers,
+    register_processor,
+    register_provider,
+)
 from .router import ProviderRouter
+from .slo_transformer import SloTransformerProvider
 
 logger = logging.getLogger("slo.models.provider")
 

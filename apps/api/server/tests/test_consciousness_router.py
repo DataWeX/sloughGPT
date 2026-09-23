@@ -60,7 +60,7 @@ def mock_trainer():
         "current_epoch": 0,
         "loss": 0.0,
     }
-    trainer._pairs = list(range(10))
+    trainer.pairs = list(range(10))
     train_result = MagicMock()
     train_result.to_dict.return_value = {"loss": 0.5, "epochs": 1}
     trainer.train.return_value = train_result
@@ -228,7 +228,7 @@ class TestConsciousnessAPI:
         mock_trainer_insufficient.is_training = False
         mock_trainer_insufficient.should_train.return_value = False
         mock_trainer_insufficient.config.min_pairs_for_training = 5
-        mock_trainer_insufficient._pairs = [1, 2]
+        mock_trainer_insufficient.pairs = [1, 2]
         router_obj._trainer = mock_trainer_insufficient
 
         app = FastAPI()

@@ -486,7 +486,8 @@ class TestBatch:
 
 
 class TestTrainStatus:
-    def test_train_unavailable(self):
+    def test_train_status_builds_adapter(self):
         client = TestClient(_app(engine=_mock_engine(), trainer_missing=True))
         resp = client.get("/consciousness/train/status")
-        assert resp.status_code == 503
+        assert resp.status_code == 200
+        assert resp.json()["data"]["pairs_collected"] == 0

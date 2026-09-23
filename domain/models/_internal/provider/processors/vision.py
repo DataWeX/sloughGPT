@@ -47,7 +47,10 @@ class VisionProcessor:
         if get_provider(self._provider_name) is not None:
             return True
         try:
-            from domain.multimodal._internal.manager import get_multimodal_manager, initialize_multimodal
+            from domain.multimodal._internal.manager import (
+                get_multimodal_manager,
+                initialize_multimodal,
+            )
 
             initialize_multimodal()
             mgr = get_multimodal_manager()

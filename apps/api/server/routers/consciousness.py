@@ -244,7 +244,7 @@ class ConsciousnessRouter:
         if not trainer.should_train():
             raise_error(
                 f"Need at least {trainer.config.min_pairs_for_training} training pairs "
-                f"(have {len(trainer._pairs)})",
+                f"(have {len(trainer.pairs)})",
                 "E_INSUFFICIENT_DATA",
                 status_code=400,
             )

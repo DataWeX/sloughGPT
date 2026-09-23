@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.shared import find_repo_root  # noqa: F401 — kept for compatibility
 
 logger = logging.getLogger("slo.slonet")
@@ -5369,8 +5370,8 @@ def train_char_lstm_from_gpt(
 # =============================================================================
 
 
-class NumpyKVCache:
-    """Persistent KV cache for cross-turn generation.
+class NumpyKVState(NativeKVState):
+    """Persistent KV cache state for cross-turn generation.
 
     This is a *cache*, not a ``Store``: it holds the per-loop K/V buffers and
     the last output for ``start_pos`` resume, but it does not own persistence.
@@ -5384,51 +5385,93 @@ class NumpyKVCache:
     equals the previous output only recomputes the appended suffix (start_pos
     resume) instead of the whole prompt.
 
-    The object is mutated in place by generation calls: buffers are grown when
-    needed and ``prev_ids`` / ``kv_len`` are updated on completion. Callers
-    never construct buffers themselves; ``reset()`` drops all cached data.
+    This is a thin subclass of :class:`NativeKVState` (the native C+numpy
+    engine): storage IS ``NativeKVState``'s preallocated numpy backend, and
+    the buffer surface below (``kv_buf_k`` / ``kv_scale_k`` / ``kv_len`` …)
+    is the backend's raw state — no separate cache implementation lives here.
+    ``prev_ids`` records the last completed output for prefix resume.
+
+    The object is mutated in place by generation calls: buffers are bound
+    by the backend and grown when needed, and ``prev_ids`` is updated on
+    completion. Callers never construct buffers themselves; ``reset()``
+    drops all cached state.
 
     Attributes:
         kv_buf_k / kv_buf_v: per-block K/V buffers (``(1, capacity, nkv, E)``).
         kv_scale_k / kv_scale_v: per-block int8 scales (None when float32).
-        kv_len: per-block current fill length.
+        kv_len: per-block current fill length (the backend's lens list).
         prev_ids: ``(1, L)`` ids of the last completed output, or None when
             the state is empty or was invalidated (e.g. an abandoned stream).
         quantize_kv: quantize mode of the cached buffers.
         capacity: length of the allocated buffers.
     """
 
-    __slots__ = (
-        "kv_buf_k",
-        "kv_buf_v",
-        "kv_scale_k",
-        "kv_scale_v",
-        "kv_len",
-        "prev_ids",
-        "quantize_kv",
-        "capacity",
-    )
+    __slots__ = ("prev_ids",)
 
     def __init__(self):
-        self.kv_buf_k = []
-        self.kv_buf_v = []
-        self.kv_scale_k = []
-        self.kv_scale_v = []
-        self.kv_len = []
+        super().__init__(n_layers=0, n_kv_heads=0, head_dim=0)
         self.prev_ids = None
-        self.quantize_kv = False
-        self.capacity = 0
+
+    @property
+    def kv_buf_k(self) -> list[np.ndarray | None]:
+        return self.backend.buffers[0]
+
+    @kv_buf_k.setter
+    def kv_buf_k(self, value) -> None:
+        self.backend.adopt(k=value)
+
+    @property
+    def kv_buf_v(self) -> list[np.ndarray | None]:
+        return self.backend.buffers[1]
+
+    @kv_buf_v.setter
+    def kv_buf_v(self, value) -> None:
+        self.backend.adopt(v=value)
+
+    @property
+    def kv_scale_k(self) -> list[np.ndarray | None]:
+        return self.backend.scales[0]
+
+    @kv_scale_k.setter
+    def kv_scale_k(self, value) -> None:
+        self.backend.adopt(sk=value)
+
+    @property
+    def kv_scale_v(self) -> list[np.ndarray | None]:
+        return self.backend.scales[1]
+
+    @kv_scale_v.setter
+    def kv_scale_v(self, value) -> None:
+        self.backend.adopt(sv=value)
+
+    @property
+    def kv_len(self) -> list[int]:
+        return self.backend.lens
+
+    @kv_len.setter
+    def kv_len(self, value) -> None:
+        self.backend.adopt(lens=value)
+
+    @property
+    def capacity(self) -> int:
+        return self.backend.capacity
+
+    @capacity.setter
+    def capacity(self, value: int) -> None:
+        self.backend.adopt(cap=value)
+
+    @property
+    def quantize_kv(self) -> bool:
+        return self.backend.quantized
+
+    @quantize_kv.setter
+    def quantize_kv(self, value: bool) -> None:
+        self.backend.adopt(quant=value)
 
     def reset(self) -> None:
         """Drop all cached KV buffers, scales, and the last output."""
-        self.kv_buf_k = []
-        self.kv_buf_v = []
-        self.kv_scale_k = []
-        self.kv_scale_v = []
-        self.kv_len = []
+        self.backend.clear()
         self.prev_ids = None
-        self.quantize_kv = False
-        self.capacity = 0
 
     def __repr__(self) -> str:
         filled = self.kv_len[0] if self.kv_len else 0
@@ -5438,7 +5481,7 @@ class NumpyKVCache:
         )
 
 
-NumpyKVState = NumpyKVCache  # deprecated alias — prefer NumpyKVCache/new_kv_cache
+NumpyKVCache = NumpyKVState  # backward-compat alias for branch consumers
 
 
 class SloTransformer(SloNet):
@@ -5765,24 +5808,15 @@ class SloTransformer(SloNet):
             where the scale buffers are ``None`` when ``quantized`` is False
             and ``kv_len`` is a list of per-block fill lengths (all zero).
         """
-        dtype = np.int8 if quantized else np.float32
-        kv_buf_k = [
-            np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)
-        ]
-        kv_buf_v = [
-            np.zeros((1, total_len, nkv[i], head_dim), dtype=dtype) for i in range(n_blocks)
-        ]
-        if quantized:
-            kv_scale_k = [
-                np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)
-            ]
-            kv_scale_v = [
-                np.zeros((1, total_len, nkv[i], 1), dtype=np.float32) for i in range(n_blocks)
-            ]
-        else:
-            kv_scale_k = [None] * n_blocks
-            kv_scale_v = [None] * n_blocks
-        return kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, [0] * n_blocks
+        state = NumpyKVState()
+        state.backend.bind(n_blocks, total_len, nkv, head_dim, quantized)
+        return (
+            state.kv_buf_k,
+            state.kv_buf_v,
+            state.kv_scale_k,
+            state.kv_scale_v,
+            state.kv_len,
+        )
 
     def new_kv_cache(self) -> NumpyKVCache:
         """Create an empty persistent KV cache for cross-turn generation.
@@ -5830,6 +5864,8 @@ class SloTransformer(SloNet):
             state is not None
             and state.prev_ids is not None
             and state.quantize_kv == use_kvq
+            and state.kv_buf_k
+            and state.kv_buf_k[0] is not None
             and len(state.kv_buf_k) == n_blocks
             and state.kv_buf_k[0].shape[-1] == head_dim
         ):
@@ -5850,30 +5886,15 @@ class SloTransformer(SloNet):
             start = 0
 
         if start == 0:
-            kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len = self._alloc_kv_cache(
-                n_blocks, total_len, nkv, head_dim, use_kvq
-            )
-            if state is not None:
-                state.kv_buf_k = kv_buf_k
-                state.kv_buf_v = kv_buf_v
-                state.kv_scale_k = kv_scale_k
-                state.kv_scale_v = kv_scale_v
-                state.kv_len = kv_len
-                state.capacity = total_len
-                state.quantize_kv = use_kvq
-            return kv_buf_k, kv_buf_v, kv_scale_k, kv_scale_v, kv_len, start
+            if state is None:
+                state = NumpyKVState()
+            state.backend.bind(n_blocks, total_len, nkv, head_dim, use_kvq)
+            return state.kv_buf_k, state.kv_buf_v, state.kv_scale_k, state.kv_scale_v, state.kv_len, 0
 
         # Resume: reuse cached buffers, growing capacity when required.
         if state.capacity < total_len:
-            cap = total_len
-            pad = ((0, 0), (0, cap - start), (0, 0), (0, 0))
-            state.kv_buf_k = [np.pad(b[:, :start], pad) for b in state.kv_buf_k]
-            state.kv_buf_v = [np.pad(b[:, :start], pad) for b in state.kv_buf_v]
-            if use_kvq:
-                state.kv_scale_k = [np.pad(b[:, :start], pad) for b in state.kv_scale_k]
-                state.kv_scale_v = [np.pad(b[:, :start], pad) for b in state.kv_scale_v]
-            state.capacity = cap
-        state.kv_len = [start] * n_blocks
+            state.backend.grow_to(total_len)
+        state.backend.lens[:] = [start] * n_blocks
         return (
             state.kv_buf_k,
             state.kv_buf_v,

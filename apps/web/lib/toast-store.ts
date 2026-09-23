@@ -11,23 +11,33 @@ export interface Toast {
   type: ToastType
   verbose?: string
   onUndo?: () => void
+  key?: string
 }
 
 interface ToastStore {
   toasts: Toast[]
-  addToast: (message: string, type?: ToastType, verbose?: string, onUndo?: () => void) => string
+  addToast: (
+    message: string,
+    type?: ToastType,
+    verbose?: string,
+    onUndo?: () => void,
+    key?: string,
+  ) => string
   dismissToast: (id: string) => void
   clearToasts: () => void
 }
 
+const dedupeTag = (message: string, type: ToastType, key?: string) => key ?? `${type}:${message}`
+
 const toastStore = createStore<ToastStore>((set, get) => ({
   toasts: [],
 
-  addToast: (message, type = 'info', verbose, onUndo) => {
-    const existing = get().toasts.find((t) => t.message === message && t.type === type)
+  addToast: (message, type = 'info', verbose, onUndo, key) => {
+    const tag = dedupeTag(message, type, key)
+    const existing = get().toasts.find((t) => dedupeTag(t.message, t.type, t.key) === tag)
     if (existing) return existing.id
     const id = `toast_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-    const toast: Toast = { id, message, type, verbose, onUndo }
+    const toast: Toast = { id, message, type, verbose, onUndo, key }
     set((prev) => ({ toasts: [...prev.toasts, toast] }))
     setTimeout(
       () => {

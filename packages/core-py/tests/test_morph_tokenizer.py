@@ -2,8 +2,8 @@
 
 import pytest
 
+from domain.infrastructure._internal.model_resolver import get_model_dir
 from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
-from domain.infrastructure._internal.safetensors_loader import _get_model_dir
 
 QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -14,7 +14,7 @@ def _is_cached(model_id: str) -> bool:
     Uses the same resolution the loader uses (searching both the standard HF
     cache and the flat project-local models/hf-cache/hub layout).
     """
-    return (_get_model_dir(model_id) / "tokenizer.json").exists()
+    return (get_model_dir(model_id) / "tokenizer.json").exists()
 
 
 class TestMorphTokenizerGPT2:
