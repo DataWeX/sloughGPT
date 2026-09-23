@@ -266,7 +266,7 @@ class TestBatchScorePronunciation:
 
 
 class TestTrainVideo:
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_train_video_starts(self, mock_exec):
         mock_exec.return_value = MagicMock()
         resp = client.post(
@@ -282,7 +282,7 @@ class TestTrainVideo:
         assert data["status"] == "started"
         assert "job_id" in data
 
-    @patch("domains.training.executor.get_training_executor")
+    @patch("domain.training._internal.executor.get_training_executor")
     def test_train_video_busy(self, mock_exec):
         mock_exec.return_value = MagicMock()
         router_instance._video_training_state["status"] = "running"
@@ -302,7 +302,7 @@ class TestTrainVideo:
 
 class TestVideoInfer:
     def test_video_infer_no_checkpoints(self):
-        with patch("domains.training.video_trainer.list_video_checkpoints", return_value=[]):
+        with patch("domain.training.list_video_checkpoints", return_value=[]):
             resp = client.post(
                 "/multimodal/video-infer",
                 json={"video_path": "/tmp/test.mp4"},
@@ -349,7 +349,7 @@ class TestDPO:
 class TestCheckpoints:
     def test_list_checkpoints_empty(self):
         with patch(
-            "domains.training.video_trainer.list_video_checkpoints",
+            "domain.training.list_video_checkpoints",
             return_value=[],
         ):
             resp = client.get("/multimodal/checkpoints")
@@ -357,7 +357,7 @@ class TestCheckpoints:
 
     def test_load_checkpoint_not_found(self):
         with patch(
-            "domains.training.video_trainer.list_video_checkpoints",
+            "domain.training.list_video_checkpoints",
             return_value=[],
         ):
             resp = client.post("/multimodal/checkpoints/nonexistent/load")
@@ -365,7 +365,7 @@ class TestCheckpoints:
 
     def test_delete_checkpoint_not_found(self):
         with patch(
-            "domains.training.video_trainer.list_video_checkpoints",
+            "domain.training.list_video_checkpoints",
             return_value=[],
         ):
             resp = client.delete("/multimodal/checkpoints/nonexistent")

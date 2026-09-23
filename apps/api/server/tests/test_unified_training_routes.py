@@ -67,7 +67,7 @@ class TestTrainingTurboStart:
             "domains.training.service.start_turbo_training",
             return_value={"job_id": "t1", "data_path": "/tmp/data"},
         ):
-            with patch("domains.training.service.run_turbo_worker"):
+            with patch("domain.training._internal.service.run_turbo_worker"):
                 resp = client.post("/training/turbo-start", json=request_body)
 
         assert resp.status_code == 200
@@ -169,7 +169,9 @@ class TestTrainingCancelFromSessions:
 
 class TestTurboStatus:
     def test_returns_turbo_state(self):
-        with patch("domains.training.service.get_turbo_status", return_value={"status": "idle"}):
+        with patch(
+            "domain.training._internal.service.get_turbo_status", return_value={"status": "idle"}
+        ):
             resp = client.get("/training/turbo/status")
 
         assert resp.status_code == 200
