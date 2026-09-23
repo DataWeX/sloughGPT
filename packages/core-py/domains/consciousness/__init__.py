@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from ``domain.cognition``."""
+"""Backward-compatibility shim — imports from the new ``domain.consciousness`` package."""
 
-from domain.cognition import (
+from domain.consciousness import (
     ConsciousnessConfig,
     ConsciousnessEngine,
     ConsciousnessEvaluator,

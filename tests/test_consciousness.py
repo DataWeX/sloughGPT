@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from domain.cognition._internal.consciousness.config import ConsciousnessConfig
-from domain.cognition._internal.consciousness.engine import ConsciousnessEngine
-from domain.cognition._internal.consciousness.self_model import Reflection, SelfEpisode, SelfModel
+from domain.consciousness._internal.config import ConsciousnessConfig
+from domain.consciousness._internal.engine import ConsciousnessEngine
+from domain.consciousness._internal.self_model import Reflection, SelfEpisode, SelfModel
 
 # ---------------------------------------------------------------------------
 # Helpers

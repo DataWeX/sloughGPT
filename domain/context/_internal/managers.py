@@ -942,9 +942,13 @@ class ConsciousnessManager:
                 lines.append(f"Experiences processed: {episodes}")
 
         if level >= 3:
-            reflection = self._engine.reflect()
-            if reflection:
-                lines.append(f"Self-reflection: {reflection[:200]}")
+            # Propose-only: prompt injection must not commit belief deltas.
+            reflection = self._engine.reflect(apply=False)
+            text = getattr(reflection, "narrative", None)
+            if text is None:
+                text = reflection if isinstance(reflection, str) else str(reflection)
+            if text:
+                lines.append(f"Self-reflection: {text[:200]}")
 
         if not lines:
             return ""

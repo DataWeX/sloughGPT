@@ -55,9 +55,18 @@ class ConsciousnessEngine:
     def save(self) -> None:
         self.self_model.save()
 
-    def reflect(self):
-        """Return structured Reflection (caller should use .narrative for text)."""
-        return self.self_model.reflect()
+    def reflect(self, apply: bool = True) -> Any:
+        """Return structured Reflection (caller should use .narrative for text).
+
+        When ``apply`` is True (default), belief deltas are committed and
+        persisted via ``apply_beliefs`` so the reflection loop closes at the
+        engine boundary. Use ``apply=False`` for a propose-only read (e.g.
+        prompt injection) that must not mutate beliefs.
+        """
+        r = self.self_model.reflect()
+        if apply and getattr(r, "belief_deltas", None):
+            self.apply_beliefs(r.belief_deltas)
+        return r
 
     def reflect_text(self) -> str:
         r = self.self_model.reflect()

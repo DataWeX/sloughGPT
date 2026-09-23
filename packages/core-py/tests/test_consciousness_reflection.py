@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.cognition._internal.consciousness.self_model import Reflection, SelfModel
+from domain.consciousness._internal.self_model import Reflection, SelfModel
 
 
 @pytest.fixture

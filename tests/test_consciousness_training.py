@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.cognition._internal.consciousness.training import (
+from domain.consciousness.training import (
     ConsciousnessPair,
     ConsciousnessTrainer,
     TrainingConfig,
@@ -25,7 +25,7 @@ from domain.cognition._internal.consciousness.training import (
 class TestImports:
     def test_router_import_path_works(self):
         # Regression for the dead import: the router does exactly this.
-        import domain.cognition._internal.consciousness.training as training
+        import domain.consciousness.training as training
 
         assert training.ConsciousnessTrainer is ConsciousnessTrainer
         assert training.TrainingConfig is TrainingConfig
@@ -43,7 +43,7 @@ class TestImports:
             config = Cfg()
             self_model = SimpleNamespace(episodes=[])
 
-        monkeypatch.setattr("domain.cognition.get_consciousness", lambda: Engine())
+        monkeypatch.setattr("domain.consciousness.get_consciousness", lambda: Engine())
 
         router_obj = ConsciousnessRouter()
         trainer = router_obj._get_trainer()
