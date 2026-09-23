@@ -420,13 +420,16 @@ class TestBuildPrompt:
         result = p._build_prompt(msgs)
         assert "user: hi" in result
 
-    def test_list_of_dicts_fallback_to_last_content(self):
-        """When tokenizer has no apply_chat_template, falls back to last message."""
+    def test_list_of_dicts_fallback_to_chat_format(self):
+        """Without a tokenizer chat template, falls back to format_chat (assistant starter)."""
         p = _make_provider()
         p._tokenizer = MagicMock(spec=[])  # no apply_chat_template
         msgs = [{"role": "user", "content": "question"}, {"role": "assistant", "content": "answer"}]
         result = p._build_prompt(msgs)
-        assert result == "answer"
+        assert result.startswith(
+            "<|im_start|>user\nquestion<|im_end|><|im_start|>assistant\nanswer<|im_end|>"
+        )
+        assert result.endswith("<|im_start|>assistant\n")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
