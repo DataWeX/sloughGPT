@@ -4963,31 +4963,26 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
     )
     try:
         with os.fdopen(tmp_fd, "wb") as f:
-            f.write(SOU_MAGIC)
-            f.write(struct.pack("<I", 3))
-            f.write(struct.pack("<I", len(json_bytes)))
-            f.write(json_bytes)
+            params: list[tuple[str, np.ndarray]] = []
             if include_weights:
                 if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
                     state_items = list(net.state_dict().items())
                 else:
                     state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
-                # Skip non-tensor state entries (e.g. ``config`` metadata some
-                # models embed in state_dict) — they are not weights.
                 params = [
                     (k, np.asarray(v, dtype=np.float32))
                     for k, v in state_items
                     if not isinstance(v, (dict, list, tuple, str, bytes, bool))
                 ]
-                f.write(struct.pack("<I", len(params)))
-                for key, arr in params:
-                    name_bytes = key.encode()
-                    f.write(struct.pack("<I", len(name_bytes)))
-                    f.write(name_bytes)
-                    f.write(struct.pack("<I", arr.ndim))
-                    for dim in arr.shape:
-                        f.write(struct.pack("<I", dim))
-                    f.write(arr.tobytes())
+            # Envelope owned by slo_format — single writer for the v3 layout.
+            from domain.inference._internal.slo_format import _write_soul_v3
+
+            _write_soul_v3(
+                f,
+                json_bytes,
+                params,
+                include_weights=include_weights,
+            )
         os.rename(tmp_path, path)
     except Exception:
         try:
@@ -5889,7 +5884,14 @@ class SloTransformer(SloNet):
             if state is None:
                 state = NumpyKVState()
             state.backend.bind(n_blocks, total_len, nkv, head_dim, use_kvq)
-            return state.kv_buf_k, state.kv_buf_v, state.kv_scale_k, state.kv_scale_v, state.kv_len, 0
+            return (
+                state.kv_buf_k,
+                state.kv_buf_v,
+                state.kv_scale_k,
+                state.kv_scale_v,
+                state.kv_len,
+                0,
+            )
 
         # Resume: reuse cached buffers, growing capacity when required.
         if state.capacity < total_len:
