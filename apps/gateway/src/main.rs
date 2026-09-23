@@ -205,9 +205,7 @@ async fn main() {
     info!("🌐 Gateway listening on {}", config.listen_addr);
     info!("   → Python sidecar at {}", config.python_core_url);
 
-    axum::serve(listener, app)
-        .await
-        .expect("Server failed");
+    axum::serve(listener, app).await.expect("Server failed");
 }
 
 // ── Health Handlers ─────────────────────────────────────────────────────────
@@ -288,10 +286,7 @@ async fn check_sidecar_health(state: &AppState) {
 // body, then streams the sidecar's response bytes untouched. Works for JSON,
 // SSE, and anything else without understanding any of it.
 
-async fn proxy_http(
-    State(state): State<AppState>,
-    req: Request,
-) -> Result<Response, GatewayError> {
+async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Response, GatewayError> {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
     let query = req
@@ -305,10 +300,12 @@ async fn proxy_http(
     let content_type = parts.headers.get("content-type").cloned();
 
     // Inbound cap enforced before Python wakes. 413 on overflow.
-    let body_bytes = to_bytes(body, MAX_BODY_BYTES).await.map_err(|_| GatewayError {
-        status: StatusCode::PAYLOAD_TOO_LARGE,
-        message: format!("Request body too large (limit {} bytes)", MAX_BODY_BYTES),
-    })?;
+    let body_bytes = to_bytes(body, MAX_BODY_BYTES)
+        .await
+        .map_err(|_| GatewayError {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: format!("Request body too large (limit {} bytes)", MAX_BODY_BYTES),
+        })?;
 
     let mut builder = match method {
         axum::http::Method::GET => state.http.get(&url),
