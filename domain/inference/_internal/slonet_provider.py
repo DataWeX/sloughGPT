@@ -1246,9 +1246,19 @@ class SloNetChatProvider:
     def _load_tokenizer(self, model_dir, config):
         """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing.
 
-        Prefers a tokenizer.json shipped with a local fine-tuned model dir;
-        falls back to the base HuggingFace model id's tokenizer.
+        Prefers a tokenizer embedded in the SLNC config (native .soul → .slnc
+        bridge, no HuggingFace), then a tokenizer.json shipped with a local
+        fine-tuned model dir; falls back to the base HuggingFace model id.
         """
+        # 1) Embedded native tokenizer in SLNC config (owned path, goal 12)
+        if isinstance(config, dict):
+            emb = config.get("slo_tokenizer")
+            if isinstance(emb, dict):
+                try:
+                    return self._tokenizer_from_embedded(emb)
+                except Exception as e:
+                    logger.warning("Embedded tokenizer load failed: %s", e, extra={"tag": "INF"})
+
         try:
             from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
@@ -1267,6 +1277,22 @@ class SloNetChatProvider:
             logger.warning("MorphTokenizer load failed: %s", e, extra={"tag": "INF"})
 
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
+
+    @staticmethod
+    def _tokenizer_from_embedded(emb: dict):
+        """Rebuild a char/token-tree tokenizer from SLNC-embedded metadata."""
+        tok = emb.get("tokenizer")
+        if isinstance(tok, dict) and tok.get("type") == "token_tree" and isinstance(tok.get("tree"), dict):
+            from domain.training._internal.token_tree import TokenTree
+
+            return _TreeTokenizer(TokenTree.from_dict(tok["tree"]))
+
+        stoi = emb.get("stoi")
+        itos = emb.get("itos")
+        if stoi and itos:
+            return _CharTokenizer(stoi, itos)
+
+        raise ValueError("Embedded tokenizer missing stoi/itos/tree")
 
     def _get_model(self):
         """Return the loaded model, loading lazily on first access.

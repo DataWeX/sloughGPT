@@ -80,7 +80,7 @@ The destination is an **owned model** (milestones 12–14): SloNet trains from s
 
 ## Owned-model milestones (the destination past bootstrap)
 
-12. **Owned architecture** — SloNet stands alone: no HF conversion in the default path, native `.soul` training → `.slnc` serving end to end.
+12. ~~**Owned architecture** — SloNet stands alone: no HF conversion in the default path, native `.soul` training → `.slnc` serving end to end.~~ **Done** — `soul_to_slnc` bridge (`domain/infrastructure/_internal/soul_to_slnc.py`) is pure (no HF import): native layout in `SLNCCompiler` + identity `build_load_plan` when `tok_emb.weight` present + embedded `slo_tokenizer` in SLNC config (`_load_tokenizer` prefers it). Priority flip: `ModelLoader` loads `.soul` first, then `.slnc`; `_autoload_model` HF download gated behind `SLO_BOOTSTRAP_HF=1`. `SloughGPTTrainer.save(compile_slnc=…)` / `SLO_COMPILE_SLNC=1` writes sibling `.slnc`. `AutoTrainer` re-pointed to `scripts/train_auto_native.py` → `SloughGPTTrainer` (JSON `{"success","loss","steps"}` contract kept). `tests/test_goal12_owned_path.py` 7/7 green (weight-identity roundtrip, embedded tokenizer, priority, no-HF default, bootstrap gate, no fourth loop); scatter gate green; `scripts/benchmark_owned_path.py` records weight-identity PASS (19/19 tensors, bridge 0.18s, slnc first-token 12ms vs soul 45ms) via `benchmark_results record --kind training`.
 13. **Owned objective** — at least one training objective beyond next-token prediction (memory consolidation, tool-use success, planning) running in the single `TrainingLoop`.
 14. **Owned data** — the model trains on experience it generates (chat sessions, tool outcomes, feedback), not only third-party text.
 

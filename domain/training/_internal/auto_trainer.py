@@ -166,7 +166,8 @@ class AutoTrainer:
         output_dir.mkdir(parents=True, exist_ok=True)
 
         venv_python = _REPO_ROOT / ".venv" / "bin" / "python3"
-        train_script = _REPO_ROOT / "scripts" / "hf_train.py"
+        # Owned architecture (goal 12): native SloughGPTTrainer, not HF hf_train.
+        train_script = _REPO_ROOT / "scripts" / "train_auto_native.py"
 
         if not venv_python.exists():
             logger.error(
@@ -185,19 +186,14 @@ class AutoTrainer:
                     str(text_file),
                     "--output",
                     str(output_dir),
-                    "--model",
-                    "gpt2",
                     "--epochs",
                     "1",
                     "--batch-size",
                     "2",
                     "--lr",
-                    "5e-5",
-                    "--max-seq-length",
-                    "256",
-                    "--use-lora",
-                    "--lora-rank",
-                    "8",
+                    "1e-3",
+                    "--max-steps",
+                    "50",
                 ],
                 capture_output=True,
                 text=True,

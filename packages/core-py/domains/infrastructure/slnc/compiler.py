@@ -90,9 +90,37 @@ LLAMA_NON_BLOCK_LAYOUT = [
     "model.lm_head.weight",
 ]
 
+# Native SloTransformer keys (SloughGPTTrainer / .soul checkpoints)
+NATIVE_BLOCK_LAYOUT = [
+    "attn_norm.weight",
+    "attn.q_proj.weight",
+    "attn.q_proj.bias",
+    "attn.k_proj.weight",
+    "attn.k_proj.bias",
+    "attn.v_proj.weight",
+    "attn.v_proj.bias",
+    "attn.o_proj.weight",
+    "attn.o_proj.bias",
+    "ff_norm.weight",
+    "ff.w1.weight",
+    "ff.w1.bias",
+    "ff.w2.weight",
+    "ff.w2.bias",
+    "ff.w3.weight",
+    "ff.w3.bias",
+]
+
+NATIVE_NON_BLOCK_LAYOUT = [
+    "norm.weight",
+    "tok_emb.weight",
+    "pos_emb.weight",
+    "lm_head.weight",
+]
+
 _ARCH_LAYOUTS = {
     "gpt2": (GPT2_BLOCK_LAYOUT, GPT2_NON_BLOCK_LAYOUT, "h.{i}."),
     "llama": (LLAMA_BLOCK_LAYOUT, LLAMA_NON_BLOCK_LAYOUT, "model.layers.{i}."),
+    "native": (NATIVE_BLOCK_LAYOUT, NATIVE_NON_BLOCK_LAYOUT, "blocks.{i}."),
 }
 
 
@@ -451,6 +479,8 @@ class SLNCCompiler:
             and "model.layers.0.self_attn.q_proj.weight" in weight_keys
         ):
             arch = "llama"
+        elif "tok_emb.weight" in weight_keys:
+            arch = "native"
         elif "wte.weight" in weight_keys:
             arch = "gpt2"
         else:
@@ -477,6 +507,10 @@ class SLNCCompiler:
             elif tensor_name == "model.lm_head.weight":
                 if "model.embed_tokens.weight" in weights:
                     result.append((tensor_name, weights["model.embed_tokens.weight"]))
+            elif tensor_name == "lm_head.weight" and "tok_emb.weight" in weights:
+                # Tied LM head — synthesize from token embedding when absent
+                if "lm_head.weight" not in weights:
+                    result.append((tensor_name, weights["tok_emb.weight"]))
 
         return result
 
