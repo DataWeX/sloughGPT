@@ -1,4 +1,4 @@
-"""consciousness public re-exports — canonical home is ``domain.cognition``."""
+"""Backward-compatibility shim — canonical code lives in domain.cognition."""
 
 from domain.cognition import (
     ConsciousnessConfig,
