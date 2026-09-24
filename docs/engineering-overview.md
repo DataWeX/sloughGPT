@@ -52,15 +52,16 @@ Self-hosted LLM platform: train from scratch, serve, chat. One core engine, four
 
 29 domain modules. The brain.
 
-| Layer | Modules | What It Does |
-|-------|---------|--------------|
-| **Training** | `training/` | Character-level trainer, GPT-2 distillation, LoRA adapters, feedback-driven training |
-| **Inference** | `inference/` | KV cache, vector store, SLNC memory-mapped format, context management |
-| **Models** | `models/` | SloughGPTModel (RoPE + SwiGLU + RMSNorm), SloTransformer, arch detection |
-| **Cognitive** | `cognitive/` | Memory, reasoning, learning, knowledge graph |
-| **Infrastructure** | `infrastructure/` | Error taxonomy, EventBus, lifecycle, task queue, rate limiter, config |
+| Layer              | Modules           | What It Does                                                                         |
+| ------------------ | ----------------- | ------------------------------------------------------------------------------------ |
+| **Training**       | `training/`       | Character-level trainer, GPT-2 distillation, LoRA adapters, feedback-driven training |
+| **Inference**      | `inference/`      | KV cache, vector store, SLNC memory-mapped format, context management                |
+| **Models**         | `models/`         | SloughGPTModel (RoPE + SwiGLU + RMSNorm), SloTransformer, arch detection             |
+| **Cognitive**      | `cognitive/`      | Memory, reasoning, learning, knowledge graph                                         |
+| **Infrastructure** | `infrastructure/` | Error taxonomy, EventBus, lifecycle, task queue, rate limiter, config                |
 
 **Key decisions:**
+
 - Pure NumPy autograd. No PyTorch dependency for core inference/training.
 - `.slnc` memory-mapped format — 2.2x faster load, demand paging.
 - `.sou` checkpoint format — 1960x faster than JSON.
@@ -75,11 +76,13 @@ FastAPI backend. The hub everything connects to.
 **48 routers** covering: chat, inference, training, models, datasets, knowledge, agents, souls, feedback, shell, VM, multimodal, voice, images, health, config, auth, security, metrics.
 
 **Startup sequence:**
+
 1. Path bootstrapping → logging → CORS
 2. `StartupOrchestrator` runs 7 lifecycle hooks (task queue, config, model load, registry, routers, daemons)
 3. Background daemons: feedback workflow, health monitor, watchdog, auto-trainer, RAG ingestion
 
 **Request flow:**
+
 ```
 Request → CorrelationId → ReadinessGate → RateLimit → Timeout → Router → Handler → Response
                                                    ↓ (error)
@@ -99,6 +102,7 @@ Request → CorrelationId → ReadinessGate → RateLimit → Timeout → Router
 Next.js 16 frontend. 59 routes.
 
 **Data flow:**
+
 ```
 Component → Controller (lib/*-controller.ts) → http-client.ts → API Server
                                                            ↓
@@ -120,6 +124,7 @@ Component ← Zustand Store ← Controller ← Response
 React Native 0.86. 32 screens, 32 services.
 
 **Two inference paths:**
+
 - **Remote:** API server via `api-client.ts` (same as web)
 - **On-device:** `llama-rn` (Metal, 15-30 tok/s) or JS SloNet (pure JS, 2-5 ms/token)
 
@@ -133,13 +138,13 @@ React Native 0.86. 32 screens, 32 services.
 
 ### 5. Gateway (`apps/gateway/`)
 
-Rust/Axum reverse proxy. 574 lines.
+Rust/Axum reverse proxy (`slough-gateway`, binds `:8080`).
 
-**Role:** Fast entry point. Routes requests to Python core. Serves static files (Next.js build). Background health checker (3s poll).
+**Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present.
 
-**Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + health + static files.
+**Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + filters + compression + health + static files.
 
-**Catch-all:** Any route not explicitly defined is proxied to Python core.
+**Catch-all:** Any allowed route not explicitly defined is proxied to Python core.
 
 ---
 
@@ -212,14 +217,14 @@ POST /models/load
 
 ## Testing Strategy
 
-| Component | Framework | Count | Focus |
-|-----------|-----------|-------|-------|
-| Core Logic | pytest | 399+ | Training convergence, inference correctness |
-| API Server | pytest | 100+ | Endpoint contracts, error handling |
-| Web | Vitest | 3048+ | Components, controllers, hooks |
-| Web E2E | Cypress | 6 specs | Critical user flows |
-| CLI | pytest | 16 files | Command parsing, output formatting |
-| Mobile | Jest + RNTL | 25+ | Screens, services |
+| Component  | Framework   | Count    | Focus                                       |
+| ---------- | ----------- | -------- | ------------------------------------------- |
+| Core Logic | pytest      | 399+     | Training convergence, inference correctness |
+| API Server | pytest      | 100+     | Endpoint contracts, error handling          |
+| Web        | Vitest      | 3048+    | Components, controllers, hooks              |
+| Web E2E    | Cypress     | 6 specs  | Critical user flows                         |
+| CLI        | pytest      | 16 files | Command parsing, output formatting          |
+| Mobile     | Jest + RNTL | 25+      | Screens, services                           |
 
 ---
 
@@ -234,6 +239,10 @@ python -m apps.api.server.main --reload    # API :8000
 cd apps/web && npm run dev                  # Web :3001
 cd apps/gateway && cargo run                # Gateway :8080
 
+# Or one shot (API + Web; opt-in edge):
+./scripts/dev-stack.sh
+MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh    # + gateway :8080 → API
+
 # CLI
 pip install -e .
 sloughgpt serve
@@ -245,15 +254,15 @@ sloughgpt shell
 
 ## What's Done, What's Next
 
-| Phase | Status |
-|-------|--------|
-| Core inference engine | Done |
-| Training pipeline | Done |
-| Model serving + health | Done |
-| API + CLI | Done |
-| Web frontend | Done |
-| Mobile app | Done |
-| Gateway | Done |
-| Multi-user / multi-tenant | Done |
-| **Cloud/edge deployment** | Next |
-| **Enterprise features** | Next |
+| Phase                     | Status |
+| ------------------------- | ------ |
+| Core inference engine     | Done   |
+| Training pipeline         | Done   |
+| Model serving + health    | Done   |
+| API + CLI                 | Done   |
+| Web frontend              | Done   |
+| Mobile app                | Done   |
+| Gateway                   | Done   |
+| Multi-user / multi-tenant | Done   |
+| **Cloud/edge deployment** | Next   |
+| **Enterprise features**   | Next   |

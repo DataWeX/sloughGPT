@@ -1,23 +1,51 @@
 # pugqeep — Point-Graph-Queue System
 
-**Processing queue on graphed files** — not a messaging queue.
-
-Loads any model AND files of the same MIME type (behavior trees, Android OS configs,
-knowledge graphs, weight files). Everything compresses to Points via VQ or function
-fitting, regardless of origin.
+**Compressed persistence for numeric arrays** — not a messaging queue, and not a
+grab-bag for "any file type". pugqeep compresses **arrays** (any component that
+reduces to a `numpy.ndarray`) into `Point`s, then stores, indexes, queues, and
+dispatches work over those Points.
 
 **Location:** `packages/core-py/domains/infrastructure/pugqeep/`
+
+## The three invariants
+
+1. **Arrays → Points via a pluggable encoder.** A `Point` stores a *generator
+   function* instead of raw values. The encoder is one of: Vector Quantization
+   (`cluster`), analytic fit (`linear` / `polynomial` / `periodic`), or `raw`
+   (incompressible data stored as-is). "Any model or file of the same MIME type"
+   is NOT a claim pugqeep makes — the claim is *"any component that reduces to a
+   numpy array"*. Behavior trees, configs, graphs, and weights all qualify **only
+   insofar as they are arrays**; the system does not parse their domain formats.
+
+2. **`Point` / `PointProtocol` is the compaction boundary.** Everything upstream
+   (encoder, `Tree`/`ModelTree`) produces Points; everything downstream (library,
+   cache, views, serialization) consumes Points. A Point is lossy *unless*
+   `accuracy == 1.0` (`point.is_lossless`), and carries its own `residual`
+   (difference from exact) plus `dtype`/`shape` so reconstruction is faithful
+   within the error budget.
+
+3. **Library, cache, and queue are orthogonal infra behind the `PGQ` facade.**
+   `PointLibrary` (storage/search/views), `TieredCache` (hot → memory → disk),
+   and `TaskQueue`/`Engine` (priority execution) are independent concerns that
+   `PGQ` composes — not features of compression itself.
+
+### Error budget → raw fallback (the decode contract)
+
+The encoder is chosen by fit: if an analytic/cluster fit meets the configured
+accuracy gate it is stored; otherwise `raw` is used (lossless, 1:1). Embeddings
+and small discrete tensors (biases) default to `raw` — see ModelTree. The `raw`
+fallback is what guarantees the system degrades to *lossless*, never to *wrong*.
 
 ## Architecture
 
 ```
 PGQ (facade)
   ├── Engine — process dispatch, Trees, Stems
-  ├── Tree / ModelTree — compresses files into Points
+  ├── Tree / ModelTree — compresses arrays into Points
   │     └── PointLibrary — stores Points
   ├── TaskQueue — priority task execution
   ├── TieredCache — hot/memory/disk tiers
-  └── PointCompressor — VQ / function fitting
+  └── PointCompressor — encoder: VQ | analytic fit | raw
 ```
 
 | Component | Purpose |
@@ -26,8 +54,8 @@ PGQ (facade)
 | **PointProtocol** | ABC defining the contract for Points |
 | **PointView** | Lazy decompression wrapper |
 | **PointLibrary** | Thread-safe Point storage with search, batch ops, views |
-| **Tree** | Generic file/data compressor — loads any array data into Points |
-| **ModelTree** | Tree subclass with ML-specific skip logic (embeddings, biases) |
+| **Tree** | Generic compressor — loads any numpy array data into Points |
+| **ModelTree** | Tree subclass, ML-specific; skips VQ for embeddings/biases |
 | **TaskQueue** | Priority task execution with worker pool |
 | **Engine** | Process dispatch with Trees and Stems |
 | **PGQ** | High-level facade combining all components |
@@ -42,12 +70,12 @@ pgq = PGQ("my-model")
 pgq.put("layer_0.weight", numpy_array)
 data = pgq.get("layer_0.weight")
 
-# Generic Tree — compress ANY numpy data (behavior trees, configs, graphs)
-tree = Tree("behavior-tree", n_clusters=16)
-tree.load_data({"node_0": arr_0, "node_1": arr_1, "edge_weights": arr_2})
-restored = tree.get_data("node_0")
+# Generic Tree — compress any numpy array
+tree = Tree("game-ai", n_clusters=16)
+tree.load_data({"patrol_node": arr_0, "attack_node": arr_1, "edge_weights": arr_2})
+restored = tree.get_data("patrol_node")
 
-# ModelTree — ML-specific with skip logic for embeddings/biases
+# ModelTree — ML-specific: skips VQ for embeddings/biases
 model_tree = ModelTree("gpt2", n_clusters=16)
 model_tree.load_weights(model.state_dict(), num_workers=4)
 weight = model_tree.get_weight("blocks.0.attn.c_attn.weight")
@@ -100,12 +128,17 @@ from domains.infrastructure.pugqeep import PointLibrary
 lib = PointLibrary("my-lib")
 view = lib.view("layer_0.weight")  # no decompression yet
 
-arr = view.generate()         # decompress full array now
-arr = view[0:100]             # decompresses everything, then slices
-len(view)                     # uncompressed element count
-view.accuracy                 # compression accuracy
-view.point.is_lossless        # True if accuracy == 1.0
+arr = view.generate()  # decompress full array now
+arr = view[0:100]  # lazy: only the requested slice is reconstructed
+len(view)  # uncompressed element count
+view.accuracy  # compression accuracy
+view.point.is_lossless  # True if accuracy == 1.0
 ```
+
+Slicing is **lazy** for both cluster and analytic-fit (linear/periodic/polynomial)
+points: `view[a:b]` reconstructs only the requested indices — no full-array
+materialization. `raw` and slice-cached access fall back to the cached path
+(which is one-time, then O(1)).
 
 ## PointLibrary
 
@@ -155,22 +188,26 @@ if "w1" in lib:
 
 ## Tree (generic)
 
-Compresses ANY numpy data into Points — not just model weights.
+Compresses any **numpy array** into Points — model weights, embeddings, features,
+time series. (The array is the contract; the domain — weights, behavior-tree
+nodes, graph embeddings — is irrelevant to compression.)
 
 ```python
 from domains.infrastructure.pugqeep import Tree
 
-# Behavior tree nodes
+# Any array data, keyed by name
 tree = Tree("game-ai", n_clusters=16)
-tree.load_data({
-    "patrol_node": patrol_weights,
-    "attack_node": attack_weights,
-    "flee_node": flee_weights,
-})
+tree.load_data(
+    {
+        "patrol_node": patrol_weights,
+        "attack_node": attack_weights,
+        "flee_node": flee_weights,
+    }
+)
 behavior = tree.get_data("patrol_node")
 
-# Knowledge graph embeddings
-tree = Tree("knowledge-graph", n_clusters=8)
+# Embeddings are arrays too; if they shouldn't be VQ'd, use ModelTree or raw method
+tree = Tree("knowledge-graph", n_clusters=8, method="raw")
 tree.load_data(graph_embeddings)
 ```
 
@@ -273,7 +310,7 @@ engine.spawn(fn, arg1, arg2, priority=1)  # use spawn, not submit
 
 # Dispatch loop
 engine.run(poll_interval=0.5)  # continuous
-engine.dispatch()              # one-shot
+engine.dispatch()  # one-shot
 
 # Shutdown
 engine.stop_workers(timeout=10.0)

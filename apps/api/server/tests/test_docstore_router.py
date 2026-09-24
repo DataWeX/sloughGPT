@@ -7,19 +7,23 @@ bulk import, and sort/limit listing.
 """
 
 import pytest
-from mogdb import MogDB
-from routers import docstore
 from test_support import get_test_client
 
 client = get_test_client()
 
 
 @pytest.fixture(autouse=True)
-def _isolated_db(tmp_path):
-    """Point the router's MogDB instance at a fresh temp directory per test."""
-    docstore._db = MogDB(str(tmp_path / "docstore"))
+def _isolated_db(tmp_path, monkeypatch):
+    """Point the router at a fresh MogDB instance per test.
+
+    The router reads its store via ``_get_db()`` — the ``MOGDB_DOCSTORE_PATH``
+    env override (per ``routers/docstore.py``) — never a ``_db`` module
+    attribute. The previous fixture swapped ``docstore._db`` which the router
+    ignores, so every test silently hit the shared on-disk ``data/docstore``
+    and leaked docs across tests and runs.
+    """
+    monkeypatch.setenv("MOGDB_DOCSTORE_PATH", str(tmp_path / "docstore"))
     yield
-    docstore._db = None
 
 
 def _data(resp):
