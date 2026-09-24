@@ -22,6 +22,8 @@ BASE = "http://localhost:3000"
 API = "http://localhost:8000"
 RESULTS = []
 
+pytestmark = [pytest.mark.slow, pytest.mark.integration]
+
 # ── API readiness helpers ─────────────────────────────────────────────
 
 
