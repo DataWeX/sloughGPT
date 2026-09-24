@@ -227,3 +227,37 @@ class TestMorphTokenizerLocalDir:
         tok = MorphTokenizer.from_pretrained(str(tmp_path))
         assert tok.vocab_size == 4
         assert tok.encode("abc") == [0, 1, 2]
+
+
+class TestByteFallbackDecodeStreaming:
+    """Single-token streaming decode must preserve ▁→space (card 053).
+
+    Full-sequence decode suppresses the first token's ▁ (SentencePiece
+    convention) — that must stay. Single-token decode (slonet_provider chat
+    stream decodes one id per call) must NOT drop the ▁, or streamed words
+    glue together.
+    """
+
+    @pytest.fixture
+    def tok(self):
+        return MorphTokenizer(
+            vocab={"▁Hello": 10, "▁world": 11, "<0x41>": 12},
+            merges=[],
+            byte_fallback=True,
+            byte_level=False,
+            eos_token_id=0,
+        )
+
+    def test_single_token_decode_preserves_space(self, tok):
+        assert tok.decode([10]) == " Hello"
+
+    def test_single_byte_token_decodes(self, tok):
+        assert tok.decode([12]) == "A"
+
+    def test_full_sequence_first_space_suppressed(self, tok):
+        assert tok.decode([10, 11]) == "Hello world"
+
+    def test_stream_concat_matches_full_decode_after_start_strip(self, tok):
+        ids = [10, 11]
+        streamed = "".join(tok.decode([i]) for i in ids)
+        assert streamed.lstrip(" ") == tok.decode(ids)
