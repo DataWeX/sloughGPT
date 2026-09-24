@@ -27,7 +27,10 @@ from unittest.mock import MagicMock, patch
 
 class TestConsciousnessStatusTransitions:
     def test_is_training_false_idle_then_runs_then_false(self, tmp_path):
-        from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig
+        from domain.cognition._internal.consciousness.training import (
+            ConsciousnessTrainer,
+            TrainingConfig,
+        )
 
         config = TrainingConfig(
             data_dir=str(tmp_path),
@@ -59,7 +62,10 @@ class TestConsciousnessStatusTransitions:
         assert status["last_result"]["status"] == result.status
 
     def test_concurrent_start_rejected_while_training(self, tmp_path):
-        from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig
+        from domain.cognition._internal.consciousness.training import (
+            ConsciousnessTrainer,
+            TrainingConfig,
+        )
 
         config = TrainingConfig(data_dir=str(tmp_path), min_pairs_for_training=1)
         trainer = ConsciousnessTrainer(config)
