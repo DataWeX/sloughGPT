@@ -94,7 +94,7 @@ def test_int4_numpy_fallback_matches_unpacked_gemm():
 
 
 def test_quant_core_import_failure_falls_back_to_numpy(monkeypatch):
-    import domains.infrastructure.quant_core.wrapper as wrapper
+    import domain.infrastructure._internal.quant_core.wrapper as wrapper
 
     class _Broken:
         def __getattr__(self, name):
