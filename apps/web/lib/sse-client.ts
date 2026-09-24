@@ -16,6 +16,59 @@
 import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
 
+// ── Shared SSE wire-frame parser ────────────────────────────────────────────
+// Single implementation of the chunk → line → data: → JSON.parse state machine
+// used by both createSSEStream (callback + reconnect) and streamSSE in
+// http-client (async-generator + retry). Keeps the two stream control flows
+// distinct while unifying the actual wire decoding.
+
+export interface SSEParseResult {
+  /** Parsed payloads extracted from this chunk (already JSON-decoded). */
+  events: unknown[]
+  /** Bytes that didn't yet form a complete line; carry into next chunk. */
+  buffer: string
+}
+
+export function consumeSSEChunk(
+  buffer: string,
+  decoder: TextDecoder,
+  chunk: Uint8Array,
+  onMalformed?: (payload: string) => void,
+): SSEParseResult {
+  let nextBuffer = buffer + decoder.decode(chunk, { stream: true })
+  const lines = nextBuffer.split('\n')
+  nextBuffer = lines.pop() || ''
+  const events: unknown[] = []
+  for (const line of lines) {
+    const trimmed = line.trimEnd()
+    if (!trimmed.startsWith('data:')) continue
+    const payload = trimmed.slice(5).trim()
+    if (!payload || payload === '[DONE]') continue
+    try {
+      events.push(JSON.parse(payload))
+    } catch (e) {
+      onMalformed?.(payload.slice(0, 80))
+    }
+  }
+  return { events, buffer: nextBuffer }
+}
+
+export function consumeSSEDrain(
+  buffer: string,
+  onMalformed?: (payload: string) => void,
+): unknown[] {
+  const trimmed = buffer.trimEnd()
+  if (!trimmed.startsWith('data:')) return []
+  const payload = trimmed.slice(5).trim()
+  if (!payload || payload === '[DONE]') return []
+  try {
+    return [JSON.parse(payload)]
+  } catch (e) {
+    onMalformed?.(payload.slice(0, 80))
+    return []
+  }
+}
+
 export interface SSEEnvelope {
   stream: string
   phase: string
@@ -121,22 +174,15 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
         const { done, value } = await reader.read()
         if (done) break
 
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const jsonStr = line.slice(6).trim()
-            if (!jsonStr) continue
-            try {
-              const parsed = JSON.parse(jsonStr)
-              onEvent(parsed as SSEEnvelope)
-            } catch {
-              // skip malformed events
-            }
-          }
+        const { events, buffer: nextBuffer } = consumeSSEChunk(buffer, decoder, value)
+        buffer = nextBuffer
+        for (const event of events) {
+          onEvent(event as SSEEnvelope)
         }
+      }
+
+      for (const event of consumeSSEDrain(buffer)) {
+        onEvent(event as SSEEnvelope)
       }
 
       // Stream ended normally
@@ -157,14 +203,13 @@ export function createSSEStream(options: SSEStreamOptions): SSEStream {
         reconnectCount++
         // Detect connection refused / fetch failures during cold start.
         // Use a longer initial delay to avoid hammering a dead server.
-        const isConnRefused = err instanceof Error && (
-          err.message.includes('Failed to fetch') ||
-          err.message.includes('ECONNREFUSED') ||
-          err.message.includes('NetworkError')
-        )
-        const effectiveBase = isConnRefused && reconnectCount <= 3
-          ? Math.max(baseReconnectMs, 5000)
-          : baseReconnectMs
+        const isConnRefused =
+          err instanceof Error &&
+          (err.message.includes('Failed to fetch') ||
+            err.message.includes('ECONNREFUSED') ||
+            err.message.includes('NetworkError'))
+        const effectiveBase =
+          isConnRefused && reconnectCount <= 3 ? Math.max(baseReconnectMs, 5000) : baseReconnectMs
         const delay = Math.min(maxReconnectMs, effectiveBase * Math.pow(2, reconnectCount - 1))
         reconnectTimer = setTimeout(connect, delay)
       } else {

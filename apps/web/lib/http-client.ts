@@ -19,6 +19,7 @@
 import { logger } from './dev-log'
 import { PUBLIC_API_URL } from './config'
 import { useAuthStore } from './auth'
+import { consumeSSEChunk, consumeSSEDrain } from './sse-client'
 
 // ── ApiError ────────────────────────────────────────────────────────────────
 
@@ -200,7 +201,11 @@ function _isDocstoreUrl(url: string): boolean {
 // ── InterceptorManager ──────────────────────────────────────────────────────
 
 export class InterceptorManager<T> {
-  private _interceptors: Array<{ id: number; fulfilled: (value: T) => T | Promise<T>; rejected?: (error: unknown) => unknown }> = []
+  private _interceptors: Array<{
+    id: number
+    fulfilled: (value: T) => T | Promise<T>
+    rejected?: (error: unknown) => unknown
+  }> = []
   private _nextId = 0
 
   use(fulfilled: (value: T) => T | Promise<T>, rejected?: (error: unknown) => unknown): number {
@@ -210,7 +215,7 @@ export class InterceptorManager<T> {
   }
 
   eject(id: number) {
-    this._interceptors = this._interceptors.filter(i => i.id !== id)
+    this._interceptors = this._interceptors.filter((i) => i.id !== id)
   }
 
   clear() {
@@ -228,7 +233,7 @@ export class InterceptorManager<T> {
         value = await interceptor.fulfilled(value)
       } catch (e) {
         if (interceptor.rejected) {
-          value = await interceptor.rejected(e) as T
+          value = (await interceptor.rejected(e)) as T
         } else {
           throw e
         }
@@ -381,8 +386,12 @@ export class CircuitBreaker {
     this._halfOpenAttempts = 0
   }
 
-  get failureCount() { return this._failureCount }
-  get successCount() { return this._successCount }
+  get failureCount() {
+    return this._failureCount
+  }
+  get successCount() {
+    return this._successCount
+  }
 }
 
 // ── Throttler ───────────────────────────────────────────────────────────────
@@ -399,8 +408,12 @@ export class Throttler {
 
   constructor(private opts: Partial<ThrottleOptions> = {}) {}
 
-  get running() { return this._running }
-  get queued() { return this._queue.length }
+  get running() {
+    return this._running
+  }
+  get queued() {
+    return this._queue.length
+  }
 
   async acquire(): Promise<void> {
     const max = this.opts.maxConcurrent ?? DEFAULT_THROTTLE_MAX
@@ -415,7 +428,7 @@ export class Throttler {
     return new Promise<void>((resolve, reject) => {
       const timeoutMs = this.opts.queueTimeoutMs ?? DEFAULT_THROTTLE_TIMEOUT_MS
       const timer = setTimeout(() => {
-        const idx = this._queue.findIndex(e => e.resolve === resolve)
+        const idx = this._queue.findIndex((e) => e.resolve === resolve)
         if (idx !== -1) this._queue.splice(idx, 1)
         reject(new ApiError('Request queue timeout', 429))
       }, timeoutMs)
@@ -498,7 +511,11 @@ async function request<T>(
 
   const timeoutMs = opts?.timeout ?? _defaultTimeout
   const isDocstore = _isDocstoreUrl(url)
-  const maxRetries = isDocstore ? DOCSTORE_MAX_RETRIES : (opts?.skipCircuitBreaker ? 0 : _defaultMaxRetries)
+  const maxRetries = isDocstore
+    ? DOCSTORE_MAX_RETRIES
+    : opts?.skipCircuitBreaker
+      ? 0
+      : _defaultMaxRetries
   const baseDelay = isDocstore ? DOCSTORE_BASE_DELAY : _defaultBaseDelay
   const retryableStatuses = isDocstore ? DOCSTORE_RETRYABLE_STATUSES : RETRYABLE_STATUSES
   let retries = 0
@@ -524,13 +541,13 @@ async function request<T>(
           fetchBody = new ReadableStream({
             start(controller) {
               const chunk = new Uint8Array(blob.size)
-              blob.arrayBuffer().then(ab => {
+              blob.arrayBuffer().then((ab) => {
                 chunk.set(new Uint8Array(ab))
                 controller.enqueue(chunk)
                 controller.close()
                 opts!.progress!.onUpload!(100, blob.size, blob.size)
               })
-            }
+            },
           })
         } else {
           fetchBody = jsonStr
@@ -559,7 +576,11 @@ async function request<T>(
             chunks.push(value)
             loaded += value.length
             if (contentLength > 0) {
-              opts.progress.onDownload(Math.round((loaded / contentLength) * 100), loaded, contentLength)
+              opts.progress.onDownload(
+                Math.round((loaded / contentLength) * 100),
+                loaded,
+                contentLength,
+              )
             }
           }
           reader.releaseLock()
@@ -587,7 +608,12 @@ async function request<T>(
 
       if (timer) clearTimeout(timer)
 
-      logger.debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, { corrId, method, url, status: res.status })
+      logger.debug(`<<< ${method} ${url} ${res.status} corr=${corrId}`, {
+        corrId,
+        method,
+        url,
+        status: res.status,
+      })
 
       // Build response envelope
       const resText = await res.text()
@@ -600,7 +626,11 @@ async function request<T>(
         config: finalConfig,
       }
       if (res.ok && resText) {
-        try { envelope.json = JSON.parse(resText) } catch { /* not JSON */ }
+        try {
+          envelope.json = JSON.parse(resText)
+        } catch {
+          /* not JSON */
+        }
       }
 
       // Run response interceptors
@@ -617,7 +647,7 @@ async function request<T>(
             `retry ${retries}/${maxRetries} ${method} ${url} ${status} delay=${delay}ms corr=${corrId}`,
             { corrId, method, url, status, retries, maxRetries, delay },
           )
-          await new Promise(r => setTimeout(r, delay))
+          await new Promise((r) => setTimeout(r, delay))
           continue
         }
 
@@ -635,25 +665,37 @@ async function request<T>(
           detail = finalEnvelope.text || finalEnvelope.statusText || 'Could not request'
         }
         const message = Array.isArray(detail)
-          ? detail.map((d: { msg?: string } | string) => typeof d === 'string' ? d : d.msg ?? '').join('; ')
+          ? detail
+              .map((d: { msg?: string } | string) => (typeof d === 'string' ? d : (d.msg ?? '')))
+              .join('; ')
           : detail || 'Could not request'
 
         const requestId = finalEnvelope.headers.get('X-Request-ID') || undefined
-        const apiErr = new ApiError(message, status, { raw: finalEnvelope.text, code: errorCode, details: errorDetails, correlationId }, requestId)
+        const apiErr = new ApiError(
+          message,
+          status,
+          { raw: finalEnvelope.text, code: errorCode, details: errorDetails, correlationId },
+          requestId,
+        )
 
         // Circuit breaker
         if (!opts?.skipCircuitBreaker) _globalCircuitBreaker.recordFailure()
 
         // Lifecycle: onError
         for (const hook of _globalHooks.onError) {
-          try { await hook(apiErr, finalConfig) } catch { /* hook errors swallowed */ }
+          try {
+            await hook(apiErr, finalConfig)
+          } catch {
+            /* hook errors swallowed */
+          }
         }
 
         if (!opts?.silent) {
           import('./error-store').then(({ useErrorStore }) => {
             useErrorStore.getState().addError(apiErr, {
               source: url,
-              title: status >= 500 ? 'Server Error' : status >= 400 ? `HTTP ${status}` : 'API Error',
+              title:
+                status >= 500 ? 'Server Error' : status >= 400 ? `HTTP ${status}` : 'API Error',
               requestId,
             })
           })
@@ -682,12 +724,15 @@ async function request<T>(
       const status = 0
       const name = e instanceof Error ? e.name : undefined
       const message_ = e instanceof Error ? e.message : undefined
-      const cause = e instanceof Error ? (e as Error & { cause?: { code?: string } }).cause : undefined
+      const cause =
+        e instanceof Error ? (e as Error & { cause?: { code?: string } }).cause : undefined
       const isTimeout = name === 'AbortError' || message_?.includes('aborted')
       const isConnRefused = message_ === 'Failed to fetch' || cause?.code === 'ECONNREFUSED'
       const message = isTimeout
         ? `Request timed out after ${timeoutMs / 1000}s`
-        : isConnRefused ? 'Connection unavailable — server may be starting up' : (message_ || 'Could not request')
+        : isConnRefused
+          ? 'Connection unavailable — server may be starting up'
+          : message_ || 'Could not request'
 
       const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 
@@ -698,7 +743,7 @@ async function request<T>(
           `retry ${retries}/${maxRetries} ${method} ${url} ${kind} delay=${delay}ms corr=${corrId}`,
           { corrId, method, url, kind, retries, maxRetries, delay },
         )
-        await new Promise(r => setTimeout(r, delay))
+        await new Promise((r) => setTimeout(r, delay))
         continue
       }
 
@@ -707,7 +752,11 @@ async function request<T>(
       const apiErr = new ApiError(message, status)
 
       for (const hook of _globalHooks.onError) {
-        try { await hook(apiErr, finalConfig) } catch { /* hook errors swallowed */ }
+        try {
+          await hook(apiErr, finalConfig)
+        } catch {
+          /* hook errors swallowed */
+        }
       }
 
       if (!opts?.silent) {
@@ -757,7 +806,11 @@ const _globalHooks: {
 
 // ── Convenience functions (backward-compatible) ─────────────────────────────
 
-export async function apiGet<T>(url: string, params?: Record<string, string>, opts?: RequestOptions): Promise<T> {
+export async function apiGet<T>(
+  url: string,
+  params?: Record<string, string>,
+  opts?: RequestOptions,
+): Promise<T> {
   const qs = params ? '?' + new URLSearchParams(params).toString() : ''
   const fullUrl = url + qs
 
@@ -774,11 +827,13 @@ export async function apiGet<T>(url: string, params?: Record<string, string>, op
       // Serve stale, revalidate in background
       logger.debug(`cache STALE ${url} — serving stale, revalidating`, { cacheKey })
       const revalidationPromise = request<T>('GET', fullUrl, undefined, opts)
-        .then(data => {
+        .then((data) => {
           _globalCache.set(cacheKey, data, typeof cacheOpt === 'object' ? cacheOpt : undefined)
           return data
         })
-        .catch(() => { /* background revalidation failed, stale data still valid */ })
+        .catch(() => {
+          /* background revalidation failed, stale data still valid */
+        })
       return cached.data as T
     }
   }
@@ -850,7 +905,11 @@ async function _doGet<T>(
 export async function apiPost<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {
   if (opts?.throttle) {
     await _globalThrottler.acquire()
-    try { return await request<T>('POST', url, body, opts) } finally { _globalThrottler.release() }
+    try {
+      return await request<T>('POST', url, body, opts)
+    } finally {
+      _globalThrottler.release()
+    }
   }
   return request<T>('POST', url, body, opts)
 }
@@ -858,7 +917,11 @@ export async function apiPost<T>(url: string, body?: unknown, opts?: RequestOpti
 export async function apiPut<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {
   if (opts?.throttle) {
     await _globalThrottler.acquire()
-    try { return await request<T>('PUT', url, body, opts) } finally { _globalThrottler.release() }
+    try {
+      return await request<T>('PUT', url, body, opts)
+    } finally {
+      _globalThrottler.release()
+    }
   }
   return request<T>('PUT', url, body, opts)
 }
@@ -866,7 +929,11 @@ export async function apiPut<T>(url: string, body?: unknown, opts?: RequestOptio
 export async function apiDelete<T>(url: string, opts?: RequestOptions): Promise<T> {
   if (opts?.throttle) {
     await _globalThrottler.acquire()
-    try { return await request<T>('DELETE', url, undefined, opts) } finally { _globalThrottler.release() }
+    try {
+      return await request<T>('DELETE', url, undefined, opts)
+    } finally {
+      _globalThrottler.release()
+    }
   }
   return request<T>('DELETE', url, undefined, opts)
 }
@@ -874,7 +941,11 @@ export async function apiDelete<T>(url: string, opts?: RequestOptions): Promise<
 export async function apiPatch<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {
   if (opts?.throttle) {
     await _globalThrottler.acquire()
-    try { return await request<T>('PATCH', url, body, opts) } finally { _globalThrottler.release() }
+    try {
+      return await request<T>('PATCH', url, body, opts)
+    } finally {
+      _globalThrottler.release()
+    }
   }
   return request<T>('PATCH', url, body, opts)
 }
@@ -895,23 +966,44 @@ function createApiClient(baseURL?: string) {
     defaults: { baseURL: prefix },
     get: <T>(url: string, config?: ApiClientConfig): Promise<T> => {
       const u = url.startsWith('/') ? `${prefix}${url}` : url
-      return apiGet<T>(u, config?.params, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth })
+      return apiGet<T>(u, config?.params, {
+        signal: config?.signal,
+        silent: config?._silent,
+        noAuth: config?._noAuth,
+      })
     },
     post: <T>(url: string, body?: unknown, config?: ApiClientConfig): Promise<T> => {
       const u = url.startsWith('/') ? `${prefix}${url}` : url
-      return apiPost<T>(u, body, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth, raw: config?._raw })
+      return apiPost<T>(u, body, {
+        signal: config?.signal,
+        silent: config?._silent,
+        noAuth: config?._noAuth,
+        raw: config?._raw,
+      })
     },
     put: <T>(url: string, body?: unknown, config?: ApiClientConfig): Promise<T> => {
       const u = url.startsWith('/') ? `${prefix}${url}` : url
-      return apiPut<T>(u, body, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth })
+      return apiPut<T>(u, body, {
+        signal: config?.signal,
+        silent: config?._silent,
+        noAuth: config?._noAuth,
+      })
     },
     delete: <T>(url: string, config?: ApiClientConfig): Promise<T> => {
       const u = url.startsWith('/') ? `${prefix}${url}` : url
-      return apiDelete<T>(u, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth })
+      return apiDelete<T>(u, {
+        signal: config?.signal,
+        silent: config?._silent,
+        noAuth: config?._noAuth,
+      })
     },
     patch: <T>(url: string, body?: unknown, config?: ApiClientConfig): Promise<T> => {
       const u = url.startsWith('/') ? `${prefix}${url}` : url
-      return apiPatch<T>(u, body, { signal: config?.signal, silent: config?._silent, noAuth: config?._noAuth })
+      return apiPatch<T>(u, body, {
+        signal: config?.signal,
+        silent: config?._silent,
+        noAuth: config?._noAuth,
+      })
     },
   }
 }
@@ -955,7 +1047,9 @@ function _createHttpClient(opts?: HttpClientOptions): HttpClient {
   }
   const cache = new HttpCache(opts?.cache)
   // Reuse global circuit breaker unless custom config is provided
-  const circuitBreaker = opts?.circuitBreaker ? new CircuitBreaker(opts.circuitBreaker) : _globalCircuitBreaker
+  const circuitBreaker = opts?.circuitBreaker
+    ? new CircuitBreaker(opts.circuitBreaker)
+    : _globalCircuitBreaker
   const throttler = new Throttler(opts?.throttle)
   const hooks: typeof _globalHooks = {
     beforeRequest: opts?.hooks?.beforeRequest ? [...opts.hooks.beforeRequest] : [],
@@ -968,7 +1062,8 @@ function _createHttpClient(opts?: HttpClientOptions): HttpClient {
     for (const i of opts.interceptors.request) interceptors.request.use(i.onFulfilled, i.onRejected)
   }
   if (opts?.interceptors?.response) {
-    for (const i of opts.interceptors.response) interceptors.response.use(i.onFulfilled, i.onRejected)
+    for (const i of opts.interceptors.response)
+      interceptors.response.use(i.onFulfilled, i.onRejected)
   }
 
   return {
@@ -983,11 +1078,25 @@ function _createHttpClient(opts?: HttpClientOptions): HttpClient {
       baseDelay: _defaultBaseDelay,
     },
     configure(newOpts) {
-      if (newOpts.timeout !== undefined) { this.defaults.timeout = newOpts.timeout; _defaultTimeout = newOpts.timeout }
-      if (newOpts.maxRetries !== undefined) { this.defaults.maxRetries = newOpts.maxRetries; _defaultMaxRetries = newOpts.maxRetries }
-      if (newOpts.baseDelay !== undefined) { this.defaults.baseDelay = newOpts.baseDelay; _defaultBaseDelay = newOpts.baseDelay }
+      if (newOpts.timeout !== undefined) {
+        this.defaults.timeout = newOpts.timeout
+        _defaultTimeout = newOpts.timeout
+      }
+      if (newOpts.maxRetries !== undefined) {
+        this.defaults.maxRetries = newOpts.maxRetries
+        _defaultMaxRetries = newOpts.maxRetries
+      }
+      if (newOpts.baseDelay !== undefined) {
+        this.defaults.baseDelay = newOpts.baseDelay
+        _defaultBaseDelay = newOpts.baseDelay
+      }
     },
-    async request<T>(method: string, url: string, body?: unknown, reqOpts?: RequestOptions): Promise<T> {
+    async request<T>(
+      method: string,
+      url: string,
+      body?: unknown,
+      reqOpts?: RequestOptions,
+    ): Promise<T> {
       const startTime = Date.now()
       const corrId = _corrId()
       _trackCorrId(corrId, url)
@@ -1003,8 +1112,15 @@ function _createHttpClient(opts?: HttpClientOptions): HttpClient {
       headers['X-Correlation-ID'] = corrId
 
       let config: RequestConfig = {
-        method, url, fullUrl, headers, body,
-        signal: reqOpts?.signal, correlationId: corrId, startTime, opts: reqOpts ?? {},
+        method,
+        url,
+        fullUrl,
+        headers,
+        body,
+        signal: reqOpts?.signal,
+        correlationId: corrId,
+        startTime,
+        opts: reqOpts ?? {},
       }
 
       // Client interceptors
@@ -1037,7 +1153,10 @@ function _createHttpClient(opts?: HttpClientOptions): HttpClient {
         if (cached && !cached.stale) return cached.data as T
         if (cached?.stale) {
           const revalidation = this.request<T>('GET', fullUrl, undefined, opts)
-            .then(data => { cache.set(cacheKey, data, typeof cacheOpt === 'object' ? cacheOpt : undefined); return data })
+            .then((data) => {
+              cache.set(cacheKey, data, typeof cacheOpt === 'object' ? cacheOpt : undefined)
+              return data
+            })
             .catch(() => {})
           return cached.data as T
         }
@@ -1100,7 +1219,9 @@ export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<R
   }
   if (opts?.headers) {
     if (opts.headers instanceof Headers) {
-      opts.headers.forEach((v, k) => { headers[k] = v })
+      opts.headers.forEach((v, k) => {
+        headers[k] = v
+      })
     } else {
       Object.assign(headers, opts.headers)
     }
@@ -1151,7 +1272,8 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
       })
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Network error'
-      const aborted = opts?.signal?.aborted === true || (e instanceof Error && e.name === 'AbortError')
+      const aborted =
+        opts?.signal?.aborted === true || (e instanceof Error && e.name === 'AbortError')
       if (aborted) {
         logger.debug(`<<< SSE ${method} ${url} aborted corr=${corrId}`, { corrId, reason: msg })
       } else {
@@ -1161,7 +1283,10 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
       return
     }
 
-    logger.debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, { corrId, status: res.status })
+    logger.debug(`<<< SSE ${method} ${url} ${res.status} corr=${corrId}`, {
+      corrId,
+      status: res.status,
+    })
 
     if (!res.ok) {
       const status = res.status
@@ -1171,10 +1296,14 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
           `SSE retry ${attempt + 1}/${maxRetries} ${method} ${url} ${status} delay=${delay}ms corr=${corrId}`,
           { corrId, method, url, status, attempt, maxRetries, delay },
         )
-        await new Promise(r => setTimeout(r, delay))
+        await new Promise((r) => setTimeout(r, delay))
         continue
       }
-      yield { status: 'error', message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`, data: { http_status: res.status, error: `HTTP ${res.status}` } }
+      yield {
+        status: 'error',
+        message: `HTTP ${res.status}${res.statusText ? `: ${res.statusText}` : ''}`,
+        data: { http_status: res.status, error: `HTTP ${res.status}` },
+      }
       return
     }
 
@@ -1201,27 +1330,25 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
           return
         }
         if (chunk.done) break
-        buffer += decoder.decode(chunk.value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-        for (const line of lines) {
-          const trimmed = line.trimEnd()
-          if (!trimmed.startsWith('data:')) continue
-          const payload = trimmed.slice(5).trim()
-          if (!payload || payload === '[DONE]') continue
-          try {
-            yield JSON.parse(payload) as SSEEvent
-          } catch (e) {
-            logger.warning('SSE malformed JSON payload skipped', { payload: payload.slice(0, 80), exception: String(e) })
-          }
+        const { events, buffer: nextBuffer } = consumeSSEChunk(
+          buffer,
+          decoder,
+          chunk.value,
+          (payload) =>
+            logger.warning('SSE malformed JSON payload skipped', {
+              payload,
+              exception: 'parse error',
+            }),
+        )
+        buffer = nextBuffer
+        for (const event of events) {
+          yield event as SSEEvent
         }
       }
-      // Drain remaining buffer
-      if (buffer.startsWith('data:')) {
-        const payload = buffer.slice(5).trim()
-        if (payload && payload !== '[DONE]') {
-          try { yield JSON.parse(payload) as SSEEvent } catch { /* skip */ }
-        }
+      // Drain remaining partial buffer
+      const drained = consumeSSEDrain(buffer)
+      for (const event of drained) {
+        yield event as SSEEvent
       }
       return
     } finally {
