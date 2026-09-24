@@ -239,7 +239,7 @@ class TestSoulChat:
         resp = client.post(
             "/souls/chat",
             json={
-                "checkpoint_name": "test",
+                "checkpoint_name": "no_such_ckpt_404",
                 "prompt": "Hello",
                 "max_new_tokens": 10,
             },

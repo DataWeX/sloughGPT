@@ -251,6 +251,12 @@ class TestListPresets:
 class TestCreatePreset:
     def setup_method(self):
         self.client = get_test_client()
+        self._created = []
+
+    def teardown_method(self):
+        # companion_mogdb is shared across runs/worktrees — clean up creations.
+        for pid in self._created:
+            self.client.delete(f"/companion/presets/{pid}")
 
     def test_create_new_preset(self):
         pid = f"test-{int(time.time() * 1000)}"
@@ -263,6 +269,7 @@ class TestCreatePreset:
                 "traits": {"warmth": 0.8},
             },
         )
+        self._created.append(pid)
         assert resp.status_code == 200
         data = _d(resp)
         assert data["preset"]["id"] == pid
@@ -274,6 +281,7 @@ class TestCreatePreset:
             "/companion/presets",
             json={"id": pid, "name": "First", "traits": {}},
         )
+        self._created.append(pid)
         resp = self.client.post(
             "/companion/presets",
             json={"id": pid, "name": "Second", "traits": {}},
