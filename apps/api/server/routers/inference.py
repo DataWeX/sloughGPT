@@ -2850,6 +2850,7 @@ class InferenceRouter:
         """chat."""
         _chat_t0 = time.monotonic()
         import state as _chat_state
+
         from domain import get_chat_domain
 
         ms = _get_model_status()
