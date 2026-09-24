@@ -1,23 +1,3 @@
-from __future__ import annotations
+"""Backward-compatibility shim — canonical code lives in domain.shell._internal.addons."""
 
-"""
-Shell Kernel Addons.
-
-Each addon is a module with a setup(kernel) function that registers
-capabilities on the kernel. Addons are installed via kernel.install_addon().
-
-Usage:
-    domain.shell._internal.addons import neural, filesystem, shell_ui
-    kernel.install_addon(neural)
-    kernel.install_addon(filesystem)
-    kernel.install_addon(shell_ui)
-"""
-
-from . import (
-    filesystem,  # noqa: F401
-    neural,  # noqa: F401
-    shell_ui,  # noqa: F401
-)
-from .base import Addon  # noqa: F401
-
-__all__ = ["Addon", "neural", "filesystem", "shell_ui"]
+from domain.shell._internal.addons import *  # noqa: F401,F403

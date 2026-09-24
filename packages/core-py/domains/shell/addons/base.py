@@ -1,18 +1,3 @@
-"""Addon protocol for kernel extensions."""
+"""Backward-compatibility shim — canonical code lives in domain.shell._internal.addons.base."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
-
-if TYPE_CHECKING:
-    from ..kernel import Kernel
-
-
-@runtime_checkable
-class Addon(Protocol):
-    """Protocol for kernel addons.
-
-    Any module with a setup(kernel) function satisfies this protocol.
-    """
-
-    def setup(self, kernel: Kernel) -> None: ...
+from domain.shell._internal.addons.base import *  # noqa: F401,F403
