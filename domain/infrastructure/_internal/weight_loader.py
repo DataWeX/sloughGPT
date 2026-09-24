@@ -237,6 +237,19 @@ def build_load_plan(
 # ── Architecture Inference ───────────────────────────────────────────────────
 
 
+def _split_fused_qkv_weight(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Split a fused QKV weight into q, k, v chunks in (out, in) layout.
+
+    Handles both storage layouts:
+    - HF/GPT-2 ``(n, 3n)``: transpose to ``(3n, n)``, then split rows.
+    - Stacked ``(3n, n)``: split rows, then transpose each chunk.
+    """
+    rows, cols = arr.shape[:2]
+    if rows and rows == 3 * cols:
+        return tuple(c.T for c in np.split(arr, 3, axis=0))  # type: ignore[return-value]
+    return np.split(arr.T, 3, axis=0)  # type: ignore[return-value]
+
+
 def infer_arch_from_state_dict(state_dict: dict[str, np.ndarray]) -> dict:
     """Infer model architecture from a state dict's tensor shapes.
 
@@ -288,7 +301,7 @@ def infer_arch_from_state_dict(state_dict: dict[str, np.ndarray]) -> dict:
 
     # intermediate_size from w1/gate_proj shape
     for key in state_dict:
-        if "mlp.w1.weight" in key or "mlp.gate_proj.weight" in key:
+        if "mlp.w1.weight" in key or "mlp.gate_proj.weight" in key or "ff.w1.weight" in key:
             shape = state_dict[key].shape
             if len(shape) >= 2:
                 result["intermediate_size"] = shape[0]
@@ -411,7 +424,7 @@ def load_into_model(
         if is_bias:
             q, k, v = np.split(arr, 3, axis=0)
         else:
-            q, k, v = np.split(arr.T, 3, axis=0)
+            q, k, v = _split_fused_qkv_weight(arr)
         for pname, chunk in zip(param_names, [q, k, v], strict=False):
             p = param_map.get(pname)
             if p is not None:
@@ -513,7 +526,7 @@ class DirectWeightLoader:
             if arr.ndim == 1:
                 q, k, v = np.split(arr, 3, axis=0)
             else:
-                q, k, v = np.split(arr.T, 3, axis=0)
+                q, k, v = _split_fused_qkv_weight(arr)
 
             for pname, chunk in zip(param_names, [q, k, v], strict=False):
                 p = param_map.get(pname)
@@ -614,11 +627,11 @@ class WeightLoaderRegistry:
 
     def register_loader(self, suffix: str, loader_class: type):
         """Register a loader class for a file suffix."""
-        self._loaders[suffix] = loader_class
+        self._loaders[suffix.lower()] = loader_class
         logger.info(
             "Registered weight loader: %s → %s",
             suffix,
-            loader_class.__name__,
+            getattr(loader_class, "__name__", str(loader_class)),
             extra={"tag": "INFRA"},
         )
 

@@ -5,6 +5,8 @@ Handles session context, messages, and inspector.
 Chat inference lives in chat.py.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time
@@ -117,7 +119,7 @@ class SessionRouter:
             def _fetch_knowledge():
                 knowledge = {"total_facts": 0, "topics": []}
                 try:
-                    from domain.learner import get_knowledge_memory
+                    from domain.knowledge import get_knowledge_memory
 
                     km = get_knowledge_memory()
                     knowledge["total_facts"] = km.stats().get("total_facts", 0)

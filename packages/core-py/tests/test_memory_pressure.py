@@ -299,7 +299,6 @@ class TestMemoryPressureMonitor:
         m = MemoryPressureMonitor()
         assert m._classify(85.0) == PressureLevel.WARNING  # default: 80-90 is WARNING
         m.configure(warning=82.0)
-        assert m._classify(85.0) == PressureLevel.NORMAL  # 85 < 82? No, 85 > 82
         # After configure(warning=82), 85.0 should be WARNING (82 <= 85 < 90)
         assert m._classify(85.0) == PressureLevel.WARNING
         m.configure(emergency=83.0)

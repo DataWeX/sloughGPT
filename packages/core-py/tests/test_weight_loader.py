@@ -381,13 +381,19 @@ class TestLoadIntoModel:
                 "blocks.0.attn.v_proj.bias",
             ]
         )
+        for name in (
+            "blocks.0.attn.q_proj.bias",
+            "blocks.0.attn.k_proj.bias",
+            "blocks.0.attn.v_proj.bias",
+        ):
+            params[name].data = np.zeros((4,), dtype=np.float32)
         fused_bias = np.random.randn(12).astype(np.float32)
         tensor_data = {"hf.qkv.bias": fused_bias}
 
         result = load_into_model(model, plan, tensor_data)
         assert result.n_fused == 3
         np.testing.assert_array_almost_equal(
-            params["blocks.0.attn.q_proj.bias"].data[:4], fused_bias[:4]
+            params["blocks.0.attn.q_proj.bias"].data, fused_bias[:4]
         )
 
     def test_tied_weights(self):
