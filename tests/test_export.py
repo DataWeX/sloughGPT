@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 try:
     from domain.models._internal import SloughGPTModel  # noqa: F401
 except (ImportError, ModuleNotFoundError):
-    pytest.skip("domains.models not available", allow_module_level=True)
+    pytest.skip("domain.models not available", allow_module_level=True)
 
 
 def test_onnx_export():

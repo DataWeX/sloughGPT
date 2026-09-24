@@ -144,9 +144,9 @@ class SyscallResult:
 ## Usage
 
 ```python
-from domains.shell.kernel_devices import DeviceTable, DeviceType
-from domains.shell.tensor_device import TensorDevice
-from domains.shell.npu_device import NPUDevice
+from domain.shell._internal.kernel_devices import DeviceTable, DeviceType
+from domain.shell._internal.tensor_device import TensorDevice
+from domain.shell._internal.npu_device import NPUDevice
 
 # Create table
 table = DeviceTable()

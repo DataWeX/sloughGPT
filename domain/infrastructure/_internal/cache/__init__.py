@@ -12,10 +12,10 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from domains import BaseComponent, ComponentException
+from domain import BaseComponent, ComponentException
 
 try:
-    from domains import ICacheManager
+    from domain import ICacheManager
 except ImportError:
 
     class ICacheManager:

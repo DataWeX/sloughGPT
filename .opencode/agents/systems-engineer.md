@@ -131,7 +131,7 @@ dbg> quit              # Exit debugger
 Dynamic addon loading for kernel extensions:
 
 ```python
-from domains.shell.addons.module_loader import ModuleLoader
+from domain.shell._internal.addons.module_loader import ModuleLoader
 
 loader = ModuleLoader(addon_dirs=["path/to/addons"])
 loader.set_kernel(kernel)
@@ -275,7 +275,7 @@ from enum import IntEnum
 
 import numpy as np
 
-from domains.infrastructure.structured_log import StructuredLogger
+from domain.infrastructure.structured_log import StructuredLogger
 from .kernel_syscall import SyscallResult
 
 logger = StructuredLogger("slo.module.name")
@@ -283,7 +283,7 @@ logger = StructuredLogger("slo.module.name")
 
 ### Logging (use StructuredLogger, not print)
 ```python
-from domains.infrastructure.structured_log import StructuredLogger
+from domain.infrastructure.structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.module.name")
 
@@ -828,8 +828,8 @@ from unittest.mock import patch, MagicMock
 import numpy as np
 import pytest
 
-from domains.shell.module import ClassA, ClassB
-from domains.shell.kernel_syscall import SyscallResult
+from domain.shell.module import ClassA, ClassB
+from domain.shell.kernel_syscall import SyscallResult
 
 
 # =============================================================================

@@ -247,7 +247,7 @@ and hybrid retrieval (BM25 + embedding). External vector DB support is planned.
 """
 # Complete production RAG pipeline:
 
-from domains.cognitive.rag import ProductionRAG
+from domain.cognition._internal.rag import ProductionRAG
 
 # 1. Initialize
 rag = ProductionRAG(config={

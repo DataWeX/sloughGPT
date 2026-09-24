@@ -29,7 +29,7 @@ feedback on changes.
 python3 -m py_compile <file>
 
 # 2. Import check (if module exists)
-python3 -c "from domains.<module> import <class>"
+python3 -c "from domain.<module> import <class>"
 
 # 3. Run unit tests for that module
 make test-py ARGS="tests/test_<module>.py -x -q"
@@ -62,12 +62,12 @@ cd apps/web && npm run typecheck
 
 # 4. Verify no import errors
 python3 -c "
-from domains.infrastructure.singleton import SingletonMeta
-from domains.inference.session_kv_manager import SessionKVManager
-from domains.infrastructure.task_queue import Task, TaskQueue
-from domains.infrastructure.server_state import AtomicRef, ServerState
-from domains.infrastructure.model_server import CircuitBreaker
-from domains.infrastructure.process_guard import ProcessGuard
+from domain.infrastructure._internal.singleton import SingletonMeta
+from domain.inference._internal.session_kv_manager import SessionKVManager
+from domain.infrastructure._internal.task_queue import Task, TaskQueue
+from domain.infrastructure.server_state import AtomicRef, ServerState
+from domain.infrastructure._internal.model_server import CircuitBreaker
+from domain.infrastructure._internal.process_guard import ProcessGuard
 print('All imports successful')
 "
 ```

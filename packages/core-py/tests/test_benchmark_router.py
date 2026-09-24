@@ -75,7 +75,7 @@ class TestGetQualityMetrics:
         br = BenchmarkRouter()
         mock_bench = MagicMock()
         mock_bench.evaluate_latest.return_value = {"coherence_score": 0.8, "repetition_rate": 0.1}
-        with patch("domains.get_benchmark_domain", return_value=mock_bench):
+        with patch("domain.get_benchmark_domain", return_value=mock_bench):
             client = TestClient(_app(br))
             resp = client.get("/benchmark/quality")
         assert resp.status_code == 200
@@ -111,7 +111,7 @@ class TestTrackerStats:
         br = BenchmarkRouter()
         mock_bench = MagicMock()
         mock_bench.get_stats.return_value = {"total_responses": 42}
-        with patch("domains.get_benchmark_domain", return_value=mock_bench):
+        with patch("domain.get_benchmark_domain", return_value=mock_bench):
             client = TestClient(_app(br))
             resp = client.get("/benchmark/stats")
         assert resp.status_code == 200
@@ -122,7 +122,7 @@ class TestClearHistory:
     def test_clear(self):
         br = BenchmarkRouter()
         mock_bench = MagicMock()
-        with patch("domains.get_benchmark_domain", return_value=mock_bench):
+        with patch("domain.get_benchmark_domain", return_value=mock_bench):
             client = TestClient(_app(br))
             resp = client.post("/benchmark/history/clear")
         assert resp.status_code == 200

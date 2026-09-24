@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 # Local
-from domains.logging import CLILogger
+from domain.logging import CLILogger
 from .base import Logger, LogLevel
 ```
 
@@ -43,7 +43,7 @@ from .base import Logger, LogLevel
 - Lazy imports for optional deps (torch, etc.):
   ```python
   try:
-      from domains.models import SloughGPTModel
+      from domain.models import SloughGPTModel
   except ImportError:
       SloughGPTModel = None
   ```
@@ -51,7 +51,7 @@ from .base import Logger, LogLevel
   ```python
   from typing import TYPE_CHECKING
   if TYPE_CHECKING:
-      from domains.training.tracking import ExperimentTracker
+      from domain.training._internal.tracking import ExperimentTracker
   ```
 
 ### Type Hints
@@ -84,7 +84,7 @@ raise ValueError(f"Cannot resume from '{resume_path}': checkpoint is unreadable 
 
 # Infrastructure — degrade gracefully
 try:
-    from domains.infrastructure.output_buffer import install_log_bridge
+    from domain.infrastructure._internal.output_buffer import install_log_bridge
     install_log_bridge()
 except Exception as e:
     logger.debug("OutputBuffer bridge unavailable: %s", e)
@@ -432,7 +432,7 @@ The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 #### Dynamic Module Loading
 
 ```python
-from domains.shell.addons.module_loader import ModuleLoader
+from domain.shell._internal.addons.module_loader import ModuleLoader
 
 loader = ModuleLoader(addon_dirs=["path/to/addons"])
 loader.set_kernel(kernel)
@@ -447,7 +447,7 @@ print(loader.summary())
 #### VM Debugger
 
 ```python
-from domains.shell.vm_debugger import Debugger
+from domain.shell._internal.vm_debugger import Debugger
 
 debugger = Debugger()
 debugger.set_output(print)
@@ -596,7 +596,7 @@ display-width truncation. CJK characters count as 2 columns.
 
 ```bash
 # Core library
-PYTHONPATH=packages/core-py .venv/bin/python -c "from domains.infrastructure.pugqeep import Tree; print('ok')"
+.venv/bin/python -c "from domain.infrastructure.pugqeep import Tree; print('ok')"
 
 # API server
 cd apps/api && .venv/bin/python -m uvicorn server.main:app --port 8000
