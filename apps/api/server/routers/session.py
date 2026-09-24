@@ -5,6 +5,8 @@ Handles session context, messages, and inspector.
 Chat inference lives in chat.py.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time

@@ -90,3 +90,102 @@ def test_no_new_legacy_domains_patch_targets() -> None:
         "New inert legacy patch target(s) added. Patch the module the router "
         "actually binds (canonical domain.* / domain.*._internal).\n" + "\n".join(violations)
     )
+
+
+# ── Build Order #4: routers must not reach into domain.*._internal ──────────
+#
+# Routers translate at the edge and call feature engines / public facades
+# (TokenizerEngine, TrainingEngine, VoiceEngine, …). Importing
+# ``domain.<ns>._internal.*`` from a router re-couples HTTP handlers to
+# private modules and defeats the engine boundary. Baseline may only shrink;
+# any new ``file|module`` pair is a contract violation.
+_INTERNAL_IMPORT = re.compile(r"^\s*(?:from|import)\s+(domain\.[\w.]*_internal(?:\.[\w.]*)?)", re.M)
+
+# Pinned baseline (58 entries: 56 after rewiring tokenizer / token_tree /
+# cloud_training onto domain.training engines + 2 pre-existing chat.py
+# regenerate imports from c2379138e). Re-generate when reducing:
+#   python -c "import re,pathlib; ..."
+_ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
+    {
+        "agents.py|domain.agents._internal.multi",
+        "agents.py|domain.agents._internal.run_history",
+        "agents.py|domain.agents._internal.system",
+        "agents.py|domain.api._internal.sse_envelope",
+        "benchmark.py|domain.feedback._internal.response_tracker",
+        "benchmark.py|domain.infrastructure._internal.errors",
+        "chat.py|domain.infrastructure._internal.session_core",
+        "chat.py|domain.models._internal.provider",
+        "consciousness.py|domain.cognition._internal.consciousness.evaluation",
+        "consciousness.py|domain.cognition._internal.consciousness.personality",
+        "consciousness.py|domain.cognition._internal.consciousness.qualia",
+        "consciousness.py|domain.cognition._internal.consciousness.self_model",
+        "consciousness.py|domain.cognition._internal.consciousness.training",
+        "dashboard.py|domain.infrastructure._internal.event_buffer",
+        "dashboard.py|domain.settings._internal.persistent",
+        "dashboard.py|domain.training._internal.outcome_tracker",
+        "dashboard.py|domain.training._internal.service",
+        "files.py|domain.cognition._internal.rag_service",
+        "lora_eval.py|domain.feedback._internal.lora_eval",
+        "lora_eval.py|domain.feedback._internal.per_user_lora",
+        "memory.py|domain.memory._internal.config",
+        "memory.py|domain.memory._internal.consolidation",
+        "memory.py|domain.memory._internal.service",
+        "memory.py|domain.memory._internal.task_memory",
+        "model_stack.py|domain.training._internal.cache_tags",
+        "models.py|domain.models._internal.provider",
+        "models.py|domain.slolib._internal.gpu",
+        "models.py|domain.training._internal.export",
+        "registry.py|domain.infrastructure._internal",
+        "self_train.py|domain.infrastructure._internal.errors",
+        "settings.py|domain.inference._internal.api_provider",
+        "settings.py|domain.settings._internal.persistent",
+        "settings.py|domain.training._internal.adaptive_config",
+        "settings.py|domain.training._internal.auto_trainer",
+        "settings.py|domain.training._internal.model_card",
+        "settings.py|domain.training._internal.outcome_tracker",
+        "settings.py|domain.training._internal.presets",
+        "shell.py|domain.shell._internal.io",
+        "shell.py|domain.shell._internal.repl",
+        "shell.py|domain.shell._internal.runtime",
+        "status.py|domain.inference._internal.native.engine",
+        "system.py|domain.infrastructure._internal.output_buffer",
+        "system.py|domain.training._internal",
+        "tenants.py|domain.auth._internal.models",
+        "tenants.py|domain.auth._internal.repositories",
+        "tokens.py|domain.billing._internal.token_service",
+        "tools.py|domain.models._internal.provider",
+        "users.py|domain.auth._internal.models",
+        "users.py|domain.auth._internal.repositories",
+        "vm.py|domain.shell._internal.vm",
+        "vm.py|domain.shell._internal.vm_permissions",
+        "vm.py|domain.shell._internal.vm_training_bridge",
+        "workspaces.py|domain.auth._internal.models",
+        "workspaces.py|domain.auth._internal.repositories",
+        "workspaces.py|domain.dataset._internal.repository",
+        "workspaces.py|domain.learner._internal.knowledge",
+        "world_render.py|domain.shell._internal.simulation",
+        "world_render.py|domain.shell._internal.world_render",
+    }
+)
+
+
+def _current_router_internal_imports() -> set[str]:
+    found: set[str] = set()
+    for py in sorted(ROUTERS_DIR.glob("*.py")):
+        for m in _INTERNAL_IMPORT.finditer(py.read_text(encoding="utf-8")):
+            found.add(f"{py.name}|{m.group(1)}")
+    return found
+
+
+def test_no_new_router_internal_imports() -> None:
+    """Routers must call feature engines, not domain.*._internal modules.
+
+    The pinned baseline may only shrink; adding a new ``file|module`` pair
+    re-couples an HTTP handler to a private module (Build Order #4).
+    """
+    current = _current_router_internal_imports()
+    violations = sorted(current - _ROUTER_INTERNAL_IMPORTS)
+    assert not violations, (
+        "New domain.*._internal import(s) in a router. Route through the "
+        "feature engine / public facade instead.\n" + "\n".join(violations)
+    )
