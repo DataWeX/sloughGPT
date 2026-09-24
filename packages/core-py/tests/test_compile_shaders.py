@@ -48,8 +48,8 @@ class TestShaderConstants:
         assert SHADERS_DIR == OUTPUT_DIR
 
     def test_dirs_are_under_gpu_module(self):
-        gpu_dir = Path(__file__).resolve().parents[1] / "domains" / "infrastructure" / "gpu"
-        assert SHADERS_DIR.parent == gpu_dir
+        gpu_dir = Path(__file__).resolve().parents[3] / "domain" / "infrastructure" / "_internal" / "gpu"
+        assert SHADERS_DIR.parent.resolve() == gpu_dir.resolve()
 
     def test_compute_shaders_is_list(self):
         assert isinstance(COMPUTE_SHADERS, list)
