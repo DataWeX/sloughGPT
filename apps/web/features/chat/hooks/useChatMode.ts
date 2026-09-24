@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { useToastStore } from '@/lib/toast-store'
 import { imagesController } from '@/lib/images-controller'
@@ -36,14 +36,17 @@ interface UseChatModeOptions {
 export function useChatMode({ chat }: UseChatModeOptions) {
   const [chatMode, _setChatMode] = useState<ChatMode>('chat')
   const setChatMode = useCallback((mode: ChatMode | ((prev: ChatMode) => ChatMode)) => {
-    _setChatMode((prev) => {
-      const next = typeof mode === 'function' ? mode(prev) : mode
-      if (prev !== next) {
-        trackEvent('chat_mode_changed', { from: prev, to: next })
-      }
-      return next
-    })
+    _setChatMode(mode)
   }, [])
+  // Log after commit, not inside the setState updater — updaters must stay
+  // pure (React may invoke them twice under StrictMode, double-firing events).
+  const prevChatModeRef = useRef<ChatMode>('chat')
+  useEffect(() => {
+    if (prevChatModeRef.current !== chatMode) {
+      trackEvent('chat_mode_changed', { from: prevChatModeRef.current, to: chatMode })
+      prevChatModeRef.current = chatMode
+    }
+  }, [chatMode])
   const [writeTone, setWriteTone] = useState('Friendly')
   const [writeType, setWriteType] = useState('Email')
   const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar')

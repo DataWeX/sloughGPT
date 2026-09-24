@@ -77,6 +77,14 @@ vi.mock('@/lib/memory-events', () => {
   }
 })
 
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({ href, children, ...rest }: any) => (
+    <a href={typeof href === 'string' ? href : String(href)} {...rest}>
+      {children}
+    </a>
+  ),
+}))
+
 import { MemoryTab } from './MemoryTab'
 import { publishMemoryEvent } from '@/lib/memory-events'
 

@@ -25,7 +25,7 @@ export function MemoryItemList({
   onDelete,
 }: MemoryItemListProps) {
   return (
-    <ul className="space-y-1 max-h-60 overflow-y-auto">
+    <ul className="space-y-1">
       {items.map(item => (
         <li key={item.id} className={cn(
           'group flex items-start justify-between gap-2 p-2 rounded bg-muted/30 border text-xs leading-relaxed transition-colors',
