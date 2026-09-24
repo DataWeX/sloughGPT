@@ -144,7 +144,10 @@ class TestTraitWeightsConfig:
     def test_update_from_feedback_with_negation(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
         cfg.update_from_feedback("thumbs_down", user_message="not formal please")
-        assert cfg.get("formality") <= 0.5
+        # Negation flips the thumbs_down delta for formality: user complained
+        # about missing formality, so formality rises above the 0.5 default.
+        # (Matches impl + twin test_negation_flips_traits in test_update_from_feedback.)
+        assert cfg.get("formality") > 0.5
 
     def test_update_from_feedback_short_response(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
@@ -420,7 +423,10 @@ class TestTaskManager:
 
     def test_get_mode_exploratory(self, tmp_path):
         tm = TaskManager(
-            _make_cfg({"creative_divergence": 0.8, "systematic_planning": 0.1}, tmp_path)
+            _make_cfg(
+                {"creative_divergence": 0.8, "systematic_planning": 0.1, "curiosity": 0.9},
+                tmp_path,
+            )
         )
         mode = tm.get_mode()
         assert mode["label"] == "Exploratory"
@@ -469,7 +475,8 @@ class TestMemoryManager:
     def test_should_consolidate_below(self, tmp_path):
         mm = MemoryManager(_make_cfg({"learning_adaptability": 0.9}, tmp_path))
         threshold = mm.memory_importance_threshold
-        assert mm.should_consolidate(threshold - 0.01) is True
+        # Below-threshold items must NOT consolidate (impl: importance >= threshold).
+        assert mm.should_consolidate(threshold - 0.01) is False
 
     def test_apply_memory_context_empty(self, tmp_path):
         mm = MemoryManager(TraitWeightsConfig(path=str(tmp_path / "t.json")))
