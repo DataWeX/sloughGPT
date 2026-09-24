@@ -1,5 +1,3 @@
-"""Backward-compatibility shim."""
+"""Backward-compatibility module — canonical package is domain/infrastructure/_internal/pugqeep/."""
 
-import domains.infrastructure.pugqeep as _mod
-
-globals().update(vars(_mod))
+from domain.infrastructure._internal.pugqeep import *  # noqa: F401,F403
