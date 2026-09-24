@@ -608,3 +608,65 @@ class TestUpsertSession:
             },
         )
         assert resp.status_code in (200, 201)
+
+
+class TestCachedReplayChunking:
+    """Coalescer replay must preserve cached text byte-for-byte (card 053).
+
+    The old replay split on whitespace and re-joined with single spaces,
+    flattening newlines / multi-space runs on reconnect.
+    """
+
+    def test_concat_is_exact_for_awkward_whitespace(self):
+        from apps.api.server.routers.inference import _chunk_replay
+
+        text = "line one\n\nline two    indented\n\tend "
+        assert "".join(_chunk_replay(text)) == text
+
+    def test_chunks_are_bounded_and_nonempty(self):
+        from apps.api.server.routers.inference import _chunk_replay
+
+        chunks = _chunk_replay("x" * 250)
+        assert len(chunks) > 1
+        assert all(chunks)
+        assert all(len(c) <= 40 for c in chunks)
+
+    def test_empty_text_yields_no_chunks(self):
+        from apps.api.server.routers.inference import _chunk_replay
+
+        assert _chunk_replay("") == []
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_coalescer")
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_generate_stream_replay_preserves_whitespace(
+        self, mock_get_provider, mock_get_coalescer, client
+    ):
+        import json as _json
+
+        mock_get_provider.return_value = MagicMock()
+        cached = "alpha  beta\n\ngamma delta"
+        existing = MagicMock()
+        existing.error = None
+        existing.result = cached
+        existing.event.wait = AsyncMock()
+        fake = MagicMock()
+        fake.hash = MagicMock(return_value="k")
+        fake.start = AsyncMock(return_value=existing)
+        mock_get_coalescer.return_value = fake
+
+        resp = client.post(
+            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 16}
+        )
+        assert resp.status_code == 200
+        tokens = []
+        for line in resp.text.splitlines():
+            if line.startswith("data: "):
+                env = _json.loads(line[6:])
+                tok = (env.get("data") or {}).get("token")
+                if tok:
+                    tokens.append(tok)
+        assert "".join(tokens) == cached

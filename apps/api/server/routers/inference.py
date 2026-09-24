@@ -2,6 +2,8 @@
 Inference Router - Chat and text generation endpoints
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import threading
@@ -137,6 +139,18 @@ def _get_model_status() -> dict:
 def _estimate_tokens(text: str) -> int:
     """Rough token estimate: ~4 chars per token for English text."""
     return max(1, len(text) // 4)
+
+
+def _chunk_replay(text: str, size: int = 40) -> list[str]:
+    """Split cached text into SSE replay chunks without altering whitespace.
+
+    Replay must concatenate back to the exact cached text — newlines and
+    multi-space runs included — so reconnects render identically to the
+    original stream.
+    """
+    if not text:
+        return []
+    return [text[i : i + size] for i in range(0, len(text), size)]
 
 
 def _trim_messages_to_budget(
@@ -770,8 +784,8 @@ def _run_post_gen_tasks(
     full_response: str,
     user_msg: str,
     session_id: str,
-    start_time: "datetime.datetime",
-    req: "ChatRequest",
+    start_time: datetime.datetime,
+    req: ChatRequest,
     ctx_core: Any,
     bg_tasks_lock: Any,
     bg_tasks: Any,
@@ -1381,12 +1395,14 @@ class InferenceRouter:
                     )
                     return
                 cached = existing.result or ""
-                tokens = cached.split()
-                for i in range(0, len(tokens), 5):
-                    yield sse_token("generate", " ".join(tokens[i : i + 5]))
+                for chunk in _chunk_replay(cached):
+                    yield sse_token("generate", chunk)
                 _mgr.finish(_op_id)
                 yield sse_token(
-                    "generate", "", done=True, meta={"tokens": len(tokens), "cached": True}
+                    "generate",
+                    "",
+                    done=True,
+                    meta={"tokens": len(cached.split()), "cached": True},
                 )
                 return
 
@@ -2414,9 +2430,8 @@ class InferenceRouter:
                             )
                             return
                         cached = existing.result or ""
-                        tokens = cached.split()
-                        for i in range(0, len(tokens), 5):
-                            yield sse_token("chat", " ".join(tokens[i : i + 5]))
+                        for chunk in _chunk_replay(cached):
+                            yield sse_token("chat", chunk)
                         _mgr.finish(_op_id)
                         yield sse_token("chat", "", done=True)
                         return

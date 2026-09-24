@@ -136,8 +136,12 @@ class BPETokenizer:
             tokens.append(tok)
         # Join and clean up word boundary markers
         text = "".join(tokens)
-        text = text.replace("</w>", " ").strip()
-        return text
+        text = text.replace("</w>", " ")
+        # Single-token decodes (streaming) must be lossless so word-boundary
+        # spaces survive chunk concatenation; only full sequences strip.
+        if len(tokens) <= 1:
+            return text
+        return text.strip()
 
     def save(self, path: str | None = None):
         """Save tokenizer state to JSON."""

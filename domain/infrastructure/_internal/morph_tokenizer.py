@@ -797,9 +797,12 @@ class MorphTokenizer:
             return bytes(result).decode("utf-8", errors="replace")
         elif self.byte_fallback:
             # SentencePiece ByteFallback: <0xHH> tokens -> bytes
-            # \u2581 in tokens means space-before-word (not at text start)
+            # ▁ in tokens means space-before-word (not at text start)
             result = bytearray()
-            first = True
+            # Single-token decodes (streaming) must be lossless so ▁ survives
+            # chunk concatenation; only the first token of a full sequence
+            # suppresses its leading space (SentencePiece convention).
+            first = len(tokens) > 1
             for t in tokens:
                 if t.startswith("<0x") and t.endswith(">") and len(t) == 6:
                     try:
