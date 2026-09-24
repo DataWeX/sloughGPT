@@ -1186,7 +1186,7 @@ class InferenceRouter:
         provider = get_provider("default")
         if provider is None:
             raise_error(
-                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500
+                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503
             )
 
         prompt_text = req.prompt
@@ -1327,7 +1327,7 @@ class InferenceRouter:
                     "IDLE",
                     "No provider available — load a model first",
                     code="E_INFRA_REGISTRY",
-                    http_status=500,
+                    http_status=503,
                 )
                 return
 

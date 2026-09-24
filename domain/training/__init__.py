@@ -34,6 +34,13 @@ from domain.training._internal.training import (
 )
 
 _LAZY_IMPORTS = {
+    "DataImporter": ("._internal.data_import", "DataImporter"),
+    "RepoImporter": ("._internal.data_import", "RepoImporter"),
+    "HuggingFaceImporter": ("._internal.data_import", "HuggingFaceImporter"),
+    "URLImporter": ("._internal.data_import", "URLImporter"),
+    "ISBNImporter": ("._internal.data_import", "ISBNImporter"),
+    "BooksSearch": ("._internal.data_import", "BooksSearch"),
+    "GitHubSearch": ("._internal.data_import", "GitHubSearch"),
     "LoRAType": ("._internal.lora", "LoRAType"),
     "LoRAConfig": ("._internal.lora", "LoRAConfig"),
     "LoRALinear": ("._internal.lora", "LoRALinear"),
@@ -88,6 +95,13 @@ __all__ = [
     "find_checkpoint",
     "load_soul",
     "load_lora_soul",
+    "DataImporter",
+    "RepoImporter",
+    "HuggingFaceImporter",
+    "URLImporter",
+    "ISBNImporter",
+    "BooksSearch",
+    "GitHubSearch",
     "LoRAType",
     "LoRAConfig",
     "LoRALinear",

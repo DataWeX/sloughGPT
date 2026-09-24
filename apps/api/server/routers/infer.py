@@ -229,7 +229,7 @@ class InferRouter:
         provider = get_provider("default")
         if provider is None:
             raise_error(
-                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500
+                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503
             )
 
         prompt_text = req.prompt
@@ -343,7 +343,7 @@ class InferRouter:
                         "IDLE",
                         "No provider available — load a model first",
                         code="E_INFRA_REGISTRY",
-                        http_status=500,
+                        http_status=503,
                     )
                     return
 
@@ -454,13 +454,13 @@ class InferRouter:
             _t0 = _time.monotonic()
             model = self._get_model_interface()
             if model is not None and hasattr(model, "embed"):
+                model_name = req.model or getattr(model, "model_id", "unknown")
                 try:
                     import numpy as np
 
                     vec = model.embed(req.text)
                     if isinstance(vec, np.ndarray):
                         vec = vec.tolist()
-                    model_name = req.model or getattr(model, "model_id", "unknown")
                     _elapsed_ms = (_time.monotonic() - _t0) * 1000
                     safe_audit_log(
                         "infer.embed",
