@@ -7,6 +7,8 @@ targets). Mirrors apps/gateway/src/compression.rs codecs.
 
 Usage:
     .venv/bin/python scripts/benchmark_gateway_compression.py [--mib 64]
+    .venv/bin/python scripts/benchmark_gateway_compression.py --file checkpoints/step_25.pt
+    .venv/bin/python scripts/benchmark_gateway_compression.py --file apps/web/public/v86/v86-fallback.wasm
 """
 
 from __future__ import annotations
@@ -84,6 +86,12 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--mib", type=int, default=64, help="payload size in MiB")
     ap.add_argument(
+        "--file",
+        type=Path,
+        default=None,
+        help="real artifact (.pt/.so/.wasm/…) — measure actual entropy, not synthetic",
+    )
+    ap.add_argument(
         "--out",
         type=Path,
         default=Path("scripts/benchmark_gateway_compression.json"),
@@ -91,7 +99,15 @@ def main() -> None:
     )
     args = ap.parse_args()
 
-    data = make_payload(args.mib)
+    if args.file is not None:
+        data = args.file.read_bytes()
+        label = str(args.file)
+        source = "file"
+    else:
+        data = make_payload(args.mib)
+        label = f"{args.mib} MiB synthetic download records"
+        source = "synthetic"
+
     results = [bench_gzip(data), bench_zstd(data)]
     results = [r for r in results if r]
 
@@ -109,7 +125,7 @@ def main() -> None:
         },
     )
 
-    print(f"payload: {args.mib} MiB synthetic download records")
+    print(f"payload: {label} ({source}, {len(data)} bytes)")
     print(
         f"{'codec':<12} {'wire':>12} {'ratio':>8} {'savings':>9} {'enc MiB/s':>10} {'dec MiB/s':>10}"
     )
@@ -125,7 +141,11 @@ def main() -> None:
             history = json.loads(args.out.read_text())
         except json.JSONDecodeError:
             history = []
-    history.append({"mib": args.mib, "results": results})
+    entry = {"mib": args.mib if args.file is None else None, "results": results}
+    if args.file is not None:
+        entry["file"] = str(args.file)
+        entry["raw_bytes"] = len(data)
+    history.append(entry)
     args.out.write_text(json.dumps(history, indent=2))
     print(f"\nrecorded → {args.out}")
 

@@ -324,6 +324,19 @@ async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Respo
     if let Some(ct) = content_type {
         builder = builder.header("content-type", ct);
     }
+    // Resume / conditional GET: forward byte-range + validator headers so
+    // sidecar 206/304 semantics reach the client unchanged.
+    for name in [
+        "range",
+        "if-range",
+        "if-none-match",
+        "if-modified-since",
+        "if-match",
+    ] {
+        if let Some(v) = parts.headers.get(name) {
+            builder = builder.header(name, v);
+        }
+    }
     // Edge owns compression: sidecar always answers identity (no double-encode).
     builder = builder.header("accept-encoding", "identity");
     let request = builder.body(body_bytes).build()?;
