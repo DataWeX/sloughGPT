@@ -235,7 +235,11 @@ class ConsciousnessTrainer:
         """Internal training implementation."""
         try:
             self.config.validate()
-        except ValueError:
+            # HFLoraConfig no longer checks existence at init (pure spec);
+            # missing model must still degrade to data_saved here.
+            if not Path(self.config.model_path).is_file():
+                raise FileNotFoundError(f"Model not found: {self.config.model_path}")
+        except (ValueError, FileNotFoundError):
             # No model configured/path missing — keep the data for later.
             return self._train_fallback(self._write_training_data())
 

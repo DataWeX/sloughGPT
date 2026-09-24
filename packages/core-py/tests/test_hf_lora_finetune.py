@@ -261,6 +261,16 @@ class TestHFLoraTrainer:
         trainer.stop()
         assert not trainer.is_training
 
+    def test_train_accepts_on_progress(self):
+        """train() must accept the on_progress kwarg the router passes (regression)."""
+        config = HFLoraConfig(model_path="/nonexistent/model.slnc", data_path="/nonexistent/data.txt")
+        trainer = HFLoraTrainer(config)
+        seen = []
+        result = trainer.train(on_progress=seen.append)
+        assert not result.success
+        assert "not found" in result.error.lower()
+        assert seen == []  # callback never fired; kwarg parsed without TypeError
+
 
 # ============================================================================
 # LoRALinear.forward_numpy tests
