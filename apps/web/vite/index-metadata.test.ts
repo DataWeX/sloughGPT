@@ -1,21 +1,16 @@
 /**
- * Drift guard: app/layout.tsx metadata/viewport must match apps/web/index.html
+ * Drift guard: lib/document-meta.ts must match apps/web/index.html
  * (Vite's document shell). Fails if either side changes without the other.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-
-vi.mock('next/font/local', () => ({
-  default: () => ({ variable: '--mock-font' }),
-}))
-
-const { metadata, viewport } = await import('../app/layout')
+import { metadata, viewport } from '../lib/document-meta'
 
 const webRoot = join(import.meta.dirname, '..')
 const html = readFileSync(join(webRoot, 'index.html'), 'utf-8')
 
-describe('index.html ↔ layout metadata parity', () => {
+describe('index.html ↔ document-meta parity', () => {
   it('title matches', () => {
     expect(html).toContain(`<title>${metadata.title}</title>`)
   })
@@ -25,9 +20,7 @@ describe('index.html ↔ layout metadata parity', () => {
   })
 
   it('favicon matches icons.icon', () => {
-    expect(metadata.icons).toBeTruthy()
-    const icon = (metadata.icons as { icon?: string }).icon
-    expect(html).toContain(`rel="icon" href="${icon}"`)
+    expect(html).toContain(`rel="icon" href="${metadata.icons.icon}"`)
   })
 
   it('viewport meta matches viewport export', () => {
