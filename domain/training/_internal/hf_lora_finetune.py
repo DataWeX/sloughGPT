@@ -98,16 +98,6 @@ class HFLoraConfig:
             model_stem = Path(self.model_path).stem
             self.adapter_name = f"{model_stem}_lora_r{self.rank}"
 
-        # Validate paths
-        if not self.model_path:
-            raise ValueError("model_path is required")
-        if not Path(self.model_path).is_file():
-            raise ValueError(f"Model file not found: {self.model_path}")
-        if not self.data_path:
-            raise ValueError("data_path is required")
-        if not Path(self.data_path).is_file():
-            raise ValueError(f"Data file not found: {self.data_path}")
-
         # Validate hyperparameters
         if self.rank < 1:
             raise ValueError(f"rank must be >= 1, got {self.rank}")
