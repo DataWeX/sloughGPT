@@ -126,7 +126,11 @@ class VoiceRouter:
 
     @endpoint("voice.status")
     async def voice_status(self) -> dict:
-        """Check voice engine status and capabilities."""
+        """Check voice engine status and capabilities.
+
+        Availability check — must not 500 when the engine is down;
+        reports server_tts=False instead so clients can fall back.
+        """
         try:
             engine = self._get_engine()
             status = engine.status()
@@ -137,8 +141,9 @@ class VoiceRouter:
                     "loaded": status,
                 }
             )
-        except Exception as e:
-            classify_and_raise(e, source="voice.status")
+        except Exception:
+            logger.warning("Voice engine unavailable", extra={"tag": "VOICE"})
+            return success_response(data={"server_tts": False, "capabilities": [], "loaded": None})
 
 
 router = VoiceRouter().router
