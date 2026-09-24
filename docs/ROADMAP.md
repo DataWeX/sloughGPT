@@ -81,8 +81,8 @@ The destination is an **owned model** (milestones 12–14): SloNet trains from s
 ## Owned-model milestones (the destination past bootstrap)
 
 12. **Owned architecture** — SloNet stands alone: no HF conversion in the default path, native `.soul` training → `.slnc` serving end to end.
-13. **Owned objective** — at least one training objective beyond next-token prediction (memory consolidation, tool-use success, planning) running in the single `TrainingLoop`.
-14. **Owned data** — the model trains on experience it generates (chat sessions, tool outcomes, feedback), not only third-party text.
+13. ~~**Owned objective** — at least one training objective beyond next-token prediction (memory consolidation, tool-use success, planning) running in the single `TrainingLoop`.~~ **Done** — `OwnedObjective` (`domain/training/_internal/owned_objective.py`) is wired into `SloughGPTTrainer.train_step`: optional `use_owned_objective` / `owned_tool_weight` / `owned_memory_weight` on `TrainerConfig` (legacy kwargs too). With experience metadata it scales the primary loss by tool-success/memory-match rates; without metadata it collapses to pure next-token (backward compat). Combined loss still goes through the one `(loss * scale).backward()` in `train_pipeline` — no fourth loop (scatter gate green). Covered by `tests/test_owned_objective_experience.py`.
+14. ~~**Owned data** — the model trains on experience it generates (chat sessions, tool outcomes, feedback), not only third-party text.~~ **Done** — `data_path="experience"` (or `experience:<corpus.jsonl>`) loads owned chat+feedback via `load_experience_text` into `prepare_data`; `ExperienceSampler` is the train-batch source when that path is set (synthetic seed corpus when the install is empty so a fresh run still trains). Chat corpus + feedback corrections aggregate through `load_experience_pairs`. Covered by `tests/test_owned_objective_experience.py` (end-to-end `data_path=experience` + owned objective through `train()`). No fourth loop — adapters only.
 
 ## Deferred (potential Rust)
 

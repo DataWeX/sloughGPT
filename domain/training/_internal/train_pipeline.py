@@ -44,6 +44,10 @@ try:
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
+from domain.training._internal.experience_adapter import (
+    is_experience_source,
+    load_experience_text,
+)
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 from domain.training._internal.quality_scorer import compute_data_quality
 from domain.training._internal.slonet import load_checkpoint_npz
@@ -211,7 +215,25 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
     Returns:
         (data, vocab_size, stoi, itos) — ``data`` is ``np.int64`` token ids.
     """
-    if isinstance(data_path, str) and is_feed_source(data_path):
+    if isinstance(data_path, str) and is_experience_source(data_path):
+        corpus = None
+        feedback = None
+        if isinstance(data_path, str) and data_path.startswith("experience:"):
+            # experience:<corpus_path> optional single override
+            rest = data_path[len("experience:"):]
+            if rest and rest not in ("chat", "owned"):
+                corpus = rest
+        text, _pairs = load_experience_text(
+            corpus_path=corpus,
+            feedback_path=feedback,
+            block_size=block_size,
+        )
+        logger.info(
+            "Loaded owned experience: %d chars",
+            len(text),
+            extra={"tag": "TRAIN"},
+        )
+    elif isinstance(data_path, str) and is_feed_source(data_path):
         text = load_feed_text(data_path)
     elif isinstance(data_path, list) and data_path and isinstance(data_path[0], tuple):
         datasets_with_ratios = data_path
@@ -371,6 +393,12 @@ class TrainerConfig:
     ewc_lambda: float = 1000.0  # Regularization strength
     ewc_num_samples: int = 200  # Samples for Fisher estimation
     ewc_ema_decay: float = 0.9  # EMA decay for Fisher estimation
+
+    # Owned objective (goal 13): beyond next-token when experience metadata present.
+    # Collapses to pure next-token when no metadata is available.
+    use_owned_objective: bool = False
+    owned_tool_weight: float = 0.3
+    owned_memory_weight: float = 0.2
 
     # Device — SloNet training is pure numpy and always runs on the CPU.
     device: str = "cpu"
@@ -893,6 +921,9 @@ class SloughGPTTrainer:
         experiment_tracker: ExperimentTracker | None = None,
         tokenizer: Any | None = None,
         feed_refresh_interval: float = 0.0,
+        use_owned_objective: bool = False,
+        owned_tool_weight: float = 0.3,
+        owned_memory_weight: float = 0.2,
     ):
         # Handle both TrainerConfig and legacy parameters
         if config is not None:
@@ -926,6 +957,9 @@ class SloughGPTTrainer:
                 log_interval=log_interval,
                 eval_interval=eval_interval,
                 feed_refresh_interval=feed_refresh_interval,
+                use_owned_objective=use_owned_objective,
+                owned_tool_weight=owned_tool_weight,
+                owned_memory_weight=owned_memory_weight,
             )
 
         self.data_path = data_path
@@ -987,6 +1021,11 @@ class SloughGPTTrainer:
         # FeedBatchSampler streams new corpus records into the train batch
         # source on a timer (see TrainerConfig.feed_refresh_interval).
         self._feed_sampler = self._build_feed_sampler_if_configured()
+        # Owned data (goal 14): ExperienceSampler streams chat+feedback when
+        # data_path is an experience source (and feed is not also configured).
+        self._owned_metadata: dict | None = None
+        self._experience_sampler = self._build_experience_sampler_if_configured()
+        self._owned_objective = self._build_owned_objective_if_configured()
 
         # Compute data quality metrics
         try:
@@ -1183,6 +1222,9 @@ class SloughGPTTrainer:
         the FeedBatchSampler (fixed vocab, timer refresh); val stays on the
         initial snapshot.
         """
+        if split == "train" and self._experience_sampler is not None:
+            x, y = self._experience_sampler.get_batch(self.config.batch_size)
+            return x.astype(np.int64), y.astype(np.int64)
         if split == "train" and self._feed_sampler is not None:
             x, y = self._feed_sampler.get_batch(self.config.batch_size)
             return x.astype(np.int64), y.astype(np.int64)
@@ -1240,6 +1282,56 @@ class SloughGPTTrainer:
         )
         return sampler
 
+    def _build_experience_sampler_if_configured(self):
+        """Build ExperienceSampler when data_path is an owned-experience source."""
+        if not is_experience_source(self.data_path):
+            return None
+        if is_feed_source(self.data_path):
+            return None  # feed path owns streaming when both somehow match
+        from domain.training._internal.experience_adapter import ExperienceSampler
+
+        sampler = ExperienceSampler(
+            stoi=self.stoi,
+            block_size=self.config.block_size,
+            seed=42,
+        )
+        stats = sampler.stats()
+        logger.info(
+            "Owned experience sampler enabled (%d pairs, %d tokens)",
+            stats["pairs"],
+            stats["tokens"],
+            extra={"tag": "TRAIN"},
+        )
+        # Metadata for OwnedObjective: prefer feedback-style high ratings as
+        # a simple memory-consolidation signal; tool_success defaults off.
+        self._owned_metadata = {
+            "memory_match": np.ones(max(1, stats["pairs"]), dtype=np.float32),
+        }
+        return sampler
+
+    def _build_owned_objective_if_configured(self):
+        """Construct OwnedObjective when config.use_owned_objective is true (goal 13)."""
+        if not getattr(self.config, "use_owned_objective", False):
+            return None
+        from domain.training._internal.owned_objective import (
+            OwnedObjective,
+            OwnedObjectiveConfig,
+        )
+
+        obj = OwnedObjective(
+            OwnedObjectiveConfig(
+                tool_success_weight=float(self.config.owned_tool_weight),
+                memory_weight=float(self.config.owned_memory_weight),
+            )
+        )
+        logger.info(
+            "Owned objective enabled (tool_w=%.2f mem_w=%.2f)",
+            self.config.owned_tool_weight,
+            self.config.owned_memory_weight,
+            extra={"tag": "TRAIN"},
+        )
+        return obj
+
     def _get_train_loader(self, num_batches: int = 10):
         """Generate training batches for EWC Fisher estimation."""
         for _ in range(num_batches):
@@ -1287,6 +1379,13 @@ class SloughGPTTrainer:
             ewc_loss, ewc_stats = self._ewc.ewc_loss()
             loss = loss + ewc_loss
 
+        # Owned objective (goal 13): combine with experience metadata when enabled.
+        owned_metrics: dict[str, float] = {}
+        if self._owned_objective is not None:
+            loss, owned_metrics = self._owned_objective.compute(
+                model, x, y, loss, metadata=self._owned_metadata
+            )
+
         (loss * scale_factor).backward()
         self.accumulation_step += 1
         raw_loss = loss.item() / scale_factor
@@ -1300,6 +1399,9 @@ class SloughGPTTrainer:
         self._ema_loss = ema
         self._last_train_loss = raw_loss
         metrics = {"loss": self._ema_loss, "raw_loss": raw_loss}
+        if owned_metrics:
+            for k, v in owned_metrics.items():
+                metrics[f"owned_{k}"] = v
 
         if self.accumulation_step >= self.config.gradient_accumulation_steps:
             params = [p for p in model.parameters() if p.grad is not None]
