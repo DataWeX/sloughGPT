@@ -1,8 +1,8 @@
 """
-Token Tree API Router — thin wrapper around TokenTreeManager.
+Token Tree API Router — thin wrapper around TokenizerEngine (token-tree surface).
 
-All business logic lives in ``packages/core-py/domain.training._internal.token_tree_manager.py``.
-This router just exposes manager methods as HTTP endpoints:
+Business logic lives in domain.training.tokenizer_engine → TokenTreeManager.
+This router only exposes engine methods as HTTP endpoints:
 
 - ``GET  /token-tree/stats``  — tree summary statistics.
 - ``GET  /token-tree/vocab``  — paged vocabulary entries.
@@ -23,6 +23,8 @@ This router just exposes manager methods as HTTP endpoints:
 - ``POST /token-tree/compare`` — diff two saved trees (overlap + examples).
 """
 
+from __future__ import annotations
+
 from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
@@ -33,7 +35,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.training._internal.token_tree_manager import get_token_tree_manager
+from domain.training.tokenizer_engine import get_token_tree_manager
 
 
 class TrainTreeRequest(BaseModel):

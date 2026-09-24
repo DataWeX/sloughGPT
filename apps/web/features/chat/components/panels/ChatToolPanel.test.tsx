@@ -135,7 +135,17 @@ describe('ChatToolPanel', () => {
     const { container } = render(<ChatToolPanel open={false} onClose={onClose} sessionId="s1" />)
     const panel = container.querySelector('#chat-tool-panel')
     expect(panel?.className).toContain('w-0')
+    expect(panel?.className).toContain('border-l-0')
+    expect(panel?.className).not.toContain('border-l ')
     expect(screen.queryByText('Tools')).toBeNull()
+  })
+
+  it('paints left border only when open', () => {
+    const { container } = render(<ChatToolPanel open={true} onClose={onClose} sessionId="s1" />)
+    const panel = container.querySelector('#chat-tool-panel')
+    expect(panel?.className).toContain('w-[var(--tool-panel-width)]')
+    expect(panel?.className).not.toContain('border-l-0')
+    expect(panel?.className).toContain('border-l')
   })
 
   it('switches to vision mode when eye icon clicked', () => {

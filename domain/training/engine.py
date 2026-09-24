@@ -524,6 +524,67 @@ class TrainingEngine:
             logger.error("Auto-trainer config update failed: %s", e)
             return TrainingResult(success=False, error=str(e))
 
+    # ── Cloud training jobs ──
+
+    @staticmethod
+    def _get_cloud_provider(provider: str = "local") -> Any:
+        from domain.training._internal.cloud import get_provider
+
+        return get_provider(provider)
+
+    @staticmethod
+    def _job_to_dict(j: Any) -> dict[str, Any]:
+        return {
+            "job_id": j.job_id,
+            "provider": j.provider,
+            "status": j.status,
+            "progress": j.progress,
+            "error": j.error,
+        }
+
+    def list_cloud_jobs(self, limit: int = 10) -> TrainingResult:
+        """List recent cloud training jobs."""
+        try:
+            jobs = self._get_cloud_provider("local").list_jobs(limit)
+            return TrainingResult(success=True, data={"jobs": [self._job_to_dict(j) for j in jobs]})
+        except Exception as e:
+            logger.error("List cloud jobs failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def submit_cloud_job(self, provider: str = "local", dataset_id: str = "") -> TrainingResult:
+        """Submit a cloud training job."""
+        try:
+            from domain.training._internal.cloud import CloudTrainingConfig
+
+            p = self._get_cloud_provider(provider)
+            config = CloudTrainingConfig(provider=provider)
+            job_id = p.submit_job(config, dataset_id, "train.py", {})
+            return TrainingResult(
+                success=True,
+                data={"job_id": job_id, "provider": provider, "status": "submitted"},
+            )
+        except Exception as e:
+            logger.error("Submit cloud job failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def cloud_job_status(self, job_id: str) -> TrainingResult:
+        """Get status of a cloud training job."""
+        try:
+            status = self._get_cloud_provider("local").get_status(job_id)
+            return TrainingResult(success=True, data=self._job_to_dict(status))
+        except Exception as e:
+            logger.error("Cloud job status failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
+    def cancel_cloud_job(self, job_id: str) -> TrainingResult:
+        """Cancel a cloud training job."""
+        try:
+            cancelled = self._get_cloud_provider("local").cancel_job(job_id)
+            return TrainingResult(success=True, data={"job_id": job_id, "cancelled": cancelled})
+        except Exception as e:
+            logger.error("Cancel cloud job failed: %s", e)
+            return TrainingResult(success=False, error=str(e))
+
 
 _engine: TrainingEngine | None = None
 
