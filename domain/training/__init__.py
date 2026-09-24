@@ -8,6 +8,7 @@ Public API:
     find_checkpoint, load_soul, load_lora_soul
     LoRAType, LoRAConfig, LoRALinear, LoRAEmbedding
     apply_lora_to_model, get_lora_parameters
+    LongRunRecorder (durable JSONL metrics for long unattended runs)
 """
 
 from domain.training._internal.checkpoints import (
@@ -46,6 +47,7 @@ _LAZY_IMPORTS = {
     "DistillConfig": ("._internal.distill_gpt2", "DistillConfig"),
     "SloughGPTTrainer": ("._internal.train_pipeline", "SloughGPTTrainer"),
     "TrainerConfig": ("._internal.train_pipeline", "TrainerConfig"),
+    "LongRunRecorder": ("._internal.long_run", "LongRunRecorder"),
     "TokenTree": ("._internal.token_tree", "TokenTree"),
     "TrainingFeedClient": ("._internal.training_feed", "TrainingFeedClient"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
@@ -93,6 +95,7 @@ __all__ = [
     "DistillConfig",
     "SloughGPTTrainer",
     "TrainerConfig",
+    "LongRunRecorder",
     "TokenTree",
     "TrainingFeedClient",
     "FeedBatchSampler",

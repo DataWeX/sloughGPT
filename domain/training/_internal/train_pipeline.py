@@ -1698,6 +1698,11 @@ class SloughGPTTrainer:
                         self.global_step,
                         extra={"tag": "TRAIN"},
                     )
+                    # Stop the whole run (not just this epoch): clear the
+                    # in-progress flag so the next epoch iteration exits, and
+                    # break the step loop. Final save still runs so a cancelled
+                    # long-run leaves a resumable checkpoint.
+                    self._is_training = False
                     break
                 if pause_event is not None and pause_event.is_set():
                     logger.info(
@@ -1707,9 +1712,11 @@ class SloughGPTTrainer:
                     )
                     while pause_event.is_set():
                         if cancel_event is not None and cancel_event.is_set():
+                            self._is_training = False
                             break
                         time.sleep(0.5)
                     if cancel_event is not None and cancel_event.is_set():
+                        self._is_training = False
                         break
 
                 metrics = self.train_step()
