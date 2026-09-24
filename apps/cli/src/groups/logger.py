@@ -24,13 +24,13 @@ import hashlib
 import json
 import re
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 
 from core.framework import click
 from core.helpers import api_get, output_json
 
 from domain.logging import get_global
+from domain.shared import utc_now_iso
 
 log = get_global()
 
@@ -46,7 +46,7 @@ _JS_BARE_RE = re.compile(r"at (\S+?):(\d+)(?::\d+)?\s*$")
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    return utc_now_iso()
 
 
 def _normalize(message: str) -> str:

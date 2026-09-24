@@ -17,12 +17,13 @@ import logging
 import threading
 import uuid
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 from mogdb import MogDB
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.feedback.database")
 
@@ -210,7 +211,7 @@ class FeedbackDB:
     def create_conversation(self, user_id: str = "default", title: str = "New Chat") -> str:
         """Create a new conversation."""
         conv_id = str(uuid.uuid4())
-        now = datetime.now(UTC).isoformat()
+        now = utc_now_iso()
 
         with self._lock:
             self._conversations.insert_one(
@@ -264,7 +265,7 @@ class FeedbackDB:
     ) -> str:
         """Add a message to a conversation."""
         msg_id = str(uuid.uuid4())
-        now = datetime.now(UTC).isoformat()
+        now = utc_now_iso()
 
         stored_embedding = self._embedding_to_list(embedding) if embedding is not None else None
 
@@ -319,7 +320,7 @@ class FeedbackDB:
     ) -> str:
         """Add feedback for a message."""
         fb_id = str(uuid.uuid4())
-        now = datetime.now(UTC).isoformat()
+        now = utc_now_iso()
 
         with self._lock:
             self._feedback.insert_one(
@@ -574,7 +575,7 @@ class FeedbackDB:
         thumbs_down (except repetition_delta which is inverted — good
         responses get lower repetition penalty).
         """
-        now = datetime.now(UTC).isoformat()
+        now = utc_now_iso()
 
         # Compute per-field deltas based on rating
         is_up = rating == "thumbs_up"

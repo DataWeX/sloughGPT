@@ -19,12 +19,13 @@ Usage:
 
 from __future__ import annotations
 
-import datetime
 import logging
 import os
 import threading
 import time
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.agents.runs")
 
@@ -36,7 +37,7 @@ _collection = None
 
 def _now_iso() -> str:
     """Return current UTC time as an ISO 8601 string."""
-    return datetime.datetime.now(datetime.UTC).isoformat()
+    return utc_now_iso()
 
 
 _id_counter = 0

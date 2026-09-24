@@ -5,11 +5,12 @@ from __future__ import annotations
 import enum
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+
+from domain.shared import utc_now_iso
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+    return utc_now_iso()
 
 
 def _new_id() -> str:

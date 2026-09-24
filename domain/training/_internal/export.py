@@ -54,10 +54,11 @@ See Also
 
 from __future__ import annotations
 
-import datetime
 import logging
 from dataclasses import asdict, dataclass, field
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.export")
 
@@ -254,7 +255,7 @@ class ModelMetadata:
                     setattr(metadata, field, val)
 
         # Set timestamps
-        metadata.created_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+        metadata.created_at = utc_now_iso()
 
         metadata.torch_version = ""
 
@@ -286,7 +287,7 @@ class ModelMetadata:
         self.final_val_loss = val_loss
         self.steps_trained = steps
         self.last_step = steps
-        self.trained_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+        self.trained_at = utc_now_iso()
 
         if val_loss > 0 and (self.best_val_loss == 0 or val_loss < self.best_val_loss):
             self.best_val_loss = val_loss
@@ -386,7 +387,7 @@ def create_model_metadata(
     if soul_info:
         metadata.add_soul_info(**soul_info)
 
-    metadata.exported_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+    metadata.exported_at = utc_now_iso()
 
     return metadata
 

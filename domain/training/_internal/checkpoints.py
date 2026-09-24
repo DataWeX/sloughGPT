@@ -10,6 +10,8 @@ import struct
 import time
 from pathlib import Path
 
+from domain.shared import normalize_iso
+
 from .helpers import (
     describe_checkpoint,
     read_slo_json_header,
@@ -97,7 +99,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
             soul = raw_soul.replace("-soul", "")
             if fp.suffix == ".soul" and (soul == fp.stem or soul == fp.name):
                 soul = "unknown"
-            return {
+            row = {
                 "name": fp.name,
                 "soul": soul,
                 "loss": m.get("avg_loss") or meta.get("final_train_loss"),
@@ -132,6 +134,14 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
                     if k in meta and meta[k]
                 },
             }
+            # Repair legacy timestamps (e.g. "...+00:00Z") so the UI never
+            # renders "Invalid Date"; unparseable values become "".
+            for _key in ("born_at", "created_at"):
+                if _key in row:
+                    row[_key] = normalize_iso(row[_key])
+                    if not row[_key]:
+                        del row[_key]
+            return row
 
         return {"name": fp.name, "soul": "unknown", "size_mb": size_mb}
     except Exception as e:

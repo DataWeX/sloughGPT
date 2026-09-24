@@ -6,12 +6,16 @@ Conversations and feedback records are stored in indexed collections
 instead of raw JSON/JSONL files.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.controllers.feedback")
 
@@ -158,7 +162,7 @@ class FeedbackController:
             "message_content": message_content,
             "user_message": user_message,
             "assistant_response": assistant_response,
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": utc_now_iso(),
         }
 
         self._feedback.insert_one(feedback)
@@ -240,7 +244,7 @@ class FeedbackController:
             Dict with id, name, session_id, created_at, updated_at, pinned, starred, message_count.
         """
         conv_id = str(uuid.uuid4())
-        now = datetime.now(UTC).isoformat()
+        now = utc_now_iso()
         conv = {
             "id": conv_id,
             "name": name,
@@ -289,7 +293,7 @@ class FeedbackController:
         Returns:
             Updated conversation dict, or None if not found.
         """
-        updates["updated_at"] = datetime.now(UTC).isoformat()
+        updates["updated_at"] = utc_now_iso()
         return self._conversations.find_one_and_update(
             {"id": conv_id},
             {"$set": updates},

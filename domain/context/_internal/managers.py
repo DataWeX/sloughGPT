@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.context.managers")
 import threading
@@ -344,7 +345,7 @@ class TraitWeightsConfig:
         safe = name.replace(" ", "_").replace("/", "_")
         with _lock:
             data = {**self._weights}
-            data["_meta"] = {"saved_at": datetime.now(UTC).isoformat(), "label": name}
+            data["_meta"] = {"saved_at": utc_now_iso(), "label": name}
         self._snapshot_repo.save(safe, data)
         return str(self._snapshots_dir / f"{safe}.json")
 

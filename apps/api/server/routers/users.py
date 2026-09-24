@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
@@ -17,6 +16,7 @@ from schemas.common import endpoint, raise_error, success_response
 
 from domain.auth._internal.models import Role, User, UserRole
 from domain.auth._internal.repositories import UserRepository
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.users")
 
@@ -182,7 +182,7 @@ class UsersRouter:
             if req.display_name is not None:
                 user.display_name = req.display_name
 
-            user.updated_at = datetime.now(UTC).isoformat()
+            user.updated_at = utc_now_iso()
             self._repo.update(user)
             return success_response(data=self._to_response(user).model_dump())
 
@@ -214,7 +214,7 @@ class UsersRouter:
                 raise_error("Current password is incorrect", "E_AUTH_MISSING", status_code=401)
 
             user.password_hash = AuthRouter._hash_password(req.new_password)
-            user.updated_at = datetime.now(UTC).isoformat()
+            user.updated_at = utc_now_iso()
             self._repo.update(user)
             return success_response(data={"changed": True})
 
@@ -235,7 +235,7 @@ class UsersRouter:
             if req.display_name is not None:
                 user.display_name = req.display_name
 
-            user.updated_at = datetime.now(UTC).isoformat()
+            user.updated_at = utc_now_iso()
             self._repo.update(user)
             return success_response(data=self._to_response(user).model_dump())
 

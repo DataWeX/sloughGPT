@@ -11,7 +11,6 @@ import logging
 import random
 import string
 import sys as _sys
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -180,8 +179,13 @@ def validate_config(config: dict, required_keys: list[str]) -> bool:
 
 
 def get_timestamp() -> str:
-    """Get ISO timestamp."""
-    return datetime.now(UTC).isoformat()
+    """Get an RFC 3339 UTC timestamp (``...Z``), JS-``new Date`` safe.
+
+    Thin alias for :func:`domain.shared.utc_now_iso`, kept for back-compat.
+    """
+    from domain.shared._internal.timestamps import utc_now_iso
+
+    return utc_now_iso()
 
 
 __all__ = [

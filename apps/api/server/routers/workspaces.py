@@ -17,6 +17,7 @@ from schemas.common import raise_error, safe_audit_log, success_response
 
 from domain.auth._internal.models import Role, User, Workspace, WorkspaceMember
 from domain.auth._internal.repositories import UserRepository, WorkspaceRepository
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.workspaces")
 
@@ -208,7 +209,7 @@ class WorkspacesRouter:
             if req.description is not None:
                 ws.description = req.description
 
-            ws.updated_at = datetime.now(UTC).isoformat()
+            ws.updated_at = utc_now_iso()
             self._ws_repo.update(ws)
             members = self._ws_repo.list_members(workspace_id)
             return success_response(data=self._to_response(ws, len(members)).model_dump())
@@ -655,7 +656,7 @@ class WorkspacesRouter:
                     "api_keys": api_keys,
                     "datasets_count": dataset_count,
                     "knowledge_count": knowledge_count,
-                    "exported_at": datetime.now(UTC).isoformat(),
+                    "exported_at": utc_now_iso(),
                 }
             )
 
@@ -886,7 +887,7 @@ class WorkspacesRouter:
             if req.allow_sharing is not None:
                 ws.allow_sharing = req.allow_sharing
 
-            ws.updated_at = datetime.now(UTC).isoformat()
+            ws.updated_at = utc_now_iso()
             self._ws_repo.update(ws)
             members = self._ws_repo.list_members(workspace_id)
             logger.info("User %s updated settings for workspace %s", user.username, workspace_id)
@@ -1392,7 +1393,7 @@ class WorkspacesRouter:
                 "target_workspace_id": req.target_workspace_id,
                 "permission": req.permission,
                 "shared_by": user.id,
-                "shared_at": datetime.now(UTC).isoformat(),
+                "shared_at": utc_now_iso(),
             }
             # Store in MogDB
             from infrastructure.mogdb import get_mogdb

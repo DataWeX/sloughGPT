@@ -5,16 +5,19 @@ Storage backed by MogDB (the project's embedded document DB). User
 records are stored in a ``users`` collection instead of a raw JSON file.
 """
 
+from __future__ import annotations
+
 import hashlib
 import logging
 import os
 import secrets
 import time
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Header, Request
 from pydantic import BaseModel, Field
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +317,7 @@ class AuthRouter:
                 "password_hash": self._hash_password(req.password),
                 "role": "user",
                 "tenant_id": "",
-                "created_at": datetime.now(UTC).isoformat(),
+                "created_at": utc_now_iso(),
             }
             self._save_user(uid, user_data)
             _, exp_hours, jwt_auth, _ = self._get_auth_deps()

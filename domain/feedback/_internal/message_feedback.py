@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 
 @dataclass
@@ -41,7 +42,7 @@ class MessageFeedback:
     ) -> dict[str, Any]:
         """Record feedback for a message."""
         with self._lock:
-            timestamp = datetime.now(UTC).isoformat()
+            timestamp = utc_now_iso()
             feedback_entry: dict[str, Any] = {
                 "message_id": message_id,
                 "rating": rating,
@@ -87,7 +88,7 @@ class MessageFeedback:
             regen_entry: dict[str, Any] = {
                 "original_message_id": original_message_id,
                 "new_message_id": new_message_id,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": utc_now_iso(),
                 "session_id": session_id,
             }
             self._regenerations[original_message_id] = regen_entry
