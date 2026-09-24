@@ -434,6 +434,9 @@ class MorphTokenizer:
         # Special tokens added beyond BPE vocab (chat template tokens like im_start, im_end)
         self.added_tokens: dict[str, int] = added_tokens or {}
         self._added_token_patterns = self._build_added_token_patterns()
+        # prepare_data() / char-train paths expect stoi/itos aliases
+        self.stoi = self.vocab
+        self.itos = self.inv_vocab
 
     def _build_added_token_patterns(self):
         """Build regex patterns for matching added tokens, longest first."""

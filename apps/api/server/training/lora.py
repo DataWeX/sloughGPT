@@ -216,13 +216,12 @@ async def start_lora_finetune(
                 if total_epochs > 0:
                     rec["progress"] = min(99, int((rec["current_epoch"] / total_epochs) * 100))
 
-            config = HFLoraConfig(
+            config_kwargs: dict[str, Any] = dict(
                 model_path=str(model_path),
                 data_path=str(data_path),
                 rank=request.rank,
                 alpha=request.alpha,
                 dropout=request.dropout,
-                target_modules=request.target_modules,
                 epochs=request.epochs,
                 batch_size=request.batch_size,
                 block_size=request.block_size,
@@ -234,11 +233,18 @@ async def start_lora_finetune(
                 log_interval=request.log_interval,
                 output_dir=request.output_dir,
                 adapter_name=request.adapter_name,
+                progress_callback=on_progress,
                 _cancel_event=cancel_event,
             )
+            # Omit when None so HFLoraConfig default_factory (W_q/W_k/W_v/W_o)
+            # applies — explicitly passing None would fall through to LoRAConfig's
+            # q_proj default and match zero modules on SloTransformer.
+            if request.target_modules:
+                config_kwargs["target_modules"] = request.target_modules
+            config = HFLoraConfig(**config_kwargs)
 
             trainer = HFLoraTrainer(config)
-            result = trainer.train(on_progress=on_progress)
+            result = trainer.train()
 
             if cancel_event.is_set():
                 _finish_job(job_id, "cancelled")
@@ -338,9 +344,45 @@ async def load_adapter(request: LoadAdapterRequest):
         raise_error("No model loaded — load a model first", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domain.training._internal.lora import load_lora_adapter
+        import numpy as np
 
-        load_lora_adapter(provider, str(adapter_path), merge=request.merge)
+        from domain.training._internal.hf_lora_finetune import load_lora_adapter, merge_lora_adapter
+        from domain.training._internal.lora import (
+            LoRAConfig,
+            apply_lora_to_model,
+            count_lora_parameters,
+            get_lora_parameters,
+        )
+
+        adapter = np.load(str(adapter_path), allow_pickle=True)
+        rank = int(adapter["_config/rank"][0]) if "_config/rank" in adapter else 8
+        alpha = float(adapter["_config/alpha"][0]) if "_config/alpha" in adapter else 16.0
+        target_modules = []
+        n_modules = (
+            int(adapter["_config/target_modules"][0]) if "_config/target_modules" in adapter else 0
+        )
+        for i in range(n_modules):
+            key = f"_config/target_module_{i}"
+            if key in adapter:
+                target_modules.append("".join(chr(int(c)) for c in adapter[key].tolist()))
+        if not target_modules:
+            target_modules = ["W_q", "W_k", "W_v", "W_o"]
+
+        model = getattr(provider, "_model", provider)
+        if model is None:
+            raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
+        if not get_lora_parameters(model):
+            model = apply_lora_to_model(
+                model, LoRAConfig(rank=rank, alpha=alpha, target_modules=target_modules)
+            )
+            if hasattr(provider, "_model"):
+                provider._model = model
+        load_lora_adapter(model, str(adapter_path))
+        if request.merge:
+            model = merge_lora_adapter(model)
+            if hasattr(provider, "_model"):
+                provider._model = model
+        n_params = count_lora_parameters(model) if not request.merge else 0
     except Exception as e:
         raise_error(f"Failed to load adapter: {e}", "E_BAD_REQUEST", status_code=400)
 
@@ -348,6 +390,10 @@ async def load_adapter(request: LoadAdapterRequest):
         "status": "loaded",
         "adapter_path": str(adapter_path),
         "merged": request.merge,
+        "rank": rank,
+        "alpha": alpha,
+        "target_modules": target_modules,
+        "n_params": n_params,
         "message": f"Adapter loaded: {adapter_path.name}",
     }
 
@@ -362,7 +408,7 @@ async def unload_adapter():
         raise_error("No model loaded", "E_BAD_REQUEST", status_code=400)
 
     try:
-        from domain.training._internal.lora import unload_lora_adapter
+        from domain.training._internal.hf_lora_finetune import unload_lora_adapter
 
         unload_lora_adapter(provider)
     except Exception as e:

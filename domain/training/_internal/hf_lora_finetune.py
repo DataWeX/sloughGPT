@@ -49,7 +49,7 @@ from domain.training._internal.trainer_protocol import TrainResult
 logger = logging.getLogger("slo.hf_lora")
 
 
-__all__ = ["HFLoraConfig", "HFLoraTrainer"]
+__all__ = ["HFLoraConfig", "HFLoraTrainer", "load_lora_adapter", "merge_lora_adapter", "unload_lora_adapter"]
 
 
 @dataclass
@@ -98,16 +98,6 @@ class HFLoraConfig:
             model_stem = Path(self.model_path).stem
             self.adapter_name = f"{model_stem}_lora_r{self.rank}"
 
-        # Validate paths
-        if not self.model_path:
-            raise ValueError("model_path is required")
-        if not Path(self.model_path).is_file():
-            raise ValueError(f"Model file not found: {self.model_path}")
-        if not self.data_path:
-            raise ValueError("data_path is required")
-        if not Path(self.data_path).is_file():
-            raise ValueError(f"Data file not found: {self.data_path}")
-
         # Validate hyperparameters
         if self.rank < 1:
             raise ValueError(f"rank must be >= 1, got {self.rank}")
@@ -138,6 +128,7 @@ class HFLoraTrainer:
         self.lora_params: dict[str, Any] = {}
         self._is_training = False
         self._training_thread: threading.Thread | None = None
+        self._cancel_event = config._cancel_event
 
     def load_model(self) -> SloTransformer:
         """Load model from .slnc file."""
@@ -196,14 +187,19 @@ class HFLoraTrainer:
         )
         return data
 
-    def train(self) -> TrainResult:
+    def train(self, on_progress: Callable[[dict[str, Any]], None] | None = None) -> TrainResult:
         """Run LoRA fine-tuning.
+
+        Args:
+            on_progress: Optional callback invoked on a throttled schedule with a dict
+                containing step/epoch/loss. Falls back to ``config.progress_callback``.
 
         Returns:
             TrainResult with adapter path and training metrics.
         """
         self._is_training = True
         start_time = time.time()
+        progress_callback = on_progress or self.config.progress_callback
 
         try:
             # Load model
@@ -302,8 +298,8 @@ class HFLoraTrainer:
                     if total_steps % self.config.log_interval == 0:
                         avg_loss = epoch_loss / max(n_batches, 1)
                         loss_history.append(avg_loss)
-                        if self.config.progress_callback:
-                            self.config.progress_callback(
+                        if progress_callback:
+                            progress_callback(
                                 {
                                     "step": total_steps,
                                     "epoch": epoch + 1,
@@ -468,6 +464,54 @@ def load_lora_adapter(model: SloTransformer, adapter_path: str) -> SloTransforme
 
     logger.info("Loaded LoRA adapter from %s", adapter_path)
     return model
+
+
+def unload_lora_adapter(model_or_provider: Any) -> Any:
+    """Remove LoRA wrappers from a model (or provider holding ``_model``).
+
+    Base weights are left untouched — this reverts to the pre-LoRA graph.
+    """
+    from domain.training._internal.lora import (
+        LoRAEmbedding,
+        LoRALinear,
+        _set_nested,
+        _walk_slo_tree,
+    )
+    from domain.training._internal.slonet import SloLinear
+
+    model = getattr(model_or_provider, "_model", model_or_provider)
+    if model is None:
+        raise RuntimeError("No model to unload")
+
+    removed = 0
+    last_path = "model"
+    for path, module in list(_walk_slo_tree(model, [])):
+        last_path = path
+        if isinstance(module, LoRALinear):
+            plain = SloLinear(
+                module.in_features,
+                module.out_features,
+                bias=module.use_bias,
+                name=f"unlora_{path.replace('.', '_')}",
+                _lazy=True,
+            )
+            plain.weight.data[:] = module.weight.data
+            if module.bias is not None and plain.bias is not None:
+                plain.bias.data[:] = module.bias.data
+            _set_nested(model, path.split("."), plain)
+            removed += 1
+        elif isinstance(module, LoRAEmbedding):
+            base = module.weight
+            base.name = f"unlora_{path.replace('.', '_')}"
+            _set_nested(model, path.split("."), base)
+            removed += 1
+
+    if hasattr(model, "_has_lora"):
+        model._has_lora = False
+    if hasattr(model_or_provider, "_model"):
+        model_or_provider._model = model
+    logger.info("Unloaded LoRA from %s (%d modules)", last_path, removed)
+    return model_or_provider
 
 
 def merge_lora_adapter(model: SloTransformer) -> SloTransformer:

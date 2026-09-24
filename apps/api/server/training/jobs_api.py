@@ -79,6 +79,10 @@ def _job_summary(job: dict) -> dict:
         "created_at": job.get("created_at"),
         "started_at": job.get("started_at"),
         "completed_at": job.get("completed_at"),
+        "loss_history": job.get("loss_history") or [],
+        "rank": job.get("rank"),
+        "alpha": job.get("alpha"),
+        "result": job.get("result"),
     }
     return {k: v for k, v in summary.items() if v is not None}
 
