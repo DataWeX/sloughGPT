@@ -1045,7 +1045,7 @@ class TestMultimodalManager:
         assert arr.min() >= 0.0 and arr.max() <= 1.0
 
     def test_count_trained_images(self, tmp_path, monkeypatch):
-        from domains.multimodal import engine as engine_mod
+        from domain.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         mgr = MultimodalManager()
@@ -1102,7 +1102,7 @@ class TestMultimodalManager:
         assert cap.confidence == 0.0
 
     def test_caption_image_auto_save_every_five(self, tmp_path, monkeypatch):
-        from domains.multimodal import engine as engine_mod
+        from domain.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         engine = _make_engine()
@@ -1139,7 +1139,7 @@ class TestMultimodalManager:
         assert isinstance(first, MultimodalManager)
 
     def test_initialize_multimodal(self, monkeypatch):
-        from domains.multimodal import manager as manager_mod
+        from domain.multimodal._internal import manager as manager_mod
 
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
@@ -1150,7 +1150,7 @@ class TestMultimodalManager:
         assert fresh._speech_recognizer is not None
 
     def test_initialize_speech_server_mode(self, monkeypatch):
-        from domains.multimodal import manager as manager_mod
+        from domain.multimodal._internal import manager as manager_mod
 
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
@@ -1162,7 +1162,7 @@ class TestMultimodalManager:
         assert caps.speech_model == "whisper" or caps.speech_model == "browser"
 
     def test_initialize_loads_saved_engine(self, tmp_path, monkeypatch):
-        from domains.multimodal import engine as engine_mod
+        from domain.multimodal._internal import engine as engine_mod
 
         saved = _make_engine()
         saved._trained = True
@@ -1179,7 +1179,7 @@ class TestMultimodalManager:
         assert mgr._learning_count == 3
 
     def test_initialize_saved_engine_fails(self, tmp_path, monkeypatch):
-        from domains.multimodal import engine as engine_mod
+        from domain.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
 
@@ -1264,7 +1264,7 @@ class TestMultimodalManager:
         assert mgr._learning_count == 1
 
     def test_caption_image_replay_and_save_failure(self, tmp_path, monkeypatch):
-        from domains.multimodal import engine as engine_mod
+        from domain.multimodal._internal import engine as engine_mod
 
         monkeypatch.setattr(engine_mod.MultimodalEngine, "SAVE_PATH", str(tmp_path / "mm.npz"))
         engine = _make_engine()
@@ -1292,7 +1292,7 @@ class TestMultimodalManager:
         assert mgr._learning_count == 6
 
     def test_initialize_register_provider_failure(self, monkeypatch):
-        from domains.multimodal import manager as manager_mod
+        from domain.multimodal._internal import manager as manager_mod
 
         fresh = MultimodalManager()
         monkeypatch.setattr(manager_mod, "_multimodal_manager", fresh)
