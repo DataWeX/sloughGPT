@@ -24,8 +24,8 @@ _root = str(Path(__file__).resolve().parents[1])
 if _root not in sys.path:
     sys.path.insert(0, _root)
 
-from domains.infrastructure.pugqeep.compressor import PointCompressor
-from domains.infrastructure.pugqeep.point import Point
+from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.point import Point
 
 
 def make_weight(shape: tuple[int, ...], seed: int = 0) -> np.ndarray:

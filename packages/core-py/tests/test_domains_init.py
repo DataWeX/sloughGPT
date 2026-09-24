@@ -4,7 +4,8 @@ import asyncio
 import time
 
 import pytest
-from domains import (
+
+from domain import (
     BaseComponent,
     BaseDomain,
     ComponentException,

@@ -314,7 +314,7 @@ class SloModel:
         no sys.path tricks. Sampling runs locally via numpy.
         """
         try:
-            from domains.inference.slonet_provider import SloNetChatProvider
+            from domain.inference._internal.slonet_provider import SloNetChatProvider
         except ImportError as e:
             raise ImportError(
                 "SloNet provider package not installed; "
