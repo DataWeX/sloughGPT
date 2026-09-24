@@ -69,15 +69,13 @@ fn accepts(header: &str, token: &str) -> bool {
             None => true,
             Some(rest) => {
                 // q=0 → rejected; missing/invalid q or q>0 → accepted.
-                let rejected = rest.split(';').filter_map(|p| p.trim().split_once('=')).any(
-                    |(k, v)| {
+                let rejected = rest
+                    .split(';')
+                    .filter_map(|p| p.trim().split_once('='))
+                    .any(|(k, v)| {
                         k.trim().eq_ignore_ascii_case("q")
-                            && v.trim()
-                                .parse::<f32>()
-                                .map(|q| q <= 0.0)
-                                .unwrap_or(false)
-                    },
-                );
+                            && v.trim().parse::<f32>().map(|q| q <= 0.0).unwrap_or(false)
+                    });
                 !rejected
             }
         }
@@ -100,7 +98,11 @@ pub fn should_skip_response(
     }
     // Explicit opt-out.
     if let Some(cc) = resp_headers.get(header::CACHE_CONTROL) {
-        if cc.to_str().map(|s| s.contains("no-transform")).unwrap_or(false) {
+        if cc
+            .to_str()
+            .map(|s| s.contains("no-transform"))
+            .unwrap_or(false)
+        {
             return true;
         }
     }
@@ -112,7 +114,11 @@ pub fn should_skip_response(
         return true;
     }
     // Only success bodies benefit; errors stay identity for easy debugging.
-    if !status.is_success() {
+    // 204/205 have no body — compressing would emit a useless empty frame.
+    if !status.is_success()
+        || status == StatusCode::NO_CONTENT
+        || status == StatusCode::RESET_CONTENT
+    {
         return true;
     }
     if let Some(len) = resp_headers
@@ -242,6 +248,13 @@ pub fn maybe_compress_response(
         header::CONTENT_ENCODING,
         HeaderValue::from_str(codec.as_str()).expect("static codec name"),
     );
+    // Advertise identity size so clients can drive progress bars / resume
+    // accounting against the decoded body, not the wire size.
+    if let Some(len) = known_len {
+        if let Ok(v) = HeaderValue::from_str(&len.to_string()) {
+            headers.insert("x-uncompressed-content-length", v);
+        }
+    }
     // Length of the identity body is no longer valid.
     headers.remove(header::CONTENT_LENGTH);
     headers.insert(header::VARY, HeaderValue::from_static("Accept-Encoding"));
@@ -344,6 +357,12 @@ mod tests {
         resp.insert(header::CONTENT_TYPE, hv("application/octet-stream"));
         resp.insert(header::CONTENT_LENGTH, hv("100000"));
         assert!(!should_skip_response(StatusCode::OK, &req, &resp));
+
+        // Empty/204 never benefits from a compressed empty frame.
+        let req = HeaderMap::new();
+        let mut resp = HeaderMap::new();
+        resp.insert(header::CONTENT_TYPE, hv("application/json"));
+        assert!(should_skip_response(StatusCode::NO_CONTENT, &req, &resp));
     }
 
     #[tokio::test]
@@ -354,9 +373,12 @@ mod tests {
                 .chunks(7 * 1024)
                 .map(|c| Ok(Bytes::copy_from_slice(c)))
                 .collect();
-            let encoded =
-                collect(compress_stream(futures::stream::iter(chunks), codec, Some(payload.len() as u64)))
-                    .await;
+            let encoded = collect(compress_stream(
+                futures::stream::iter(chunks),
+                codec,
+                Some(payload.len() as u64),
+            ))
+            .await;
             assert!(encoded.len() < payload.len(), "{codec:?} must shrink");
 
             let decoded = match codec {
@@ -400,10 +422,7 @@ mod tests {
             .unwrap();
         let req = HeaderMap::new();
         let out = maybe_compress_response(resp, Some(Codec::Gzip), &req);
-        assert_eq!(
-            out.headers().get(header::CONTENT_ENCODING).unwrap(),
-            "gzip"
-        );
+        assert_eq!(out.headers().get(header::CONTENT_ENCODING).unwrap(), "gzip");
         assert!(out.headers().get(header::CONTENT_LENGTH).is_none());
         assert_eq!(out.headers().get(header::VARY).unwrap(), "Accept-Encoding");
         let wire = body_bytes(out).await;
@@ -418,6 +437,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn compressed_response_advertises_identity_length() {
+        let payload = sample_body();
+        let resp = Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .header(header::CONTENT_LENGTH, payload.len())
+            .body(Body::from(payload.clone()))
+            .unwrap();
+        let req = HeaderMap::new();
+        let out = maybe_compress_response(resp, Some(Codec::Gzip), &req);
+        let hdr = out
+            .headers()
+            .get("x-uncompressed-content-length")
+            .expect("identity length header");
+        assert_eq!(hdr.to_str().unwrap(), payload.len().to_string());
+        assert!(out.headers().get(header::CONTENT_LENGTH).is_none());
+    }
+
+    #[tokio::test]
     async fn already_encoded_passthrough_byte_identical() {
         let payload = sample_body();
         let resp = Response::builder()
@@ -429,10 +467,7 @@ mod tests {
             .unwrap();
         let req = HeaderMap::new();
         let out = maybe_compress_response(resp, Some(Codec::Zstd), &req);
-        assert_eq!(
-            out.headers().get(header::CONTENT_ENCODING).unwrap(),
-            "gzip"
-        );
+        assert_eq!(out.headers().get(header::CONTENT_ENCODING).unwrap(), "gzip");
         assert_eq!(body_bytes(out).await, payload);
     }
 
@@ -463,10 +498,7 @@ mod tests {
             .unwrap();
         let req = HeaderMap::new();
         let out = maybe_compress_response(resp, Some(Codec::Zstd), &req);
-        assert_eq!(
-            out.headers().get(header::CONTENT_ENCODING).unwrap(),
-            "zstd"
-        );
+        assert_eq!(out.headers().get(header::CONTENT_ENCODING).unwrap(), "zstd");
         let wire = body_bytes(out).await;
         assert!(wire.len() < payload.len() / 2);
         let decoded = zstd::decode_all(&wire[..]).unwrap();

@@ -28,6 +28,9 @@ use tower_http::{
 use tracing::info;
 
 mod compression;
+mod filters;
+
+use filters::PathPolicy;
 
 // ── Edge policy (transport only — no model knowledge) ──────────────────────
 
@@ -58,6 +61,7 @@ struct GatewayConfig {
     python_core_url: String,
     static_dir: String,
     listen_addr: SocketAddr,
+    policy: PathPolicy,
 }
 
 impl Default for GatewayConfig {
@@ -72,6 +76,7 @@ impl Default for GatewayConfig {
             static_dir: std::env::var("MAN_STATIC_DIR")
                 .unwrap_or_else(|_| "apps/web/.next/static".into()),
             listen_addr: SocketAddr::from(([0, 0, 0, 0], port)),
+            policy: PathPolicy::from_env(),
         }
     }
 }
@@ -204,10 +209,14 @@ async fn main() {
 
     info!("🌐 Gateway listening on {}", config.listen_addr);
     info!("   → Python sidecar at {}", config.python_core_url);
+    if config.policy.chat_only {
+        info!("   → chat-only edge mode ON (MAN_GATEWAY_CHAT_ONLY)");
+    }
+    if !config.policy.deny_prefixes.is_empty() {
+        info!("   → deny prefixes: {:?}", config.policy.deny_prefixes);
+    }
 
-    axum::serve(listener, app)
-        .await
-        .expect("Server failed");
+    axum::serve(listener, app).await.expect("Server failed");
 }
 
 // ── Health Handlers ─────────────────────────────────────────────────────────
@@ -239,27 +248,45 @@ async fn detailed_health(State(state): State<AppState>) -> Json<serde_json::Valu
             "uptime_seconds": uptime,
             "mode": "transport-relay",
             "max_body_bytes": MAX_BODY_BYTES,
+            "chat_only": state.config.policy.chat_only,
+            "deny_prefixes": state.config.policy.deny_prefixes,
         },
         "sidecar": sidecar,
     }))
+}
+
+/// Unwrap the API health envelope. FastAPI answers either a bare object or
+/// `{ "status": "success", "data": { ... } }` — read fields from whichever
+/// level actually holds them so model_name/model_loaded aren't stuck empty.
+fn parse_sidecar_health(health: &serde_json::Value) -> (bool, String) {
+    let root = health.get("data").unwrap_or(health);
+    let model_loaded = root
+        .get("model_loaded")
+        .or_else(|| health.get("model_loaded"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let model_name = root
+        .get("model_type")
+        .or_else(|| root.get("model_name"))
+        .or_else(|| root.get("model"))
+        .or_else(|| health.get("model_type"))
+        .or_else(|| health.get("model_name"))
+        .or_else(|| health.get("model"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("unknown")
+        .to_string();
+    (model_loaded, model_name)
 }
 
 async fn check_sidecar_health(state: &AppState) {
     let url = format!("{}/health", state.config.python_core_url);
     let (healthy, model_loaded, model_name) = match state.http.get(&url).send().await {
         Ok(resp) => match resp.json::<serde_json::Value>().await {
-            Ok(health) => (
-                true,
-                health
-                    .get("model_loaded")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false),
-                health
-                    .get("model")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown")
-                    .to_string(),
-            ),
+            Ok(health) => {
+                let (loaded, name) = parse_sidecar_health(&health);
+                (true, loaded, name)
+            }
             Err(_) => (false, false, String::new()),
         },
         Err(_) => (false, false, String::new()),
@@ -288,12 +315,18 @@ async fn check_sidecar_health(state: &AppState) {
 // body, then streams the sidecar's response bytes untouched. Works for JSON,
 // SSE, and anything else without understanding any of it.
 
-async fn proxy_http(
-    State(state): State<AppState>,
-    req: Request,
-) -> Result<Response, GatewayError> {
+async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Response, GatewayError> {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
+
+    // Edge policy first: rejected paths never wake Python.
+    if let Err(reason) = state.config.policy.check(&path) {
+        return Err(GatewayError {
+            status: StatusCode::FORBIDDEN,
+            message: reason.into(),
+        });
+    }
+
     let query = req
         .uri()
         .query()
@@ -305,13 +338,16 @@ async fn proxy_http(
     let content_type = parts.headers.get("content-type").cloned();
 
     // Inbound cap enforced before Python wakes. 413 on overflow.
-    let body_bytes = to_bytes(body, MAX_BODY_BYTES).await.map_err(|_| GatewayError {
-        status: StatusCode::PAYLOAD_TOO_LARGE,
-        message: format!("Request body too large (limit {} bytes)", MAX_BODY_BYTES),
-    })?;
+    let body_bytes = to_bytes(body, MAX_BODY_BYTES)
+        .await
+        .map_err(|_| GatewayError {
+            status: StatusCode::PAYLOAD_TOO_LARGE,
+            message: format!("Request body too large (limit {} bytes)", MAX_BODY_BYTES),
+        })?;
 
     let mut builder = match method {
         axum::http::Method::GET => state.http.get(&url),
+        axum::http::Method::HEAD => state.http.head(&url),
         axum::http::Method::POST => state.http.post(&url),
         axum::http::Method::PUT => state.http.put(&url),
         axum::http::Method::DELETE => state.http.delete(&url),
@@ -326,6 +362,21 @@ async fn proxy_http(
     if let Some(ct) = content_type {
         builder = builder.header("content-type", ct);
     }
+    // Resume / conditional GET: forward byte-range + validator headers so
+    // sidecar 206/304 semantics reach the client unchanged.
+    for name in [
+        "range",
+        "if-range",
+        "if-none-match",
+        "if-modified-since",
+        "if-match",
+    ] {
+        if let Some(v) = parts.headers.get(name) {
+            builder = builder.header(name, v);
+        }
+    }
+    // Edge owns compression: sidecar always answers identity (no double-encode).
+    builder = builder.header("accept-encoding", "identity");
     let request = builder.body(body_bytes).build()?;
 
     // Streaming paths (SSE) get no total edge timeout — Python owns
@@ -341,12 +392,13 @@ async fn proxy_http(
                 message: "Edge timeout waiting for sidecar".into(),
             })??
     };
-    relay_response(resp, &parts.headers).await
+    relay_response(resp, &parts.headers, &method).await
 }
 
 async fn relay_response(
     resp: reqwest::Response,
     req_headers: &HeaderMap,
+    req_method: &axum::http::Method,
 ) -> Result<Response, GatewayError> {
     let status =
         StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -373,7 +425,56 @@ async fn relay_response(
     // Stateless edge compression: negotiate from the *client* Accept-Encoding,
     // stream-encode, identity passthrough on skip rules. No disk, no full-body
     // buffer — reduces egress without the sidecar knowing.
-    let codec = compression::negotiate(req_headers.get("accept-encoding"));
+    //
+    // HEAD must stay identity: the body is empty while Content-Length still
+    // advertises the identity size — compressing would either emit a frame
+    // header alone or break zstd's pledged-size check.
+    let codec = if req_method == axum::http::Method::HEAD {
+        None
+    } else {
+        compression::negotiate(req_headers.get("accept-encoding"))
+    };
     let out = compression::maybe_compress_response(out, codec, req_headers);
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_bare_health_object() {
+        let v = serde_json::json!({
+            "status": "healthy",
+            "model_loaded": true,
+            "model": "Qwen/Qwen2.5-0.5B-Instruct"
+        });
+        let (loaded, name) = parse_sidecar_health(&v);
+        assert!(loaded);
+        assert_eq!(name, "Qwen/Qwen2.5-0.5B-Instruct");
+    }
+
+    #[test]
+    fn parses_wrapped_api_envelope() {
+        let v = serde_json::json!({
+            "status": "success",
+            "data": {
+                "status": "healthy",
+                "model_loaded": true,
+                "model_type": "Qwen/Qwen2.5-0.5B-Instruct",
+                "device": "cpu"
+            }
+        });
+        let (loaded, name) = parse_sidecar_health(&v);
+        assert!(loaded, "model_loaded must come from data envelope");
+        assert_eq!(name, "Qwen/Qwen2.5-0.5B-Instruct");
+    }
+
+    #[test]
+    fn empty_name_falls_back_to_unknown() {
+        let v = serde_json::json!({ "data": { "model_loaded": false, "model_type": "" } });
+        let (loaded, name) = parse_sidecar_health(&v);
+        assert!(!loaded);
+        assert_eq!(name, "unknown");
+    }
 }
