@@ -7,6 +7,10 @@ asserted in backend tests**. This file walks each surface through its full
 lifecycle (idle → running → terminal) so a broken status contract fails cheaply
 before a long run depends on it.
 
+The consciousness trainer lives at
+``domain.cognition._internal.consciousness.training`` (goal 20 deleted the
+``domain.consciousness`` package — no shims).
+
 Transitions covered:
 
 * Consciousness trainer: ``is_training`` False → True (during a run) → False,
