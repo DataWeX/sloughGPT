@@ -103,44 +103,33 @@ class TestAuditLogs:
 
 
 class TestKeys:
-    def test_keys_configured(self):
+    def _client_with_keys(self, keys):
         sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = ["key1", "key2"]
-        with patch("settings.get_security_settings", return_value=mock_sec):
+        mock_mgr = MagicMock()
+        mock_mgr.list.return_value = keys
+        with patch("routers.security._get_key_manager", return_value=mock_mgr):
             client = TestClient(_app(sr))
             resp = client.get("/security/keys")
+        return resp
+
+    def test_keys_configured(self):
+        resp = self._client_with_keys(["key1", "key2"])
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["count"] == 2
         assert data["configured"] is True
 
     def test_keys_not_configured(self):
-        sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = []
-        with patch("settings.get_security_settings", return_value=mock_sec):
-            client = TestClient(_app(sr))
-            resp = client.get("/security/keys")
+        resp = self._client_with_keys([])
         assert resp.status_code == 200
         assert resp.json()["data"]["configured"] is False
 
     def test_single_key(self):
-        sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = ["only-one-key"]
-        with patch("settings.get_security_settings", return_value=mock_sec):
-            client = TestClient(_app(sr))
-            resp = client.get("/security/keys")
+        resp = self._client_with_keys(["only-one-key"])
         data = resp.json()["data"]
         assert data["count"] == 1
         assert data["configured"] is True
 
     def test_many_keys(self):
-        sr = SecurityRouter()
-        mock_sec = MagicMock()
-        mock_sec.valid_api_keys = [f"key_{i}" for i in range(50)]
-        with patch("settings.get_security_settings", return_value=mock_sec):
-            client = TestClient(_app(sr))
-            resp = client.get("/security/keys")
+        resp = self._client_with_keys([f"key_{i}" for i in range(50)])
         assert resp.json()["data"]["count"] == 50

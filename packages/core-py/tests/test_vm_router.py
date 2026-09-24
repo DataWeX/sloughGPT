@@ -22,7 +22,16 @@ from routers.vm import router as vm_router  # noqa: E402
 def _app() -> FastAPI:
     app = FastAPI()
     app.include_router(vm_router)
+    from infrastructure.exception_handlers import register_all_handlers
+
+    register_all_handlers(app)
     return app
+
+
+def _data(resp):
+    """Unwrap the success_response() envelope."""
+    body = resp.json()
+    return body.get("data", body)
 
 
 class TestListBuiltins:
@@ -30,7 +39,7 @@ class TestListBuiltins:
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
         assert resp.status_code == 200
-        programs = resp.json()["programs"]
+        programs = _data(resp)["programs"]
         assert isinstance(programs, list)
         assert len(programs) >= 10
         names = [p["name"] for p in programs]
@@ -40,7 +49,7 @@ class TestListBuiltins:
     def test_builtins_have_required_fields(self):
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = _data(resp)["programs"]
         for p in programs:
             assert "name" in p
             assert "description" in p
@@ -49,14 +58,14 @@ class TestListBuiltins:
     def test_builtins_unique_names(self):
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = _data(resp)["programs"]
         names = [p["name"] for p in programs]
         assert len(names) == len(set(names))
 
     def test_builtins_hello_is_hello_world(self):
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = _data(resp)["programs"]
         hello = next(p for p in programs if p["name"] == "hello")
         assert "mov" in hello["code"].lower() or "int" in hello["code"].lower()
 
@@ -66,7 +75,7 @@ class TestVMInfo:
         client = TestClient(_app())
         resp = client.get("/vm/info")
         assert resp.status_code == 200
-        data = resp.json()
+        data = _data(resp)
         assert data["isa"] == "x86-32"
         assert "registers" in data
         assert "features" in data
@@ -74,22 +83,22 @@ class TestVMInfo:
     def test_info_isa(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert resp.json()["isa"] == "x86-32"
+        assert _data(resp)["isa"] == "x86-32"
 
     def test_info_registers_is_dict(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert isinstance(resp.json()["registers"], dict)
+        assert isinstance(_data(resp)["registers"], dict)
 
     def test_info_features_is_list(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert isinstance(resp.json()["features"], list)
+        assert isinstance(_data(resp)["features"], list)
 
     def test_info_has_eax(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert "EAX" in resp.json()["registers"]
+        assert "EAX" in _data(resp)["registers"]
 
 
 class TestVMRun:
@@ -103,7 +112,7 @@ class TestVMRun:
     def test_run_invalid_program(self):
         client = TestClient(_app())
         resp = client.post("/vm/run", json={"program": "nonexistent_xyz"})
-        assert resp.status_code in (200, 400, 404, 422, 500)
+        assert resp.status_code == 404  # E_NOT_FOUND via AppError handler
 
     def test_run_empty_request(self):
         client = TestClient(_app())
@@ -127,4 +136,4 @@ class TestVMTrainingJobs:
     def test_training_job_nonexistent(self):
         client = TestClient(_app())
         resp = client.get("/vm/training/jobs/nonexistent-id-123")
-        assert resp.status_code in (200, 404)
+        assert resp.status_code == 404  # non-int job_id → E_NOT_FOUND
