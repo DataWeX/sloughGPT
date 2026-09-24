@@ -91,6 +91,31 @@ LLAMA_WEIGHT_MAP = {
     "final_norm.weight": "model.norm.weight",
 }
 
+# Native SloTransformer keys — identity mapping (file tensor == param name).
+# Used when state_dict already carries training-native names (.soul / native .slnc).
+NATIVE_WEIGHT_MAP = {
+    "embed.token": "tok_emb.weight",
+    "embed.pos": "pos_emb.weight",
+    "layers.{i}.attn_norm.weight": "blocks.{i}.attn_norm.weight",
+    "layers.{i}.q.weight": "blocks.{i}.attn.q_proj.weight",
+    "layers.{i}.k.weight": "blocks.{i}.attn.k_proj.weight",
+    "layers.{i}.v.weight": "blocks.{i}.attn.v_proj.weight",
+    "layers.{i}.q.bias": "blocks.{i}.attn.q_proj.bias",
+    "layers.{i}.k.bias": "blocks.{i}.attn.k_proj.bias",
+    "layers.{i}.v.bias": "blocks.{i}.attn.v_proj.bias",
+    "layers.{i}.o_proj.weight": "blocks.{i}.attn.o_proj.weight",
+    "layers.{i}.o_proj.bias": "blocks.{i}.attn.o_proj.bias",
+    "layers.{i}.ff_norm.weight": "blocks.{i}.ff_norm.weight",
+    "layers.{i}.ffn.gate.weight": "blocks.{i}.ff.w1.weight",
+    "layers.{i}.ffn.gate.bias": "blocks.{i}.ff.w1.bias",
+    "layers.{i}.ffn.up.weight": "blocks.{i}.ff.w3.weight",
+    "layers.{i}.ffn.up.bias": "blocks.{i}.ff.w3.bias",
+    "layers.{i}.ffn.down.weight": "blocks.{i}.ff.w2.weight",
+    "layers.{i}.ffn.down.bias": "blocks.{i}.ff.w2.bias",
+    "final_norm.weight": "norm.weight",
+    "lm_head": "lm_head.weight",
+}
+
 
 def build_arch(name: str, config: dict, weight_keys: set) -> ArchConfig:
     """Build ArchConfig from HuggingFace config.json + actual weight keys.
@@ -109,7 +134,19 @@ def build_arch(name: str, config: dict, weight_keys: set) -> ArchConfig:
     rope_base = config.get("rope_theta", 10000.0)
 
     # Select weight map based on which keys exist in the checkpoint
-    if "wte.weight" in weight_keys:
+    if "tok_emb.weight" in weight_keys:
+        # Native SloTransformer (.soul / native .slnc) — identity mapping,
+        # no transpose (SloLinear stores (out, in), same as training).
+        wm = NATIVE_WEIGHT_MAP
+        norm = "rms_norm" if config.get("rms_norm_eps") is not None else "layer_norm"
+        has_rope = config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+        positional = "rope" if has_rope else "absolute"
+        has_w3 = "blocks.0.ff.w3.weight" in weight_keys
+        has_gate = "blocks.0.ff.w1.weight" in weight_keys
+        activation = "swiglu" if (has_w3 or has_gate) else "gelu"
+        attention = "gqa" if n_kv_head < n_head else "mha"
+        transpose = False
+    elif "wte.weight" in weight_keys:
         # GPT-2 uses Conv1D which stores weights as (in, out).
         # SloNet SloLinear stores as (out, in) and does x @ W.T — transpose needed.
         wm = GPT2_WEIGHT_MAP

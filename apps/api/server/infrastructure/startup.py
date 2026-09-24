@@ -1621,7 +1621,17 @@ def _autoload_model(cfg: ServerConfig):
             )
             _time.sleep(delay)
 
-    # 2) All local load attempts failed — download from HuggingFace
+    # 2) Local load failed — HuggingFace bootstrap is opt-in (goal 12).
+    #    Set SLO_BOOTSTRAP_HF=1 to allow downloading HF weights as fallback.
+    bootstrap_hf = os.environ.get("SLO_BOOTSTRAP_HF", "0").strip() in ("1", "true", "yes")
+    if not bootstrap_hf:
+        logger.warning(
+            "No local model for %s and SLO_BOOTSTRAP_HF is off — skipping HF download",
+            model_id,
+            extra={"tag": "START"},
+        )
+        return None
+
     logger.info(
         "No local .slnc/safetensors for %s — downloading from HuggingFace",
         model_id,

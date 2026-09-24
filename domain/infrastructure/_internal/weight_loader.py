@@ -128,6 +128,50 @@ def build_load_plan(
 
     from .arch_config import build_arch
 
+    # ── Native identity path (.soul / native .slnc keys) ──────────────────
+    # File tensor names already match SloTransformer params — no remapping,
+    # no transpose. This is the owned-architecture load plan (goal 12).
+    if "tok_emb.weight" in state_dict:
+        tensor_map: dict[str, TensorMapping] = {
+            key: TensorMapping(param_name=key, needs_transpose=False, canonical=key)
+            for key in state_dict
+        }
+        loaded_params = set(tensor_map)
+        tied: list[tuple[str, str]] = []
+        if "lm_head.weight" not in loaded_params and "tok_emb.weight" in loaded_params:
+            tied.append(("lm_head.weight", "tok_emb.weight"))
+
+        synthesized: list[tuple[str, str, str]] = []
+        has_w3 = any(k.endswith(".ff.w3.weight") for k in loaded_params)
+        if not has_w3:
+            for i in range(n_layer):
+                w1_key = f"blocks.{i}.ff.w1.weight"
+                if w1_key in loaded_params:
+                    synthesized.append((f"blocks.{i}.ff.w3.weight", "0", w1_key))
+                    synthesized.append((f"blocks.{i}.ff.w3.bias", "1", w1_key))
+
+        n_embed_arr = state_dict.get("tok_emb.weight")
+        n_embed = int(n_embed_arr.shape[1]) if n_embed_arr is not None and n_embed_arr.ndim == 2 else 0
+
+        plan = LoadPlan(
+            tensor_map=tensor_map,
+            tied_weights=tied,
+            synthesized_params=synthesized,
+            fused_qkv={},
+            n_layer=n_layer,
+            n_embed=n_embed,
+            arch_name="native",
+        )
+        logger.info(
+            "build_load_plan: arch=native mapped=%d tied=%d synth=%d (%.3fs)",
+            len(tensor_map),
+            len(tied),
+            len(synthesized),
+            time.monotonic() - _t0,
+            extra={"tag": "INFRA"},
+        )
+        return plan
+
     arch = build_arch(
         name=config.get("architectures", ["unknown"])[0],
         config=config,

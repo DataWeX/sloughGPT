@@ -135,6 +135,24 @@ class ModelLoader:
         if not has_slnc:
             tracker.start(model_id, stage=ConversionStage.DOWNLOADING, message="Loading model...")
 
+        # Priority: native .soul first (owned architecture, goal 12), then .slnc.
+        soul_result = self._try_load_soul(model_id)
+        if soul_result is not None:
+            if verify and soul_result.success:
+                self._verify_model(soul_result)
+            elapsed_ms = (time.monotonic() - load_start) * 1000
+            logger.info(
+                "model_loader: load complete",
+                extra={
+                    "model_id": model_id,
+                    "elapsed_ms": round(elapsed_ms, 1),
+                    "success": soul_result.success,
+                    "source": "soul",
+                },
+            )
+            tracker.finish(model_id)
+            return soul_result
+
         result = self._try_load_slnc(model_id, device, quantize, quant_bits, quant_mode)
         if result is not None:
             tracker.update(
@@ -157,24 +175,6 @@ class ModelLoader:
             )
             tracker.finish(model_id)
             return result
-
-        # Try native .soul checkpoint (trained by SloNet, not converted from HF)
-        soul_result = self._try_load_soul(model_id)
-        if soul_result is not None:
-            if verify and soul_result.success:
-                self._verify_model(soul_result)
-            elapsed_ms = (time.monotonic() - load_start) * 1000
-            logger.info(
-                "model_loader: load complete",
-                extra={
-                    "model_id": model_id,
-                    "elapsed_ms": round(elapsed_ms, 1),
-                    "success": soul_result.success,
-                    "source": "soul",
-                },
-            )
-            tracker.finish(model_id)
-            return soul_result
 
         elapsed_ms = (time.monotonic() - load_start) * 1000
         logger.warning(

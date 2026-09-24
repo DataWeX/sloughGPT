@@ -2250,6 +2250,7 @@ class SloughGPTTrainer:
         include_optimizer_state: bool = True,
         avg_quality: float | None = None,
         is_final: bool = False,
+        compile_slnc: bool | None = None,
     ):
         """Save the model in ``.soul`` format (the only SloNet checkpoint format).
 
@@ -2272,14 +2273,19 @@ class SloughGPTTrainer:
                 a mid-training run resumes exactly. If False, only step and
                 hyperparameters are embedded — momentum buffers are dropped,
                 keeping the checkpoint small; a resume rebuilds the optimizer
-                with fresh momentum. Pass False for final delivered artifacts
+                with fresh             momentum. Pass False for final delivered artifacts
                 that only need inference weights.
+            compile_slnc: If True (or env ``SLO_COMPILE_SLNC=1`` when None),
+                also write a sibling ``.slnc`` via the soul→slnc bridge so the
+                checkpoint is servable through the mmap load path without a
+                separate compile step.
 
         Returns:
             None.
 
         Side effects:
             - Writes ``<path>.soul`` and its ``<path>.soul.meta.json``.
+            - Optionally writes ``<path>.slnc`` when compilation is enabled.
         """
         if format is not None:
             warnings.warn(
@@ -2374,6 +2380,20 @@ class SloughGPTTrainer:
         save_soul(self.model, output_path, soul_profile=soul)
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})
+
+        # Optional post-train .slnc compile (owned architecture, goal 12).
+        # Default follows SLO_COMPILE_SLNC=1 when compile_slnc is None.
+        if compile_slnc is None:
+            compile_slnc = os.environ.get("SLO_COMPILE_SLNC", "0").strip() in ("1", "true", "yes")
+        if compile_slnc:
+            try:
+                from domain.infrastructure._internal.soul_to_slnc import soul_to_slnc
+
+                slnc_out = path + ".slnc"
+                soul_to_slnc(output_path, slnc_out)
+                logger.info("Also compiled %s", slnc_out, extra={"tag": "TRAIN"})
+            except Exception as e:
+                logger.warning("Post-train .slnc compile failed: %s", e, extra={"tag": "TRAIN"})
 
         # Auto-compress checkpoint into pugqeep Points for efficient inference.
         # Final saves only: periodic checkpoints sit beside a fresh .soul,
