@@ -2835,7 +2835,8 @@ class InferenceRouter:
         """chat."""
         _chat_t0 = time.monotonic()
         import state as _chat_state
-        from domains import get_chat_domain
+
+        from domain.chat._internal.domain import get_chat_domain
 
         ms = _get_model_status()
         if not ms["ready"]:

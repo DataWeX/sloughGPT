@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from ...__init__ import BaseComponent, ComponentException
+from domain import BaseComponent, ComponentException
 
 try:
-    from ...__init__ import IDeploymentManager
+    from domain import IDeploymentManager
 except ImportError:
 
     class IDeploymentManager:

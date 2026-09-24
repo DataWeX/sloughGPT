@@ -1,5 +1,11 @@
-"""Backward-compatibility shim."""
+"""Quantization core — INT8/INT4 matrix multiply kernels."""
 
-import domains.infrastructure.quant_core as _mod
+from __future__ import annotations
 
-globals().update(vars(_mod))
+from domain.infrastructure._internal.quant_core.wrapper import (
+    matmul_int4_c,
+    matmul_int8_c,
+    matmul_int8_f32_c,
+)
+
+__all__ = ["matmul_int8_c", "matmul_int8_f32_c", "matmul_int4_c"]

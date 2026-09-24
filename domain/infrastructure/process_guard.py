@@ -1,3 +1,8 @@
-"""Shim: re-exports from canonical old-style location."""
+"""Re-export of the canonical infra module (was core-py)."""
 
-from domains.infrastructure.process_guard import *  # noqa: F401,F403
+from domain.infrastructure._internal.process_guard import *  # noqa: F401,F403
+
+try:  # noqa
+    from domain.infrastructure._internal.process_guard import __all__  # noqa: F401
+except ImportError:
+    pass
