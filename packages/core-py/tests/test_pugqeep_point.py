@@ -236,6 +236,30 @@ class TestPointBytesRoundTrip:
         p2 = Point.from_bytes(data)
         assert p2.function_type == "raw"
 
+    def test_block_q4(self):
+        from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+
+        w = np.random.RandomState(0).randn(64).astype(np.float32)
+        p = PointCompressor().compress_block_q4(w, identity="q4")
+        p2 = Point.from_bytes(p.to_bytes(), identity="q4")
+        assert p2.function_type == "block_q4"
+        np.testing.assert_allclose(p2.params["mins"], p.params["mins"])
+        np.testing.assert_allclose(p2.params["scales"], p.params["scales"])
+        np.testing.assert_array_equal(p2.params["packed"], p.params["packed"])
+        assert p2.params["n_elements"] == p.params["n_elements"]
+        assert p2.params["n_blocks"] == p.params["n_blocks"]
+        assert p2.params["block_size"] == p.params["block_size"]
+
+    def test_block_q8(self):
+        from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+
+        w = np.random.RandomState(1).randn(64).astype(np.float32)
+        p = PointCompressor().compress_block_q8(w, identity="q8")
+        p2 = Point.from_bytes(p.to_bytes(), identity="q8")
+        assert p2.function_type == "block_q8"
+        np.testing.assert_array_equal(p2.params["values"], p.params["values"])
+        np.testing.assert_allclose(p2.params["mins"], p.params["mins"])
+
     def test_unknown_type_code_raises(self):
         with pytest.raises(ValueError, match="Unknown type code"):
             Point.from_bytes(b"\xff\xff\xff\xff" + b"\x00" * 8)

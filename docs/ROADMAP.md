@@ -31,7 +31,7 @@
 
 ### Compression (pugqeep)
 
-- VQ cluster path is wired end to end: k-means++ init + entropy-adaptive k + Lloyd's early-stop refinement, Huffman-coded assignments, `Point.generate` decodes on read. `test_pugqeep_compressor.py` 159/159 green (cluster/function/round-trip/serialization/nbytes + extended suites). Open: Lloyd+Huffman vs Q4-block benchmark, plus a dedicated Huffman round-trip test (decode is currently covered only implicitly via decompress round-trips).
+- VQ cluster path is wired end to end: k-means++ init + entropy-adaptive k + Lloyd's early-stop refinement, Huffman-coded assignments, `Point.generate` decodes on read. Dedicated Huffman round-trip suite in `test_pugqeep_compressor.py::TestHuffmanRoundTrip` (multi/single-symbol, from_dict, empty, Point.generate). Lloyd+Huffman vs block Q4/Q8 via `scripts/benchmark_block_quantization.py` (cluster cosine ~0.9998 / ~3.4x; Q4 ~5.3x cosine ~0.997; Q8 ~3.2x cosine ~0.99999) — `block_q4`/`block_q8` now binary-serializable (`BQ4 `/`BQ8 `).
 
 ### What the bootstrap era taught us (keep the lessons, drop the habits)
 

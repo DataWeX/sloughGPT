@@ -45,6 +45,9 @@ class HuffmanTree:
     @classmethod
     def build(cls, data: np.ndarray) -> HuffmanTree:
         """Build Huffman tree from uint8 array."""
+        data = np.asarray(data)
+        if data.size == 0:
+            return cls(codes={}, tree=None)
         freq = Counter(data.tolist())
         heap = [cls._Node(v, c) for v, c in freq.items()]
         heapq.heapify(heap)

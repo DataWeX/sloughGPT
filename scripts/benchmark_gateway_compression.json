@@ -198,5 +198,37 @@
         "dec_mibs": 609.5
       }
     ]
+  },
+  {
+    "mib": 64,
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 67108864,
+        "wire_bytes": 67108864,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 67108864,
+        "wire_bytes": 1530175,
+        "ratio": 0.0228,
+        "savings_pct": 97.72,
+        "enc_mibs": 65.7,
+        "dec_mibs": 218.4
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 67108864,
+        "wire_bytes": 573363,
+        "ratio": 0.0085,
+        "savings_pct": 99.15,
+        "enc_mibs": 345.2,
+        "dec_mibs": 481.5
+      }
+    ]
   }
 ]

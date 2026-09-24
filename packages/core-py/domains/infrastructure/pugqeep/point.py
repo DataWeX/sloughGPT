@@ -151,8 +151,24 @@ class Point(PointProtocol):
         "polynomial": b"POLY",
         "cluster": b"CLUS",
         "raw": b"RAW ",
+        "block_q4": b"BQ4 ",
+        "block_q8": b"BQ8 ",
     }
     _TYPE_DECODE = {v: k for k, v in _TYPE_CODES.items()}
+
+    @staticmethod
+    def _pack_block_header(params: dict) -> bytes:
+        return struct.pack(
+            "<III",
+            int(params["n_elements"]),
+            int(params["n_blocks"]),
+            int(params["block_size"]),
+        )
+
+    @staticmethod
+    def _unpack_block_header(param_bytes: bytes) -> tuple[int, int, int, int]:
+        n_elements, n_blocks, block_size = struct.unpack_from("<III", param_bytes, 0)
+        return n_elements, n_blocks, block_size, 12
 
     def to_bytes(self) -> bytes:
         """Serialize point to bytes.
@@ -160,6 +176,7 @@ class Point(PointProtocol):
         Binary layout per type:
           header:  4 bytes type code (fixed)
           cluster: [n_centroids:uint32] [centroids:f32*n] [n_assignments:uint32] [assignments:u8*n] [has_residual:u8] [residual_bytes?]
+          block_q4/q8: [n_elements:u32] [n_blocks:u32] [block_size:u32] [mins:f32*n_blocks] [scales:f32*n_blocks] [payload]
           periodic/linear/polynomial: [params:f32*k] [has_residual:u8] [residual_bytes?]
           raw:     [n_bytes:uint32] [raw_data]
         """
@@ -185,6 +202,25 @@ class Point(PointProtocol):
                 res_bytes = self.residual.astype(np.float32).tobytes()
                 param_bytes += struct.pack("<I", len(res_bytes))
                 param_bytes += res_bytes
+        elif self.function_type == "block_q4":
+            mins = self.params["mins"].astype(np.float32)
+            scales = self.params["scales"].astype(np.float32)
+            packed = self.params["packed"]
+            param_bytes = self._pack_block_header(self.params)
+            param_bytes += mins.tobytes()
+            param_bytes += scales.tobytes()
+            param_bytes += struct.pack("<I", len(packed))
+            param_bytes += packed.tobytes()
+        elif self.function_type == "block_q8":
+            mins = self.params["mins"].astype(np.float32)
+            scales = self.params["scales"].astype(np.float32)
+            values = self.params["values"]
+            param_bytes = self._pack_block_header(self.params)
+            param_bytes += mins.tobytes()
+            param_bytes += scales.tobytes()
+            values_flat = values.astype(np.uint8).ravel()
+            param_bytes += struct.pack("<I", values_flat.size)
+            param_bytes += values_flat.tobytes()
         elif self.function_type == "periodic":
             param_bytes = struct.pack("fff", self.params["a"], self.params["b"], self.params["w"])
             has_res = 1 if self.residual is not None else 0
@@ -301,6 +337,43 @@ class Point(PointProtocol):
                 res_len = struct.unpack("<I", param_bytes[offset : offset + 4])[0]
                 offset += 4
                 residual = np.frombuffer(param_bytes[offset : offset + res_len], dtype=np.float32)
+        elif function_type == "block_q4":
+            n_elements, n_blocks, block_size, offset = cls._unpack_block_header(param_bytes)
+            n_f32 = n_blocks * 2
+            floats = np.frombuffer(param_bytes[offset : offset + n_f32 * 4], dtype=np.float32)
+            offset += n_f32 * 4
+            mins = floats[:n_blocks]
+            scales = floats[n_blocks:]
+            packed_len = struct.unpack_from("<I", param_bytes, offset)[0]
+            offset += 4
+            packed = np.frombuffer(param_bytes[offset : offset + packed_len], dtype=np.uint8)
+            params = {
+                "mins": mins,
+                "scales": scales,
+                "packed": packed,
+                "n_elements": n_elements,
+                "n_blocks": n_blocks,
+                "block_size": block_size,
+            }
+        elif function_type == "block_q8":
+            n_elements, n_blocks, block_size, offset = cls._unpack_block_header(param_bytes)
+            n_f32 = n_blocks * 2
+            floats = np.frombuffer(param_bytes[offset : offset + n_f32 * 4], dtype=np.float32)
+            offset += n_f32 * 4
+            mins = floats[:n_blocks]
+            scales = floats[n_blocks:]
+            values_len = struct.unpack_from("<I", param_bytes, offset)[0]
+            offset += 4
+            values = np.frombuffer(param_bytes[offset : offset + values_len], dtype=np.uint8)
+            values = values.reshape(n_blocks, block_size)
+            params = {
+                "mins": mins,
+                "scales": scales,
+                "values": values,
+                "n_elements": n_elements,
+                "n_blocks": n_blocks,
+                "block_size": block_size,
+            }
         elif function_type == "raw":
             n_bytes = struct.unpack("<I", param_bytes[:4])[0]
             raw_data = param_bytes[4 : 4 + n_bytes]
