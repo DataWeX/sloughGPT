@@ -58,7 +58,7 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "domains.infrastructure.model_registry",
     "domain.models._internal.provider",
     "domain.inference._internal.slo_manager",
-    "domains.slolib.gpu",
+    "domain.slolib._internal.gpu",
     "domains.infrastructure.model_catalog",
     "domains.infrastructure.task_queue",
     "domains.infrastructure.training_queue",
