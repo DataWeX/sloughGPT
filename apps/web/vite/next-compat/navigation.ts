@@ -69,9 +69,13 @@ export function useRouter(): NextRouter {
   )
 }
 
-/** next/navigation useSearchParams — same tuple API as react-router. */
-export function useSearchParams(): ReturnType<typeof useReactRouterSearchParams> {
-  return useReactRouterSearchParams()
+/**
+ * next/navigation useSearchParams — returns ReadonlyURLSearchParams-like object
+ * (NOT react-router's tuple). Call sites use `searchParams.get(...)`.
+ */
+export function useSearchParams(): URLSearchParams {
+  const [params] = useReactRouterSearchParams()
+  return params
 }
 
 export const REDIRECT_DIGEST_PREFIX = 'NEXT_REDIRECT;'

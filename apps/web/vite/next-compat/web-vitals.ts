@@ -1,4 +1,14 @@
 /** next/web-vitals no-op — Phase 0; wire `web-vitals` package in a later phase. */
-export function useReportWebVitals(_callback: (metric: unknown) => void): void {
-  // intentionally empty in the Vite spike
+
+export type WebVitalsMetric = {
+  name: string
+  value: number
+  rating?: string
+  id?: string
+  navigationType?: string
+  [key: string]: unknown
+}
+
+export function useReportWebVitals(callback: (metric: WebVitalsMetric) => void): void {
+  void callback
 }
