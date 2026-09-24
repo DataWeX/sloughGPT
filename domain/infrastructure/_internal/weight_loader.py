@@ -286,9 +286,9 @@ def infer_arch_from_state_dict(state_dict: dict[str, np.ndarray]) -> dict:
             if detected >= 1:
                 result["n_head"] = detected
 
-    # intermediate_size from w1/gate_proj shape
+    # intermediate_size from w1/gate_proj shape (SloNet: blocks.N.ff.w1, HF: mlp.gate_proj)
     for key in state_dict:
-        if "mlp.w1.weight" in key or "mlp.gate_proj.weight" in key:
+        if ".w1.weight" in key or "gate_proj.weight" in key:
             shape = state_dict[key].shape
             if len(shape) >= 2:
                 result["intermediate_size"] = shape[0]
@@ -411,7 +411,8 @@ def load_into_model(
         if is_bias:
             q, k, v = np.split(arr, 3, axis=0)
         else:
-            q, k, v = np.split(arr.T, 3, axis=0)
+            # HF fused weight is (3*n, n); split rows then transpose → SloNet (n, n)
+            q, k, v = (c.T for c in np.split(arr, 3, axis=0))
         for pname, chunk in zip(param_names, [q, k, v], strict=False):
             p = param_map.get(pname)
             if p is not None:
@@ -513,7 +514,7 @@ class DirectWeightLoader:
             if arr.ndim == 1:
                 q, k, v = np.split(arr, 3, axis=0)
             else:
-                q, k, v = np.split(arr.T, 3, axis=0)
+                q, k, v = (c.T for c in np.split(arr, 3, axis=0))
 
             for pname, chunk in zip(param_names, [q, k, v], strict=False):
                 p = param_map.get(pname)
@@ -613,12 +614,13 @@ class WeightLoaderRegistry:
         self._default: type | None = None
 
     def register_loader(self, suffix: str, loader_class: type):
-        """Register a loader class for a file suffix."""
-        self._loaders[suffix] = loader_class
+        """Register a loader class for a file suffix (case-insensitive)."""
+        key = suffix.lower() if suffix.startswith(".") else f".{suffix.lower()}"
+        self._loaders[key] = loader_class
         logger.info(
             "Registered weight loader: %s → %s",
-            suffix,
-            loader_class.__name__,
+            key,
+            getattr(loader_class, "__name__", repr(loader_class)),
             extra={"tag": "INFRA"},
         )
 
