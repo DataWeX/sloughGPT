@@ -100,52 +100,60 @@ def test_check_numba_true_branch(monkeypatch):
 
 def test_get_accelerator_slolib_metal(monkeypatch):
     slolib = types.ModuleType("domain.slolib")
-    slolib_gpu = types.ModuleType("domain.slolib.gpu")
+    slolib_internal = types.ModuleType("domain.slolib._internal")
+    slolib_gpu = types.ModuleType("domain.slolib._internal.gpu")
     slolib_gpu.get_accelerator = lambda: _FakeAcc()
     monkeypatch.setitem(sys.modules, "domain.slolib", slolib)
-    monkeypatch.setitem(sys.modules, "domain.slolib.gpu", slolib_gpu)
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal", slolib_internal)
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal.gpu", slolib_gpu)
     assert _get_accelerator().name == "metal"
 
 
 def test_get_accelerator_slolib_raise_falls_back_to_old_backend(monkeypatch):
     slolib = types.ModuleType("domain.slolib")
-    slolib_gpu = types.ModuleType("domain.slolib.gpu")
+    slolib_internal = types.ModuleType("domain.slolib._internal")
+    slolib_gpu = types.ModuleType("domain.slolib._internal.gpu")
     slolib_gpu.get_accelerator = lambda: (_ for _ in ()).throw(RuntimeError("boom"))
     monkeypatch.setitem(sys.modules, "domain.slolib", slolib)
-    monkeypatch.setitem(sys.modules, "domain.slolib.gpu", slolib_gpu)
-    old_pkg = types.ModuleType("domain.training.gpu")
-    old_mod = types.ModuleType("domain.training.gpu.accelerator")
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal", slolib_internal)
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal.gpu", slolib_gpu)
+    old_pkg = types.ModuleType("domain.training._internal.gpu")
+    old_mod = types.ModuleType("domain.training._internal.gpu.accelerator")
     old_mod.get_accelerator = lambda: None
-    monkeypatch.setitem(sys.modules, "domain.training.gpu", old_pkg)
-    monkeypatch.setitem(sys.modules, "domain.training.gpu.accelerator", old_mod)
+    monkeypatch.setitem(sys.modules, "domain.training._internal.gpu", old_pkg)
+    monkeypatch.setitem(sys.modules, "domain.training._internal.gpu.accelerator", old_mod)
     assert _get_accelerator() is None
 
 
 def test_get_accelerator_old_backend(monkeypatch):
     slolib = types.ModuleType("domain.slolib")
-    slolib_gpu = types.ModuleType("domain.slolib.gpu")
+    slolib_internal = types.ModuleType("domain.slolib._internal")
+    slolib_gpu = types.ModuleType("domain.slolib._internal.gpu")
     slolib_gpu.get_accelerator = lambda: (_ for _ in ()).throw(ImportError("no"))
     monkeypatch.setitem(sys.modules, "domain.slolib", slolib)
-    monkeypatch.setitem(sys.modules, "domain.slolib.gpu", slolib_gpu)
-    old_pkg = types.ModuleType("domain.training.gpu")
-    old_mod = types.ModuleType("domain.training.gpu.accelerator")
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal", slolib_internal)
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal.gpu", slolib_gpu)
+    old_pkg = types.ModuleType("domain.training._internal.gpu")
+    old_mod = types.ModuleType("domain.training._internal.gpu.accelerator")
     old_mod.get_accelerator = lambda: _FakeAcc()
-    monkeypatch.setitem(sys.modules, "domain.training.gpu", old_pkg)
-    monkeypatch.setitem(sys.modules, "domain.training.gpu.accelerator", old_mod)
+    monkeypatch.setitem(sys.modules, "domain.training._internal.gpu", old_pkg)
+    monkeypatch.setitem(sys.modules, "domain.training._internal.gpu.accelerator", old_mod)
     assert _get_accelerator().name == "metal"
 
 
 def test_get_accelerator_old_returns_none(monkeypatch):
     slolib = types.ModuleType("domain.slolib")
-    slolib_gpu = types.ModuleType("domain.slolib.gpu")
+    slolib_internal = types.ModuleType("domain.slolib._internal")
+    slolib_gpu = types.ModuleType("domain.slolib._internal.gpu")
     slolib_gpu.get_accelerator = lambda: (_ for _ in ()).throw(ImportError("no"))
     monkeypatch.setitem(sys.modules, "domain.slolib", slolib)
-    monkeypatch.setitem(sys.modules, "domain.slolib.gpu", slolib_gpu)
-    old_pkg = types.ModuleType("domain.training.gpu")
-    old_mod = types.ModuleType("domain.training.gpu.accelerator")
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal", slolib_internal)
+    monkeypatch.setitem(sys.modules, "domain.slolib._internal.gpu", slolib_gpu)
+    old_pkg = types.ModuleType("domain.training._internal.gpu")
+    old_mod = types.ModuleType("domain.training._internal.gpu.accelerator")
     old_mod.get_accelerator = lambda: None
-    monkeypatch.setitem(sys.modules, "domain.training.gpu", old_pkg)
-    monkeypatch.setitem(sys.modules, "domain.training.gpu.accelerator", old_mod)
+    monkeypatch.setitem(sys.modules, "domain.training._internal.gpu", old_pkg)
+    monkeypatch.setitem(sys.modules, "domain.training._internal.gpu.accelerator", old_mod)
     assert _get_accelerator() is None
 
 
