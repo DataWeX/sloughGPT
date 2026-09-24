@@ -1,3 +1,3 @@
 """Shim: re-exports from canonical old-style location."""
 
-from domains.infrastructure.memory_pressure import *  # noqa: F401,F403
+from domain.infrastructure._internal.memory_pressure import *  # noqa: F401,F403

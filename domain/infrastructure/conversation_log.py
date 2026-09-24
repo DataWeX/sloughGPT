@@ -1,3 +1,3 @@
 """Shim: re-exports from canonical old-style location."""
 
-from domains.infrastructure.conversation_log import *  # noqa: F401,F403
+from domain.infrastructure._internal.conversation_log import *  # noqa: F401,F403

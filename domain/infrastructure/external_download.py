@@ -1,3 +1,3 @@
 """Shim: re-exports from canonical old-style location."""
 
-from domains.infrastructure.external_download import *  # noqa: F401,F403
+from domain.infrastructure._internal.external_download import *  # noqa: F401,F403
