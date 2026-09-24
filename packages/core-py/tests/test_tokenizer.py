@@ -220,6 +220,33 @@ class TestSloBPEDecode:
         decoded = trained_tok.decode(ids)
         assert "?" in decoded
 
+    def test_single_token_stream_preserves_spaces(self, trained_tok):
+        """Streaming decodes one token at a time; whitespace must survive."""
+        ids = trained_tok.encode("hello world")
+        streamed = "".join(trained_tok.decode([i]) for i in ids)
+        full = trained_tok.decode(ids)
+        assert streamed.strip() == full.strip()
+        # word separator present somewhere in per-token stream
+        assert "hello" in streamed and "world" in streamed
+        # at least one chunk carries the inter-word space
+        pieces = [trained_tok.decode([i]) for i in ids]
+        assert any(p != p.strip() for p in pieces), f"all chunks stripped: {pieces!r}"
+
+    def test_single_token_keeps_boundary_space_gpt2(self):
+        tok = SloBPE(pretokenizer="gpt2")
+        tok.train(["hello world", "hello there"] * 10, vocab_size=64)
+        ids = tok.encode("hello world")
+        pieces = [tok.decode([i]) for i in ids]
+        joined = "".join(pieces)
+        assert (
+            "hello world" in joined or "hello" in joined and any(p.startswith(" ") for p in pieces)
+        )
+
+    def test_multi_token_full_decode_still_strips(self, trained_tok):
+        ids = trained_tok.encode("hello world")
+        decoded = trained_tok.decode(ids)
+        assert decoded == decoded.strip()
+
 
 class TestSloBPESerialization:
     def test_to_dict_roundtrip(self):
@@ -524,6 +551,15 @@ class TestSloUnigramDecode:
         ids = [9999]
         decoded = trained_tok.decode(ids)
         assert "?" in decoded
+
+    def test_single_token_stream_preserves_spaces(self, trained_tok):
+        """Streaming decodes one token at a time; whitespace must survive."""
+        ids = trained_tok.encode("hello world")
+        pieces = [trained_tok.decode([i]) for i in ids]
+        joined = "".join(pieces)
+        full = trained_tok.decode(ids)
+        assert joined.strip() == full.strip()
+        assert any(p != p.strip() for p in pieces), f"all chunks stripped: {pieces!r}"
 
 
 class TestSloUnigramSerialization:
