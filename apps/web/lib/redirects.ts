@@ -43,6 +43,16 @@ export const REDIRECTS: Record<string, string> = {
   '/vm': '/developer',
   '/workflow': '/feedback',
   '/tools': '/chat',
+  '/workspace-dashboard': '/workspace',
+  '/usage': '/workspace/usage',
+  '/audit-trail': '/workspace/audit',
+  '/members': '/workspace/members',
+  '/permissions': '/workspace/members/permissions',
+  '/workspace-settings': '/workspace/settings',
+  '/api-keys': '/workspace/settings/api-keys',
+  '/notifications': '/workspace/settings/notifications',
+  '/shared-data': '/workspace/data',
+  '/workspace-search': '/workspace/data/search',
 }
 
 export function isIgnoredPath(pathname: string): boolean {
