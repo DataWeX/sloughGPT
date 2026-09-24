@@ -2339,13 +2339,27 @@ class SloughGPTTrainer:
             except (KeyError, TypeError):
                 pass
         soul.metadata["vocab_size"] = self.vocab_size
+        # Persist architecture flags + FFN width so from_soul / soul_to_slnc
+        # rebuild the exact trained architecture (RoPE/RMSNorm, not abs/LN).
+        _intermediate = None
+        try:
+            _w1 = self.model.blocks[0].ff.w1.weight
+            _intermediate = int(_w1.shape[0])
+        except Exception:
+            _intermediate = getattr(self.config, "intermediate_size", None)
         soul.metadata["config"] = {
             "n_embed": self.config.n_embed,
             "n_layer": self.config.n_layer,
             "n_head": self.config.n_head,
             "block_size": self.config.block_size,
+            "vocab_size": self.vocab_size,
             "model_type": "sloughgpt",
+            "use_rope": True,
+            "norm_type": "rms_norm",
+            "max_seq_len": getattr(self.model, "max_seq_len", 2048),
         }
+        if _intermediate:
+            soul.metadata["config"]["intermediate_size"] = int(_intermediate)
         if training_duration is not None:
             soul.metadata["training_duration_s"] = training_duration
         if avg_quality is not None:

@@ -63,6 +63,9 @@ def build_slnc_config_from_soul(soul: Any, state_dict: dict) -> dict:
         # reconstructs the same architecture (no absolute pos_emb).
         "position_embedding_type": "rope",
         "rope_theta": 10000.0,
+        # Explicit arch flags (also present in newer .soul config blocks).
+        "use_rope": True if cfg.get("use_rope") is None else bool(cfg["use_rope"]),
+        "norm_type": cfg.get("norm_type") or "rms_norm",
         # SloughGPTModel / SloTransformer default norm is RMSNorm
         "rms_norm_eps": 1e-5,
         # build_model_from_config maps silu → SwiGLU (w1/w2/w3)

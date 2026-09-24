@@ -366,19 +366,33 @@ def build_model_from_config(config: dict, _lazy: bool = True):
     n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
     vocab_size = config.get("vocab_size", 50257)
     intermediate_size = config.get("n_inner") or config.get("intermediate_size", n_embed * 4)
-    max_pos = config.get("n_positions", config.get("max_position_embeddings", 1024))
-
-    # Auto-detect positional encoding
-    has_rope = (
-        config.get("rope_theta") is not None or config.get("position_embedding_type") == "rope"
+    max_pos = (
+        config.get("n_positions")
+        or config.get("max_position_embeddings")
+        or config.get("block_size")
+        or 1024
     )
-    use_abs_pos = not has_rope
+    max_seq_len = config.get("max_seq_len") or max_pos
 
-    # Auto-detect norm type
-    has_rms = config.get("rms_norm_eps") is not None
-    norm_type = "rms_norm" if has_rms else "layer_norm"
-    if config.get("layer_norm_type"):
+    # Auto-detect positional encoding (native soul sets use_rope explicitly)
+    if config.get("use_rope") is not None:
+        use_abs_pos = not bool(config["use_rope"])
+    else:
+        has_rope = (
+            config.get("rope_theta") is not None
+            or config.get("position_embedding_type") == "rope"
+        )
+        use_abs_pos = not has_rope
+
+    # Auto-detect norm type (native soul sets norm_type explicitly)
+    if config.get("norm_type"):
+        norm_type = config["norm_type"]
+    elif config.get("layer_norm_type"):
         norm_type = config["layer_norm_type"]
+    elif config.get("rms_norm_eps") is not None:
+        norm_type = "rms_norm"
+    else:
+        norm_type = "layer_norm"
 
     # Auto-detect GQA
     n_kv_head = config.get("num_key_value_heads", n_head)
@@ -397,7 +411,7 @@ def build_model_from_config(config: dict, _lazy: bool = True):
         n_kv_head=n_kv_head,
         intermediate_size=intermediate_size,
         block_size=max_pos,
-        max_seq_len=max_pos,
+        max_seq_len=max_seq_len,
         use_rope=not use_abs_pos,
         rope_base=config.get("rope_theta", 10000.0),
         dropout=0.0,
