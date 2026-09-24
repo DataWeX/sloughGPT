@@ -376,3 +376,105 @@ class TestProcessGuardMemoryMb:
         mock_worker._process = None
         guard._worker = mock_worker
         assert guard._memory_mb() is None
+
+
+class TestThreadWorkerHFGenerate:
+    """HF/thread mode: _generate_fn/_stream_fn must not assume provider."""
+
+    @staticmethod
+    def _worker():
+        from domain.infrastructure._internal.model_config import ModelConfig
+        from domain.infrastructure._internal.process_guard import _ThreadWorker
+
+        return _ThreadWorker(ModelConfig(model_id="hf-unit"), worker_id="hf-unit")
+
+    def test_generate_uses_hf_model_generate_numpy(self):
+        import numpy as np
+
+        w = self._worker()
+        w._provider = None
+        w._hf_tokenizer = MagicMock()
+        w._hf_tokenizer.encode.return_value = [1, 2, 3]
+        w._hf_tokenizer.decode.return_value = "hello"
+        w._hf_tokenizer.eos_token_id = 0
+        w._hf_model = MagicMock()
+        w._hf_model.generate_numpy.return_value = np.array([[1, 2, 3, 4]])
+
+        out = w._generate_fn("hi", max_new_tokens=4)
+        assert out["text"] == "hello"
+        assert out["tokens_generated"] == 4
+        w._hf_model.generate_numpy.assert_called_once()
+
+    def test_stream_uses_hf_model_generate_numpy_stream(self):
+        w = self._worker()
+        w._provider = None
+        w._hf_tokenizer = MagicMock()
+        w._hf_tokenizer.encode.return_value = [1]
+        w._hf_tokenizer.decode.side_effect = lambda ids: f"t{ids[0]}"
+        w._hf_tokenizer.eos_token_id = 0
+        w._hf_model = MagicMock()
+        w._hf_model.generate_numpy_stream.return_value = iter([7, 8])
+
+        toks = list(w._stream_fn("hi", max_new_tokens=4))
+        assert toks == ["t7", "t8"]
+
+    def test_generate_hf_callable_tokenizer_and_generate(self):
+        import numpy as np
+
+        class FakeTok:
+            eos_token_id = 0
+            pad_token_id = 0
+
+            def __call__(self, prompt, return_tensors=None):
+                class Arr(np.ndarray):
+                    def to(self, _d):
+                        return self
+
+                ids = np.array([[1, 2, 3]], dtype=np.int64).view(Arr)
+                mask = np.ones((1, 3), dtype=np.int64).view(Arr)
+                return {"input_ids": ids, "attention_mask": mask}
+
+            def decode(self, ids, skip_special_tokens=False):
+                return "hf-out"
+
+        class FakeModel:
+            device = "cpu"
+
+            def generate(self, **_kw):
+                return np.array([[1, 2, 3, 7, 8]], dtype=np.int64)
+
+        w = self._worker()
+        w._provider = None
+        w._hf_tokenizer = FakeTok()
+        w._hf_model = FakeModel()
+        out = w._generate_fn("hey", max_new_tokens=3)
+        assert out["text"] == "hf-out"
+        assert out["tokens_generated"] == 2
+
+        # stream falls back to single-chunk yield of full generate
+        toks = list(w._stream_fn("hey", max_new_tokens=3))
+        assert toks == ["hf-out"]
+
+    def test_generate_raises_when_no_backend(self):
+        w = self._worker()
+        w._provider = None
+        w._hf_model = None
+        w._hf_tokenizer = None
+        with pytest.raises(RuntimeError, match="no provider or HF model"):
+            w._generate_fn("x")
+
+    def test_provider_path_still_preferred(self):
+        import numpy as np
+
+        w = self._worker()
+        prov = MagicMock()
+        prov._tokenizer.encode.return_value = [1]
+        prov._tokenizer.decode.return_value = "slo"
+        prov._tokenizer.eos_token_id = 0
+        prov._model.generate_numpy.return_value = np.array([[9]])
+        w._provider = prov
+        w._hf_model = None
+        w._hf_tokenizer = None
+        out = w._generate_fn("x")
+        assert out["text"] == "slo"
+        prov._model.generate_numpy.assert_called_once()

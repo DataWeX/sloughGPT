@@ -818,25 +818,12 @@ class TestProcessGuard:
 
 
 class TestModelServerWithGuard:
+    """ModelServer delegates to an alive ProcessGuard without loading HF/torch."""
+
     @pytest.fixture
     def model_server_with_guard(self):
-        pytest.importorskip("torch")
-        import torch
-
         from domain.infrastructure._internal.model_server import ModelServer
         from domain.infrastructure._internal.process_guard import ProcessGuard
-
-        mock_model = MagicMock()
-        mock_model.generate.return_value = torch.zeros(1, 10, dtype=torch.long)
-        mock_model.device = "cpu"
-
-        mock_tokenizer = MagicMock()
-        mock_tokenizer.pad_token_id = 0
-        mock_tokenizer.eos_token_id = 0
-        inputs_mock = MagicMock()
-        inputs_mock.__getitem__.return_value = torch.zeros(1, 5, dtype=torch.long)
-        inputs_mock.get.return_value = None
-        mock_tokenizer.return_value = inputs_mock
 
         guard = ProcessGuard(
             model_cls_path="fake_model.FakeTestModel",
@@ -848,17 +835,28 @@ class TestModelServerWithGuard:
             health_check_interval=0.5,
             extra_sys_paths=_extra_paths,
         )
-        guard.start()
+        # Skip real HF load — stub a live worker that answers generate/stream.
+        fake_worker = MagicMock()
+        fake_worker.alive = True
+        fake_worker.generate.return_value = {
+            "text": "process isolated",
+            "tokens_generated": 0,
+            "elapsed_ms": 1.0,
+        }
+        fake_worker.generate_stream.return_value = iter(["proc", " isolated"])
+        guard._worker = fake_worker
+        guard._stop_monitor.set()  # no monitor thread
 
         server = ModelServer(
-            model=mock_model,
-            tokenizer=mock_tokenizer,
+            model=MagicMock(),
+            tokenizer=MagicMock(),
             model_id="test-with-guard",
             process_guard=guard,
             enable_warmup=False,
+            enable_circuit_breaker=False,
         )
         yield server, guard
-        guard.stop()
+        guard._worker = None
 
     @pytest.mark.asyncio
     async def test_generate_delegates_to_guard(self, model_server_with_guard):

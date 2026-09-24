@@ -58,6 +58,33 @@ def resolve_memory_limit_mb(slnc_path: str | None, configured: float | None = No
     return max(8192.0, size_mb * 8.0)
 
 
+
+
+def _accepts_return_tensors(tokenizer: Any) -> bool:
+    """True when tokenizer.__call__ accepts return_tensors= (HF-style)."""
+    try:
+        import inspect
+
+        sig = inspect.signature(tokenizer.__call__)
+        return "return_tensors" in sig.parameters or any(
+            p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _decode_supports_skip(tokenizer: Any) -> bool:
+    """True when tokenizer.decode accepts skip_special_tokens=."""
+    try:
+        import inspect
+
+        sig = inspect.signature(tokenizer.decode)
+        return "skip_special_tokens" in sig.parameters or any(
+            p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        )
+    except (TypeError, ValueError):
+        return False
+
 # ── Thread-mode worker ────────────────────────────────────────────────
 
 
@@ -95,6 +122,10 @@ class _ThreadWorker:
         self._errors = 0
         self._crashed = False
         self._crash_count = 0
+        # Set by _run_* before ready; generate/stream must not assume provider.
+        self._provider: Any = None
+        self._hf_model: Any = None
+        self._hf_tokenizer: Any = None
 
     @property
     def alive(self) -> bool:
@@ -250,8 +281,11 @@ class _ThreadWorker:
             quant_clip=self._config.quant_clip,
             free_quantized_originals=True,
         )
-        self._hb_q.put_nowait(("ready", None))
+        # Publish provider before ready so generate never sees a half-init worker.
         self._provider = provider
+        self._hf_model = None
+        self._hf_tokenizer = None
+        self._hb_q.put_nowait(("ready", None))
         self._request_loop()
 
     def _run_hf(self) -> None:
@@ -261,10 +295,11 @@ class _ThreadWorker:
             model_id=self._config.hf_model_kwargs.get("model_id", self._config.model_id),
             device=self._config.hf_model_kwargs.get("device", "cpu"),
         )
-        self._hb_q.put_nowait(("ready", None))
+        # Publish HF handles before ready so generate never sees a half-init worker.
         self._provider = None  # HF uses model+tokenizer directly
         self._hf_model = model
         self._hf_tokenizer = tokenizer
+        self._hb_q.put_nowait(("ready", None))
         self._request_loop()
 
     def _request_loop(self) -> None:
@@ -295,41 +330,190 @@ class _ThreadWorker:
                 except Exception as e:
                     self._resp_q.put_nowait(("error", session_id, str(e)))
 
+    def _resolve_runtime(self) -> tuple[Any, Any, str]:
+        """Return ``(tokenizer, model, kind)`` for provider or HF thread mode.
+
+        kind is ``"provider"`` (SloNet provider) or ``"hf"`` (direct model).
+        Raises RuntimeError when neither backend is initialized.
+        """
+        provider = self._provider
+        if provider is not None:
+            tokenizer = getattr(provider, "_tokenizer", None)
+            model = getattr(provider, "_model", None)
+            if tokenizer is None or model is None:
+                raise RuntimeError(
+                    f"ThreadWorker[{self.worker_id}]: provider missing _tokenizer/_model"
+                )
+            return tokenizer, model, "provider"
+
+        tokenizer = self._hf_tokenizer
+        model = self._hf_model
+        if tokenizer is None and model is not None:
+            tokenizer = getattr(model, "_tokenizer", None) or getattr(model, "tokenizer", None)
+        if model is None:
+            raise RuntimeError(
+                f"ThreadWorker[{self.worker_id}]: no provider or HF model loaded"
+            )
+        if tokenizer is None:
+            raise RuntimeError(
+                f"ThreadWorker[{self.worker_id}]: HF model has no tokenizer"
+            )
+        return tokenizer, model, "hf"
+
+    @staticmethod
+    def _eos_id(tokenizer: Any) -> int:
+        return getattr(tokenizer, "eos_token_id", None) or 0
+
     def _generate_fn(self, prompt: str, **kwargs) -> dict:
+        import time as _time
+
         import numpy as np
 
-        provider = self._provider
-        token_ids = provider._tokenizer.encode(prompt)
-        input_ids = np.array([token_ids], dtype=np.int64)
-        result = provider._model.generate_numpy(
-            input_ids,
-            max_new_tokens=kwargs.get("max_new_tokens", 100),
-            temperature=kwargs.get("temperature", 0.7),
-            top_k=kwargs.get("top_k", 50),
-            top_p=kwargs.get("top_p", 0.9),
-            repetition_penalty=kwargs.get("repetition_penalty", 1.0),
-            eos_token=provider._tokenizer.eos_token_id or 0,
-        )
-        generated = result[0].tolist()
-        text = provider._tokenizer.decode(generated)
-        return {"text": text, "tokens_generated": len(generated), "elapsed_ms": 0}
+        tokenizer, model, kind = self._resolve_runtime()
+        max_new_tokens = kwargs.get("max_new_tokens", 100)
+        temperature = kwargs.get("temperature", 0.7)
+        top_k = kwargs.get("top_k", 50)
+        top_p = kwargs.get("top_p", 0.9)
+        repetition_penalty = kwargs.get("repetition_penalty", 1.0)
+        start = _time.time()
+
+        if hasattr(model, "generate_numpy"):
+            token_ids = tokenizer.encode(prompt)
+            input_ids = np.array([token_ids], dtype=np.int64)
+            result = model.generate_numpy(
+                input_ids,
+                max_new_tokens=max_new_tokens,
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                eos_token=self._eos_id(tokenizer),
+            )
+            generated = result[0].tolist()
+            text = tokenizer.decode(generated)
+            return {
+                "text": text,
+                "tokens_generated": len(generated),
+                "elapsed_ms": round((_time.time() - start) * 1000, 1),
+            }
+
+        if kind != "hf":
+            raise RuntimeError(
+                f"ThreadWorker[{self.worker_id}]: model has no generate_numpy"
+            )
+        return self._hf_generate(tokenizer, model, prompt, kwargs, start)
+
+    def _hf_generate(self, tokenizer: Any, model: Any, prompt: str, kwargs: dict, start: float) -> dict:
+        """HF-style generate (callable tokenizer + model.generate)."""
+        import time as _time
+
+        max_new_tokens = kwargs.get("max_new_tokens", 100)
+        temperature = kwargs.get("temperature", 0.7)
+        top_k = kwargs.get("top_k", 50)
+        top_p = kwargs.get("top_p", 0.9)
+        repetition_penalty = kwargs.get("repetition_penalty", 1.0)
+
+        if not callable(tokenizer):
+            raise RuntimeError(
+                f"ThreadWorker[{self.worker_id}]: HF tokenizer is not callable"
+            )
+        if not hasattr(model, "generate"):
+            raise RuntimeError(
+                f"ThreadWorker[{self.worker_id}]: HF model has no generate()"
+            )
+
+        inputs = tokenizer(prompt, return_tensors="pt") if _accepts_return_tensors(tokenizer) else tokenizer(prompt)
+        if isinstance(inputs, dict) or hasattr(inputs, "keys"):
+            input_ids = inputs["input_ids"]
+            attention_mask = inputs.get("attention_mask") if hasattr(inputs, "get") else None
+        else:
+            input_ids = inputs
+            attention_mask = None
+
+        device = getattr(model, "device", None)
+        if device is not None and str(device) != "cpu" and hasattr(input_ids, "to"):
+            input_ids = input_ids.to(device)
+            if attention_mask is not None and hasattr(attention_mask, "to"):
+                attention_mask = attention_mask.to(device)
+
+        gen_kwargs: dict[str, Any] = {
+            "input_ids": input_ids,
+            "max_new_tokens": max_new_tokens,
+            "do_sample": temperature > 0,
+            "temperature": max(temperature, 1e-5),
+            "top_p": top_p,
+            "top_k": top_k,
+            "repetition_penalty": repetition_penalty,
+            "pad_token_id": getattr(tokenizer, "pad_token_id", None)
+            or getattr(tokenizer, "eos_token_id", None),
+            "eos_token_id": getattr(tokenizer, "eos_token_id", None),
+        }
+        if attention_mask is not None:
+            gen_kwargs["attention_mask"] = attention_mask
+
+        output_ids = model.generate(**gen_kwargs)
+        prompt_len = int(input_ids.shape[-1]) if hasattr(input_ids, "shape") else 0
+        generated = output_ids[0][prompt_len:]
+        text = tokenizer.decode(generated, skip_special_tokens=True) if _decode_supports_skip(
+            tokenizer
+        ) else tokenizer.decode(generated)
+        try:
+            n_tokens = len(generated)
+        except TypeError:
+            n_tokens = int(getattr(generated, "shape", [0])[-1])
+        return {
+            "text": text,
+            "tokens_generated": n_tokens,
+            "elapsed_ms": round((_time.time() - start) * 1000, 1),
+        }
 
     def _stream_fn(self, prompt: str, **kwargs):
         import numpy as np
 
-        provider = self._provider
-        token_ids = provider._tokenizer.encode(prompt)
-        input_ids = np.array([token_ids], dtype=np.int64)
-        for tok_id in provider._model.generate_numpy_stream(
-            input_ids,
-            max_new_tokens=kwargs.get("max_new_tokens", 100),
-            eos_token=provider._tokenizer.eos_token_id or 0,
-            temperature=kwargs.get("temperature", 0.7),
-            top_k=kwargs.get("top_k", 50),
-            top_p=kwargs.get("top_p", 0.9),
-            repetition_penalty=kwargs.get("repetition_penalty", 1.0),
-        ):
-            yield provider._tokenizer.decode([tok_id])
+        tokenizer, model, kind = self._resolve_runtime()
+        max_new_tokens = kwargs.get("max_new_tokens", 100)
+        temperature = kwargs.get("temperature", 0.7)
+        top_k = kwargs.get("top_k", 50)
+        top_p = kwargs.get("top_p", 0.9)
+        repetition_penalty = kwargs.get("repetition_penalty", 1.0)
+
+        if hasattr(model, "generate_numpy_stream"):
+            token_ids = tokenizer.encode(prompt)
+            input_ids = np.array([token_ids], dtype=np.int64)
+            for tok_id in model.generate_numpy_stream(
+                input_ids,
+                max_new_tokens=max_new_tokens,
+                eos_token=self._eos_id(tokenizer),
+                temperature=temperature,
+                top_k=top_k,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+            ):
+                yield tokenizer.decode([tok_id])
+            return
+
+        if kind != "hf":
+            raise RuntimeError(
+                f"ThreadWorker[{self.worker_id}]: model has no generate_numpy_stream"
+            )
+        # HF has no token streamer in thread mode without torch TextIteratorStreamer —
+        # generate once and yield the full text as a single chunk.
+        result = self._hf_generate(
+            tokenizer,
+            model,
+            prompt,
+            {
+                "max_new_tokens": max_new_tokens,
+                "temperature": temperature,
+                "top_k": top_k,
+                "top_p": top_p,
+                "repetition_penalty": repetition_penalty,
+            },
+            start=0.0,
+        )
+        text = result.get("text") or ""
+        if text:
+            yield text
 
 
 _session_counter = 0
