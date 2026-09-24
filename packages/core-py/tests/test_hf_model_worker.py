@@ -12,6 +12,8 @@ _core_dir = str(Path(__file__).resolve().parents[2])
 if _core_dir not in sys.path:
     sys.path.insert(0, _core_dir)
 
+from unittest.mock import patch
+
 from domain.infrastructure._internal.hf_model_worker import _resolve_device, hf_model_loader
 
 
@@ -65,7 +67,8 @@ class TestResolveDeviceAuto:
         result = _resolve_device("auto")
         assert len(result) > 0
 
-    def test_auto_returns_cpu_on_no_accelerator(self):
+    @patch("domain.infrastructure._internal.ml_types.auto_device", side_effect=ImportError)
+    def test_auto_returns_cpu_on_no_accelerator(self, _mock):
         result = _resolve_device("auto")
         assert result == "cpu"
 
