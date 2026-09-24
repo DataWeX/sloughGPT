@@ -296,7 +296,7 @@ class ConsciousnessConfig:
    ```python
    def _update_consciousness(self, user_msg, response, rating):
        try:
-           from domains.consciousness import get_consciousness
+           from domain.cognition import get_consciousness
            engine = get_consciousness()
            if engine and engine.config.is_enabled():
                engine.observe_feedback(user_msg, response, rating)

@@ -131,6 +131,7 @@ __all__ = [
     "ProducerConsumerQueue",
     "ShutdownMode",
     # Engine classes
+    "Engine",
     "ProcessGroup",
     "SubprocessProcess",
     "ProcessMonitor",

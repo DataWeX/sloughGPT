@@ -78,7 +78,7 @@ class MemoryConfig:
 ```python
 # GOOD: Lazy import inside function body
 def _get_store(self):
-    from domains.learner.knowledge import get_knowledge_memory
+    from domain.memory._internal.knowledge_store import get_knowledge_memory
     return get_knowledge_memory()
 
 # GOOD: Protocol for storage seam
@@ -86,7 +86,7 @@ class MemoryProvider(Protocol):
     def store(self, content: str, topic: str, source: str) -> bool: ...
 
 # BAD: Top-level cross-package import
-from domains.learner.knowledge import KnowledgeFact  # DON'T
+from domain.memory._internal.knowledge_store import KnowledgeFact  # DON'T
 ```
 
 ### Embedding Utilities
@@ -97,7 +97,7 @@ Self-contained math functions live in `_internal/embedding.py`:
 from memory._internal.embedding import cosine_similarity, ngram_embed
 ```
 
-No dependency on `domains.inference.vector_store` — the functions are copied because they're pure math with no business logic.
+No dependency on `domain.inference._internal.vector_store` — the functions are copied because they're pure math with no business logic.
 
 ## Migration Strategy
 

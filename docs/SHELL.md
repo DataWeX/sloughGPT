@@ -49,8 +49,8 @@ sloughgpt shell -c "gen hello world > output.txt"
 ### Programmatic Use
 
 ```python
-from domains.shell.repl import ShellREPL
-from domains.shell.kernel import DaitRuntime
+from domain.shell._internal.repl import ShellREPL
+from domain.shell import DaitRuntime
 
 rt = DaitRuntime()
 repl = ShellREPL(rt)
@@ -854,7 +854,7 @@ Grants persist to `~/.config/shell_permissions.json`:
 ### Configuration
 
 ```python
-from domains.shell import ShellPermissions, Risk
+from domain.shell._internal.permissions import ShellPermissions, Risk
 
 perms = ShellPermissions()
 perms.set_policy(Risk.DANGEROUS, "allow")   # allow all dangerous

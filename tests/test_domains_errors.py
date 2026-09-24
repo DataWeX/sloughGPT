@@ -1,4 +1,4 @@
-"""``domains.errors`` — domain exceptions and prompt guards (no HTTP)."""
+"""``domain.errors`` — domain exceptions and prompt guards (no HTTP)."""
 
 from __future__ import annotations
 
