@@ -206,3 +206,20 @@ class TestVocabProperties:
         t.train(captions)
         ids = list(t.vocab.values())
         assert ids == sorted(ids)
+
+
+class TestDecodeStreaming:
+    """Single-token decode must keep the word-boundary space (card 053)."""
+
+    @pytest.fixture
+    def tok(self):
+        t = BPETokenizer()
+        t.vocab = {"cat</w>": 4, "dog</w>": 5}
+        t.itos = {4: "cat</w>", 5: "dog</w>"}
+        return t
+
+    def test_single_token_decode_keeps_boundary_space(self, tok):
+        assert tok.decode([4]) == "cat "
+
+    def test_multi_token_decode_still_strips(self, tok):
+        assert tok.decode([4, 5]) == "cat dog"

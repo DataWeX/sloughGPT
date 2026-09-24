@@ -295,6 +295,17 @@ class TestChat:
 class TestListPresets:
     """GET /companion/presets"""
 
+    def setup_method(self):
+        # companion_mogdb persists across runs (db_pool resolves repo root one
+        # level above the checkout, so every worktree shares the same db).
+        # Reset to just the 4 defaults so the exact-count assertion is stable.
+        from apps.api.server.routers.companion import _get_db, _seed_default_presets
+
+        col = _get_db().collection("presets")
+        for p in col.find():
+            col.delete_one({"id": p["id"]})
+        _seed_default_presets()
+
     def test_list_presets(self):
         resp = client.get("/companion/presets")
         assert resp.status_code == 200
