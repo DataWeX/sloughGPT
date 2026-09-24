@@ -178,11 +178,20 @@ def download(
             logger.info("%s already exists with matching checksum", label)
             return {"status": "already_downloaded", "dest": str(dest), "label": label}
 
-    # Check existing state
+    # Check existing state — only skip when the destination is actually on disk.
+    # State is keyed by URL; a prior download to a different path (or a
+    # deleted file) must not short-circuit a new download.
     existing = st.get(lookup_key)
-    if existing and existing.status == "complete":
+    if existing and existing.status == "complete" and dest.exists():
         logger.info("%s already downloaded", label)
         return {"status": "already_downloaded", "dest": str(dest), "label": label}
+    if existing and existing.status == "complete" and not dest.exists():
+        logger.warning(
+            "%s marked complete in state but missing on disk — re-downloading",
+            label,
+        )
+        st.set_status(lookup_key, "queued")
+        st.flush()
 
     start = time.time()
     total_bytes = [0]
