@@ -366,7 +366,9 @@ class TestAuditLoggerFileQuery:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["count"] == 1
-        logger.file_query.assert_called_once_with(limit=100, event_type=None, before=None)
+        logger.file_query.assert_called_once_with(
+            limit=100, event_type=None, before=None, workspace_id=""
+        )
 
     @patch("infrastructure.auth.get_audit_logger")
     def test_router_history_before_and_filter_passthrough(self, mock_get_logger, client):
@@ -380,6 +382,7 @@ class TestAuditLoggerFileQuery:
             limit=5,
             event_type="auth_failed",
             before="2024-01-01T00:00:00+00:00",
+            workspace_id="",
         )
 
     @patch("infrastructure.auth.get_audit_logger")
@@ -499,7 +502,7 @@ class TestSecurityKeys:
     def test_keys_exact_data_keys(self, mock_get_mgr, client):
         mock_get_mgr.return_value.list.return_value = []
         resp = client.get("/security/keys")
-        assert set(resp.json()["data"].keys()) == {"count", "keys"}
+        assert set(resp.json()["data"].keys()) == {"count", "keys", "configured"}
 
     def test_keys_wrong_methods_return_405(self, client):
         assert client.put("/security/keys").status_code == 405
