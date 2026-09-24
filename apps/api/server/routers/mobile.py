@@ -14,6 +14,7 @@ import logging
 import subprocess
 import time as _time
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -142,6 +143,11 @@ class FromSessionsRequest(BaseModel):
     min_length: int = Field(default=5, ge=1)
     model: str | None = None
     session_ids: list[str] | None = None
+
+
+def _venv_python() -> Path:
+    """Repo virtualenv interpreter (seam so tests don't require a real .venv)."""
+    return Path(__file__).resolve().parents[4] / ".venv" / "bin" / "python3"
 
 
 class MobileRouter:
@@ -1152,7 +1158,7 @@ class MobileRouter:
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
         await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
-        venv_python = repo_root / ".venv" / "bin" / "python3"
+        venv_python = _venv_python()
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not await asyncio.to_thread(venv_python.exists):
@@ -1604,22 +1610,18 @@ class MobileRouter:
         t0 = _time.time()
 
         # Extract pairs from server logs
-        from domain.training.engine import get_training_engine
+        from domain.training import (
+            extract_pairs_from_logs,
+            extract_pairs_from_sessions,
+            write_training_text,
+        )
 
-        engine = get_training_engine()
-
-        pairs = (
-            engine.extract_pairs_from_sessions(
-                limit=body.limit, min_length=body.min_length, session_ids=body.session_ids
-            ).data
-            or []
+        pairs = extract_pairs_from_sessions(
+            limit=body.limit, min_length=body.min_length, session_ids=body.session_ids
         )
         if len(pairs) < 5:
-            pairs = (
-                engine.extract_pairs_from_logs(
-                    limit=body.limit, min_length=body.min_length, model=body.model
-                ).data
-                or []
+            pairs = extract_pairs_from_logs(
+                limit=body.limit, min_length=body.min_length, model=body.model
             )
 
         if len(pairs) < 5:
@@ -1642,9 +1644,7 @@ class MobileRouter:
         )
 
         # Write training text file
-        text_file = (
-            engine.write_training_text(pairs) if hasattr(engine, "write_training_text") else ""
-        )
+        text_file = write_training_text(pairs)
 
         # Store pairs in MogDB (with quality scoring)
         from domain.training.engine import get_training_engine
@@ -1671,7 +1671,7 @@ class MobileRouter:
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        venv_python = repo_root / ".venv" / "bin" / "python3"
+        venv_python = _venv_python()
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not venv_python.exists():
