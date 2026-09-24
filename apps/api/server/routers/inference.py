@@ -1145,6 +1145,7 @@ class InferenceRouter:
             raise_error(
                 "No provider available — load a model first",
                 "E_INFRA_REGISTRY",
+                status_code=503,
             )
 
         prompt_text = req.prompt

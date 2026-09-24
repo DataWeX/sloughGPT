@@ -265,6 +265,9 @@ class TestInferInfo:
         with patch(
             "apps.api.server.routers.infer.InferRouter._get_model_interface",
             return_value=mock_model,
+        ), patch(
+            "routers.inference._get_model_status",
+            return_value={"ready": True},
         ):
             resp = client.get("/infer/info")
             assert resp.status_code == 200

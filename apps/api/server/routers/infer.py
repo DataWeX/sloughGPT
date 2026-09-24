@@ -233,6 +233,7 @@ class InferRouter:
             raise_error(
                 "No provider available — load a model first",
                 "E_INFRA_REGISTRY",
+                status_code=503,
             )
 
         prompt_text = req.prompt
@@ -457,6 +458,7 @@ class InferRouter:
             _t0 = _time.monotonic()
             model = self._get_model_interface()
             if model is not None and hasattr(model, "embed"):
+                model_name = req.model or getattr(model, "model_id", "unknown")
                 try:
                     import numpy as np
 
