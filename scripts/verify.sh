@@ -60,7 +60,7 @@ if [ "$all_found" = true ]; then
     if command -v node &>/dev/null && [ -d "apps/web/node_modules" ]; then
         echo "Web npm run ci (apps/web)..."
         (cd apps/web && npm run ci) || {
-            echo "❌ Web npm run ci failed (clean .next, lint, typecheck, test, next build)"
+            echo "❌ Web npm run ci failed (lint, typecheck, test, vite build)"
             exit 1
         }
         echo "✓ Web npm run ci passed"

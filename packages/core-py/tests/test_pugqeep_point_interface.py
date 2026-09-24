@@ -154,6 +154,118 @@ class TestPointView:
         full = view.generate()
         np.testing.assert_array_equal(slice_arr, full[10:15])
 
+    def test_view_partial_decompress_analytic(self):
+        """Analytic-fit points (linear/periodic/polynomial) should decompress
+        only the sliced portion, matching the cluster lazy path."""
+        params = {"a": 2.0, "b": 1.0}
+        p = Point(
+            identity="analytic-partial",
+            function_type="linear",
+            params=params,
+            accuracy=1.0,
+            dtype="float32",
+            shape=(100,),
+        )
+        view = PointView(p, shape=(100,), dtype="float32")
+
+        # Slice must not trigger full decompression (laziness contract)
+        slice_arr = view[10:15]
+        assert slice_arr.shape == (5,)
+        assert view._cache is None, "analytic slice must NOT materialize the full array"
+
+        # Values must match the full decompression's slice
+        full = view.generate()
+        np.testing.assert_array_equal(slice_arr, full[10:15])
+
+        # Strided slice on the same analytic point, still lazy
+        view.clear_cache()
+        step_arr = view[5:50:5]
+        assert step_arr.shape == (9,)
+        assert view._cache is None, "strided analytic slice must stay lazy"
+        np.testing.assert_array_equal(step_arr, view.generate()[5:50:5])
+
+    def test_view_partial_decompress_periodic(self):
+        """Periodic-fit points are lazy-sliced too (cos/sin params)."""
+        p = Point(
+            identity="periodic-partial",
+            function_type="periodic",
+            params={"a": 1.0, "b": 0.5, "w": 0.0},
+            accuracy=1.0,
+            dtype="float32",
+            shape=(64,),
+        )
+        view = PointView(p, shape=(64,), dtype="float32")
+
+        slice_arr = view[0:16]
+        assert slice_arr.shape == (16,)
+        assert view._cache is None
+        np.testing.assert_array_equal(slice_arr, view.generate()[0:16])
+
+    def test_view_partial_decompress_cluster_2d(self):
+        """Multi-D cluster slice must reshape to match generate()[key],
+        not return a flat strip (fast path shape parity)."""
+        centroids = np.array([0.0, 10.0, 20.0, 30.0], dtype=np.float32)
+        rows = np.tile(np.arange(4, dtype=np.uint8), 10)  # 10 rows of [0..3]
+        assignments = np.repeat(rows, 8)  # (80,) rows x 8 cols each
+        p = Point(
+            identity="cluster-2d",
+            function_type="cluster",
+            params={"centroids": centroids, "assignments": assignments},
+            accuracy=1.0,
+            dtype="float32",
+            shape=(10, 8),
+        )
+        view = PointView(p, shape=(10, 8), dtype="float32")
+
+        slice_arr = view[2:5]
+        assert slice_arr.shape == (3, 8), f"want (3,8), got {slice_arr.shape}"
+        assert view._cache is None
+        np.testing.assert_array_equal(slice_arr, view.generate()[2:5])
+
+    def test_view_partial_decompress_analytic_2d(self):
+        """Analytic slice on a 2-D shape must reshape to the sliced matrix."""
+        p = Point(
+            identity="analytic-2d",
+            function_type="linear",
+            params={"a": 2.0, "b": 1.0},
+            accuracy=1.0,
+            dtype="float32",
+            shape=(16, 4),
+        )
+        view = PointView(p, shape=(16, 4), dtype="float32")
+
+        slice_arr = view[3:9]
+        assert slice_arr.shape == (6, 4), f"want (6,4), got {slice_arr.shape}"
+        assert view._cache is None
+        np.testing.assert_array_equal(slice_arr, view.generate()[3:9])
+
+    def test_view_partial_decompress_cluster_quantized(self):
+        """Quantized cluster slice must dequantize centroids exactly like
+        generate() (centroid_quantized/scale/zero_point parity)."""
+        centroids = np.array([0, 255], dtype=np.uint8)
+        assignments = np.tile([0, 1], 50).astype(np.uint8)  # 100 elements
+        scale = 0.5
+        zero_point = 10.0
+        p = Point(
+            identity="cluster-quant",
+            function_type="cluster",
+            params={
+                "centroids": centroids,
+                "assignments": assignments,
+                "centroid_quantized": True,
+                "centroid_scale": scale,
+                "centroid_zero_point": zero_point,
+            },
+            accuracy=0.95,
+            dtype="float32",
+            shape=(100,),
+        )
+        view = PointView(p, shape=(100,), dtype="float32")
+
+        slice_arr = view[10:20]
+        assert view._cache is None
+        np.testing.assert_array_equal(slice_arr, view.generate()[10:20])
+
     def test_view_len(self):
         p = self._make_cluster_point()
         view = PointView(p, shape=(100,), dtype="float32")

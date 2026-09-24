@@ -230,26 +230,87 @@ class PointView:
         return arr
 
     def __getitem__(self, key) -> np.ndarray:
-        """Slice access — optimized for cluster points (partial decompression)."""
-        # Fast path for cluster points: decompress only the needed slice
-        if (
-            self._point.function_type == "cluster"
-            and self._cache is None
-            and isinstance(key, slice)
-            and self._shape
-        ):
-            centroids = self._point.params.get("centroids")
-            assignments = self._point.params.get("assignments")
-            if centroids is not None and assignments is not None:
-                # Convert slice to range of indices
-                n_total = len(assignments)
-                indices = range(*key.indices(n_total))
-                # Look up only the needed centroids
-                result = centroids[assignments[list(indices)]]
-                return result.astype(self._dtype)
+        """Slice access — lazily decompresses only the requested portion.
+
+        Fast paths avoid materializing the full array for both cluster and
+        analytic-fit (linear/periodic/polynomial) points, including multi-D
+        shapes and quantized centroids. `raw`, huffman-decoded clusters, and
+        exotic slices (negative steps over leading axes) fall back to the
+        cache-aware path.
+        """
+        if isinstance(key, slice) and self._cache is None:
+            fast = self._try_fast_slice(key)
+            if fast is not None:
+                return fast
 
         # Fallback: full decompression then slice
         return self.generate()[key]
+
+    def _try_fast_slice(self, key: slice) -> np.ndarray | None:
+        """Compute a lazy slice, or None if the fast path cannot handle `key`."""
+        ft = self._point.function_type
+        if ft not in ("cluster", "linear", "periodic", "polynomial"):
+            return None  # raw / unknown
+        if not self._shape:
+            return None
+        if ft == "cluster" and self._point.params.get("huffman_data") is not None:
+            return None  # huffman-cluster slices not lazy-safe
+
+        if len(self._shape) == 1:
+            n = self._shape[0]
+            start, stop, step = key.indices(n)
+            pos = np.arange(start, stop, step, dtype=np.int64)
+            out_shape = tuple(pos.shape)
+        else:
+            # Leading-axis slice with full trailing axes (view[i:j] or view[i:j:k]).
+            # This is the common weight-matrix case and stays O(slice).
+            start, stop, step = key.indices(self._shape[0])
+            if step < 0:
+                return None  # reversed multi-D slice: fall back
+            rows = np.arange(start, stop, step, dtype=np.int64)
+            inner = int(np.prod(self._shape[1:]))
+            pos = (rows[:, None] * inner + np.arange(inner, dtype=np.int64)[None, :]).ravel()
+            out_shape = (rows.size,) + tuple(self._shape[1:])
+
+        if pos.size == 0:
+            return np.empty(out_shape, dtype=self._dtype)
+
+        values = self._eval_at(pos)
+        return values.reshape(out_shape).astype(self._dtype)
+
+    def _eval_at(self, pos: np.ndarray) -> np.ndarray:
+        """Evaluate the point's stored function at flat index positions `pos`.
+
+        Matches ``Point.generate`` semantics exactly (including quantized
+        centroids and residuals) so lazy slices equal ``view.generate()[key]``.
+        """
+        p = self._point
+        if p.function_type == "cluster":
+            centroids = p.params["centroids"]
+            if p.params.get("centroid_quantized"):
+                scale = p.params["centroid_scale"]
+                zp = p.params["centroid_zero_point"]
+                centroids = (centroids.astype(np.float32) - zp) * scale
+            assignments = p.params["assignments"]
+            values = centroids[assignments[pos]]
+            if p.residual is not None:
+                values = values + p.residual[pos]
+            return values
+
+        i = pos.astype(np.float32)
+        if p.function_type == "periodic":
+            a, b, w = p.params["a"], p.params["b"], p.params["w"]
+            values = a * np.cos(i) + b * np.sin(i) + w
+        elif p.function_type == "linear":
+            a, b = p.params["a"], p.params["b"]
+            values = a * i + b
+        else:  # polynomial
+            a, b, c = p.params["a"], p.params["b"], p.params["c"]
+            values = a * i**2 + b * i + c
+
+        if p.residual is not None:
+            values = values + p.residual[pos]
+        return values
 
     def __len__(self) -> int:
         return int(np.prod(self._shape)) if self._shape else 0

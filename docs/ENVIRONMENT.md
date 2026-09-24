@@ -61,6 +61,56 @@ SLO_JWT_SECRET=your-64-character-secret
 
 ## Server Configuration
 
+### MAN_GATEWAY_PORT
+
+**Optional** · Rust edge (`apps/gateway`)
+
+Listen port for `slough-gateway` (default `8080`).
+
+```bash
+MAN_GATEWAY_PORT=8080
+```
+
+### MAN_CORE_URL
+
+**Optional** · Rust edge
+
+Upstream Python API base URL the edge relays to (default `http://127.0.0.1:8000`).
+
+```bash
+MAN_CORE_URL=http://127.0.0.1:8000
+```
+
+### MAN_STATIC_DIR
+
+**Optional** · Rust edge
+
+Directory of static files to mount at `/static` when present (default `apps/web/.next/static`). Missing dir is skipped.
+
+```bash
+MAN_STATIC_DIR=apps/web/.next/static
+```
+
+### MAN_GATEWAY_DENY
+
+**Optional** · Rust edge
+
+Comma-separated path prefixes rejected at the edge with **403** before Python is contacted (boundary match: `/shell` blocks `/shell/run`, not `/shelladmin`). Traversal (`..`), `..` substrings, and NUL are always rejected.
+
+```bash
+MAN_GATEWAY_DENY=/shell,/datasets
+```
+
+### MAN_GATEWAY_CHAT_ONLY
+
+**Optional** · Rust edge
+
+When `1`/`true`/`yes`/`on`, only the conversation surface is allowed (`/chat`, `/inference`, `/models`, `/session`, `/memory`, `/companion`, `/souls`, `/feedback`, `/conversations`, `/docs`, `/redoc`, `/openapi.json`, `/metrics`, `/system`, `/health*`). Everything else → **403**. Exposure shape only — auth and rate limits stay in Python.
+
+```bash
+MAN_GATEWAY_CHAT_ONLY=1
+```
+
 ### SLO_ENV
 
 **Optional**

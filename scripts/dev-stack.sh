@@ -10,6 +10,7 @@
 # Usage:
 #   ./scripts/dev-stack.sh              # both API (:8000) + Web (:3000)
 #   SLO_API_PORT=9000 ./scripts/dev-stack.sh  # custom API port
+#   MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh  # also start Rust edge (:8080)
 #
 # Replaces: npm run dev:stack (concurrently). This script is the single entrypoint.
 set -uo pipefail
@@ -20,6 +21,8 @@ cd "$ROOT"
 # ── Config ─────────────────────────────────────────────────────
 export SLO_API_PORT="${SLO_API_PORT:-8000}"
 WEB_PORT="${WEB_PORT:-3000}"
+MAN_GATEWAY_PORT="${MAN_GATEWAY_PORT:-8080}"
+MAN_DEV_GATEWAY="${MAN_DEV_GATEWAY:-0}"
 MAX_RETRIES=5
 INITIAL_BACKOFF=2
 
@@ -36,21 +39,23 @@ RESET='\033[0m'
 # ── State ──────────────────────────────────────────────────────
 API_PID=""
 WEB_PID=""
+GW_PID=""
 STOPPING=0
 API_RESTARTS=0
 WEB_RESTARTS=0
+GW_RESTARTS=0
 
 # ── Cleanup ────────────────────────────────────────────────────
 cleanup() {
   STOPPING=1
   # Kill children in reverse order
-  for pid in "$WEB_PID" "$API_PID"; do
+  for pid in "$GW_PID" "$WEB_PID" "$API_PID"; do
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       kill -TERM "$pid" 2>/dev/null || true
     fi
   done
   # Wait for them to exit (max 5s each)
-  for pid in "$WEB_PID" "$API_PID"; do
+  for pid in "$GW_PID" "$WEB_PID" "$API_PID"; do
     if [[ -n "$pid" ]]; then
       for _ in $(seq 1 10); do
         kill -0 "$pid" 2>/dev/null || break
@@ -68,6 +73,7 @@ trap cleanup EXIT INT TERM
 # ── Helpers ────────────────────────────────────────────────────
 log_api()  { echo -e "${CYAN}[api]${RESET}  $*"; }
 log_web()  { echo -e "${MAGENTA}[web]${RESET}  $*"; }
+log_gw()   { echo -e "${GREEN}[gw]${RESET}   $*"; }
 log_ok()   { echo -e "  ${GREEN}✓${RESET} $*"; }
 log_warn() { echo -e "  ${YELLOW}⚠${RESET} $*"; }
 log_err()  { echo -e "  ${RED}✗${RESET} $*"; }
@@ -139,12 +145,43 @@ start_web() {
   return 1
 }
 
+# ── Start Gateway (opt-in: MAN_DEV_GATEWAY=1) ─────────────────
+start_gateway() {
+  local bin="$ROOT/apps/gateway/target/release/slough-gateway"
+  if [[ ! -x "$bin" ]]; then
+    log_warn "Gateway binary missing at $bin — run: cargo build --release --locked -p slough-gateway"
+    return 1
+  fi
+  log_gw "Starting (port $MAN_GATEWAY_PORT)..."
+  MAN_GATEWAY_PORT="$MAN_GATEWAY_PORT" \
+  MAN_CORE_URL="http://127.0.0.1:${SLO_API_PORT}" \
+  "$bin" 2>&1 &
+  GW_PID=$!
+  for _ in $(seq 1 10); do
+    if curl -sf "http://127.0.0.1:${MAN_GATEWAY_PORT}/health" >/dev/null 2>&1; then
+      log_ok "Gateway on :$MAN_GATEWAY_PORT → API :$SLO_API_PORT"
+      return 0
+    fi
+    kill -0 "$GW_PID" 2>/dev/null || break
+    sleep 0.5
+  done
+  if ! kill -0 "$GW_PID" 2>/dev/null; then
+    log_err "Gateway exited before healthy"
+    return 1
+  fi
+  log_warn "Gateway not healthy within 5s (may still be starting)"
+  return 0
+}
+
 # ══════════════════════════════════════════════════════════════
 #  MAIN
 # ══════════════════════════════════════════════════════════════
 echo ""
 echo -e "${BOLD}SloughGPT Dev Stack${RESET}"
 echo -e "${DIM}API: http://localhost:$SLO_API_PORT  |  Web: http://localhost:$WEB_PORT${RESET}"
+if [[ "$MAN_DEV_GATEWAY" == "1" ]]; then
+  echo -e "${DIM}Gateway: http://localhost:$MAN_GATEWAY_PORT${RESET}"
+fi
 echo ""
 
 # ── Phase 1: Start API (with retry) ──
@@ -166,11 +203,19 @@ done
 # ── Phase 2: Start Web ──
 start_web || true
 
+# ── Phase 3: Optional gateway edge ──
+if [[ "$MAN_DEV_GATEWAY" == "1" ]]; then
+  start_gateway || true
+fi
+
 echo ""
 echo -e "${BOLD}All services ready!${RESET}"
 echo -e "  ${DIM}API:${RESET}  http://localhost:$SLO_API_PORT"
 echo -e "  ${DIM}Docs:${RESET} http://localhost:$SLO_API_PORT/docs"
 echo -e "  ${DIM}Web:${RESET}  http://localhost:$WEB_PORT"
+if [[ -n "$GW_PID" ]] && kill -0 "$GW_PID" 2>/dev/null; then
+  echo -e "  ${DIM}Edge:${RESET}  http://localhost:$MAN_GATEWAY_PORT"
+fi
 echo -e "  ${DIM}Press Ctrl+C to stop${RESET}"
 echo ""
 
@@ -219,5 +264,23 @@ while [[ $STOPPING -eq 0 ]]; do
     log_warn "Web exited (code $local_code). Restarting... ($WEB_RESTARTS/$MAX_RETRIES)"
     start_web || true
     [[ $? -eq 0 ]] && WEB_RESTARTS=0
+  fi
+
+  # Check Gateway (only if we started it)
+  if [[ -n "$GW_PID" ]] && ! kill -0 "$GW_PID" 2>/dev/null; then
+    wait "$GW_PID" 2>/dev/null
+    local_code=$?
+    [[ $STOPPING -eq 1 ]] && break
+    GW_RESTARTS=$((GW_RESTARTS + 1))
+    if [[ $GW_RESTARTS -ge $MAX_RETRIES ]]; then
+      log_err "Gateway crashed too many times ($GW_RESTARTS). Continuing with API+Web."
+      GW_PID=""
+      GW_RESTARTS=0
+    else
+      log_warn "Gateway exited (code $local_code). Restarting... ($GW_RESTARTS/$MAX_RETRIES)"
+      if start_gateway; then
+        GW_RESTARTS=0
+      fi
+    fi
   fi
 done

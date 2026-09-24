@@ -28,7 +28,7 @@ def _d(resp):
 @pytest.fixture(autouse=True)
 def _fresh_agent_system():
     """Reset the agent system singleton before each test."""
-    import domain.agents.system as sys_mod
+    import domain.agents._internal.system as sys_mod
 
     sys_mod._default_system = None
     yield
@@ -183,18 +183,24 @@ class TestExecuteAgent:
     def setup_method(self):
         self.client = get_test_client()
 
-    @patch("domains.agents.system.AgentSystem.execute", new_callable=AsyncMock)
-    def test_execute_calls_system(self, mock_execute):
-        mock_execute.return_value = {"response": "Hello!", "success": True}
+    @pytest.fixture
+    def _mock_system(self):
+        from unittest.mock import MagicMock
+
+        system = MagicMock()
+        system.execute = AsyncMock(return_value={"response": "Hello!", "success": True})
+        with patch("domain.agents._internal.system.get_agent_system", return_value=system):
+            yield system
+
+    def test_execute_calls_system(self, _mock_system):
         aid = _unique_id("exec")
         self.client.post("/agents", json={"name": aid, "description": "x"})
         resp = self.client.post(f"/agents/{aid}/execute", json={"request": "Say hello"})
         assert resp.status_code == 200
-        mock_execute.assert_called_once()
+        _mock_system.execute.assert_called_once()
 
-    @patch("domains.agents.system.AgentSystem.execute", new_callable=AsyncMock)
-    def test_execute_nonexistent_agent(self, mock_execute):
-        mock_execute.return_value = {"error": "Agent 'nope' not found", "success": False}
+    def test_execute_nonexistent_agent(self, _mock_system):
+        _mock_system.execute.return_value = {"error": "Agent 'nope' not found", "success": False}
         resp = self.client.post("/agents/nope/execute", json={"request": "hi"})
         assert resp.status_code == 404
 

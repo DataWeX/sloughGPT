@@ -1,14 +1,16 @@
 """
 Point — compressed data with meaning.
 
-A Point is a compressed representation of any structured data, storing
-a generator function instead of raw values. This enables:
-  - Function-based generation (periodic, linear, polynomial)
+A Point is a compressed representation of a numpy array, storing a generator
+function instead of raw values. The encoder is pluggable:
   - Cluster-based generation (vector quantization)
-  - Raw storage for incompressible data
+  - Function-based generation (periodic, linear, polynomial)
+  - Raw storage for incompressible arrays
 
-Works with any numpy array: weight tensors, feature vectors, embeddings,
-time series, sensor data, or any structured numerical data.
+The contract is the ARRAY, not the domain: any component that reduces to a
+numpy array (weights, embeddings, features, time series) compresses the same
+way. A Point is lossy unless `accuracy == 1.0`; it carries `residual`,
+`dtype`, and `shape` so reconstruction is faithful within the error budget.
 
 Implements PointProtocol — the abstract interface for compressed data.
 """

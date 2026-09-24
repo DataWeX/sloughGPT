@@ -1,7 +1,17 @@
 /** next-auth/react Phase-0 stub — real auth lives in FastAPI /login. */
 import type { ReactNode } from 'react'
 
-export function SessionProvider({ children }: { children: ReactNode }) {
+export type SessionProviderProps = {
+  children: ReactNode
+  session?: unknown
+  baseUrl?: string
+  basePath?: string
+  refetchInterval?: number
+  refetchOnWindowFocus?: boolean
+  refetchWhenOffline?: boolean
+}
+
+export function SessionProvider({ children }: SessionProviderProps) {
   return <>{children}</>
 }
 
