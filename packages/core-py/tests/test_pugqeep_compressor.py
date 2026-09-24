@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.compressor import HuffmanTree, PointCompressor
 from domain.infrastructure._internal.pugqeep.config import CompressorConfig
 from domain.infrastructure._internal.pugqeep.point import Point
 
@@ -1307,3 +1307,91 @@ class TestEngineConfigExtended:
         assert cfg.max_stems == 16
         assert cfg.queue_size == 256
         assert cfg.poll_interval == 0.5
+
+
+class TestHuffmanRoundTrip:
+    """Dedicated Huffman encode/decode round-trip (not only via decompress)."""
+
+    @staticmethod
+    def _rt(data: np.ndarray) -> np.ndarray:
+        tree = HuffmanTree.build(data)
+        packed, total_bits = tree.encode(data)
+        return HuffmanTree.decode(packed, total_bits, tree.tree, len(data))
+
+    def test_multi_symbol_round_trip(self):
+        data = np.array([0, 1, 1, 2, 2, 2, 3, 0, 3], dtype=np.uint8)
+        assert np.array_equal(self._rt(data), data)
+
+    def test_balanced_two_symbol_round_trip(self):
+        data = np.array([0, 1] * 64, dtype=np.uint8)
+        assert np.array_equal(self._rt(data), data)
+
+    def test_single_symbol_round_trip(self):
+        data = np.full(32, 7, dtype=np.uint8)
+        out = self._rt(data)
+        assert np.array_equal(out, data)
+        tree = HuffmanTree.build(data)
+        assert set(tree.codes) == {7}
+
+    def test_full_uint8_range_round_trip(self):
+        data = np.arange(256, dtype=np.uint8)
+        assert np.array_equal(self._rt(data), data)
+
+    def test_skewed_distribution_compresses_losslessly(self):
+        rng = np.random.RandomState(0)
+        data = rng.choice([1, 2, 3], size=1000, p=[0.8, 0.15, 0.05]).astype(np.uint8)
+        tree = HuffmanTree.build(data)
+        packed, total_bits = tree.encode(data)
+        out = HuffmanTree.decode(packed, total_bits, tree.tree, len(data))
+        assert np.array_equal(out, data)
+        assert len(packed) < len(data)
+        assert total_bits <= len(data) * 8
+
+    def test_from_dict_rebuild_round_trip(self):
+        data = np.array([5, 5, 6, 7, 5, 6], dtype=np.uint8)
+        tree = HuffmanTree.build(data)
+        packed, total_bits = tree.encode(data)
+        rebuilt = HuffmanTree.from_dict(tree.tree_dict())
+        out = HuffmanTree.decode(packed, total_bits, rebuilt.tree, len(data))
+        assert np.array_equal(out, data)
+        assert rebuilt.codes == tree.codes
+
+    def test_tree_dict_is_json_safe(self):
+        import json
+
+        data = np.array([0, 1, 2, 2], dtype=np.uint8)
+        tree = HuffmanTree.build(data)
+        d = tree.tree_dict()
+        assert all(isinstance(k, str) for k in d)
+        json.dumps(d)
+
+    def test_empty_array_round_trip(self):
+        data = np.array([], dtype=np.uint8)
+        tree = HuffmanTree.build(data)
+        packed, total_bits = tree.encode(data)
+        out = HuffmanTree.decode(packed, total_bits, tree.tree, 0)
+        assert out.shape == (0,)
+
+    def test_cluster_point_huffman_matches_assignments(self):
+        c = PointCompressor(n_clusters=8, lloyd_iterations=3)
+        weights = np.random.RandomState(1).randn(128).astype(np.float32) * 0.02
+        p = c.compress_cluster(weights, identity="huff")
+        assert p.params.get("huffman_data") is not None
+        rebuilt = HuffmanTree.from_dict(p.params["huffman_codes"])
+        decoded = HuffmanTree.decode(
+            p.params["huffman_data"],
+            p.params["huffman_bits"],
+            rebuilt.tree,
+            len(p.params["assignments"]),
+        )
+        assert np.array_equal(decoded, p.params["assignments"])
+
+    def test_cluster_generate_stable_with_huffman(self):
+        c = PointCompressor(n_clusters=8, lloyd_iterations=3)
+        weights = np.random.RandomState(2).randn(96).astype(np.float32)
+        p = c.compress_cluster(weights, identity="gen")
+        g1 = p.generate(96)
+        g2 = p.generate(96)
+        assert g1.shape == (96,)
+        assert np.isfinite(g1).all()
+        assert np.allclose(g1, g2)
