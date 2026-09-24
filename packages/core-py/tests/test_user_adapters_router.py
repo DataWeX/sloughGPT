@@ -3,8 +3,8 @@
 Covers: UserAdaptersRouter CRUD, merge, aggregate-best, quality, prune, delete.
 All domain calls are mocked; only HTTP-level behavior is tested.
 
-Note: the user_adapters router imports get_per_user_lora INSIDE each handler,
-so we must patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora'.
+Note: the router does `from domain.feedback import get_per_user_lora` inside
+each handler — patch the package attribute, not the _internal definition.
 """
 
 from __future__ import annotations
@@ -27,6 +27,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
+import routers.user_adapters as ua_module  # noqa: E402
 from routers.user_adapters import router  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -42,7 +43,8 @@ def _make_store(**overrides):
         ],
         "get_stats": lambda: {"total_adapters": 2, "total_feedback": 15},
         "get_adapter": lambda uid: SimpleNamespace(feedback_count=10) if uid == "u1" else None,
-        "update_adapter": lambda uid, feedback_signal=None: None,
+        # Matches PerUserLoRAStore.update_adapter(user_id, feedback_signal, ...)
+        "update_adapter": lambda uid, feedback_signal, learning_rate=0.01: None,
         "reset_user_adapter": lambda uid: None,
         "merge_all": lambda: None,
         "aggregate_best_adapters": lambda **kw: {
@@ -71,8 +73,16 @@ def _app():
     return app
 
 
+@pytest.fixture(autouse=True)
+def _clear_list_cache():
+    # list_adapters caches for 15s at module scope — would poison later tests.
+    ua_module._list_cache = None
+    yield
+    ua_module._list_cache = None
+
+
 # ---------------------------------------------------------------------------
-# Tests — patch at 'domain.feedback.get_per_user_lora'
+# Tests — patch domain.feedback.get_per_user_lora (package attr the router binds)
 # ---------------------------------------------------------------------------
 #
 # The handler runs `from domain.feedback import get_per_user_lora` inside
@@ -85,21 +95,6 @@ def _app():
 # 'default' instead of the fake's u1/u2).
 
 MOCK_TARGET = "domain.feedback.get_per_user_lora"
-
-
-@pytest.fixture(autouse=True)
-def _clear_list_cache():
-    """Drop the router's module-level 15s response cache between tests.
-
-    list_adapters() short-circuits on `_list_cache` BEFORE it calls
-    _get_store(), so a warm cache both replays the previous test's payload
-    and defeats the ImportError patch in test_import_error_returns_503.
-    """
-    import routers.user_adapters as ua
-
-    ua._list_cache = None
-    yield
-    ua._list_cache = None
 
 
 class TestListAdapters:
@@ -144,7 +139,8 @@ class TestGetAdapter:
 class TestUpdateAdapter:
     @patch(MOCK_TARGET)
     def test_update_rating(self, mock_get):
-        mock_get.return_value = _make_store()
+        store = _make_store()
+        mock_get.return_value = store
         client = TestClient(_app())
         resp = client.post("/user-adapters/u1/update", json={"rating": "thumbs_up"})
         assert resp.status_code == 200
