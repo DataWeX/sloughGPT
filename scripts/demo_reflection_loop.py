@@ -16,8 +16,8 @@ _project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_project_root))
 sys.path.insert(0, str(_project_root / "packages" / "core-py"))
 
-from domain.consciousness._internal.config import ConsciousnessConfig
-from domain.consciousness._internal.engine import ConsciousnessEngine
+from domain.cognition._internal.consciousness.config import ConsciousnessConfig
+from domain.cognition._internal.consciousness.engine import ConsciousnessEngine
 
 
 def divider(title: str) -> None:

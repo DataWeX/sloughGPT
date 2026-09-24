@@ -1,12 +1,10 @@
 """Tests for the consciousness training adapter.
 
-``domain/consciousness/training.py`` was deleted in the layout refactor and the
-router's ``_get_trainer()`` still imports it — every training-touching
-endpoint (``/consciousness/status``, ``/train/status``, ``/train/start``,
-``/stats``, ``/stream``) 500s with ``ModuleNotFoundError``. These tests pin the
-router contract and the adapter's behaviour (collect pairs → delegate the real
-loop to the consolidated ``HFLoraTrainer`` → fall back to ``data_saved`` when no
-model is available).
+``domain/cognition/_internal/consciousness/training.py`` is the dataset adapter
+over the one loop; the router's ``_get_trainer()`` imports it. These tests pin
+the router contract and the adapter's behaviour (collect pairs → delegate the
+real loop to the consolidated ``HFLoraTrainer`` → fall back to ``data_saved``
+when no model is available).
 """
 
 from __future__ import annotations
@@ -15,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.consciousness.training import (
+from domain.cognition._internal.consciousness.training import (
     ConsciousnessPair,
     ConsciousnessTrainer,
     TrainingConfig,
@@ -25,7 +23,7 @@ from domain.consciousness.training import (
 class TestImports:
     def test_router_import_path_works(self):
         # Regression for the dead import: the router does exactly this.
-        import domain.consciousness.training as training
+        import domain.cognition._internal.consciousness.training as training
 
         assert training.ConsciousnessTrainer is ConsciousnessTrainer
         assert training.TrainingConfig is TrainingConfig
@@ -43,13 +41,13 @@ class TestImports:
             config = Cfg()
             self_model = SimpleNamespace(episodes=[])
 
-        monkeypatch.setattr("domain.consciousness.get_consciousness", lambda: Engine())
+        monkeypatch.setattr("domain.cognition.get_consciousness", lambda: Engine())
 
         router_obj = ConsciousnessRouter()
         trainer = router_obj._get_trainer()
         assert router_obj._trainer is not None
         # Contract the router depends on — the concrete class may live in the
-        # router or in domain.consciousness.training, but it must satisfy this.
+        # router or in the consciousness training adapter, but it must satisfy this.
         assert trainer.config.rank == 4
         assert trainer.config.alpha == 8.0
         assert trainer.config.min_pairs_for_training == 10
