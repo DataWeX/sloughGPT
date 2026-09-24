@@ -27,7 +27,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
-__all__ = ["is_valid_iso", "normalize_iso", "parse_iso", "to_iso", "utc_now_iso"]
+__all__ = ["get_timestamp", "is_valid_iso", "normalize_iso", "parse_iso", "to_iso", "utc_now_iso"]
 
 # "...+00:00Z" / "...+02:00Z" — an offset immediately followed by a Z designator.
 _DUPLICATE_Z = re.compile(r"(?P<offset>[+-]\d{2}:?\d{2})Z$")
@@ -96,3 +96,11 @@ def normalize_iso(value: object) -> str:
 def is_valid_iso(value: object) -> bool:
     """True when *value* parses as an ISO 8601 timestamp."""
     return parse_iso(value) is not None
+
+
+def get_timestamp() -> str:
+    """Back-compat alias for :func:`utc_now_iso` (was ``datetime.now(UTC).isoformat()``).
+
+    Now returns the JS-safe ``...Z`` form instead of ``...+00:00``.
+    """
+    return utc_now_iso()
