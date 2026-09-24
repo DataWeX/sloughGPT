@@ -7,7 +7,7 @@ so the manager stays type-agnostic.
 
 Usage::
 
-    from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+    from domain.infrastructure._internal.cancel_manager import get_cancel_manager, OpType
 
     mgr = get_cancel_manager()
 

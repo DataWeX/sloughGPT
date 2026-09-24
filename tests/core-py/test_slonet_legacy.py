@@ -2549,7 +2549,7 @@ class TestKernelsImportFallback:
             "        if name == 'domain.training._internal.slonet_kernels':\n"
             "            raise ImportError('blocked for test')\n"
             "sys.meta_path.insert(0, _Block())\n"
-            "from domains.training import slonet\n"
+            "from domain.training._internal import slonet\n"
             "assert slonet._KERNELS_AVAILABLE is False\n"
             "print('KERNELS_FALLBACK_OK')\n"
         )

@@ -356,7 +356,7 @@ class TestCompressCheckpointBranches:
         import tempfile
         from pathlib import Path
 
-        from domains.training import executor as exmod
+        from domain.training._internal import executor as exmod
 
         monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.pugqeep", None)
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -368,7 +368,7 @@ class TestCompressCheckpointBranches:
         import tempfile
         from pathlib import Path
 
-        from domains.training import executor as exmod
+        from domain.training._internal import executor as exmod
 
         with (
             patch("domain.training._internal.slonet.import_from_sou", return_value=None),
@@ -382,7 +382,7 @@ class TestCompressCheckpointBranches:
         import tempfile
         from pathlib import Path
 
-        from domains.training import executor as exmod
+        from domain.training._internal import executor as exmod
 
         with (
             patch(
@@ -399,7 +399,7 @@ class TestCompressCheckpointBranches:
         import tempfile
         from pathlib import Path
 
-        from domains.training import executor as exmod
+        from domain.training._internal import executor as exmod
 
         class FakeModel:
             def state_dict(self):
