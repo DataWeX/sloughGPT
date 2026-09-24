@@ -1,6 +1,10 @@
 """
 Cloud Training Router — endpoints for cloud training management.
+
+Delegates to TrainingEngine; does not import domain.training._internal.
 """
+
+from __future__ import annotations
 
 import logging
 
@@ -24,28 +28,20 @@ class CloudTrainingRouter:
         self.router.add_api_route("/{job_id}/status", self.job_status, methods=["GET"])
         self.router.add_api_route("/{job_id}/cancel", self.cancel_job, methods=["POST"])
 
+    @staticmethod
+    def _engine():
+        from domain.training.engine import get_training_engine
+
+        return get_training_engine()
+
     @endpoint("cloud_training.list_jobs")
     async def list_jobs(self, limit: int = 10) -> dict:
         """List recent cloud training jobs."""
         try:
-            from domain.training._internal.cloud import get_provider
-
-            provider = get_provider("local")
-            jobs = provider.list_jobs(limit)
-            return success_response(
-                data={
-                    "jobs": [
-                        {
-                            "job_id": j.job_id,
-                            "provider": j.provider,
-                            "status": j.status,
-                            "progress": j.progress,
-                            "error": j.error,
-                        }
-                        for j in jobs
-                    ]
-                }
-            )
+            result = self._engine().list_cloud_jobs(limit=limit)
+            if not result.success:
+                raise RuntimeError(result.error or "list failed")
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="cloud_training.list_jobs")
 
@@ -58,19 +54,11 @@ class CloudTrainingRouter:
     ) -> dict:
         """Submit a cloud training job."""
         try:
-            from domain.training._internal.cloud import CloudTrainingConfig, get_provider
-
-            p = get_provider(provider)
-            config = CloudTrainingConfig(provider=provider)
-            job_id = p.submit_job(config, dataset_id, "train.py", {})
+            result = self._engine().submit_cloud_job(provider=provider, dataset_id=dataset_id)
+            if not result.success:
+                raise RuntimeError(result.error or "submit failed")
             safe_audit_log("cloud_training.submit", resource=dataset_id, detail=provider)
-            return success_response(
-                data={
-                    "job_id": job_id,
-                    "provider": provider,
-                    "status": "submitted",
-                }
-            )
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="cloud_training.submit")
 
@@ -78,19 +66,10 @@ class CloudTrainingRouter:
     async def job_status(self, job_id: str) -> dict:
         """Get status of a cloud training job."""
         try:
-            from domain.training._internal.cloud import get_provider
-
-            provider = get_provider("local")
-            status = provider.get_status(job_id)
-            return success_response(
-                data={
-                    "job_id": status.job_id,
-                    "provider": status.provider,
-                    "status": status.status,
-                    "progress": status.progress,
-                    "error": status.error,
-                }
-            )
+            result = self._engine().cloud_job_status(job_id)
+            if not result.success:
+                raise RuntimeError(result.error or "status failed")
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="cloud_training.job_status")
 
@@ -102,17 +81,11 @@ class CloudTrainingRouter:
     ) -> dict:
         """Cancel a cloud training job."""
         try:
-            from domain.training._internal.cloud import get_provider
-
-            provider = get_provider("local")
-            cancelled = provider.cancel_job(job_id)
+            result = self._engine().cancel_cloud_job(job_id)
+            if not result.success:
+                raise RuntimeError(result.error or "cancel failed")
             safe_audit_log("cloud_training.cancel", resource=job_id)
-            return success_response(
-                data={
-                    "job_id": job_id,
-                    "cancelled": cancelled,
-                }
-            )
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="cloud_training.cancel")
 
