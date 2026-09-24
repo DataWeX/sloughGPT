@@ -12,7 +12,7 @@ import logging
 import time
 from typing import Any
 
-from domains import (
+from domain import (
     BaseComponent,
     ComponentException,
     ICognitiveProcessor,

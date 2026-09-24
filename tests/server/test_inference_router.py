@@ -238,7 +238,7 @@ class TestChat:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domains.get_chat_domain")
+    @patch("domain.get_chat_domain")
     def test_chat_success(self, mock_get_domain, client):
         mock_domain = MagicMock()
         mock_domain.respond = AsyncMock(
@@ -382,7 +382,7 @@ class TestContextEndpoints:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domains.get_chat_domain")
+    @patch("domain.get_chat_domain")
     def test_inspect_context(self, mock_get_domain, client):
         resp = client.get("/context/inspect")
         assert resp.status_code == 200

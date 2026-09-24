@@ -143,7 +143,8 @@ def _load_gpt2_numpy() -> tuple[dict, ArchConfig, dict]:
     if not slnc_path.exists():
         raise RuntimeError(
             "No .slnc file for GPT-2. Convert first: "
-            "python -m domains.infrastructure.slnc.compiler gpt2"
+            'SLNCCompiler().compile("gpt2", output="model.slnc") '
+            "(domain.infrastructure._internal.slnc.compiler)"
         )
 
     parser = SLNCParser(str(slnc_path))
