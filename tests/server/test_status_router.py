@@ -3,6 +3,7 @@ Tests for the status router — /status, /ready, /live.
 """
 
 import time
+from unittest.mock import patch
 
 import pytest
 from fastapi import FastAPI
@@ -74,18 +75,30 @@ class TestGetStatus:
 class TestReadiness:
     """GET /ready"""
 
-    def test_returns_ready(self, client):
+    @patch("domain.inference._internal.native.engine.get_engine")
+    @patch("domain.feedback.get_feedback_db")
+    def test_returns_ready(self, mock_db, mock_engine, client):
+        mock_db.return_value = object()
+        mock_engine.return_value = object()
         resp = client.get("/ready")
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
         assert body["data"]["ready"] is True
 
-    def test_ready_is_always_true(self, client):
+    @patch("domain.inference._internal.native.engine.get_engine")
+    @patch("domain.feedback.get_feedback_db")
+    def test_ready_is_always_true(self, mock_db, mock_engine, client):
+        mock_db.return_value = object()
+        mock_engine.return_value = object()
         resp = client.get("/ready")
         assert resp.json()["data"]["ready"] is True
 
-    def test_ready_multiple_times(self, client):
+    @patch("domain.inference._internal.native.engine.get_engine")
+    @patch("domain.feedback.get_feedback_db")
+    def test_ready_multiple_times(self, mock_db, mock_engine, client):
+        mock_db.return_value = object()
+        mock_engine.return_value = object()
         for _ in range(3):
             assert client.get("/ready").json()["data"]["ready"] is True
 
@@ -125,7 +138,11 @@ class TestLiveness:
         resp = client.post("/status")
         assert resp.status_code == 405
 
-    def test_ready_data_shape(self, client):
+    @patch("domain.inference._internal.native.engine.get_engine")
+    @patch("domain.feedback.get_feedback_db")
+    def test_ready_data_shape(self, mock_db, mock_engine, client):
+        mock_db.return_value = object()
+        mock_engine.return_value = object()
         body = client.get("/ready").json()
         assert set(body["data"].keys()) >= {"ready"}
         assert body["data"]["ready"] is True
