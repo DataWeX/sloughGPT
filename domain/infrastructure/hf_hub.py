@@ -1,3 +1,3 @@
 """Shim: re-exports from canonical old-style location."""
 
-from domains.infrastructure.hf_hub import *  # noqa: F401,F403
+from domain.infrastructure._internal.hf_hub import *  # noqa: F401,F403
