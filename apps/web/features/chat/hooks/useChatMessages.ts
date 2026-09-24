@@ -732,9 +732,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
             if (signal?.aborted) break
             hasContent = true
             let cleanedToken = token
-            if (assistantContentLen < 50) {
+            if (assistantContentLen === 0) {
               cleanedToken = stripAssistantPrefix(cleanedToken)
               cleanedToken = cleanStreamedContent(cleanedToken)
+            } else if (assistantContentLen < 50) {
+              cleanedToken = stripAssistantPrefix(cleanedToken)
             }
             assistantContentLen += cleanedToken.length
             tokenBufRef.current.push({ id: assistantId, text: cleanedToken })
@@ -768,9 +770,11 @@ export function useChatMessages(config: ChatMessagesConfig) {
             knowledge: knowledgeFacts.length > 0 ? knowledgeFacts : undefined,
             onToken: (token: string) => {
               let cleanedToken = token
-              if (assistantContentLen < 50) {
+              if (assistantContentLen === 0) {
                 cleanedToken = stripAssistantPrefix(cleanedToken)
                 cleanedToken = cleanStreamedContent(cleanedToken)
+              } else if (assistantContentLen < 50) {
+                cleanedToken = stripAssistantPrefix(cleanedToken)
               }
               assistantContentLen += cleanedToken.length
               tokenBufRef.current.push({ id: assistantId, text: cleanedToken })

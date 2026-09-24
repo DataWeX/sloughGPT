@@ -403,6 +403,10 @@ class SloBPE:
         else:
             # Whitespace: </w> marks word boundary → insert space
             raw = raw.replace(self._word_suffix, " ")
+        # Single-token decodes (streaming) must be lossless so inter-token
+        # whitespace survives chunk concatenation; only full sequences strip.
+        if len(tokens) <= 1:
+            return raw
         return raw.strip()
 
     # ------------------------------------------------------------------
@@ -1304,7 +1308,12 @@ class SloUnigram:
                 continue
             tokens.append(t)
 
-        return "".join(tokens).strip()
+        raw = "".join(tokens)
+        # Single-token decodes (streaming) must be lossless so inter-token
+        # whitespace survives chunk concatenation; only full sequences strip.
+        if len(tokens) <= 1:
+            return raw
+        return raw.strip()
 
     # ------------------------------------------------------------------
     # Serialization
