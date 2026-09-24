@@ -14,9 +14,8 @@ import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "packages", "core-py"))
 
-import domains.feedback.database as database
-from domains.feedback.hf_dpo import HFDPOTrainer
-
+from domain.feedback._internal import database
+from domain.feedback._internal.hf_dpo import HFDPOTrainer
 from domain.training._internal.slonet import SloLSTM
 
 
