@@ -28,13 +28,14 @@ def main():
         Path(__file__).resolve().parents[1] / "data" / "tinyshakespeare" / "input.txt",
         get_cache_root() / "tinyshakespeare" / "corpus.jsonl",
     ]
-    data_path = next((str(p) for p in candidates if p.exists()), str(candidates[0]))
-    print(f"Dataset: {data_path}")
-    if Path(data_path).exists():
-        print(f"Data size: {os.path.getsize(data_path) / 1024:.1f} KB")
+    default_data_path = next((str(p) for p in candidates if p.exists()), str(candidates[0]))
+    print(f"Dataset: {default_data_path}")
+    if Path(default_data_path).exists():
+        print(f"Data size: {os.path.getsize(default_data_path) / 1024:.1f} KB")
     else:
         print("Data not found — using synthetic tiny dataset")
-        data_path = None
+        default_data_path = None
+    data_path = default_data_path
 
     configs = [
         {
@@ -97,6 +98,10 @@ def main():
 
         # Deterministic gate (goal 16): the whole benchmark is reproducible.
         np.random.seed(0)
+
+        # Each config runs on its own data_path — never leak the gate corpus
+        # into later configs (2201 chars starve small/medium: block*batch > n).
+        data_path = default_data_path
 
         if name == "gate":
             # Gate corpus: 10-cycle over a 10-char alphabet so next-char is a pure
