@@ -1,0 +1,387 @@
+'use client'
+
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { Card, CardHeader, CardTitle, CardContent, StatCard, KpiGrid, Skeleton, Button, StatusDot } from '@sloughgpt/strui'
+import { PageContainer } from '@/components/PageContainer'
+import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
+import { overviewTabs } from '@/components/workspace/workspace-tabs'
+import { apiGet } from '@/lib/http-client'
+import { useAuthStore } from '@/lib/auth'
+import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
+import { RefreshCw, ExternalLink, ChevronRight, AlertTriangle } from 'lucide-react'
+
+interface WorkspaceStats {
+  workspace_id: string
+  name: string
+  member_count: number
+  dataset_count: number
+  training_jobs: number
+  active_training_jobs: number
+  knowledge_items: number
+}
+
+interface Activity {
+  type: string
+  action: string
+  detail: string
+  status: string
+  timestamp: string
+  user: string
+  job_id?: string
+  dataset_id?: string
+}
+
+interface UsageData {
+  members: { total: number; admins: number; users: number; viewers: number }
+  training: { total: number; running: number; completed: number; failed: number; total_minutes: number }
+  datasets: { total: number }
+  knowledge: { total: number }
+  api_keys: { total: number }
+}
+
+function getActivityLink(a: Activity): string | null {
+  if (a.job_id) return `/training/queue`
+  if (a.type === 'training') return '/training/queue'
+  if (a.type === 'dataset') return '/datasets'
+  if (a.type === 'knowledge') return '/knowledge'
+  if (a.type === 'member') return '/workspace/members'
+  if (a.type === 'audit') return '/workspace/audit'
+  if (a.type === 'api_key') return '/workspace/settings/api-keys'
+  return null
+}
+
+export default function WorkspaceDashboardPage() {
+  const router = useRouter()
+  const [stats, setStats] = useState<WorkspaceStats | null>(null)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [usage, setUsage] = useState<UsageData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [healthStatus, setHealthStatus] = useState<string | null>(null)
+  const [checkingHealth, setCheckingHealth] = useState(false)
+  const [showAllActivities, setShowAllActivities] = useState(false)
+  const { currentWorkspace } = useAuthStore()
+  const addToast = useToastStore(s => s.addToast)
+
+  const runHealthCheck = useCallback(async () => {
+    if (!currentWorkspace?.id) return
+    setCheckingHealth(true)
+    try {
+      const res = await apiGet<{ data: { status: string } }>(`/workspaces/${currentWorkspace.id}/health`)
+      setHealthStatus(res?.data?.status ?? null)
+    } catch {
+      setHealthStatus('error')
+    } finally {
+      setCheckingHealth(false)
+    }
+  }, [currentWorkspace?.id])
+
+  const fetchData = useCallback(async () => {
+    if (!currentWorkspace?.id) {
+      setLoading(false)
+      return
+    }
+    try {
+      const [statsRes, activityRes, usageRes] = await Promise.all([
+        apiGet<{ data: WorkspaceStats }>(`/workspaces/${currentWorkspace.id}/stats`),
+        apiGet<{ data: { activities: Activity[] } }>(`/workspaces/${currentWorkspace.id}/activity`),
+        apiGet<{ data: UsageData }>(`/workspaces/${currentWorkspace.id}/usage`),
+      ])
+      setStats(statsRes?.data ?? null)
+      setActivities(activityRes?.data?.activities ?? [])
+      setUsage(usageRes?.data ?? null)
+      runHealthCheck()
+    } catch {
+      addToast('Failed to load workspace data', 'error')
+    } finally {
+      setLoading(false)
+    }
+  }, [currentWorkspace?.id, runHealthCheck, addToast])
+
+  useEffect(() => { fetchData() }, [fetchData])
+  useRefreshShortcut(fetchData)
+
+  const activityByType = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const a of activities) {
+      map[a.type] = (map[a.type] || 0) + 1
+    }
+    return map
+  }, [activities])
+
+  const trainingByStatus = useMemo(() => {
+    if (!usage?.training) return { completed: 0, failed: 0, running: 0 }
+    return {
+      completed: usage.training.completed,
+      failed: usage.training.failed,
+      running: usage.training.running,
+    }
+  }, [usage])
+
+  const formatTime = (ts: string) => {
+    if (!ts) return ''
+    try { return new Date(ts).toLocaleString() } catch { return ts }
+  }
+
+  const maxActivityType = useMemo(() => {
+    let max = 0
+    let maxType = ''
+    for (const [type, count] of Object.entries(activityByType)) {
+      if (count > max) { max = count; maxType = type }
+    }
+    return { type: maxType, count: max }
+  }, [activityByType])
+
+  const displayedActivities = showAllActivities ? activities : activities.slice(0, 10)
+
+  if (loading) {
+    return (
+      <PageContainer title="Workspace Dashboard"
+      toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
+    >
+        <Skeleton className="h-8 w-64 mb-4" />
+        <KpiGrid className="mb-6">
+          {[1,2,3,4,5,6].map(i => (
+            <Card key={i}><CardContent className="p-4 space-y-2">
+              <Skeleton className="h-2 w-16" />
+              <Skeleton className="h-5 w-10" />
+            </CardContent></Card>
+          ))}
+        </KpiGrid>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+          <Card><CardContent className="p-4 space-y-3">
+            <Skeleton className="h-3 w-28" />
+            {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+          </CardContent></Card>
+          <Card><CardContent className="p-4 space-y-3">
+            <Skeleton className="h-3 w-28" />
+            {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
+          </CardContent></Card>
+        </div>
+        <Card><CardContent className="p-4 space-y-2">
+          <Skeleton className="h-3 w-32" />
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-8 w-full" />)}
+        </CardContent></Card>
+      </PageContainer>
+    )
+  }
+
+  return (
+    <PageContainer title={stats?.name ? `${stats.name} — Dashboard` : "Workspace Dashboard"}
+      toolbar={<WorkspaceSectionTabs tabs={overviewTabs} ariaLabel="Workspace overview" />}
+    >
+      {/* KPIs */}
+      <KpiGrid className="mb-6">
+        <StatCard label="Members" value={stats?.member_count ?? 0} />
+        <StatCard label="Training Jobs" value={stats?.training_jobs ?? 0} />
+        <StatCard label="Active Jobs" value={stats?.active_training_jobs ?? 0} />
+        <StatCard label="Datasets" value={stats?.dataset_count ?? 0} />
+        <StatCard label="Knowledge" value={stats?.knowledge_items ?? 0} />
+        <StatCard label="API Keys" value={usage?.api_keys?.total ?? 0} />
+      </KpiGrid>
+
+      {/* Active training indicator */}
+      {(stats?.active_training_jobs ?? 0) > 0 && (
+        <Card className="mb-4">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs">
+                <StatusDot tone="success" pulse />
+                <span className="text-success font-medium">
+                  {stats?.active_training_jobs} training job{stats?.active_training_jobs !== 1 ? 's' : ''} running
+                </span>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => router.push('/training/queue')}>
+                View Queue <ChevronRight className="h-3 w-3 ml-1" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+        {/* Training Status */}
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-xs">Training Overview</CardTitle>
+              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchData} title="Refresh">
+                <RefreshCw className="h-3 w-3" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">Completed</span>
+                <span className="font-medium text-success">{trainingByStatus.completed}</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-1.5">
+                <div
+                  className="bg-success h-1.5 rounded-full"
+                  style={{ width: `${usage?.training?.total ? (trainingByStatus.completed / usage.training.total) * 100 : 0}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">Running</span>
+                <span className="font-medium text-info">{trainingByStatus.running}</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-1.5">
+                <div
+                  className="bg-info h-1.5 rounded-full"
+                  style={{ width: `${usage?.training?.total ? (trainingByStatus.running / usage.training.total) * 100 : 0}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">Failed</span>
+                <span className="font-medium text-destructive">{trainingByStatus.failed}</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-1.5">
+                <div
+                  className="bg-destructive h-1.5 rounded-full"
+                  style={{ width: `${usage?.training?.total ? (trainingByStatus.failed / usage.training.total) * 100 : 0}%` }}
+                />
+              </div>
+
+              <div className="pt-2 border-t text-[10px] text-muted-foreground">
+                Total training time: {usage?.training?.total_minutes ?? 0} min
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Activity Breakdown */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs">Activity Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {Object.entries(activityByType)
+                .sort(([, a], [, b]) => b - a)
+                .map(([type, count]) => (
+                  <div key={type} className="flex items-center justify-between text-[10px]">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
+                        type === 'training' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
+                        type === 'audit' ? 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {type}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-24 bg-muted rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full ${
+                            type === 'training' ? 'bg-info' :
+                            type === 'audit' ? 'bg-primary' : 'bg-muted'
+                          }`}
+                          style={{ width: `${maxActivityType.count ? (count / maxActivityType.count) * 100 : 0}%` }}
+                        />
+                      </div>
+                      <span className="font-medium w-6 text-right">{count}</span>
+                    </div>
+                  </div>
+                ))}
+              {Object.keys(activityByType).length === 0 && (
+                <p className="text-[10px] text-muted-foreground text-center py-4">No activity data</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Quick health status */}
+      {healthStatus && (
+        <Card className="mb-4">
+          <CardContent className="py-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs">
+                <StatusDot tone={
+                  healthStatus === 'healthy' ? 'success' :
+                  healthStatus === 'warning' ? 'warning' : 'destructive'
+                } />
+                <span className="font-medium capitalize">Workspace {healthStatus}</span>
+                {healthStatus === 'error' && (
+                  <AlertTriangle className="h-3 w-3 text-warning" />
+                )}
+              </div>
+              <button
+                onClick={runHealthCheck}
+                disabled={checkingHealth}
+                className="text-[10px] text-muted-foreground hover:text-foreground"
+              >
+                {checkingHealth ? 'Checking...' : 'Re-check'}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Activity feed */}
+      <Card>
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-xs">Recent Activity</CardTitle>
+            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={fetchData} title="Refresh">
+              <RefreshCw className="h-3 w-3" />
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-1">
+          {activities.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">No recent activity</p>
+          ) : (
+            <>
+              {displayedActivities.map((a, i) => {
+                const link = getActivityLink(a)
+                const Wrapper = link ? 'a' : 'div'
+                return (
+                  <Wrapper
+                    key={i}
+                    {...(link ? { href: link } : {})}
+                    className={`flex items-center justify-between px-2 py-1.5 rounded text-[10px] ${
+                      link ? 'hover:bg-muted/50 cursor-pointer' : ''
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-medium">{a.action}</span>
+                      {a.detail && <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {a.user && <span className="text-muted-foreground">{a.user}</span>}
+                      {a.status && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                          a.status === 'completed' || a.status === 'success' ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success' :
+                          a.status === 'failed' || a.status === 'failure' ? 'bg-destructive/15 text-destructive dark:bg-destructive/10 dark:text-destructive' :
+                          a.status === 'running' ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info' :
+                          'bg-muted text-muted-foreground'
+                        }`}>
+                          {a.status}
+                        </span>
+                      )}
+                      <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                      {link && <ExternalLink className="h-2.5 w-2.5 text-muted-foreground" />}
+                    </div>
+                  </Wrapper>
+                )
+              })}
+              {activities.length > 10 && (
+                <button
+                  onClick={() => setShowAllActivities(!showAllActivities)}
+                  className="w-full text-center text-[10px] text-muted-foreground hover:text-foreground py-2"
+                >
+                  {showAllActivities ? 'Show less' : `Show all ${activities.length} activities`}
+                </button>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </PageContainer>
+  )
+}

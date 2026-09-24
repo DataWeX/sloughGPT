@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { NAV_SECTIONS, SHORTCUT_TO_PATH, ALL_ROUTES, SIDEBAR_ICONS } from './navigation'
 
 describe('navigation', () => {
-  it('has 4 sections', () => {
+  it('has 5 sections', () => {
     expect(NAV_SECTIONS).toHaveLength(5)
   })
 

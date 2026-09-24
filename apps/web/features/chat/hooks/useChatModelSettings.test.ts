@@ -1,5 +1,6 @@
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { useAppStore, DEFAULT_SETTINGS } from '@/lib/store'
 
 const mockList = vi.fn()
 const mockLoad = vi.fn()
@@ -50,6 +51,7 @@ describe('useChatModelSettings', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    useAppStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     mockList.mockResolvedValue([])
     mockGet.mockResolvedValue({ temperature: 0.8, max_new_tokens: 200 })
     mockSoulsList.mockResolvedValue({ souls: [], current_soul: null })

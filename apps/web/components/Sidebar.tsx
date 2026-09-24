@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from '@/vite/next-compat/link'
+import { usePathname } from '@/vite/next-compat/navigation'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconClose } from '@/components/icons/NavIcons'
 import { routeMatchesPath } from '@/lib/route-match'
@@ -23,7 +23,7 @@ export type SidebarProps = {
   onClose?: () => void
 }
 
-export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollapse, onNavigate, onClose }: SidebarProps) {
+export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollapse: _onToggleCollapse, onNavigate, onClose }: SidebarProps) {
   const pathname = usePathname()
   const isDrawer = variant === 'drawer'
   const isCollapsed = collapsed && !isDrawer
@@ -93,7 +93,18 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
           aria-label="Primary"
         >
           <div className={cn('min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide', isCollapsed && 'w-fit')}>
-            {NAV_SECTIONS.map((section, si) => (
+            {(() => {
+              // Longest-prefix match so /workspace/members highlights Members, not Dashboard
+              const allRoutes = NAV_SECTIONS.flatMap((s) => s.routes)
+              let bestPath: string | null = null
+              let bestLen = -1
+              for (const route of allRoutes) {
+                if (routeMatchesPath(pathname, route.path) && route.path.length > bestLen) {
+                  bestPath = route.path
+                  bestLen = route.path.length
+                }
+              }
+              return NAV_SECTIONS.map((section, si) => (
               <div key={si}>
                 {si > 0 && (
                   <div className="my-2 border-t border-border/30 dark:border-border/40" />
@@ -105,7 +116,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                 )}
                 <ul className="space-y-0.5">
                   {section.routes.map((route) => {
-                    const active = routeMatchesPath(pathname, route.path)
+                    const active = route.path === bestPath
                     const RouteIcon = SIDEBAR_ICONS[route.path]
                     return (
                       <li key={route.path}>
@@ -137,7 +148,8 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                   )}
                 </ul>
               </div>
-            ))}
+            ))
+            })()}
           </div>
         </nav>
 

@@ -34,8 +34,21 @@ describe('resolveRedirect / splitTarget', () => {
     expect(splitTarget('/datasets')).toEqual({ path: '/datasets', search: '' })
   })
 
-  it('has 39 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(39)
+  it('has 49 entries matching proxy table', () => {
+    expect(Object.keys(REDIRECTS).length).toBe(49)
+  })
+
+  it('maps workspace legacy paths to consolidated routes', () => {
+    expect(resolveRedirect('/workspace-dashboard')).toBe('/workspace')
+    expect(resolveRedirect('/usage')).toBe('/workspace/usage')
+    expect(resolveRedirect('/audit-trail')).toBe('/workspace/audit')
+    expect(resolveRedirect('/members')).toBe('/workspace/members')
+    expect(resolveRedirect('/permissions')).toBe('/workspace/members/permissions')
+    expect(resolveRedirect('/workspace-settings')).toBe('/workspace/settings')
+    expect(resolveRedirect('/api-keys')).toBe('/workspace/settings/api-keys')
+    expect(resolveRedirect('/notifications')).toBe('/workspace/settings/notifications')
+    expect(resolveRedirect('/shared-data')).toBe('/workspace/data')
+    expect(resolveRedirect('/workspace-search')).toBe('/workspace/data/search')
   })
 })
 
