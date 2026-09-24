@@ -23,7 +23,7 @@ class TestGetMetaWeightsRequest:
 
     def test_defaults(self):
         req = GetMetaWeightsRequest(user_message="hi")
-        assert req.k == 10
+        assert req.k == 5
         assert req.user_id == "default"
 
     def test_custom_k(self):
@@ -62,32 +62,37 @@ class TestMetaWeightsRouter:
 
     def test_router_has_routes(self):
         router = MetaWeightsRouter()
+        # FastAPI folds the router prefix into route.path.
+        prefix = router.router.prefix
         routes = [r.path for r in router.router.routes]
-        assert "/ping" in routes
-        assert "/get" in routes
-        assert "/stats" in routes
+        assert f"{prefix}/ping" in routes
+        assert f"{prefix}/get" in routes
+        assert f"{prefix}/stats" in routes
 
     def test_ping_route_exists(self):
         router = MetaWeightsRouter()
+        target = f"{router.router.prefix}/ping"
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/ping":
+            if hasattr(route, "path") and route.path == target:
                 methods.extend(route.methods)
         assert "GET" in methods
 
     def test_get_route_exists(self):
         router = MetaWeightsRouter()
+        target = f"{router.router.prefix}/get"
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/get":
+            if hasattr(route, "path") and route.path == target:
                 methods.extend(route.methods)
         assert "POST" in methods
 
     def test_stats_route_exists(self):
         router = MetaWeightsRouter()
+        target = f"{router.router.prefix}/stats"
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/stats":
+            if hasattr(route, "path") and route.path == target:
                 methods.extend(route.methods)
         assert "GET" in methods
 

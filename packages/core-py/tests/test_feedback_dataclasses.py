@@ -2,6 +2,7 @@
 
 import dataclasses
 import threading
+from typing import get_type_hints
 
 import numpy as np
 import pytest
@@ -725,11 +726,13 @@ class TestMetaWeights:
         assert mw1 != mw2
 
     def test_all_float_fields(self):
-        for f in dataclasses.fields(MetaWeights):
-            if f.name == "top_k":
-                assert f.type is int
+        # get_type_hints resolves string annotations from `from __future__ import annotations`.
+        hints = get_type_hints(MetaWeights)
+        for name, typ in hints.items():
+            if name == "top_k":
+                assert typ is int
             else:
-                assert f.type is float
+                assert typ is float
 
     def test_copy_via_replace(self):
         mw1 = MetaWeights()
@@ -870,11 +873,11 @@ class TestHealthSnapshot:
         assert hs1 == hs2
 
     def test_dataclass_field_types(self):
-        fields = {f.name: f.type for f in dataclasses.fields(HealthSnapshot)}
-        assert fields["timestamp"] is float
-        assert fields["perplexity"] is float
-        assert fields["loss"] is float
-        assert fields["num_sentences"] is int
+        hints = get_type_hints(HealthSnapshot)
+        assert hints["timestamp"] is float
+        assert hints["perplexity"] is float
+        assert hints["loss"] is float
+        assert hints["num_sentences"] is int
 
 
 class TestDatabaseDataclasses:

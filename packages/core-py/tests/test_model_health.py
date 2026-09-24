@@ -113,11 +113,14 @@ class TestModelHealthMonitor:
     def test_persistence_truncates_to_200(self, tmp_path):
         path = str(tmp_path / "health.json")
         monitor = ModelHealthMonitor(db_path=path)
-        monitor._history = [
-            {"timestamp": i, "perplexity": float(i), "loss": 2.0, "num_sentences": 15}
-            for i in range(250)
-        ]
-        monitor._save_history()
+        # Seed the store directly: _save_history only appends the latest entry.
+        col = monitor._db.collection("benchmarks")
+        col.insert_many(
+            [
+                {"timestamp": i, "perplexity": float(i), "loss": 2.0, "num_sentences": 15}
+                for i in range(250)
+            ]
+        )
         monitor2 = ModelHealthMonitor(db_path=path)
         assert len(monitor2._history) == 200
 
