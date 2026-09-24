@@ -500,7 +500,7 @@ class MultimodalEngine:
         if text_tokens is None:
             raise ValueError("text_tokens is required")
         # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
 
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
@@ -562,7 +562,7 @@ class MultimodalEngine:
         if not samples:
             return 0.0
 
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
 
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
@@ -638,7 +638,7 @@ class MultimodalEngine:
         _saved_rng = np.random.get_state()
         np.random.seed(42)
         # Disable GPU accelerator for deterministic inference (Metal can be non-deterministic)
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
 
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
@@ -790,7 +790,7 @@ class MultimodalEngine:
         self.eval()
         _saved_rng = np.random.get_state()
         np.random.seed(42)
-        import domains.training.slonet as _slonet_mod
+        import domain.training._internal.slonet as _slonet_mod
 
         _saved_accel = _slonet_mod._ACCELERATOR
         _slonet_mod._ACCELERATOR = "none"
@@ -1535,7 +1535,7 @@ def contrastive_step(engine: MultimodalEngine, img_np: np.ndarray, buffer: Repla
         return 0.0
 
     # Disable GPU accelerator for training — Metal dispatch overhead dominates at embed_dim≤128
-    import domains.training.slonet as _slonet_mod
+    import domain.training._internal.slonet as _slonet_mod
 
     _saved_accel = _slonet_mod._ACCELERATOR
     _slonet_mod._ACCELERATOR = "none"

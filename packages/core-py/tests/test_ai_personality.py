@@ -145,6 +145,6 @@ class TestModuleSingletons:
         assert get_personality_manager() is get_personality_manager()
 
     def test_list_personalities_matches_manager(self):
-        from domains.ai_personality import _default_manager
+        from domain.ai_personality._internal.personality import _default_manager
 
         assert list_personalities() == _default_manager.list_personalities()

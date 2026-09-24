@@ -73,7 +73,7 @@ from domain.shared import find_repo_root
 @contextmanager
 def _no_accel():
     """Context manager to temporarily disable Metal/GPU accelerator."""
-    import domains.training.slonet as _slonet
+    import domain.training._internal.slonet as _slonet
 
     prev = getattr(_slonet, "_ACCELERATOR", None)
     try:
@@ -1420,7 +1420,7 @@ class SloTextEmbedder:
         Returns:
             list of floats (L2-normalized)
         """
-        import domains.training.slonet as _slonet
+        import domain.training._internal.slonet as _slonet
 
         _prev_accel = getattr(_slonet, "_ACCELERATOR", None)
         try:

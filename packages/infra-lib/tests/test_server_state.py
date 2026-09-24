@@ -1,4 +1,4 @@
-"""Tests for domains.infrastructure.server_state — AtomicRef and ServerState."""
+"""Tests for domain.infrastructure._internal.server_state — AtomicRef and ServerState."""
 
 import threading
 import time
@@ -255,8 +255,9 @@ class TestServerState:
         assert s.check_rate_limit("/api", max_per_second=30) is True
 
     def test_singleton_get_server_state(self):
-        import domains.infrastructure.server_state as mod
         from infra_lib.server_state import _server_state_lock, get_server_state
+
+        import domain.infrastructure._internal.server_state as mod
 
         with _server_state_lock:
             old = mod._server_state
