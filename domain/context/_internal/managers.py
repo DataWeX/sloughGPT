@@ -91,15 +91,16 @@ class TraitWeightsConfig:
         self._load()
 
     def _init_mogdb(self):
-        """Initialize MogDB with JSON sync for trait weights."""
-        import os
+        """Initialize MogDB with JSON sync for trait weights.
 
+        Store lives next to the config file so each instance path gets its
+        own store (default data/trait_weights.json → data/trait_weights_mogdb;
+        per-test tmp paths stay isolated instead of sharing one cross-run DB).
+        """
         from mogdb import MogDB
 
-        repo_root = self._path.parent.parent.parent
-        db_path = os.path.join(repo_root, "data", "trait_weights_mogdb")
-        sync_path = os.path.join(repo_root, "data", "trait_weights_json")
-        return MogDB(db_path, sync_dir=sync_path)
+        base = self._path.parent
+        return MogDB(str(base / "trait_weights_mogdb"), sync_dir=str(base / "trait_weights_json"))
 
     # ── Access ───────────────────────────────────────────────────────
 
@@ -374,12 +375,20 @@ class TraitWeightsConfig:
     # ── Persistence ──────────────────────────────────────────────────
 
     def _save(self) -> None:
-        """Write weights to MogDB (with automatic JSON sync)."""
+        """Write weights to MogDB (JSON sync) and mirror to the JSON path.
+
+        The mirror keeps ``self._path`` authoritative for readers when MogDB is
+        unavailable or mocked (tests, bootstrap fallback via ``_load_legacy``).
+        """
+        weights_data = {k: round(v, 4) for k, v in self._weights.items()}
+        try:
+            self._path.write_text(json.dumps(weights_data))
+        except OSError as e:
+            logger.warning("Failed to write trait weights JSON %s: %s", self._path, e)
         try:
             col = self._db.collection("weights")
             # Upsert: update if exists, insert if not
             existing = col.find_one({"_key": "trait_weights"})
-            weights_data = {k: round(v, 4) for k, v in self._weights.items()}
             if existing:
                 col.update_one(
                     {"_key": "trait_weights"},
