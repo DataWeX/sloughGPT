@@ -185,28 +185,36 @@ class TestCompanionSystem:
 
     def test_adjust_for_mood_down(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.5
+        c.set_personality(warmth=0.5)
         c.adjust_for_mood("down")
+        # deltas apply to base traits, not a mid-session traits mutation
         assert c.traits.warmth == pytest.approx(0.7)
 
     def test_adjust_for_mood_upset(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.9
+        c.set_personality(warmth=0.9)
         c.adjust_for_mood("upset")
-        # min(1.0, 0.9 + 0.2) = 1.0
+        # min(1.0, base 0.9 + 0.2) = 1.0
         assert c.traits.warmth == pytest.approx(1.0)
 
     def test_adjust_for_mood_happy(self):
         c = CompanionSystem()
-        original_warmth = c.traits.warmth
+        base_warmth = c._base_traits.warmth
         c.adjust_for_mood("happy")
-        assert c.traits.warmth == pytest.approx(min(1.0, original_warmth + 0.1))
+        assert c.traits.warmth == pytest.approx(min(1.0, base_warmth + 0.1))
 
     def test_adjust_for_mood_excited(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.8
+        c.set_personality(warmth=0.8)
         c.adjust_for_mood("excited")
         assert c.traits.warmth == pytest.approx(0.9)
+
+    def test_adjust_for_mood_uses_base_not_current_traits(self):
+        c = CompanionSystem()
+        c.set_personality(warmth=0.5)
+        c.traits.warmth = 0.1  # mid-session drift must not affect mood delta
+        c.adjust_for_mood("down")
+        assert c.traits.warmth == pytest.approx(0.7)
 
     def test_adjust_for_mood_neutral_no_change(self):
         c = CompanionSystem()
