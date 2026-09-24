@@ -1,8 +1,7 @@
 """consciousness — Self-awareness, qualia, meta-cognition, narrative.
 
 Canonical implementation of the consciousness subsystem. Re-exported by
-``domain.cognition`` (canonical facade) and the ``domain.consciousness``
-backward-compat shim.
+``domain.cognition`` (canonical facade).
 """
 
 from domain.cognition._internal.consciousness.config import ConsciousnessConfig

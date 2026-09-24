@@ -1,6 +1,7 @@
 # Training OOP Refactor Plan (v2 — Simplified Start)
 
 ## Problem
+
 Three training files duplicate gradient clipping, zero-grad, vocab construction, and training loops.
 
 ## Phase 1: Training Strategies + Simple Loop (NOW)
@@ -18,33 +19,51 @@ class BatchSampler(Protocol):
     def get_batch(self, batch_size: int) -> tuple[np.ndarray, np.ndarray]: ...
     def __len__(self) -> int: ...
 
+
 class GradientHandler(Protocol):
     def step(self, model, loss, optimizer) -> dict: ...
     def zero_grads(self, model) -> None: ...
+
 
 class LossTracker(Protocol):
     def update(self, loss_val: float) -> float: ...
     @property
     def current(self) -> float: ...
 
+
 class CheckpointSaver(Protocol):
     def save(self, model, path, **metadata) -> str: ...
     def load(self, path, model) -> bool: ...
     def latest_path(self) -> str | None: ...
 
+
 # --- Implementations ---
-class RandomBlockSampler: ...     # flat data → random blocks
-class PermutationSampler: ...     # fixed sequences → shuffled mini-batches
-class ChatPairSampler: ...        # chat pairs → token blocks
+class RandomBlockSampler: ...  # flat data → random blocks
+
+
+class PermutationSampler: ...  # fixed sequences → shuffled mini-batches
+
+
+class ChatPairSampler: ...  # chat pairs → token blocks
+
 
 class DirectGradientHandler: ...  # single backward → clip → step → zero
+
+
 class AccumulationGradientHandler: ...  # multi-step accumulation
 
-class RawLossTracker: ...         # simple average
-class EMALossTracker: ...         # exponential moving average
 
-class SoulCheckpointSaver: ...    # .soul format, rotation
-class NpzCheckpointSaver: ...     # .npz format, filtered tensors
+class RawLossTracker: ...  # simple average
+
+
+class EMALossTracker: ...  # exponential moving average
+
+
+class SoulCheckpointSaver: ...  # .soul format, rotation
+
+
+class NpzCheckpointSaver: ...  # .npz format, filtered tensors
+
 
 # --- Utilities ---
 def clip_gradients(params, max_norm) -> float: ...
@@ -68,7 +87,7 @@ class TrainingLoopConfig:
 
 class TrainingLoop:
     """Simple compositional loop — Phase 1."""
-    
+
     def __init__(
         self, model, optimizer,
         batch_sampler: BatchSampler,
@@ -79,7 +98,7 @@ class TrainingLoop:
         on_step: Callable | None = None,
         on_epoch: Callable | None = None,
     ): ...
-    
+
     def train(self) -> TrainResult:
         # Single loop with:
         # - Gradient accumulation
@@ -99,6 +118,7 @@ class TrainingLoop:
 ### Phase 2 (later)
 
 Add to `TrainingLoop`:
+
 - EMA loss smoothing
 - Cancel/pause events
 - Eval integration
@@ -109,6 +129,6 @@ Add to `TrainingLoop`:
 
 ### Verification
 
-1. `python -c "from domain.consciousness.training import ConsciousnessTrainer, TrainingConfig; print('OK')"`
+1. `python -c "from domain.cognition._internal.consciousness.training import ConsciousnessTrainer, TrainingConfig; print('OK')"`
 2. `pytest packages/core-py/tests/test_train_pipeline.py packages/core-py/tests/test_slonet_chat_trainer.py`
 3. Start server, verify `/consciousness/status` returns 200

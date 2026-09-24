@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``domain.consciousness`` package."""
+"""consciousness public re-exports — canonical home is ``domain.cognition``."""
 
-from domain.consciousness import (
+from domain.cognition import (
     ConsciousnessConfig,
     ConsciousnessEngine,
     ConsciousnessEvaluator,
