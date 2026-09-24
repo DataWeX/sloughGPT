@@ -91,14 +91,18 @@ class TraitWeightsConfig:
         self._load()
 
     def _init_mogdb(self):
-        """Initialize MogDB with JSON sync for trait weights."""
+        """Initialize MogDB with JSON sync for trait weights.
+
+        Storage lives next to the JSON file so every config instance gets an
+        isolated store (production: data/; tests: their own tmp dir).
+        """
         import os
 
         from mogdb import MogDB
 
-        repo_root = self._path.parent.parent.parent
-        db_path = os.path.join(repo_root, "data", "trait_weights_mogdb")
-        sync_path = os.path.join(repo_root, "data", "trait_weights_json")
+        base_dir = self._path.parent
+        db_path = os.path.join(base_dir, "trait_weights_mogdb")
+        sync_path = os.path.join(base_dir, "trait_weights_json")
         return MogDB(db_path, sync_dir=sync_path)
 
     # ── Access ───────────────────────────────────────────────────────

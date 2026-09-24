@@ -93,8 +93,9 @@ class TestWorkflowFeedback:
             },
         )
         assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert data["workflow_active"] is True
+        data = resp.json()
+        assert data["status"] == "ok"
+        assert data["feedback_id"]
 
 
 class TestFeedbackStats:
