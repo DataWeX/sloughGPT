@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from domains import ComponentException, Thought
+from domain import ComponentException, Thought
 
 from domain.cognition._internal.processor import CognitiveProcessor
 

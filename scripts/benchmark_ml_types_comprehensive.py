@@ -217,7 +217,7 @@ def run():
     for _ in range(100):
         import importlib
 
-        mod = sys.modules.get("domains.infrastructure.ml_types")
+        mod = sys.modules.get("domain.infrastructure._internal.ml_types")
         if mod:
             importlib.reload(mod)
     ml_import_us = ((time.perf_counter() - start) / 100) * 1e6

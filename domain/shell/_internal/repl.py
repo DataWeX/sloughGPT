@@ -326,7 +326,7 @@ class ShellREPL(LinuxCommandsMixin):
 
         self.console = Console(self.io, has_readline=_HAS_READLINE)
 
-        # Structured logger — inherit from domains.logging
+        # Structured logger — inherit from domain.logging
         from domain.logging import LogLevel, ShellLogger
 
         self.log = ShellLogger("slo.shell.repl", level=LogLevel.DEBUG)

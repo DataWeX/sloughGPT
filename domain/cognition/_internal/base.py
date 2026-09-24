@@ -10,7 +10,7 @@ import asyncio
 import logging
 from typing import Any
 
-from domains import (
+from domain import (
     BaseDomain,
     DomainException,
     ICognitiveProcessor,

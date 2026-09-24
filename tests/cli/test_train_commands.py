@@ -343,9 +343,9 @@ class TestCmdTrainEmbed:
         args = self._args(tmp_path, corpus=str(corpus))
         fake = _FakeEmbedder()
         with (
-            patch("domains.inference.slo_embedder.train_embedder") as mock_train,
+            patch("domain.inference._internal.slo_embedder.train_embedder") as mock_train,
             patch(
-                "domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake
+                "domain.inference._internal.slo_embedder.SloTextEmbedder.load", return_value=fake
             ) as mock_load,
         ):
             mock_train.return_value = {
@@ -374,9 +374,9 @@ class TestCmdTrainEmbed:
         args = self._args(tmp_path, corpus=str(corpus))
         fake = _FakeEmbedder()
         with (
-            patch("domains.inference.slo_embedder.train_embedder") as mock_train,
+            patch("domain.inference._internal.slo_embedder.train_embedder") as mock_train,
             patch(
-                "domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake
+                "domain.inference._internal.slo_embedder.SloTextEmbedder.load", return_value=fake
             ) as mock_load,
             patch("commands.train._embedder_retrieval_check") as mock_check,
         ):
@@ -405,7 +405,7 @@ class TestCmdTrainEmbed:
         fake = _FakeEmbedder()
         with (
             patch(
-                "domains.inference.slo_embedder.SloTextEmbedder.load", return_value=fake
+                "domain.inference._internal.slo_embedder.SloTextEmbedder.load", return_value=fake
             ) as mock_load,
             patch("commands.train._embedder_retrieval_check") as mock_check,
         ):

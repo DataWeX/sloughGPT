@@ -7,7 +7,7 @@ torch = pytest.importorskip("torch")
 try:
     from domain.models._internal import SloughGPTModel
 except (ImportError, ModuleNotFoundError):
-    pytest.skip("domains.models not available", allow_module_level=True)
+    pytest.skip("domain.models not available", allow_module_level=True)
 
 from domain.training._internal.checkpoint_utils import (
     KEY_MODEL_STATE,

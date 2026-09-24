@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from domains import Thought
+from domain import Thought
 
 from domain.cognition._internal.metacognition import (
     CognitiveProcess,

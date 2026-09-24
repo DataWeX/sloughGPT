@@ -8,7 +8,7 @@ as required by the ``ModelWorkerProcess`` protocol.
 Usage::
 
     worker = ModelWorkerProcess(
-        model_cls_path="domains.infrastructure.hf_model_worker.hf_model_loader",
+        model_cls_path="domain.infrastructure._internal.hf_model_worker.hf_model_loader",
         model_kwargs={"model_id": "gpt2"},
     )
 """

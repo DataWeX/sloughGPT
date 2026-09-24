@@ -14,19 +14,19 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from domains import (
+from domain import (
     BaseComponent as BaseComponent,
 )
-from domains import (
+from domain import (
     ComponentException as ComponentException,
 )
-from domains import (
+from domain import (
     IMetacognitiveMonitor as IMetacognitiveMonitor,
 )
-from domains import (
+from domain import (
     Thought as Thought,
 )
-from domains import (
+from domain import (
     ThoughtType as ThoughtType,
 )
 
