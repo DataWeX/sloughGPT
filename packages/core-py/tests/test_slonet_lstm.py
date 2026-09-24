@@ -348,7 +348,7 @@ def test_generate_long_sequence():
 def test_generate_sampling_does_not_collapse_to_single_token():
     """Greedy argmax on a fresh LSTM collapses to one repeated token; sampled
     decoding with temperature/top-k must stay diverse."""
-    np.random.default_rng(0)
+    np.random.seed(0)
     text = "the quick brown fox jumps over the lazy dog and then runs away home"
     vocab = sorted(set(text))
     stoi = {c: i for i, c in enumerate(vocab)}
