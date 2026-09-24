@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from dataclasses import dataclass
@@ -69,13 +68,16 @@ class ModelHealthMonitor:
         self._load_history()
 
     def _init_mogdb(self):
-        """Initialize MogDB with JSON sync for model health."""
+        """Initialize MogDB with JSON sync for model health.
+
+        Store lives next to the db file so each instance path gets its own
+        store (default data/model_health.json → data/model_health_mogdb;
+        per-test tmp paths stay isolated instead of sharing one cross-run DB).
+        """
         from mogdb import MogDB
 
-        repo_root = self.db_path.parent.parent.parent
-        db_path = os.path.join(repo_root, "data", "model_health_mogdb")
-        sync_path = os.path.join(repo_root, "data", "model_health_json")
-        return MogDB(db_path, sync_dir=sync_path)
+        base = self.db_path.parent
+        return MogDB(str(base / "model_health_mogdb"), sync_dir=str(base / "model_health_json"))
 
     def set_model(self, model, tokenizer) -> None:
         """Set the model and tokenizer to benchmark."""
