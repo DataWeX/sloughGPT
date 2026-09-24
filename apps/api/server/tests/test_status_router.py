@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -60,10 +60,19 @@ class TestStatus:
 
 class TestReady:
     def test_ready_returns_true(self):
-        resp = client.get("/ready")
-        assert resp.status_code == 200
-        data = _data(resp)
-        assert data.get("ready") is True
+        with (
+            patch("domain.feedback.get_feedback_db", return_value=MagicMock()),
+            patch(
+                "domain.inference._internal.native.engine.get_engine",
+                return_value=MagicMock(),
+            ),
+        ):
+            resp = client.get("/ready")
+            assert resp.status_code == 200
+            data = _data(resp)
+            assert data.get("ready") is True
+            assert data["checks"]["database"] is True
+            assert data["checks"]["inference"] is True
 
     def test_ready_has_checks(self):
         resp = client.get("/ready")

@@ -374,20 +374,32 @@ class TestLoadIntoModel:
             n_embed=4,
             arch_name="test",
         )
-        model, params = self._make_mock_model(
-            [
-                "blocks.0.attn.q_proj.bias",
-                "blocks.0.attn.k_proj.bias",
-                "blocks.0.attn.v_proj.bias",
-            ]
-        )
+        # Bias params are 1-D (out_features,), not (out, in)
+        model = MagicMock()
+        params = {}
+        for name in (
+            "blocks.0.attn.q_proj.bias",
+            "blocks.0.attn.k_proj.bias",
+            "blocks.0.attn.v_proj.bias",
+        ):
+            p = MagicMock()
+            p.data = np.zeros((4,), dtype=np.float32)
+            params[name] = p
+        model._named_parameters.return_value = params.items()
+
         fused_bias = np.random.randn(12).astype(np.float32)
         tensor_data = {"hf.qkv.bias": fused_bias}
 
         result = load_into_model(model, plan, tensor_data)
         assert result.n_fused == 3
         np.testing.assert_array_almost_equal(
-            params["blocks.0.attn.q_proj.bias"].data[:4], fused_bias[:4]
+            params["blocks.0.attn.q_proj.bias"].data, fused_bias[:4]
+        )
+        np.testing.assert_array_almost_equal(
+            params["blocks.0.attn.k_proj.bias"].data, fused_bias[4:8]
+        )
+        np.testing.assert_array_almost_equal(
+            params["blocks.0.attn.v_proj.bias"].data, fused_bias[8:12]
         )
 
     def test_tied_weights(self):

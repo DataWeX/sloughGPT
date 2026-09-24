@@ -155,7 +155,8 @@ class FakeTrackingModule:
 @pytest.fixture
 def fake_tracking(monkeypatch):
     fake = FakeTrackingModule()
-    monkeypatch.setitem(sys.modules, "domain.training.tracking", fake)
+    # Production imports domain.training._internal.tracking (not domain.training.tracking)
+    monkeypatch.setitem(sys.modules, "domain.training._internal.tracking", fake)
     return fake
 
 
@@ -171,7 +172,7 @@ class TestCreateTrainingTrackerForApiJob:
 
     def test_missing_tracking_module_returns_none(self, tracking_config, monkeypatch):
         tracking_config.tracking.wandb_training_enabled = True
-        monkeypatch.setitem(sys.modules, "domain.training.tracking", None)
+        monkeypatch.setitem(sys.modules, "domain.training._internal.tracking", None)
         assert (
             create_training_tracker_for_api_job(
                 job_id="j1", job_name="n", data_path="p", hyperparams={}
