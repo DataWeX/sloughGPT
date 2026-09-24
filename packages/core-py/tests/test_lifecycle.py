@@ -56,7 +56,8 @@ class TestLifecyclePhase:
         assert LifecyclePhase.RUNNING in [LifecyclePhase.INIT, LifecyclePhase.RUNNING]
 
     def test_string_representation(self):
-        assert str(LifecyclePhase.RUNNING) == "LifecyclePhase.RUNNING"
+        assert str(LifecyclePhase.RUNNING) == "running"
+        assert repr(LifecyclePhase.RUNNING) == "<LifecyclePhase.RUNNING: 'running'>"
 
     def test_members_are_strings(self):
         for phase in LifecyclePhase:
