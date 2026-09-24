@@ -1,5 +1,10 @@
 """
-ModelTree — ML-specific Tree with skip logic for embeddings and biases.
+ModelTree — ML-specific extension of Tree with a skip policy for embeddings
+and biases.
+
+This is an EXTENSION of the core pugqeep invariant (arrays -> Points), not a
+separate mechanism. It encodes the ML error-budget rule: discrete, large
+embedding tables and small bias tensors are stored raw rather than VQ'd.
 
 Extends Tree with:
   - skip_embeddings: don't VQ embedding layers (discrete, large)
