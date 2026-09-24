@@ -125,7 +125,7 @@ class TestUpdateAdapter:
         data = resp.json()["data"]
         assert data["status"] == "updated"
         assert data["user_id"] == "user1"
-        store.update_adapter.assert_called_once_with("user1", rating="thumbs_up")
+        store.update_adapter.assert_called_once_with("user1", feedback_signal=1.0)
 
     @patch(STORE_TARGET)
     def test_update_adapter_import_error(self, mock_get):
