@@ -156,7 +156,7 @@ class ChatRouter:
                 _start = time.time()
                 _token_count = 0
                 try:
-                    from domain.infrastructure._internal.session_core import SessionCore
+                    from domain.infrastructure.session_core import SessionCore
 
                     msgs = SessionCore.get_messages(session_id)
                     if not msgs:
@@ -169,7 +169,7 @@ class ChatRouter:
                         )
                         return
 
-                    from domain.models._internal.provider import get_provider
+                    from domain.models import get_provider
 
                     provider = get_provider("default")
                     if provider is None:

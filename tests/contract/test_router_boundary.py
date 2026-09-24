@@ -101,9 +101,8 @@ def test_no_new_legacy_domains_patch_targets() -> None:
 # any new ``file|module`` pair is a contract violation.
 _INTERNAL_IMPORT = re.compile(r"^\s*(?:from|import)\s+(domain\.[\w.]*_internal(?:\.[\w.]*)?)", re.M)
 
-# Pinned baseline (58 entries: 56 after rewiring tokenizer / token_tree /
-# cloud_training onto domain.training engines + 2 pre-existing chat.py
-# regenerate imports from c2379138e). Re-generate when reducing:
+# Pinned baseline (56 entries after rewiring tokenizer / token_tree /
+# cloud_training onto domain.training engines). Re-generate when reducing:
 #   python -c "import re,pathlib; ..."
 _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
     {
@@ -113,8 +112,6 @@ _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
         "agents.py|domain.api._internal.sse_envelope",
         "benchmark.py|domain.feedback._internal.response_tracker",
         "benchmark.py|domain.infrastructure._internal.errors",
-        "chat.py|domain.infrastructure._internal.session_core",
-        "chat.py|domain.models._internal.provider",
         "consciousness.py|domain.cognition._internal.consciousness.evaluation",
         "consciousness.py|domain.cognition._internal.consciousness.personality",
         "consciousness.py|domain.cognition._internal.consciousness.qualia",
