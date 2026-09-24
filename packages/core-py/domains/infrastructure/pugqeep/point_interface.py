@@ -230,26 +230,57 @@ class PointView:
         return arr
 
     def __getitem__(self, key) -> np.ndarray:
-        """Slice access — optimized for cluster points (partial decompression)."""
-        # Fast path for cluster points: decompress only the needed slice
-        if (
-            self._point.function_type == "cluster"
-            and self._cache is None
-            and isinstance(key, slice)
-            and self._shape
-        ):
-            centroids = self._point.params.get("centroids")
-            assignments = self._point.params.get("assignments")
-            if centroids is not None and assignments is not None:
-                # Convert slice to range of indices
-                n_total = len(assignments)
-                indices = range(*key.indices(n_total))
-                # Look up only the needed centroids
-                result = centroids[assignments[list(indices)]]
-                return result.astype(self._dtype)
+        """Slice access — lazily decompresses only the requested portion.
+
+        Fast paths avoid materializing the full array for both cluster and
+        analytic-fit (linear/periodic/polynomial) points; `raw` and strided
+        slices on complex shapes fall back to the cache-aware path.
+        """
+        if isinstance(key, slice) and self._cache is None:
+            if self._point.function_type == "cluster":
+                return self._slice_cluster(key)
+            if self._point.function_type in ("linear", "periodic", "polynomial"):
+                return self._slice_analytic(key)
 
         # Fallback: full decompression then slice
         return self.generate()[key]
+
+    def _slice_cluster(self, key: slice) -> np.ndarray:
+        """Cluster fast path — look up only the requested centroids."""
+        centroids = self._point.params.get("centroids")
+        assignments = self._point.params.get("assignments")
+        if centroids is None or assignments is None:
+            return self.generate()[key]
+        indices = range(*key.indices(len(assignments)))
+        values = centroids[assignments[list(indices)]]
+        if self._point.residual is not None:
+            values = values + self._point.residual[list(indices)]
+        return values.astype(self._dtype)
+
+    def _slice_analytic(self, key: slice) -> np.ndarray:
+        """Analytic fast path — evaluate the stored function over slice indices only."""
+        if not self._shape:
+            return self.generate()[key]
+        n_total = int(np.prod(self._shape))
+        start, stop, step = key.indices(n_total)
+        indices = np.arange(start, stop, step, dtype=np.float32)
+        if indices.size == 0:
+            return np.empty((0,), dtype=self._dtype)
+
+        p = self._point
+        if p.function_type == "periodic":
+            a, b, w = p.params["a"], p.params["b"], p.params["w"]
+            values = a * np.cos(indices) + b * np.sin(indices) + w
+        elif p.function_type == "linear":
+            a, b = p.params["a"], p.params["b"]
+            values = a * indices + b
+        else:  # polynomial
+            a, b, c = p.params["a"], p.params["b"], p.params["c"]
+            values = a * indices**2 + b * indices + c
+
+        if p.residual is not None:
+            values = values + p.residual[start:stop:step]
+        return values.astype(self._dtype)
 
     def __len__(self) -> int:
         return int(np.prod(self._shape)) if self._shape else 0

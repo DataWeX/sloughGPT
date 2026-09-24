@@ -129,11 +129,16 @@ lib = PointLibrary("my-lib")
 view = lib.view("layer_0.weight")  # no decompression yet
 
 arr = view.generate()  # decompress full array now
-arr = view[0:100]  # decompresses everything, then slices
+arr = view[0:100]  # lazy: only the requested slice is reconstructed
 len(view)  # uncompressed element count
 view.accuracy  # compression accuracy
 view.point.is_lossless  # True if accuracy == 1.0
 ```
+
+Slicing is **lazy** for both cluster and analytic-fit (linear/periodic/polynomial)
+points: `view[a:b]` reconstructs only the requested indices — no full-array
+materialization. `raw` and slice-cached access fall back to the cached path
+(which is one-time, then O(1)).
 
 ## PointLibrary
 

@@ -154,6 +154,53 @@ class TestPointView:
         full = view.generate()
         np.testing.assert_array_equal(slice_arr, full[10:15])
 
+    def test_view_partial_decompress_analytic(self):
+        """Analytic-fit points (linear/periodic/polynomial) should decompress
+        only the sliced portion, matching the cluster lazy path."""
+        params = {"a": 2.0, "b": 1.0}
+        p = Point(
+            identity="analytic-partial",
+            function_type="linear",
+            params=params,
+            accuracy=1.0,
+            dtype="float32",
+            shape=(100,),
+        )
+        view = PointView(p, shape=(100,), dtype="float32")
+
+        # Slice must not trigger full decompression (laziness contract)
+        slice_arr = view[10:15]
+        assert slice_arr.shape == (5,)
+        assert view._cache is None, "analytic slice must NOT materialize the full array"
+
+        # Values must match the full decompression's slice
+        full = view.generate()
+        np.testing.assert_array_equal(slice_arr, full[10:15])
+
+        # Strided slice on the same analytic point, still lazy
+        view.clear_cache()
+        step_arr = view[5:50:5]
+        assert step_arr.shape == (9,)
+        assert view._cache is None, "strided analytic slice must stay lazy"
+        np.testing.assert_array_equal(step_arr, view.generate()[5:50:5])
+
+    def test_view_partial_decompress_periodic(self):
+        """Periodic-fit points are lazy-sliced too (cos/sin params)."""
+        p = Point(
+            identity="periodic-partial",
+            function_type="periodic",
+            params={"a": 1.0, "b": 0.5, "w": 0.0},
+            accuracy=1.0,
+            dtype="float32",
+            shape=(64,),
+        )
+        view = PointView(p, shape=(64,), dtype="float32")
+
+        slice_arr = view[0:16]
+        assert slice_arr.shape == (16,)
+        assert view._cache is None
+        np.testing.assert_array_equal(slice_arr, view.generate()[0:16])
+
     def test_view_len(self):
         p = self._make_cluster_point()
         view = PointView(p, shape=(100,), dtype="float32")
