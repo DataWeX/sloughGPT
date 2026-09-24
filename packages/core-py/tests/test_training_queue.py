@@ -633,9 +633,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -660,9 +660,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 5, "perplexity": 1.2}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -688,9 +688,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 3}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -719,9 +719,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, expected_meta
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -748,9 +748,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -784,9 +784,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -827,9 +827,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -851,9 +851,9 @@ class TestTrainingSessionsHandler:
         def raising_train(*args, **kwargs):
             raise RuntimeError("Session training crashed")
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             raising_train,
         )
 
@@ -876,9 +876,9 @@ class TestTrainingSessionsHandler:
         def raising_train(*args, **kwargs):
             raise ValueError("Bad sessions")
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             raising_train,
         )
 
@@ -909,9 +909,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -937,9 +937,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -970,9 +970,9 @@ class TestTrainingSessionsHandler:
                     on_step(5, 0.5, 0, total_steps=10)
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -1003,9 +1003,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -1031,9 +1031,9 @@ class TestTrainingSessionsHandler:
             def __call__(self, config, on_step=None, cancel_event=None):
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
@@ -1060,9 +1060,9 @@ class TestTrainingSessionsHandler:
                     on_step(1, 1.0, 0, total_steps=5)
                 return {"success": True}, {"num_pairs": 1}
 
-        monkeypatch.setattr("domain.training.chat_trainer.ChatTrainConfig", FakeConfig)
+        monkeypatch.setattr("domain.training._internal.chat_trainer.ChatTrainConfig", FakeConfig)
         monkeypatch.setattr(
-            "domain.training.chat_trainer.train_from_sessions",
+            "domain.training._internal.chat_trainer.train_from_sessions",
             FakeSessionTrainer(),
         )
 
