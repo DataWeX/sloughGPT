@@ -9,10 +9,16 @@ from __future__ import annotations
 import builtins
 import json
 import logging
+import os
 import threading
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+# Overrides the default job-store location. Tests set this to a temp path so a
+# test run can never INSERT rows into the repo's data/training_jobs.db (a real
+# regression: a phantom row showed up as a "Recoverable Job" in the UI).
+JOB_STORE_ENV_VAR = "SLO_TRAINING_JOBS_DB"
 
 from mogdb import MogDB
 
@@ -37,7 +43,9 @@ class JobStore:
 
     def __init__(self, db_path: str | None = None):
         if db_path is None:
-            db_path = str(find_repo_root(Path(__file__).resolve()) / "data" / "training_jobs.db")
+            db_path = os.environ.get(JOB_STORE_ENV_VAR) or str(
+                find_repo_root(Path(__file__).resolve()) / "data" / "training_jobs.db"
+            )
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
@@ -297,7 +305,17 @@ class JobStore:
                 if hb is None or hb < cutoff:
                     recoverable.append(doc)
 
-        return [self._doc_to_job(d) for d in recoverable]
+        # Hide jobs the recovery endpoint would reject anyway (no dataset
+        # recorded, dataset gone, or a trainer this path cannot restart). A
+        # Resume button that is guaranteed to 422 is worse than no button.
+        from .recovery_policy import recovery_incompatibility
+
+        eligible = []
+        for doc in recoverable:
+            job = self._doc_to_job(doc)
+            if recovery_incompatibility(job) is None:
+                eligible.append(job)
+        return eligible
 
     def log_event(self, job_id: str, event: str, data: dict | None = None) -> None:
         """Log a job event."""

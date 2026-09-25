@@ -29,6 +29,7 @@ from .helpers import _finish_job, _run_async, _sloughgpt_trainer_kwds
 from .job_store import get_job_store
 from .jobs import training_jobs
 from .jobs_api import router as jobs_router
+from .recovery_policy import recovery_incompatibility
 from .webhooks import (
     notify_training_event,
 )
@@ -227,6 +228,26 @@ async def get_recoverable_jobs():
     }
 
 
+def _job_checkpoint_stems(job: dict[str, Any]) -> list[str]:
+    """Stems of the checkpoint files this job itself writes, most specific first.
+
+    ``save_checkpoint`` writes ``<dataset>_<timestamp>.soul`` and the final save
+    writes ``<stem>_trained.soul`` — both derived from the job's recorded stem
+    or dataset, so those are the only prefixes safe to resume from.
+    """
+    config = job.get("config") if isinstance(job.get("config"), dict) else {}
+    stems: list[str] = []
+    for raw in (
+        job.get("output_checkpoint_stem"),
+        job.get("dataset"),
+        config.get("dataset"),
+    ):
+        cleaned = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(raw or ""))[:120]
+        if cleaned and cleaned not in stems:
+            stems.append(cleaned)
+    return stems
+
+
 @router.post("/recovery/recover/{job_id}")
 async def recover_job(job_id: str):
     """
@@ -250,13 +271,28 @@ async def recover_job(job_id: str):
             "E_BAD_REQUEST",
             status_code=400,
         )
+
+    # Reject jobs that could never finish BEFORE any recovery state exists.
+    # Without this the endpoint happily spawns a worker that dies on the first
+    # data load (data_path "" -> FileNotFoundError: tried '.' and
+    # 'data/input.txt'), flips the training phase to ``error``, and marks the
+    # original row failed — which is itself still listed as recoverable, so the
+    # user could retry the exact same impossible job forever.
+    incompatibility = recovery_incompatibility(job)
+    if incompatibility is not None:
+        raise_error(incompatibility, "E_VAL_REQUEST", status_code=422)
+
     # Get config and checkpoint. The store's checkpoint_dir column is only
     # written on completion, so interrupted jobs have it NULL — the job's
     # stored request config is the authoritative source for the scan directory.
     config = job.get("config", {})
     data_path = job.get("data_path", "")
     checkpoint_path = job.get("checkpoint_path", "")
-    checkpoint_dir = job.get("checkpoint_dir") or config.get("checkpoint_dir") or "checkpoints"
+    # Align with helpers._sloughgpt_trainer_kwds / TrainerConfig defaults so a
+    # job whose config omitted checkpoint_dir still scans the real save dir.
+    checkpoint_dir = (
+        job.get("checkpoint_dir") or config.get("checkpoint_dir") or "models/auto-training"
+    )
     job_name = job.get("name", "recovered_job")
 
     # Resolve the checkpoint to resume from. A job's recorded path is loaded
@@ -296,7 +332,17 @@ async def recover_job(job_id: str):
                 status_code=422,
             )
     else:
-        checkpoint_path, resume_bundle = manager.load_latest_with_path()
+        # A job that recorded NO checkpoint path gets a scan of ITS OWN
+        # checkpoints only. ``checkpoint_dir`` is shared between jobs, so
+        # "newest file that loads" is allowed to be another job's weights —
+        # resuming from them silently trains a different model. With no
+        # identifiable stem we start fresh instead of adopting a stranger's.
+        checkpoint_path, resume_bundle = None, None
+        for stem in _job_checkpoint_stems(job):
+            path, bundle = manager.load_latest_with_path(stem_prefix=stem)
+            if bundle is not None:
+                checkpoint_path, resume_bundle = path, bundle
+                break
         checkpoint_path = checkpoint_path or ""
 
     # Create recovery job in training_jobs. config is spread first so the
@@ -449,8 +495,11 @@ async def recover_job(job_id: str):
 
         except FileNotFoundError as e:
             logger.error("Recovery failed (missing file): %s", e, extra={"tag": "TRAIN"})
-            _finish_job(jid, "failed", f"Data file not found: {e}")
-            store.mark_failed(job_id, f"Data file not found: {e}")
+            # str(e) already carries the domain's own wording ("Data file not
+            # found: ...") — prefixing it again produced the doubled message
+            # users saw in the global banner.
+            _finish_job(jid, "failed", str(e))
+            store.mark_failed(job_id, str(e))
             controller.fail()
         except Exception as e:
             logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})

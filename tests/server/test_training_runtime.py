@@ -137,7 +137,13 @@ class TestShutdownNonCooperative:
 
 
 class TestRestore:
-    def test_stale_running_row_marked_interrupted(self, store):
+    def test_stale_running_row_marked_interrupted(self, store, monkeypatch):
+        # restore() seeds the GLOBAL training_jobs registry, whose store is the
+        # process-wide JobStore. Swap it for a plain dict (as the sibling test
+        # below does) so seeding can never write a row anywhere but `store`.
+        from training import jobs as jobs_mod
+
+        monkeypatch.setattr(jobs_mod, "training_jobs", {})
         store.create("stale", "distill", {})
         store.mark_started("stale")
         runtime = TrainingRuntime(store=store, grace_timeout_s=0.2)

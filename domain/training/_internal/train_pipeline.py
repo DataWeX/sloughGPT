@@ -671,20 +671,34 @@ class CheckpointManager:
         p = Path(path).expanduser()
         return p.is_file() and p.suffix in (".soul", ".npz")
 
-    def _candidates_newest_first(self) -> list[Path]:
+    def _candidates_newest_first(self, stem_prefix: str | None = None) -> list[Path]:
         """Checkpoint files under ``checkpoint_dir``, newest modification first.
 
         In-progress temp artifacts (``*.tmp`` / ``*.tmp.npz``) written during an
         atomic save are excluded, so an orphaned temp (from a crash between the
         write and the rename) never surfaces as a resume candidate.
+
+        Args:
+            stem_prefix: When given, only files whose stem equals ``stem_prefix``
+                or starts with ``stem_prefix + "_"`` are considered. Checkpoint
+                directories are shared between jobs (``models/auto-training``),
+                so a resume that does not know which job it belongs to must not
+                adopt another job's weights.
         """
-        return sorted(
-            [
+        candidates = [
+            p
+            for p in list(self.checkpoint_dir.glob("*.soul"))
+            + list(self.checkpoint_dir.glob("*.npz"))
+            if not (p.name.endswith(".tmp") or p.name.endswith(".tmp.npz"))
+        ]
+        if stem_prefix:
+            candidates = [
                 p
-                for p in list(self.checkpoint_dir.glob("*.soul"))
-                + list(self.checkpoint_dir.glob("*.npz"))
-                if not (p.name.endswith(".tmp") or p.name.endswith(".tmp.npz"))
-            ],
+                for p in candidates
+                if p.stem == stem_prefix or p.stem.startswith(f"{stem_prefix}_")
+            ]
+        return sorted(
+            candidates,
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )
@@ -704,7 +718,9 @@ class CheckpointManager:
         candidates = self._candidates_newest_first()
         return str(candidates[0]) if candidates else None
 
-    def load_latest_with_path(self) -> tuple[str | None, dict[str, Any] | None]:
+    def load_latest_with_path(
+        self, stem_prefix: str | None = None
+    ) -> tuple[str | None, dict[str, Any] | None]:
         """Load the newest readable checkpoint and return its path and bundle.
 
         Single-load primitive: iterates checkpoints newest-first and returns
@@ -713,6 +729,11 @@ class CheckpointManager:
         :meth:`latest_valid_path` then :meth:`load_latest`, which would load
         the same checkpoint twice.
 
+        Args:
+            stem_prefix: Restrict the scan to checkpoints belonging to one job
+                (see :meth:`_candidates_newest_first`). Pass ``None`` only when
+                the caller has already pinned the file it wants.
+
         Returns:
             ``(path, bundle)`` for the newest loadable checkpoint, or
             ``(None, None)`` when no checkpoint in the directory loads.
@@ -720,7 +741,7 @@ class CheckpointManager:
         Side effects:
             - logs a warning per skipped unreadable checkpoint
         """
-        for p in self._candidates_newest_first():
+        for p in self._candidates_newest_first(stem_prefix):
             try:
                 bundle = CheckpointManager.load_from_path(str(p))
             except Exception as exc:

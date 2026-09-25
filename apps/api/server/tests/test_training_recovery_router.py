@@ -12,6 +12,7 @@ so no second load happens in the worker thread.
 
 import contextlib
 import importlib
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -89,12 +90,18 @@ class _SyncExecutor:
 
 
 def _base_job(checkpoint_dir, checkpoint_path=""):
+    # The dataset must actually exist: the endpoint now rejects a job whose
+    # data_path is empty or unresolvable before it spawns a worker.
+    data_file = Path(checkpoint_dir) / "corpus.txt"
+    if not data_file.exists():
+        data_file.parent.mkdir(parents=True, exist_ok=True)
+        data_file.write_text("hello world\n" * 10, encoding="utf-8")
     return {
         "id": "job-1",
         "name": "train_job",
         "status": "interrupted",
         "config": {},
-        "data_path": "/tmp/corpus.txt",
+        "data_path": str(data_file),
         "checkpoint_path": checkpoint_path,
         "checkpoint_dir": checkpoint_dir,
     }
@@ -176,6 +183,74 @@ def test_recover_allows_stale_recovering_job(tmp_path, deps):
     resp = _recover(tmp_path, job)
     assert resp.status_code == 200
     assert ("mark_recovering", ("job-1",), {}) in resp._store.calls
+    router_mod.training_jobs.pop("recovery_job-1", None)
+
+
+# ── Preflight: impossible recoveries are rejected before any state exists ───
+
+
+def test_recover_missing_dataset_422_before_spawning(tmp_path, deps):
+    # Regression: the endpoint used to spawn the worker with data_path "", which
+    # died on the first data load ("Data file not found: ''") after the training
+    # phase had already flipped to error — and mark_failed() left the original
+    # row 'failed', which is itself still listed as recoverable.
+    job = _base_job(str(tmp_path))
+    job["data_path"] = ""
+    resp = _recover(tmp_path, job)
+
+    assert resp.status_code == 422
+    assert "No dataset recorded" in resp.json()["error"]
+    assert deps[0].submitted == []
+    assert "recovery_job-1" not in router_mod.training_jobs
+    written = [method for method, _, _ in resp._store.calls]
+    assert "mark_recovering" not in written
+    assert "mark_failed" not in written
+
+
+def test_recover_dangling_dataset_422(tmp_path, deps):
+    job = _base_job(str(tmp_path))
+    job["data_path"] = str(tmp_path / "deleted-corpus.txt")
+    resp = _recover(tmp_path, job)
+
+    assert resp.status_code == 422
+    assert "Dataset not found" in resp.json()["error"]
+    assert deps[0].submitted == []
+
+
+def test_recover_non_slonet_job_422(tmp_path, deps):
+    # A distill/LoRA/visual job ran a different trainer; restarting it here
+    # would run SloughGPTTrainer over it with the wrong hyperparameters.
+    job = _base_job(str(tmp_path))
+    job["type"] = "distill"
+    resp = _recover(tmp_path, job)
+
+    assert resp.status_code == 422
+    assert "'distill'" in resp.json()["error"]
+    assert deps[0].submitted == []
+    assert "recovery_job-1" not in router_mod.training_jobs
+
+
+def test_recover_never_adopts_a_foreign_checkpoint(tmp_path, deps):
+    # checkpoint_dir is shared. A job that recorded no checkpoint path used to
+    # resume from "the newest file that loads" — which can be another job's
+    # weights entirely (observed: a plain job resuming from
+    # models/auto-training/api_conversations_*.soul).
+    ckpt_dir = tmp_path / "shared-ckpts"
+    ckpt_dir.mkdir()
+    (ckpt_dir / "api_conversations_1790243253.soul").write_bytes(b"other job's weights")
+
+    job = _base_job(str(tmp_path), checkpoint_path="")
+    job["checkpoint_dir"] = str(ckpt_dir)
+    job["dataset"] = "corpus"
+    resp = _recover(tmp_path, job)
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["checkpoint_path"] == ""
+    assert "beginning" in body["message"]
+
+    rec = router_mod.training_jobs["recovery_job-1"]
+    assert rec["checkpoint_path"] == ""
     router_mod.training_jobs.pop("recovery_job-1", None)
 
 
@@ -274,7 +349,7 @@ def test_recover_valid_recorded_path_resumes_with_bundle(tmp_path, deps):
     assert call.kwargs["on_progress"] is not None
 
 
-# ── Fallback: no recorded path uses load_latest_with_path ───────────────────
+# ── Fallback: no recorded path scans the job's OWN checkpoints only ─────────
 
 
 def test_recover_fallback_no_checkpoint_starts_fresh(tmp_path, deps):
@@ -328,23 +403,26 @@ def test_recover_checkpoint_dir_from_job_config(tmp_path, deps):
     assert rec["checkpoint_dir"] == custom_dir
 
 
-def test_recover_fallback_uses_latest_bundle(tmp_path, deps):
+def test_recover_fallback_scans_only_the_jobs_own_stem(tmp_path, deps):
     executor, trainer_inst = deps
     from domain.training._internal.train_pipeline import CheckpointManager
 
-    latest = str(tmp_path / "ck" / "model_200.soul")
+    latest = str(tmp_path / "ck" / "corpus_200.soul")
     bundle = {"step": 5, "epoch": 1, "model_state_dict": {}}
     job = _base_job(str(tmp_path), checkpoint_path="")
+    job["dataset"] = "corpus"
+    load = MagicMock(return_value=(latest, bundle))
     resp = _recover(
         tmp_path,
         job,
-        patches=[
-            patch.object(CheckpointManager, "load_latest_with_path", return_value=(latest, bundle)),
-        ],
+        patches=[patch.object(CheckpointManager, "load_latest_with_path", load)],
     )
 
     assert resp.status_code == 200
     assert resp.json()["checkpoint_path"] == latest
+    # checkpoint_dir is shared between jobs, so the scan must be scoped — an
+    # unscoped "newest that loads" adopts another job's weights.
+    load.assert_called_once_with(stem_prefix="corpus")
 
     rec = router_mod.training_jobs["recovery_job-1"]
     assert rec["checkpoint_path"] == latest
@@ -463,7 +541,7 @@ def test_recover_reuses_original_hyperparameters(tmp_path, deps):
     assert resp.status_code == 200
 
     kw = tcls.call_args.kwargs
-    assert kw["data_path"] == "/tmp/corpus.txt"
+    assert kw["data_path"] == job["data_path"]
     assert kw["use_lora"] is True
     assert kw["dropout"] == 0.05
     assert kw["lora_rank"] == 16

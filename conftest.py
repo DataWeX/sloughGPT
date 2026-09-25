@@ -1,7 +1,20 @@
+import atexit
 import os
+import shutil
 import sys
+import tempfile
 
 repo_root = os.path.abspath(os.path.join(__file__, ".."))
+
+# Redirect the training job store to a throw-away path BEFORE any test module
+# can import training.* . The store resolves its default location lazily on
+# first use, so tests that seed training_jobs must never see the repo's real
+# data/training_jobs.db — a test-written row surfaces as a "Recoverable Job"
+# in the UI and fails recovery with "Data file not found: ''".
+if "SLO_TRAINING_JOBS_DB" not in os.environ:
+    _job_store_dir = tempfile.mkdtemp(prefix="slo-training-jobs-")
+    os.environ["SLO_TRAINING_JOBS_DB"] = os.path.join(_job_store_dir, "training_jobs.db")
+    atexit.register(shutil.rmtree, _job_store_dir, True)
 
 # Add core-py and server paths for module resolution.
 for _p in ("packages/core-py", "apps/api/server", "packages/downcraft"):
