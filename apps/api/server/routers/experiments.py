@@ -6,9 +6,11 @@ Each experiment, metric, param, and status is a MogDB document.
 The JSON files are written to data/experiments_json/ for human readability.
 """
 
+from __future__ import annotations
+
 import logging
 import re
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query
@@ -20,6 +22,8 @@ from schemas.common import (
     safe_audit_log,
     success_response,
 )
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.routers.experiments")
 
@@ -181,7 +185,7 @@ class ExperimentsRouter:
         status_data = {
             "experiment_id": e_id,
             "status": "completed",
-            "completed_at": datetime.now(UTC).isoformat(),
+            "completed_at": utc_now_iso(),
         }
         if existing:
             status_col.update_one(
@@ -257,7 +261,7 @@ class ExperimentsRouter:
                 "metric": metric_name,
                 "value": value,
                 "step": step,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
         safe_audit_log(
@@ -286,7 +290,7 @@ class ExperimentsRouter:
                 "experiment_id": e_id,
                 "param": param_name,
                 "value": value,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
         safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")

@@ -9,9 +9,10 @@ entries.
 from __future__ import annotations
 
 import logging
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.shell.state")
 
@@ -93,7 +94,7 @@ class ShellState:
             "history": self.history[-_MAX_HISTORY:],
             "aliases": self.aliases,
             "env": self.env,
-            "last_session": datetime.now(UTC).isoformat(),
+            "last_session": utc_now_iso(),
             "first_run": self.first_run,
         }
         try:

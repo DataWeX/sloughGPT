@@ -1,262 +1,64 @@
-"""
-SloughGPT Utilities
-Common utility functions for the SloughGPT AI Framework
+"""SloughGPT shared utilities — back-compat facade.
+
+The implementation now lives in focused modules; every name below is still
+importable from ``domain.shared._internal.utils`` (and most from
+``domain.shared``) so existing imports keep working:
+
+    ids           generate_id
+    hashing       hash_string
+    formatting    format_size, format_time
+    jsonio        load_json, save_json
+    ops           merge_dicts, clamp, validate_config
+    concurrency   retry, Timer, Cache, RateLimiter
+    net           find_available_port
+    paths         find_repo_root, find_server_python
+    timestamps    get_timestamp, utc_now_iso, to_iso, parse_iso,
+                  normalize_iso, is_valid_iso
+
+New code should import from the specific module (or from ``domain.shared``)
+rather than from this facade.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import logging
-import random
-import string
-import sys as _sys
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
-
-logger = logging.getLogger("slo.shared")
-
-
-def generate_id(prefix: str = "") -> str:
-    """Generate a random ID."""
-    chars = string.ascii_lowercase + string.digits
-    random_id = "".join(random.choices(chars, k=8))
-    return f"{prefix}{random_id}" if prefix else random_id
-
-
-def hash_string(s: str, algorithm: str = "sha256") -> str:
-    """Hash a string."""
-    if algorithm == "sha256":
-        return hashlib.sha256(s.encode()).hexdigest()
-    elif algorithm == "md5":
-        return hashlib.md5(s.encode()).hexdigest()
-    elif algorithm == "sha1":
-        return hashlib.sha1(s.encode()).hexdigest()
-    return s
-
-
-def format_size(size_bytes: int) -> str:
-    """Format bytes to human readable string."""
-    for unit in ["B", "KB", "MB", "GB", "TB"]:
-        if size_bytes < 1024:
-            return f"{size_bytes:.1f} {unit}"
-        size_bytes /= 1024
-    return f"{size_bytes:.1f} PB"
-
-
-def format_time(seconds: float) -> str:
-    """Format seconds to human readable string."""
-    if seconds < 60:
-        return f"{seconds:.1f}s"
-    elif seconds < 3600:
-        return f"{seconds / 60:.1f}m"
-    elif seconds < 86400:
-        return f"{seconds / 3600:.1f}h"
-    else:
-        return f"{seconds / 86400:.1f}d"
-
-
-def load_json(path: str) -> dict:
-    """Load JSON from file."""
-    with open(path) as f:
-        return json.load(f)
-
-
-def save_json(data: Any, path: str, indent: int = 2) -> None:
-    """Save data to JSON file."""
-    with open(path, "w") as f:
-        json.dump(data, f, indent=indent)
-
-
-def merge_dicts(*dicts: dict) -> dict:
-    """Merge multiple dictionaries."""
-    result = {}
-    for d in dicts:
-        result.update(d)
-    return result
-
-
-def clamp(value: float, min_val: float, max_val: float) -> float:
-    """Clamp value between min and max."""
-    return max(min_val, min(max_val, value))
-
-
-def retry(max_attempts: int = 3, delay: float = 1.0):
-    """Retry decorator."""
-
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    if attempt == max_attempts - 1:
-                        raise
-                    logger.warning("Attempt %d failed: %s", attempt + 1, e, extra={"tag": "INFRA"})
-                    import time
-
-                    time.sleep(delay)
-
-        return wrapper
-
-    return decorator
-
-
-class Timer:
-    """Simple timer context manager."""
-
-    def __init__(self):
-        self.start = None
-        self.end = None
-        self.elapsed = None
-
-    def __enter__(self):
-        import time
-
-        self.start = time.time()
-        return self
-
-    def __exit__(self, *args):
-        import time
-
-        self.end = time.time()
-        self.elapsed = self.end - self.start
-
-
-class Cache:
-    """Simple in-memory cache."""
-
-    def __init__(self, max_size: int = 100):
-        self._cache = {}
-        self._max_size = max_size
-
-    def get(self, key: str) -> Any | None:
-        return self._cache.get(key)
-
-    def set(self, key: str, value: Any) -> None:
-        if len(self._cache) >= self._max_size:
-            # Remove oldest
-            oldest = next(iter(self._cache))
-            del self._cache[oldest]
-        self._cache[key] = value
-
-    def clear(self) -> None:
-        self._cache.clear()
-
-    def __len__(self) -> int:
-        return len(self._cache)
-
-
-class RateLimiter:
-    """Simple rate limiter."""
-
-    def __init__(self, max_calls: int, period: float):
-        self.max_calls = max_calls
-        self.period = period
-        self.calls = []
-
-    def __call__(self, func):
-        import time
-
-        def wrapper(*args, **kwargs):
-            now = time.time()
-            self.calls = [c for c in self.calls if now - c < self.period]
-
-            if len(self.calls) >= self.max_calls:
-                raise Exception(
-                    f"Rate limit exceeded. Max {self.max_calls} calls per {self.period}s"
-                )
-
-            self.calls.append(now)
-            return func(*args, **kwargs)
-
-        return wrapper
-
-
-def validate_config(config: dict, required_keys: list[str]) -> bool:
-    """Validate config has required keys."""
-    return all(key in config for key in required_keys)
-
-
-def get_timestamp() -> str:
-    """Get ISO timestamp."""
-    return datetime.now(UTC).isoformat()
-
+from domain.shared._internal.concurrency import Cache, RateLimiter, Timer, retry
+from domain.shared._internal.formatting import format_size, format_time
+from domain.shared._internal.hashing import hash_string
+from domain.shared._internal.ids import generate_id
+from domain.shared._internal.jsonio import load_json, save_json
+from domain.shared._internal.net import find_available_port
+from domain.shared._internal.ops import clamp, merge_dicts, validate_config
+from domain.shared._internal.paths import find_repo_root, find_server_python
+from domain.shared._internal.timestamps import (
+    get_timestamp,
+    is_valid_iso,
+    normalize_iso,
+    parse_iso,
+    to_iso,
+    utc_now_iso,
+)
 
 __all__ = [
-    "generate_id",
-    "hash_string",
-    "format_size",
-    "format_time",
-    "load_json",
-    "save_json",
-    "merge_dicts",
-    "clamp",
-    "retry",
-    "Timer",
     "Cache",
     "RateLimiter",
-    "validate_config",
-    "get_timestamp",
+    "Timer",
+    "clamp",
     "find_available_port",
+    "find_repo_root",
+    "find_server_python",
+    "format_size",
+    "format_time",
+    "generate_id",
+    "get_timestamp",
+    "hash_string",
+    "is_valid_iso",
+    "load_json",
+    "merge_dicts",
+    "normalize_iso",
+    "parse_iso",
+    "retry",
+    "save_json",
+    "to_iso",
+    "utc_now_iso",
+    "validate_config",
 ]
-
-
-def find_available_port(host: str = "", start_port: int = 8000, max_attempts: int = 10) -> int:
-    """Find an available port starting from start_port.
-
-    Args:
-        host: Bind host (empty string for all interfaces)
-        start_port: Starting port number
-        max_attempts: Maximum number of ports to try
-
-    Returns:
-        Available port number
-
-    Raises:
-        RuntimeError: If no port is available in range
-    """
-    import socket
-
-    for port in range(start_port, start_port + max_attempts):
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind((host, port))
-            sock.close()
-            return port
-        except OSError:
-            continue
-    raise RuntimeError(
-        f"Could not find available port in range {start_port}-{start_port + max_attempts}"
-    )
-
-
-def find_repo_root(start: Path | str = "") -> Path:
-    """Walk up from *start* (or this file) to find the repository root.
-
-    The root is identified by having both ``apps/`` and ``packages/``
-    subdirectories.  Falls back to ``pyproject.toml`` + ``apps/``.
-    """
-    here = Path(start).resolve() if start else Path(__file__).resolve()
-    for parent in here.parents:
-        if (parent / "apps").is_dir() and (parent / "packages").is_dir():
-            return parent
-        if (parent / "pyproject.toml").exists() and (parent / "apps").is_dir():
-            return parent
-    return here.parents[min(4, len(here.parents) - 1)]
-
-
-def find_server_python(repo_root: Path | str = "") -> str:
-    """Find the Python executable with the project's dependencies.
-
-    Checks ``<repo_root>/.venv/bin/python3`` first, then ``.venv/bin/python``,
-    then falls back to the currently running interpreter.
-    """
-    root = Path(repo_root) if repo_root else find_repo_root()
-    for name in (".venv/bin/python3", ".venv/bin/python"):
-        venv_py = root / name
-        if venv_py.is_file():
-            return str(venv_py)
-    return _sys.executable or "python3"

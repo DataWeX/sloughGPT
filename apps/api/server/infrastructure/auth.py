@@ -15,7 +15,6 @@ import os
 import threading
 import time
 from collections import deque
-from datetime import UTC, datetime
 
 from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -23,6 +22,7 @@ from schemas.common import raise_error
 
 from config import ServerConfig
 from domain.infrastructure._internal.errors import AppError
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.auth")
 
@@ -164,7 +164,7 @@ class APIKeyAuth:
         Returns:
             (timestamp, signature) tuple.
         """
-        ts = datetime.now(UTC).isoformat()
+        ts = utc_now_iso()
         sig = hmac.new(self._key.encode(), body + ts.encode(), hashlib.sha256).hexdigest()
         return ts, sig
 
@@ -286,7 +286,7 @@ class AuditLogger:
             workspace_id: Workspace scope for the event.
         """
         record = {
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": utc_now_iso(),
             "event_type": event,
             "user": user,
             "resource": resource,

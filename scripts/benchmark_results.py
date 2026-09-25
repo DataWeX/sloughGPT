@@ -12,12 +12,15 @@ Usage:
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import subprocess
 import sys
-from datetime import UTC, datetime
 from pathlib import Path
+
+from domain.shared import utc_now_iso
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "data" / "benchmark_results"
@@ -62,7 +65,7 @@ def git_commit() -> str | None:
 
 def timestamp() -> str:
     """Return ISO timestamp with timezone."""
-    return datetime.now(UTC).isoformat()
+    return utc_now_iso()
 
 
 def results_path(kind: str, model: str, stamp: str) -> Path:

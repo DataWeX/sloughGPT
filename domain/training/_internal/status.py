@@ -16,12 +16,12 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
 import numpy as np
 
+from domain.shared import utc_now_iso
 from domain.training._internal.slonet import load_checkpoint_npz as _load_npz
 from domain.training._internal.slonet import save_checkpoint_npz as _save_npz
 
@@ -139,7 +139,7 @@ class TrainingStatusTracker:
         self.model_name = model_name
         self.report = TrainingCompletionReport(
             model_name=model_name,
-            created_at=datetime.now(UTC).isoformat() + "Z",
+            created_at=utc_now_iso(),
         )
         self.checkpoints: list[dict[str, Any]] = []
 
@@ -187,7 +187,7 @@ class TrainingStatusTracker:
 
         stage_status = stage_name_map.get(stage)
         if stage_status:
-            stage_status.started_at = datetime.now(UTC).isoformat() + "Z"
+            stage_status.started_at = utc_now_iso()
             stage_status.status = CompletionStatus.IN_PROGRESS
 
     def update_stage(
@@ -226,7 +226,7 @@ class TrainingStatusTracker:
 
         stage_status = stage_name_map.get(stage)
         if stage_status:
-            stage_status.completed_at = datetime.now(UTC).isoformat() + "Z"
+            stage_status.completed_at = utc_now_iso()
             stage_status.status = CompletionStatus.COMPLETED
 
             if stage_status.best_loss > 0:
@@ -266,7 +266,7 @@ class TrainingStatusTracker:
                 "path": checkpoint_path,
                 "step": step,
                 "loss": loss,
-                "timestamp": datetime.now(UTC).isoformat() + "Z",
+                "timestamp": utc_now_iso(),
             }
         )
         self.report.checkpoint_count = len(self.checkpoints)
@@ -294,13 +294,13 @@ class TrainingStatusTracker:
 
             if all_complete:
                 self.report.completion_status = CompletionStatus.COMPLETED
-                self.report.trained_at = datetime.now(UTC).isoformat() + "Z"
+                self.report.trained_at = utc_now_iso()
 
     def mark_complete(self):
         """Mark training as complete."""
         self.report.completion_status = CompletionStatus.COMPLETED
         self.report.completion_percentage = 100.0
-        self.report.trained_at = datetime.now(UTC).isoformat() + "Z"
+        self.report.trained_at = utc_now_iso()
 
     def get_report(self) -> TrainingCompletionReport:
         """Get the completion report."""

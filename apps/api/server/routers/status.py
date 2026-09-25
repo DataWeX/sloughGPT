@@ -2,10 +2,14 @@
 Status Router - Overall service health and info
 """
 
-from datetime import UTC, datetime
+from __future__ import annotations
+
+from datetime import datetime
 
 from fastapi import APIRouter
 from schemas.common import endpoint, success_response
+
+from domain.shared import utc_now_iso
 
 
 class StatusRouter:
@@ -27,7 +31,7 @@ class StatusRouter:
             data={
                 "status": "healthy",
                 "uptime_seconds": uptime,
-                "timestamp": datetime.now(UTC).isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
 

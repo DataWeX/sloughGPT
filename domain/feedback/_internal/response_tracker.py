@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root
+from domain.shared import find_repo_root, utc_now_iso
 
 logger = logging.getLogger("slo.response_tracker")
 
@@ -105,7 +105,7 @@ class ResponseTracker:
     ) -> ResponseLog:
         """Log a response."""
         entry = ResponseLog(
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=utc_now_iso(),
             user_message=user_message,
             assistant_response=assistant_response,
             model=model,

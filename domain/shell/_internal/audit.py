@@ -15,9 +15,10 @@ import logging
 import logging.handlers
 import os
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 _DEFAULT_LOG_DIR = Path.home() / ".config" / "sloughgpt"
 _DEFAULT_LOG_FILE = "shell_audit.jsonl"
@@ -66,7 +67,7 @@ class ShellAuditLogger:
 
     def _emit(self, event: str, **fields: Any) -> None:
         record: dict[str, Any] = {
-            "ts": datetime.now(UTC).isoformat(),
+            "ts": utc_now_iso(),
             "session": self._session_id,
             "event": event,
         }

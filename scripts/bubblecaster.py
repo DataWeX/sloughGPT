@@ -23,8 +23,9 @@ import sys
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
+
+from domain.shared import utc_now_iso
 
 # --- Tunables ---------------------------------------------------------------
 
@@ -155,7 +156,7 @@ def append_record(state: GameState, cast: Cast, result: dict, score_delta: int) 
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     record = {
         "event": "cast",
-        "ts": datetime.now(UTC).isoformat(),
+        "ts": utc_now_iso(),
         "session": state.session_id,
         "sky": [asdict(s) for s in state.stars],
         "cast": asdict(cast),

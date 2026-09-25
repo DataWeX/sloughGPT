@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-
 // ── Mock the HTTP client with an in-memory DocStore ───────────────────
 // Mirrors the backend contract (/docstore/{collection}[/{id}]) so the
 // db.ts client can be tested end-to-end without a live server.
@@ -111,11 +110,12 @@ vi.mock('@/lib/http-client', () => ({ apiGet, apiPut, apiPatch, apiDelete, apiPo
 
 // Override the global @/lib/db mock with the real module (which uses the mocked http-client)
 vi.mock('@/lib/db', async () => {
-  const actual = await vi.importActual<typeof import('./db')>('./db')
+  const actual = await vi.importActual<typeof DbModule>('./db')
   return actual
 })
 
 import { chatDB, createChatDB, DbCircuitBreaker, type ChatSession, type ChatMessage } from './db'
+import type * as DbModule from './db'
 
 beforeEach(() => {
   store.clear()
@@ -211,6 +211,49 @@ describe('chatDB', () => {
     it('does nothing for nonexistent id', async () => {
       await chatDB.updateSession('nonexistent', { starred: true })
       // no error
+    })
+  })
+
+  describe('empty-id guards', () => {
+    // docUrl(coll, '') collapses to the collection path: PUT/PATCH → 405,
+    // DELETE → wipes the whole collection. Guards must fail fast instead.
+    it('saveSession with empty id is a no-op (no PUT to collection path)', async () => {
+      const before = apiPut.mock.calls.length
+      await chatDB.saveSession({ ...testSession, id: '' })
+      expect(apiPut.mock.calls.length).toBe(before)
+      expect(await chatDB.loadSessions()).toEqual([])
+    })
+
+    it('deleteSession with empty id does NOT wipe the collection', async () => {
+      await chatDB.saveSession(testSession)
+      const before = apiDelete.mock.calls.length
+      await chatDB.deleteSession('')
+      expect(apiDelete.mock.calls.length).toBe(before)
+      expect(await chatDB.loadSessions()).toHaveLength(1)
+    })
+
+    it('updateSession with empty id is a no-op', async () => {
+      const before = apiPatch.mock.calls.length
+      await chatDB.updateSession('', { starred: true })
+      expect(apiPatch.mock.calls.length).toBe(before)
+    })
+
+    it('loadSession with empty id returns undefined without a request', async () => {
+      const before = apiGet.mock.calls.length
+      expect(await chatDB.loadSession('')).toBeUndefined()
+      expect(apiGet.mock.calls.length).toBe(before)
+    })
+
+    it('deleteDraft with empty sessionId does NOT wipe the drafts collection', async () => {
+      const before = apiDelete.mock.calls.length
+      await chatDB.deleteDraft('')
+      expect(apiDelete.mock.calls.length).toBe(before)
+    })
+
+    it('setKV with empty key is a no-op', async () => {
+      const before = apiPut.mock.calls.length
+      await chatDB.setKV('', { any: 1 })
+      expect(apiPut.mock.calls.length).toBe(before)
     })
   })
 

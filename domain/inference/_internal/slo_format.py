@@ -14,7 +14,6 @@ Trademark (c) 2026 SloughGPT. All rights reserved.
 
 from __future__ import annotations
 
-import datetime
 import hashlib
 import json
 import logging
@@ -26,6 +25,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.inference.slo_format")
 
@@ -211,7 +212,7 @@ class SloProfile:
 
     def __post_init__(self):
         if not self.born_at:
-            self.born_at = datetime.datetime.now(datetime.UTC).isoformat() + "Z"
+            self.born_at = utc_now_iso()
 
     def to_dict(self) -> dict[str, Any]:
         d = {

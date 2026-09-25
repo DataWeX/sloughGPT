@@ -31,6 +31,8 @@ Usage:
     # --bits 8,4 also emits a best-precision recommendation (text/--report/--json)
 """
 
+from __future__ import annotations
+
 import argparse
 import contextlib
 import csv
@@ -42,11 +44,12 @@ import platform
 import sys
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from domain.shared import utc_now_iso
 
 # Add core-py + repo root to path (root holds the top-level ``domain`` package)
 _root = Path(__file__).resolve().parent.parent
@@ -1489,7 +1492,7 @@ def _save_baseline(path: Path, current: dict[str, dict[str, Any]]) -> None:
 
     payload = {
         "tool": "benchmark_quantization.py",
-        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "timestamp": utc_now_iso().replace("+00:00", "Z"),
         "metrics": current,
     }
     path.parent.mkdir(parents=True, exist_ok=True)

@@ -10,6 +10,7 @@ import {
   formatTimeShort,
   formatDateTimeUS,
   formatSeconds,
+  toDate,
 } from './time-format'
 
 describe('formatRelativeTime', () => {
@@ -130,6 +131,17 @@ describe('formatDateTimeShort', () => {
     expect(result).toContain('Jan')
     expect(result).toContain('5')
   })
+
+  it('returns empty string for undefined/null (backend strips null fields)', () => {
+    expect(formatDateTimeShort(undefined)).toBe('')
+    expect(formatDateTimeShort(null)).toBe('')
+    expect(formatDateTimeShort('')).toBe('')
+  })
+
+  it('returns empty string for invalid dates instead of throwing', () => {
+    expect(formatDateTimeShort('not-a-date')).toBe('')
+    expect(formatDateTimeShort(new Date('invalid'))).toBe('')
+  })
 })
 
 describe('formatDateTimeFull', () => {
@@ -198,5 +210,64 @@ describe('formatSeconds', () => {
 
   it('truncates fractional seconds', () => {
     expect(formatSeconds(90.9)).toBe('1:30')
+  })
+})
+
+describe('toDate', () => {
+  it('parses valid ISO strings, numbers, and Date objects', () => {
+    expect(toDate('2026-09-24T09:47:33.835728Z')?.getTime()).toBe(1790243253835)
+    expect(toDate(0)?.getTime()).toBe(0)
+    const d = new Date('2026-01-05T12:00:00Z')
+    expect(toDate(d)).toBe(d)
+  })
+
+  it('returns null for missing or unparsable input', () => {
+    expect(toDate(null)).toBeNull()
+    expect(toDate(undefined)).toBeNull()
+    expect(toDate('')).toBeNull()
+    expect(toDate('not-a-date')).toBeNull()
+    expect(toDate(new Date('nope'))).toBeNull()
+  })
+
+  it('returns null for the legacy "+00:00Z" backend format', () => {
+    // Regression: this is what produced "Invalid Date" on the souls page.
+    expect(new Date('2026-09-24T09:47:33.835728+00:00Z').getTime()).toBeNaN()
+    expect(toDate('2026-09-24T09:47:33.835728+00:00Z')).toBeNull()
+  })
+})
+
+describe('formatters never render "Invalid Date"', () => {
+  const legacy = '2026-09-24T09:47:33.835728+00:00Z'
+  const formatters = {
+    formatRelativeTime,
+    formatShortRelative,
+    formatDateTime,
+    formatShortDate,
+    formatDateTimeShort,
+    formatDateTimeFull,
+    formatTimeWithSeconds,
+    formatTimeShort,
+    formatDateTimeUS,
+  } as const
+
+  it.each(Object.entries(formatters))('%s returns "" for legacy timestamps', (_name, fn) => {
+    expect(fn(legacy)).toBe('')
+  })
+
+  it.each(Object.entries(formatters))('%s returns "" for null/undefined', (_name, fn) => {
+    expect(fn(null)).toBe('')
+    expect(fn(undefined)).toBe('')
+  })
+
+  it.each(Object.entries(formatters))('%s still formats valid dates', (_name, fn) => {
+    expect(fn('2026-01-05T14:30:00Z')).not.toBe('')
+    expect(fn(new Date('2026-01-05T14:30:00Z'))).not.toBe('')
+  })
+})
+
+describe('formatSeconds guards non-finite input', () => {
+  it('returns "0:00" for NaN/Infinity', () => {
+    expect(formatSeconds(Number.NaN)).toBe('0:00')
+    expect(formatSeconds(Number.POSITIVE_INFINITY)).toBe('0:00')
   })
 })

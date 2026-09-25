@@ -8,11 +8,12 @@ import math
 import re
 import struct
 from dataclasses import asdict, is_dataclass
-from datetime import UTC
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from domain.shared import utc_now_iso
 
 from .state import REPO_ROOT, SOU_MAGIC
 
@@ -35,8 +36,6 @@ def _finite_payload(o: Any) -> Any:
 
 def log_experiment_metric(experiment_id: str, metric: str, value: float, step: int = 0) -> None:
     try:
-        from datetime import datetime
-
         exp_dir = REPO_ROOT / "data" / "experiments"
         exp_dir.mkdir(parents=True, exist_ok=True)
         metrics_file = exp_dir / f"{experiment_id}_metrics.jsonl"
@@ -45,7 +44,7 @@ def log_experiment_metric(experiment_id: str, metric: str, value: float, step: i
             "metric": metric,
             "value": value,
             "step": step,
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": utc_now_iso(),
         }
         with open(metrics_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")
@@ -55,8 +54,6 @@ def log_experiment_metric(experiment_id: str, metric: str, value: float, step: i
 
 def log_experiment_param(experiment_id: str, param_name: str, value: Any) -> None:
     try:
-        from datetime import datetime
-
         exp_dir = REPO_ROOT / "data" / "experiments"
         exp_dir.mkdir(parents=True, exist_ok=True)
         params_file = exp_dir / f"{experiment_id}_params.jsonl"
@@ -64,7 +61,7 @@ def log_experiment_param(experiment_id: str, param_name: str, value: Any) -> Non
             "experiment_id": experiment_id,
             "param": param_name,
             "value": value,
-            "timestamp": datetime.now(UTC).isoformat(),
+            "timestamp": utc_now_iso(),
         }
         with open(params_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry) + "\n")

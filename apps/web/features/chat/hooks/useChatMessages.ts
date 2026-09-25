@@ -649,8 +649,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
       setContextLayers([])
       setLoading(true)
 
-      // Auto-name conversation from first user message
-      if (messagesRef.current.length === 0 && text.trim()) {
+      // Auto-name conversation from first user message (only once a session
+      // id exists — renameSession cannot persist without one)
+      if (messagesRef.current.length === 0 && text.trim() && sessionIdRef.current) {
         const title = text
           .trim()
           .slice(0, 50)

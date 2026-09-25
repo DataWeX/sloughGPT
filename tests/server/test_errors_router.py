@@ -3,7 +3,6 @@ Tests for the errors router — log, recent, grouped, trends, export, clear, unr
 """
 
 import logging
-from datetime import UTC
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.errors import ErrorsRouter
+from domain.shared import utc_now_iso
 
 
 @pytest.fixture
@@ -212,9 +212,8 @@ class TestErrorTrends:
 
     def test_trends_count_accumulates(self, client, router_instance):
         router_instance._error_buffer.clear()
-        from datetime import datetime
 
-        now = datetime.now(UTC).isoformat()
+        now = utc_now_iso()
         for _ in range(5):
             router_instance._error_buffer.append(
                 {

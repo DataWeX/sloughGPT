@@ -18,10 +18,9 @@ import json
 import logging
 import os
 import threading
-from datetime import UTC, datetime
 from pathlib import Path
 
-from domain.shared import find_repo_root
+from domain.shared import find_repo_root, utc_now_iso
 
 logger = logging.getLogger("slo.infrastructure.conversation_log")
 
@@ -99,7 +98,7 @@ class ConversationLogger:
                 "tokens_generated": tokens_generated,
                 "elapsed_ms": round(elapsed_ms, 1),
                 "temperature": temperature,
-                "captured_at": datetime.now(UTC).isoformat(),
+                "captured_at": utc_now_iso(),
             },
         }
         if meta:

@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 import numpy as np
+
+from domain.shared import utc_now_iso
 
 from .database import SimilarPattern, get_feedback_db
 
@@ -239,7 +240,7 @@ class MetaWeightManager:
             # Store in history
             self._weight_history.append(
                 {
-                    "timestamp": datetime.now(UTC).isoformat(),
+                    "timestamp": utc_now_iso(),
                     "temperature": weights.temperature,
                     "repetition_penalty": weights.repetition_penalty,
                     "top_p": weights.top_p,
