@@ -4,14 +4,15 @@ Complete reference for all environment variables used in SloughGPT.
 
 ## Quick Reference
 
-| Variable         | Required | Default       | Description                        |
-| ---------------- | -------- | ------------- | ---------------------------------- |
-| `SLO_API_KEY`    | Yes      | -             | API key for authentication         |
-| `SLO_JWT_SECRET` | Yes      | -             | Secret for JWT token signing       |
-| `SLO_ENV`        | No       | `development` | Environment mode                   |
-| `SLO_HOST`       | No       | `0.0.0.0`     | Server host                        |
-| `SLO_PORT`       | No       | `8000`        | Server port                        |
-| `SLO_RELOAD`     | No       | `false`       | Enable auto-reload on file changes |
+| Variable               | Required | Default                 | Description                        |
+| ---------------------- | -------- | ----------------------- | ---------------------------------- |
+| `SLO_API_KEY`          | Yes      | -                       | API key for authentication         |
+| `SLO_JWT_SECRET`       | Yes      | -                       | Secret for JWT token signing       |
+| `SLO_ENV`              | No       | `development`           | Environment mode                   |
+| `SLO_HOST`             | No       | `0.0.0.0`               | Server host                        |
+| `SLO_PORT`             | No       | `8000`                  | Server port                        |
+| `SLO_RELOAD`           | No       | `false`                 | Enable auto-reload on file changes |
+| `SLO_TRAINING_JOBS_DB` | No       | `data/training_jobs.db` | Training job store directory       |
 
 **Legacy names:** older docs and images used a typo (`SLAUGHGPT_*`). The server still accepts `SLAUGHGPT_API_KEY`, `SLAUGHGPT_JWT_SECRET`, and `SLAUGHGPT_API_KEYS` if the `SLO_*` counterparts are unset. Prefer `SLO_*` for new deployments.
 
@@ -341,6 +342,29 @@ prune rewrite leaves the original file untouched.
 
 ```bash
 SLO_MEMORY_ARCHIVE_RETENTION_DAYS=90   # keep three months of provenance
+```
+
+---
+
+## Training
+
+### SLO_TRAINING_JOBS_DB
+
+**Optional** — default: `data/training_jobs.db`
+
+Directory holding the persistent training-job store (`jobs.jsonl` plus its
+write-ahead journal). Every process that lists, recovers, or abandons a job
+resolves this store through `training.job_store.get_job_store()`.
+
+`conftest.py` sets it to a throw-away directory before the test suite imports
+anything, so tests write their own rows. Without that redirect the suite and a
+running server resolve the same store, and fixture rows — an `interrupted` job
+whose `data_path` is empty — show up as a Recoverable Job; recovering one fails
+in the dataset loader. Point the store elsewhere to give a server its own
+history:
+
+```bash
+SLO_TRAINING_JOBS_DB=/tmp/slo-jobs.db python apps/api/server/main.py
 ```
 
 ---
