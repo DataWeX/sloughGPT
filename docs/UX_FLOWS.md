@@ -328,6 +328,23 @@ their own pages (`/chat`, `/training`).
 6. Tap "Try it now" → jumps to chat with the new model loaded
 7. Optionally: see a before/after comparison of how the AI responds
 
+**If training was interrupted** (app closed, device died, server restarted):
+
+- The training page shows a "Needs resume" count and a short list of stopped runs
+- Each stopped run has one **Resume** button — tap it and training picks up
+  from the last saved checkpoint (same data, same settings, no re-setup)
+- The same Resume button appears on the job detail page and in the
+  monitoring "Training History" list
+- Progress so far is kept — resume continues, it does not start over
+- A stopped run is only offered by the recovery card when it can actually
+  resume: if its data file is gone or it never recorded one, it stays out of
+  the count and out of that list rather than offering a button that would fail.
+  The Training History still shows the run — it did happen — but tapping
+  Resume there explains the refusal in plain words, never a status code or
+  stack trace ("Could not resume job: No dataset recorded for this job")
+- Each stopped run also has an **Abandon** button to say "I don't need this
+  one", which takes it off the list
+
 **What they should NOT see:**
 
 - Learning rate, batch size, epochs, LoRA rank, gradient accumulation
