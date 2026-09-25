@@ -88,7 +88,7 @@ shaders/%.metal: shaders/%.wgsl
 
 test: lib
 	@echo "Running smoke test..."
-	@python3 -c "from domains.infrastructure.gpu.gpu_engine import is_gpu_available; print('GPU available:', is_gpu_available())"
+	@python3 -c "from domain.infrastructure._internal.gpu.gpu_engine import is_gpu_available; print('GPU available:', is_gpu_available())"
 
 clean:
 	rm -f $(LIB_TARGET)

@@ -59,11 +59,11 @@ Build a consciousness system with 4 modules: Self-Model, Qualia Engine, Meta-Cog
 
 ## Phase 1: Core Packages (Week 1)
 
-### 1.1 Create `domains/consciousness/` package
+### 1.1 Create `domain/cognition/` package
 
 **New files:**
 ```
-packages/core-py/domains/consciousness/
+domain/cognition/
 ├── __init__.py              # Exports ConsciousnessEngine, get_consciousness
 ├── self_model.py            # SelfModel, SelfIdentity, SelfEpisode
 ├── qualia.py                # QualiaState, QualiaEngine
@@ -254,7 +254,7 @@ class ConsciousnessConfig:
 
 ### 2.1 Add ConsciousnessManager to ContextCore
 
-**File:** `packages/core-py/domains/infrastructure/context_core.py`
+**File:** `domain/infrastructure/context_core.py`
 
 **Changes:**
 1. Add `consciousness_manager` param to `__init__()` (line 62)
@@ -269,7 +269,7 @@ class ConsciousnessConfig:
 
 ### 2.2 Add Consciousness Traits to TraitWeightsConfig
 
-**File:** `packages/core-py/domains/context/managers.py`
+**File:** `domain/context/_internal/managers.py`
 
 **Changes:**
 1. Add `"consciousness"` group to `TRAIT_SCHEMA` (line 28):
@@ -289,7 +289,7 @@ class ConsciousnessConfig:
 
 ### 2.3 Wire into FeedbackWorkflowManager
 
-**File:** `packages/core-py/domains/feedback/workflow.py`
+**File:** `domain/feedback/_internal/workflow.py`
 
 **Changes:**
 1. Add `_update_consciousness()` method (after line 149):
@@ -675,7 +675,7 @@ Add consciousness endpoints to `docs/API.md`.
 
 ### 7.3 Create consciousness README
 
-**File:** `packages/core-py/domains/consciousness/README.md`
+**File:** `domain/cognition/README.md`
 
 ---
 
@@ -684,27 +684,27 @@ Add consciousness endpoints to `docs/API.md`.
 ### New Files (14)
 | File | Purpose |
 |------|---------|
-| `domains/consciousness/__init__.py` | Package exports |
-| `domains/consciousness/self_model.py` | SelfModel, SelfIdentity, SelfEpisode |
-| `domains/consciousness/qualia.py` | QualiaState, QualiaEngine |
-| `domains/consciousness/meta_cognition.py` | MetaCognition |
-| `domains/consciousness/narrative.py` | NarrativeGenerator |
-| `domains/consciousness/training.py` | ConsciousnessTrainer (LoRA) |
-| `domains/consciousness/evaluation.py` | CogLM benchmark |
-| `domains/consciousness/config.py` | ConsciousnessConfig |
+| `domain/cognition/__init__.py` | Package exports |
+| `domain/cognition/self_model.py` | SelfModel, SelfIdentity, SelfEpisode |
+| `domain/cognition/qualia.py` | QualiaState, QualiaEngine |
+| `domain/cognition/meta_cognition.py` | MetaCognition |
+| `domain/cognition/narrative.py` | NarrativeGenerator |
+| `domain/cognition/training.py` | ConsciousnessTrainer (LoRA) |
+| `domain/cognition/evaluation.py` | CogLM benchmark |
+| `domain/cognition/config.py` | ConsciousnessConfig |
 | `apps/api/server/routers/consciousness.py` | API endpoints |
 | `apps/web/lib/consciousness-controller.ts` | Frontend API client |
 | `apps/web/components/chat/ConsciousnessBadge.tsx` | UI badge |
 | `apps/web/components/chat/ConsciousnessPanel.tsx` | UI detail panel |
-| `packages/core-py/domains/consciousness/README.md` | Documentation |
-| `packages/core-py/domains/consciousness/tests/__init__.py` | Test package |
+| `domain/cognition/README.md` | Documentation |
+| `domain/cognition/tests/__init__.py` | Test package |
 
 ### Modified Files (8)
 | File | Changes |
 |------|---------|
-| `domains/infrastructure/context_core.py` | Add consciousness manager (5th manager) |
-| `domains/context/managers.py` | Add consciousness traits to TRAIT_SCHEMA |
-| `domains/feedback/workflow.py` | Add consciousness feedback signal |
+| `domain/infrastructure/context_core.py` | Add consciousness manager (5th manager) |
+| `domain/context/_internal/managers.py` | Add consciousness traits to TRAIT_SCHEMA |
+| `domain/feedback/_internal/workflow.py` | Add consciousness feedback signal |
 | `apps/api/server/main.py` | Register consciousness router |
 | `apps/web/lib/controllers.ts` | Export consciousnessController |
 | `apps/web/components/chat/ChatToolbar.tsx` | Add ConsciousnessBadge |

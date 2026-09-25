@@ -31,7 +31,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROD_ROOTS = (
     REPO_ROOT / "domain",
-    REPO_ROOT / "packages" / "core-py" / "domains",
 )
 ROUTERS_DIR = REPO_ROOT / "apps" / "api" / "server" / "routers"
 
