@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useErrorStore, type AppError, type ErrorSeverity } from '../../lib/error-store'
 import { cn } from '../../lib/cn'
+import { formatDateTime } from '../../lib/format-time'
 
 function ErrorIcon({ className }: { className?: string }) {
   return (
@@ -79,7 +80,7 @@ function ErrorItem({ error, onDismiss }: { error: AppError; onDismiss: (id: stri
       `Message: ${error.message}`,
       error.source ? `Source: ${error.source}` : null,
       error.requestId ? `Request ID: ${error.requestId}` : null,
-      `Time: ${new Date(error.timestamp).toLocaleString()}`,
+      `Time: ${formatDateTime(error.timestamp)}`,
       `URL: ${typeof window !== 'undefined' ? window.location.href : 'N/A'}`,
     ]
       .filter(Boolean)
@@ -163,7 +164,7 @@ export function ErrorPanel() {
           `Message: ${e.message}`,
           e.source ? `Source: ${e.source}` : null,
           e.requestId ? `Request ID: ${e.requestId}` : null,
-          `Time: ${new Date(e.timestamp).toLocaleString()}`,
+          `Time: ${formatDateTime(e.timestamp)}`,
         ]
           .filter(Boolean)
           .join('\n'),
