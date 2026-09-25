@@ -295,7 +295,7 @@ class TestPhaseConfigReady:
         with (
             patch("domain.infrastructure._internal.config.get_config") as mock_cfg,
             patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager"
+                "domain.infrastructure.resource_manager.get_resource_manager"
             ) as mock_rm,
         ):
             rm = mock_rm.return_value
@@ -318,7 +318,7 @@ class TestPhaseConfigReady:
                 side_effect=RuntimeError("boom"),
             ),
             patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager",
+                "domain.infrastructure.resource_manager.get_resource_manager",
                 side_effect=RuntimeError("boom2"),
             ),
         ):

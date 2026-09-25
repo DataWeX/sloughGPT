@@ -307,9 +307,6 @@ class TestDPO:
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_run(self):
-        import sys
-        import types
-
         class _FakeTrainer:
             def __init__(self, model, tokenizer, learning_rate):
                 self._lr = learning_rate
@@ -325,19 +322,19 @@ class TestDPO:
                     "pairs_trained": max_pairs,
                 }
 
-        fake_mod = types.ModuleType("domain.feedback._internal.hf_dpo")
-        fake_mod.HFDPOTrainer = _FakeTrainer
-        with patch.dict(sys.modules, {"domain.feedback._internal.hf_dpo": fake_mod}):
-            with patch(
+        with (
+            patch("domain.feedback.HFDPOTrainer", _FakeTrainer),
+            patch(
                 "apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
                 return_value=(object(), object()),
-            ):
-                multimodal_router._dpo_state["status"] = "idle"
-                resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
-                assert resp.status_code == 200
-                data = resp.json()["data"]
-                assert data["status"] == "accepted"
-                assert data["pairs_trained"] == 4
+            ),
+        ):
+            multimodal_router._dpo_state["status"] = "idle"
+            resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
+            assert resp.status_code == 200
+            data = resp.json()["data"]
+            assert data["status"] == "accepted"
+            assert data["pairs_trained"] == 4
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_rejects_invalid_pairs(self):

@@ -34,8 +34,14 @@ except Exception:
 
 # Disable the readiness gate for tests so schema-validation tests can
 # reach the router and trigger 422s instead of being blocked with 503.
+# The real dispatch is stashed on the class so suites that DO test the gate
+# (tests/server/test_readiness_gate.py) can restore it — this import-time
+# patch is process-wide and leaks into any test module that runs after it.
 try:
     from infrastructure.middleware import ReadinessGateMiddleware as _RGM
+
+    if not hasattr(_RGM, "_real_dispatch"):
+        _RGM._real_dispatch = _RGM.dispatch
 
     async def _noop_readiness(self, request, call_next):
         return await call_next(request)
