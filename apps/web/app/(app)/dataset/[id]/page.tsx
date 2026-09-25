@@ -1,22 +1,42 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import dynamicNext from 'next/dynamic'
+import dynamicNext from '@/vite/next-compat/dynamic'
+import { formatDateTime } from '@/lib/time-format'
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@sloughgpt/strui'
 import { Button, Spinner } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { Breadcrumbs } from '@sloughgpt/strui'
-import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconClock, IconChevronDown } from '@sloughgpt/strui'
-import { datasetController, type Dataset, type DatasetStats, type DatasetPreview as DatasetPreviewData } from '@/lib/dataset-controller'
+import {
+  IconTrash,
+  IconDownload,
+  IconEdit,
+  IconCheck,
+  IconX,
+  IconClock,
+  IconChevronDown,
+} from '@sloughgpt/strui'
+import {
+  datasetController,
+  type Dataset,
+  type DatasetStats,
+  type DatasetPreview as DatasetPreviewData,
+} from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
 import { DatasetQualityCard } from '@/components/dataset/DatasetQualityCard'
 import { DatasetInsightsCard } from '@/components/dataset/DatasetInsightsCard'
@@ -24,12 +44,15 @@ import { formatBytes } from '@/lib/format-bytes'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
 
-const DatasetImportDialog = dynamicNext(() => import('@/components/DatasetImportDialog').then(m => m.DatasetImportDialog), { ssr: false })
+const DatasetImportDialog = dynamicNext(
+  () => import('@/components/DatasetImportDialog').then((m) => m.DatasetImportDialog),
+  { ssr: false },
+)
 
 export default function DatasetDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const datasetId = decodeURIComponent((params.id as string) || '')
 
   const [dataset, setDataset] = useState<Dataset | null>(null)
@@ -47,7 +70,11 @@ export default function DatasetDetailPage() {
   const [previewData, setPreviewData] = useState<DatasetPreviewData | null>(null)
   const [convertPrompt, setConvertPrompt] = useState('')
   const [converting, setConverting] = useState(false)
-  const [convertResult, setConvertResult] = useState<{ status: string; new_dataset_id: string; total_conversations: number } | null>(null)
+  const [convertResult, setConvertResult] = useState<{
+    status: string
+    new_dataset_id: string
+    total_conversations: number
+  } | null>(null)
 
   const fetchDataset = useCallback(async () => {
     setLoading(true)
@@ -122,7 +149,10 @@ export default function DatasetDetailPage() {
   }
 
   useEffect(() => {
-    if (!datasetId) { router.push('/datasets'); return }
+    if (!datasetId) {
+      router.push('/datasets')
+      return
+    }
     fetchDataset()
   }, [datasetId, fetchDataset, router])
 
@@ -150,7 +180,7 @@ export default function DatasetDetailPage() {
     if (!renameText.trim() || !dataset) return
     try {
       await datasetController.update(dataset.id, { name: renameText.trim() })
-      setDataset(prev => prev ? { ...prev, name: renameText.trim() } : prev)
+      setDataset((prev) => (prev ? { ...prev, name: renameText.trim() } : prev))
       addToast('Renamed', 'success')
       setRenaming(false)
     } catch {
@@ -188,18 +218,30 @@ export default function DatasetDetailPage() {
       const blob = await datasetController.export(dataset.id)
       const text = await blob.text()
       const lines = text.trim().split('\n').filter(Boolean)
-      const rows = lines.map(line => {
-        try { return JSON.parse(line) } catch { return { content: line } }
+      const rows = lines.map((line) => {
+        try {
+          return JSON.parse(line)
+        } catch {
+          return { content: line }
+        }
       })
-      if (rows.length === 0) { addToast('Empty dataset', 'error'); return }
-      const headers = Array.from(new Set(rows.flatMap(r => Object.keys(r))))
+      if (rows.length === 0) {
+        addToast('Empty dataset', 'error')
+        return
+      }
+      const headers = Array.from(new Set(rows.flatMap((r) => Object.keys(r))))
       const csv = [
         headers.join(','),
-        ...rows.map(row => headers.map(h => {
-          const val = String(row[h] ?? '')
-          return val.includes(',') || val.includes('"') || val.includes('\n')
-            ? `"${val.replace(/"/g, '""')}"` : val
-        }).join(','))
+        ...rows.map((row) =>
+          headers
+            .map((h) => {
+              const val = String(row[h] ?? '')
+              return val.includes(',') || val.includes('"') || val.includes('\n')
+                ? `"${val.replace(/"/g, '""')}"`
+                : val
+            })
+            .join(','),
+        ),
       ].join('\n')
       downloadBlob(new Blob([csv], { type: 'text/csv' }), `${dataset.name || dataset.id}.csv`)
       addToast('Exported as CSV', 'success')
@@ -230,10 +272,15 @@ export default function DatasetDetailPage() {
 
   const headerRight = (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" className="h-11 text-xs" onClick={() => setImportOpen(true)}>
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-11 text-xs"
+        onClick={() => setImportOpen(true)}
+      >
         Import Data
       </Button>
-       <Button variant="outline" size="sm" onClick={fetchDataset} disabled={loading}>
+      <Button variant="outline" size="sm" onClick={fetchDataset} disabled={loading}>
         <Spinner className="h-4 w-4 mr-1" />
         Refresh
       </Button>
@@ -274,7 +321,11 @@ export default function DatasetDetailPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base">Details</CardTitle>
-                   {dataset.type && <Badge variant="outline" className="text-xs">{dataset.type}</Badge>}
+                  {dataset.type && (
+                    <Badge variant="outline" className="text-xs">
+                      {dataset.type}
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -283,27 +334,49 @@ export default function DatasetDetailPage() {
                       variant="outline"
                       className="h-8 text-xs"
                       onClick={() => setExportOpen(!exportOpen)}
-                      onKeyDown={(e) => { if (e.key === 'Escape') setExportOpen(false) }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setExportOpen(false)
+                      }}
                       aria-expanded={exportOpen}
                       aria-pressed={exportOpen}
                       aria-haspopup="true"
                     >
-                      <IconDownload className="h-4 w-4 mr-1" /> Export <IconChevronDown className="h-3 w-3 ml-1" />
+                      <IconDownload className="h-4 w-4 mr-1" /> Export{' '}
+                      <IconChevronDown className="h-3 w-3 ml-1" />
                     </Button>
                     {exportOpen && (
                       <div className="absolute right-0 top-full mt-1 z-50">
                         <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
-                          <button type="button" onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleExport()
+                              setExportOpen(false)
+                            }}
+                            className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors"
+                          >
                             Export as JSONL
                           </button>
-                          <button type="button" onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleExportCSV()
+                              setExportOpen(false)
+                            }}
+                            className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors"
+                          >
                             Export as CSV
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
-                  <Button size="sm" variant="outline" className="h-11 text-xs text-destructive hover:text-destructive" onClick={() => setShowDelete(true)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-11 text-xs text-destructive hover:text-destructive"
+                    onClick={() => setShowDelete(true)}
+                  >
                     <IconTrash className="h-4 w-4 mr-1" /> Delete
                   </Button>
                 </div>
@@ -314,22 +387,45 @@ export default function DatasetDetailPage() {
                 <div className="flex items-center gap-2 mb-3">
                   <Input
                     value={renameText}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRenameText(e.target.value)}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      setRenameText(e.target.value)
+                    }
                     className="h-9 text-sm max-w-xs"
                     autoFocus
-                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => { if (e.key === 'Enter') commitRename(); if (e.key === 'Escape') setRenaming(false) }}
+                    onKeyDown={(e: React.KeyboardEvent<HTMLInputElement>) => {
+                      if (e.key === 'Enter') commitRename()
+                      if (e.key === 'Escape') setRenaming(false)
+                    }}
                   />
-                  <Button variant="ghost" size="icon-sm" className="h-8 w-8" onClick={commitRename} aria-label="Confirm rename">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8"
+                    onClick={commitRename}
+                    aria-label="Confirm rename"
+                  >
                     <IconCheck className="h-4 w-4 text-success" />
                   </Button>
-                  <Button variant="ghost" size="icon-sm" className="h-8 w-8" onClick={() => setRenaming(false)} aria-label="Cancel rename">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-8 w-8"
+                    onClick={() => setRenaming(false)}
+                    aria-label="Cancel rename"
+                  >
                     <IconX className="h-4 w-4" />
                   </Button>
                 </div>
               ) : (
                 <div className="flex items-center gap-2 mb-3">
                   <span className="text-sm font-medium">{dataset.name}</span>
-                  <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={startRename} aria-label="Rename dataset">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-6 w-6"
+                    onClick={startRename}
+                    aria-label="Rename dataset"
+                  >
                     <IconEdit className="h-4 w-4" />
                   </Button>
                 </div>
@@ -339,29 +435,40 @@ export default function DatasetDetailPage() {
                 <StatCard label="ID" value={dataset.id} />
                 <StatCard label="Source" value={dataset.source || 'local'} />
                 <StatCard label="Size" value={formatBytes(dataset.size)} />
-                {dataset.samples != null && <StatCard label="Samples" value={dataset.samples.toLocaleString()} />}
+                {dataset.samples != null && (
+                  <StatCard label="Samples" value={dataset.samples.toLocaleString()} />
+                )}
               </KpiGrid>
 
               {dataset.tags && dataset.tags.length > 0 && (
                 <div className="flex items-center gap-1.5 mt-3">
                   <span className="text-xs text-muted-foreground">Tags:</span>
-                  {dataset.tags.map(t => (
-                    <Badge key={t} variant={"default" as const} size="sm">{t}</Badge>
+                  {dataset.tags.map((t) => (
+                    <Badge key={t} variant={'default' as const} size="sm">
+                      {t}
+                    </Badge>
                   ))}
                 </div>
               )}
 
               {dataset.created_at && (
                 <p className="text-xs text-muted-foreground mt-2">
-                  Created: {new Date(dataset.created_at).toLocaleString()}
+                  Created: {formatDateTime(dataset.created_at)}
                 </p>
               )}
 
               <div className="flex items-center gap-2 mt-3">
-                <Button size="sm" onClick={() => router.push(`/training?dataset=${dataset.id}&method=distill`)}>
+                <Button
+                  size="sm"
+                  onClick={() => router.push(`/training?dataset=${dataset.id}&method=distill`)}
+                >
                   Train on this dataset
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => router.push(`/training?dataset=${dataset.id}&method=finetune`)}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => router.push(`/training?dataset=${dataset.id}&method=finetune`)}
+                >
                   Fine-tune
                 </Button>
               </div>
@@ -378,13 +485,18 @@ export default function DatasetDetailPage() {
                 <KpiGrid columns={4}>
                   <StatCard label="Format" value={stats.format || '—'} />
                   <StatCard label="Rows (lines)" value={stats.lines?.toLocaleString() || '—'} />
-                  <StatCard label="Avg length" value={stats.avg_length ? `${stats.avg_length.toFixed(0)} chars` : '—'} />
+                  <StatCard
+                    label="Avg length"
+                    value={stats.avg_length ? `${stats.avg_length.toFixed(0)} chars` : '—'}
+                  />
                   <StatCard label="Total chars" value={stats.chars?.toLocaleString() || '—'} />
                 </KpiGrid>
                 {stats.suggested_method && stats.suggested_method !== 'unknown' && (
                   <div className="flex items-center gap-2 mt-2">
                     <span className="text-xs text-muted-foreground">Recommended method:</span>
-                    <Badge variant={"secondary" as const} size="sm">{stats.suggested_method}</Badge>
+                    <Badge variant={'secondary' as const} size="sm">
+                      {stats.suggested_method}
+                    </Badge>
                   </div>
                 )}
               </CardContent>
@@ -403,7 +515,12 @@ export default function DatasetDetailPage() {
               <CardTitle className="text-base">Preview</CardTitle>
             </CardHeader>
             <CardContent>
-              <DatasetPreview datasetId={dataset.id} onUseForTraining={() => router.push(`/training?dataset=${dataset.id}&method=distill`)} />
+              <DatasetPreview
+                datasetId={dataset.id}
+                onUseForTraining={() =>
+                  router.push(`/training?dataset=${dataset.id}&method=distill`)
+                }
+              />
             </CardContent>
           </Card>
 
@@ -412,7 +529,12 @@ export default function DatasetDetailPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base">Versions</CardTitle>
-                <Button size="sm" className="h-11 text-xs" onClick={handleCreateVersion} disabled={snapshotting}>
+                <Button
+                  size="sm"
+                  className="h-11 text-xs"
+                  onClick={handleCreateVersion}
+                  disabled={snapshotting}
+                >
                   <IconClock className="h-4 w-4 mr-1" />
                   {snapshotting ? 'Snapshotting…' : 'Create snapshot'}
                 </Button>
@@ -427,16 +549,26 @@ export default function DatasetDetailPage() {
                 </div>
               ) : (
                 <ul className="space-y-2">
-                  {versions.map(v => (
-                    <li key={v} className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
+                  {versions.map((v) => (
+                    <li
+                      key={v}
+                      className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2"
+                    >
                       <div className="flex items-center gap-2 text-sm">
                         <IconClock className="h-4 w-4 text-muted-foreground" />
                         <span className="font-mono text-xs">{v}</span>
                         <span className="text-xs text-muted-foreground">
-                          {new Date(`${v.slice(0,4)}-${v.slice(4,6)}-${v.slice(6,8)}T${v.slice(8,10)}:${v.slice(10,12)}:${v.slice(12,14)}Z`).toLocaleString()}
+                          {formatDateTime(
+                            `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6, 8)}T${v.slice(8, 10)}:${v.slice(10, 12)}:${v.slice(12, 14)}Z`,
+                          )}
                         </span>
                       </div>
-                      <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => setRestoreTarget(v)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 text-xs"
+                        onClick={() => setRestoreTarget(v)}
+                      >
                         Restore
                       </Button>
                     </li>
@@ -453,17 +585,25 @@ export default function DatasetDetailPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                Turn this dataset into chat-style conversations (system / user / assistant) so it can fine-tune chat models. This creates a new dataset.
+                Turn this dataset into chat-style conversations (system / user / assistant) so it
+                can fine-tune chat models. This creates a new dataset.
               </p>
               <div className="flex items-center gap-2 mt-3">
                 <Input
                   value={convertPrompt}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setConvertPrompt(e.target.value)}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                    setConvertPrompt(e.target.value)
+                  }
                   placeholder="System prompt (optional)"
                   aria-label="System prompt"
                   className="h-8 text-xs max-w-sm"
                 />
-                <Button size="sm" className="h-11 text-xs" onClick={handleConvert} disabled={converting}>
+                <Button
+                  size="sm"
+                  className="h-11 text-xs"
+                  onClick={handleConvert}
+                  disabled={converting}
+                >
                   <IconClock className="h-4 w-4 mr-1" />
                   {converting ? 'Converting…' : 'Convert to chat format'}
                 </Button>
@@ -471,9 +611,17 @@ export default function DatasetDetailPage() {
               {convertResult && (
                 <div className="mt-3 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-sm">
                   <p>
-                    Created {dataset.name}-messages with {convertResult.total_conversations} conversation{convertResult.total_conversations !== 1 ? 's' : ''}.
+                    Created {dataset.name}-messages with {convertResult.total_conversations}{' '}
+                    conversation{convertResult.total_conversations !== 1 ? 's' : ''}.
                   </p>
-                  <Button size="sm" variant="outline" className="mt-2 h-8 text-xs" onClick={() => router.push(`/dataset/${encodeURIComponent(convertResult.new_dataset_id)}`)}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mt-2 h-8 text-xs"
+                    onClick={() =>
+                      router.push(`/dataset/${encodeURIComponent(convertResult.new_dataset_id)}`)
+                    }
+                  >
                     Open converted dataset
                   </Button>
                 </div>
@@ -483,12 +631,18 @@ export default function DatasetDetailPage() {
         </>
       )}
 
-      <AlertDialog open={restoreTarget !== null} onOpenChange={(open: boolean) => { if (!open) setRestoreTarget(null) }}>
+      <AlertDialog
+        open={restoreTarget !== null}
+        onOpenChange={(open: boolean) => {
+          if (!open) setRestoreTarget(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Restore version</AlertDialogTitle>
             <AlertDialogDescription>
-              Restore dataset &ldquo;{dataset?.name}&rdquo; to version {restoreTarget ? `"${restoreTarget}"` : ''}? This overwrites the current files.
+              Restore dataset &ldquo;{dataset?.name}&rdquo; to version{' '}
+              {restoreTarget ? `"${restoreTarget}"` : ''}? This overwrites the current files.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -508,7 +662,10 @@ export default function DatasetDetailPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -519,7 +676,10 @@ export default function DatasetDetailPage() {
         <DatasetImportDialog
           open={importOpen}
           onOpenChange={setImportOpen}
-          onImportComplete={() => { setImportOpen(false); fetchDataset() }}
+          onImportComplete={() => {
+            setImportOpen(false)
+            fetchDataset()
+          }}
         />
       )}
     </PageContainer>

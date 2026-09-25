@@ -1,6 +1,7 @@
 'use client'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { formatDateTime } from '@/lib/time-format'
 
 interface AccountDetailsCardProps {
   userId?: string
@@ -15,7 +16,7 @@ export function AccountDetailsCard({
   lastLoginAt,
   createdAt,
 }: AccountDetailsCardProps) {
-  const formatDate = (d?: string) => (d ? new Date(d).toLocaleString() : '—')
+  const formatDate = (d?: string) => formatDateTime(d) || '—'
 
   return (
     <Card>

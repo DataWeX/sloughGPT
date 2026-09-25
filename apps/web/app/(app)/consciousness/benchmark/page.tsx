@@ -1,10 +1,17 @@
 'use client'
 
 import { useState, useCallback, useRef } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -48,7 +55,11 @@ const TEST_TYPES: { id: TestType; labelKey: string }[] = [
   { id: 'status', labelKey: 'consciousness_benchmark.test_status' },
 ]
 
-async function apiCall(method: string, path: string, body?: string): Promise<{ status: number; duration: number }> {
+async function apiCall(
+  method: string,
+  path: string,
+  body?: string,
+): Promise<{ status: number; duration: number }> {
   const start = Date.now()
   try {
     const init: RequestInit = {
@@ -102,14 +113,16 @@ function computeHistogramBins(times: number[], bins: number): { start: number; c
   for (let i = 0; i < bins; i++) {
     const start = min + i * binSize
     const end = start + binSize
-    const count = times.filter(t => i === bins - 1 ? t >= start && t <= end : t >= start && t < end).length
+    const count = times.filter((t) =>
+      i === bins - 1 ? t >= start && t <= end : t >= start && t < end,
+    ).length
     result.push({ start: Math.round(start), count })
   }
   return result
 }
 
 export default function ConsciousnessBenchmarkPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
 
   const [iterations, setIterations] = useState(50)
@@ -223,19 +236,19 @@ export default function ConsciousnessBenchmarkPage() {
 
   const progressPct = warmup + iterations > 0 ? (progress / (warmup + iterations)) * 100 : 0
 
-  const prevForType = previousRuns.filter(r => r.testType === testType)
+  const prevForType = previousRuns.filter((r) => r.testType === testType)
   const lastPrev = prevForType.length > 0 ? prevForType[prevForType.length - 1] : null
-  const improvement = result && lastPrev
-    ? Math.round(((lastPrev.avgTime - result.avgTime) / lastPrev.avgTime) * 10000) / 100
-    : null
+  const improvement =
+    result && lastPrev
+      ? Math.round(((lastPrev.avgTime - result.avgTime) / lastPrev.avgTime) * 10000) / 100
+      : null
 
   const histBins = result ? computeHistogramBins(result.times, 20) : []
-  const maxBinCount = histBins.length > 0 ? Math.max(...histBins.map(b => b.count)) : 1
+  const maxBinCount = histBins.length > 0 ? Math.max(...histBins.map((b) => b.count)) : 1
 
   return (
     <PageContainer title={t('consciousness_benchmark.page_title')}>
       <div className="space-y-4">
-
         <Card>
           <CardHeader>
             <CardTitle>{t('consciousness_benchmark.config_title')}</CardTitle>
@@ -244,39 +257,49 @@ export default function ConsciousnessBenchmarkPage() {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">{t('consciousness_benchmark.iterations_label')}</label>
+                <label className="text-sm text-muted-foreground">
+                  {t('consciousness_benchmark.iterations_label')}
+                </label>
                 <input
                   type="number"
                   min={10}
                   max={1000}
                   step={10}
                   value={iterations}
-                  onChange={e => setIterations(Math.max(10, Math.min(1000, Number(e.target.value))))}
+                  onChange={(e) =>
+                    setIterations(Math.max(10, Math.min(1000, Number(e.target.value))))
+                  }
                   disabled={running}
                   className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">{t('consciousness_benchmark.test_type_label')}</label>
+                <label className="text-sm text-muted-foreground">
+                  {t('consciousness_benchmark.test_type_label')}
+                </label>
                 <select
                   value={testType}
-                  onChange={e => setTestType(e.target.value as TestType)}
+                  onChange={(e) => setTestType(e.target.value as TestType)}
                   disabled={running}
                   className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 >
-                  {TEST_TYPES.map(tt => (
-                    <option key={tt.id} value={tt.id}>{t(tt.labelKey)}</option>
+                  {TEST_TYPES.map((tt) => (
+                    <option key={tt.id} value={tt.id}>
+                      {t(tt.labelKey)}
+                    </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">{t('consciousness_benchmark.warmup_label')}</label>
+                <label className="text-sm text-muted-foreground">
+                  {t('consciousness_benchmark.warmup_label')}
+                </label>
                 <input
                   type="number"
                   min={0}
                   max={10}
                   value={warmup}
-                  onChange={e => setWarmup(Math.max(0, Math.min(10, Number(e.target.value))))}
+                  onChange={(e) => setWarmup(Math.max(0, Math.min(10, Number(e.target.value))))}
                   disabled={running}
                   className="w-full rounded-md border border-border bg-background px-3 py-1.5 text-sm font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
                 />
@@ -293,7 +316,10 @@ export default function ConsciousnessBenchmarkPage() {
               )}
               <div className="flex-1" />
               <div className="text-xs text-muted-foreground">
-                {t('consciousness_benchmark.progress', { current: Math.max(0, progress - warmup), total: iterations })}
+                {t('consciousness_benchmark.progress', {
+                  current: Math.max(0, progress - warmup),
+                  total: iterations,
+                })}
               </div>
             </div>
             {running && (
@@ -316,19 +342,27 @@ export default function ConsciousnessBenchmarkPage() {
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                   <div>
-                    <div className="text-muted-foreground text-xs">{t('consciousness_benchmark.avg_time')}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {t('consciousness_benchmark.avg_time')}
+                    </div>
                     <div className="font-mono text-lg">{result.avgTime}ms</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground text-xs">{t('consciousness_benchmark.min_time')}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {t('consciousness_benchmark.min_time')}
+                    </div>
                     <div className="font-mono text-lg">{result.minTime}ms</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground text-xs">{t('consciousness_benchmark.max_time')}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {t('consciousness_benchmark.max_time')}
+                    </div>
                     <div className="font-mono text-lg">{result.maxTime}ms</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground text-xs">{t('consciousness_benchmark.total_time')}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {t('consciousness_benchmark.total_time')}
+                    </div>
                     <div className="font-mono text-lg">{result.totalTime}ms</div>
                   </div>
                 </div>
@@ -346,18 +380,32 @@ export default function ConsciousnessBenchmarkPage() {
                     <div className="font-mono text-lg">{result.p99}ms</div>
                   </div>
                   <div>
-                    <div className="text-muted-foreground text-xs">{t('consciousness_benchmark.throughput')}</div>
+                    <div className="text-muted-foreground text-xs">
+                      {t('consciousness_benchmark.throughput')}
+                    </div>
                     <div className="font-mono text-lg">{result.throughput} req/s</div>
                   </div>
                 </div>
                 {improvement !== null && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{t('consciousness_benchmark.vs_previous')}:</span>
-                    <Badge className={improvement >= 0 ? 'bg-success/15 text-success border-success/30' : 'bg-destructive/15 text-destructive border-destructive/30'}>
+                    <span className="text-xs text-muted-foreground">
+                      {t('consciousness_benchmark.vs_previous')}:
+                    </span>
+                    <Badge
+                      className={
+                        improvement >= 0
+                          ? 'bg-success/15 text-success border-success/30'
+                          : 'bg-destructive/15 text-destructive border-destructive/30'
+                      }
+                    >
                       {improvement >= 0 ? `+${improvement}%` : `${improvement}%`}
                     </Badge>
                     <span className="text-xs text-muted-foreground">
-                      {t(improvement >= 0 ? 'consciousness_benchmark.improvement' : 'consciousness_benchmark.regression')}
+                      {t(
+                        improvement >= 0
+                          ? 'consciousness_benchmark.improvement'
+                          : 'consciousness_benchmark.regression',
+                      )}
                     </span>
                   </div>
                 )}
@@ -370,7 +418,12 @@ export default function ConsciousnessBenchmarkPage() {
                 <CardDescription>{t('consciousness_benchmark.histogram_desc')}</CardDescription>
               </CardHeader>
               <CardContent>
-                <svg viewBox="0 0 800 200" className="w-full h-48" role="img" aria-label="Latency distribution histogram">
+                <svg
+                  viewBox="0 0 800 200"
+                  className="w-full h-48"
+                  role="img"
+                  aria-label="Latency distribution histogram"
+                >
                   {histBins.map((bin, i) => {
                     const barWidth = 800 / histBins.length - 2
                     const barHeight = maxBinCount > 0 ? (bin.count / maxBinCount) * 180 : 0
@@ -411,31 +464,50 @@ export default function ConsciousnessBenchmarkPage() {
                 <CardDescription>{t('consciousness_benchmark.timeline_desc')}</CardDescription>
               </CardHeader>
               <CardContent>
-                <svg viewBox="0 0 800 200" className="w-full h-48" role="img" aria-label="Response time timeline">
-                  {result.times.length > 1 && (() => {
-                    const maxVal = Math.max(...result.times)
-                    const minVal = Math.min(...result.times)
-                    const range = maxVal - minVal || 1
-                    const points = result.times.map((t, i) => {
-                      const x = (i / (result.times.length - 1)) * 780 + 10
-                      const y = 190 - ((t - minVal) / range) * 170
-                      return `${x},${y}`
-                    }).join(' ')
-                    return (
-                      <>
-                        <polyline
-                          points={points}
-                          fill="none"
-                          stroke="rgb(var(--primary))"
-                          strokeWidth={1.5}
-                          opacity={0.8}
-                        />
-                        <line x1={10} y1={190} x2={790} y2={190} stroke="rgb(var(--border))" strokeWidth={0.5} />
-                        <text x={5} y={12} className="fill-muted-foreground" fontSize={10}>{maxVal}ms</text>
-                        <text x={5} y={188} className="fill-muted-foreground" fontSize={10}>{minVal}ms</text>
-                      </>
-                    )
-                  })()}
+                <svg
+                  viewBox="0 0 800 200"
+                  className="w-full h-48"
+                  role="img"
+                  aria-label="Response time timeline"
+                >
+                  {result.times.length > 1 &&
+                    (() => {
+                      const maxVal = Math.max(...result.times)
+                      const minVal = Math.min(...result.times)
+                      const range = maxVal - minVal || 1
+                      const points = result.times
+                        .map((t, i) => {
+                          const x = (i / (result.times.length - 1)) * 780 + 10
+                          const y = 190 - ((t - minVal) / range) * 170
+                          return `${x},${y}`
+                        })
+                        .join(' ')
+                      return (
+                        <>
+                          <polyline
+                            points={points}
+                            fill="none"
+                            stroke="rgb(var(--primary))"
+                            strokeWidth={1.5}
+                            opacity={0.8}
+                          />
+                          <line
+                            x1={10}
+                            y1={190}
+                            x2={790}
+                            y2={190}
+                            stroke="rgb(var(--border))"
+                            strokeWidth={0.5}
+                          />
+                          <text x={5} y={12} className="fill-muted-foreground" fontSize={10}>
+                            {maxVal}ms
+                          </text>
+                          <text x={5} y={188} className="fill-muted-foreground" fontSize={10}>
+                            {minVal}ms
+                          </text>
+                        </>
+                      )
+                    })()}
                 </svg>
               </CardContent>
             </Card>
@@ -447,27 +519,42 @@ export default function ConsciousnessBenchmarkPage() {
               </CardHeader>
               <CardContent>
                 {prevForType.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">{t('consciousness_benchmark.no_previous')}</div>
+                  <div className="text-sm text-muted-foreground">
+                    {t('consciousness_benchmark.no_previous')}
+                  </div>
                 ) : (
                   <div className="rounded-md border border-border/40 overflow-hidden">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="bg-muted/30">
-                          <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_benchmark.col_date')}</th>
-                          <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_benchmark.col_iterations')}</th>
-                          <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_benchmark.col_avg_time')}</th>
-                          <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_benchmark.col_throughput')}</th>
+                          <th className="px-3 py-1.5 text-left font-medium">
+                            {t('consciousness_benchmark.col_date')}
+                          </th>
+                          <th className="px-3 py-1.5 text-left font-medium">
+                            {t('consciousness_benchmark.col_iterations')}
+                          </th>
+                          <th className="px-3 py-1.5 text-left font-medium">
+                            {t('consciousness_benchmark.col_avg_time')}
+                          </th>
+                          <th className="px-3 py-1.5 text-left font-medium">
+                            {t('consciousness_benchmark.col_throughput')}
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
-                        {prevForType.slice(-10).reverse().map(run => (
-                          <tr key={run.id} className="border-t border-border/30">
-                            <td className="px-3 py-1.5 font-mono">{new Date(run.timestamp).toLocaleString()}</td>
-                            <td className="px-3 py-1.5 font-mono">{run.iterations}</td>
-                            <td className="px-3 py-1.5 font-mono">{run.avgTime}ms</td>
-                            <td className="px-3 py-1.5 font-mono">{run.throughput} req/s</td>
-                          </tr>
-                        ))}
+                        {prevForType
+                          .slice(-10)
+                          .reverse()
+                          .map((run) => (
+                            <tr key={run.id} className="border-t border-border/30">
+                              <td className="px-3 py-1.5 font-mono">
+                                {formatDateTime(run.timestamp)}
+                              </td>
+                              <td className="px-3 py-1.5 font-mono">{run.iterations}</td>
+                              <td className="px-3 py-1.5 font-mono">{run.avgTime}ms</td>
+                              <td className="px-3 py-1.5 font-mono">{run.throughput} req/s</td>
+                            </tr>
+                          ))}
                       </tbody>
                     </table>
                   </div>
@@ -482,7 +569,6 @@ export default function ConsciousnessBenchmarkPage() {
             </div>
           </>
         )}
-
       </div>
     </PageContainer>
   )

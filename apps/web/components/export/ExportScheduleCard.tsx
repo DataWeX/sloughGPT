@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { formatLocaleDate } from '@/lib/time-format'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
 
@@ -22,11 +23,17 @@ async function loadSchedules(): Promise<ExportSchedule[]> {
   try {
     const entry = await chatDB.getKV<ExportSchedule[]>(STORAGE_KEY)
     return entry ?? []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 async function saveSchedules(schedules: ExportSchedule[]) {
-  try { await chatDB.setKV(STORAGE_KEY, schedules) } catch { /* quota exceeded */ }
+  try {
+    await chatDB.setKV(STORAGE_KEY, schedules)
+  } catch {
+    /* quota exceeded */
+  }
 }
 
 function calcNextRun(frequency: string, from: number): number {
@@ -61,7 +68,9 @@ export function ExportScheduleCard() {
   const [editFormat, setEditFormat] = useState('sou')
   const [editFrequency, setEditFrequency] = useState<ExportSchedule['frequency']>('weekly')
 
-  useEffect(() => { loadSchedules().then(setSchedules) }, [])
+  useEffect(() => {
+    loadSchedules().then(setSchedules)
+  }, [])
 
   const handleSave = useCallback(() => {
     if (!editName.trim()) return
@@ -83,26 +92,35 @@ export function ExportScheduleCard() {
     setEditName('')
   }, [editName, editType, editFormat, editFrequency, schedules])
 
-  const toggleEnabled = useCallback((id: string) => {
-    const updated = schedules.map(s =>
-      s.id === id ? { ...s, enabled: !s.enabled } : s
-    )
-    setSchedules(updated)
-    saveSchedules(updated).catch(() => {})
-  }, [schedules])
+  const toggleEnabled = useCallback(
+    (id: string) => {
+      const updated = schedules.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s))
+      setSchedules(updated)
+      saveSchedules(updated).catch(() => {})
+    },
+    [schedules],
+  )
 
-  const deleteSchedule = useCallback((id: string) => {
-    const updated = schedules.filter(s => s.id !== id)
-    setSchedules(updated)
-    saveSchedules(updated).catch(() => {})
-  }, [schedules])
+  const deleteSchedule = useCallback(
+    (id: string) => {
+      const updated = schedules.filter((s) => s.id !== id)
+      setSchedules(updated)
+      saveSchedules(updated).catch(() => {})
+    },
+    [schedules],
+  )
 
   return (
     <Card data-testid="export-schedule">
       <CardHeader>
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Scheduled Exports</CardTitle>
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setEditing(!editing)}>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px]"
+            onClick={() => setEditing(!editing)}
+          >
             {editing ? 'Cancel' : '+ New'}
           </Button>
         </div>
@@ -112,7 +130,7 @@ export function ExportScheduleCard() {
           <div className="space-y-2 rounded-md border border-border/40 p-2.5">
             <Input
               value={editName}
-              onChange={e => setEditName(e.target.value)}
+              onChange={(e) => setEditName(e.target.value)}
               placeholder="Schedule name"
               className="h-7 text-[11px]"
             />
@@ -120,26 +138,43 @@ export function ExportScheduleCard() {
               <select
                 className="text-[10px] border border-border/40 rounded px-1.5 py-1 bg-background"
                 value={editType}
-                onChange={e => setEditType(e.target.value as ExportSchedule['type'])}
+                onChange={(e) => setEditType(e.target.value as ExportSchedule['type'])}
               >
-                {TYPE_OPTIONS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                {TYPE_OPTIONS.map((t) => (
+                  <option key={t.value} value={t.value}>
+                    {t.label}
+                  </option>
+                ))}
               </select>
               <select
                 className="text-[10px] border border-border/40 rounded px-1.5 py-1 bg-background"
                 value={editFormat}
-                onChange={e => setEditFormat(e.target.value)}
+                onChange={(e) => setEditFormat(e.target.value)}
               >
-                {['sou', 'onnx', 'jsonl', 'gguf'].map(f => <option key={f} value={f}>{f.toUpperCase()}</option>)}
+                {['sou', 'onnx', 'jsonl', 'gguf'].map((f) => (
+                  <option key={f} value={f}>
+                    {f.toUpperCase()}
+                  </option>
+                ))}
               </select>
               <select
                 className="text-[10px] border border-border/40 rounded px-1.5 py-1 bg-background"
                 value={editFrequency}
-                onChange={e => setEditFrequency(e.target.value as ExportSchedule['frequency'])}
+                onChange={(e) => setEditFrequency(e.target.value as ExportSchedule['frequency'])}
               >
-                {FREQUENCY_OPTIONS.map(f => <option key={f} value={f}>{f.charAt(0).toUpperCase() + f.slice(1)}</option>)}
+                {FREQUENCY_OPTIONS.map((f) => (
+                  <option key={f} value={f}>
+                    {f.charAt(0).toUpperCase() + f.slice(1)}
+                  </option>
+                ))}
               </select>
             </div>
-            <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={!editName.trim()}>
+            <Button
+              size="sm"
+              className="h-6 text-[10px]"
+              onClick={handleSave}
+              disabled={!editName.trim()}
+            >
               Save Schedule
             </Button>
           </div>
@@ -149,7 +184,7 @@ export function ExportScheduleCard() {
           <p className="text-xs text-muted-foreground text-center py-2">No scheduled exports.</p>
         ) : (
           <div className="space-y-1.5">
-            {schedules.map(s => (
+            {schedules.map((s) => (
               <div
                 key={s.id}
                 className={cn(
@@ -167,14 +202,24 @@ export function ExportScheduleCard() {
                   </div>
                   <div className="text-[9px] text-muted-foreground mt-0.5">
                     {s.format.toUpperCase()} · {s.enabled ? formatNextRun(s.nextRun) : 'Paused'}
-                    {s.lastRun && <> · Last: {new Date(s.lastRun).toLocaleDateString()}</>}
+                    {s.lastRun && <> · Last: {formatLocaleDate(s.lastRun)}</>}
                   </div>
                 </div>
                 <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button size="sm" variant="ghost" className="h-5 text-[9px]" onClick={() => toggleEnabled(s.id)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 text-[9px]"
+                    onClick={() => toggleEnabled(s.id)}
+                  >
                     {s.enabled ? 'Pause' : 'Resume'}
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-5 text-[9px] text-destructive" onClick={() => deleteSchedule(s.id)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-5 text-[9px] text-destructive"
+                    onClick={() => deleteSchedule(s.id)}
+                  >
                     Del
                   </Button>
                 </div>

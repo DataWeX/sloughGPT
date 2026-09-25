@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { trainingJobsController, type Webhook, type WebhookStats } from '@/lib/training-controller'
 import { trackEvent } from '@/lib/dev-log'
 
@@ -11,11 +12,15 @@ export const AVAILABLE_EVENTS = [
 ]
 
 export function eventLabel(key: string): string {
-  return AVAILABLE_EVENTS.find(e => e.key === key)?.label ?? key
+  return AVAILABLE_EVENTS.find((e) => e.key === key)?.label ?? key
 }
 
 export function formatTimestamp(ts: string): string {
-  try { return new Date(ts).toLocaleString() } catch { return ts }
+  try {
+    return formatDateTime(ts)
+  } catch {
+    return ts
+  }
 }
 
 export interface RetryEntry {
@@ -66,9 +71,17 @@ export interface UseWebhooksReturn {
   setPendingDelete: (id: string | null) => void
   fetchWebhooks: () => Promise<void>
   fetchRetryData: () => Promise<void>
-  addWebhook: (addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => Promise<void>
-  deleteWebhook: (id: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => Promise<void>
-  testWebhook: (url: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => Promise<void>
+  addWebhook: (
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+  ) => Promise<void>
+  deleteWebhook: (
+    id: string,
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+  ) => Promise<void>
+  testWebhook: (
+    url: string,
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+  ) => Promise<void>
   loadDeliveries: (webhookId: string) => Promise<void>
 }
 
@@ -117,56 +130,64 @@ export function useWebhooks(): UseWebhooksReturn {
   useEffect(() => {
     let active = true
     const loadAll = async () => {
-      await Promise.all([
-        fetchWebhooks(),
-        fetchRetryData(),
-      ])
+      await Promise.all([fetchWebhooks(), fetchRetryData()])
     }
     loadAll()
-    return () => { active = false }
-  }, [])
-
-  const addWebhook = useCallback(async (addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
-    if (!newUrl.trim()) return
-    setAdding(true)
-    try {
-      await trainingJobsController.createWebhook(newUrl.trim(), newEvents)
-      trackEvent('webhook_created', { url: newUrl.trim() })
-      setNewUrl('')
-      setNewEvents(['training.completed'])
-      addToast('Webhook added', 'success')
-      await fetchWebhooks()
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to add webhook', 'error')
-    } finally {
-      setAdding(false)
-    }
-  }, [newUrl, newEvents, fetchWebhooks])
-
-  const deleteWebhook = useCallback(async (id: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
-    try {
-      await trainingJobsController.deleteWebhook(id)
-      trackEvent('webhook_deleted', { id })
-      addToast('Webhook deleted', 'success')
-      setPendingDelete(null)
-      await fetchWebhooks()
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to delete webhook', 'error')
-    }
-  }, [fetchWebhooks])
-
-  const testWebhook = useCallback(async (url: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
-    setTestingUrl(url)
-    try {
-      await trainingJobsController.testWebhook(url)
-      trackEvent('webhook_tested', { url })
-      addToast('Test sent', 'success')
-    } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Test failed', 'error')
-    } finally {
-      setTestingUrl(null)
+    return () => {
+      active = false
     }
   }, [])
+
+  const addWebhook = useCallback(
+    async (addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
+      if (!newUrl.trim()) return
+      setAdding(true)
+      try {
+        await trainingJobsController.createWebhook(newUrl.trim(), newEvents)
+        trackEvent('webhook_created', { url: newUrl.trim() })
+        setNewUrl('')
+        setNewEvents(['training.completed'])
+        addToast('Webhook added', 'success')
+        await fetchWebhooks()
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : 'Failed to add webhook', 'error')
+      } finally {
+        setAdding(false)
+      }
+    },
+    [newUrl, newEvents, fetchWebhooks],
+  )
+
+  const deleteWebhook = useCallback(
+    async (id: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
+      try {
+        await trainingJobsController.deleteWebhook(id)
+        trackEvent('webhook_deleted', { id })
+        addToast('Webhook deleted', 'success')
+        setPendingDelete(null)
+        await fetchWebhooks()
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : 'Failed to delete webhook', 'error')
+      }
+    },
+    [fetchWebhooks],
+  )
+
+  const testWebhook = useCallback(
+    async (url: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
+      setTestingUrl(url)
+      try {
+        await trainingJobsController.testWebhook(url)
+        trackEvent('webhook_tested', { url })
+        addToast('Test sent', 'success')
+      } catch (err) {
+        addToast(err instanceof Error ? err.message : 'Test failed', 'error')
+      } finally {
+        setTestingUrl(null)
+      }
+    },
+    [],
+  )
 
   const loadDeliveries = useCallback(async (webhookId: string) => {
     setDeliveriesLoading(true)
@@ -181,10 +202,30 @@ export function useWebhooks(): UseWebhooksReturn {
   }, [])
 
   return {
-    webhooks, loading, newUrl, newEvents, adding, testingUrl,
-    expandedId, deliveries, deliveriesLoading, pendingDelete,
-    retryQueue, deadLetters, showRetries, stats,
-    setNewUrl, setNewEvents, setExpandedId, setShowRetries, setPendingDelete,
-    fetchWebhooks, fetchRetryData, addWebhook, deleteWebhook, testWebhook, loadDeliveries,
+    webhooks,
+    loading,
+    newUrl,
+    newEvents,
+    adding,
+    testingUrl,
+    expandedId,
+    deliveries,
+    deliveriesLoading,
+    pendingDelete,
+    retryQueue,
+    deadLetters,
+    showRetries,
+    stats,
+    setNewUrl,
+    setNewEvents,
+    setExpandedId,
+    setShowRetries,
+    setPendingDelete,
+    fetchWebhooks,
+    fetchRetryData,
+    addWebhook,
+    deleteWebhook,
+    testWebhook,
+    loadDeliveries,
   }
 }

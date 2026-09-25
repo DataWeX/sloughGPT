@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, memo } from 'react'
+import { formatMonthDay } from '@/lib/time-format'
 import { Button, Spinner } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
@@ -64,14 +65,14 @@ function computeAnalytics(sessions: ChatSession[]): AnalyticsData {
 
   const mostActiveDay = Object.entries(dayCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'
   const activeDays = new Set(
-    sessions.map(s => new Date(s.updatedAt || s.createdAt).toDateString())
+    sessions.map((s) => new Date(s.updatedAt || s.createdAt).toDateString()),
   ).size
 
   const sessionTrend = sessions
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
     .slice(-7)
-    .map(s => ({
-      date: new Date(s.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+    .map((s) => ({
+      date: formatMonthDay(s.createdAt, 'en-US'),
       count: s.messages?.length || 0,
     }))
 
@@ -89,19 +90,31 @@ function computeAnalytics(sessions: ChatSession[]): AnalyticsData {
   }
 }
 
-function StatCard({ label, value, subtext }: { label: string; value: string | number; subtext?: string }) {
+function StatCard({
+  label,
+  value,
+  subtext,
+}: {
+  label: string
+  value: string | number
+  subtext?: string
+}) {
   return (
     <div className="space-y-0.5">
-      <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">{label}</div>
-      <div className="text-sm font-medium">{typeof value === 'number' ? value.toLocaleString() : value}</div>
+      <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+        {label}
+      </div>
+      <div className="text-sm font-medium">
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </div>
       {subtext && <div className="text-[10px] text-muted-foreground">{subtext}</div>}
     </div>
   )
 }
 
 function MiniBarChart({ data }: { data: Array<{ date: string; count: number }> }) {
-  const max = Math.max(...data.map(d => d.count), 1)
-  
+  const max = Math.max(...data.map((d) => d.count), 1)
+
   return (
     <div className="flex items-end gap-1 h-12">
       {data.map((d, i) => (
@@ -148,9 +161,7 @@ export const ChatAnalytics = memo(function ChatAnalytics({ className }: ChatAnal
   return (
     <div className={cn('space-y-3', className)}>
       <div className="flex items-center justify-between">
-        <span className="text-xs text-muted-foreground">
-          {analytics.activeDays} active days
-        </span>
+        <span className="text-xs text-muted-foreground">{analytics.activeDays} active days</span>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -172,7 +183,9 @@ export const ChatAnalytics = memo(function ChatAnalytics({ className }: ChatAnal
 
       {analytics.sessionTrend.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Recent Activity</div>
+          <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+            Recent Activity
+          </div>
           <MiniBarChart data={analytics.sessionTrend} />
         </div>
       )}

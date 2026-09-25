@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatLocaleDate } from '@/lib/time-format'
 import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
 
 interface Member {
@@ -20,10 +21,11 @@ interface MembersListProps {
 export function MembersList({ members, loading, onRemove }: MembersListProps) {
   const [searchQuery, setSearchQuery] = useState('')
 
-  const filtered = members.filter(m =>
-    m.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.role.toLowerCase().includes(searchQuery.toLowerCase())
+  const filtered = members.filter(
+    (m) =>
+      m.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.role.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   return (
@@ -33,7 +35,7 @@ export function MembersList({ members, loading, onRemove }: MembersListProps) {
           <CardTitle className="text-xs">Members</CardTitle>
           <Input
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search..."
             className="w-48 h-6 text-[10px]"
           />
@@ -47,7 +49,7 @@ export function MembersList({ members, loading, onRemove }: MembersListProps) {
             {searchQuery ? 'No members match search' : 'No members in this workspace'}
           </p>
         ) : (
-          filtered.map(m => (
+          filtered.map((m) => (
             <div
               key={m.user_id}
               className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50"
@@ -57,16 +59,20 @@ export function MembersList({ members, loading, onRemove }: MembersListProps) {
                 <div className="text-muted-foreground">{m.email}</div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <span className={`px-2 py-0.5 rounded-full text-[9px] font-medium ${
-                  m.role === 'admin' ? 'bg-info/15 text-info' :
-                  m.role === 'member' ? 'bg-success/15 text-success' :
-                  'bg-muted text-muted-foreground'
-                }`}>
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[9px] font-medium ${
+                    m.role === 'admin'
+                      ? 'bg-info/15 text-info'
+                      : m.role === 'member'
+                        ? 'bg-success/15 text-success'
+                        : 'bg-muted text-muted-foreground'
+                  }`}
+                >
                   {m.role}
                 </span>
                 {m.joined_at && (
                   <span className="text-muted-foreground whitespace-nowrap">
-                    Joined {new Date(m.joined_at).toLocaleDateString()}
+                    Joined {formatLocaleDate(m.joined_at)}
                   </span>
                 )}
                 <Button

@@ -1,6 +1,7 @@
 'use client'
 
 import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import { formatDateTime } from '@/lib/time-format'
 import { IconRefresh } from '@sloughgpt/strui'
 
 interface LoggedResponse {
@@ -22,15 +23,28 @@ export function EvalResponsesCard({ responses, onRefresh, onClear }: EvalRespons
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
-        <CardTitle className="text-[11px] font-medium">Logged Responses ({responses.length})</CardTitle>
+        <CardTitle className="text-[11px] font-medium">
+          Logged Responses ({responses.length})
+        </CardTitle>
         <div className="flex gap-1">
           {onRefresh && (
-            <Button size="sm" variant="ghost" onClick={onRefresh} aria-label="Refresh responses" className="h-6 text-[10px]">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={onRefresh}
+              aria-label="Refresh responses"
+              className="h-6 text-[10px]"
+            >
               <IconRefresh className="h-4 w-4" />
             </Button>
           )}
           {onClear && (
-            <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={onClear}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive h-6 text-[10px]"
+              onClick={onClear}
+            >
               Clear
             </Button>
           )}
@@ -44,12 +58,20 @@ export function EvalResponsesCard({ responses, onRefresh, onClear }: EvalRespons
         ) : (
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {responses.map((r, i) => (
-              <div key={i} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm">
+              <div
+                key={i}
+                className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm"
+              >
                 <div className="text-[10px] text-muted-foreground mb-1">
-                  {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} · {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
+                  {formatDateTime(r.timestamp) || '—'} · {r.model} · {r.tokens_generated} tokens ·{' '}
+                  {r.duration_ms?.toFixed(0)}ms
                 </div>
-                <div className="text-[10px]"><span className="text-muted-foreground">User:</span> {r.user_message}</div>
-                <div className="text-[10px] mt-0.5"><span className="text-muted-foreground">AI:</span> {r.assistant_response}</div>
+                <div className="text-[10px]">
+                  <span className="text-muted-foreground">User:</span> {r.user_message}
+                </div>
+                <div className="text-[10px] mt-0.5">
+                  <span className="text-muted-foreground">AI:</span> {r.assistant_response}
+                </div>
               </div>
             ))}
           </div>

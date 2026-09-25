@@ -1,9 +1,22 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import { Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Skeleton, Slider, Switch } from '@sloughgpt/strui'
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+  Slider,
+  Switch,
+} from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 
@@ -32,11 +45,14 @@ interface ConsciousnessStatus {
 
 interface EvalReport {
   overall_score: number
-  metrics: Record<string, {
-    score: number
-    weight: number
-    details: string
-  }>
+  metrics: Record<
+    string,
+    {
+      score: number
+      weight: number
+      details: string
+    }
+  >
 }
 
 interface Episode {
@@ -58,7 +74,7 @@ const LEVEL_DESCRIPTIONS = [
 ]
 
 export default function ConsciousnessPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
   const [evalReport, setEvalReport] = useState<EvalReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -192,45 +208,59 @@ export default function ConsciousnessPage() {
             <Skeleton className="h-8 w-20" />
             <Skeleton className="h-8 w-20" />
           </div>
-          <Card><CardContent className="p-3 sm:p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-32" />
-              <Skeleton className="h-5 w-16 rounded-full" />
-            </div>
-            <Skeleton className="h-2 w-48" />
-            <Skeleton className="h-1.5 w-full rounded-full" />
-          </CardContent></Card>
-          <Card><CardContent className="p-3 sm:p-4 space-y-3">
-            <Skeleton className="h-3 w-24" />
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
-              {[1,2,3,4,5,6,7,8].map(i => (
-                <div key={i} className="space-y-1">
-                  <Skeleton className="h-2 w-12" />
-                  <Skeleton className="h-1.5 w-full rounded-full" />
-                </div>
-              ))}
-            </div>
-          </CardContent></Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+              <Skeleton className="h-2 w-48" />
+              <Skeleton className="h-1.5 w-full rounded-full" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-3 sm:p-4 space-y-3">
+              <Skeleton className="h-3 w-24" />
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton className="h-2 w-12" />
+                    <Skeleton className="h-1.5 w-full rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-            <Card><CardContent className="p-3 sm:p-4 space-y-2">
-              <Skeleton className="h-3 w-28" />
-              {[1,2,3].map(i => <Skeleton key={i} className="h-3 w-full" />)}
-            </CardContent></Card>
-            <Card><CardContent className="p-3 sm:p-4 space-y-2">
-              <Skeleton className="h-3 w-28" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-8 w-24" />
-            </CardContent></Card>
+            <Card>
+              <CardContent className="p-3 sm:p-4 space-y-2">
+                <Skeleton className="h-3 w-28" />
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-3 w-full" />
+                ))}
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 sm:p-4 space-y-2">
+                <Skeleton className="h-3 w-28" />
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-8 w-24" />
+              </CardContent>
+            </Card>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
-            <Card><CardContent className="p-3 sm:p-4 space-y-2">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-1.5 w-full rounded-full" />
-            </CardContent></Card>
-            <Card><CardContent className="p-3 sm:p-4 space-y-2">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-1.5 w-full rounded-full" />
-            </CardContent></Card>
+            <Card>
+              <CardContent className="p-3 sm:p-4 space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 sm:p-4 space-y-2">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </CardContent>
+            </Card>
           </div>
         </div>
       </PageContainer>
@@ -263,9 +293,7 @@ export default function ConsciousnessPage() {
                 {LEVEL_LABELS[level]}
               </Badge>
             </CardTitle>
-            <CardDescription>
-              {LEVEL_DESCRIPTIONS[level]}
-            </CardDescription>
+            <CardDescription>{LEVEL_DESCRIPTIONS[level]}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -330,11 +358,13 @@ export default function ConsciousnessPage() {
                     )
                   })}
                   <polygon
-                    points={Object.entries(qualia).map(([, value], k) => {
-                      const angle = (k * 2 * Math.PI) / 7 - Math.PI / 2
-                      const clamped = Math.max(0, Math.min(1, value as number))
-                      return `${Math.cos(angle) * clamped * 100},${Math.sin(angle) * clamped * 100}`
-                    }).join(' ')}
+                    points={Object.entries(qualia)
+                      .map(([, value], k) => {
+                        const angle = (k * 2 * Math.PI) / 7 - Math.PI / 2
+                        const clamped = Math.max(0, Math.min(1, value as number))
+                        return `${Math.cos(angle) * clamped * 100},${Math.sin(angle) * clamped * 100}`
+                      })
+                      .join(' ')}
                     fill="hsl(var(--primary) / 0.2)"
                     stroke="hsl(var(--primary))"
                     strokeWidth="1.5"
@@ -438,10 +468,7 @@ export default function ConsciousnessPage() {
             >
               {reflecting ? 'Reflecting...' : 'Reflect'}
             </Button>
-            <Button
-              onClick={handleTrain}
-              disabled={training || !status?.enabled}
-            >
+            <Button onClick={handleTrain} disabled={training || !status?.enabled}>
               {training ? 'Training...' : 'Train LoRA'}
             </Button>
           </CardFooter>
@@ -462,7 +489,9 @@ export default function ConsciousnessPage() {
               <div className="space-y-2 sm:space-y-3">
                 {Object.entries(evalReport.metrics).map(([name, metric]) => (
                   <div key={name} className="flex items-center gap-2 sm:gap-3">
-                    <span className="w-28 sm:w-40 text-xs sm:text-sm capitalize">{name.replace(/_/g, ' ')}</span>
+                    <span className="w-28 sm:w-40 text-xs sm:text-sm capitalize">
+                      {name.replace(/_/g, ' ')}
+                    </span>
                     <div className="h-2 flex-1 rounded-full bg-secondary">
                       <div
                         className="h-full rounded-full bg-primary transition-all"
@@ -544,18 +573,26 @@ export default function ConsciousnessPage() {
                       <p className="text-sm flex-1 line-clamp-2">{ep.input}</p>
                       <div className="flex items-center gap-0.5 shrink-0">
                         {Array.from({ length: 5 }, (_, s) => (
-                          <svg key={s} className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${s < ep.rating ? 'fill-amber-400' : 'fill-muted'}`} viewBox="0 0 20 20">
+                          <svg
+                            key={s}
+                            className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${s < ep.rating ? 'fill-amber-400' : 'fill-muted'}`}
+                            viewBox="0 0 20 20"
+                          >
                             <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                           </svg>
                         ))}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={ep.growth_delta >= 0 ? 'default' : 'destructive'} className="text-xs">
-                        {ep.growth_delta >= 0 ? '+' : ''}{ep.growth_delta.toFixed(3)}
+                      <Badge
+                        variant={ep.growth_delta >= 0 ? 'default' : 'destructive'}
+                        className="text-xs"
+                      >
+                        {ep.growth_delta >= 0 ? '+' : ''}
+                        {ep.growth_delta.toFixed(3)}
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        {new Date(ep.timestamp).toLocaleString()}
+                        {formatDateTime(ep.timestamp)}
                       </span>
                     </div>
                   </div>

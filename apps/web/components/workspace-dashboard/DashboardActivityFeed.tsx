@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { RefreshCw, ExternalLink } from 'lucide-react'
 
@@ -23,7 +24,7 @@ interface DashboardActivityFeedProps {
 function formatTime(ts: string) {
   if (!ts) return ''
   try {
-    return new Date(ts).toLocaleString()
+    return formatDateTime(ts)
   } catch {
     return ts
   }
@@ -44,7 +45,13 @@ export function DashboardActivityFeed({
         <div className="flex items-center justify-between">
           <CardTitle className="text-xs">Recent Activity</CardTitle>
           {onRefresh && (
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onRefresh} title="Refresh">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={onRefresh}
+              title="Refresh"
+            >
               <RefreshCw className="h-3 w-3" />
             </Button>
           )}
@@ -66,7 +73,9 @@ export function DashboardActivityFeed({
                 >
                   <div className="min-w-0 flex-1">
                     <span className="font-medium">{a.action}</span>
-                    {a.detail && <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>}
+                    {a.detail && (
+                      <span className="text-muted-foreground ml-1.5 truncate">{a.detail}</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {a.user && <span className="text-muted-foreground">{a.user}</span>}
@@ -83,7 +92,9 @@ export function DashboardActivityFeed({
                         {a.status}
                       </span>
                     )}
-                    <span className="text-muted-foreground whitespace-nowrap">{formatTime(a.timestamp)}</span>
+                    <span className="text-muted-foreground whitespace-nowrap">
+                      {formatTime(a.timestamp)}
+                    </span>
                     {link && <ExternalLink className="h-2.5 w-2.5 text-muted-foreground" />}
                   </div>
                 </div>

@@ -1,6 +1,7 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { formatDateTime } from '@/lib/time-format'
 import { useState, useEffect } from 'react'
 import {
   Card,
@@ -412,8 +413,8 @@ export default function BenchmarkPage() {
                       className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm"
                     >
                       <div className="text-xs text-muted-foreground mb-1">
-                        {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} ·{' '}
-                        {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
+                        {formatDateTime(r.timestamp) || '—'} · {r.model} · {r.tokens_generated}{' '}
+                        tokens · {r.duration_ms?.toFixed(0)}ms
                       </div>
                       <div className="text-xs">
                         <span className="text-muted-foreground">User:</span> {r.user_message}

@@ -2,7 +2,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { formatLocaleDate, formatMonthDay, toDateSeconds } from '@/lib/time-format'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 
 import {
@@ -819,8 +820,7 @@ export default function KnowledgePage() {
                 <span>{adapterStatus.fact_count} things learned</span>
                 {adapterStatus.trained_at && (
                   <span>
-                    Last trained{' '}
-                    {new Date(adapterStatus.trained_at * MS_PER_SECOND).toLocaleDateString()}
+                    Last trained {formatLocaleDate(toDateSeconds(adapterStatus.trained_at))}
                   </span>
                 )}
               </div>
@@ -1151,10 +1151,7 @@ export default function KnowledgePage() {
                             </button>
                           )}
                           <span className="text-xs text-muted-foreground/50">
-                            {new Date(item.timestamp * MS_PER_SECOND).toLocaleDateString(
-                              undefined,
-                              { month: 'short', day: 'numeric' },
-                            )}
+                            {formatMonthDay(toDateSeconds(item.timestamp))}
                           </span>
                         </div>
                       </>

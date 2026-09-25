@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, useEffect, memo } from 'react'
+import { formatLocaleDate } from '@/lib/time-format'
 import { Button, IconX, IconPlus, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
@@ -56,7 +57,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
 
   const filteredBookmarks = useMemo(() => {
     if (filter === 'all') return bookmarks
-    return bookmarks.filter(b => b.category === filter)
+    return bookmarks.filter((b) => b.category === filter)
   }, [bookmarks, filter])
 
   const stats = useMemo(() => {
@@ -70,24 +71,30 @@ export const MessageBookmarking = memo(function MessageBookmarking({
   const handleAddCategory = useCallback(() => {
     const trimmed = customCategory.trim()
     if (trimmed && !categories.includes(trimmed)) {
-      setCategories(prev => [...prev, trimmed])
+      setCategories((prev) => [...prev, trimmed])
       setCustomCategory('')
       setShowAddCategory(false)
     }
   }, [customCategory, categories])
 
-  const handleRemoveBookmark = useCallback((id: string) => {
-    const next = bookmarks.filter(b => b.id !== id)
-    setBookmarks(next)
-    saveBookmarks(next)
-  }, [bookmarks])
+  const handleRemoveBookmark = useCallback(
+    (id: string) => {
+      const next = bookmarks.filter((b) => b.id !== id)
+      setBookmarks(next)
+      saveBookmarks(next)
+    },
+    [bookmarks],
+  )
 
-  const handleClearCategory = useCallback((category: string) => {
-    const next = bookmarks.filter(b => b.category !== category)
-    setBookmarks(next)
-    saveBookmarks(next)
-    setCategories(prev => prev.filter(c => c !== category))
-  }, [bookmarks])
+  const handleClearCategory = useCallback(
+    (category: string) => {
+      const next = bookmarks.filter((b) => b.category !== category)
+      setBookmarks(next)
+      saveBookmarks(next)
+      setCategories((prev) => prev.filter((c) => c !== category))
+    },
+    [bookmarks],
+  )
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -136,19 +143,23 @@ export const MessageBookmarking = memo(function MessageBookmarking({
           onClick={() => setFilter('all')}
           className={cn(
             'text-[10px] px-2 py-0.5 rounded transition-colors',
-            filter === 'all' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+            filter === 'all'
+              ? 'bg-primary/20 text-primary'
+              : 'text-muted-foreground hover:bg-muted/50',
           )}
         >
           All ({stats.total})
         </button>
-        {categories.map(cat => (
+        {categories.map((cat) => (
           <button
             key={cat}
             type="button"
             onClick={() => setFilter(cat)}
             className={cn(
               'text-[10px] px-2 py-0.5 rounded transition-colors',
-              filter === cat ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+              filter === cat
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground hover:bg-muted/50',
             )}
           >
             {cat} ({stats.byCategory[cat] || 0})
@@ -163,7 +174,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
           </p>
         ) : (
           <div className="divide-y">
-            {filteredBookmarks.map(bookmark => (
+            {filteredBookmarks.map((bookmark) => (
               <div key={bookmark.id} className="px-3 py-2 hover:bg-muted/30 group">
                 <div className="flex items-start justify-between gap-2">
                   <button
@@ -176,7 +187,7 @@ export const MessageBookmarking = memo(function MessageBookmarking({
                         {bookmark.category}
                       </span>
                       <span className="text-[10px] text-muted-foreground">
-                        {new Date(bookmark.createdAt).toLocaleDateString()}
+                        {formatLocaleDate(bookmark.createdAt)}
                       </span>
                     </div>
                     <p className="text-xs truncate">{bookmark.content.slice(0, 80)}</p>

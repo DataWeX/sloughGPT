@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import {
@@ -142,7 +143,7 @@ export function RecoveryCard({ addToast, onRecovered }: Props) {
                 <p className="text-[10px] text-muted-foreground/60">
                   Interrupted{' '}
                   {j.updated_at || j.failed_at
-                    ? new Date((j.updated_at || j.failed_at) as string).toLocaleString()
+                    ? formatDateTime((j.updated_at || j.failed_at) as string)
                     : 'recently'}
                   {j.progress != null ? ` · ${j.progress}%` : ''}
                 </p>

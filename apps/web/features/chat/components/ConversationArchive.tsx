@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, memo } from 'react'
+import { formatLocaleDate } from '@/lib/time-format'
 import { Button, IconDownload, IconX, IconRefresh } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 
@@ -34,28 +35,34 @@ export const ConversationArchive = memo(function ConversationArchive({
   const filtered = useMemo(() => {
     switch (filter) {
       case 'active':
-        return conversations.filter(c => !c.archived)
+        return conversations.filter((c) => !c.archived)
       case 'archived':
-        return conversations.filter(c => c.archived)
+        return conversations.filter((c) => c.archived)
       default:
         return conversations
     }
   }, [conversations, filter])
 
-  const stats = useMemo(() => ({
-    total: conversations.length,
-    active: conversations.filter(c => !c.archived).length,
-    archived: conversations.filter(c => c.archived).length,
-  }), [conversations])
+  const stats = useMemo(
+    () => ({
+      total: conversations.length,
+      active: conversations.filter((c) => !c.archived).length,
+      archived: conversations.filter((c) => c.archived).length,
+    }),
+    [conversations],
+  )
 
-  const handleDelete = useCallback((id: string) => {
-    if (confirmDelete === id) {
-      onDelete(id)
-      setConfirmDelete(null)
-    } else {
-      setConfirmDelete(id)
-    }
-  }, [confirmDelete, onDelete])
+  const handleDelete = useCallback(
+    (id: string) => {
+      if (confirmDelete === id) {
+        onDelete(id)
+        setConfirmDelete(null)
+      } else {
+        setConfirmDelete(id)
+      }
+    },
+    [confirmDelete, onDelete],
+  )
 
   return (
     <div className={cn('border rounded-lg bg-card overflow-hidden', className)}>
@@ -70,14 +77,16 @@ export const ConversationArchive = memo(function ConversationArchive({
       </div>
 
       <div className="flex gap-1 p-2 border-b">
-        {(['all', 'active', 'archived'] as const).map(f => (
+        {(['all', 'active', 'archived'] as const).map((f) => (
           <button
             key={f}
             type="button"
             onClick={() => setFilter(f)}
             className={cn(
               'text-[10px] px-2 py-1 rounded capitalize transition-colors',
-              filter === f ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted/50',
+              filter === f
+                ? 'bg-primary/20 text-primary'
+                : 'text-muted-foreground hover:bg-muted/50',
             )}
           >
             {f}
@@ -90,15 +99,15 @@ export const ConversationArchive = memo(function ConversationArchive({
           <p className="text-xs text-muted-foreground text-center py-4">No conversations</p>
         ) : (
           <div className="divide-y">
-            {filtered.map(conv => (
+            {filtered.map((conv) => (
               <div key={conv.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/30">
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium truncate">{conv.title}</div>
                   <div className="text-[10px] text-muted-foreground">
-                    {conv.messageCount} messages · {new Date(conv.lastActivity).toLocaleDateString()}
+                    {conv.messageCount} messages · {formatLocaleDate(conv.lastActivity)}
                     {conv.archived && conv.archivedAt && (
                       <span className="ml-2 text-warning">
-                        · Archived {new Date(conv.archivedAt).toLocaleDateString()}
+                        · Archived {formatLocaleDate(conv.archivedAt)}
                       </span>
                     )}
                   </div>
@@ -130,13 +139,14 @@ export const ConversationArchive = memo(function ConversationArchive({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className={cn(
-                      'h-6 w-6',
-                      confirmDelete === conv.id && 'text-destructive',
-                    )}
+                    className={cn('h-6 w-6', confirmDelete === conv.id && 'text-destructive')}
                     onClick={() => handleDelete(conv.id)}
                     title={confirmDelete === conv.id ? 'Click again to confirm' : 'Delete'}
-                    aria-label={confirmDelete === conv.id ? 'Confirm delete conversation' : 'Delete conversation'}
+                    aria-label={
+                      confirmDelete === conv.id
+                        ? 'Confirm delete conversation'
+                        : 'Delete conversation'
+                    }
                   >
                     <IconX className="h-3 w-3" />
                   </Button>

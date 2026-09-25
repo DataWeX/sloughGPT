@@ -32,6 +32,18 @@ export function toDate(value: DateInput): Date | null {
 }
 
 /**
+ * Parse an **epoch-seconds** value (Python `time.time()` / backend `ts`
+ * fields) into a valid `Date`, or `null` when it is missing or not a finite
+ * number. Use this before any `new Date(secs * 1000)`-style conversion.
+ */
+export function toDateSeconds(secs: number | string | null | undefined): Date | null {
+  if (secs == null || secs === '') return null
+  const n = typeof secs === 'number' ? secs : Number(secs)
+  if (!Number.isFinite(n)) return null
+  return toDate(n * MS_PER_SECOND)
+}
+
+/**
  * Format a timestamp as a relative time string ("just now", "5m ago", "2h ago").
  */
 export function formatRelativeTime(date: DateInput): string {
@@ -95,6 +107,15 @@ export function formatLocaleDate(date: DateInput): string {
   const d = toDate(date)
   if (!d) return ''
   return d.toLocaleDateString()
+}
+
+/**
+ * Format a timestamp in the browser's default time-only style ("2:30:45 PM").
+ */
+export function formatLocaleTime(date: DateInput): string {
+  const d = toDate(date)
+  if (!d) return ''
+  return d.toLocaleTimeString()
 }
 
 /**

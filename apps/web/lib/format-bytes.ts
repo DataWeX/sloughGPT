@@ -1,3 +1,5 @@
+import { formatLocaleDate } from './time-format'
+
 /** Format byte count to human-readable string (e.g. "1.5 MB"). */
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '—'
@@ -40,7 +42,7 @@ export function formatRelativeTime(seconds: number): string {
   if (diffMs < MS_PER_HOUR) return `${Math.floor(diffMs / MS_PER_MINUTE)}m ago`
   if (diffMs < MS_PER_DAY) return `${Math.floor(diffMs / MS_PER_HOUR)}h ago`
   if (diffMs < 7 * MS_PER_DAY) return `${Math.floor(diffMs / MS_PER_DAY)}d ago`
-  return new Date(ts).toLocaleDateString()
+  return formatLocaleDate(ts) || ''
 }
 
 /** Today's date as YYYY-MM-DD for filenames. */

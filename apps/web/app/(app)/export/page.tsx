@@ -1,8 +1,19 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { formatLocaleDate } from '@/lib/time-format'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Badge, IconDownload, cn, Spinner } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Badge,
+  IconDownload,
+  cn,
+  Spinner,
+} from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { modelController } from '@/lib/model-controller'
@@ -43,11 +54,12 @@ export default function ExportPage() {
   const [loadingCheckpoints, setLoadingCheckpoints] = useState(false)
 
   useEffect(() => {
-    modelController.getExportFormats?.()
+    modelController
+      .getExportFormats?.()
       .then((res: Record<string, string>) => {
         const list = Object.entries(res).map(([key, description]) => ({
           key,
-          label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
           description,
         }))
         setFormats(list)
@@ -70,7 +82,9 @@ export default function ExportPage() {
     }
   }
 
-  useEffect(() => { fetchCheckpoints() }, [])
+  useEffect(() => {
+    fetchCheckpoints()
+  }, [])
 
   const handleExportModel = async () => {
     setExporting(true)
@@ -125,9 +139,7 @@ export default function ExportPage() {
       {exportResult && (
         <StatusBanner variant="success" message={exportResult} dismissible={false} />
       )}
-      {exportError && (
-        <StatusBanner variant="error" message={exportError} />
-      )}
+      {exportError && <StatusBanner variant="error" message={exportError} />}
       {formatLoadError && (
         <StatusBanner variant="error" message={formatLoadError} dismissible={false} />
       )}
@@ -136,9 +148,11 @@ export default function ExportPage() {
 
       <ExportProgressCard />
 
-      <ExportTemplateCard onSelect={(t) => {
-        setSelectedFormat(t.format)
-      }} />
+      <ExportTemplateCard
+        onSelect={(t) => {
+          setSelectedFormat(t.format)
+        }}
+      />
 
       <ExportScheduleCard />
 
@@ -151,12 +165,17 @@ export default function ExportPage() {
             Export the currently loaded model to a file format.
           </p>
           <div className="flex flex-wrap gap-1">
-            {formats.map(f => (
+            {formats.map((f) => (
               <button
                 key={f.key}
                 type="button"
                 onClick={() => setSelectedFormat(f.key)}
-                className={cn('rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors', selectedFormat === f.key ? 'bg-primary/15 text-primary' : 'bg-muted/50 text-muted-foreground hover:bg-muted/80')}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors',
+                  selectedFormat === f.key
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted/80',
+                )}
                 title={f.description}
               >
                 {f.label}
@@ -165,7 +184,7 @@ export default function ExportPage() {
           </div>
           {selectedFormat && (
             <p className="text-[10px] text-muted-foreground/60">
-              {formats.find(f => f.key === selectedFormat)?.description}
+              {formats.find((f) => f.key === selectedFormat)?.description}
             </p>
           )}
           <Button
@@ -224,21 +243,35 @@ export default function ExportPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
           <CardTitle className="text-[11px] font-medium">Checkpoints</CardTitle>
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px]"
+            onClick={fetchCheckpoints}
+            disabled={loadingCheckpoints}
+            aria-label="Refresh checkpoints"
+          >
             <Spinner className="h-3 w-3" />
           </Button>
         </CardHeader>
         <CardContent className="px-2.5 pb-2.5">
           {checkpoints.length === 0 ? (
             <div className="text-center py-4 space-y-1.5">
-              <p className="text-[10px] text-muted-foreground/60">No checkpoints found. Train a model to create checkpoints.</p>
-              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/training')}>
+              <p className="text-[10px] text-muted-foreground/60">
+                No checkpoints found. Train a model to create checkpoints.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px]"
+                onClick={() => router.push('/training')}
+              >
                 Go to Training
               </Button>
             </div>
           ) : (
             <div className="space-y-1">
-              {checkpoints.map(cp => (
+              {checkpoints.map((cp) => (
                 <div
                   key={cp.name}
                   className="flex items-center justify-between rounded-lg border border-border/40 px-2.5 py-2 text-[11px] hover:bg-muted/20 transition-colors"
@@ -248,7 +281,7 @@ export default function ExportPage() {
                     <div className="text-[10px] text-muted-foreground/60">
                       {fmtBytes(cp.size_bytes)}
                       {cp.loss != null && <> · Loss: {cp.loss.toFixed(3)}</>}
-                      {cp.created_at && <> · {new Date(cp.created_at).toLocaleDateString()}</>}
+                      {cp.created_at && <> · {formatLocaleDate(cp.created_at)}</>}
                     </div>
                   </div>
                   <Button

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { cn, Card, CardHeader, CardTitle, CardContent, Button } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -49,14 +50,20 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [experimentId])
 
   if (loading) {
     return (
       <Card data-testid="experiment-details">
-        <CardHeader><CardTitle className="text-base">Experiment Data</CardTitle></CardHeader>
-        <CardContent><div className="h-20 animate-pulse bg-muted/50 rounded" /></CardContent>
+        <CardHeader>
+          <CardTitle className="text-base">Experiment Data</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="h-20 animate-pulse bg-muted/50 rounded" />
+        </CardContent>
       </Card>
     )
   }
@@ -64,7 +71,9 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
   if (error) {
     return (
       <Card data-testid="experiment-details">
-        <CardHeader><CardTitle className="text-base">Experiment Data</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle className="text-base">Experiment Data</CardTitle>
+        </CardHeader>
         <CardContent>
           <StatusBanner variant="error" message={error} dismissible={false} onRetry={fetchData} />
         </CardContent>
@@ -79,7 +88,7 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
 
   if (!hasData && !status) return null
 
-  const uniqueMetrics = [...new Set(metrics.map(m => m.metric))]
+  const uniqueMetrics = [...new Set(metrics.map((m) => m.metric))]
   const latestByMetric: Record<string, { value: number; step: number }> = {}
   for (const m of metrics) {
     const existing = latestByMetric[m.metric]
@@ -88,7 +97,7 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
     }
   }
 
-  const uniqueParams = [...new Set(params.map(p => p.param))]
+  const uniqueParams = [...new Set(params.map((p) => p.param))]
   const latestByParam: Record<string, string> = {}
   for (const p of params) {
     latestByParam[p.param] = String(p.value)
@@ -101,7 +110,14 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
           <div className="flex items-center gap-2">
             <CardTitle className="text-base">Experiment Data</CardTitle>
             {status?.status && (
-              <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', status.status === 'completed' ? 'bg-success/15 text-success' : 'bg-warning/15 text-warning')}>
+              <span
+                className={cn(
+                  'text-[9px] px-1.5 py-0.5 rounded font-medium',
+                  status.status === 'completed'
+                    ? 'bg-success/15 text-success'
+                    : 'bg-warning/15 text-warning',
+                )}
+              >
                 {status.status}
               </span>
             )}
@@ -116,14 +132,15 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
           <div className="mb-3">
             <div className="text-[10px] text-muted-foreground mb-1.5">Metrics</div>
             <div className="grid grid-cols-2 gap-2">
-              {uniqueMetrics.map(m => (
+              {uniqueMetrics.map((m) => (
                 <div key={m} className="rounded-md bg-muted/30 p-2">
                   <div className="text-[10px] text-muted-foreground truncate">{m}</div>
                   <div className="text-sm font-mono font-medium">
                     {latestByMetric[m]?.value.toFixed(4)}
                   </div>
                   <div className="text-[9px] text-muted-foreground">
-                    step {latestByMetric[m]?.step} · {metrics.filter(x => x.metric === m).length} entries
+                    step {latestByMetric[m]?.step} · {metrics.filter((x) => x.metric === m).length}{' '}
+                    entries
                   </div>
                 </div>
               ))}
@@ -135,8 +152,11 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
           <div className="mb-3">
             <div className="text-[10px] text-muted-foreground mb-1.5">Parameters</div>
             <div className="space-y-1">
-              {uniqueParams.map(p => (
-                <div key={p} className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0">
+              {uniqueParams.map((p) => (
+                <div
+                  key={p}
+                  className="flex items-center justify-between text-[11px] py-0.5 border-b border-border/30 last:border-0"
+                >
                   <span className="text-muted-foreground">{p}</span>
                   <span className="font-mono">{latestByParam[p]}</span>
                 </div>
@@ -147,12 +167,14 @@ export function ExperimentDetailsCard({ experimentId }: ExperimentDetailsCardPro
 
         {status?.completed_at && (
           <div className="text-[10px] text-muted-foreground">
-            Completed {new Date(status.completed_at).toLocaleString()}
+            Completed {formatDateTime(status.completed_at)}
           </div>
         )}
 
         {!hasData && (
-          <p className="text-sm text-muted-foreground text-center py-2">No metrics or parameters logged yet.</p>
+          <p className="text-sm text-muted-foreground text-center py-2">
+            No metrics or parameters logged yet.
+          </p>
         )}
       </CardContent>
     </Card>

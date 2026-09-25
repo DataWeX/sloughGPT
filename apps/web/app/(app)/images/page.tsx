@@ -1,8 +1,18 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { formatLocaleDate, toDateSeconds } from '@/lib/time-format'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, cn } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  Textarea,
+  cn,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { StatusBanner } from '@/components/composed/StatusBanner'
@@ -28,7 +38,7 @@ export default function ImagesPage() {
   const [generating, setGenerating] = useState(false)
   const [lastGenerated, setLastGenerated] = useState<string | null>(null)
   const [genError, setGenError] = useState<string | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const fetchData = async () => {
     try {
@@ -49,7 +59,9 @@ export default function ImagesPage() {
 
   useRefreshShortcut(fetchData)
 
-  useEffect(() => { fetchData() }, [])
+  useEffect(() => {
+    fetchData()
+  }, [])
 
   const handleGenerate = async () => {
     if (!prompt.trim()) return
@@ -78,37 +90,51 @@ export default function ImagesPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
           <CardTitle className="text-[11px] font-medium">Generate</CardTitle>
-          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchData} aria-label="Refresh">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px]"
+            onClick={fetchData}
+            aria-label="Refresh"
+          >
             <IconRefresh className="h-3 w-3" />
           </Button>
         </CardHeader>
         <CardContent className="space-y-2 px-2.5 pb-2.5">
           <Textarea
             value={prompt}
-            onChange={e => setPrompt(e.target.value)}
+            onChange={(e) => setPrompt(e.target.value)}
             placeholder="Describe the image you want to generate..."
             rows={2}
             className="text-[11px] rounded-lg border-border/40"
           />
           <div className="flex flex-wrap gap-1">
-            {styles.map(s => (
+            {styles.map((s) => (
               <button
                 key={s.key}
                 type="button"
                 onClick={() => setSelectedStyle(s.key as ImageStyle)}
-                className={cn('px-2.5 py-1 text-[10px] font-medium rounded-full transition-colors', selectedStyle === s.key ? 'bg-primary/15 text-primary border border-primary/30' : 'bg-muted/30 text-muted-foreground/60 border border-border/40 hover:bg-muted/50')}
+                className={cn(
+                  'px-2.5 py-1 text-[10px] font-medium rounded-full transition-colors',
+                  selectedStyle === s.key
+                    ? 'bg-primary/15 text-primary border border-primary/30'
+                    : 'bg-muted/30 text-muted-foreground/60 border border-border/40 hover:bg-muted/50',
+                )}
               >
                 {s.name}
               </button>
             ))}
           </div>
           <div className="flex items-center gap-2">
-            <Button size="sm" className="h-7 text-[11px]" onClick={handleGenerate} disabled={generating || !prompt.trim()}>
+            <Button
+              size="sm"
+              className="h-7 text-[11px]"
+              onClick={handleGenerate}
+              disabled={generating || !prompt.trim()}
+            >
               {generating ? 'Generating...' : 'Generate'}
             </Button>
-            {lastGenerated && (
-              <span className="text-[10px] text-success">Generated</span>
-            )}
+            {lastGenerated && <span className="text-[10px] text-success">Generated</span>}
           </div>
           {genError && <StatusBanner variant="error" message={genError} dismissible={false} />}
         </CardContent>
@@ -120,7 +146,11 @@ export default function ImagesPage() {
             <CardTitle className="text-[11px] font-medium">Last Generated</CardTitle>
           </CardHeader>
           <CardContent className="px-2.5 pb-2.5">
-            <img src={lastGenerated} alt="Generated" className="w-full max-w-md rounded-lg border border-border/40" />
+            <img
+              src={lastGenerated}
+              alt="Generated"
+              className="w-full max-w-md rounded-lg border border-border/40"
+            />
           </CardContent>
         </Card>
       )}
@@ -133,14 +163,22 @@ export default function ImagesPage() {
           {gallery.length === 0 ? (
             <div className="text-center py-6 text-[10px] text-muted-foreground/60 space-y-1.5">
               <div>No images generated yet.</div>
-              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/chat')}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-6 text-[10px]"
+                onClick={() => router.push('/chat')}
+              >
                 Open Chat
               </Button>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              {gallery.map(img => (
-                <div key={img.id} className="rounded-lg border border-border/40 overflow-hidden hover:border-border/40 transition-colors">
+              {gallery.map((img) => (
+                <div
+                  key={img.id}
+                  className="rounded-lg border border-border/40 overflow-hidden hover:border-border/40 transition-colors"
+                >
                   <img
                     src={`${PUBLIC_API_URL}${img.path}`}
                     alt={img.id}
@@ -148,7 +186,7 @@ export default function ImagesPage() {
                     loading="lazy"
                   />
                   <div className="px-2 py-1 text-[10px] text-muted-foreground/60 truncate font-mono tabular-nums">
-                    {new Date(img.created * 1000).toLocaleDateString()}
+                    {formatLocaleDate(toDateSeconds(img.created))}
                   </div>
                 </div>
               ))}

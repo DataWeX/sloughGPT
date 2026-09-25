@@ -3,8 +3,9 @@
 export const dynamic = 'force-dynamic'
 
 import React, { Suspense, useEffect, useState } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { formatLocaleDate } from '@/lib/time-format'
+import Link from '@/vite/next-compat/link'
+import { useRouter } from '@/vite/next-compat/navigation'
 
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
@@ -432,7 +433,7 @@ export default function HomePage() {
                   {recentSessions[0].message_count != null && (
                     <span>{recentSessions[0].message_count} messages · </span>
                   )}
-                  {new Date(recentSessions[0].updated_at).toLocaleDateString()}
+                  {formatLocaleDate(recentSessions[0].updated_at)}
                 </p>
               </div>
               <IconChevronRight className="h-3.5 w-3.5 text-muted-foreground/40 group-hover:text-primary/60 transition-colors" />

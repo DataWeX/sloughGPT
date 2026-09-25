@@ -1,7 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
+import { formatLocaleDate } from '@/lib/time-format'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { IconPlus, IconTrash, IconRefresh } from '@/components/icons/NavIcons'
 import { PageContainer } from '@/components/PageContainer'
 import { apiGet, apiPost, apiPut, apiDelete } from '@/lib/http-client'
@@ -37,7 +48,7 @@ export default function UsersAdminPage() {
   const [editEmail, setEditEmail] = useState('')
   const [editRole, setEditRole] = useState('')
   const [editStatus, setEditStatus] = useState('')
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const fetchUsers = useCallback(async () => {
     try {
@@ -107,10 +118,12 @@ export default function UsersAdminPage() {
     }
   }
 
-  useEffect(() => { fetchUsers() }, [fetchUsers])
+  useEffect(() => {
+    fetchUsers()
+  }, [fetchUsers])
 
-  const activeUsers = users.filter(u => u.status === 'active')
-  const adminUsers = users.filter(u => u.role === 'admin' || u.role === 'owner')
+  const activeUsers = users.filter((u) => u.status === 'active')
+  const adminUsers = users.filter((u) => u.role === 'admin' || u.role === 'owner')
 
   if (loading) {
     return (
@@ -120,7 +133,11 @@ export default function UsersAdminPage() {
           <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
           <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded-lg" /></CardContent></Card>
+        <Card>
+          <CardContent>
+            <div className="h-48 animate-pulse bg-muted/50 rounded-lg" />
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }
@@ -135,139 +152,172 @@ export default function UsersAdminPage() {
         </Button>
       }
     >
-        <KpiGrid>
-          <StatCard label="Total Users" value={users.length} />
-          <StatCard label="Active" value={activeUsers.length} />
-          <StatCard label="Admins" value={adminUsers.length} />
-        </KpiGrid>
+      <KpiGrid>
+        <StatCard label="Total Users" value={users.length} />
+        <StatCard label="Active" value={activeUsers.length} />
+        <StatCard label="Admins" value={adminUsers.length} />
+      </KpiGrid>
 
-        {/* Create user */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Create User</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="grid grid-cols-2 gap-1.5">
-              <Input
-                value={newUsername}
-                onChange={e => setNewUsername(e.target.value)}
-                placeholder="Username"
-                className="h-6 text-[10px]"
-              />
-              <Input
-                value={newEmail}
-                onChange={e => setNewEmail(e.target.value)}
-                placeholder="Email"
-                type="email"
-                className="h-6 text-[10px]"
-              />
-              <Input
-                value={newPassword}
-                onChange={e => setNewPassword(e.target.value)}
-                placeholder="Password (min 8 chars)"
-                type="password"
-                className="h-6 text-[10px]"
-              />
-              <select
-                value={newRole}
-                onChange={e => setNewRole(e.target.value)}
-                className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
-              >
-                <option value="viewer">Viewer</option>
-                <option value="user">User</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
-            <Button size="sm" className="h-6 text-[10px]" onClick={createUser} disabled={creating || !newUsername.trim() || !newEmail.trim() || !newPassword.trim()}>
-              {creating ? 'Creating...' : 'Create User'}
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Create user */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Create User</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <div className="grid grid-cols-2 gap-1.5">
+            <Input
+              value={newUsername}
+              onChange={(e) => setNewUsername(e.target.value)}
+              placeholder="Username"
+              className="h-6 text-[10px]"
+            />
+            <Input
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+              placeholder="Email"
+              type="email"
+              className="h-6 text-[10px]"
+            />
+            <Input
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Password (min 8 chars)"
+              type="password"
+              className="h-6 text-[10px]"
+            />
+            <select
+              value={newRole}
+              onChange={(e) => setNewRole(e.target.value)}
+              className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+            >
+              <option value="viewer">Viewer</option>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <Button
+            size="sm"
+            className="h-6 text-[10px]"
+            onClick={createUser}
+            disabled={creating || !newUsername.trim() || !newEmail.trim() || !newPassword.trim()}
+          >
+            {creating ? 'Creating...' : 'Create User'}
+          </Button>
+        </CardContent>
+      </Card>
 
-        {/* User list */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs">Users</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-0.5">
-            {users.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">No users yet</p>
-            ) : (
-              users.map(u => (
-                <div key={u.id} className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">
-                  {editingUser === u.id ? (
-                    /* Edit mode */
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-3 gap-1.5">
-                        <Input
-                          value={editEmail}
-                          onChange={e => setEditEmail(e.target.value)}
-                          placeholder="Email"
-                          className="h-6 text-[10px]"
-                        />
-                        <select
-                          value={editRole}
-                          onChange={e => setEditRole(e.target.value)}
-                          className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+      {/* User list */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Users</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-0.5">
+          {users.length === 0 ? (
+            <p className="text-xs text-muted-foreground py-4 text-center">No users yet</p>
+          ) : (
+            users.map((u) => (
+              <div key={u.id} className="px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">
+                {editingUser === u.id ? (
+                  /* Edit mode */
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <Input
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                        placeholder="Email"
+                        className="h-6 text-[10px]"
+                      />
+                      <select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value)}
+                        className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                      >
+                        <option value="viewer">Viewer</option>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                        <option value="owner">Owner</option>
+                      </select>
+                      <select
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value)}
+                        className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                        <option value="suspended">Suspended</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Button size="sm" className="h-5 text-[10px]" onClick={saveEdit}>
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 text-[10px]"
+                        onClick={() => setEditingUser(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* View mode */
+                  <div className="flex items-center justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-xs">{u.username}</span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            u.role === 'owner'
+                              ? 'bg-accent/15 text-accent'
+                              : u.role === 'admin'
+                                ? 'bg-info/15 text-info dark:bg-info/15 text-info'
+                                : 'bg-muted text-muted-foreground'
+                          }`}
                         >
-                          <option value="viewer">Viewer</option>
-                          <option value="user">User</option>
-                          <option value="admin">Admin</option>
-                          <option value="owner">Owner</option>
-                        </select>
-                        <select
-                          value={editStatus}
-                          onChange={e => setEditStatus(e.target.value)}
-                          className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                          {u.role}
+                        </span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                            u.status === 'active'
+                              ? 'bg-success/15 text-success dark:bg-success/15 text-success'
+                              : 'bg-destructive/15 text-destructive dark:bg-destructive/15 text-destructive'
+                          }`}
                         >
-                          <option value="active">Active</option>
-                          <option value="inactive">Inactive</option>
-                          <option value="suspended">Suspended</option>
-                        </select>
+                          {u.status}
+                        </span>
                       </div>
-                      <div className="flex gap-1.5">
-                        <Button size="sm" className="h-5 text-[10px]" onClick={saveEdit}>Save</Button>
-                        <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => setEditingUser(null)}>Cancel</Button>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">
+                        {u.email} · {u.display_name || '—'} · Last login:{' '}
+                        {formatLocaleDate(u.last_login_at) || 'Never'}
                       </div>
                     </div>
-                  ) : (
-                    /* View mode */
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-xs">{u.username}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            u.role === 'owner' ? 'bg-accent/15 text-accent' :
-                            u.role === 'admin' ? 'bg-info/15 text-info dark:bg-info/15 text-info' :
-                            'bg-muted text-muted-foreground'
-                          }`}>{u.role}</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                            u.status === 'active' ? 'bg-success/15 text-success dark:bg-success/15 text-success' :
-                            'bg-destructive/15 text-destructive dark:bg-destructive/15 text-destructive'
-                          }`}>{u.status}</span>
-                        </div>
-                        <div className="text-[10px] text-muted-foreground mt-0.5">
-                          {u.email} · {u.display_name || '—'} · Last login: {u.last_login_at ? new Date(u.last_login_at).toLocaleDateString() : 'Never'}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button size="sm" variant="ghost" className="h-5 text-[10px]" onClick={() => startEdit(u)}>Edit</Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => deleteUser(u.id, u.username)}
-                        >
-                          <IconTrash className="h-3 w-3" />
-                        </Button>
-                      </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 text-[10px]"
+                        onClick={() => startEdit(u)}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => deleteUser(u.id, u.username)}
+                      >
+                        <IconTrash className="h-3 w-3" />
+                      </Button>
                     </div>
-                  )}
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
     </PageContainer>
   )
 }

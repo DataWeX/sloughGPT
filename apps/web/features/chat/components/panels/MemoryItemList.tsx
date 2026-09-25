@@ -1,6 +1,7 @@
 'use client'
 
 import { IconTrash, IconEdit } from '@sloughgpt/strui'
+import { formatDateTime, toDateSeconds } from '@/lib/time-format'
 import { cn } from '@sloughgpt/strui'
 import { memoryController, type MemoryItem } from '@/lib/memory-controller'
 import { formatRelativeTime } from '@/lib/format-bytes'
@@ -26,11 +27,14 @@ export function MemoryItemList({
 }: MemoryItemListProps) {
   return (
     <ul className="space-y-1 max-h-60 overflow-y-auto">
-      {items.map(item => (
-        <li key={item.id} className={cn(
-          'group flex items-start justify-between gap-2 p-2 rounded bg-muted/30 border text-xs leading-relaxed transition-colors',
-          item.id === highlightedId ? 'border-primary/60 bg-primary/10' : 'border-border/40',
-        )}>
+      {items.map((item) => (
+        <li
+          key={item.id}
+          className={cn(
+            'group flex items-start justify-between gap-2 p-2 rounded bg-muted/30 border text-xs leading-relaxed transition-colors',
+            item.id === highlightedId ? 'border-primary/60 bg-primary/10' : 'border-border/40',
+          )}
+        >
           <div className="min-w-0">
             <div className="flex items-start justify-between gap-1">
               <span
@@ -54,20 +58,27 @@ export function MemoryItemList({
             </div>
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {item.topic && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{item.topic}</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                  {item.topic}
+                </span>
               )}
               {item.source && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{item.source}</span>
+                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">
+                  {item.source}
+                </span>
               )}
               {typeof item.importance === 'number' && (
-                <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium" title="Importance score">
+                <span
+                  className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground font-medium"
+                  title="Importance score"
+                >
                   importance {item.importance.toFixed(1)}
                 </span>
               )}
               {item.timestamp > 0 && (
                 <span
                   className="text-[9px] text-muted-foreground font-mono"
-                  title={new Date(item.timestamp * 1000).toLocaleString()}
+                  title={formatDateTime(toDateSeconds(item.timestamp))}
                 >
                   {formatRelativeTime(item.timestamp)}
                 </span>
@@ -76,7 +87,9 @@ export function MemoryItemList({
           </div>
           <div className="flex items-center gap-0.5 shrink-0">
             {typeof item.score === 'number' && searchResults !== null && (
-              <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">{item.score.toFixed(2)}</span>
+              <span className="text-[10px] text-muted-foreground font-mono shrink-0 mr-0.5">
+                {item.score.toFixed(2)}
+              </span>
             )}
             <button
               type="button"

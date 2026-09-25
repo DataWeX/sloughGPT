@@ -1,9 +1,26 @@
 'use client'
 
 import { useState, useEffect, useCallback, memo, useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
+import { formatLocaleDate } from '@/lib/time-format'
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
-import { trainingJobsController, type TrainingPair, type TrainingDataStats } from '@/lib/training-controller'
+import {
+  trainingJobsController,
+  type TrainingPair,
+  type TrainingDataStats,
+} from '@/lib/training-controller'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
@@ -27,7 +44,11 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
     try {
       const [statsResult, pairsResult] = await Promise.all([
         trainingJobsController.getTrainingStats(),
-        trainingJobsController.listTrainingPairs({ limit, offset: page * limit, search: search || undefined }),
+        trainingJobsController.listTrainingPairs({
+          limit,
+          offset: page * limit,
+          search: search || undefined,
+        }),
       ])
       if (activeRef.current) {
         setStats(statsResult)
@@ -49,7 +70,9 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
   useEffect(() => {
     activeRef.current = true
     void fetchData()
-    return () => { activeRef.current = false }
+    return () => {
+      activeRef.current = false
+    }
   }, [fetchData])
 
   const handleSearch = useCallback(() => {
@@ -57,25 +80,31 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
     void fetchData()
   }, [fetchData])
 
-  const handleDelete = useCallback(async (id: string) => {
-    try {
-      await trainingJobsController.deletePair(id)
-      addToast('Pair deleted', 'success')
-      void fetchData()
-    } catch {
-      addToast('Could not delete pair', 'error')
-    }
-  }, [addToast, fetchData])
+  const handleDelete = useCallback(
+    async (id: string) => {
+      try {
+        await trainingJobsController.deletePair(id)
+        addToast('Pair deleted', 'success')
+        void fetchData()
+      } catch {
+        addToast('Could not delete pair', 'error')
+      }
+    },
+    [addToast, fetchData],
+  )
 
-  const handleUpdateQuality = useCallback(async (id: string, quality: number) => {
-    try {
-      await trainingJobsController.updatePairQuality(id, quality)
-      addToast('Quality updated', 'success')
-      void fetchData()
-    } catch {
-      addToast('Could not update quality', 'error')
-    }
-  }, [addToast, fetchData])
+  const handleUpdateQuality = useCallback(
+    async (id: string, quality: number) => {
+      try {
+        await trainingJobsController.updatePairQuality(id, quality)
+        addToast('Quality updated', 'success')
+        void fetchData()
+      } catch {
+        addToast('Could not update quality', 'error')
+      }
+    },
+    [addToast, fetchData],
+  )
 
   const handleDeleteSynced = useCallback(async () => {
     try {
@@ -96,11 +125,24 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
           <CardTitle className="text-base">Training data ({total})</CardTitle>
           <div className="flex gap-2">
             {stats && stats.synced > 0 && (
-              <Button size="sm" variant="ghost" className="text-destructive" onClick={handleDeleteSynced} aria-label="Delete all synced training data">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive"
+                onClick={handleDeleteSynced}
+                aria-label="Delete all synced training data"
+              >
                 Delete synced ({stats.synced})
               </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => void fetchData()} aria-label="Refresh training data">Refresh</Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => void fetchData()}
+              aria-label="Refresh training data"
+            >
+              Refresh
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -108,23 +150,36 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
         {loading && !stats ? (
           <p className="text-xs text-muted-foreground">Loading...</p>
         ) : error ? (
-          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchData()} />
+          <StatusBanner
+            variant="error"
+            message={error}
+            dismissible={false}
+            onRetry={() => void fetchData()}
+          />
         ) : stats ? (
           <div className="grid grid-cols-4 gap-2">
             <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Total</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Total
+              </p>
               <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.total}</p>
             </div>
             <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Pending</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Pending
+              </p>
               <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.pending}</p>
             </div>
             <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Synced</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Synced
+              </p>
               <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.synced}</p>
             </div>
             <div className="rounded-lg bg-muted/20 px-2 py-1.5 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Used</p>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Used
+              </p>
               <p className="text-sm font-semibold tabular-nums mt-0.5">{stats.used}</p>
             </div>
           </div>
@@ -134,11 +189,18 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
           <Input
             placeholder="Search pairs..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleSearch()}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             className="h-8 text-xs"
           />
-          <Button size="sm" variant="ghost" onClick={handleSearch} aria-label="Search training pairs">Search</Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleSearch}
+            aria-label="Search training pairs"
+          >
+            Search
+          </Button>
         </div>
 
         {loading ? (
@@ -147,27 +209,45 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
           <p className="text-xs text-muted-foreground">No training pairs found.</p>
         ) : (
           <div className="space-y-1.5">
-            {pairs.map(p => (
-              <div key={p.id} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors">
+            {pairs.map((p) => (
+              <div
+                key={p.id}
+                className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 transition-colors"
+              >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1 space-y-0.5">
-                    <p className="text-[11px] text-muted-foreground/60 truncate">User: {p.user_msg}</p>
+                    <p className="text-[11px] text-muted-foreground/60 truncate">
+                      User: {p.user_msg}
+                    </p>
                     <p className="text-xs truncate">{p.assistant_msg}</p>
                     <div className="flex gap-2 text-[10px] text-muted-foreground/50">
                       <span>Quality: {p.quality}</span>
-                      <span>{new Date(p.timestamp).toLocaleDateString()}</span>
+                      <span>{formatLocaleDate(p.timestamp)}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Select value={String(p.quality)} onValueChange={v => void handleUpdateQuality(p.id, Number(v))}>
+                    <Select
+                      value={String(p.quality)}
+                      onValueChange={(v) => void handleUpdateQuality(p.id, Number(v))}
+                    >
                       <SelectTrigger className="h-6 w-12 text-[10px]" aria-label="Quality rating">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {[1, 2, 3, 4, 5].map(q => <SelectItem key={q} value={String(q)}>{q}</SelectItem>)}
+                        {[1, 2, 3, 4, 5].map((q) => (
+                          <SelectItem key={q} value={String(q)}>
+                            {q}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
-                    <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px]" onClick={() => void handleDelete(p.id)} aria-label={`Delete training pair ${p.id.slice(0, 8)}`}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-destructive h-6 text-[10px]"
+                      onClick={() => void handleDelete(p.id)}
+                      aria-label={`Delete training pair ${p.id.slice(0, 8)}`}
+                    >
                       Delete
                     </Button>
                   </div>
@@ -179,10 +259,28 @@ export const TrainingDataCard = memo(function TrainingDataCard({ addToast }: Pro
 
         {totalPages > 1 && (
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Page {page + 1} of {totalPages}</span>
+            <span>
+              Page {page + 1} of {totalPages}
+            </span>
             <div className="flex gap-1">
-              <Button size="sm" variant="ghost" disabled={page === 0} onClick={() => setPage(p => p - 1)} aria-label="Previous page">Prev</Button>
-              <Button size="sm" variant="ghost" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)} aria-label="Next page">Next</Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={page === 0}
+                onClick={() => setPage((p) => p - 1)}
+                aria-label="Previous page"
+              >
+                Prev
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={page >= totalPages - 1}
+                onClick={() => setPage((p) => p + 1)}
+                aria-label="Next page"
+              >
+                Next
+              </Button>
             </div>
           </div>
         )}

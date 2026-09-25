@@ -1,7 +1,8 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { formatDateTime } from '@/lib/time-format'
 import { useEffect, useState } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, cn, Spinner } from '@sloughgpt/strui'
@@ -398,8 +399,8 @@ export default function EvaluatePage() {
                         className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm"
                       >
                         <div className="text-[10px] text-muted-foreground mb-1">
-                          {r.timestamp ? new Date(r.timestamp).toLocaleString() : '—'} · {r.model} ·{' '}
-                          {r.tokens_generated} tokens · {r.duration_ms?.toFixed(0)}ms
+                          {formatDateTime(r.timestamp) || '—'} · {r.model} · {r.tokens_generated}{' '}
+                          tokens · {r.duration_ms?.toFixed(0)}ms
                         </div>
                         <div className="text-[10px]">
                           <span className="text-muted-foreground">User:</span> {r.user_message}

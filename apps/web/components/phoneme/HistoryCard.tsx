@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useRef, useMemo } from 'react'
+import { formatLocaleTime, formatTimeShort } from '@/lib/time-format'
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { IconTrash, IconDownload, IconUpload } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
@@ -9,11 +10,19 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@sloughgpt/
 import { usePhonemeStore, type HistoryEntry } from '@/lib/phoneme-store'
 import { useToastStore } from '@/lib/toast-store'
 import { PHONEME_LANGUAGES, type PhonemeLanguage } from '@/lib/phoneme-controller'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts'
 import PhonemeSkeleton from './PhonemeSkeleton'
 
 function HistoryRow({ entry }: { entry: HistoryEntry }) {
-  const time = new Date(entry.timestamp).toLocaleTimeString()
+  const time = formatLocaleTime(entry.timestamp)
   const pct = (entry.score * 100).toFixed(0)
 
   return (
@@ -28,7 +37,9 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
       >
         {pct}%
       </Badge>
-      <Badge variant="outline" className="w-8 justify-center">{entry.language.toUpperCase()}</Badge>
+      <Badge variant="outline" className="w-8 justify-center">
+        {entry.language.toUpperCase()}
+      </Badge>
     </div>
   )
 }
@@ -41,7 +52,7 @@ function ProgressChart({ history }: { history: HistoryEntry[] }) {
       index: i + 1,
       score: Math.round(entry.score * 100),
       word: entry.target,
-      time: new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: formatTimeShort(entry.timestamp),
     }))
   }, [history])
 
@@ -106,7 +117,9 @@ function HistoryStats({ history }: { history: HistoryEntry[] }) {
     if (history.length === 0) return null
     const avgScore = history.reduce((sum, e) => sum + e.score, 0) / history.length
     const langCounts: Record<string, number> = {}
-    let excellent = 0, good = 0, needsWork = 0
+    let excellent = 0,
+      good = 0,
+      needsWork = 0
     for (const e of history) {
       langCounts[e.language] = (langCounts[e.language] || 0) + 1
       if (e.score >= 0.8) excellent++
@@ -124,7 +137,9 @@ function HistoryStats({ history }: { history: HistoryEntry[] }) {
       <CollapsibleTrigger className="w-full">
         <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer text-sm">
           <span className="font-medium">Stats</span>
-          <span className="text-muted-foreground">{stats.total} entries · avg {(stats.avgScore * 100).toFixed(0)}%</span>
+          <span className="text-muted-foreground">
+            {stats.total} entries · avg {(stats.avgScore * 100).toFixed(0)}%
+          </span>
         </div>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -161,7 +176,13 @@ function HistoryStats({ history }: { history: HistoryEntry[] }) {
         </div>
         {stats.topLang && (
           <div className="px-2 pb-2">
-            <p className="text-xs text-muted-foreground">Most practiced: <Badge variant="outline" className="ml-1">{stats.topLang[0].toUpperCase()}</Badge> ({stats.topLang[1]} entries)</p>
+            <p className="text-xs text-muted-foreground">
+              Most practiced:{' '}
+              <Badge variant="outline" className="ml-1">
+                {stats.topLang[0].toUpperCase()}
+              </Badge>{' '}
+              ({stats.topLang[1]} entries)
+            </p>
           </div>
         )}
       </CollapsibleContent>
@@ -187,7 +208,11 @@ function WordDifficulty({ history }: { history: HistoryEntry[] }) {
         attempts: s.total,
       }))
       .sort((a, b) => a.avg - b.avg)
-    return { hardest: ranked.slice(0, 5), easiest: ranked.slice(-5).reverse(), total: ranked.length }
+    return {
+      hardest: ranked.slice(0, 5),
+      easiest: ranked.slice(-5).reverse(),
+      total: ranked.length,
+    }
   }, [history])
 
   if (!wordStats || wordStats.total === 0) return null
@@ -211,10 +236,14 @@ function WordDifficulty({ history }: { history: HistoryEntry[] }) {
               <div key={i} className="flex items-center justify-between py-1 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{w.word}</span>
-                  <Badge variant="outline" className="text-xs">{w.lang.toUpperCase()}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {w.lang.toUpperCase()}
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="destructive" className="text-xs">{(w.avg * 100).toFixed(0)}%</Badge>
+                  <Badge variant="destructive" className="text-xs">
+                    {(w.avg * 100).toFixed(0)}%
+                  </Badge>
                   <span className="text-xs text-muted-foreground">×{w.attempts}</span>
                 </div>
               </div>
@@ -229,10 +258,14 @@ function WordDifficulty({ history }: { history: HistoryEntry[] }) {
               <div key={i} className="flex items-center justify-between py-1 text-sm">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">{w.word}</span>
-                  <Badge variant="outline" className="text-xs">{w.lang.toUpperCase()}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {w.lang.toUpperCase()}
+                  </Badge>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="default" className="text-xs">{(w.avg * 100).toFixed(0)}%</Badge>
+                  <Badge variant="default" className="text-xs">
+                    {(w.avg * 100).toFixed(0)}%
+                  </Badge>
                   <span className="text-xs text-muted-foreground">×{w.attempts}</span>
                 </div>
               </div>
@@ -246,16 +279,16 @@ function WordDifficulty({ history }: { history: HistoryEntry[] }) {
 
 export default function HistoryCard() {
   const [filterLang, setFilterLang] = useState<string>('all')
-  const history = usePhonemeStore(s => s.history)
-  const clearHistory = usePhonemeStore(s => s.clearHistory)
-  const exportHistory = usePhonemeStore(s => s.exportHistory)
-  const importHistory = usePhonemeStore(s => s.importHistory)
-  const addToast = useToastStore(s => s.addToast)
+  const history = usePhonemeStore((s) => s.history)
+  const clearHistory = usePhonemeStore((s) => s.clearHistory)
+  const exportHistory = usePhonemeStore((s) => s.exportHistory)
+  const importHistory = usePhonemeStore((s) => s.importHistory)
+  const addToast = useToastStore((s) => s.addToast)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const filteredHistory = useMemo(() => {
     if (filterLang === 'all') return history
-    return history.filter(e => e.language === filterLang)
+    return history.filter((e) => e.language === filterLang)
   }, [history, filterLang])
 
   const handleExport = useCallback(() => {
@@ -271,8 +304,16 @@ export default function HistoryCard() {
   }, [exportHistory, addToast])
 
   const handleExportCSV = useCallback(() => {
-    const headers = ['Time', 'Target', 'Spoken', 'Score', 'Language', 'Target Phonemes', 'Spoken Phonemes']
-    const rows = history.map(e => [
+    const headers = [
+      'Time',
+      'Target',
+      'Spoken',
+      'Score',
+      'Language',
+      'Target Phonemes',
+      'Spoken Phonemes',
+    ]
+    const rows = history.map((e) => [
       new Date(e.timestamp).toISOString(),
       e.target,
       e.spoken,
@@ -281,7 +322,7 @@ export default function HistoryCard() {
       e.targetPhonemes.join(' '),
       e.spokenPhonemes.join(' '),
     ])
-    const csv = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
+    const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -292,18 +333,21 @@ export default function HistoryCard() {
     addToast('History exported as CSV', 'success')
   }, [history, addToast])
 
-  const handleImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = () => {
-      const json = reader.result as string
-      importHistory(json)
-      addToast('History imported', 'success')
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }, [importHistory, addToast])
+  const handleImport = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const json = reader.result as string
+        importHistory(json)
+        addToast('History imported', 'success')
+      }
+      reader.readAsText(file)
+      e.target.value = ''
+    },
+    [importHistory, addToast],
+  )
 
   const handleClear = useCallback(() => {
     clearHistory()
@@ -315,7 +359,9 @@ export default function HistoryCard() {
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Pronunciation History</span>
-          <span className="text-sm font-normal text-muted-foreground">{filteredHistory.length} entries</span>
+          <span className="text-sm font-normal text-muted-foreground">
+            {filteredHistory.length} entries
+          </span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -330,8 +376,10 @@ export default function HistoryCard() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Languages</SelectItem>
-              {PHONEME_LANGUAGES.map(l => (
-                <SelectItem key={l.value} value={l.value}>{l.label}</SelectItem>
+              {PHONEME_LANGUAGES.map((l) => (
+                <SelectItem key={l.value} value={l.value}>
+                  {l.label}
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -353,7 +401,13 @@ export default function HistoryCard() {
               Clear
             </Button>
           </div>
-          <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json"
+            className="hidden"
+            onChange={handleImport}
+          />
         </div>
 
         <div className="space-y-1 max-h-[400px] overflow-y-auto">
@@ -367,7 +421,11 @@ export default function HistoryCard() {
             )
           ) : (
             filteredHistory.map((entry, i) => (
-              <div key={entry.id} className="animate-in fade-in duration-200" style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}>
+              <div
+                key={entry.id}
+                className="animate-in fade-in duration-200"
+                style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}
+              >
                 <HistoryRow entry={entry} />
               </div>
             ))

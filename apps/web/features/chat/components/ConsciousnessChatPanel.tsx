@@ -8,6 +8,7 @@
  */
 
 import { useState, memo } from 'react'
+import { formatLocaleTime } from '@/lib/time-format'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconX, IconBrain, IconSparkle, IconRefresh } from '@sloughgpt/strui'
 import { useConsciousness } from '@/features/chat/contexts/ConsciousnessContext'
@@ -55,9 +56,7 @@ function StarRating({ value, onChange }: { value: number; onChange: (v: number) 
           onClick={() => onChange(n)}
           className={cn(
             'h-5 w-5 flex items-center justify-center rounded transition-colors',
-            n <= value
-              ? 'text-warning'
-              : 'text-muted-foreground/30 hover:text-muted-foreground/60',
+            n <= value ? 'text-warning' : 'text-muted-foreground/30 hover:text-muted-foreground/60',
           )}
           aria-label={`${n} ${t('consciousness_chat.star')}`}
         >
@@ -240,7 +239,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                           {(ep.growth_delta * 100).toFixed(1)}%
                         </span>
                         <span className="text-[9px] text-muted-foreground font-mono">
-                          {new Date(ep.timestamp).toLocaleTimeString()}
+                          {formatLocaleTime(ep.timestamp)}
                         </span>
                       </div>
                     </div>
@@ -321,7 +320,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
                         {ep.narrative || t('consciousness_chat.no_narrative')}
                       </span>
                       <span className="text-[9px] text-muted-foreground font-mono shrink-0">
-                        {new Date(ep.timestamp).toLocaleTimeString()}
+                        {formatLocaleTime(ep.timestamp)}
                       </span>
                     </li>
                   ))}

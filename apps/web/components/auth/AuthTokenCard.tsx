@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDateTime, toDateSeconds } from '@/lib/time-format'
 import { Card, CardHeader, CardTitle, CardContent, Button, cn } from '@sloughgpt/strui'
 
 function decodeJwtPayload(token: string): Record<string, unknown> | null {
@@ -9,7 +10,9 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
     if (!base64) return null
     const json = atob(base64.replace(/-/g, '+').replace(/_/g, '/'))
     return JSON.parse(json)
-  } catch { return null }
+  } catch {
+    return null
+  }
 }
 
 function formatExpiry(exp: number): string {
@@ -27,7 +30,9 @@ interface AuthTokenCardProps {
 }
 
 export function AuthTokenCard({ token, onVerify }: AuthTokenCardProps) {
-  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; expires?: number } | null>(null)
+  const [verifyResult, setVerifyResult] = useState<{ valid: boolean; expires?: number } | null>(
+    null,
+  )
   const [verifying, setVerifying] = useState(false)
   const [copied, setCopied] = useState(false)
 
@@ -65,7 +70,13 @@ export function AuthTokenCard({ token, onVerify }: AuthTokenCardProps) {
           <CardTitle className="text-base">Token Details</CardTitle>
           <div className="flex gap-1">
             {onVerify && (
-              <Button size="sm" variant="ghost" className="text-[10px]" onClick={handleVerify} disabled={verifying}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-[10px]"
+                onClick={handleVerify}
+                disabled={verifying}
+              >
                 {verifying ? 'Verifying...' : 'Verify'}
               </Button>
             )}
@@ -79,44 +90,59 @@ export function AuthTokenCard({ token, onVerify }: AuthTokenCardProps) {
         <div className="space-y-2">
           {sub && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Subject</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Subject
+              </div>
               <div className="text-xs font-medium mt-0.5">{sub}</div>
             </div>
           )}
           {role && (
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Role</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Role
+              </div>
               <div className="text-xs font-medium mt-0.5 capitalize">{role}</div>
             </div>
           )}
           {exp && (
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">Expires:</span>
-              <span className={cn('text-[10px] font-mono',
-                exp * 1000 < Date.now() ? 'text-destructive' :
-                exp * 1000 - Date.now() < 3600000 ? 'text-warning' :
-                'text-success'
-              )}>
+              <span
+                className={cn(
+                  'text-[10px] font-mono',
+                  exp * 1000 < Date.now()
+                    ? 'text-destructive'
+                    : exp * 1000 - Date.now() < 3600000
+                      ? 'text-warning'
+                      : 'text-success',
+                )}
+              >
                 {formatExpiry(exp)}
               </span>
             </div>
           )}
           {iat && (
             <div className="text-[10px] text-muted-foreground">
-              Issued: {new Date(iat * 1000).toLocaleString()}
+              Issued: {formatDateTime(toDateSeconds(iat))}
             </div>
           )}
           <div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-0.5">Raw</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-0.5">
+              Raw
+            </div>
             <div className="text-[9px] font-mono text-muted-foreground break-all bg-muted/50 rounded p-1.5 max-h-16 overflow-y-auto">
               {token}
             </div>
           </div>
           {verifyResult && (
-            <div className={cn(
-              'text-xs font-medium p-2 rounded',
-              verifyResult.valid ? 'bg-success/10 text-success' : 'bg-destructive/10 text-destructive'
-            )}>
+            <div
+              className={cn(
+                'text-xs font-medium p-2 rounded',
+                verifyResult.valid
+                  ? 'bg-success/10 text-success'
+                  : 'bg-destructive/10 text-destructive',
+              )}
+            >
               {verifyResult.valid ? '✓ Token is valid' : '✗ Token is invalid or expired'}
             </div>
           )}

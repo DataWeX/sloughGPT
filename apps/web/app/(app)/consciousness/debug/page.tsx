@@ -1,12 +1,21 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { formatLocaleTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
-  Input, Skeleton, Switch,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Input,
+  Skeleton,
+  Switch,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -38,15 +47,38 @@ const COMMON_EXPRESSIONS = [
   { labelKey: 'consciousness_debug.shortcut_status', endpoint: '/consciousness/status' },
   { labelKey: 'consciousness_debug.shortcut_qualia', endpoint: '/consciousness/qualia' },
   { labelKey: 'consciousness_debug.shortcut_beliefs', endpoint: '/consciousness/self-model' },
-  { labelKey: 'consciousness_debug.shortcut_episodes', endpoint: '/consciousness/history/episodes?limit=5' },
+  {
+    labelKey: 'consciousness_debug.shortcut_episodes',
+    endpoint: '/consciousness/history/episodes?limit=5',
+  },
 ]
 
 const STATE_ENDPOINTS = [
-  { key: 'status', labelKey: 'consciousness_debug.state_status', endpoint: '/consciousness/status' },
-  { key: 'self_model', labelKey: 'consciousness_debug.state_self_model', endpoint: '/consciousness/self-model' },
-  { key: 'personality', labelKey: 'consciousness_debug.state_personality', endpoint: '/consciousness/personality' },
-  { key: 'config', labelKey: 'consciousness_debug.state_config', endpoint: '/consciousness/config' },
-  { key: 'training', labelKey: 'consciousness_debug.state_training', endpoint: '/consciousness/train/status' },
+  {
+    key: 'status',
+    labelKey: 'consciousness_debug.state_status',
+    endpoint: '/consciousness/status',
+  },
+  {
+    key: 'self_model',
+    labelKey: 'consciousness_debug.state_self_model',
+    endpoint: '/consciousness/self-model',
+  },
+  {
+    key: 'personality',
+    labelKey: 'consciousness_debug.state_personality',
+    endpoint: '/consciousness/personality',
+  },
+  {
+    key: 'config',
+    labelKey: 'consciousness_debug.state_config',
+    endpoint: '/consciousness/config',
+  },
+  {
+    key: 'training',
+    labelKey: 'consciousness_debug.state_training',
+    endpoint: '/consciousness/train/status',
+  },
 ] as const
 
 function generateId() {
@@ -54,7 +86,7 @@ function generateId() {
 }
 
 function formatTimestamp(ts: number): string {
-  return new Date(ts).toLocaleTimeString()
+  return formatLocaleTime(ts)
 }
 
 function formatJson(data: unknown): string {
@@ -66,7 +98,7 @@ function formatJson(data: unknown): string {
 }
 
 export default function ConsciousnessDebugPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
 
   const [autoRefresh, setAutoRefresh] = useState(false)
@@ -93,7 +125,7 @@ export default function ConsciousnessDebugPage() {
   const [lastError, setLastError] = useState<string | null>(null)
 
   const fetchState = useCallback(async (key: string, endpoint: string) => {
-    setStateLoading(prev => ({ ...prev, [key]: true }))
+    setStateLoading((prev) => ({ ...prev, [key]: true }))
     try {
       let data: unknown
       if (endpoint === '/consciousness/status') {
@@ -108,14 +140,14 @@ export default function ConsciousnessDebugPage() {
         const json = await res.json()
         data = json.data ?? json
       }
-      setStateData(prev => ({ ...prev, [key]: data }))
+      setStateData((prev) => ({ ...prev, [key]: data }))
       setConnected(true)
     } catch (e) {
       setConnected(false)
       setLastError(extractErrorMessage(e))
-      setStateData(prev => ({ ...prev, [key]: { error: extractErrorMessage(e) } }))
+      setStateData((prev) => ({ ...prev, [key]: { error: extractErrorMessage(e) } }))
     } finally {
-      setStateLoading(prev => ({ ...prev, [key]: false }))
+      setStateLoading((prev) => ({ ...prev, [key]: false }))
     }
   }, [])
 
@@ -165,7 +197,7 @@ export default function ConsciousnessDebugPage() {
       data: { subscribed: true, filter: filter || null },
       timestamp: Date.now(),
     }
-    setEvents(prev => [newEvent, ...prev].slice(0, 50))
+    setEvents((prev) => [newEvent, ...prev].slice(0, 50))
     addToast(t('consciousness_debug.toast_subscribed'), 'success')
   }, [eventInput, addToast, t])
 
@@ -182,7 +214,12 @@ export default function ConsciousnessDebugPage() {
     const output: string[] = [`> ${input}`]
 
     try {
-      if (input.startsWith('GET ') || input.startsWith('POST ') || input.startsWith('PATCH ') || input.startsWith('DELETE ')) {
+      if (
+        input.startsWith('GET ') ||
+        input.startsWith('POST ') ||
+        input.startsWith('PATCH ') ||
+        input.startsWith('DELETE ')
+      ) {
         const parts = input.split(' ')
         const method = parts[0]
         const path = parts.slice(1).join(' ')
@@ -216,7 +253,7 @@ export default function ConsciousnessDebugPage() {
       setLastError(extractErrorMessage(e))
     }
 
-    setConsoleOutput(prev => [...output, ...prev].slice(0, 100))
+    setConsoleOutput((prev) => [...output, ...prev].slice(0, 100))
     setConsoleLoading(false)
   }, [consoleInput])
 
@@ -233,7 +270,7 @@ export default function ConsciousnessDebugPage() {
       setConnected(false)
       setLastError(extractErrorMessage(e))
     }
-    setConsoleOutput(prev => [...output, ...prev].slice(0, 100))
+    setConsoleOutput((prev) => [...output, ...prev].slice(0, 100))
     setConsoleLoading(false)
   }, [])
 
@@ -305,9 +342,8 @@ export default function ConsciousnessDebugPage() {
     }
   }, [autoRefresh, autoRefreshInterval, fetchAllStates])
 
-  const filteredEvents = eventFilter === 'all'
-    ? events
-    : events.filter(e => e.type === eventFilter)
+  const filteredEvents =
+    eventFilter === 'all' ? events : events.filter((e) => e.type === eventFilter)
 
   return (
     <PageContainer title={t('consciousness_debug.page_title')}>
@@ -315,13 +351,19 @@ export default function ConsciousnessDebugPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} />
-            <span className="text-xs text-muted-foreground">{t('consciousness_debug.auto_refresh')}</span>
+            <span className="text-xs text-muted-foreground">
+              {t('consciousness_debug.auto_refresh')}
+            </span>
             {autoRefresh && (
               <div className="flex items-center gap-1.5">
                 <Input
                   type="number"
                   value={autoRefreshInterval}
-                  onChange={(e) => setAutoRefreshInterval(Math.max(1, parseInt((e.target as HTMLInputElement).value) || 10))}
+                  onChange={(e) =>
+                    setAutoRefreshInterval(
+                      Math.max(1, parseInt((e.target as HTMLInputElement).value) || 10),
+                    )
+                  }
                   className="h-7 w-16 text-xs"
                   min={1}
                   max={300}
@@ -331,9 +373,15 @@ export default function ConsciousnessDebugPage() {
             )}
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connected === true ? 'bg-success' : connected === false ? 'bg-destructive' : 'bg-warning'}`} />
+            <div
+              className={`w-2 h-2 rounded-full ${connected === true ? 'bg-success' : connected === false ? 'bg-destructive' : 'bg-warning'}`}
+            />
             <span className="text-xs text-muted-foreground">
-              {connected === true ? t('consciousness_debug.connected') : connected === false ? t('consciousness_debug.disconnected') : t('consciousness_debug.checking')}
+              {connected === true
+                ? t('consciousness_debug.connected')
+                : connected === false
+                  ? t('consciousness_debug.disconnected')
+                  : t('consciousness_debug.checking')}
             </span>
           </div>
         </div>
@@ -343,32 +391,48 @@ export default function ConsciousnessDebugPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-sm">{t('consciousness_debug.state_inspector')}</CardTitle>
+                  <CardTitle className="text-sm">
+                    {t('consciousness_debug.state_inspector')}
+                  </CardTitle>
                   <CardDescription>{t('consciousness_debug.state_inspector_desc')}</CardDescription>
                 </div>
-                <Button variant="outline" size="sm" onClick={fetchAllStates} className="h-7 text-xs">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={fetchAllStates}
+                  className="h-7 text-xs"
+                >
                   {t('consciousness_debug.refresh_all')}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {STATE_ENDPOINTS.map(ep => (
+              {STATE_ENDPOINTS.map((ep) => (
                 <div key={ep.key} className="rounded-md border border-border/40 bg-muted/10">
                   <button
                     type="button"
-                    onClick={() => setExpandedState(prev => ({ ...prev, [ep.key]: !prev[ep.key] }))}
+                    onClick={() =>
+                      setExpandedState((prev) => ({ ...prev, [ep.key]: !prev[ep.key] }))
+                    }
                     className="w-full flex items-center justify-between px-3 py-2 text-left"
                   >
                     <div className="flex items-center gap-2">
-                      <Badge variant="outline" className="font-mono text-[9px] border px-1.5 py-0 shrink-0 bg-success/15 text-success border-success/30">
+                      <Badge
+                        variant="outline"
+                        className="font-mono text-[9px] border px-1.5 py-0 shrink-0 bg-success/15 text-success border-success/30"
+                      >
                         GET
                       </Badge>
                       <span className="text-xs font-medium">{t(ep.labelKey)}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono">{ep.endpoint}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">
+                        {ep.endpoint}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       {stateLoading[ep.key] && <Skeleton className="h-3 w-3" />}
-                      <span className="text-muted-foreground text-[10px]">{expandedState[ep.key] ? '▼' : '▶'}</span>
+                      <span className="text-muted-foreground text-[10px]">
+                        {expandedState[ep.key] ? '▼' : '▶'}
+                      </span>
                     </div>
                   </button>
                   {expandedState[ep.key] && (
@@ -415,21 +479,27 @@ export default function ConsciousnessDebugPage() {
                 className="w-full h-7 rounded-md border border-border/40 bg-muted/20 px-2 text-xs"
               >
                 <option value="all">{t('consciousness_debug.all_events')}</option>
-                {EVENT_TYPES.map(type => (
-                  <option key={type} value={type}>{type}</option>
+                {EVENT_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
                 ))}
               </select>
               <div className="max-h-80 overflow-y-auto space-y-1">
                 {filteredEvents.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground text-center py-4">{t('consciousness_debug.no_events')}</p>
+                  <p className="text-[10px] text-muted-foreground text-center py-4">
+                    {t('consciousness_debug.no_events')}
+                  </p>
                 )}
-                {filteredEvents.map(ev => (
+                {filteredEvents.map((ev) => (
                   <div
                     key={ev.id}
                     className="rounded border border-border/30 bg-muted/10 px-2 py-1.5 text-[10px]"
                   >
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-muted-foreground font-mono">{formatTimestamp(ev.timestamp)}</span>
+                      <span className="text-muted-foreground font-mono">
+                        {formatTimestamp(ev.timestamp)}
+                      </span>
                       <Badge variant="outline" className="text-[8px] font-mono border px-1 py-0">
                         {ev.type}
                       </Badge>
@@ -450,7 +520,7 @@ export default function ConsciousnessDebugPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-1.5">
-                {COMMON_EXPRESSIONS.map(expr => (
+                {COMMON_EXPRESSIONS.map((expr) => (
                   <Button
                     key={expr.endpoint}
                     variant="outline"
@@ -467,21 +537,33 @@ export default function ConsciousnessDebugPage() {
                 <Input
                   value={consoleInput}
                   onChange={(e) => setConsoleInput((e.target as HTMLInputElement).value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleConsoleExecute() }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConsoleExecute()
+                  }}
                   placeholder={t('consciousness_debug.console_placeholder')}
                   className="h-7 text-xs font-mono"
                   disabled={consoleLoading}
                 />
-                <Button size="sm" onClick={handleConsoleExecute} disabled={consoleLoading} className="h-7 text-xs shrink-0">
+                <Button
+                  size="sm"
+                  onClick={handleConsoleExecute}
+                  disabled={consoleLoading}
+                  className="h-7 text-xs shrink-0"
+                >
                   {consoleLoading ? '...' : t('consciousness_debug.execute')}
                 </Button>
               </div>
               <div className="max-h-60 overflow-y-auto rounded border border-border/30 bg-background/50 p-2 text-[11px] font-mono">
                 {consoleOutput.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-2">{t('consciousness_debug.console_empty')}</p>
+                  <p className="text-muted-foreground text-center py-2">
+                    {t('consciousness_debug.console_empty')}
+                  </p>
                 ) : (
                   consoleOutput.map((line, i) => (
-                    <div key={i} className={`whitespace-pre-wrap break-all py-0.5 ${line.startsWith('>') ? 'text-primary' : 'text-muted-foreground'}`}>
+                    <div
+                      key={i}
+                      className={`whitespace-pre-wrap break-all py-0.5 ${line.startsWith('>') ? 'text-primary' : 'text-muted-foreground'}`}
+                    >
                       {line}
                     </div>
                   ))
@@ -497,16 +579,28 @@ export default function ConsciousnessDebugPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-2 gap-2">
-                <Button variant="outline" onClick={fetchHealth} disabled={healthLoading} className="h-8 text-xs">
+                <Button
+                  variant="outline"
+                  onClick={fetchHealth}
+                  disabled={healthLoading}
+                  className="h-8 text-xs"
+                >
                   {healthLoading ? '...' : t('consciousness_debug.check_health')}
                 </Button>
-                <Button variant="outline" onClick={fetchEval} disabled={evalLoading} className="h-8 text-xs">
+                <Button
+                  variant="outline"
+                  onClick={fetchEval}
+                  disabled={evalLoading}
+                  className="h-8 text-xs"
+                >
                   {evalLoading ? '...' : t('consciousness_debug.run_eval')}
                 </Button>
               </div>
               {healthData != null && (
                 <div>
-                  <p className="text-[10px] font-medium text-muted-foreground mb-1">{t('consciousness_debug.health_report')}</p>
+                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                    {t('consciousness_debug.health_report')}
+                  </p>
                   <pre className="max-h-40 overflow-auto rounded border border-border/30 bg-background/50 p-2 text-[10px] font-mono whitespace-pre-wrap">
                     {formatJson(healthData as Record<string, unknown>)}
                   </pre>
@@ -514,7 +608,9 @@ export default function ConsciousnessDebugPage() {
               )}
               {evalData != null && (
                 <div>
-                  <p className="text-[10px] font-medium text-muted-foreground mb-1">{t('consciousness_debug.eval_report')}</p>
+                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                    {t('consciousness_debug.eval_report')}
+                  </p>
                   <pre className="max-h-40 overflow-auto rounded border border-border/30 bg-background/50 p-2 text-[10px] font-mono whitespace-pre-wrap">
                     {formatJson(evalData as Record<string, unknown>)}
                   </pre>
@@ -522,7 +618,9 @@ export default function ConsciousnessDebugPage() {
               )}
               {lastError && (
                 <div>
-                  <p className="text-[10px] font-medium text-destructive mb-1">{t('consciousness_debug.last_error')}</p>
+                  <p className="text-[10px] font-medium text-destructive mb-1">
+                    {t('consciousness_debug.last_error')}
+                  </p>
                   <pre className="max-h-24 overflow-auto rounded border border-destructive/20 bg-destructive/5 p-2 text-[10px] font-mono text-destructive whitespace-pre-wrap">
                     {lastError}
                   </pre>

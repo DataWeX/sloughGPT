@@ -3,6 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input } from '@sloughgpt/strui'
 import { trainingFacade } from '@/lib/training-facade'
@@ -82,7 +83,7 @@ export default function AutoTrainPage() {
   const formatDate = (ts: string | null) => {
     if (!ts) return '-'
     try {
-      return new Date(ts).toLocaleString()
+      return formatDateTime(ts)
     } catch {
       return ts
     }

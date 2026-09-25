@@ -1,7 +1,17 @@
 'use client'
 
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button, Checkbox, Skeleton } from '@sloughgpt/strui'
+import { formatLocaleDate } from '@/lib/time-format'
+import {
+  cn,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Button,
+  Checkbox,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { trainingJobsController, type ChatSession } from '@/lib/training-controller'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 
@@ -34,7 +44,9 @@ export function SessionTrainingCard({ addToast }: Props) {
   useEffect(() => {
     activeRef.current = true
     void fetchSessions()
-    return () => { activeRef.current = false }
+    return () => {
+      activeRef.current = false
+    }
   }, [fetchSessions])
 
   useEffect(() => {
@@ -44,7 +56,7 @@ export function SessionTrainingCard({ addToast }: Props) {
         if (pairCounts[id] == null) {
           try {
             const result = await trainingJobsController.getSessionPairs(id)
-            if (active) setPairCounts(prev => ({ ...prev, [id]: result.count }))
+            if (active) setPairCounts((prev) => ({ ...prev, [id]: result.count }))
           } catch {
             if (active) addToast('Could not load pair count', 'error')
           }
@@ -52,13 +64,16 @@ export function SessionTrainingCard({ addToast }: Props) {
       }
     }
     void fetchMissing()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [selected])
 
   const toggleSelect = useCallback((id: string) => {
-    setSelected(prev => {
+    setSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }, [])
@@ -71,12 +86,18 @@ export function SessionTrainingCard({ addToast }: Props) {
         session_ids: Array.from(selected),
       })
       if (result.success) {
-        addToast(`Trained from ${selected.size} sessions (loss: ${result.loss.toFixed(4)}, ${result.steps} steps)`, 'success')
+        addToast(
+          `Trained from ${selected.size} sessions (loss: ${result.loss.toFixed(4)}, ${result.steps} steps)`,
+          'success',
+        )
       } else {
         addToast(result.message || 'Training completed with issues', 'info')
       }
     } catch (e) {
-      addToast(`Session training failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+      addToast(
+        `Session training failed: ${e instanceof Error ? e.message : 'Unknown error'}`,
+        'error',
+      )
     } finally {
       setTraining(false)
     }
@@ -91,14 +112,24 @@ export function SessionTrainingCard({ addToast }: Props) {
           <CardTitle className="text-base">Train from Sessions</CardTitle>
           <div className="flex gap-1">
             {selected.size > 0 && (
-              <Button size="sm" variant="ghost" className="text-destructive text-[10px]" onClick={() => setSelected(new Set())}>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive text-[10px]"
+                onClick={() => setSelected(new Set())}
+              >
                 Clear ({selected.size})
               </Button>
             )}
-            <Button size="sm" variant="ghost" className="text-[10px]" onClick={() => {
-              if (selected.size === sessions.length) setSelected(new Set())
-              else setSelected(new Set(sessions.map(s => s.id)))
-            }}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-[10px]"
+              onClick={() => {
+                if (selected.size === sessions.length) setSelected(new Set())
+                else setSelected(new Set(sessions.map((s) => s.id)))
+              }}
+            >
               {selected.size === sessions.length ? 'Deselect all' : 'Select all'}
             </Button>
           </div>
@@ -115,10 +146,15 @@ export function SessionTrainingCard({ addToast }: Props) {
           <p className="text-[10px] text-muted-foreground/60">No chat sessions found.</p>
         ) : (
           <div className="space-y-1 max-h-64 overflow-y-auto">
-            {sessions.slice(0, 50).map(s => (
+            {sessions.slice(0, 50).map((s) => (
               <div
                 key={s.id}
-                className={cn('flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-colors', selected.has(s.id) ? 'border-primary bg-primary/5' : 'border-border/40 hover:bg-muted/20')}
+                className={cn(
+                  'flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition-colors',
+                  selected.has(s.id)
+                    ? 'border-primary bg-primary/5'
+                    : 'border-border/40 hover:bg-muted/20',
+                )}
               >
                 <Checkbox
                   checked={selected.has(s.id)}
@@ -129,8 +165,10 @@ export function SessionTrainingCard({ addToast }: Props) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[11px] font-medium">{s.name}</p>
                   <div className="flex gap-1.5 text-[9px] text-muted-foreground/60">
-                    <span className="tabular-nums">{new Date(s.updated_at).toLocaleDateString()}</span>
-                    {pairCounts[s.id] != null && <span className="tabular-nums">{pairCounts[s.id]} pairs</span>}
+                    <span className="tabular-nums">{formatLocaleDate(s.updated_at)}</span>
+                    {pairCounts[s.id] != null && (
+                      <span className="tabular-nums">{pairCounts[s.id]} pairs</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -143,7 +181,12 @@ export function SessionTrainingCard({ addToast }: Props) {
             <span className="text-muted-foreground/60">
               {selected.size} sessions, ~{totalPairs} pairs
             </span>
-            <Button size="sm" className="h-6 text-[10px]" onClick={() => setPendingTrain(true)} disabled={training}>
+            <Button
+              size="sm"
+              className="h-6 text-[10px]"
+              onClick={() => setPendingTrain(true)}
+              disabled={training}
+            >
               {training ? 'Training...' : 'Train from Sessions'}
             </Button>
           </div>
@@ -156,7 +199,10 @@ export function SessionTrainingCard({ addToast }: Props) {
         description={`This will train a model from ${selected.size} sessions (~${totalPairs} pairs). This may take a while.`}
         confirmLabel="Start training"
         destructive={false}
-        onConfirm={() => { setPendingTrain(false); void handleTrain() }}
+        onConfirm={() => {
+          setPendingTrain(false)
+          void handleTrain()
+        }}
       />
     </Card>
   )

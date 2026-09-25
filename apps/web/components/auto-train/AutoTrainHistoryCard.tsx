@@ -1,6 +1,7 @@
 'use client'
 
 import { Card, CardHeader, CardTitle, CardContent, cn } from '@sloughgpt/strui'
+import { formatDateTime } from '@/lib/time-format'
 
 interface LastTrain {
   started_at: string
@@ -21,33 +22,52 @@ export function AutoTrainHistoryCard({ lastTrain }: AutoTrainHistoryCardProps) {
       </CardHeader>
       <CardContent>
         {!lastTrain ? (
-          <div className="text-sm text-muted-foreground text-center py-4">No training runs yet.</div>
+          <div className="text-sm text-muted-foreground text-center py-4">
+            No training runs yet.
+          </div>
         ) : (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Started</span>
-              <span className="text-xs">{new Date(lastTrain.started_at).toLocaleString()}</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Started
+              </span>
+              <span className="text-xs">{formatDateTime(lastTrain.started_at)}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Completed</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Completed
+              </span>
               <span className="text-xs">
-                {lastTrain.completed_at
-                  ? new Date(lastTrain.completed_at).toLocaleString()
-                  : <span className="text-warning">In progress...</span>
-                }
+                {lastTrain.completed_at ? (
+                  formatDateTime(lastTrain.completed_at)
+                ) : (
+                  <span className="text-warning">In progress...</span>
+                )}
               </span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Pairs Used</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Pairs Used
+              </span>
               <span className="text-xs font-medium">{lastTrain.pairs_used}</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Checkpoint</span>
-              <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">{lastTrain.checkpoint}</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Checkpoint
+              </span>
+              <span className="text-[10px] font-mono bg-muted px-1.5 py-0.5 rounded">
+                {lastTrain.checkpoint}
+              </span>
             </div>
             {lastTrain.completed_at && (
               <div className="text-[10px] text-muted-foreground text-right">
-                Duration: {Math.round((new Date(lastTrain.completed_at).getTime() - new Date(lastTrain.started_at).getTime()) / 1000)}s
+                Duration:{' '}
+                {Math.round(
+                  (new Date(lastTrain.completed_at).getTime() -
+                    new Date(lastTrain.started_at).getTime()) /
+                    1000,
+                )}
+                s
               </div>
             )}
           </div>

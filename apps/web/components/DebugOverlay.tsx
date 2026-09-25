@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { formatLocaleTime, toDateSeconds } from '@/lib/time-format'
 import { useErrorStore } from '@/lib/error-store'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useErrorStream } from '@/hooks/useErrorStream'
@@ -334,7 +335,7 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
                   </span>
                   <span className="text-muted-foreground/60 truncate">{e.model}</span>
                   <span className="text-muted-foreground/30 tabular-nums shrink-0">
-                    {new Date(e.ts * 1000).toLocaleTimeString()}
+                    {formatLocaleTime(toDateSeconds(e.ts))}
                   </span>
                 </div>
               ))}

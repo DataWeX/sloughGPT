@@ -2,7 +2,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { formatDateTime } from '@/lib/time-format'
+import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -152,7 +153,9 @@ export default function ModelDetailPage() {
                   <div className="text-xs text-muted-foreground">P99 (ms)</div>
                 </div>
                 <div>
-                  <div className="text-base font-bold text-destructive">{model.error_count ?? 0}</div>
+                  <div className="text-base font-bold text-destructive">
+                    {model.error_count ?? 0}
+                  </div>
                   <div className="text-xs text-muted-foreground">Errors</div>
                 </div>
               </div>
@@ -193,10 +196,7 @@ export default function ModelDetailPage() {
                   <div className="text-xs text-destructive mt-2">{model.warmup_error}</div>
                 )}
                 {model.last_request_at && (
-                  <Row
-                    label="Last Request"
-                    value={new Date(model.last_request_at).toLocaleString()}
-                  />
+                  <Row label="Last Request" value={formatDateTime(model.last_request_at)} />
                 )}
               </CardContent>
             </Card>

@@ -1,6 +1,7 @@
 'use client'
 
 import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { formatDateTime, toDateSeconds } from '@/lib/time-format'
 
 interface AuthSessionInfoCardProps {
   token: string | null
@@ -43,27 +44,38 @@ export function AuthSessionInfoCard({ token, user, onLogout }: AuthSessionInfoCa
         <div className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">User</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                User
+              </div>
               <div className="text-sm font-medium mt-0.5">{user.username}</div>
             </div>
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Email</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+                Email
+              </div>
               <div className="text-sm font-medium mt-0.5">{user.email}</div>
             </div>
           </div>
           {exp && (
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-muted-foreground">Token expires:</span>
-              <span className={cn('text-[10px] font-mono', exp * 1000 < Date.now() ? 'text-destructive' :
-                exp * 1000 - Date.now() < 3600000 ? 'text-warning' :
-                'text-success')}>
+              <span
+                className={cn(
+                  'text-[10px] font-mono',
+                  exp * 1000 < Date.now()
+                    ? 'text-destructive'
+                    : exp * 1000 - Date.now() < 3600000
+                      ? 'text-warning'
+                      : 'text-success',
+                )}
+              >
                 {formatExpiry(exp)}
               </span>
             </div>
           )}
           {iat && (
             <div className="text-[10px] text-muted-foreground">
-              Issued: {new Date(iat * 1000).toLocaleString()}
+              Issued: {formatDateTime(toDateSeconds(iat))}
             </div>
           )}
           <button

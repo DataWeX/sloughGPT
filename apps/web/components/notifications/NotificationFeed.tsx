@@ -1,4 +1,5 @@
 import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { formatDateTime } from '@/lib/time-format'
 
 export interface NotificationItem {
   type: string
@@ -24,7 +25,11 @@ const STATUS_STYLES: Record<string, string> = {
 
 function formatTime(ts: string) {
   if (!ts) return ''
-  try { return new Date(ts).toLocaleString() } catch { return ts }
+  try {
+    return formatDateTime(ts)
+  } catch {
+    return ts
+  }
 }
 
 export function NotificationFeed({ notifications }: NotificationFeedProps) {
@@ -38,10 +43,15 @@ export function NotificationFeed({ notifications }: NotificationFeedProps) {
           <p className="text-xs text-muted-foreground py-4 text-center">No notifications</p>
         ) : (
           notifications.map((n, i) => (
-            <div key={i} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
+            <div
+              key={i}
+              className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50"
+            >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${TYPE_STYLES[n.type] || 'bg-muted text-muted-foreground'}`}>
+                  <span
+                    className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${TYPE_STYLES[n.type] || 'bg-muted text-muted-foreground'}`}
+                  >
                     {n.type}
                   </span>
                   <span className="font-medium">{n.title}</span>
@@ -50,11 +60,15 @@ export function NotificationFeed({ notifications }: NotificationFeedProps) {
               </div>
               <div className="flex items-center gap-3 shrink-0">
                 {n.status && (
-                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${STATUS_STYLES[n.status] || 'bg-muted text-muted-foreground'}`}>
+                  <span
+                    className={`px-1.5 py-0.5 rounded-full text-[9px] ${STATUS_STYLES[n.status] || 'bg-muted text-muted-foreground'}`}
+                  >
                     {n.status}
                   </span>
                 )}
-                <span className="text-muted-foreground whitespace-nowrap">{formatTime(n.timestamp)}</span>
+                <span className="text-muted-foreground whitespace-nowrap">
+                  {formatTime(n.timestamp)}
+                </span>
               </div>
             </div>
           ))

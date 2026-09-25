@@ -1,11 +1,32 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
+import { formatDateTime, formatLocaleDate } from '@/lib/time-format'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, cn, Spinner } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  cn,
+  Spinner,
+} from '@sloughgpt/strui'
 import { IconTrash } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { userAdaptersController, type UserAdapterInfo, type UserAdapterStats } from '@/lib/user-adapters-controller'
+import {
+  userAdaptersController,
+  type UserAdapterInfo,
+  type UserAdapterStats,
+} from '@/lib/user-adapters-controller'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { loraEvalController, type LoraEvalResult } from '@/lib/lora-eval-controller'
 import { AdapterHealthCard } from '@/components/adapters/AdapterHealthCard'
@@ -18,7 +39,7 @@ export default function AdaptersPage() {
   const [adapters, setAdapters] = useState<UserAdapterInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [aggregating, setAggregating] = useState(false)
   const [aggregateResult, setAggregateResult] = useState<string | null>(null)
   const [pruning, setPruning] = useState(false)
@@ -56,7 +77,9 @@ export default function AdaptersPage() {
       }
     }
     load()
-    return () => { ignore = true }
+    return () => {
+      ignore = true
+    }
   }, [])
 
   const handleAggregate = async () => {
@@ -66,7 +89,9 @@ export default function AdaptersPage() {
       const res = await userAdaptersController.aggregateBest()
       const evalInfo = res.eval
       if (evalInfo?.verdict) {
-        setAggregateResult(`Aggregated ${res.user_count ?? 0} adapters. Verdict: ${evalInfo.verdict}`)
+        setAggregateResult(
+          `Aggregated ${res.user_count ?? 0} adapters. Verdict: ${evalInfo.verdict}`,
+        )
       } else {
         setAggregateResult(`Aggregated ${res.user_count ?? 0} adapters`)
       }
@@ -107,18 +132,25 @@ export default function AdaptersPage() {
   if (loading) {
     return (
       <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" loadingCards={1}>
-        <Card><CardContent><div className="h-24 animate-pulse bg-muted/20 rounded-lg" /></CardContent></Card>
-  
-    </PageContainer>
+        <Card>
+          <CardContent>
+            <div className="h-24 animate-pulse bg-muted/20 rounded-lg" />
+          </CardContent>
+        </Card>
+      </PageContainer>
     )
   }
 
   if (error) {
     return (
-      <PageContainer title="Adapters" subtitle="Per-user LoRA adapter management" error={error} onRetry={() => void refreshData()}>
+      <PageContainer
+        title="Adapters"
+        subtitle="Per-user LoRA adapter management"
+        error={error}
+        onRetry={() => void refreshData()}
+      >
         <></>
-  
-    </PageContainer>
+      </PageContainer>
     )
   }
 
@@ -126,12 +158,18 @@ export default function AdaptersPage() {
     <PageContainer
       title="Adapters"
       subtitle="Per-user LoRA adapter management"
-      headerRight={<Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh"><Spinner className="h-4 w-4" /></Button>}
+      headerRight={
+        <Button size="sm" variant="ghost" onClick={refreshData} aria-label="Refresh">
+          <Spinner className="h-4 w-4" />
+        </Button>
+      }
     >
       {aggregateResult && (
         <div className="rounded-md bg-primary/10 border border-primary/20 p-2 text-sm text-primary">
           {aggregateResult}
-          <button type="button" className="ml-2 underline" onClick={() => setAggregateResult(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setAggregateResult(null)}>
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -147,7 +185,7 @@ export default function AdaptersPage() {
                 { label: 'Total Size', value: `${stats.total_size_mb?.toFixed(1) ?? 0} MB` },
                 { label: 'Rank', value: stats.adapter_rank },
                 { label: 'Avg/User', value: `${stats.avg_size_per_user_kb?.toFixed(1) ?? 0} KB` },
-              ].map(s => (
+              ].map((s) => (
                 <div key={s.label} className="rounded-md bg-muted/30 p-3 text-center">
                   <div className="text-[10px] text-muted-foreground">{s.label}</div>
                   <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
@@ -187,14 +225,21 @@ export default function AdaptersPage() {
           {adapters.length === 0 ? (
             <div className="text-center py-6 space-y-2">
               <p className="text-[10px] text-muted-foreground/60">No adapters yet.</p>
-              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => router.push('/chat')}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-[11px]"
+                onClick={() => router.push('/chat')}
+              >
                 Start a chat
               </Button>
-              <p className="text-[10px] text-muted-foreground/60">and give feedback to create adapters.</p>
+              <p className="text-[10px] text-muted-foreground/60">
+                and give feedback to create adapters.
+              </p>
             </div>
           ) : (
             <div className="space-y-2">
-              {adapters.map(a => (
+              {adapters.map((a) => (
                 <div
                   key={a.user_id}
                   className="flex items-center justify-between rounded-lg border-border/40 p-2.5 hover:bg-muted/20 transition-colors"
@@ -206,7 +251,7 @@ export default function AdaptersPage() {
                       <span>rank {a.rank}</span>
                       <span>alpha {a.alpha}</span>
                       <span>dim {a.model_dim}</span>
-                      {a.updated_at && <span>updated {new Date(a.updated_at).toLocaleDateString()}</span>}
+                      {a.updated_at && <span>updated {formatLocaleDate(a.updated_at)}</span>}
                     </div>
                   </div>
                   <Button
@@ -238,16 +283,29 @@ export default function AdaptersPage() {
                 <div key={i} className="rounded-lg border-border/40 p-2.5 text-xs space-y-1.5">
                   <div className="flex items-center gap-2">
                     <span className="font-medium truncate">{String(r.adapter_path ?? '—')}</span>
-                    <span className={cn('rounded-full text-[9px] px-1.5 py-0.5 font-medium', r.verdict === 'accept' ? 'bg-success/15 text-success' : r.verdict === 'reject' ? 'bg-destructive/15 text-destructive' : 'bg-muted text-muted-foreground')}>
+                    <span
+                      className={cn(
+                        'rounded-full text-[9px] px-1.5 py-0.5 font-medium',
+                        r.verdict === 'accept'
+                          ? 'bg-success/15 text-success'
+                          : r.verdict === 'reject'
+                            ? 'bg-destructive/15 text-destructive'
+                            : 'bg-muted text-muted-foreground',
+                      )}
+                    >
                       {String(r.verdict ?? '—')}
                     </span>
                     {r.timestamp && (
-                      <span className="text-muted-foreground ml-auto">{new Date(r.timestamp).toLocaleString()}</span>
+                      <span className="text-muted-foreground ml-auto">
+                        {formatDateTime(r.timestamp)}
+                      </span>
                     )}
                   </div>
                   {(r.perplexity != null || r.bleu != null) && (
                     <div className="flex gap-4 text-muted-foreground">
-                      {r.perplexity != null && <span>Perplexity: {Number(r.perplexity).toFixed(3)}</span>}
+                      {r.perplexity != null && (
+                        <span>Perplexity: {Number(r.perplexity).toFixed(3)}</span>
+                      )}
                       {r.bleu != null && <span>BLEU: {Number(r.bleu).toFixed(3)}</span>}
                     </div>
                   )}
@@ -258,7 +316,12 @@ export default function AdaptersPage() {
         </CardContent>
       </Card>
 
-      <AlertDialog open={pendingResetUserId !== null} onOpenChange={(open) => { if (!open) setPendingResetUserId(null) }}>
+      <AlertDialog
+        open={pendingResetUserId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingResetUserId(null)
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Reset adapter?</AlertDialogTitle>
@@ -268,7 +331,22 @@ export default function AdaptersPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={async () => { const userId = pendingResetUserId; setPendingResetUserId(null); if (userId) { try { await userAdaptersController.reset(userId); await refreshData(); addToast(`Adapter for ${userId} reset`, 'success') } catch { addToast('Could not reset adapter', 'error') } } }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction
+              onClick={async () => {
+                const userId = pendingResetUserId
+                setPendingResetUserId(null)
+                if (userId) {
+                  try {
+                    await userAdaptersController.reset(userId)
+                    await refreshData()
+                    addToast(`Adapter for ${userId} reset`, 'success')
+                  } catch {
+                    addToast('Could not reset adapter', 'error')
+                  }
+                }
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
               Reset
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, memo } from 'react'
+import { formatLocaleTime } from '@/lib/time-format'
 import { Button, IconX, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { formatDurationCompact } from '@/lib/formatDuration'
@@ -48,7 +49,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
   }, [])
 
   const handleToggle = useCallback((id: string) => {
-    setExpandedId(prev => prev === id ? null : id)
+    setExpandedId((prev) => (prev === id ? null : id))
   }, [])
 
   if (executions.length === 0) {
@@ -61,7 +62,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
 
   return (
     <div className={cn('space-y-2', className)}>
-      {executions.map(exec => (
+      {executions.map((exec) => (
         <div
           key={exec.id}
           className={cn(
@@ -84,7 +85,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
             </div>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-muted-foreground">
-                {new Date(exec.timestamp).toLocaleTimeString()}
+                {formatLocaleTime(exec.timestamp)}
               </span>
               <span className="text-xs">{expandedId === exec.id ? '▼' : '▶'}</span>
             </div>

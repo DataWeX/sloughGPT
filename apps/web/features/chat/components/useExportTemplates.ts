@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import type { ChatMessage } from '@/lib/chat-utils'
 
 export interface ExportTemplate {
@@ -75,7 +76,7 @@ export function saveTemplates(templates: ExportTemplate[]) {
 }
 
 export function filterMessages(messages: ChatMessage[], template: ExportTemplate): ChatMessage[] {
-  return messages.filter(msg => {
+  return messages.filter((msg) => {
     if (template.messageFilter === 'all') return true
     if (template.messageFilter === 'user') return msg.role === 'user'
     if (template.messageFilter === 'assistant') return msg.role === 'assistant'
@@ -83,7 +84,11 @@ export function filterMessages(messages: ChatMessage[], template: ExportTemplate
   })
 }
 
-export function formatMarkdown(messages: ChatMessage[], template: ExportTemplate, title?: string): string {
+export function formatMarkdown(
+  messages: ChatMessage[],
+  template: ExportTemplate,
+  title?: string,
+): string {
   const lines: string[] = []
   if (template.includeMetadata && title) {
     lines.push(`# ${title}`)
@@ -93,9 +98,8 @@ export function formatMarkdown(messages: ChatMessage[], template: ExportTemplate
   }
   for (const msg of messages) {
     const role = msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'Assistant' : 'System'
-    const timestamp = template.includeTimestamps && msg.timestamp
-      ? ` _${new Date(msg.timestamp).toLocaleString()}_`
-      : ''
+    const timestamp =
+      template.includeTimestamps && msg.timestamp ? ` _${formatDateTime(msg.timestamp)}_` : ''
     lines.push(`### ${role}${timestamp}`)
     lines.push('')
     lines.push(msg.content)
@@ -104,13 +108,18 @@ export function formatMarkdown(messages: ChatMessage[], template: ExportTemplate
   return lines.join('\n')
 }
 
-export function formatJSON(messages: ChatMessage[], template: ExportTemplate, title?: string): string {
+export function formatJSON(
+  messages: ChatMessage[],
+  template: ExportTemplate,
+  title?: string,
+): string {
   const data = {
     ...(template.includeMetadata && { title, exportedAt: new Date().toISOString() }),
-    messages: messages.map(msg => ({
+    messages: messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
-      ...(template.includeTimestamps && msg.timestamp && { timestamp: new Date(msg.timestamp).toISOString() }),
+      ...(template.includeTimestamps &&
+        msg.timestamp && { timestamp: new Date(msg.timestamp).toISOString() }),
     })),
   }
   return JSON.stringify(data, null, 2)
@@ -122,15 +131,20 @@ export function formatCSV(messages: ChatMessage[], template: ExportTemplate): st
   rows.push(header)
   for (const msg of messages) {
     const content = msg.content.replace(/"/g, '""')
-    const row = template.includeTimestamps && msg.timestamp
-      ? `"${msg.role}","${content}","${new Date(msg.timestamp).toISOString()}"`
-      : `"${msg.role}","${content}"`
+    const row =
+      template.includeTimestamps && msg.timestamp
+        ? `"${msg.role}","${content}","${new Date(msg.timestamp).toISOString()}"`
+        : `"${msg.role}","${content}"`
     rows.push(row)
   }
   return rows.join('\n')
 }
 
-export function formatHTML(messages: ChatMessage[], template: ExportTemplate, title?: string): string {
+export function formatHTML(
+  messages: ChatMessage[],
+  template: ExportTemplate,
+  title?: string,
+): string {
   const lines: string[] = [
     '<!DOCTYPE html>',
     '<html><head><meta charset="utf-8">',
@@ -149,9 +163,10 @@ export function formatHTML(messages: ChatMessage[], template: ExportTemplate, ti
   }
   for (const msg of messages) {
     const roleClass = msg.role
-    const timestamp = template.includeTimestamps && msg.timestamp
-      ? `<div class="meta">${new Date(msg.timestamp).toLocaleString()}</div>`
-      : ''
+    const timestamp =
+      template.includeTimestamps && msg.timestamp
+        ? `<div class="meta">${formatDateTime(msg.timestamp)}</div>`
+        : ''
     lines.push(`<div class="message ${roleClass}">`)
     lines.push(timestamp)
     lines.push(`<div>${msg.content.replace(/\n/g, '<br>')}</div>`)
@@ -180,7 +195,7 @@ export interface UseExportTemplatesReturn {
 
 export function useExportTemplates(
   messages: ChatMessage[],
-  sessionTitle?: string
+  sessionTitle?: string,
 ): UseExportTemplatesReturn {
   const [templates, setTemplates] = useState<ExportTemplate[]>(() => loadTemplates())
   const [selectedId, setSelectedId] = useState<string | null>('full')
@@ -188,7 +203,7 @@ export function useExportTemplates(
   const [customName, setCustomName] = useState('')
   const [customFormat, setCustomFormat] = useState<ExportTemplate['format']>('markdown')
 
-  const selectedTemplate = templates.find(t => t.id === selectedId) || null
+  const selectedTemplate = templates.find((t) => t.id === selectedId) || null
 
   const handleSaveCustom = useCallback(() => {
     if (!customName.trim()) return
@@ -209,12 +224,15 @@ export function useExportTemplates(
     setShowCustom(false)
   }, [customName, customFormat, templates])
 
-  const handleDeleteTemplate = useCallback((id: string) => {
-    const updated = templates.filter(t => t.id !== id)
-    setTemplates(updated)
-    saveTemplates(updated)
-    if (selectedId === id) setSelectedId('full')
-  }, [templates, selectedId])
+  const handleDeleteTemplate = useCallback(
+    (id: string) => {
+      const updated = templates.filter((t) => t.id !== id)
+      setTemplates(updated)
+      saveTemplates(updated)
+      if (selectedId === id) setSelectedId('full')
+    },
+    [templates, selectedId],
+  )
 
   const handleExport = useCallback(() => {
     if (!selectedTemplate || messages.length === 0) return
@@ -279,9 +297,19 @@ export function useExportTemplates(
   }, [selectedTemplate, messages, sessionTitle])
 
   return {
-    templates, selectedId, selectedTemplate,
-    showCustom, customName, customFormat,
-    setSelectedId, setShowCustom, setCustomName, setCustomFormat,
-    handleSaveCustom, handleDeleteTemplate, handleExport, handleCopy,
+    templates,
+    selectedId,
+    selectedTemplate,
+    showCustom,
+    customName,
+    customFormat,
+    setSelectedId,
+    setShowCustom,
+    setCustomName,
+    setCustomFormat,
+    handleSaveCustom,
+    handleDeleteTemplate,
+    handleExport,
+    handleCopy,
   }
 }

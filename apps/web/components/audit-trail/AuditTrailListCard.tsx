@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { Card, CardHeader, CardTitle, CardContent, cn } from '@sloughgpt/strui'
 
 interface Activity {
@@ -47,7 +48,10 @@ export function AuditTrailListCard({ activities }: AuditTrailListCardProps) {
         ) : (
           <div className="space-y-1 max-h-96 overflow-y-auto">
             {activities.map((a, i) => (
-              <div key={i} className="rounded border border-border hover:border-primary/30 transition-colors">
+              <div
+                key={i}
+                className="rounded border border-border hover:border-primary/30 transition-colors"
+              >
                 <button
                   className="w-full flex items-center justify-between p-2.5 text-left"
                   onClick={() => setExpanded(expanded === i ? null : i)}
@@ -55,35 +59,63 @@ export function AuditTrailListCard({ activities }: AuditTrailListCardProps) {
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', TYPE_COLORS[a.type] ?? 'bg-muted text-muted-foreground')}>
+                      <span
+                        className={cn(
+                          'text-[9px] px-1.5 py-0.5 rounded font-medium',
+                          TYPE_COLORS[a.type] ?? 'bg-muted text-muted-foreground',
+                        )}
+                      >
                         {a.type}
                       </span>
                       <span className="text-xs font-medium">{a.action}</span>
                     </div>
-                    {a.detail && <div className="text-[10px] text-muted-foreground mt-0.5 truncate">{a.detail}</div>}
+                    {a.detail && (
+                      <div className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                        {a.detail}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {a.user && <span className="text-[10px] text-muted-foreground">{a.user}</span>}
                     {a.status && (
-                      <span className={cn('text-[9px] px-1.5 py-0.5 rounded font-medium', STATUS_COLORS[a.status] ?? 'bg-muted text-muted-foreground')}>
+                      <span
+                        className={cn(
+                          'text-[9px] px-1.5 py-0.5 rounded font-medium',
+                          STATUS_COLORS[a.status] ?? 'bg-muted text-muted-foreground',
+                        )}
+                      >
                         {a.status}
                       </span>
                     )}
                     <span className="text-[9px] text-muted-foreground whitespace-nowrap">
-                      {new Date(a.timestamp).toLocaleString()}
+                      {formatDateTime(a.timestamp)}
                     </span>
                   </div>
                 </button>
                 {expanded === i && (
                   <div className="px-2.5 pb-2.5 pt-1 border-t border-border/30">
                     <div className="grid grid-cols-2 gap-2 text-[10px]">
-                      <div><span className="text-muted-foreground">Type: </span>{a.type}</div>
-                      <div><span className="text-muted-foreground">Action: </span>{a.action}</div>
-                      <div><span className="text-muted-foreground">User: </span>{a.user || '—'}</div>
-                      <div><span className="text-muted-foreground">Time: </span>{new Date(a.timestamp).toLocaleString()}</div>
+                      <div>
+                        <span className="text-muted-foreground">Type: </span>
+                        {a.type}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Action: </span>
+                        {a.action}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">User: </span>
+                        {a.user || '—'}
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Time: </span>
+                        {formatDateTime(a.timestamp)}
+                      </div>
                     </div>
                     {a.detail && (
-                      <div className="mt-2 p-2 bg-muted/30 rounded text-[10px] font-mono whitespace-pre-wrap">{a.detail}</div>
+                      <div className="mt-2 p-2 bg-muted/30 rounded text-[10px] font-mono whitespace-pre-wrap">
+                        {a.detail}
+                      </div>
                     )}
                   </div>
                 )}

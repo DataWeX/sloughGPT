@@ -1,9 +1,22 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { formatDateTime, formatLocaleDate, formatLocaleTime } from '@/lib/time-format'
 import {
-  Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, Spinner,
-  Tabs, TabsList, TabsTrigger, TabsContent,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+  Skeleton,
+  Spinner,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
 } from '@sloughgpt/strui'
 import { IconRefresh, IconTrash, IconDownload } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -53,7 +66,7 @@ type AuthMode = 'login' | 'register'
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>('security')
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   // ── Shared header state ─────────────────────────────────────────────────────
   const [globalLoading, setGlobalLoading] = useState(true)
@@ -78,8 +91,12 @@ export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null)
 
   // ── Errors state ────────────────────────────────────────────────────────────
-  const [grouped, setGrouped] = useState<Awaited<ReturnType<typeof errorsController.getGrouped>>>([])
-  const [recent, setRecent] = useState<Awaited<ReturnType<typeof errorsController.getRecent>>['errors']>([])
+  const [grouped, setGrouped] = useState<Awaited<ReturnType<typeof errorsController.getGrouped>>>(
+    [],
+  )
+  const [recent, setRecent] = useState<
+    Awaited<ReturnType<typeof errorsController.getRecent>>['errors']
+  >([])
   const [trends, setTrends] = useState<Awaited<ReturnType<typeof errorsController.getTrends>>>([])
   const [total, setTotal] = useState(0)
   const [errLoading, setErrLoading] = useState(true)
@@ -99,8 +116,14 @@ export default function AdminPage() {
     try {
       const auditUrl = `${useHistory ? '/security/audit?history=true&limit=100' : '/security/audit?limit=100'}${eventParam()}`
       const [logsRes, keysRes] = await Promise.all([
-        apiGet<AuditResponse>(auditUrl).catch((e) => { logger.warning('Could not audit log fetch', e); return null }),
-        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => { logger.warning('Could not security keys fetch', e); return null }),
+        apiGet<AuditResponse>(auditUrl).catch((e) => {
+          logger.warning('Could not audit log fetch', e)
+          return null
+        }),
+        apiGet<{ count: number; configured: boolean }>('/security/keys').catch((e) => {
+          logger.warning('Could not security keys fetch', e)
+          return null
+        }),
       ])
       setLogs(logsRes?.logs ?? [])
       const keysData = keysRes && 'count' in keysRes ? keysRes : null
@@ -128,9 +151,11 @@ export default function AdminPage() {
       )
       if (!oldest) return
       const before = encodeURIComponent(oldest)
-      const res = await apiGet<AuditResponse>(`/security/audit?history=true&limit=100&before=${before}${eventParam()}`)
+      const res = await apiGet<AuditResponse>(
+        `/security/audit?history=true&limit=100&before=${before}${eventParam()}`,
+      )
       const older = res?.logs ?? []
-      setLogs(prev => mergeLogs(prev, older))
+      setLogs((prev) => mergeLogs(prev, older))
     } catch {
       addToast('Could not load older audit logs', 'error')
     } finally {
@@ -144,9 +169,10 @@ export default function AdminPage() {
     setAuthLoading(true)
     setAuthError(null)
     try {
-      const data = authMode === 'login'
-        ? await authController.login(username, password)
-        : await authController.register(username, email, password)
+      const data =
+        authMode === 'login'
+          ? await authController.login(username, password)
+          : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
       localStorage.setItem('auth_token', data.token)
@@ -205,10 +231,13 @@ export default function AdminPage() {
   }
 
   const handleExportFiltered = () => {
-    const filtered = grouped.filter(g =>
-      !search || g.message.toLowerCase().includes(search.toLowerCase()) || g.source.toLowerCase().includes(search.toLowerCase())
+    const filtered = grouped.filter(
+      (g) =>
+        !search ||
+        g.message.toLowerCase().includes(search.toLowerCase()) ||
+        g.source.toLowerCase().includes(search.toLowerCase()),
     )
-    const data = filtered.map(g => ({
+    const data = filtered.map((g) => ({
       message: g.message,
       source: g.source,
       count: g.count,
@@ -239,10 +268,7 @@ export default function AdminPage() {
       setChecking(false)
 
       // Fetch all tabs in parallel
-      await Promise.all([
-        fetchSecurity(false),
-        fetchErrors(),
-      ])
+      await Promise.all([fetchSecurity(false), fetchErrors()])
       setGlobalLoading(false)
     }
     init()
@@ -253,9 +279,17 @@ export default function AdminPage() {
     if (tab !== 'errors') return
     if (autoRefresh) {
       intervalRef.current = setInterval(fetchErrors, 10000)
-      const onVis = () => { if (!document.hidden && intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = setInterval(fetchErrors, 10000) } }
+      const onVis = () => {
+        if (!document.hidden && intervalRef.current) {
+          clearInterval(intervalRef.current)
+          intervalRef.current = setInterval(fetchErrors, 10000)
+        }
+      }
       document.addEventListener('visibilitychange', onVis)
-      return () => { clearInterval(intervalRef.current!); document.removeEventListener('visibilitychange', onVis) }
+      return () => {
+        clearInterval(intervalRef.current!)
+        document.removeEventListener('visibilitychange', onVis)
+      }
     } else if (intervalRef.current) {
       clearInterval(intervalRef.current)
     }
@@ -287,15 +321,15 @@ export default function AdminPage() {
 
   // ── Derived state ───────────────────────────────────────────────────────────
   const filteredLogs = filter.trim()
-    ? logs.filter(l => l.event_type?.toLowerCase().includes(filter.toLowerCase()))
+    ? logs.filter((l) => l.event_type?.toLowerCase().includes(filter.toLowerCase()))
     : logs
 
-  const lastHourCount = recent.filter(e => {
+  const lastHourCount = recent.filter((e) => {
     const ts = new Date(e.timestamp).getTime()
     return Date.now() - ts < 3600000
   }).length
   const topError = grouped.length > 0 ? grouped[0].message.slice(0, 40) : 'None'
-  const maxTrend = Math.max(...trends.map(t => t.count), 1)
+  const maxTrend = Math.max(...trends.map((t) => t.count), 1)
 
   const isInitialLoading = globalLoading || checking
 
@@ -312,8 +346,16 @@ export default function AdminPage() {
           <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
           <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        <Card><CardContent><div className="h-64 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card>
+          <CardContent>
+            <div className="h-32 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <div className="h-64 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }
@@ -323,7 +365,13 @@ export default function AdminPage() {
       title="Admin"
       subtitle="Security, authentication & error monitoring"
       headerRight={
-        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={refreshAll} aria-label="Refresh">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 text-[10px]"
+          onClick={refreshAll}
+          aria-label="Refresh"
+        >
           <IconRefresh className="h-3 w-3" />
         </Button>
       }
@@ -338,7 +386,10 @@ export default function AdminPage() {
         {/* ── Security Tab ──────────────────────────────────────────────── */}
         <TabsContent value="security" className="space-y-4">
           <KpiGrid>
-            <StatCard label="API Keys" value={keyInfo?.configured ? `${keyInfo.count} configured` : 'None'} />
+            <StatCard
+              label="API Keys"
+              value={keyInfo?.configured ? `${keyInfo.count} configured` : 'None'}
+            />
             <StatCard label="Audit Logs" value={logs.length} />
             <StatCard label="History Mode" value={historyMode ? 'Persisted' : 'Session'} />
             <StatCard label="Filter" value={filter || 'All'} />
@@ -369,13 +420,15 @@ export default function AdminPage() {
                   onClick={loadOlder}
                   disabled={loadingMore || !historyMode}
                 >
-                  {loadingMore ? (
-                    <Spinner size="sm" />
-                  ) : (
-                    'Load older'
-                  )}
+                  {loadingMore ? <Spinner size="sm" /> : 'Load older'}
                 </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => fetchSecurity(historyMode)} aria-label="Refresh audit logs">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px]"
+                  onClick={() => fetchSecurity(historyMode)}
+                  aria-label="Refresh audit logs"
+                >
                   <IconRefresh className="h-3 w-3" />
                 </Button>
               </div>
@@ -383,7 +436,7 @@ export default function AdminPage() {
             <CardContent className="space-y-2 px-2.5 pb-2.5">
               <Input
                 value={filter}
-                onChange={e => setFilter(e.target.value)}
+                onChange={(e) => setFilter(e.target.value)}
                 placeholder="Filter by event type..."
                 className="h-7 text-[11px]"
               />
@@ -395,16 +448,31 @@ export default function AdminPage() {
               ) : (
                 <div className="space-y-1 max-h-96 overflow-y-auto">
                   {filteredLogs.map((log, i) => (
-                    <div key={i} className="rounded-lg border border-border/40 px-2.5 py-2 text-[11px]">
+                    <div
+                      key={i}
+                      className="rounded-lg border border-border/40 px-2.5 py-2 text-[11px]"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{log.event_type}</span>
                         <span className="text-[10px] text-muted-foreground/60 font-mono tabular-nums">
-                          {log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}
+                          {formatDateTime(log.timestamp) || '—'}
                         </span>
                       </div>
-                      {log.resource && <div className="text-[10px] text-muted-foreground/60 mt-0.5">Resource: {log.resource}</div>}
-                      {log.user && <div className="text-[10px] text-muted-foreground/60 mt-0.5">User: {log.user}</div>}
-                      {log.detail && <div className="text-[10px] text-muted-foreground/60 mt-0.5">{log.detail}</div>}
+                      {log.resource && (
+                        <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                          Resource: {log.resource}
+                        </div>
+                      )}
+                      {log.user && (
+                        <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                          User: {log.user}
+                        </div>
+                      )}
+                      {log.detail && (
+                        <div className="text-[10px] text-muted-foreground/60 mt-0.5">
+                          {log.detail}
+                        </div>
+                      )}
                       {log.extra && Object.keys(log.extra).length > 0 && (
                         <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono">
                           {JSON.stringify(log.extra).slice(0, 120)}
@@ -435,19 +503,38 @@ export default function AdminPage() {
                 <CardContent className="space-y-2 px-2.5 pb-2.5">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
                     <div className="rounded-lg bg-muted/20 p-2 text-center">
-                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Username</div>
-                      <div className="text-[11px] font-mono font-medium tabular-nums">{currentUser.username}</div>
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">
+                        Username
+                      </div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums">
+                        {currentUser.username}
+                      </div>
                     </div>
                     <div className="rounded-lg bg-muted/20 p-2 text-center">
-                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">Email</div>
-                      <div className="text-[11px] font-mono font-medium tabular-nums">{currentUser.email}</div>
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">
+                        Email
+                      </div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums">
+                        {currentUser.email}
+                      </div>
                     </div>
                     <div className="rounded-lg bg-muted/20 p-2 text-center">
-                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">User ID</div>
-                      <div className="text-[11px] font-mono font-medium tabular-nums truncate">{currentUser.id}</div>
+                      <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">
+                        User ID
+                      </div>
+                      <div className="text-[11px] font-mono font-medium tabular-nums truncate">
+                        {currentUser.id}
+                      </div>
                     </div>
                   </div>
-                  <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleLogout}>Logout</Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </Button>
                 </CardContent>
               </Card>
               <AuthSessionInfoCard token={token} user={currentUser} onLogout={handleLogout} />
@@ -455,13 +542,15 @@ export default function AdminPage() {
           ) : (
             <Card>
               <CardHeader className="pb-2 pt-2.5 px-2.5">
-                <CardTitle className="text-[11px] font-medium">{authMode === 'login' ? 'Login' : 'Register'}</CardTitle>
+                <CardTitle className="text-[11px] font-medium">
+                  {authMode === 'login' ? 'Login' : 'Register'}
+                </CardTitle>
               </CardHeader>
               <CardContent className="px-2.5 pb-2.5">
                 <form onSubmit={handleAuthSubmit} className="space-y-2">
                   <Input
                     value={username}
-                    onChange={e => setUsername(e.target.value)}
+                    onChange={(e) => setUsername(e.target.value)}
                     placeholder="Username"
                     aria-label="Username"
                     className="h-7 text-[11px]"
@@ -471,7 +560,7 @@ export default function AdminPage() {
                     <Input
                       type="email"
                       value={email}
-                      onChange={e => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value)}
                       placeholder="Email"
                       aria-label="Email"
                       className="h-7 text-[11px]"
@@ -481,21 +570,31 @@ export default function AdminPage() {
                   <Input
                     type="password"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={(e) => setPassword(e.target.value)}
                     placeholder="Password"
                     aria-label="Password"
                     className="h-7 text-[11px]"
                     required
                   />
-                  {authError && <StatusBanner variant="error" message={authError} dismissible={false} />}
+                  {authError && (
+                    <StatusBanner variant="error" message={authError} dismissible={false} />
+                  )}
                   <div className="flex items-center gap-2">
-                    <Button size="sm" type="submit" className="h-7 text-[11px]" disabled={authLoading}>
+                    <Button
+                      size="sm"
+                      type="submit"
+                      className="h-7 text-[11px]"
+                      disabled={authLoading}
+                    >
                       {authLoading ? 'Processing...' : authMode === 'login' ? 'Login' : 'Register'}
                     </Button>
                     <button
                       type="button"
                       className="text-[10px] text-primary hover:text-primary/80"
-                      onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setAuthError(null) }}
+                      onClick={() => {
+                        setAuthMode(authMode === 'login' ? 'register' : 'login')
+                        setAuthError(null)
+                      }}
                     >
                       {authMode === 'login' ? 'Create account' : 'Already have an account?'}
                     </button>
@@ -513,8 +612,12 @@ export default function AdminPage() {
               {token ? (
                 <div className="space-y-1.5">
                   <div className="rounded-lg bg-muted/20 p-2">
-                    <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-0.5">JWT Token</div>
-                    <div className="text-[10px] font-mono break-all text-muted-foreground/60">{token.slice(0, 60)}...</div>
+                    <div className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-0.5">
+                      JWT Token
+                    </div>
+                    <div className="text-[10px] font-mono break-all text-muted-foreground/60">
+                      {token.slice(0, 60)}...
+                    </div>
                   </div>
                   <Button
                     size="sm"
@@ -523,15 +626,22 @@ export default function AdminPage() {
                     onClick={async () => {
                       try {
                         const data = await authController.verify(token!)
-                        addToast(data?.valid ? 'Token is valid' : 'Token is invalid', data?.valid ? 'success' : 'error')
-                      } catch { addToast('Could not verify token', 'error') }
+                        addToast(
+                          data?.valid ? 'Token is valid' : 'Token is invalid',
+                          data?.valid ? 'success' : 'error',
+                        )
+                      } catch {
+                        addToast('Could not verify token', 'error')
+                      }
                     }}
                   >
                     Verify Token
                   </Button>
                 </div>
               ) : (
-                <p className="text-[10px] text-muted-foreground/60">No token. Login or register to get one.</p>
+                <p className="text-[10px] text-muted-foreground/60">
+                  No token. Login or register to get one.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -552,31 +662,58 @@ export default function AdminPage() {
             <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
               <CardTitle className="text-[11px] font-medium">Actions</CardTitle>
               <div className="flex items-center gap-1">
-                <Button size="sm" variant={autoRefresh ? 'default' : 'ghost'} className="h-6 text-[10px]" onClick={() => setAutoRefresh(!autoRefresh)}>
+                <Button
+                  size="sm"
+                  variant={autoRefresh ? 'default' : 'ghost'}
+                  className="h-6 text-[10px]"
+                  onClick={() => setAutoRefresh(!autoRefresh)}
+                >
                   {autoRefresh ? 'Auto-refresh ON' : 'Auto-refresh'}
                 </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchErrors} aria-label="Refresh">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px]"
+                  onClick={fetchErrors}
+                  aria-label="Refresh"
+                >
                   <IconRefresh className="h-3 w-3" />
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="px-2.5 pb-2.5">
               <div className="flex gap-1">
-                <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleExport}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px]"
+                  onClick={handleExport}
+                >
                   <span className="inline-flex items-center gap-1">
                     <IconDownload className="h-3 w-3" />
                     Export All
                   </span>
                 </Button>
                 {search && (
-                  <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleExportFiltered}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-[11px]"
+                    onClick={handleExportFiltered}
+                  >
                     <span className="inline-flex items-center gap-1">
                       <IconDownload className="h-3 w-3" />
                       Export Filtered
                     </span>
                   </Button>
                 )}
-                <Button size="sm" variant="outline" className="h-7 text-[11px] text-destructive" onClick={handleClear} disabled={clearing}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[11px] text-destructive"
+                  onClick={handleClear}
+                  disabled={clearing}
+                >
                   <span className="inline-flex items-center gap-1">
                     <IconTrash className="h-3 w-3" />
                     {clearing ? 'Clearing...' : 'Clear All'}
@@ -612,10 +749,12 @@ export default function AdminPage() {
 
           <Card>
             <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 pb-2 pt-2.5 px-2.5">
-              <CardTitle className="text-[11px] font-medium">Grouped Errors ({grouped.length})</CardTitle>
+              <CardTitle className="text-[11px] font-medium">
+                Grouped Errors ({grouped.length})
+              </CardTitle>
               <Input
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search errors..."
                 className="h-7 w-full sm:w-40 text-[11px]"
               />
@@ -626,28 +765,41 @@ export default function AdminPage() {
               ) : (
                 <div className="space-y-1">
                   {grouped
-                    .filter(g => !search || g.message.toLowerCase().includes(search.toLowerCase()) || g.source.toLowerCase().includes(search.toLowerCase()))
-                    .map(g => (
-                    <div key={g.fingerprint} className="rounded-lg border border-border/40 px-2.5 py-2 text-[11px] hover:bg-muted/20 transition-colors">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="font-medium truncate">{g.message}</div>
-                          <div className="text-[10px] text-muted-foreground/60">
-                            {g.source} · {g.sample_url && <span className="truncate max-w-[200px] inline-block">{g.sample_url}</span>}
-                            {g.sample_line != null && `:${g.sample_line}`}
+                    .filter(
+                      (g) =>
+                        !search ||
+                        g.message.toLowerCase().includes(search.toLowerCase()) ||
+                        g.source.toLowerCase().includes(search.toLowerCase()),
+                    )
+                    .map((g) => (
+                      <div
+                        key={g.fingerprint}
+                        className="rounded-lg border border-border/40 px-2.5 py-2 text-[11px] hover:bg-muted/20 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="font-medium truncate">{g.message}</div>
+                            <div className="text-[10px] text-muted-foreground/60">
+                              {g.source} ·{' '}
+                              {g.sample_url && (
+                                <span className="truncate max-w-[200px] inline-block">
+                                  {g.sample_url}
+                                </span>
+                              )}
+                              {g.sample_line != null && `:${g.sample_line}`}
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-[10px] font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-full">
-                            ×{g.count}
-                          </span>
-                          <div className="text-[9px] text-muted-foreground/60 mt-0.5 font-mono">
-                            {g.latest && new Date(g.latest).toLocaleDateString()}
+                          <div className="text-right shrink-0">
+                            <span className="text-[10px] font-mono bg-destructive/10 text-destructive px-1.5 py-0.5 rounded-full">
+                              ×{g.count}
+                            </span>
+                            <div className="text-[9px] text-muted-foreground/60 mt-0.5 font-mono">
+                              {g.latest && formatLocaleDate(g.latest)}
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
             </CardContent>
@@ -662,10 +814,13 @@ export default function AdminPage() {
                 <p className="text-[10px] text-muted-foreground/60">No recent errors.</p>
               ) : (
                 <div className="space-y-0 max-h-96 overflow-y-auto">
-                  {recent.map(e => (
-                    <div key={e.id} className="flex items-start gap-2 text-[10px] py-1.5 border-b border-border/20 last:border-0">
+                  {recent.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-start gap-2 text-[10px] py-1.5 border-b border-border/20 last:border-0"
+                    >
                       <span className="font-mono text-muted-foreground/60 shrink-0 w-14 tabular-nums">
-                        {e.timestamp ? new Date(e.timestamp).toLocaleTimeString() : '—'}
+                        {formatLocaleTime(e.timestamp) || '—'}
                       </span>
                       <span className="truncate">{e.message}</span>
                     </div>

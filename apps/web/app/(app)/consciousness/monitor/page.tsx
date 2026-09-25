@@ -1,10 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { formatLocaleTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton, Switch,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+  Switch,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -43,11 +52,11 @@ function generateId() {
 }
 
 function formatTimestamp(ts: number): string {
-  return new Date(ts).toLocaleTimeString()
+  return formatLocaleTime(ts)
 }
 
 export default function ConsciousnessMonitorPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
 
@@ -75,13 +84,18 @@ export default function ConsciousnessMonitorPage() {
   const [errorRate, setErrorRate] = useState(0)
 
   const addMonitorEvent = useCallback((type: string, summary: string, data: unknown = null) => {
-    setEvents(prev => [{
-      id: generateId(),
-      type,
-      summary,
-      timestamp: Date.now(),
-      data,
-    }, ...prev].slice(0, 200))
+    setEvents((prev) =>
+      [
+        {
+          id: generateId(),
+          type,
+          summary,
+          timestamp: Date.now(),
+          data,
+        },
+        ...prev,
+      ].slice(0, 200),
+    )
   }, [])
 
   const fetchAll = useCallback(async () => {
@@ -100,7 +114,7 @@ export default function ConsciousnessMonitorPage() {
         const status = statusResult.value
         if (status.current_qualia) {
           setCurrentQualia(status.current_qualia)
-          setQualiaStream(prev => [...prev, status.current_qualia].slice(-30))
+          setQualiaStream((prev) => [...prev, status.current_qualia].slice(-30))
         }
         if (status.beliefs) {
           setCurrentBeliefs(status.beliefs)
@@ -116,7 +130,7 @@ export default function ConsciousnessMonitorPage() {
       if (healthResult.status === 'fulfilled') {
         const health = healthResult.value
         setGrowthDelta(health.avg_growth ?? 0)
-        setGrowthStream(prev => [...prev, health.avg_growth ?? 0].slice(-30))
+        setGrowthStream((prev) => [...prev, health.avg_growth ?? 0].slice(-30))
         setErrorRate(health.diagnostics?.length ? Math.min(100, health.diagnostics.length * 5) : 0)
         addMonitorEvent('health', `Health score: ${(health.health_score * 100).toFixed(0)}%`)
       }
@@ -125,7 +139,7 @@ export default function ConsciousnessMonitorPage() {
         const eps = episodesResult.value.episodes ?? []
         const lastRating = (eps[eps.length - 1] as any)?.rating
         if (lastRating !== undefined) {
-          setRatingStream(prev => [...prev, lastRating].slice(-10))
+          setRatingStream((prev) => [...prev, lastRating].slice(-10))
         }
       }
 
@@ -142,7 +156,9 @@ export default function ConsciousnessMonitorPage() {
     }
   }, [addMonitorEvent])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   useEffect(() => {
     if (paused) {
@@ -159,8 +175,11 @@ export default function ConsciousnessMonitorPage() {
     if (!isLive || !latestEvent || eventsPaused) return
     if (latestEvent.qualia) {
       setCurrentQualia(latestEvent.qualia)
-      setQualiaStream(prev => [...prev, latestEvent.qualia].slice(-30))
-      addMonitorEvent('qualia', `Qualia updated — valence: ${(latestEvent.qualia.valence ?? 0).toFixed(2)}`)
+      setQualiaStream((prev) => [...prev, latestEvent.qualia].slice(-30))
+      addMonitorEvent(
+        'qualia',
+        `Qualia updated — valence: ${(latestEvent.qualia.valence ?? 0).toFixed(2)}`,
+      )
     }
     if (latestEvent.beliefs) {
       setCurrentBeliefs(latestEvent.beliefs)
@@ -168,7 +187,7 @@ export default function ConsciousnessMonitorPage() {
     }
     if (latestEvent.growth_delta !== undefined) {
       setGrowthDelta(latestEvent.growth_delta)
-      setGrowthStream(prev => [...prev, latestEvent.growth_delta].slice(-30))
+      setGrowthStream((prev) => [...prev, latestEvent.growth_delta].slice(-30))
     }
   }, [latestEvent, isLive, eventsPaused, addMonitorEvent])
 
@@ -193,8 +212,8 @@ export default function ConsciousnessMonitorPage() {
     const points = qualiaStream.length
     if (points < 2) return null
 
-    const paths = QUALIA_DIMS.map(dim => {
-      const vals = qualiaStream.map(s => s[dim] ?? 0)
+    const paths = QUALIA_DIMS.map((dim) => {
+      const vals = qualiaStream.map((s) => s[dim] ?? 0)
       const coords = vals.map((v, i) => {
         const x = pad + (i / (points - 1)) * (w - 2 * pad)
         const y = h - pad - ((v + 1) / 2) * (h - 2 * pad)
@@ -205,12 +224,34 @@ export default function ConsciousnessMonitorPage() {
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-40">
-        <line x1={pad} y1={h / 2} x2={w - pad} y2={h / 2} stroke="hsl(var(--border))" strokeDasharray="4" strokeWidth={0.5} />
-        {paths.map(p => (
-          <path key={p.dim} d={p.d} fill="none" stroke={p.color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
+        <line
+          x1={pad}
+          y1={h / 2}
+          x2={w - pad}
+          y2={h / 2}
+          stroke="hsl(var(--border))"
+          strokeDasharray="4"
+          strokeWidth={0.5}
+        />
+        {paths.map((p) => (
+          <path
+            key={p.dim}
+            d={p.d}
+            fill="none"
+            stroke={p.color}
+            strokeWidth={1.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         ))}
-        {paths.map(p => (
-          <circle key={`last-${p.dim}`} cx={pad + ((points - 1) / (points - 1)) * (w - 2 * pad)} cy={h - pad - (((qualiaStream[points - 1][p.dim] ?? 0) + 1) / 2) * (h - 2 * pad)} r={3} fill={p.color} />
+        {paths.map((p) => (
+          <circle
+            key={`last-${p.dim}`}
+            cx={pad + ((points - 1) / (points - 1)) * (w - 2 * pad)}
+            cy={h - pad - (((qualiaStream[points - 1][p.dim] ?? 0) + 1) / 2) * (h - 2 * pad)}
+            r={3}
+            fill={p.color}
+          />
         ))}
       </svg>
     )
@@ -225,7 +266,7 @@ export default function ConsciousnessMonitorPage() {
 
     const coords = growthStream.map((v, i) => {
       const x = pad + (i / (points - 1)) * (w - 2 * pad)
-      const normalized = Math.max(0, Math.min(1, (v + 0.5)))
+      const normalized = Math.max(0, Math.min(1, v + 0.5))
       const y = h - pad - normalized * (h - 2 * pad)
       return `${x},${y}`
     })
@@ -235,8 +276,24 @@ export default function ConsciousnessMonitorPage() {
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32">
         <polygon points={areaCoords.join(' ')} fill="#6366f1" fillOpacity={0.1} />
-        <polyline points={coords.join(' ')} fill="none" stroke="#6366f1" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" />
-        <circle cx={pad + ((points - 1) / (points - 1)) * (w - 2 * pad)} cy={h - pad - Math.max(0, Math.min(1, (growthStream[points - 1] ?? 0) + 0.5)) * (h - 2 * pad)} r={3} fill="#6366f1" />
+        <polyline
+          points={coords.join(' ')}
+          fill="none"
+          stroke="#6366f1"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle
+          cx={pad + ((points - 1) / (points - 1)) * (w - 2 * pad)}
+          cy={
+            h -
+            pad -
+            Math.max(0, Math.min(1, (growthStream[points - 1] ?? 0) + 0.5)) * (h - 2 * pad)
+          }
+          r={3}
+          fill="#6366f1"
+        />
       </svg>
     )
   }, [growthStream])
@@ -258,10 +315,26 @@ export default function ConsciousnessMonitorPage() {
           const y = h - pad - barH
           const hue = (v / 5) * 120
           return (
-            <rect key={i} x={x} y={y} width={barW} height={barH} rx={2} fill={`hsl(${hue}, 70%, 50%)`} fillOpacity={0.8} />
+            <rect
+              key={i}
+              x={x}
+              y={y}
+              width={barW}
+              height={barH}
+              rx={2}
+              fill={`hsl(${hue}, 70%, 50%)`}
+              fillOpacity={0.8}
+            />
           )
         })}
-        <line x1={pad} y1={h - pad} x2={w - pad} y2={h - pad} stroke="hsl(var(--border))" strokeWidth={0.5} />
+        <line
+          x1={pad}
+          y1={h - pad}
+          x2={w - pad}
+          y2={h - pad}
+          stroke="hsl(var(--border))"
+          strokeWidth={0.5}
+        />
       </svg>
     )
   }, [ratingStream])
@@ -272,25 +345,40 @@ export default function ConsciousnessMonitorPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <Switch checked={!paused} onCheckedChange={(v) => setPaused(!v)} />
-            <span className="text-xs text-muted-foreground">{paused ? t('consciousness_monitor.paused') : t('consciousness_monitor.running')}</span>
+            <span className="text-xs text-muted-foreground">
+              {paused ? t('consciousness_monitor.paused') : t('consciousness_monitor.running')}
+            </span>
             <div className="flex items-center gap-1.5">
               <input
                 type="range"
                 min={1}
                 max={10}
                 value={refreshInterval}
-                onChange={(e) => setRefreshInterval(parseInt((e.target as HTMLInputElement).value) || 2)}
+                onChange={(e) =>
+                  setRefreshInterval(parseInt((e.target as HTMLInputElement).value) || 2)
+                }
                 className="w-20 h-1 accent-primary"
               />
               <span className="text-[10px] text-muted-foreground w-8">{refreshInterval}s</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className={`w-2 h-2 rounded-full ${connected === true ? 'bg-success' : connected === false ? 'bg-destructive' : 'bg-warning'}`} />
+            <div
+              className={`w-2 h-2 rounded-full ${connected === true ? 'bg-success' : connected === false ? 'bg-destructive' : 'bg-warning'}`}
+            />
             <span className="text-xs text-muted-foreground">
-              {connected === true ? t('consciousness_monitor.connected') : connected === false ? t('consciousness_monitor.disconnected') : t('consciousness_monitor.checking')}
+              {connected === true
+                ? t('consciousness_monitor.connected')
+                : connected === false
+                  ? t('consciousness_monitor.disconnected')
+                  : t('consciousness_monitor.checking')}
             </span>
-            <Button variant="outline" size="sm" onClick={handleClearHistory} className="h-7 text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClearHistory}
+              className="h-7 text-xs"
+            >
               <IconTrash className="h-3 w-3 mr-1" />
               {t('consciousness_monitor.clear_history')}
             </Button>
@@ -302,7 +390,9 @@ export default function ConsciousnessMonitorPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="text-sm">{t('consciousness_monitor.live_status')}</CardTitle>
+                  <CardTitle className="text-sm">
+                    {t('consciousness_monitor.live_status')}
+                  </CardTitle>
                   <CardDescription>{t('consciousness_monitor.live_status_desc')}</CardDescription>
                 </div>
                 {isLive && (
@@ -315,42 +405,54 @@ export default function ConsciousnessMonitorPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <div className="text-[10px] font-medium text-muted-foreground mb-2">{t('consciousness_monitor.qualia')}</div>
+                <div className="text-[10px] font-medium text-muted-foreground mb-2">
+                  {t('consciousness_monitor.qualia')}
+                </div>
                 <div className="space-y-1.5">
-                  {QUALIA_DIMS.map(dim => {
+                  {QUALIA_DIMS.map((dim) => {
                     const val = currentQualia[dim] ?? 0
                     const pct = Math.max(0, Math.min(100, ((val + 1) / 2) * 100))
                     return (
                       <div key={dim} className="flex items-center gap-2">
-                        <span className="text-[10px] capitalize w-16 text-muted-foreground">{dim}</span>
+                        <span className="text-[10px] capitalize w-16 text-muted-foreground">
+                          {dim}
+                        </span>
                         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{ width: `${pct}%`, backgroundColor: QUALIA_COLORS[dim] }}
                           />
                         </div>
-                        <span className="text-[10px] text-muted-foreground w-10 text-right font-mono">{val.toFixed(2)}</span>
+                        <span className="text-[10px] text-muted-foreground w-10 text-right font-mono">
+                          {val.toFixed(2)}
+                        </span>
                       </div>
                     )
                   })}
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-medium text-muted-foreground mb-2">{t('consciousness_monitor.beliefs')}</div>
+                <div className="text-[10px] font-medium text-muted-foreground mb-2">
+                  {t('consciousness_monitor.beliefs')}
+                </div>
                 <div className="space-y-1.5">
-                  {BELIEF_DIMS.map(dim => {
+                  {BELIEF_DIMS.map((dim) => {
                     const val = currentBeliefs[dim] ?? 0
                     const pct = Math.max(0, Math.min(100, val * 100))
                     return (
                       <div key={dim} className="flex items-center gap-2">
-                        <span className="text-[10px] capitalize w-16 text-muted-foreground">{dim}</span>
+                        <span className="text-[10px] capitalize w-16 text-muted-foreground">
+                          {dim}
+                        </span>
                         <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                           <div
                             className="h-full rounded-full transition-all duration-700 ease-out"
                             style={{ width: `${pct}%`, backgroundColor: BELIEF_COLORS[dim] }}
                           />
                         </div>
-                        <span className="text-[10px] text-muted-foreground w-10 text-right font-mono">{(val * 100).toFixed(0)}%</span>
+                        <span className="text-[10px] text-muted-foreground w-10 text-right font-mono">
+                          {(val * 100).toFixed(0)}%
+                        </span>
                       </div>
                     )
                   })}
@@ -358,13 +460,20 @@ export default function ConsciousnessMonitorPage() {
               </div>
               <div className="flex gap-4 pt-2 border-t border-border/30">
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.growth')}</span>
-                  <span className={`text-xs font-mono font-bold ${growthDelta >= 0 ? 'text-success' : 'text-destructive'}`}>
-                    {growthDelta >= 0 ? '+' : ''}{(growthDelta * 100).toFixed(1)}%
+                  <span className="text-[10px] text-muted-foreground">
+                    {t('consciousness_monitor.growth')}
+                  </span>
+                  <span
+                    className={`text-xs font-mono font-bold ${growthDelta >= 0 ? 'text-success' : 'text-destructive'}`}
+                  >
+                    {growthDelta >= 0 ? '+' : ''}
+                    {(growthDelta * 100).toFixed(1)}%
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.episodes')}</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {t('consciousness_monitor.episodes')}
+                  </span>
                   <span className="text-xs font-mono font-bold">{episodeCount}</span>
                 </div>
               </div>
@@ -378,13 +487,33 @@ export default function ConsciousnessMonitorPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: 'CPU', value: cpuUsage, color: cpuUsage > 80 ? 'rgb(var(--destructive))' : cpuUsage > 50 ? 'rgb(var(--warning))' : 'rgb(var(--success))' },
-                { label: 'Memory', value: memoryUsage, color: memoryUsage > 80 ? 'rgb(var(--destructive))' : memoryUsage > 50 ? 'rgb(var(--warning))' : 'rgb(var(--success))' },
-              ].map(item => (
+                {
+                  label: 'CPU',
+                  value: cpuUsage,
+                  color:
+                    cpuUsage > 80
+                      ? 'rgb(var(--destructive))'
+                      : cpuUsage > 50
+                        ? 'rgb(var(--warning))'
+                        : 'rgb(var(--success))',
+                },
+                {
+                  label: 'Memory',
+                  value: memoryUsage,
+                  color:
+                    memoryUsage > 80
+                      ? 'rgb(var(--destructive))'
+                      : memoryUsage > 50
+                        ? 'rgb(var(--warning))'
+                        : 'rgb(var(--success))',
+                },
+              ].map((item) => (
                 <div key={item.label}>
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] text-muted-foreground">{item.label}</span>
-                    <span className="text-[10px] font-mono text-muted-foreground">{item.value.toFixed(0)}%</span>
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {item.value.toFixed(0)}%
+                    </span>
                   </div>
                   <div className="h-2 rounded-full bg-muted overflow-hidden">
                     <div
@@ -395,15 +524,27 @@ export default function ConsciousnessMonitorPage() {
                 </div>
               ))}
               <div className="flex items-center justify-between pt-2 border-t border-border/30">
-                <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.response_time')}</span>
-                <span className="text-[10px] font-mono text-muted-foreground">{responseTime}ms</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {t('consciousness_monitor.response_time')}
+                </span>
+                <span className="text-[10px] font-mono text-muted-foreground">
+                  {responseTime}ms
+                </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.error_rate')}</span>
-                <span className={`text-[10px] font-mono ${errorRate > 20 ? 'text-destructive' : 'text-muted-foreground'}`}>{errorRate.toFixed(0)}%</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {t('consciousness_monitor.error_rate')}
+                </span>
+                <span
+                  className={`text-[10px] font-mono ${errorRate > 20 ? 'text-destructive' : 'text-muted-foreground'}`}
+                >
+                  {errorRate.toFixed(0)}%
+                </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground">{t('consciousness_monitor.last_update')}</span>
+                <span className="text-[10px] text-muted-foreground">
+                  {t('consciousness_monitor.last_update')}
+                </span>
                 <span className="text-[10px] font-mono text-muted-foreground">
                   {lastUpdate ? formatTimestamp(lastUpdate) : '—'}
                 </span>
@@ -420,9 +561,12 @@ export default function ConsciousnessMonitorPage() {
             <CardContent>
               {qualiaSvg ? (
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {QUALIA_DIMS.map(dim => (
+                  {QUALIA_DIMS.map((dim) => (
                     <div key={dim} className="flex items-center gap-1">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: QUALIA_COLORS[dim] }} />
+                      <div
+                        className="w-2 h-2 rounded-full"
+                        style={{ backgroundColor: QUALIA_COLORS[dim] }}
+                      />
                       <span className="text-[9px] text-muted-foreground capitalize">{dim}</span>
                     </div>
                   ))}
@@ -473,7 +617,9 @@ export default function ConsciousnessMonitorPage() {
               <div className="flex items-center gap-2">
                 <Switch checked={!eventsPaused} onCheckedChange={(v) => setEventsPaused(!v)} />
                 <span className="text-[10px] text-muted-foreground">
-                  {eventsPaused ? t('consciousness_monitor.events_paused') : t('consciousness_monitor.events_live')}
+                  {eventsPaused
+                    ? t('consciousness_monitor.events_paused')
+                    : t('consciousness_monitor.events_live')}
                 </span>
               </div>
             </div>
@@ -481,16 +627,23 @@ export default function ConsciousnessMonitorPage() {
           <CardContent>
             <div className="max-h-60 overflow-y-auto space-y-1">
               {events.length === 0 && (
-                <p className="text-[10px] text-muted-foreground text-center py-4">{t('consciousness_monitor.no_events')}</p>
+                <p className="text-[10px] text-muted-foreground text-center py-4">
+                  {t('consciousness_monitor.no_events')}
+                </p>
               )}
-              {events.map(ev => (
+              {events.map((ev) => (
                 <div
                   key={ev.id}
                   className="flex items-start gap-2 rounded border border-border/30 bg-muted/10 px-2 py-1.5 text-[10px]"
                 >
                   <IconClock className="h-3 w-3 mt-0.5 text-muted-foreground shrink-0" />
-                  <span className="text-muted-foreground font-mono shrink-0">{formatTimestamp(ev.timestamp)}</span>
-                  <Badge variant="outline" className="text-[8px] font-mono border px-1 py-0 shrink-0">
+                  <span className="text-muted-foreground font-mono shrink-0">
+                    {formatTimestamp(ev.timestamp)}
+                  </span>
+                  <Badge
+                    variant="outline"
+                    className="text-[8px] font-mono border px-1 py-0 shrink-0"
+                  >
                     {ev.type}
                   </Badge>
                   <span className="text-muted-foreground">{ev.summary}</span>

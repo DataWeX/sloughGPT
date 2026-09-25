@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import {
-  Card, CardContent, CardHeader, CardTitle, Skeleton, Switch,
-} from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Skeleton, Switch } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useLocale } from '@/hooks/useLocale'
@@ -84,7 +83,7 @@ function saveHistory(history: Array<{ timestamp: number; score: number }>) {
 }
 
 export default function ConsciousnessHealthPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const [loading, setLoading] = useState(true)
   const [health, setHealth] = useState<HealthData | null>(null)
@@ -110,8 +109,11 @@ export default function ConsciousnessHealthPage() {
         const data = hResult.value as unknown as HealthData
         setHealth(data)
         if (typeof data.health_score === 'number') {
-          setHistory(prev => {
-            const next = [...prev, { timestamp: Date.now() / 1000, score: data.health_score }].slice(-MAX_HISTORY)
+          setHistory((prev) => {
+            const next = [
+              ...prev,
+              { timestamp: Date.now() / 1000, score: data.health_score },
+            ].slice(-MAX_HISTORY)
             saveHistory(next)
             return next
           })
@@ -172,17 +174,20 @@ export default function ConsciousnessHealthPage() {
 
   const qualiaActive = useMemo(() => {
     if (!health?.qualia) return 0
-    return Object.values(health.qualia).filter(v => v > 0.1).length
+    return Object.values(health.qualia).filter((v) => v > 0.1).length
   }, [health?.qualia])
 
   const avgGrowthPct = health ? (health.avg_growth * 100).toFixed(1) : '—'
   const positiveRatioPct = health ? `${(health.positive_ratio * 100).toFixed(0)}%` : '—'
-  const trainingPairs = (status as any)?.training?.total_pairs ?? (status as any)?.training_pairs ?? 0
+  const trainingPairs =
+    (status as any)?.training?.total_pairs ?? (status as any)?.training_pairs ?? 0
 
   const diagnosticSeverity = (msg: string): 'info' | 'warning' | 'error' => {
     const lower = msg.toLowerCase()
-    if (lower.includes('error') || lower.includes('fail') || lower.includes('critical')) return 'error'
-    if (lower.includes('warn') || lower.includes('low') || lower.includes('decline')) return 'warning'
+    if (lower.includes('error') || lower.includes('fail') || lower.includes('critical'))
+      return 'error'
+    if (lower.includes('warn') || lower.includes('low') || lower.includes('decline'))
+      return 'warning'
     return 'info'
   }
 
@@ -195,7 +200,7 @@ export default function ConsciousnessHealthPage() {
   if (loading) {
     return (
       <PageContainer title={t('consciousness_health.page_title')}>
-      <div className="space-y-4">
+        <div className="space-y-4">
           <Skeleton className="h-48 w-full max-w-xs mx-auto" />
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
             <Skeleton className="h-20" />
@@ -242,9 +247,18 @@ export default function ConsciousnessHealthPage() {
         <Card>
           <CardContent className="p-4 sm:p-6 flex flex-col items-center">
             <svg viewBox="0 0 120 120" className="w-40 h-40 sm:w-56 sm:h-56">
-              <circle cx="60" cy="60" r="54" fill="none" stroke="hsl(var(--border))" strokeWidth="8" />
               <circle
-                cx="60" cy="60" r="54"
+                cx="60"
+                cy="60"
+                r="54"
+                fill="none"
+                stroke="hsl(var(--border))"
+                strokeWidth="8"
+              />
+              <circle
+                cx="60"
+                cy="60"
+                r="54"
                 fill="none"
                 stroke={scoreColor}
                 strokeWidth="8"
@@ -254,20 +268,45 @@ export default function ConsciousnessHealthPage() {
                 transform="rotate(-90 60 60)"
                 className="transition-all duration-1000 ease-out"
               />
-              <text x="60" y="52" textAnchor="middle" className="fill-foreground" fontSize="24" fontWeight="bold">
+              <text
+                x="60"
+                y="52"
+                textAnchor="middle"
+                className="fill-foreground"
+                fontSize="24"
+                fontWeight="bold"
+              >
                 {score.toFixed(0)}
               </text>
-              <text x="60" y="68" textAnchor="middle" className="fill-muted-foreground" fontSize="8">
+              <text
+                x="60"
+                y="68"
+                textAnchor="middle"
+                className="fill-muted-foreground"
+                fontSize="8"
+              >
                 {t('consciousness_health.out_of_100')}
               </text>
-              <text x="60" y="82" textAnchor="middle" fontSize="9" fontWeight="500" fill={scoreColor}>
+              <text
+                x="60"
+                y="82"
+                textAnchor="middle"
+                fontSize="9"
+                fontWeight="500"
+                fill={scoreColor}
+              >
                 {getScoreLabel(score, t)}
               </text>
             </svg>
             <div className="mt-2 text-sm text-muted-foreground">
-              {t('consciousness_health.trend')}: {' '}
-              <span className={trend === 'up' ? 'text-success' : trend === 'down' ? 'text-destructive' : ''}>
-                {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'} {t(`consciousness_health.trend_${trend}`)}
+              {t('consciousness_health.trend')}:{' '}
+              <span
+                className={
+                  trend === 'up' ? 'text-success' : trend === 'down' ? 'text-destructive' : ''
+                }
+              >
+                {trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'}{' '}
+                {t(`consciousness_health.trend_${trend}`)}
               </span>
             </div>
           </CardContent>
@@ -276,17 +315,23 @@ export default function ConsciousnessHealthPage() {
         <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.enabled')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.enabled')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-lg font-bold ${health?.enabled ? 'text-success' : 'text-destructive'}`}>
+              <div
+                className={`text-lg font-bold ${health?.enabled ? 'text-success' : 'text-destructive'}`}
+              >
                 {health?.enabled ? t('consciousness_health.yes') : t('consciousness_health.no')}
               </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.level')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.level')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-lg font-bold">{health?.level ?? '—'}/3</div>
@@ -294,15 +339,21 @@ export default function ConsciousnessHealthPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.episodes')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.episodes')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-lg font-bold">{health?.episodes ?? episodesData?.total ?? '—'}</div>
+              <div className="text-lg font-bold">
+                {health?.episodes ?? episodesData?.total ?? '—'}
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.training_pairs')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.training_pairs')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-lg font-bold">{trainingPairs}</div>
@@ -310,7 +361,9 @@ export default function ConsciousnessHealthPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.last_reflection')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.last_reflection')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xs text-muted-foreground truncate">
@@ -323,10 +376,14 @@ export default function ConsciousnessHealthPage() {
         <div className="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-3">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.avg_growth')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.avg_growth')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={`text-xl font-bold ${health && health.avg_growth >= 0 ? 'text-success' : 'text-destructive'}`}>
+              <div
+                className={`text-xl font-bold ${health && health.avg_growth >= 0 ? 'text-success' : 'text-destructive'}`}
+              >
                 {health ? `${health.avg_growth >= 0 ? '+' : ''}${avgGrowthPct}%` : '—'}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
@@ -336,7 +393,9 @@ export default function ConsciousnessHealthPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.positive_ratio')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.positive_ratio')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">{positiveRatioPct}</div>
@@ -353,16 +412,22 @@ export default function ConsciousnessHealthPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.qualia_diversity')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.qualia_diversity')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">{qualiaActive}/7</div>
-              <div className="text-xs text-muted-foreground mt-1">{t('consciousness_health.dimensions_active')}</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                {t('consciousness_health.dimensions_active')}
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.belief_stability')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.belief_stability')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">
@@ -372,7 +437,9 @@ export default function ConsciousnessHealthPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.narrative_coherence')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.narrative_coherence')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">
@@ -382,7 +449,9 @@ export default function ConsciousnessHealthPage() {
           </Card>
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs text-muted-foreground">{t('consciousness_health.feedback_alignment')}</CardTitle>
+              <CardTitle className="text-xs text-muted-foreground">
+                {t('consciousness_health.feedback_alignment')}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-xl font-bold">
@@ -402,7 +471,10 @@ export default function ConsciousnessHealthPage() {
                 {evalData.diagnostics.map((msg: string, i: number) => {
                   const sev = diagnosticSeverity(msg)
                   return (
-                    <div key={i} className={`flex items-start gap-2 rounded-md p-2 text-xs ${severityColor(sev)}`}>
+                    <div
+                      key={i}
+                      className={`flex items-start gap-2 rounded-md p-2 text-xs ${severityColor(sev)}`}
+                    >
                       <span className="shrink-0 mt-0.5">
                         {sev === 'error' ? '●' : sev === 'warning' ? '●' : '●'}
                       </span>
@@ -413,7 +485,7 @@ export default function ConsciousnessHealthPage() {
               </div>
               {evalData.timestamp && (
                 <div className="mt-3 text-xs text-muted-foreground">
-                  {t('consciousness_health.last_evaluation')}: {new Date(evalData.timestamp).toLocaleString()}
+                  {t('consciousness_health.last_evaluation')}: {formatDateTime(evalData.timestamp)}
                 </div>
               )}
             </CardContent>
@@ -427,23 +499,55 @@ export default function ConsciousnessHealthPage() {
             </CardHeader>
             <CardContent>
               <svg viewBox="0 0 400 150" className="w-full h-auto">
-                <line x1="40" y1="10" x2="40" y2="130" stroke="hsl(var(--border))" strokeWidth="0.5" />
-                <line x1="40" y1="130" x2="390" y2="130" stroke="hsl(var(--border))" strokeWidth="0.5" />
+                <line
+                  x1="40"
+                  y1="10"
+                  x2="40"
+                  y2="130"
+                  stroke="hsl(var(--border))"
+                  strokeWidth="0.5"
+                />
+                <line
+                  x1="40"
+                  y1="130"
+                  x2="390"
+                  y2="130"
+                  stroke="hsl(var(--border))"
+                  strokeWidth="0.5"
+                />
                 {[0, 25, 50, 75, 100].map((v) => {
                   const y = 130 - (v / 100) * 120
                   return (
                     <g key={v}>
-                      <line x1="40" y1={y} x2="390" y2={y} stroke="hsl(var(--border))" strokeWidth="0.5" strokeDasharray="3 3" />
-                      <text x="35" y={y + 3} textAnchor="end" fontSize="8" className="fill-muted-foreground">{v}</text>
+                      <line
+                        x1="40"
+                        y1={y}
+                        x2="390"
+                        y2={y}
+                        stroke="hsl(var(--border))"
+                        strokeWidth="0.5"
+                        strokeDasharray="3 3"
+                      />
+                      <text
+                        x="35"
+                        y={y + 3}
+                        textAnchor="end"
+                        fontSize="8"
+                        className="fill-muted-foreground"
+                      >
+                        {v}
+                      </text>
                     </g>
                   )
                 })}
                 {(() => {
-                  const points = timelineData.map(d => {
-                    const x = 40 + (d.x / 100) * 350
-                    const y = 130 - (d.y / 100) * 120
-                    return `${x.toFixed(1)},${y.toFixed(1)}`
-                  }).join(' ')
+                  const points = timelineData
+                    .map((d) => {
+                      const x = 40 + (d.x / 100) * 350
+                      const y = 130 - (d.y / 100) * 120
+                      return `${x.toFixed(1)},${y.toFixed(1)}`
+                    })
+                    .join(' ')
                   return (
                     <polygon
                       points={`${40},${130} ${points} ${40 + ((timelineData[timelineData.length - 1]?.x ?? 0) / 100) * 350},130`}
@@ -459,14 +563,27 @@ export default function ConsciousnessHealthPage() {
                     return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`
                   })
                   return (
-                    <path d={pathParts.join(' ')} fill="none" stroke="hsl(var(--primary))" strokeWidth="2" />
+                    <path
+                      d={pathParts.join(' ')}
+                      fill="none"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth="2"
+                    />
                   )
                 })()}
                 {timelineData.map((d, i) => {
                   const x = 40 + (d.x / 100) * 350
                   const y = 130 - (d.y / 100) * 120
                   return (
-                    <circle key={i} cx={x} cy={y} r="3" fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth="1" />
+                    <circle
+                      key={i}
+                      cx={x}
+                      cy={y}
+                      r="3"
+                      fill="hsl(var(--primary))"
+                      stroke="hsl(var(--background))"
+                      strokeWidth="1"
+                    />
                   )
                 })}
               </svg>

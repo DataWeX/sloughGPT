@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { formatLocaleDate } from '@/lib/time-format'
 import { ArrowLeft, Database, Key } from 'lucide-react'
 
 const RESOURCE_ICONS: Record<string, typeof Database> = {
@@ -30,7 +31,11 @@ interface IncomingSharesCardProps {
   resolveWorkspace: (id: string) => string
 }
 
-export function IncomingSharesCard({ shares, resolveName, resolveWorkspace }: IncomingSharesCardProps) {
+export function IncomingSharesCard({
+  shares,
+  resolveName,
+  resolveWorkspace,
+}: IncomingSharesCardProps) {
   return (
     <Card className="mb-4">
       <CardHeader className="pb-2">
@@ -41,25 +46,36 @@ export function IncomingSharesCard({ shares, resolveName, resolveWorkspace }: In
       </CardHeader>
       <CardContent className="space-y-1">
         {shares.length === 0 ? (
-          <p className="text-[10px] text-muted-foreground text-center py-4">No data shared with this workspace</p>
+          <p className="text-[10px] text-muted-foreground text-center py-4">
+            No data shared with this workspace
+          </p>
         ) : (
-          shares.map(s => {
+          shares.map((s) => {
             const Icon = RESOURCE_ICONS[s.resource_type] || Database
             return (
-              <div key={s.id} className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50">
+              <div
+                key={s.id}
+                className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}>
+                    <span
+                      className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${RESOURCE_COLORS[s.resource_type] || 'bg-muted/50 text-muted-foreground'}`}
+                    >
                       <Icon className="h-2.5 w-2.5 inline mr-0.5" />
                       {s.resource_type}
                     </span>
-                    <span className="font-medium">{resolveName(s.resource_type, s.resource_id)}</span>
+                    <span className="font-medium">
+                      {resolveName(s.resource_type, s.resource_id)}
+                    </span>
                   </div>
                   <div className="text-muted-foreground mt-0.5 flex items-center gap-1">
-                    From <span className="font-medium">{resolveWorkspace(s.source_workspace_id)}</span> · {s.permission}
+                    From{' '}
+                    <span className="font-medium">{resolveWorkspace(s.source_workspace_id)}</span> ·{' '}
+                    {s.permission}
                   </div>
                 </div>
-                <span className="text-muted-foreground">{new Date(s.shared_at).toLocaleDateString()}</span>
+                <span className="text-muted-foreground">{formatLocaleDate(s.shared_at)}</span>
               </div>
             )
           })

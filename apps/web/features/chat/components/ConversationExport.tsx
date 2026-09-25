@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, memo } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { Button, IconDownload, IconCopy, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
@@ -34,7 +35,10 @@ function computeMetadata(
   maxTokens: number,
 ): ExportMetadata {
   const totalCharacters = messages.reduce((sum, m) => sum + m.content.length, 0)
-  const totalWords = messages.reduce((sum, m) => sum + m.content.split(/\s+/).filter(Boolean).length, 0)
+  const totalWords = messages.reduce(
+    (sum, m) => sum + m.content.split(/\s+/).filter(Boolean).length,
+    0,
+  )
 
   return {
     exportedAt: new Date().toISOString(),
@@ -48,10 +52,7 @@ function computeMetadata(
   }
 }
 
-function formatAsMarkdown(
-  messages: ChatMessage[],
-  metadata: ExportMetadata,
-): string {
+function formatAsMarkdown(messages: ChatMessage[], metadata: ExportMetadata): string {
   const lines: string[] = []
 
   lines.push(`# ${metadata.sessionName || 'Chat Conversation'}`)
@@ -73,7 +74,7 @@ function formatAsMarkdown(
 
   for (const msg of messages) {
     const role = msg.role === 'user' ? 'User' : 'Assistant'
-    const timestamp = new Date(msg.timestamp).toLocaleString()
+    const timestamp = formatDateTime(msg.timestamp)
     lines.push(`### ${role} (${timestamp})`)
     lines.push('')
     lines.push(msg.content)
@@ -90,20 +91,21 @@ function formatAsMarkdown(
   return lines.join('\n')
 }
 
-function formatAsJSON(
-  messages: ChatMessage[],
-  metadata: ExportMetadata,
-): string {
-  return JSON.stringify({
-    metadata,
-    messages: messages.map(m => ({
-      role: m.role,
-      content: m.content,
-      timestamp: new Date(m.timestamp).toISOString(),
-      toolCalls: m.toolCalls,
-      images: m.images,
-    })),
-  }, null, 2)
+function formatAsJSON(messages: ChatMessage[], metadata: ExportMetadata): string {
+  return JSON.stringify(
+    {
+      metadata,
+      messages: messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+        timestamp: new Date(m.timestamp).toISOString(),
+        toolCalls: m.toolCalls,
+        images: m.images,
+      })),
+    },
+    null,
+    2,
+  )
 }
 
 export const ConversationExport = memo(function ConversationExport({

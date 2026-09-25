@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo, memo } from 'react'
+import { formatDateTime } from '@/lib/time-format'
 import { Button, IconRefresh } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { logger } from '@/lib/dev-log'
@@ -52,7 +53,7 @@ const MODEL_PRICING = {
   'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
   'claude-3-opus': { input: 0.015, output: 0.075 },
   'claude-3-sonnet': { input: 0.003, output: 0.015 },
-  'default': { input: 0.001, output: 0.002 },
+  default: { input: 0.001, output: 0.002 },
 }
 
 function formatTokens(n: number): string {
@@ -65,9 +66,7 @@ function formatCost(n: number): string {
   return `$${n.toFixed(4)}`
 }
 
-export const TokenBilling = memo(function TokenBilling({
-  className,
-}: TokenBillingProps) {
+export const TokenBilling = memo(function TokenBilling({ className }: TokenBillingProps) {
   const [balance, setBalance] = useState<TokenBalance | null>(null)
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [history, setHistory] = useState<UsageRecord[]>([])
@@ -86,7 +85,9 @@ export const TokenBilling = memo(function TokenBilling({
       setUsage(usageRes)
       setHistory(historyRes.records || [])
     } catch (e) {
-      logger.warning('Failed to fetch token data', { error: e instanceof Error ? e.message : String(e) })
+      logger.warning('Failed to fetch token data', {
+        error: e instanceof Error ? e.message : String(e),
+      })
     } finally {
       setLoading(false)
     }
@@ -124,23 +125,31 @@ export const TokenBilling = memo(function TokenBilling({
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">Token Billing</span>
           {balance && (
-            <span className={cn(
-              'text-[10px] px-2 py-0.5 rounded-full font-medium',
-              balance.tier === 'free' && 'bg-muted text-muted-foreground',
-              balance.tier === 'pro' && 'bg-primary/20 text-primary',
-              balance.tier === 'enterprise' && 'bg-success/20 text-success',
-            )}>
+            <span
+              className={cn(
+                'text-[10px] px-2 py-0.5 rounded-full font-medium',
+                balance.tier === 'free' && 'bg-muted text-muted-foreground',
+                balance.tier === 'pro' && 'bg-primary/20 text-primary',
+                balance.tier === 'enterprise' && 'bg-success/20 text-success',
+              )}
+            >
               {balance.tier.charAt(0).toUpperCase() + balance.tier.slice(1)}
             </span>
           )}
         </div>
-        <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={fetchData} aria-label="Refresh token balance">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="h-6 w-6"
+          onClick={fetchData}
+          aria-label="Refresh token balance"
+        >
           <IconRefresh className="h-3 w-3" />
         </Button>
       </div>
 
       <div className="flex border-b">
-        {(['overview', 'history', 'pricing'] as const).map(tab => (
+        {(['overview', 'history', 'pricing'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -195,17 +204,22 @@ export const TokenBilling = memo(function TokenBilling({
             {history.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-4">No usage yet</p>
             ) : (
-              history.map(record => (
-                <div key={record.id} className="flex items-center justify-between py-2 border-b last:border-0">
+              history.map((record) => (
+                <div
+                  key={record.id}
+                  className="flex items-center justify-between py-2 border-b last:border-0"
+                >
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium truncate">{record.model}</div>
                     <div className="text-[10px] text-muted-foreground">
-                      {new Date(record.timestamp).toLocaleString()}
+                      {formatDateTime(record.timestamp)}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
                     <div className="text-xs">{formatTokens(record.totalTokens)}</div>
-                    <div className="text-[10px] text-muted-foreground">{formatCost(record.cost)}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {formatCost(record.cost)}
+                    </div>
                   </div>
                 </div>
               ))
@@ -242,12 +256,16 @@ export const TokenBilling = memo(function TokenBilling({
             <div className="pt-2">
               <h4 className="text-xs font-medium mb-2">Model Pricing (per 1K tokens)</h4>
               <div className="space-y-1">
-                {Object.entries(MODEL_PRICING).filter(([k]) => k !== 'default').map(([model, pricing]) => (
-                  <div key={model} className="flex justify-between text-[10px]">
-                    <span className="text-muted-foreground">{model}</span>
-                    <span>In: {formatCost(pricing.input)} / Out: {formatCost(pricing.output)}</span>
-                  </div>
-                ))}
+                {Object.entries(MODEL_PRICING)
+                  .filter(([k]) => k !== 'default')
+                  .map(([model, pricing]) => (
+                    <div key={model} className="flex justify-between text-[10px]">
+                      <span className="text-muted-foreground">{model}</span>
+                      <span>
+                        In: {formatCost(pricing.input)} / Out: {formatCost(pricing.output)}
+                      </span>
+                    </div>
+                  ))}
               </div>
             </div>
           </div>
@@ -257,7 +275,12 @@ export const TokenBilling = memo(function TokenBilling({
   )
 })
 
-function UsageBar({ label, used, limit, percentage }: {
+function UsageBar({
+  label,
+  used,
+  limit,
+  percentage,
+}: {
   label: string
   used: number
   limit: number
@@ -267,15 +290,15 @@ function UsageBar({ label, used, limit, percentage }: {
     <div className="space-y-1">
       <div className="flex justify-between text-[10px]">
         <span className="text-muted-foreground">{label}</span>
-        <span>{formatTokens(used)} / {formatTokens(limit)}</span>
+        <span>
+          {formatTokens(used)} / {formatTokens(limit)}
+        </span>
       </div>
       <div className="h-1.5 bg-muted rounded-full overflow-hidden">
         <div
           className={cn(
             'h-full rounded-full transition-all',
-            percentage > 90 ? 'bg-destructive' :
-            percentage > 70 ? 'bg-warning' :
-            'bg-primary',
+            percentage > 90 ? 'bg-destructive' : percentage > 70 ? 'bg-warning' : 'bg-primary',
           )}
           style={{ width: `${percentage}%` }}
         />
