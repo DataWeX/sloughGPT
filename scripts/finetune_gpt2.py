@@ -7,7 +7,6 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "core-py"))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "apps", "api", "server"))
 
-from datasets import Dataset
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -15,6 +14,8 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+
+from datasets import Dataset
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("finetune")
