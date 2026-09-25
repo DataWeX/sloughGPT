@@ -1,16 +1,27 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge } from '@sloughgpt/strui'
+import { trainingJobsController } from '@/lib/training-controller'
+import { formatToastError } from '@/lib/error-utils'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
-import type { TrainingJob } from '@/lib/training-controller'
 
 interface ResultsStepProps {
   checkpoints: UseTrainingCheckpointsReturn
   goToTrain: () => void
   onTest: () => void
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  /** Fired after a successful resume so the host page can refresh jobs / poll. */
+  onRecovered?: (result: {
+    status: string
+    original_job_id?: string
+    recovery_job_id?: string
+    checkpoint_path?: string
+    message?: string
+  }) => void
 }
+
+const RESUMABLE = new Set(['interrupted', 'failed'])
 
 function jobStatusStyle(status: string): {
   label: string
@@ -22,6 +33,9 @@ function jobStatusStyle(status: string): {
   }
   if (s === 'completed' || s === 'complete' || s === 'success' || s === 'done') {
     return { label: 'Completed', variant: 'success' }
+  }
+  if (s === 'interrupted') {
+    return { label: 'Interrupted', variant: 'error' }
   }
   if (s === 'failed' || s === 'error' || s === 'cancelled' || s === 'canceled') {
     return { label: s === 'failed' ? 'Failed' : status, variant: 'error' }
@@ -63,7 +77,14 @@ function QualitySparkline({ values }: { values: number[] }) {
   )
 }
 
-export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: ResultsStepProps) {
+export function ResultsStep({
+  checkpoints,
+  goToTrain,
+  onTest,
+  addToast,
+  onRecovered,
+}: ResultsStepProps) {
+  const [resuming, setResuming] = useState<string | null>(null)
   const bestName = useMemo(() => {
     const withLoss = checkpoints.checkpoints.filter((c) => c.loss != null && c.loss > 0)
     if (withLoss.length === 0) return null
@@ -77,11 +98,30 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
       .map((j) => j.avg_quality!)
   }, [checkpoints.jobs])
 
-  const completedJobs = useMemo(() => {
+  const recentJobs = useMemo(() => {
     return checkpoints.jobs
-      .filter((j) => j.status === 'completed' || j.status === 'failed')
+      .filter(
+        (j) => j.status === 'completed' || j.status === 'failed' || j.status === 'interrupted',
+      )
       .slice(0, 5)
   }, [checkpoints.jobs])
+
+  const handleResume = useCallback(
+    async (jobId: string) => {
+      setResuming(jobId)
+      try {
+        const result = await trainingJobsController.recover(jobId)
+        addToast(result.message || 'Resume started', 'success')
+        void checkpoints.fetchJobs()
+        onRecovered?.(result)
+      } catch (e) {
+        addToast(formatToastError(e, 'Could not resume job'), 'error')
+      } finally {
+        setResuming(null)
+      }
+    },
+    [addToast, checkpoints, onRecovered],
+  )
 
   return (
     <Card>
@@ -96,12 +136,13 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
           </div>
         )}
 
-        {completedJobs.length > 0 && (
+        {recentJobs.length > 0 && (
           <div>
             <div className="text-[10px] text-muted-foreground/60 mb-1.5">Recent runs</div>
             <div className="space-y-1">
-              {completedJobs.map((job) => {
+              {recentJobs.map((job) => {
                 const style = jobStatusStyle(job.status)
+                const canResume = RESUMABLE.has(job.status)
                 return (
                   <div
                     key={job.id}
@@ -117,11 +158,27 @@ export function ResultsStep({ checkpoints, goToTrain, onTest, addToast }: Result
                         {job.loss != null && (
                           <span className="ml-1.5">Loss: {job.loss.toFixed(4)}</span>
                         )}
+                        {job.status === 'interrupted' && job.progress != null && (
+                          <span className="ml-1.5">{job.progress}%</span>
+                        )}
                       </div>
                     </div>
-                    <Badge size="sm" variant={style.variant}>
-                      {style.label}
-                    </Badge>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {canResume && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-5 text-[9px] px-1.5"
+                          disabled={resuming === job.id}
+                          onClick={() => void handleResume(job.id)}
+                        >
+                          {resuming === job.id ? 'Resuming…' : 'Resume'}
+                        </Button>
+                      )}
+                      <Badge size="sm" variant={style.variant}>
+                        {style.label}
+                      </Badge>
+                    </div>
                   </div>
                 )
               })}
