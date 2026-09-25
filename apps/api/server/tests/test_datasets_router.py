@@ -164,6 +164,12 @@ class TestControllerSearch:
     """Direct controller test — the router mocks the controller, so a shape
     regression (names instead of full summaries) can only be caught here."""
 
+    @pytest.fixture(autouse=True)
+    def _isolated_cache_root(self, tmp_path, monkeypatch):
+        """Point the just-cache at an empty tmp dir so the user's real cache
+        (e.g. ~/.cache/sloughgpt/external) never leaks into search results."""
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+
     def _make_controller(self, tmp_path: Path) -> DatasetsController:
         datasets_dir = tmp_path / "data"
         (datasets_dir / "shakespeare").mkdir(parents=True)

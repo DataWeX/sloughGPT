@@ -673,6 +673,7 @@ def get_configured_middleware(
         (SerializationGuardMiddleware, {}),
         (ReadinessGateMiddleware, {}),
         (CorrelationIdMiddleware, {}),
+        (ClientErrorFilterMiddleware, {}),
     ]
 
 
