@@ -59,22 +59,22 @@ class TestResolveDevice:
     def test_explicit_cuda_unavailable_falls_back_to_cpu(self, ctrl):
         """Regression: requesting cuda on a GPU-less machine must not report
         cuda as the active device — resolve to cpu instead."""
-        with patch("domain.infrastructure._internal.ml_types._cuda_available", return_value=False):
+        with patch("domain.infrastructure.ml_types._cuda_available", return_value=False):
             result = ctrl._resolve_device("cuda")
         assert result == "cpu"
 
     def test_explicit_cuda_available_stays_cuda(self, ctrl):
-        with patch("domain.infrastructure._internal.ml_types._cuda_available", return_value=True):
+        with patch("domain.infrastructure.ml_types._cuda_available", return_value=True):
             result = ctrl._resolve_device("cuda")
         assert result == "cuda"
 
     def test_explicit_mps_unavailable_falls_back_to_cpu(self, ctrl):
-        with patch("domain.infrastructure._internal.ml_types._mps_available", return_value=False):
+        with patch("domain.infrastructure.ml_types._mps_available", return_value=False):
             result = ctrl._resolve_device("mps")
         assert result == "cpu"
 
     def test_explicit_mps_available_stays_mps(self, ctrl):
-        with patch("domain.infrastructure._internal.ml_types._mps_available", return_value=True):
+        with patch("domain.infrastructure.ml_types._mps_available", return_value=True):
             result = ctrl._resolve_device("mps")
         assert result == "mps"
 

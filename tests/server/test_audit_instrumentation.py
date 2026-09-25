@@ -91,7 +91,6 @@ class TestModelAudit:
     def test_unload_model_logs_event(self, mock_logger, mock_ctrl, models_client):
         ctrl = MagicMock()
         ctrl.unload_model.return_value = {"status": "unloaded"}
-        ctrl._current_model = "gpt2"
         ctrl.active_model_id.return_value = "gpt2"
         mock_ctrl.return_value = ctrl
         resp = models_client.post("/models/unload")
@@ -389,10 +388,11 @@ class TestTrainingRouterAudit:
             "source_kind": "dataset",
         }
 
+    @patch("apps.api.server.training.lora.get_training_executor")
     @patch("apps.api.server.training.lora.find_repo_root")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_hf_training_logs_event(
-        self, mock_logger, mock_root, training_router_client, tmp_path
+        self, mock_logger, mock_root, mock_engine, training_router_client, tmp_path
     ):
         mock_root.return_value = tmp_path
         text_file = tmp_path / "input.txt"

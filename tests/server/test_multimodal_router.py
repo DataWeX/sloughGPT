@@ -5,6 +5,7 @@ Tests for the multimodal router — status, train, batch, transcribe, generate.
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
@@ -15,6 +16,15 @@ app = FastAPI()
 register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture(autouse=True)
+def _reset_voice_engine():
+    """Voice engine is cached on the shared module-level router — reset per test."""
+    multimodal_router._voice_engine = None
+    yield
+    multimodal_router._voice_engine = None
+
 
 MGR_TARGET = "apps.api.server.routers.multimodal.get_multimodal_manager"
 ROUTER = "apps.api.server.routers.multimodal.MultimodalRouter"
@@ -151,23 +161,25 @@ class TestStatus:
 class TestTranscribe:
     """POST /multimodal/transcribe"""
 
-    def test_transcribe_audio(self):
-        engine = MagicMock()
+    @patch("domain.voice.get_voice_engine")
+    def test_transcribe_audio(self, mock_get_voice):
+        ve = MagicMock()
         result = MagicMock()
         result.success = True
         result.data = "hello world"
         result.metadata = {"language": "en"}
-        engine.recognize.return_value = result
-        with patch.object(multimodal_router, "_voice_engine", engine):
-            resp = client.post(
-                "/multimodal/transcribe",
-                files={"file": ("test.wav", b"fake-audio", "audio/wav")},
-                data={"language": "en"},
-            )
+        ve.recognize.return_value = result
+        mock_get_voice.return_value = ve
+        resp = client.post(
+            "/multimodal/transcribe",
+            files={"file": ("test.wav", b"fake-audio", "audio/wav")},
+            data={"language": "en"},
+        )
         assert resp.status_code == 200
         data = _get_data(resp)
         assert data["text"] == "hello world"
         assert data["language"] == "en"
+        assert "elapsed_ms" in data
 
     @patch(MGR_TARGET)
     def test_transcribe_rejects_non_audio(self, mock_get):
@@ -310,20 +322,19 @@ class TestDPO:
                     "pairs_trained": max_pairs,
                 }
 
-        # The endpoint late-imports HFDPOTrainer from the facade; patch the
-        # facade attr directly so it works even when domain.feedback was already
-        # imported (eager-bound) by earlier tests in the same process.
-        with patch("domain.feedback.HFDPOTrainer", _FakeTrainer):
-            with patch(
+        with (
+            patch("domain.feedback.HFDPOTrainer", _FakeTrainer),
+            patch(
                 "apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
                 return_value=(object(), object()),
-            ):
-                multimodal_router._dpo_state["status"] = "idle"
-                resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
-                assert resp.status_code == 200
-                data = resp.json()["data"]
-                assert data["status"] == "accepted"
-                assert data["pairs_trained"] == 4
+            ),
+        ):
+            multimodal_router._dpo_state["status"] = "idle"
+            resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
+            assert resp.status_code == 200
+            data = resp.json()["data"]
+            assert data["status"] == "accepted"
+            assert data["pairs_trained"] == 4
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_rejects_invalid_pairs(self):
@@ -451,7 +462,8 @@ class TestAnalyze:
 class TestSynthesizeSpeech:
     """POST /multimodal/synthesize-speech"""
 
-    def test_synthesizes_waveform(self):
+    @patch("domain.voice._internal.tts.TTSEngine")
+    def test_synthesizes_waveform(self, mock_tts_cls):
         import numpy as np
 
         engine = MagicMock()

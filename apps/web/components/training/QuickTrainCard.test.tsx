@@ -215,7 +215,7 @@ describe('QuickTrainCard', () => {
         addToast={vi.fn()}
       />,
     )
-    expect(screen.getByText('Turbo training complete!')).toBeDefined()
+    expect(screen.getByText('Training complete!')).toBeDefined()
     expect(screen.getByText(/Final loss: 0.9000/)).toBeDefined()
     fireEvent.click(screen.getByText('Train another'))
     expect(session.stopTurboTrain).toHaveBeenCalled()

@@ -366,7 +366,9 @@ class TestAuditLoggerFileQuery:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["count"] == 1
-        logger.file_query.assert_called_once_with(limit=100, event_type=None, before=None, workspace_id="")
+        logger.file_query.assert_called_once_with(
+            limit=100, event_type=None, before=None, workspace_id=""
+        )
 
     @patch("infrastructure.auth.get_audit_logger")
     def test_router_history_before_and_filter_passthrough(self, mock_get_logger, client):

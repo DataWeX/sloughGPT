@@ -63,7 +63,7 @@ PGQ (facade)
 ## Quick start
 
 ```python
-from domains.infrastructure.pugqeep import PGQ, Point, PointLibrary, Tree, ModelTree
+from domain.infrastructure.pugqeep import PGQ, Point, PointLibrary, Tree, ModelTree
 
 # High-level facade
 pgq = PGQ("my-model")
@@ -123,7 +123,7 @@ Any Point implementation must satisfy:
 ### PointView (lazy decompression)
 
 ```python
-from domains.infrastructure.pugqeep import PointLibrary
+from domain.infrastructure.pugqeep import PointLibrary
 
 lib = PointLibrary("my-lib")
 view = lib.view("layer_0.weight")  # no decompression yet
@@ -145,7 +145,7 @@ materialization. `raw` and slice-cached access fall back to the cached path
 Thread-safe Point storage with batch operations, search, and views.
 
 ```python
-from domains.infrastructure.pugqeep import PointLibrary, Point
+from domain.infrastructure.pugqeep import PointLibrary, Point
 
 lib = PointLibrary("my-lib")
 
@@ -193,7 +193,7 @@ time series. (The array is the contract; the domain — weights, behavior-tree
 nodes, graph embeddings — is irrelevant to compression.)
 
 ```python
-from domains.infrastructure.pugqeep import Tree
+from domain.infrastructure.pugqeep import Tree
 
 # Any array data, keyed by name
 tree = Tree("game-ai", n_clusters=16)
@@ -217,7 +217,7 @@ Extends Tree with skip logic for embeddings and biases (discrete tensors
 that shouldn't be VQ-compressed).
 
 ```python
-from domains.infrastructure.pugqeep import ModelTree, save_library, load_library
+from domain.infrastructure.pugqeep import ModelTree, save_library, load_library
 from pathlib import Path
 import numpy as np
 
@@ -251,7 +251,7 @@ tree = load_library(Path("model.points.json"))
 Priority task execution with worker pool mode.
 
 ```python
-from domains.infrastructure.pugqeep import TaskQueue, Task, TaskPriority
+from domain.infrastructure.pugqeep import TaskQueue, Task, TaskPriority
 
 q = TaskQueue(name="training")
 
@@ -292,7 +292,7 @@ PENDING → RUNNING → COMPLETED
 Process dispatch with Trees and Stems.
 
 ```python
-from domains.infrastructure.pugqeep import Engine
+from domain.infrastructure.pugqeep import Engine
 
 engine = Engine("main")
 
@@ -386,7 +386,7 @@ Accuracy:  ~80-95% (varies by pattern)
 Long-running pugqeep operations wire into `CancelManager` for cancellation:
 
 ```python
-from domains.infrastructure.cancel_manager import get_cancel_manager, OpType
+from domain.infrastructure.cancel_manager import get_cancel_manager, OpType
 
 mgr = get_cancel_manager()
 op_id = mgr.register(OpType.TRAINING, "compress model")

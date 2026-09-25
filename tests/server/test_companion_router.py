@@ -16,6 +16,7 @@ app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
 COMPANION_TARGET = "apps.api.server.routers.companion._companion_router._get_companion"
+CREATE_COMPANION_TARGET = "domain.companion.create_companion"
 
 
 def _mock_companion():
@@ -31,12 +32,27 @@ def _mock_companion():
         },
     }
     comp.get_system_prompt.return_value = "You are a warm friend."
+    comp.respond.return_value = "Hello! I'm here for you."
 
-    def _apply_personality(**kwargs):
-        # Mirror the real Companion.set_personality attribute writes so the
-        # router's delegation can be asserted on the mock instance.
-        for key, value in kwargs.items():
-            if value is not None and not isinstance(value, MagicMock):
+    def _apply_personality(
+        name=None,
+        warmth=None,
+        curiosity=None,
+        creativity=None,
+        confidence=None,
+        humor=None,
+    ):
+        if isinstance(name, str):
+            comp.name = name
+            comp.to_dict.return_value["name"] = name
+        for key, value in (
+            ("warmth", warmth),
+            ("curiosity", curiosity),
+            ("creativity", creativity),
+            ("confidence", confidence),
+            ("humor", humor),
+        ):
+            if isinstance(value, (int, float)):
                 setattr(comp, key, value)
 
     comp.set_personality.side_effect = _apply_personality
@@ -166,7 +182,7 @@ class TestPatchPersonality:
 class TestResetCompanion:
     """DELETE /companion/"""
 
-    @patch("domain.companion.create_companion")
+    @patch(CREATE_COMPANION_TARGET)
     @patch(COMPANION_TARGET)
     def test_reset_companion(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -182,7 +198,7 @@ class TestResetCompanion:
 class TestPreset:
     """POST /companion/preset"""
 
-    @patch("domain.companion.create_companion")
+    @patch(CREATE_COMPANION_TARGET)
     @patch(COMPANION_TARGET)
     def test_use_preset(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -195,7 +211,7 @@ class TestPreset:
             body = resp.json()
             assert "traits" in body["data"]
 
-    @patch("domain.companion.create_companion")
+    @patch(CREATE_COMPANION_TARGET)
     @patch(COMPANION_TARGET)
     def test_use_preset_warm(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -227,7 +243,8 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat(self, mock_get):
         comp = _mock_companion()
-        comp.respond = MagicMock(return_value="Hello! I'm here for you.")
+        comp.respond.return_value = "Hello! I'm here for you."
+        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
         resp = client.post("/companion/chat", json={"message": "Hello!"})
@@ -238,7 +255,8 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_with_mood(self, mock_get):
         comp = _mock_companion()
-        comp.respond = MagicMock(return_value="I understand.")
+        comp.respond.return_value = "I understand."
+        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
         resp = client.post(
@@ -253,7 +271,8 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_no_system_prompt(self, mock_get):
         comp = _mock_companion()
-        comp.respond = MagicMock(return_value="Hi!")
+        comp.respond.return_value = "Hi!"
+        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
         resp = client.post(
@@ -270,7 +289,8 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_with_user_name(self, mock_get):
         comp = _mock_companion()
-        comp.respond = MagicMock(return_value="Hello Alice!")
+        comp.respond.return_value = "Hello Alice!"
+        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
         resp = client.post(
@@ -287,7 +307,8 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_provider_error(self, mock_get):
         comp = _mock_companion()
-        comp.respond = MagicMock(side_effect=Exception("model crash"))
+        comp.respond.side_effect = Exception("model crash")
+        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
         mock_get.return_value = comp
 
         resp = client.post("/companion/chat", json={"message": "Hello"})
@@ -414,7 +435,7 @@ class TestChatValidation:
     @patch(COMPANION_TARGET)
     def test_no_provider_returns_error_response(self, mock_get):
         comp = _mock_companion()
-        comp.respond = MagicMock(side_effect=Exception("No model loaded"))
+        comp.respond.side_effect = Exception("No model loaded")
         mock_get.return_value = comp
         resp = client.post("/companion/chat", json={"message": "Hello"})
         assert resp.status_code == 500

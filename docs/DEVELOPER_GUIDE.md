@@ -273,7 +273,7 @@ class ExampleService:
 Use the built-in `ServerState` for metrics tracking:
 
 ```python
-from domains.infrastructure.server_state import get_server_state
+from domain.infrastructure.server_state import get_server_state
 
 state = get_server_state()
 state.record_inference(tokens=100, elapsed_ms=500, model="sloughgpt-7b")

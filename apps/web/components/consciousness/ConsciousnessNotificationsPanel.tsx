@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import type { JSX } from 'react'
 import { useLocale } from '@/hooks/useLocale'
 import { useConsciousnessNotifications } from '@/hooks/useConsciousnessNotifications'
 

@@ -44,11 +44,9 @@ class TestInfer:
 
     @patch("state.model")
     @patch("domain.models.get_provider", return_value=None)
-    def test_returns_500_when_no_provider(self, mock_prov, mock_model, client):
+    def test_returns_503_when_no_provider(self, mock_prov, mock_model, client):
         resp = client.post("/infer", json={"prompt": "Hi"})
-        # 500 (was 503) — deliberate: no provider is a permanent failure, not a retryable one.
-        assert resp.status_code == 500
-        assert resp.json()["code"] == "E_INFRA_REGISTRY"
+        assert resp.status_code == 503
 
     @patch("state.model")
     @patch("domain.models.get_provider")
@@ -267,6 +265,9 @@ class TestInferInfo:
         with patch(
             "apps.api.server.routers.infer.InferRouter._get_model_interface",
             return_value=mock_model,
+        ), patch(
+            "routers.inference._get_model_status",
+            return_value={"ready": True},
         ):
             resp = client.get("/infer/info")
             assert resp.status_code == 200

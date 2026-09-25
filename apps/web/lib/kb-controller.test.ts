@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const mockApiGet = vi.fn()
 const mockApiPost = vi.fn()
+const mockApiPostForm = vi.fn()
 const mockApiPut = vi.fn()
 const mockApiPatch = vi.fn()
 const mockApiDelete = vi.fn()
@@ -9,6 +10,7 @@ const mockApiDelete = vi.fn()
 vi.mock('@/lib/http-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
   apiPost: (...args: unknown[]) => mockApiPost(...args),
+  apiPostForm: (...args: unknown[]) => mockApiPostForm(...args),
   apiPut: (...args: unknown[]) => mockApiPut(...args),
   apiPatch: (...args: unknown[]) => mockApiPatch(...args),
   apiDelete: (...args: unknown[]) => mockApiDelete(...args),
@@ -111,6 +113,27 @@ describe('kbController', () => {
       url: 'https://example.com',
       source: 'web',
     })
+  })
+
+  it('ingestFile posts multipart form to /knowledge/ingest-file', async () => {
+    mockApiPostForm.mockResolvedValue({
+      status: 'imported',
+      stored: 1,
+      total_chunks: 2,
+      topic: 'imported',
+      filename: 'notes.txt',
+      file_size: 11,
+    })
+    const file = new File(['hello world'], 'notes.txt', { type: 'text/plain' })
+    const result = await kbController.ingestFile(file)
+    expect(mockApiPostForm).toHaveBeenCalledTimes(1)
+    const [url, form] = mockApiPostForm.mock.calls[0]
+    expect(url).toBe('/knowledge/ingest-file')
+    expect(form).toBeInstanceOf(FormData)
+    expect((form as FormData).get('file')).toBe(file)
+    expect((form as FormData).get('topic')).toBe('imported')
+    expect(result.total_chunks).toBe(2)
+    expect(result.filename).toBe('notes.txt')
   })
 
   it('batchIngest calls POST /knowledge/batch', async () => {

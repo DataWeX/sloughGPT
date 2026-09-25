@@ -509,7 +509,7 @@ export function useTrainingSession(): UseTrainingSessionReturn {
             })
             return
           }
-          addToast('Turbo training started', 'info')
+          addToast('Training started', 'info')
           operationsStore
             .getState()
             .fetch()

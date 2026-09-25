@@ -847,7 +847,7 @@ def create_model_guard(
 ) -> ProcessGuard:
     """Create a ProcessGuard for an HF model (legacy path)."""
     config = ModelConfig(
-        hf_model_cls_path="domains.infrastructure.hf_model_worker.hf_model_loader",
+        hf_model_cls_path="domain.infrastructure._internal.hf_model_worker.hf_model_loader",
         hf_model_kwargs={"model_id": model_id, "device": device},
         model_id=model_id,
     )

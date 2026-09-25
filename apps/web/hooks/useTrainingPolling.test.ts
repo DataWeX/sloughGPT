@@ -207,7 +207,7 @@ describe('useTrainingPolling', () => {
       expect(mockWriteTraining).toHaveBeenCalledWith(
         expect.objectContaining({ phase: 'complete', checkpoint: 'tcp1', modelPath: '/models/turbo/final.soul' }),
       )
-      expect(addToast).toHaveBeenCalledWith('Turbo training complete!', 'success')
+      expect(addToast).toHaveBeenCalledWith('Training complete!', 'success')
     })
 
     it('handles turbo error', async () => {

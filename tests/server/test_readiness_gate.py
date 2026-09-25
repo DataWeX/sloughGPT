@@ -12,6 +12,22 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.middleware import ReadinessGateMiddleware
 
+# apps/api/server/tests/test_support.py replaces this class's dispatch with a
+# no-op at import time (for its schema-validation tests). That patch is
+# process-wide, so stash the real implementation here — works whether this
+# module is imported before or after test_support. Restored per-test below.
+_PRISTINE_DISPATCH = getattr(
+    ReadinessGateMiddleware, "_real_dispatch", ReadinessGateMiddleware.dispatch
+)
+
+
+@pytest.fixture(autouse=True)
+def _real_gate_dispatch():
+    prev = ReadinessGateMiddleware.dispatch
+    ReadinessGateMiddleware.dispatch = _PRISTINE_DISPATCH
+    yield
+    ReadinessGateMiddleware.dispatch = prev
+
 
 @pytest.fixture
 def app():
@@ -48,18 +64,29 @@ def model_not_ready():
     import state as server_state
     from startup_progress import STARTUP_PHASE
 
+    from domain.infrastructure.server_state import get_server_state
+
     saved_model = server_state.model
     saved_provider = server_state.provider
     saved_phase = STARTUP_PHASE["phase"]
+    # _model_ready() also consults the core ServerState singleton, which other
+    # tests may have loaded — clear it or the gate stays open.
+    core = get_server_state()
+    saved_core_model = core.model.get()
+    saved_core_tokenizer = core.tokenizer.get()
 
     server_state.model = None
     server_state.provider = None
+    core.model.set(None)
+    core.tokenizer.set(None)
     STARTUP_PHASE["phase"] = "ready"
     try:
         yield
     finally:
         server_state.model = saved_model
         server_state.provider = saved_provider
+        core.model.set(saved_core_model)
+        core.tokenizer.set(saved_core_tokenizer)
         STARTUP_PHASE["phase"] = saved_phase
 
 

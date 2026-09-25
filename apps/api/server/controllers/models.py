@@ -62,8 +62,7 @@ class ModelsController:
                 )
                 return "cpu"
         try:
-            # Underscore helpers are not re-exported by the facade's star-import.
-            from domain.infrastructure._internal.ml_types import _cuda_available, _mps_available
+            from domain.infrastructure.ml_types import _cuda_available, _mps_available
         except ImportError:
             logger.warning("ml_types not available, device checks disabled", extra={"tag": "MODEL"})
             _cuda_available = _mps_available = None

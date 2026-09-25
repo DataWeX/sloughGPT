@@ -108,7 +108,7 @@ export function TurboCard({
           </div>
         ) : session.turboPhase === 'complete' ? (
           <div className="space-y-2 text-sm">
-            <p className="text-success">Turbo training complete!</p>
+            <p className="text-success">Training complete!</p>
             {session.turboResult && (
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>
@@ -134,7 +134,7 @@ export function TurboCard({
           </div>
         ) : session.turboPhase === 'error' ? (
           <div className="space-y-2 text-sm">
-            <p className="text-destructive">Turbo training failed</p>
+            <p className="text-destructive">Training failed</p>
             {session.turboError && (
               <p className="text-xs text-muted-foreground">{session.turboError}</p>
             )}

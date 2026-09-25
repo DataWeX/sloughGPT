@@ -69,6 +69,7 @@ import {
 } from '@/lib/rag-controller'
 import { KnowledgeCategoryChart } from '@/components/knowledge/KnowledgeCategoryChart'
 import { MemoryCard } from '@/components/knowledge/MemoryCard'
+import { ReadMyFilesCard } from '@/components/knowledge/ReadMyFilesCard'
 import { SpacedReviewCard } from '@/components/knowledge/SpacedReviewCard'
 import { KnowledgeIntelligenceCard } from '@/components/knowledge/KnowledgeIntelligenceCard'
 import { MemorySettingsCard } from '@/components/knowledge/MemorySettingsCard'
@@ -728,6 +729,8 @@ export default function KnowledgePage() {
       headerRight={headerRight}
       toolbar={toolbar}
     >
+      <ReadMyFilesCard addToast={addToast} onIngested={fetchData} />
+
       {loading && !stats ? (
         <KnowledgeStatsSkeleton />
       ) : stats ? (
@@ -773,7 +776,7 @@ export default function KnowledgePage() {
         </div>
       ) : null}
 
-      <FoldSection heading="Advanced — memory, RAG & topics">
+      <FoldSection heading="Advanced — memory & topics">
         {items.length > 0 && <KnowledgeCategoryChart items={items} stats={stats} />}
         <SpacedReviewCard addToast={addToast} />
         {loading && !adapterStatus ? (

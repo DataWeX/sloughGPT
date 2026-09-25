@@ -355,7 +355,7 @@ Routes are split across focused sub-modules:
 | `POST` | `/training/finetuned-models/{name}/load` | Load a fine-tuned model. |
 | `DELETE` | `/training/finetuned-models/{name}` | Delete a fine-tuned model. |
 
-> **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domains.training.service` (core layer).
+> **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domain.training._internal.service` (core layer).
 
 ## Self-Train Router (`/self-train`)
 

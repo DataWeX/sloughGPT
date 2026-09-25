@@ -143,7 +143,7 @@ export const QuickTrainCard = memo(function QuickTrainCard({
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base">Turbo Training — Hyperparameters</CardTitle>
+        <CardTitle className="text-base">Training — advanced options</CardTitle>
         <p className="text-xs text-muted-foreground font-mono">epochs · lr · embed_dim · n_heads · n_layers · experiment_id</p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -232,7 +232,7 @@ export const QuickTrainCard = memo(function QuickTrainCard({
           </div>
         ) : session.turboPhase === 'complete' ? (
           <div className="space-y-2 text-sm">
-            <p className="text-success">Turbo training complete!</p>
+            <p className="text-success">Training complete!</p>
             {session.turboResult && (
               <div className="space-y-1 text-xs text-muted-foreground">
                 <p>
@@ -260,7 +260,7 @@ export const QuickTrainCard = memo(function QuickTrainCard({
         ) : session.turboPhase === 'error' ? (
           <StatusBanner
             variant="error"
-            message={session.turboError || 'Turbo training failed'}
+            message={session.turboError || 'Training failed'}
             dismissible={false}
             onDismiss={session.stopTurboTrain}
           />

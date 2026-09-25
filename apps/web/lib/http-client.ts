@@ -519,9 +519,8 @@ async function request<T>(
   const baseDelay = isDocstore ? DOCSTORE_BASE_DELAY : _defaultBaseDelay
   const retryableStatuses = isDocstore ? DOCSTORE_RETRYABLE_STATUSES : RETRYABLE_STATUSES
   let retries = 0
-  let cacheHit = false
 
-  while (true) {
+  for (;;) {
     let signal = opts?.signal
     let timer: ReturnType<typeof setTimeout> | undefined
     if (!signal) {
@@ -570,7 +569,7 @@ async function request<T>(
           const reader = originalRes.body.getReader()
           const chunks: Uint8Array[] = []
           const decoder = new TextDecoder()
-          while (true) {
+          for (;;) {
             const { done, value } = await reader.read()
             if (done) break
             chunks.push(value)
@@ -912,6 +911,27 @@ export async function apiPost<T>(url: string, body?: unknown, opts?: RequestOpti
     }
   }
   return request<T>('POST', url, body, opts)
+}
+
+/**
+ * Multipart upload via FormData. Uses `raw` mode so the JSON Content-Type
+ * is omitted — the browser sets `multipart/form-data` with its own boundary.
+ */
+export async function apiPostForm<T>(
+  url: string,
+  form: FormData,
+  opts?: RequestOptions,
+): Promise<T> {
+  const rawOpts: RequestOptions = { ...opts, raw: true }
+  if (rawOpts.throttle) {
+    await _globalThrottler.acquire()
+    try {
+      return await request<T>('POST', url, form, rawOpts)
+    } finally {
+      _globalThrottler.release()
+    }
+  }
+  return request<T>('POST', url, form, rawOpts)
 }
 
 export async function apiPut<T>(url: string, body?: unknown, opts?: RequestOptions): Promise<T> {

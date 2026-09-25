@@ -6,8 +6,8 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from domains import DomainException
 
+from domain import DomainException
 from domain.cognition._internal.base import CognitiveDomain, CognitiveException
 
 # ── CognitiveException ────────────────────────────────────────────────────

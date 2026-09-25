@@ -294,10 +294,9 @@ class TestPhaseConfigReady:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with (
             patch("domain.infrastructure._internal.config.get_config") as mock_cfg,
-            # _phase_config late-imports the facade, which binds eagerly on first
-            # import — patch the facade so the call is intercepted regardless of
-            # whether domain.infrastructure.resource_manager was already imported.
-            patch("domain.infrastructure.resource_manager.get_resource_manager") as mock_rm,
+            patch(
+                "domain.infrastructure.resource_manager.get_resource_manager"
+            ) as mock_rm,
         ):
             rm = mock_rm.return_value
             rm.apply_blas_env.return_value = None
@@ -319,7 +318,7 @@ class TestPhaseConfigReady:
                 side_effect=RuntimeError("boom"),
             ),
             patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager",
+                "domain.infrastructure.resource_manager.get_resource_manager",
                 side_effect=RuntimeError("boom2"),
             ),
         ):
@@ -851,11 +850,17 @@ class TestRunDirectFallback:
     """run() — profile_enum None + lifecycle None → direct phase calls."""
 
     def test_direct_fallback_runs_registry_and_routers(self):
-        orch = StartupOrchestrator(FastAPI(), ServerConfig())
+        # autoload "off" keeps Stage 2's model_ready wait from spinning 120s;
+        # heavy phases (model autoload w/ retry sleeps, wandb, multimodal) are
+        # stubbed — this test only verifies run() wires registry/routers/ready.
+        orch = StartupOrchestrator(FastAPI(), ServerConfig(autoload_model="off"))
         orch._lifecycle = None
         orch._profile_enum = None
         with (
             patch.object(StartupOrchestrator, "_init_lifecycle", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase2_model_load", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase3_wandb", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase4_multimodal", new=AsyncMock()),
             patch.object(
                 StartupOrchestrator, "_phase5_model_registry", new=AsyncMock()
             ) as mock_reg,

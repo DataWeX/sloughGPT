@@ -55,11 +55,11 @@ Same as Python SDK, for JS/TS applications.
 
 ### Trainer
 
-**Canonical:** `domains.training.train_pipeline.SloughGPTTrainer`
-**Protocol:** `domains.training.trainer_protocol.TrainerProtocol`
+**Canonical:** `domain.training._internal.train_pipeline.SloughGPTTrainer`
+**Protocol:** `domain.training._internal.trainer_protocol.TrainerProtocol`
 
 ```python
-from domains.training import SloughGPTTrainer
+from domain.training import SloughGPTTrainer
 
 trainer = SloughGPTTrainer(data_path="data.txt")
 trainer.train()
@@ -67,13 +67,13 @@ trainer.train()
 
 ### Training Config
 
-**Canonical:** `domains.training.train_pipeline.TrainerConfig`
+**Canonical:** `domain.training._internal.train_pipeline.TrainerConfig`
 
 All other `TrainingConfig` classes are deprecated.
 
 ### Model
 
-**Canonical:** `domains.models.SloughGPTModel`
+**Canonical:** `domain.models.SloughGPTModel`
 
 Uses:
 - Rotary Position Embeddings (RoPE)
@@ -83,7 +83,7 @@ Uses:
 
 ### TextDataset
 
-**Canonical:** `domains.training.train_pipeline.TextDataset`
+**Canonical:** `domain.training._internal.train_pipeline.TextDataset`
 
 ## Deprecated/Unified Classes
 
@@ -196,7 +196,7 @@ python3 -m pytest tests/ -q
 
 ```python
 # Absolute imports within package
-from domains.training import SloughGPTTrainer
+from domain.training import SloughGPTTrainer
 
 # Relative imports within same package
 from .models import SloughGPTModel
