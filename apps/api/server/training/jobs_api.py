@@ -13,6 +13,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
+from domain.shared import parse_iso
 from domain.training._internal.executor import get_training_executor
 
 from .jobs import training_jobs
@@ -29,7 +30,8 @@ def _to_timestamp(val):
         return val
     if isinstance(val, str):
         try:
-            return datetime.fromisoformat(val).timestamp()
+            parsed = parse_iso(val)
+            return parsed.timestamp() if parsed is not None else 0
         except (ValueError, TypeError):
             return 0
     return 0

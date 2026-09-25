@@ -43,6 +43,7 @@ from domain.knowledge import KnowledgeFact, get_knowledge_memory
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
 from domain.models import KnowledgeProcessor, apply_processors, get_provider
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.inference")
 
@@ -1014,8 +1015,8 @@ class InferenceRouter:
         return {
             "id": session_id,
             "messages": [],
-            "created_at": datetime.datetime.now().isoformat(),
-            "updated_at": datetime.datetime.now().isoformat(),
+            "created_at": utc_now_iso(),
+            "updated_at": utc_now_iso(),
         }
 
     def _get_session(self, session_id: str) -> dict:
@@ -1028,7 +1029,7 @@ class InferenceRouter:
 
     def _save_session(self, session_id: str, data: dict) -> None:
         self._session_cache = None
-        data["updated_at"] = datetime.datetime.now().isoformat()
+        data["updated_at"] = utc_now_iso()
         self._session_cache_put(session_id, data)
         self._session_dirty.add(session_id)
 
@@ -1155,7 +1156,7 @@ class InferenceRouter:
                 else:
                     data["name"] = sid
             if not data.get("updated_at"):
-                data["updated_at"] = data.get("created_at") or datetime.datetime.now().isoformat()
+                data["updated_at"] = data.get("created_at") or utc_now_iso()
             sessions.append(data)
         sessions.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
         self._session_cache = sessions
@@ -1984,7 +1985,7 @@ class InferenceRouter:
                 {
                     "role": "user",
                     "content": user_msg,
-                    "timestamp": datetime.datetime.now().isoformat(),
+                    "timestamp": utc_now_iso(),
                 }
             )
 
@@ -2714,7 +2715,7 @@ class InferenceRouter:
                         {
                             "role": "assistant",
                             "content": full_response,
-                            "timestamp": datetime.datetime.now().isoformat(),
+                            "timestamp": utc_now_iso(),
                         }
                     )
                     self._save_session(session_id, session_data)
@@ -3029,7 +3030,7 @@ class InferenceRouter:
                 "content": "[Voice Message]",
                 "audio_path": f"{session_id}/{msg_id}{ext}",
                 "audio_duration_ms": duration_ms,
-                "timestamp": datetime.datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
                 "_voice": True,
             }
         )

@@ -24,6 +24,7 @@ from schemas.common import (
 )
 
 from domain.multimodal import get_multimodal_manager
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.routers.multimodal")
 
@@ -360,7 +361,7 @@ class MultimodalRouter:
                 errors=0,
                 current_caption="",
                 current_image="",
-                started_at=datetime.datetime.now().isoformat(),
+                started_at=utc_now_iso(),
                 finished_at=None,
             )
         asyncio.create_task(self._run_batch_training(mgr, image_paths))
@@ -413,7 +414,7 @@ class MultimodalRouter:
                 await asyncio.sleep(0)
         with self._bg_lock:
             self._background_job["running"] = False
-            self._background_job["finished_at"] = datetime.datetime.now().isoformat()
+            self._background_job["finished_at"] = utc_now_iso()
             _job_id = self._background_job.get("job_id", "unknown")
             _completed = self._background_job["completed"]
             _errors = self._background_job["errors"]
@@ -549,7 +550,7 @@ class MultimodalRouter:
         elapsed = time.time() - t0
         result["elapsed_seconds"] = round(elapsed, 1)
         with self._dpo_lock:
-            self._dpo_state["last_run"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            self._dpo_state["last_run"] = utc_now_iso()
             self._dpo_state["result"] = result
             self._dpo_state["status"] = result["status"]
             if result["status"] == "accepted":

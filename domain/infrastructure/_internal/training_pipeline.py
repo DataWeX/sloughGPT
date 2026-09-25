@@ -33,6 +33,8 @@ from typing import Any
 
 from mogdb import MogDB
 
+from domain.shared import utc_now_iso
+
 logger = logging.getLogger("slo.infrastructure.training_pipeline")
 
 FEEDBACK_UP = "thumbs_up"
@@ -290,7 +292,7 @@ class TrainingDataPipeline:
                 "user_message": user_message,
                 "assistant_message": assistant_message,
                 "model": model,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
                 "tokens": tokens,
                 "feedback": feedback,
                 "metadata": metadata or {},
@@ -380,7 +382,7 @@ class TrainingDataPipeline:
             "response": conversation["assistant_message"],
             "quality_score": quality,
             "feedback": conversation.get("feedback"),
-            "created_at": datetime.now().isoformat(),
+            "created_at": utc_now_iso(),
             "used_in_training": False,
             "training_run_id": None,
         }
@@ -472,7 +474,7 @@ class TrainingDataPipeline:
             run_id = f"run_{self._training_runs.count()}_{int(datetime.now().timestamp() * 1000)}"
             run = {
                 "id": run_id,
-                "created_at": datetime.now().isoformat(),
+                "created_at": utc_now_iso(),
                 "dataset_version": dataset_version,
                 "pairs_count": pairs_count,
                 "model_used": model_used,

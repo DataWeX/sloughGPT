@@ -64,6 +64,32 @@ class _IsoPlusZ(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+class _NaiveNowIso(ast.NodeVisitor):
+    """Collect line numbers of ``datetime.now().isoformat()`` (naive, no tz).
+
+    A naive timestamp carries no offset, so JavaScript reads it as the
+    *viewer's* local time — every viewer outside the server's zone (WAT, UTC+1
+    here) sees a shifted clock. Write ``utc_now_iso()`` instead. ``now()`` with
+    a timezone argument is fine and not reported.
+    """
+
+    def __init__(self) -> None:
+        self.hits: list[int] = []
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "isoformat"
+            and isinstance(node.func.value, ast.Call)
+            and isinstance(node.func.value.func, ast.Attribute)
+            and node.func.value.func.attr == "now"
+            and not node.func.value.args
+            and not node.func.value.keywords
+        ):
+            self.hits.append(node.lineno)
+        self.generic_visit(node)
+
+
 def _production_py_files() -> list[Path]:
     files: list[Path] = []
     for name in SCAN_DIRS:
@@ -99,5 +125,31 @@ def test_no_bare_isoformat_plus_z_writers():
     assert not offenders, (
         "datetime.isoformat() + 'Z' writes '+00:00Z', which JS renders as "
         "'Invalid Date'. Use domain.shared.utc_now_iso() / to_iso() instead. "
+        f"Offenders: {offenders}"
+    )
+
+
+def test_no_naive_now_isoformat_writers():
+    offenders: list[str] = []
+    for path in _production_py_files():
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if "isoformat" not in text:
+            continue
+        try:
+            tree = ast.parse(text, filename=str(path))
+        except SyntaxError:
+            continue
+        finder = _NaiveNowIso()
+        finder.visit(tree)
+        for line in finder.hits:
+            offenders.append(f"{path.relative_to(ROOT)}:{line}")
+
+    assert not offenders, (
+        "datetime.now().isoformat() emits a naive local timestamp with no "
+        "offset; JS parses it as the viewer's local time and every non-matching "
+        "zone sees a shifted clock. Use domain.shared.utc_now_iso() instead. "
         f"Offenders: {offenders}"
     )

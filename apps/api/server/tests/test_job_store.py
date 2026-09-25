@@ -1,16 +1,18 @@
 """
-Tests for the SQLite-backed JobStore crash-recovery semantics.
+Tests for the persistent JobStore crash-recovery semantics.
 
 Covers the heartbeat format contract (heartbeats are persisted via
-``datetime.now().isoformat()`` with a 'T' separator — stale detection must
-compare in the SAME format, not an SQLite ``datetime(?, 'unixepoch')`` string,
-which silently never fires), stale 'recovering' detection, and the recoverable
+``utc_now_iso()`` as UTC ``...Z`` strings — stale detection must compare
+absolute instants through ``parse_iso``, not lexicographically against mixed
+legacy naive-local strings), stale 'recovering' detection, and the recoverable
 list (interrupted + failed + stale recovering, never an actively-recovered row).
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from training.job_store import JobStore
+
+from domain.shared import to_iso, utc_now_iso
 
 
 def _mk_store(tmp_path):
@@ -39,7 +41,7 @@ def _corpus(tmp_path):
 
 
 def _old_heartbeat(seconds=600):
-    return (datetime.now() - timedelta(seconds=seconds)).isoformat()
+    return to_iso(datetime.now(UTC) - timedelta(seconds=seconds))
 
 
 # ── detect_crashed_jobs (heartbeat-format regression) ────────────────────────
@@ -48,7 +50,7 @@ def _old_heartbeat(seconds=600):
 def test_detect_crashed_jobs_stale_running(tmp_path):
     store = _mk_store(tmp_path)
     _create(store, "a", status="running", heartbeat=_old_heartbeat())
-    _create(store, "b", status="running", heartbeat=datetime.now().isoformat())
+    _create(store, "b", status="running", heartbeat=utc_now_iso())
 
     crashed = store.detect_crashed_jobs(timeout_seconds=300)
     ids = [j["id"] for j in crashed]
@@ -58,7 +60,7 @@ def test_detect_crashed_jobs_stale_running(tmp_path):
 
 def test_detect_crashed_jobs_no_rows(tmp_path):
     store = _mk_store(tmp_path)
-    _create(store, "a", status="running", heartbeat=datetime.now().isoformat())
+    _create(store, "a", status="running", heartbeat=utc_now_iso())
 
     assert store.detect_crashed_jobs(timeout_seconds=300) == []
 
@@ -66,7 +68,7 @@ def test_detect_crashed_jobs_no_rows(tmp_path):
 def test_detect_crashed_jobs_stale_recovering(tmp_path):
     store = _mk_store(tmp_path)
     _create(store, "a", status="recovering", heartbeat=_old_heartbeat())
-    _create(store, "b", status="recovering", heartbeat=datetime.now().isoformat())
+    _create(store, "b", status="recovering", heartbeat=utc_now_iso())
 
     crashed = store.detect_crashed_jobs(timeout_seconds=300)
     assert [j["id"] for j in crashed] == ["a"]
@@ -102,7 +104,7 @@ def test_mark_recovering_sets_fresh_heartbeat_and_clears_crashed(tmp_path):
 
 def test_is_stale_heartbeat(tmp_path):
     store = _mk_store(tmp_path)
-    _create(store, "a", status="running", heartbeat=datetime.now().isoformat())
+    _create(store, "a", status="running", heartbeat=utc_now_iso())
     _create(store, "b", status="running", heartbeat=_old_heartbeat())
     _create(store, "c", status="running")
     store.update("c", last_heartbeat=None)  # NULL heartbeat
@@ -129,7 +131,7 @@ def test_get_recoverable_jobs_includes_interrupted_and_failed(tmp_path):
     _create(store, "interrupted", status="interrupted", data_path=data_path)
     _create(store, "failed", status="failed", data_path=data_path)
     _create(store, "completed", status="completed", data_path=data_path)
-    _create(store, "running", status="running", heartbeat=datetime.now().isoformat())
+    _create(store, "running", status="running", heartbeat=utc_now_iso())
 
     ids = [j["id"] for j in store.get_recoverable_jobs()]
     assert sorted(ids) == ["failed", "interrupted"]

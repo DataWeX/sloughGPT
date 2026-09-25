@@ -15,14 +15,14 @@ import threading
 import time
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import httpx
 from mogdb import MogDB
 
-from domain.shared import find_repo_root
+from domain.shared import find_repo_root, parse_iso, utc_now_iso
 
 logger = logging.getLogger("slo.webhooks")
 
@@ -51,7 +51,7 @@ class WebhookDelivery:
     payload: dict[str, Any]
     status_code: int | None = None
     success: bool = False
-    attempted_at: datetime = field(default_factory=datetime.now)
+    attempted_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     response_body: str | None = None
     error: str | None = None
     attempt_count: int = 0
@@ -104,7 +104,7 @@ class WebhookStore:
             secret=doc["secret"],
             description=doc.get("description", ""),
             is_active=bool(doc.get("is_active", True)),
-            created_at=datetime.fromisoformat(doc["created_at"]),
+            created_at=parse_iso(doc["created_at"]) or datetime.now(UTC),
             headers=doc.get("headers") or {},
         )
 
@@ -131,7 +131,7 @@ class WebhookStore:
         if secret is None:
             secret = hashlib.sha256(uuid.uuid4().bytes).hexdigest()[:32]
 
-        now = datetime.now().isoformat()
+        now = utc_now_iso()
 
         with self._lock:
             self._webhooks.insert_one(
@@ -232,7 +232,7 @@ class WebhookStore:
         # Prepare payload with metadata
         full_payload = {
             "event": event,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utc_now_iso(),
             "data": payload,
         }
 
@@ -348,7 +348,7 @@ class WebhookStore:
             "timeout": timeout,
             "attempt_count": delivery.attempt_count,
             "next_retry_at": next_retry_at,
-            "queued_at": datetime.now().isoformat(),
+            "queued_at": utc_now_iso(),
         }
 
         self._retry_queue.append(retry_entry)
@@ -371,7 +371,7 @@ class WebhookStore:
                 "error": delivery.error,
                 "status_code": delivery.status_code,
                 "attempt_count": delivery.attempt_count,
-                "dead_lettered_at": datetime.now().isoformat(),
+                "dead_lettered_at": utc_now_iso(),
             }
         )
         # Trim dead letter queue

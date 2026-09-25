@@ -9,7 +9,7 @@ import http.server
 import json
 import socketserver
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 LOG_FILE = Path("/tmp/sloughgpt-unified.log")
@@ -26,7 +26,7 @@ class LogHandler(http.server.BaseHTTPRequestHandler):
             body = self.rfile.read(content_length)
             try:
                 entry = json.loads(body)
-                timestamp = entry.get("timestamp", datetime.now().isoformat())
+                timestamp = entry.get("timestamp", datetime.now(UTC).isoformat())
                 source = entry.get("source", "unknown")
                 level = entry.get("level", "INFO")
                 message = entry.get("message", "")

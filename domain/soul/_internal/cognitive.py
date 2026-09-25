@@ -23,6 +23,8 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
+from domain.shared import utc_now_iso
+
 try:
     from .foundation import EvolutionStage, Experience, FoundationSLO, SLOConfig, Thought
 except ImportError:
@@ -370,7 +372,7 @@ class SessionMemory:
         self.max_turns = max_turns
         self.conversation: list[dict] = []
         self.session_id = self._generate_session_id()
-        self.session_start = datetime.now().isoformat()
+        self.session_start = utc_now_iso()
 
     def _generate_session_id(self) -> str:
         return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{random.randint(1000, 9999)}"
@@ -380,7 +382,7 @@ class SessionMemory:
         message = {
             "role": role,
             "content": content,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utc_now_iso(),
             "turn": len(self.conversation),
         }
         self.conversation.append(message)
@@ -403,7 +405,7 @@ class SessionMemory:
         """Clear session for new conversation."""
         self.conversation = []
         self.session_id = self._generate_session_id()
-        self.session_start = datetime.now().isoformat()
+        self.session_start = utc_now_iso()
 
     def get_summary(self) -> dict:
         """Get session summary."""
@@ -434,7 +436,7 @@ class EpisodicMemoryStore:
         self.episode_metadata[episode_id] = {
             "session_id": session_id,
             "turns": len(conversation),
-            "saved": datetime.now().isoformat(),
+            "saved": utc_now_iso(),
             "importance": self._calculate_importance(conversation),
         }
 
@@ -535,7 +537,7 @@ class CognitiveArchitecture:
         self.sensory_buffer.append(
             {
                 "data": input_data,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
         # Keep buffer small
@@ -557,7 +559,7 @@ class CognitiveArchitecture:
         """Consolidate working memory to episodic."""
         episode = {
             "content": item,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utc_now_iso(),
             "importance": random.random(),
         }
         try:
@@ -594,14 +596,14 @@ class CognitiveArchitecture:
             self.semantic_memory[key] = {
                 "value": value,
                 "strength": 1.0,
-                "created": datetime.now().isoformat(),
+                "created": utc_now_iso(),
             }
         return True
 
     def retrieve_semantic(self, key: str) -> Any | None:
         """Retrieve from semantic memory."""
         if key in self.semantic_memory:
-            self.semantic_memory[key]["last_accessed"] = datetime.now().isoformat()
+            self.semantic_memory[key]["last_accessed"] = utc_now_iso()
             return self.semantic_memory[key]["value"]
         return None
 

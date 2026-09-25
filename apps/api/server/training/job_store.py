@@ -11,7 +11,7 @@ import json
 import logging
 import os
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -22,9 +22,27 @@ JOB_STORE_ENV_VAR = "SLO_TRAINING_JOBS_DB"
 
 from mogdb import MogDB
 
-from domain.shared import find_repo_root
+from domain.shared import find_repo_root, parse_iso, utc_now_iso
 
 logger = logging.getLogger("slo.job_store")
+
+
+def _heartbeat_instant(value: object) -> datetime | None:
+    """Absolute instant for a stored timestamp, whatever era wrote it.
+
+    Current rows are UTC ``...Z`` strings from :func:`utc_now_iso`; legacy rows
+    are naive *local* strings (``datetime.now()`` / ``time.localtime()``).
+    Naive input is therefore interpreted as local time so mixed-era rows
+    compare on the same axis, and malformed input returns ``None``.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return parse_iso(text)
+    return parsed if parsed.tzinfo is not None else parsed.astimezone()
 
 
 class JobStore:
@@ -149,7 +167,7 @@ class JobStore:
         """Create a new job."""
         if not self.is_available:
             return {"id": job_id, "status": "error", "error": "Job store unavailable"}
-        now = datetime.now().isoformat()
+        now = utc_now_iso()
         with self._lock:
             self._jobs.insert_one(
                 self._new_job_doc(job_id, name, config, dataset, now, user_id, workspace_id)
@@ -195,7 +213,7 @@ class JobStore:
 
     def update(self, job_id: str, **kwargs) -> dict | None:
         """Update job fields."""
-        kwargs["updated_at"] = datetime.now().isoformat()
+        kwargs["updated_at"] = utc_now_iso()
 
         # Don't allow updating id
         kwargs.pop("id", None)
@@ -221,7 +239,7 @@ class JobStore:
             global_step=step,
             loss=loss,
             train_loss=loss,
-            last_heartbeat=datetime.now().isoformat(),
+            last_heartbeat=utc_now_iso(),
         )
 
     def mark_started(self, job_id: str) -> None:
@@ -229,8 +247,8 @@ class JobStore:
         self.update(
             job_id,
             status="running",
-            started_at=datetime.now().isoformat(),
-            last_heartbeat=datetime.now().isoformat(),
+            started_at=utc_now_iso(),
+            last_heartbeat=utc_now_iso(),
         )
 
     def mark_completed(self, job_id: str, checkpoint_path: str = "") -> None:
@@ -239,17 +257,17 @@ class JobStore:
             job_id,
             status="completed",
             progress=100,
-            completed_at=datetime.now().isoformat(),
+            completed_at=utc_now_iso(),
             checkpoint_path=checkpoint_path,
         )
 
     def mark_failed(self, job_id: str, error: str) -> None:
         """Mark job as failed."""
-        self.update(job_id, status="failed", error=error, completed_at=datetime.now().isoformat())
+        self.update(job_id, status="failed", error=error, completed_at=utc_now_iso())
 
     def mark_crashed(self, job_id: str) -> None:
         """Mark job as crashed/interrupted."""
-        self.update(job_id, crashed=1, status="interrupted", updated_at=datetime.now().isoformat())
+        self.update(job_id, crashed=1, status="interrupted", updated_at=utc_now_iso())
 
     def mark_recovering(self, job_id: str) -> None:
         """Mark a job as being actively recovered.
@@ -262,7 +280,7 @@ class JobStore:
             job_id,
             status="recovering",
             crashed=0,
-            last_heartbeat=datetime.now().isoformat(),
+            last_heartbeat=utc_now_iso(),
         )
 
     @staticmethod
@@ -274,15 +292,14 @@ class JobStore:
         hb = job.get("last_heartbeat")
         if not hb:
             return True
-        try:
-            last = datetime.fromisoformat(hb)
-        except ValueError:
+        last = _heartbeat_instant(hb)
+        if last is None:
             return True
-        return (datetime.now() - last).total_seconds() > timeout_seconds
+        return (datetime.now(UTC) - last).total_seconds() > timeout_seconds
 
     def heartbeat(self, job_id: str) -> None:
         """Update heartbeat timestamp."""
-        self.update(job_id, last_heartbeat=datetime.now().isoformat())
+        self.update(job_id, last_heartbeat=utc_now_iso())
 
     def delete(self, job_id: str) -> bool:
         """Delete a job."""
@@ -298,19 +315,26 @@ class JobStore:
         Jobs that are 'running' (or 'recovering') but haven't sent a heartbeat
         in timeout_seconds are considered potentially crashed.
 
-        Note: heartbeats are persisted with ``datetime.now().isoformat()``
-        ('T' separator), so the cutoff is built in the SAME format.
+        Heartbeats are UTC ``...Z`` strings written by :func:`utc_now_iso`, but
+        rows written before that migration are naive local strings — so the
+        cutoff is enforced in Python against absolute instants (see
+        ``_heartbeat_instant``) rather than as a lexicographic string
+        comparison across mixed formats.
         """
-        cutoff = datetime.fromtimestamp(datetime.now().timestamp() - timeout_seconds).isoformat()
+        cutoff_epoch = datetime.now(UTC).timestamp() - timeout_seconds
 
         docs = self._jobs.find(
             {
                 "status": {"$in": ["running", "recovering"]},
                 "crashed": 0,
-                "last_heartbeat": {"$lt": cutoff},
             }
         )
-        return [self.store_row_to_job(d) for d in docs]
+        stale = []
+        for doc in docs:
+            hb = _heartbeat_instant(doc.get("last_heartbeat"))
+            if hb is None or hb.timestamp() < cutoff_epoch:
+                stale.append(doc)
+        return [self.store_row_to_job(d) for d in stale]
 
     def get_recoverable_jobs(self) -> builtins.list[dict]:
         """Get jobs that can be recovered.
@@ -320,7 +344,7 @@ class JobStore:
         (a recovery run that died without completing). A 'recovering' row with
         a fresh heartbeat is actively being recovered and is NOT listed here.
         """
-        cutoff = datetime.fromtimestamp(datetime.now().timestamp() - 300).isoformat()
+        cutoff_epoch = datetime.now(UTC).timestamp() - 300
 
         docs = self._jobs.find(sort=[("created_at", -1)])
         recoverable = []
@@ -329,8 +353,8 @@ class JobStore:
             if status in ("interrupted", "failed"):
                 recoverable.append(doc)
             elif status == "recovering":
-                hb = doc.get("last_heartbeat")
-                if hb is None or hb < cutoff:
+                hb = _heartbeat_instant(doc.get("last_heartbeat"))
+                if hb is None or hb.timestamp() < cutoff_epoch:
                     recoverable.append(doc)
 
         # Hide jobs the recovery endpoint would reject anyway (no dataset
@@ -353,7 +377,7 @@ class JobStore:
                     "job_id": job_id,
                     "event": event,
                     "data": json.dumps(data) if data else None,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": utc_now_iso(),
                 }
             )
 
@@ -479,7 +503,7 @@ class PersistentTrainingJobs:
         # Most job-creation paths never set created_at; stamp it here so every
         # job registered through training_jobs[id] = {...} has a timestamp.
         if not value.get("created_at"):
-            value["created_at"] = datetime.now().isoformat()
+            value["created_at"] = utc_now_iso()
         self._live[key] = value
         self._persist(key, value)
 

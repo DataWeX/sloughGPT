@@ -6,7 +6,7 @@ Serves GGUF models for Aria app download.
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 # Configuration
@@ -66,7 +66,7 @@ def get_model_list():
                     "version": "1.0.0",
                     "format": "gguf",
                     "sha256": get_file_hash(gguf_file),
-                    "updated_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now(UTC).isoformat(),
                 }
             )
 

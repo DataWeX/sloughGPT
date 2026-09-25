@@ -163,11 +163,11 @@ def test_recover_400_when_status_not_interruptible(tmp_path, deps):
 
 
 def test_recover_400_when_recovering_with_fresh_heartbeat(tmp_path, deps):
-    from datetime import datetime
+    from domain.shared import utc_now_iso
 
     job = _base_job(str(tmp_path))
     job["status"] = "recovering"
-    job["last_heartbeat"] = datetime.now().isoformat()
+    job["last_heartbeat"] = utc_now_iso()
     resp = _recover(tmp_path, job)
     assert resp.status_code == 400
     assert "stale heartbeat" in resp.json()["error"]
@@ -175,11 +175,13 @@ def test_recover_400_when_recovering_with_fresh_heartbeat(tmp_path, deps):
 
 
 def test_recover_allows_stale_recovering_job(tmp_path, deps):
-    from datetime import datetime, timedelta
+    from datetime import UTC, datetime, timedelta
+
+    from domain.shared import to_iso
 
     job = _base_job(str(tmp_path))
     job["status"] = "recovering"
-    job["last_heartbeat"] = (datetime.now() - timedelta(seconds=600)).isoformat()
+    job["last_heartbeat"] = to_iso(datetime.now(UTC) - timedelta(seconds=600))
     resp = _recover(tmp_path, job)
     assert resp.status_code == 200
     assert ("mark_recovering", ("job-1",), {}) in resp._store.calls

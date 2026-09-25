@@ -10,6 +10,8 @@ from typing import Any, Optional
 
 import psutil
 
+from domain.shared import utc_now_iso
+
 logger = logging.getLogger(__name__)
 
 _health_start_time = datetime.now()
@@ -471,7 +473,7 @@ class HealthController:
         model_loading = not model_loaded and _is_model_loading()
         result: dict[str, Any] = {
             "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utc_now_iso(),
             "model_loaded": model_loaded,
             "model_loading": model_loading,
             "model_type": model_type,
@@ -653,7 +655,7 @@ class HealthController:
             if lifecycle.get("is_running", False)
             else lifecycle.get("phase", "unknown"),
             "uptime_seconds": uptime,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utc_now_iso(),
             "request_count": request_count,
             "error_count": error_count,
             "avg_latency_ms": avg_latency,

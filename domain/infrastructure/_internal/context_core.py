@@ -9,8 +9,9 @@ import hashlib
 import logging
 import threading
 from dataclasses import asdict, dataclass
-from datetime import datetime
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.infrastructure.context_core")
 
@@ -200,7 +201,7 @@ Be concise, accurate, and helpful."""
         self.sensory_buffer.append(
             {
                 "data": data,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
         if len(self.sensory_buffer) > 100:
@@ -220,7 +221,7 @@ Be concise, accurate, and helpful."""
             self.episodic_memory[self.session_id].append(
                 {
                     "content": item,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": utc_now_iso(),
                     "importance": 1.0,
                 }
             )
@@ -234,15 +235,15 @@ Be concise, accurate, and helpful."""
             self.semantic_memory[key] = {
                 "value": value,
                 "strength": 1.0,
-                "created": datetime.now().isoformat(),
-                "accessed": datetime.now().isoformat(),
+                "created": utc_now_iso(),
+                "accessed": utc_now_iso(),
             }
         self._add_sensory(f"Stored fact: {key}")
 
     def recall_fact(self, key: str) -> Any | None:
         """Recall from semantic memory."""
         if key in self.semantic_memory:
-            self.semantic_memory[key]["accessed"] = datetime.now().isoformat()
+            self.semantic_memory[key]["accessed"] = utc_now_iso()
             return self.semantic_memory[key]["value"]
         return None
 
@@ -431,7 +432,7 @@ Be concise, accurate, and helpful."""
         manager_mods = self._apply_managers(query)
         system_prompt = self.system_prompt + manager_mods.get("system_extra", "")
 
-        frame_id = hashlib.md5(f"{datetime.now().isoformat()}{query}".encode()).hexdigest()[:12]
+        frame_id = hashlib.md5(f"{utc_now_iso()}{query}".encode()).hexdigest()[:12]
         layers: list[ContextLayer] = []
         used_tokens = self._estimate_tokens(system_prompt)
 
@@ -445,7 +446,7 @@ Be concise, accurate, and helpful."""
                 content=session_content,
                 tokens=self._estimate_tokens(session_content),
                 source="current_session",
-                timestamp=datetime.now().isoformat(),
+                timestamp=utc_now_iso(),
                 priority=1.0,
             )
             layers.append(layer)
@@ -465,7 +466,7 @@ Be concise, accurate, and helpful."""
                     content=memory_content,
                     tokens=self._estimate_tokens(memory_content),
                     source="episodic_store+auto_memory" if auto_memory else "episodic_store",
-                    timestamp=datetime.now().isoformat(),
+                    timestamp=utc_now_iso(),
                     priority=0.8,
                 )
                 if used_tokens + layer.tokens <= self.max_tokens:
@@ -481,7 +482,7 @@ Be concise, accurate, and helpful."""
                     content=rag_content,
                     tokens=self._estimate_tokens(rag_content),
                     source="vector_store",
-                    timestamp=datetime.now().isoformat(),
+                    timestamp=utc_now_iso(),
                     priority=0.7,
                 )
                 if used_tokens + layer.tokens <= self.max_tokens:
@@ -494,7 +495,7 @@ Be concise, accurate, and helpful."""
             layers=layers,
             total_tokens=used_tokens,
             max_tokens=self.max_tokens,
-            created_at=datetime.now().isoformat(),
+            created_at=utc_now_iso(),
         )
 
         self.frame_history.append(frame)

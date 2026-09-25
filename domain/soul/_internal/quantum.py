@@ -14,8 +14,9 @@ import cmath
 import logging
 import math
 import random
-from datetime import datetime
 from typing import Any
+
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.soul.quantum")
 
@@ -180,7 +181,7 @@ class QuantumParallelProcessor:
             {
                 "inputs": len(inputs),
                 "streams_used": min(len(inputs), self.num_streams),
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
 
@@ -317,7 +318,7 @@ class TemporalReasoningEngine:
                 {
                     **event,
                     "timeline": timeline,
-                    "timestamp": datetime.now().isoformat(),
+                    "timestamp": utc_now_iso(),
                 }
             )
 
@@ -330,7 +331,7 @@ class TemporalReasoningEngine:
                 "from_timeline": self.current_timeline,
                 "to_timeline": new_timeline,
                 "condition": condition,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
             }
         )
 

@@ -137,6 +137,8 @@ class TrainingRuntime:
         rec = self._get_job(job_id)
         if rec is None:
             return
+        from domain.shared import utc_now_iso
+
         store = self._get_store()
         if store.get(job_id) is None:
             self._ensure_row(job_id, rec, rec.get("config"))
@@ -155,7 +157,7 @@ class TrainingRuntime:
             "checkpoint_path": rec.get("checkpoint"),
             "checkpoint_dir": rec.get("checkpoint_dir"),
             "error": rec.get("error"),
-            "last_heartbeat": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+            "last_heartbeat": utc_now_iso(),
         }
         if status == "completed":
             fields["completed_at"] = fields["last_heartbeat"]
