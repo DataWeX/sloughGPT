@@ -110,7 +110,7 @@ class ToolsRouter:
                     "IDLE",
                     "No provider available — load a model first",
                     code="E_INFRA_REGISTRY",
-                    http_status=500,
+                    http_status=503,
                 )
                 return
 

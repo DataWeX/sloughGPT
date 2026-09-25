@@ -507,3 +507,26 @@ class TestSecurityKeys:
     def test_keys_wrong_methods_return_405(self, client):
         assert client.put("/security/keys").status_code == 405
         assert client.delete("/security/keys").status_code == 405
+
+
+class TestAuthPermissionContract:
+    """Auth-enabled permission checks must return 403, not crash with 500.
+
+    raise_error takes keyword-only ``status_code``; passing ``status=`` raised
+    TypeError at request time → 500 instead of 403 whenever auth was enabled
+    and a non-admin hit an admin/key-owner route (auth-disabled tests skipped
+    these branches entirely).
+    """
+
+    def test_audit_non_admin_gets_403(self, app, client):
+        from infrastructure.auth import require_auth_if_enabled
+
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "u1",
+            "role": "user",
+        }
+        try:
+            resp = client.get("/security/audit")
+        finally:
+            app.dependency_overrides.pop(require_auth_if_enabled, None)
+        assert resp.status_code == 403

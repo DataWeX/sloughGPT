@@ -66,7 +66,7 @@ class SecurityRouter:
         from infrastructure.auth import get_audit_logger
 
         if auth_user and auth_user.get("role") not in ("owner", "admin"):
-            raise_error("Admin access required", code="auth/forbidden", status=403)
+            raise_error("Admin access required", code="auth/forbidden", status_code=403)
 
         audit_logger = get_audit_logger()
 
@@ -118,11 +118,11 @@ class SecurityRouter:
         if key is None:
             raise_error("API key not found", "E_NOT_FOUND", status_code=404)
         if (
-                auth_user is not None
-                and auth_user.get("sub") != key.get("user_id")
-                and auth_user.get("role") != "admin"
-            ):
-            raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
+            auth_user is not None
+            and auth_user.get("sub") != key.get("user_id")
+            and auth_user.get("role") != "admin"
+        ):
+            raise_error("Not authorized to manage this key", code="auth/forbidden", status_code=403)
         return success_response(data=key)
 
     @staticmethod
@@ -138,7 +138,9 @@ class SecurityRouter:
                 and auth_user.get("sub") != key.get("user_id")
                 and auth_user.get("role") != "admin"
             ):
-                raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
+                raise_error(
+                    "Not authorized to manage this key", code="auth/forbidden", status_code=403
+                )
             mgr.revoke(key_id)
             return success_response(data={"revoked": True})
         except ValueError as e:
@@ -157,7 +159,9 @@ class SecurityRouter:
                 and auth_user.get("sub") != key.get("user_id")
                 and auth_user.get("role") != "admin"
             ):
-                raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
+                raise_error(
+                    "Not authorized to manage this key", code="auth/forbidden", status_code=403
+                )
             new_key = mgr.rotate(key_id)
             return success_response(data=new_key)
         except ValueError as e:
