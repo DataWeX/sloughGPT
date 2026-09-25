@@ -24,13 +24,48 @@ interface DatasetImportDialogProps {
 }
 
 const SOURCE_OPTIONS = [
-  { value: 'github' as const, label: 'GitHub', description: 'Clone a repository', tip: 'Clones a GitHub repo and imports matching files. Requires git installed on the server.' },
-  { value: 'huggingface' as const, label: 'HuggingFace', description: 'Download from HF Hub', tip: 'Downloads from HuggingFace Hub using the datasets library. Multi-config datasets auto-detect available configs.' },
-  { value: 'isbn' as const, label: 'ISBN / Book', description: 'Search by title or ISBN', tip: 'Searches Open Library for books by title or ISBN, then tries Project Gutenberg for full text extraction.' },
-  { value: 'kaggle' as const, label: 'Kaggle', description: 'Download from Kaggle', tip: 'Downloads from Kaggle. Requires Kaggle CLI installed and authenticated on the server.' },
-  { value: 'csv' as const, label: 'CSV', description: 'Import CSV from URL', tip: 'Downloads a CSV file from a URL and converts it to JSONL format automatically.' },
-  { value: 'url' as const, label: 'URL', description: 'Download from a URL', tip: 'Downloads content from any URL. The entire content becomes one JSONL record.' },
-  { value: 'local' as const, label: 'Folder Path', description: 'Folder on this machine', tip: 'Imports files from a local folder. Supports .txt, .json, .csv, .pdf (via PyMuPDF), and more.' },
+  {
+    value: 'github' as const,
+    label: 'GitHub',
+    description: 'Clone a repository',
+    tip: 'Clones a GitHub repo and imports matching files. Requires git installed on the server.',
+  },
+  {
+    value: 'huggingface' as const,
+    label: 'HuggingFace',
+    description: 'Download from HF Hub',
+    tip: 'Downloads from HuggingFace Hub using the datasets library. Multi-config datasets auto-detect available configs.',
+  },
+  {
+    value: 'isbn' as const,
+    label: 'ISBN / Book',
+    description: 'Search by title or ISBN',
+    tip: 'Searches Open Library for books by title or ISBN, then tries Project Gutenberg for full text extraction.',
+  },
+  {
+    value: 'kaggle' as const,
+    label: 'Kaggle',
+    description: 'Download from Kaggle',
+    tip: 'Downloads from Kaggle. Requires Kaggle CLI installed and authenticated on the server.',
+  },
+  {
+    value: 'csv' as const,
+    label: 'CSV',
+    description: 'Import CSV from URL',
+    tip: 'Downloads a CSV file from a URL and converts it to JSONL format automatically.',
+  },
+  {
+    value: 'url' as const,
+    label: 'URL',
+    description: 'Download from a URL',
+    tip: 'Downloads content from any URL. The entire content becomes one JSONL record.',
+  },
+  {
+    value: 'local' as const,
+    label: 'Folder Path',
+    description: 'Folder on this machine',
+    tip: 'Imports files from a local folder. Supports .txt, .json, .csv, .pdf (via PyMuPDF), and more.',
+  },
 ]
 
 export function DatasetImportDialog({
@@ -45,12 +80,10 @@ export function DatasetImportDialog({
       <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Import Dataset</DialogTitle>
-          <DialogDescription>
-            Import training data from various sources
-          </DialogDescription>
+          <DialogDescription>Import training data from various sources</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4 overflow-y-auto flex-1 min-h-0">
+        <div className="space-y-4 overflow-y-auto overflow-x-hidden py-4 flex-1 min-h-0">
           <fieldset>
             <legend className="sr-only">Import source</legend>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -67,7 +100,10 @@ export function DatasetImportDialog({
                         di.setSelectedBook(null)
                         di.setSelectedRepo(null)
                       }}
-                      className={cn('h-auto flex-col items-start p-3', di.source === option.value ? 'border-primary' : '')}
+                      className={cn(
+                        'h-auto flex-col items-start whitespace-normal min-w-0 p-3',
+                        di.source === option.value ? 'border-primary' : '',
+                      )}
                       role="radio"
                       aria-checked={di.source === option.value}
                       aria-label={`${option.label}: ${option.description}`}
@@ -99,7 +135,14 @@ export function DatasetImportDialog({
                     }}
                     className="flex-1"
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={di.handleSearch} disabled={di.searching || !di.url.trim()} aria-busy={di.searching}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={di.handleSearch}
+                    disabled={di.searching || !di.url.trim()}
+                    aria-busy={di.searching}
+                  >
                     {di.searching ? <Spinner className="w-4 h-4" /> : 'Search'}
                   </Button>
                 </div>
@@ -110,7 +153,9 @@ export function DatasetImportDialog({
                   <div className="min-w-0 flex-1">
                     <span className="font-medium truncate">{di.selectedRepo.full_name}</span>
                     {di.selectedRepo.description && (
-                      <span className="text-muted-foreground ml-2 truncate">— {di.selectedRepo.description}</span>
+                      <span className="text-muted-foreground ml-2 truncate">
+                        — {di.selectedRepo.description}
+                      </span>
                     )}
                   </div>
                   <span className="text-muted-foreground shrink-0">{di.selectedRepo.stars} ★</span>
@@ -133,7 +178,11 @@ export function DatasetImportDialog({
           )}
 
           {di.source === 'github' && di.searchResults.length > 0 && (
-            <div className="max-h-48 overflow-y-auto rounded-md border" role="listbox" aria-label="Repository search results">
+            <div
+              className="max-h-48 overflow-y-auto rounded-md border"
+              role="listbox"
+              aria-label="Repository search results"
+            >
               {di.searchResults.map((repo) => (
                 <Button
                   key={repo.id}
@@ -144,7 +193,10 @@ export function DatasetImportDialog({
                     di.setName(repo.name)
                     di.setSearchResults([])
                   }}
-                  className={cn('flex w-full items-start justify-between border-b px-3 py-2.5 text-left last:border-b-0', di.selectedRepo?.id === repo.id ? 'bg-primary/10' : '')}
+                  className={cn(
+                    'flex w-full items-start justify-between border-b px-3 py-2.5 text-left last:border-b-0',
+                    di.selectedRepo?.id === repo.id ? 'bg-primary/10' : '',
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{repo.full_name}</div>
@@ -155,7 +207,9 @@ export function DatasetImportDialog({
                     )}
                     <div className="flex items-center gap-2 mt-1">
                       {repo.language && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">{repo.language}</Badge>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          {repo.language}
+                        </Badge>
                       )}
                       <span className="text-[10px] text-muted-foreground">{repo.stars} ★</span>
                     </div>
@@ -165,9 +219,14 @@ export function DatasetImportDialog({
             </div>
           )}
 
-          {di.source === 'github' && !di.searching && di.searchResults.length === 0 && di.url.trim() && (
-            <p className="text-xs text-muted-foreground">Type a search term and click Search to find repositories.</p>
-          )}
+          {di.source === 'github' &&
+            !di.searching &&
+            di.searchResults.length === 0 &&
+            di.url.trim() && (
+              <p className="text-xs text-muted-foreground">
+                Type a search term and click Search to find repositories.
+              </p>
+            )}
 
           {di.source === 'isbn' && (
             <div className="space-y-3">
@@ -184,7 +243,14 @@ export function DatasetImportDialog({
                     }}
                     className="flex-1"
                   />
-                  <Button type="button" variant="outline" size="sm" onClick={di.handleSearch} disabled={di.searching || !di.url.trim()} aria-busy={di.searching}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={di.handleSearch}
+                    disabled={di.searching || !di.url.trim()}
+                    aria-busy={di.searching}
+                  >
                     {di.searching ? <Spinner className="w-4 h-4" /> : 'Search'}
                   </Button>
                 </div>
@@ -213,7 +279,11 @@ export function DatasetImportDialog({
           )}
 
           {di.source === 'isbn' && di.bookResults.length > 0 && (
-            <div className="max-h-48 overflow-y-auto rounded-md border" role="listbox" aria-label="Book search results">
+            <div
+              className="max-h-48 overflow-y-auto rounded-md border"
+              role="listbox"
+              aria-label="Book search results"
+            >
               {di.bookResults.map((book) => (
                 <Button
                   key={book.key}
@@ -224,7 +294,10 @@ export function DatasetImportDialog({
                     di.setUrl(book.isbn)
                     di.setBookResults([])
                   }}
-                  className={cn('flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0', di.selectedBook?.key === book.key ? 'bg-primary/10' : '')}
+                  className={cn(
+                    'flex w-full items-center justify-between border-b px-3 py-2 text-left last:border-b-0',
+                    di.selectedBook?.key === book.key ? 'bg-primary/10' : '',
+                  )}
                 >
                   <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{book.title}</div>
@@ -232,15 +305,23 @@ export function DatasetImportDialog({
                       {book.author} {book.year && `(${book.year})`}
                     </div>
                   </div>
-                   <Badge variant="outline" className="shrink-0 ml-2">{book.isbn}</Badge>
+                  <Badge variant="outline" className="shrink-0 ml-2">
+                    {book.isbn}
+                  </Badge>
                 </Button>
               ))}
             </div>
           )}
 
-          {di.source === 'isbn' && !di.searching && di.bookResults.length === 0 && di.url.trim() && !di.selectedBook && (
-            <p className="text-xs text-muted-foreground">Type a title or ISBN and click Search to find books.</p>
-          )}
+          {di.source === 'isbn' &&
+            !di.searching &&
+            di.bookResults.length === 0 &&
+            di.url.trim() &&
+            !di.selectedBook && (
+              <p className="text-xs text-muted-foreground">
+                Type a title or ISBN and click Search to find books.
+              </p>
+            )}
 
           {di.source === 'huggingface' && (
             <div className="space-y-3">
@@ -254,7 +335,9 @@ export function DatasetImportDialog({
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Examples: <code className="font-mono text-[10px]">HuggingFaceH4/tinyshakespeare</code>, <code className="font-mono text-[10px]">HuggingFaceH4/ultrachat_200k</code>
+                  Examples:{' '}
+                  <code className="font-mono text-[10px]">HuggingFaceH4/tinyshakespeare</code>,{' '}
+                  <code className="font-mono text-[10px]">HuggingFaceH4/ultrachat_200k</code>
                 </p>
               </div>
             </div>
@@ -272,10 +355,13 @@ export function DatasetImportDialog({
                   className="mt-1"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Examples: <code className="font-mono text-[10px]">heptapod/titanic</code>, <code className="font-mono text-[10px]">uciml/iris</code>, <code className="font-mono text-[10px]">rounakbanik/pokemon</code>
+                  Examples: <code className="font-mono text-[10px]">heptapod/titanic</code>,{' '}
+                  <code className="font-mono text-[10px]">uciml/iris</code>,{' '}
+                  <code className="font-mono text-[10px]">rounakbanik/pokemon</code>
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Requires Kaggle CLI installed and authenticated (<code className="font-mono text-[10px]">kaggle config</code>)
+                  Requires Kaggle CLI installed and authenticated (
+                  <code className="font-mono text-[10px]">kaggle config</code>)
                 </p>
               </div>
             </div>
@@ -340,21 +426,29 @@ export function DatasetImportDialog({
 
           {(di.source === 'github' || di.source === 'local') && (
             <fieldset>
-              <legend className="text-sm font-medium text-foreground mb-2">File Types (for code repos)</legend>
-              <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Select file extensions">
-                {['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml', '.csv', '.pdf'].map((ext) => (
-                  <Button
-                    key={ext}
-                    variant={di.extensions.includes(ext) ? 'default' : 'outline'}
-                    size="sm"
-                    onClick={() => di.toggleExtension(ext)}
-                    role="checkbox"
-                    aria-checked={di.extensions.includes(ext)}
-                    aria-label={`${ext} file type`}
-                  >
-                    {ext}
-                  </Button>
-                ))}
+              <legend className="text-sm font-medium text-foreground mb-2">
+                File Types (for code repos)
+              </legend>
+              <div
+                className="mt-2 flex flex-wrap gap-2"
+                role="group"
+                aria-label="Select file extensions"
+              >
+                {['.py', '.js', '.ts', '.md', '.txt', '.json', '.yaml', '.csv', '.pdf'].map(
+                  (ext) => (
+                    <Button
+                      key={ext}
+                      variant={di.extensions.includes(ext) ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => di.toggleExtension(ext)}
+                      role="checkbox"
+                      aria-checked={di.extensions.includes(ext)}
+                      aria-label={`${ext} file type`}
+                    >
+                      {ext}
+                    </Button>
+                  ),
+                )}
               </div>
             </fieldset>
           )}
@@ -374,20 +468,25 @@ export function DatasetImportDialog({
             <div className="flex items-center gap-3 rounded-md bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
               <Spinner className="w-4 h-4" />
               <span>
-                {di.source === 'local' ? 'Scanning folder...' :
-                 di.source === 'github' ? 'Cloning repository...' :
-                 di.source === 'huggingface' ? 'Downloading from HuggingFace...' :
-                 'Importing...'}
+                {di.source === 'local'
+                  ? 'Scanning folder...'
+                  : di.source === 'github'
+                    ? 'Cloning repository...'
+                    : di.source === 'huggingface'
+                      ? 'Downloading from HuggingFace...'
+                      : 'Importing...'}
               </span>
             </div>
           )}
 
-          {di.error && (
-            <StatusBanner variant="error" message={di.error} dismissible={false} />
-          )}
+          {di.error && <StatusBanner variant="error" message={di.error} dismissible={false} />}
 
           {di.success && (
-            <div className="rounded-md bg-success/10 px-4 py-3 text-sm text-success" role="status" aria-live="polite">
+            <div
+              className="rounded-md bg-success/10 px-4 py-3 text-sm text-success"
+              role="status"
+              aria-live="polite"
+            >
               <div className="flex items-center gap-2 font-medium mb-1">
                 <IconCheck className="w-4 h-4 shrink-0" />
                 {di.success.message}
