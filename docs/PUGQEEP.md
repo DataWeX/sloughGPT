@@ -5,7 +5,7 @@ grab-bag for "any file type". pugqeep compresses **arrays** (any component that
 reduces to a `numpy.ndarray`) into `Point`s, then stores, indexes, queues, and
 dispatches work over those Points.
 
-**Location:** `packages/core-py/domains/infrastructure/pugqeep/`
+**Location:** `domain/infrastructure/_internal/pugqeep`
 
 ## The three invariants
 

@@ -28,7 +28,7 @@ Fix: Change `logger.info(f"msg {var}")` to `logger.info("msg %s", var)`
 
 ### 2. Missing `from __future__ import annotations`
 ```bash
-for f in $(find packages/core-py/domains -name "*.py" -not -path "*__pycache__*"); do
+for f in $(find domain -name "*.py" -not -path "*__pycache__*"); do
   if ! grep -q "from __future__ import annotations" "$f"; then
     echo "Missing: $f"
   fi
@@ -46,7 +46,7 @@ Fix: Change `except:` to `except Exception:`
 
 ### 4. print() in production code
 ```bash
-rg '^\s*print\(' packages/core-py/domains --include '*.py'
+rg '^\s*print\(' domain --include '*.py'
 ```
 
 Fix: Replace `print(...)` with `logger.info(...)` or `logger.debug(...)`
@@ -127,11 +127,10 @@ except Exception:
 ## Project Structure
 
 ```
-packages/core-py/       # Python core logic
-  domains/              # Domain modules
-    training/           # Training pipeline
-    logging/            # Logging system
-    shell/              # Shell/TUI
+domain/                 # Domain modules (training, logging, shell, …)
+  training/             # Training pipeline
+  logging/              # Logging system
+  shell/                # Shell/TUI
 apps/cli/               # CLI commands
 apps/api/               # FastAPI backend
 scripts/                # Utility scripts

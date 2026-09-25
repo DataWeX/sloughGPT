@@ -1,4 +1,4 @@
-"""Tests for domains/infrastructure/cache/__init__.py (CacheManager)."""
+"""Tests for domain/infrastructure/_internal/cache/__init__.py (CacheManager)."""
 
 import asyncio
 

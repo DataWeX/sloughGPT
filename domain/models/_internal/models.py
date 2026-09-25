@@ -1,5 +1,5 @@
 """
-domains/models/ - Pluggable model backends (native SloNet)
+domain/models/ - Pluggable model backends (native SloNet)
 
 **ModelInterface** is the generic contract (forward, generate, load, ...) for any
 neural backend in this repo.

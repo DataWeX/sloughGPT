@@ -2,7 +2,7 @@
 
 General-purpose bounded work queue with priority scheduling, backpressure, and consumer thread pools.
 
-**Location:** `packages/core-py/domains/infrastructure/producer_consumer.py`
+**Location:** `domain/infrastructure/_internal/producer_consumer.py`
 
 ## When to use
 

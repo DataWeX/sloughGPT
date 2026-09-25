@@ -1,7 +1,7 @@
 """Tests for downcraft.verify — SHA-256 integrity verification.
 
 Model-level ``list_missing_files`` moved to
-``domains.infrastructure.hf_hub`` (see core-py tests).
+``domain.infrastructure.hf_hub`` (see core-py tests).
 """
 
 import hashlib

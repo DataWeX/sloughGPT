@@ -1,5 +1,5 @@
 """
-Tests for DataFilter (domains/learner/data_filter.py).
+Tests for DataFilter (domain/learner/_internal/data_filter.py).
 """
 
 import pytest

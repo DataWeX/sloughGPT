@@ -1,4 +1,4 @@
-"""Tests for domains/training/lm_eval_char.py — char-LM perplexity eval.
+"""Tests for domain/training/_internal/lm_eval_char.py — char-LM perplexity eval.
 
 The main path is exercised end-to-end against a real tiny ``SloughGPTModel``
 on the numpy SloNet stack (no PyTorch, no weights, no network). CLI wrapper

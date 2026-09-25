@@ -17,7 +17,7 @@ Deployment assets live under **`infra/`** (Docker, Kubernetes, Helm, etc.).
 - API server: `apps/api/server/main.py`
 - Web app: `apps/web`
 - CLI (also reachable as repo-root `cli.py`): `apps/cli/cli.py`
-- Python “domains” package: `packages/core-py/domains` (import name **`domains`** after **`python3 -m pip install -e .`** from repo root)
+- Python “domains” package: `domain` (import name **`domains`** after **`python3 -m pip install -e .`** from repo root)
 - Python SDK: `packages/sdk-py/sloughgpt_sdk`
 - TypeScript SDK: `packages/sdk-ts/typescript-sdk`
 - Standards / schemas: `packages/standards/`
@@ -31,7 +31,7 @@ Two importable trees coexist:
 | Tree | Path | Import name | Role |
 |------|------|-------------|------|
 | Singular (migrated) | `domain/` (repo root) | `domain.*` | **Canonical** for almost all application code |
-| Plural (legacy install) | `packages/core-py/domains/` | `domains.*` | Mostly backward-compat shims; pip-installable via `packages/core-py` |
+| Plural (legacy install) | `domain/` | `domains.*` | Mostly backward-compat shims; pip-installable via `packages/core-py` |
 
 **Import census (this repo):**
 
@@ -40,9 +40,9 @@ Two importable trees coexist:
 - `scripts/` → `domain.*`: **51** / → `domains.*`: **2** (`benchmark_block_quantization` → pugqeep)
 
 **File counts:** `domain/` **574** `.py` (≈226 real, 77 shims still pointing at `domains.*`, 231 internal facades).  
-`packages/core-py/domains` **268** `.py` (**232 shims → `domain.*`**, only **~27 real** modules left).
+`domain` **268** `.py` (**232 shims → `domain.*`**, only **~27 real** modules left).
 
-### Remaining real code only in `packages/core-py/domains` (~27)
+### Remaining real code only in `domain` (~27)
 
 - `infrastructure/pugqeep/*` (engine, compressor, point, …)
 - `infrastructure/quant_core/wrapper.py`, `infrastructure/slnc/spec.py`
@@ -60,17 +60,17 @@ Root `setup.py` / `packages/core-py/pyproject.toml` still **`include = ["domains
 
 **Consolidate onto singular `domain/` as the only source of truth.**
 
-1. **Do not** grow `packages/core-py/domains` with new code — all new modules go under `domain/…/_internal/` with a thin public facade.
+1. **Do not** grow `domain` with new code — all new modules go under `domain/…/_internal/` with a thin public facade.
 2. **Migrate** the ~27 remaining real plural-only files into `domain/` (pugqeep, shell cmds, quant/slnc, …), leaving shims behind until callers are retargeted.
 3. **Retarget** the last plural imports (`test_slolib_gpu`, `benchmark_block_quantization`) to `domain.*`.
-4. **Delete** `packages/core-py/domains` only after (2)+(3) and a green suite; then drop `domains*` from packaging `include`.
-5. **Interim:** keep plural shims so `import domains…` does not break external scripts; mark them deprecated in module docstrings.
+4. **Delete** `domain` only after (2)+(3) and a green suite; then drop `domains*` from packaging `include`.
+5. **Interim:** keep plural shims so `import domain…` does not break external scripts; mark them deprecated in module docstrings.
 
 **Why not keep dual trees long-term:** bidirectional shims already cause attribute errors (e.g. `KNOWLEDGE_DIR` on a re-export module); two packaging roots invite split-brain; the import graph is already ~99% singular.
 
 ### Related pre-existing test breakage (this card)
 
-- `test_learner_continual` fixture patched `domains.learner.knowledge` (shim without path attrs) → **fixed** to patch `domain.memory._internal.knowledge_store`.
+- `test_learner_continual` fixture patched `domain.learner._internal.knowledge` (shim without path attrs) → **fixed** to patch `domain.memory._internal.knowledge_store`.
 - `test_slonet_wave_a` accelerator tests mocked old `domain.slolib.gpu` / `domain.training.gpu` paths → **fixed** to `…_internal.gpu` matching production imports.
 - `test_slo_manager`, `test_truth_maintainer`, `test_kg_pipeline`, `test_console_logger` were already green on main.
 

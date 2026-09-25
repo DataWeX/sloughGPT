@@ -10,7 +10,7 @@ sloughgpt --help
 
 **`python3 cli.py --help`** groups commands by how people use them (train/chat first, then server and config). **`gen`** is an alias for **`generate`**. Top-level **`stats`** reports **`models/`** + **`datasets/`** sizes; **`data stats PATH`** inspects one path.
 
-**Inventory:** **`python3 cli.py models`** lists **`models/*.soul`**, **`*.slnc`**, **`.safetensors`**; **`personalities`** prints built-in **`PersonalityType`** presets from **`domains.ai_personality`**.
+**Inventory:** **`python3 cli.py models`** lists **`models/*.soul`**, **`*.slnc`**, **`.safetensors`**; **`personalities`** prints built-in **`PersonalityType`** presets from **`domain.ai_personality`**.
 
 See **QUICKSTART.md** for common commands and **CONTRIBUTING.md** for validation.
 

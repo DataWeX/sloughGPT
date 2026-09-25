@@ -15,7 +15,7 @@ rg 'logger\.(info|warning|error|debug)\(f"' packages/core-py/apps scripts
 
 ### 2. Missing `from __future__ import annotations`
 ```bash
-rg -L 'from __future__ import annotations' packages/core-py/domains/**/*.py
+rg -L 'from __future__ import annotations' domain/**/*.py
 ```
 
 ### 3. Bare except clauses
@@ -25,7 +25,7 @@ rg 'except:' packages/core-py
 
 ### 4. print() in production code (should use logger)
 ```bash
-rg '^\s*print\(' packages/core-py/domains --include '*.py'
+rg '^\s*print\(' domain --include '*.py'
 ```
 
 ### 5. TODO/FIXME/HACK comments
@@ -35,7 +35,7 @@ rg '(TODO|FIXME|HACK|XXX):' packages/core-py
 
 ### 6. Unused imports
 ```bash
-rg '^import ' packages/core-py/domains | head -20
+rg '^import ' domain | head -20
 ```
 
 ## Workflow

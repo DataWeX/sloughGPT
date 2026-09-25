@@ -13,7 +13,7 @@ SloughGPT is an enterprise-grade AI framework with production-ready ML infrastru
 │   ├── web/                 # Next.js 14 UI — app/(app)/ (port 3000)
 │   ├── cli/                 # cli.py (repo-root launcher may wrap this)
 ├── packages/
-│   ├── core-py/domains/     # Python domains (training, inference, models, …)
+│   ├── core-py/             # Python core (tests, utils; domain code at repo domain/)
 │   ├── sdk-py/              # Python SDK
 │   ├── sdk-ts/typescript-sdk/  # TypeScript SDK (npm package root)
 │   └── standards/           # SloughGPT Standard v1 docs

@@ -1,4 +1,4 @@
-"""Tests for packages/core-py/domains/training/huggingface/ modules.
+"""Tests for domain/training/_internal/huggingface modules.
 
 Covers pure logic only: config parsing, data processing, model map,
 format helpers, and error paths. No external API calls or model loading.

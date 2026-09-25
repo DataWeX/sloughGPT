@@ -1,7 +1,7 @@
 /**
  * WebLogger — structured logging for the browser frontend.
  *
- * Mirrors the Python ``domains.logging.WebLogger`` pattern.
+ * Mirrors the Python ``domain.logging.WebLogger`` pattern.
  * Routes to console.debug/log/warn/error based on level.
  * Production: only warnings and errors are emitted.
  * Development: all levels are emitted.

@@ -146,7 +146,7 @@ class LoraFinetuneRequest(BaseModel):
     Trains low-rank adapters on top of any model loaded via SloNetChatProvider.
     Adapter is saved as a .npz file alongside the base model.
 
-    Fields map 1:1 to ``domains.training.hf_lora_finetune.HFLoraConfig``.
+    Fields map 1:1 to ``domain.training._internal.hf_lora_finetune.HFLoraConfig``.
     """
 
     model_path: str = Field(description="Path to .slnc model file")

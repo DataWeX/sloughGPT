@@ -9,7 +9,7 @@ Subpackages:
     mobile     — Push notifications
     soul       — Cognitive engine
 
-Root exports (moved from packages/core-py/domains/__init__.py):
+Root exports (moved from domain/__init__.py):
     BaseComponent, ComponentException, BaseDomain, DomainException
     ICognitiveProcessor, IMemoryManager, IMetacognitiveMonitor, IReasoningEngine
     Memory, Thought, ThoughtType

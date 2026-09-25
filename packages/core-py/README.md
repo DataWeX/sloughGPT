@@ -2,28 +2,28 @@
 
 `packages/core-py/` is on the Python path as the **`domains`** package (and related **`utils`**) when you install from the repo root (**`python3 -m pip install -e ".[dev]"`**).
 
-Training, inference, models, and infrastructure code live under **`domains/`**. The API imports these modules; keep heavy logic here instead of in **`apps/api/server/`** route handlers. Trainer-native **`.soul`** checkpoints embed **`stoi` / `itos` / `chars`** for char-LM eval; see **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
+Training, inference, models, and infrastructure code live under **`domain/`**. The API imports these modules; keep heavy logic here instead of in **`apps/api/server/`** route handlers. Trainer-native **`.soul`** checkpoints embed **`stoi` / `itos` / `chars`** for char-LM eval; see **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
 
 ### Key infrastructure modules
 
 | Module | Purpose | Docs |
 |--------|---------|------|
-| `domains.infrastructure.producer_consumer` | General-purpose bounded work queue with priority, backpressure, consumer thread pools | [PRODUCER_CONSUMER_QUEUE.md](../../docs/PRODUCER_CONSUMER_QUEUE.md) |
-| `domains.infrastructure.pugqeep` | Point-Graph-Queue system: compressed data points, model trees, task queues, engine | [PUGQEEP.md](../../docs/PUGQEEP.md) |
-| `domains.infrastructure.cancel_manager` | Cancellation for long-running operations | [AGENTS.md](../../AGENTS.md) |
-| `domains.infrastructure.model_server` | Model lifecycle, backends, circuit breaker | [AGENTS.md](../../AGENTS.md) |
-| `domains.infrastructure.process_guard` | Subprocess crash isolation, auto-restart | [AGENTS.md](../../AGENTS.md) |
+| `domain.infrastructure._internal.producer_consumer` | General-purpose bounded work queue with priority, backpressure, consumer thread pools | [PRODUCER_CONSUMER_QUEUE.md](../../docs/PRODUCER_CONSUMER_QUEUE.md) |
+| `domain.infrastructure.pugqeep` | Point-Graph-Queue system: compressed data points, model trees, task queues, engine | [PUGQEEP.md](../../docs/PUGQEEP.md) |
+| `domain.infrastructure.cancel_manager` | Cancellation for long-running operations | [AGENTS.md](../../AGENTS.md) |
+| `domain.infrastructure.model_server` | Model lifecycle, backends, circuit breaker | [AGENTS.md](../../AGENTS.md) |
+| `domain.infrastructure.process_guard` | Subprocess crash isolation, auto-restart | [AGENTS.md](../../AGENTS.md) |
 
 ### Core domains
 
 | Domain | Purpose |
 |--------|---------|
-| `domains.training` | Training pipelines, executor, distillation |
-| `domains.inference` | Vector store, KV cache, providers |
-| `domains.feedback` | LoRA eval, per-user adapter |
-| `domains.cognitive` | Soul engine, metacognition |
-| `domains.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |
-| `domains.multimodal` | Phoneme encoders, TTS, speech synthesis |
+| `domain.training` | Training pipelines, executor, distillation |
+| `domain.inference` | Vector store, KV cache, providers |
+| `domain.feedback` | LoRA eval, per-user adapter |
+| `domain.cognitive` | Soul engine, metacognition |
+| `domain.infrastructure` | ProcessGuard, ModelServer, TaskQueue, CancelManager |
+| `domain.multimodal` | Phoneme encoders, TTS, speech synthesis |
 
 ### Phoneme Encoder API
 
@@ -33,16 +33,16 @@ The phoneme encoder system supports 6 languages: English, German, French, Spanis
 
 ```bash
 # Single text encoding
-python -m domains.multimodal.phoneme_encoder_cli "hello world"
+python -m domain.multimodal._internal.phoneme_encoder_cli "hello world"
 
 # Batch encoding
-python -m domains.multimodal.phoneme_encoder_cli --batch "hello" "world" "test"
+python -m domain.multimodal._internal.phoneme_encoder_cli --batch "hello" "world" "test"
 
 # Language-specific encoding
-python -m domains.multimodal.phoneme_encoder_cli --lang it "ciao mondo"
+python -m domain.multimodal._internal.phoneme_encoder_cli --lang it "ciao mondo"
 
 # Language detection
-python -m domains.multimodal.phoneme_encoder_cli --detect "hello world"
+python -m domain.multimodal._internal.phoneme_encoder_cli --detect "hello world"
 ```
 
 #### REST API Endpoints

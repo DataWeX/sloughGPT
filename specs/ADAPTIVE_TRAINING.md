@@ -87,7 +87,7 @@ Learns from history to recommend configs.
 
 **Integration:** `auto_configure()` calls the adaptive engine after building the static config. If the engine has enough data (≥3 runs, confidence > 0.5), it overrides the static values.
 
-### 3. PersistentSettings (`domains/settings/persistent.py`)
+### 3. PersistentSettings (`domain/settings/_internal/persistent.py`)
 
 User-facing configuration that survives restarts.
 

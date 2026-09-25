@@ -69,7 +69,7 @@
       "hidden": false
     },
     "qa-developer": {
-      "description": "QA developer agent for core backend infrastructure. Finds regressions, fixes backend logic bugs, and improves test coverage in packages/core-py/domains/.",
+      "description": "QA developer agent for core backend infrastructure. Finds regressions, fixes backend logic bugs, and improves test coverage in domain/.",
       "mode": "subagent",
       "hidden": false
     },

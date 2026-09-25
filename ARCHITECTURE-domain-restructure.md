@@ -2,7 +2,7 @@
 
 ## Problem
 
-The `packages/core-py/domains/` directory is a dumping ground — 30+ unrelated subsystems crammed into one namespace. There's no meaningful boundary between `billing`, `consciousness`, `shell`, and `multimodal`. Everything imports everything, and the namespace `domains.` is meaningless.
+The `domain/` directory is a dumping ground — 30+ unrelated subsystems crammed into one namespace. There's no meaningful boundary between `billing`, `consciousness`, `shell`, and `multimodal`. Everything imports everything, and the namespace `domains.` is meaningless.
 
 ## Solution
 
@@ -102,7 +102,7 @@ No dependency on `domain.inference._internal.vector_store` — the functions are
 ## Migration Strategy
 
 1. **Create new package** with `_internal/` structure
-2. **Add compatibility shim** in old `domains/memory/__init__.py` that re-exports from new package
+2. **Add compatibility shim** in old `domain/memory/__init__.py` that re-exports from new package
 3. **Update consumers** gradually — old imports still work via shim
 4. **Remove shim** once all consumers are migrated
 

@@ -1336,7 +1336,7 @@ class ModelsRouter:
                 from domain.infrastructure.quantization import Quantine
             except ImportError:
                 raise_error(
-                    "Quantization not available — domains.infrastructure.quantization missing",
+                    "Quantization not available — domain.infrastructure.quantization missing",
                     "E_BAD_REQUEST",
                 )
             try:

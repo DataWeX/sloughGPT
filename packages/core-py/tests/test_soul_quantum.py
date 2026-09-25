@@ -1,4 +1,4 @@
-"""Tests for domains/soul/quantum.py — pure logic, no mocks."""
+"""Tests for domain/soul/_internal/quantum.py — pure logic, no mocks."""
 
 import math
 

@@ -1,4 +1,4 @@
-"""Smoke test for domains.training.train_pipeline.SloughGPTTrainer (CLI / API driver)."""
+"""Smoke test for domain.training._internal.train_pipeline.SloughGPTTrainer (CLI / API driver)."""
 
 from pathlib import Path
 

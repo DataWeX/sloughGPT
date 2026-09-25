@@ -1,4 +1,4 @@
-"""Tests for domains/infrastructure/pugqeep/model_tree.py and queue.py."""
+"""Tests for domain/infrastructure/_internal/pugqeep/model_tree.py and queue.py."""
 
 import numpy as np
 import pytest

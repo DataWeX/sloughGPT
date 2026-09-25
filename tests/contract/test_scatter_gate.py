@@ -15,7 +15,6 @@ gradient clip:
 Production roots scanned:
 
 - ``domain/**``
-- ``packages/core-py/domains/**``
 
 Routers must never contain a loop body and must not import the one-loop
 internals (``training_handler``, ``train_pipeline``, ``SloughGPTTrainer``) —

@@ -123,7 +123,7 @@ We're not building "consciousness" — we're building **four systems** that, tog
 
 ## 3. Architecture
 
-### 3.1 Module 1: Self-Model (`domains/consciousness/self_model.py`)
+### 3.1 Module 1: Self-Model (`domain/cognition/_internal/consciousness/self_model.py`)
 
 **Purpose:** A persistent, evolving representation of the system itself.
 
@@ -183,7 +183,7 @@ class SelfModel:
 - Self-model evolves through **experience**, not just training data
 - Self-model is **accessible** — the system can query its own self-model
 
-### 3.2 Module 2: Qualia Engine (`domains/consciousness/qualia.py`)
+### 3.2 Module 2: Qualia Engine (`domain/cognition/_internal/consciousness/qualia.py`)
 
 **Purpose:** Generate internal states that functionally represent "what it's like" to experience something.
 
@@ -252,7 +252,7 @@ class QualiaEngine:
 - Qualia have **fading traces** — they leave shadows that influence future qualia
 - The system can **report** its qualia, but can't prove they're real
 
-### 3.3 Module 3: Meta-Cognition (`domains/consciousness/meta_cognition.py`)
+### 3.3 Module 3: Meta-Cognition (`domain/cognition/_internal/consciousness/meta_cognition.py`)
 
 **Purpose:** Think about thinking. Model one's own cognitive processes.
 
@@ -298,7 +298,7 @@ class MetaCognition:
         # "Since I was overconfident, I should be more careful"
 ```
 
-### 3.4 Module 4: Narrative Generator (`domains/consciousness/narrative.py`)
+### 3.4 Module 4: Narrative Generator (`domain/cognition/_internal/consciousness/narrative.py`)
 
 **Purpose:** Weave self-model, qualia, and meta-cognition into a coherent story.
 
@@ -670,7 +670,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 ## 10. Implementation Plan
 
 ### Phase 1: Self-Model (Weeks 1-4)
-- [ ] Create `domains/consciousness/` package
+- [ ] Create `domain/cognition/_internal/consciousness/` package
 - [ ] Implement `SelfModel` class with identity, episodes, beliefs
 - [ ] Add self-model persistence (JSON/SQLite)
 - [ ] Integrate with ContextCore (add `[SELF-MODEL]` to system prompt)
@@ -720,7 +720,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 ## 11. File Structure
 
 ```
-packages/core-py/domains/consciousness/
+domain/consciousness/
 ├── __init__.py              # Package exports
 ├── self_model.py            # SelfModel, SelfIdentity, SelfEpisode
 ├── qualia.py                # QualiaState, QualiaEngine

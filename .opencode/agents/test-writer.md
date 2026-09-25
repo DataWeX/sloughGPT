@@ -394,7 +394,7 @@ class TestToolsFlows:
 # Python
 cd packages/core-py
 .venv/bin/python -m pytest tests/test_<module>*.py \
-  --cov=domains/<area>/<module> \
+  --cov=domain/<area>/<module> \
   --cov-report=term-missing -q
 
 # Frontend

@@ -48,7 +48,7 @@ See Also
 
 - :class:`ExportConfig`: Configuration dataclass
 - :func:`list_export_formats`: List all supported formats
-- :mod:`domains.training.gguf_export`: GGUF-specific export
+- :mod:`domain.training._internal.gguf_export`: GGUF-specific export
 
 """
 
@@ -554,7 +554,7 @@ def export_to_gguf(
         - Example: 1M params + 2048 ctx ≈ 5MB
 
     See Also:
-        :mod:`domains.training.gguf_export`: Advanced GGUF options
+        :mod:`domain.training._internal.gguf_export`: Advanced GGUF options
         https://github.com/mybigday/llama.rn
         https://github.com/ggerganov/llama.cpp
     """
@@ -670,7 +670,7 @@ def export_to_sou(
         Path to exported file
 
     See Also:
-        :mod:`domains.inference.slo_format`: Slo format details
+        :mod:`domain.inference._internal.slo_format`: Slo format details
     """
     from domain.inference import save_soul as sou_export
 

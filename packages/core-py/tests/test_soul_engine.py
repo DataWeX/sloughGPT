@@ -1,4 +1,4 @@
-"""Tests for domains/core/soul.py (SloEngine, GenerationContext)."""
+"""Tests for domain/core/_internal/soul.py (SloEngine, GenerationContext)."""
 
 import asyncio
 from unittest.mock import patch

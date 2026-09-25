@@ -130,7 +130,7 @@
         "dec_mibs": 178.8
       }
     ],
-    "file": "packages/core-py/domains/infrastructure/quant_core/matmul_int8.so",
+    "file": "domain/infrastructure/_internal/quant_core/matmul_int8.so",
     "raw_bytes": 20520
   },
   {

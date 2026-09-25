@@ -1,5 +1,5 @@
 """
-Live realm viewer — ``python3 -m domains.shell.realm_live``.
+Live realm viewer — ``python3 -m domain.shell._internal.realm_live``.
 
 Watches the Programmable World Realm run: a solar-lit generated world,
 babies spawned on the surface, and the sun rising and setting over the grid
@@ -11,11 +11,11 @@ the run and prints the final conservation summary.
 
 Flags are optional; the defaults give a good first look.
 
-    python3 -m domains.shell.realm_live                # 240 ticks, 8 fps
-    python3 -m domains.shell.realm_live --ticks 96 --day 16 --fps 12
-    python3 -m domains.shell.realm_live --seed 3 --population 12
-    python3 -m domains.shell.realm_live --seasons      # two years of seasons
-    python3 -m domains.shell.realm_live --seasons --seasons-per-year 6
+    python3 -m domain.shell._internal.realm_live                # 240 ticks, 8 fps
+    python3 -m domain.shell._internal.realm_live --ticks 96 --day 16 --fps 12
+    python3 -m domain.shell._internal.realm_live --seed 3 --population 12
+    python3 -m domain.shell._internal.realm_live --seasons      # two years of seasons
+    python3 -m domain.shell._internal.realm_live --seasons --seasons-per-year 6
 """
 
 from __future__ import annotations

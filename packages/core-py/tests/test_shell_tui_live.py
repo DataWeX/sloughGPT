@@ -304,7 +304,7 @@ class _TuiSession:
             cov_dir = os.environ.get("TUI_LIVE_COV_DIR", "/tmp/opencode/tui_cov")
             os.makedirs(cov_dir, exist_ok=True)
             cov = coverage.Coverage(
-                source=["domains/shell"],
+                source=["domain/shell"],
                 data_suffix=True,
                 data_file=os.path.join(cov_dir, ".coverage"),
             )

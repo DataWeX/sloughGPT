@@ -97,7 +97,7 @@ This transforms our complex ML workflow into an intuitive, interactive experienc
 
 ## Auto-Memory Command Group (current `sloughgpt` CLI)
 
-The shipped `sloughgpt` CLI exposes a `memory` command group that wraps the core auto-memory service (`packages/core-py/domains/memory/`). The group is fail-closed: with `SLO_MEMORY_ENABLED=false` every subcommand reports that memory is disabled.
+The shipped `sloughgpt` CLI exposes a `memory` command group that wraps the core auto-memory service (`domain/memory`). The group is fail-closed: with `SLO_MEMORY_ENABLED=false` every subcommand reports that memory is disabled.
 
 | Command | Description |
 |---------|-------------|
@@ -127,7 +127,7 @@ sloughgpt memory enable
 
 ## Token Tree Command Group (current `sloughgpt` CLI)
 
-The `sloughgpt token-tree` group wraps the tree-based BPE tokenizer (`packages/core-py/domains/training/token_tree.py`). Commands read a saved tree (`.slnp` matrix + `.json` metadata) from `--tree` (`-t`, default `models/slonet-native/token_tree`), matching the `.soul`-embedded tokenizer format.
+The `sloughgpt token-tree` group wraps the tree-based BPE tokenizer (`domain/training/_internal/token_tree.py`). Commands read a saved tree (`.slnp` matrix + `.json` metadata) from `--tree` (`-t`, default `models/slonet-native/token_tree`), matching the `.soul`-embedded tokenizer format.
 
 | Command | Description |
 |---------|-------------|

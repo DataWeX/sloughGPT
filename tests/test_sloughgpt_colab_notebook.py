@@ -125,7 +125,7 @@ def test_sloughgpt_colab_notebook_is_valid_nbformat_v4_with_smoke_hooks() -> Non
 
 
 def test_colab_export_to_sou_importable_via_public_shim() -> None:
-    """The Save/Export cell imports ``domains.training.export.export_to_sou``.
+    """The Save/Export cell imports ``domain.training._internal.export.export_to_sou``.
 
     Regression guard: ``domain/training/_internal/export.py``'s ``__all__`` must
     re-export ``export_to_sou`` (and the ``packages/core-py`` shim, its
@@ -136,7 +136,7 @@ def test_colab_export_to_sou_importable_via_public_shim() -> None:
     code = (
         f"import sys; sys.path.insert(0, {str(root / 'packages' / 'core-py')!r});"
         "import inspect;"
-        "from domains.training.export import export_to_sou;"
+        "from domain.training._internal.export import export_to_sou;"
         "params = list(inspect.signature(export_to_sou).parameters);"
         "assert 'weights_only' in params and 'soul_profile' in params, params;"
         "print(export_to_sou.__name__, export_to_sou.__module__)"

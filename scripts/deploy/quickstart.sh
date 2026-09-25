@@ -89,7 +89,7 @@ conda run -n "$CONDA_ENV" python3 -c "import torch; print(f'  torch: {torch.__ve
 
 echo ""
 echo "SloughGPT (venv):"
-"$VENV_DIR/bin/python3" -c "from domains.models import SloughGPTModel; print('  SloughGPTModel: OK')"
+"$VENV_DIR/bin/python3" -c "from domain.models import SloughGPTModel; print('  SloughGPTModel: OK')"
 
 echo ""
 echo "======================================"
