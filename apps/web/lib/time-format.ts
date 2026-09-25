@@ -89,6 +89,25 @@ export function formatShortDate(date: DateInput): string {
 }
 
 /**
+ * Format a timestamp in the browser's default date-only style ("1/5/2026").
+ */
+export function formatLocaleDate(date: DateInput): string {
+  const d = toDate(date)
+  if (!d) return ''
+  return d.toLocaleDateString()
+}
+
+/**
+ * Format a timestamp as short month + day ("Jan 5" / "5 Jan").
+ * Pass `locale` to pin the locale (e.g. "en-US").
+ */
+export function formatMonthDay(date: DateInput, locale?: string): string {
+  const d = toDate(date)
+  if (!d) return ''
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' })
+}
+
+/**
  * Format a timestamp as a date+time with short month ("Jan 5, 2:30 PM").
  */
 export function formatDateTimeShort(date: DateInput): string {

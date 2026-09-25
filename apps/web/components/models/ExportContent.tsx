@@ -1,13 +1,24 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, IconDownload, Spinner } from '@sloughgpt/strui'
+import {
+  cn,
+  ActionCard,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  IconDownload,
+  Spinner,
+} from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
 import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
 import { downloadBlob } from '@/lib/download-utils'
 import { apiGet } from '@/lib/http-client'
+import { formatLocaleDate } from '@/lib/time-format'
 
 interface ExportFormat {
   key: string
@@ -38,12 +49,13 @@ export default function ExportContent() {
 
   useEffect(() => {
     let active = true
-    modelController.getExportFormats?.()
+    modelController
+      .getExportFormats?.()
       .then((res: Record<string, string>) => {
         if (!active) return
         const list = Object.entries(res).map(([key, description]) => ({
           key,
-          label: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+          label: key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
           description,
         }))
         setFormats(list)
@@ -53,7 +65,9 @@ export default function ExportContent() {
         const msg = err instanceof Error ? err.message : String(err)
         setFormatLoadError(`Could not load export formats: ${msg}`)
       })
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
 
   const fetchCheckpoints = useCallback(async () => {
@@ -82,7 +96,9 @@ export default function ExportContent() {
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
 
   const handleExportModel = async () => {
@@ -138,9 +154,7 @@ export default function ExportContent() {
       {exportResult && (
         <StatusBanner variant="success" message={exportResult} dismissible={false} />
       )}
-      {exportError && (
-        <StatusBanner variant="error" message={exportError} dismissible={false} />
-      )}
+      {exportError && <StatusBanner variant="error" message={exportError} dismissible={false} />}
       {formatLoadError && (
         <StatusBanner variant="error" message={formatLoadError} dismissible={false} />
       )}
@@ -156,14 +170,17 @@ export default function ExportContent() {
             Export the currently loaded model to a file format.
           </p>
           <div className="flex flex-wrap gap-2">
-            {formats.map(f => (
+            {formats.map((f) => (
               <button
                 type="button"
                 key={f.key}
                 onClick={() => setSelectedFormat(f.key)}
-                className={cn('rounded-md px-3 py-1.5 text-xs font-medium transition-colors', selectedFormat === f.key
+                className={cn(
+                  'rounded-md px-3 py-1.5 text-xs font-medium transition-colors',
+                  selectedFormat === f.key
                     ? 'bg-primary/15 text-primary'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80')}
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80',
+                )}
                 title={f.description}
               >
                 {f.label}
@@ -172,14 +189,10 @@ export default function ExportContent() {
           </div>
           {selectedFormat && (
             <p className="text-xs text-muted-foreground">
-              {formats.find(f => f.key === selectedFormat)?.description}
+              {formats.find((f) => f.key === selectedFormat)?.description}
             </p>
           )}
-          <Button
-            size="sm"
-            onClick={handleExportModel}
-            disabled={exporting}
-          >
+          <Button size="sm" onClick={handleExportModel} disabled={exporting}>
             {exporting ? (
               <span className="inline-flex items-center gap-1.5">
                 <Spinner size="xs" />
@@ -229,41 +242,45 @@ export default function ExportContent() {
       <ActionCard
         title="Checkpoints"
         actions={
-          <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={fetchCheckpoints}
+            disabled={loadingCheckpoints}
+            aria-label="Refresh checkpoints"
+          >
             <Spinner className="h-3.5 w-3.5" />
           </Button>
         }
       >
-          {checkpoints.length === 0 ? (
-            <div className="text-center py-6 space-y-2">
-              <p className="text-sm text-muted-foreground">No checkpoints found. Train a model to create checkpoints.</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {checkpoints.map(cp => (
-                <div
-                  key={cp.name}
-                  className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium truncate">{cp.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {fmtBytes(cp.size_bytes)}
-                      {cp.loss != null && <> · Loss: {cp.loss.toFixed(3)}</>}
-                      {cp.created_at && <> · {new Date(cp.created_at).toLocaleDateString()}</>}
-                    </div>
+        {checkpoints.length === 0 ? (
+          <div className="text-center py-6 space-y-2">
+            <p className="text-sm text-muted-foreground">
+              No checkpoints found. Train a model to create checkpoints.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {checkpoints.map((cp) => (
+              <div
+                key={cp.name}
+                className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+              >
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{cp.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {fmtBytes(cp.size_bytes)}
+                    {cp.loss != null && <> · Loss: {cp.loss.toFixed(3)}</>}
+                    {formatLocaleDate(cp.created_at) && <> · {formatLocaleDate(cp.created_at)}</>}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleDownloadCheckpoint(cp.name)}
-                  >
-                    <IconDownload className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
-              ))}
-            </div>
-          )}
+                <Button size="sm" variant="ghost" onClick={() => handleDownloadCheckpoint(cp.name)}>
+                  <IconDownload className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
       </ActionCard>
     </>
   )

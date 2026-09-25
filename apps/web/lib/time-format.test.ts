@@ -4,6 +4,8 @@ import {
   formatShortRelative,
   formatDateTime,
   formatShortDate,
+  formatLocaleDate,
+  formatMonthDay,
   formatDateTimeShort,
   formatDateTimeFull,
   formatTimeWithSeconds,
@@ -269,5 +271,25 @@ describe('formatSeconds guards non-finite input', () => {
   it('returns "0:00" for NaN/Infinity', () => {
     expect(formatSeconds(Number.NaN)).toBe('0:00')
     expect(formatSeconds(Number.POSITIVE_INFINITY)).toBe('0:00')
+  })
+})
+
+describe('formatLocaleDate / formatMonthDay', () => {
+  const valid = new Date('2026-01-05T12:30:00Z')
+
+  it('formats valid dates', () => {
+    expect(formatLocaleDate(valid)).toBe(valid.toLocaleDateString())
+    expect(formatMonthDay(valid, 'en-US')).toBe('Jan 5')
+    expect(formatMonthDay(valid)).toBe(
+      valid.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    )
+  })
+
+  it('returns "" for invalid and missing input', () => {
+    for (const bad of [null, undefined, '', 'nope', '2026-01-05T12:00:00+00:00Z', new Date('x')]) {
+      expect(formatLocaleDate(bad)).toBe('')
+      expect(formatMonthDay(bad)).toBe('')
+      expect(formatMonthDay(bad, 'en-US')).toBe('')
+    }
   })
 })

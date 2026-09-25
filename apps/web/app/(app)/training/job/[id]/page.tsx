@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useCallback, useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, CardHeader, CardTitle, cn } from '@sloughgpt/strui'
 import {
@@ -20,7 +20,7 @@ import { Skeleton } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import { Breadcrumbs } from '@sloughgpt/strui'
-import dynamicNext from 'next/dynamic'
+import dynamicNext from '@/vite/next-compat/dynamic'
 import type { LossPoint, RewardPoint } from '@/components/training/LossChart'
 
 const LossChart = dynamicNext(
@@ -34,6 +34,7 @@ import { useToastStore } from '@/lib/toast-store'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { formatElapsed } from '@/lib/formatDuration'
 import { extractErrorMessage, formatToastError } from '@/lib/error-utils'
+import { formatDateTime } from '@/lib/time-format'
 
 const STATUS_BADGE: Record<
   string,
@@ -45,9 +46,12 @@ const STATUS_BADGE: Record<
   running: { label: 'Running', variant: 'default' },
   completed: { label: 'Completed', variant: 'secondary' },
   failed: { label: 'Failed', variant: 'destructive' },
+  interrupted: { label: 'Interrupted', variant: 'warning' },
   stopped: { label: 'Stopped', variant: 'secondary' },
   queued: { label: 'Queued', variant: 'outline' },
 }
+
+const RESUMABLE_STATUSES = new Set(['interrupted', 'failed'])
 
 export default function TrainingJobDetailPage() {
   const params = useParams()
@@ -276,6 +280,28 @@ export default function TrainingJobDetailPage() {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-1">
+                  {RESUMABLE_STATUSES.has(job!.status) && (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="h-8 text-xs"
+                      onClick={async () => {
+                        try {
+                          const result = await trainingJobsController.recover(job!.id)
+                          addToast(result.message || 'Resume started', 'success')
+                          if (result.recovery_job_id && result.recovery_job_id !== job!.id) {
+                            router.push(`/training/job/${result.recovery_job_id}`)
+                          } else {
+                            await fetchJob()
+                          }
+                        } catch (e) {
+                          addToast(formatToastError(e, 'Could not resume job'), 'error')
+                        }
+                      }}
+                    >
+                      Resume
+                    </Button>
+                  )}
                   {job!.status === 'running' && (
                     <Button
                       size="sm"
@@ -478,7 +504,7 @@ export default function TrainingJobDetailPage() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Created</p>
-                  <p className="text-xs mt-0.5">{new Date(job!.created_at).toLocaleString()}</p>
+                  <p className="text-xs mt-0.5">{formatDateTime(job!.created_at) || '—'}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Duration</p>

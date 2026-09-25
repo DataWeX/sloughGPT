@@ -13,7 +13,7 @@ importable from ``domain.shared._internal.utils`` (and most from
     net           find_available_port
     paths         find_repo_root, find_server_python
     timestamps    get_timestamp, utc_now_iso, to_iso, parse_iso,
-                  normalize_iso, is_valid_iso
+                  normalize_iso, is_valid_iso, repair_iso
 
 New code should import from the specific module (or from ``domain.shared``)
 rather than from this facade.
@@ -34,6 +34,7 @@ from domain.shared._internal.timestamps import (
     is_valid_iso,
     normalize_iso,
     parse_iso,
+    repair_iso,
     to_iso,
     utc_now_iso,
 )
@@ -56,6 +57,7 @@ __all__ = [
     "merge_dicts",
     "normalize_iso",
     "parse_iso",
+    "repair_iso",
     "retry",
     "save_json",
     "to_iso",

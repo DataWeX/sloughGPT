@@ -31,6 +31,8 @@ import zipfile
 from pathlib import Path
 from typing import Any
 
+from domain.shared import repair_iso  # stdlib-only, no third-party imports
+
 logger = logging.getLogger("slo.artifact_registry")
 
 # Bytes hashed for the content fingerprint (magic + head chunk only, so
@@ -182,7 +184,11 @@ def _soul_sidecar_meta(path: Path) -> dict[str, Any]:
         "final_train_loss",
         "vocab_size",
     )
-    return {k: meta[k] for k in keep if meta.get(k) not in (None, "")}
+    out = {k: meta[k] for k in keep if meta.get(k) not in (None, "")}
+    if isinstance(out.get("born_at"), str):
+        # Legacy sidecars store "...+00:00Z"; repair it before it reaches a UI.
+        out["born_at"] = repair_iso(out["born_at"])
+    return out
 
 
 def _safetensors_meta(path: Path) -> dict[str, Any]:

@@ -26,7 +26,7 @@ from typing import Any
 
 import numpy as np
 
-from domain.shared import utc_now_iso
+from domain.shared import repair_iso, utc_now_iso
 
 logger = logging.getLogger("slo.inference.slo_format")
 
@@ -386,7 +386,8 @@ class SouParser:
             elif line.startswith("LINEAGE "):
                 sp.lineage = line[8:].strip()
             elif line.startswith("BORN "):
-                sp.born_at = line[5:].strip()
+                raw_born = line[5:].strip()
+                sp.born_at = repair_iso(raw_born)  # type: ignore[assignment]
             elif line.startswith("CREATED_BY "):
                 sp.created_by = line[11:].strip()
             elif line.startswith("TAGLINE "):
@@ -768,7 +769,7 @@ def load_soul(sou_path: str):
         f"SOUL {config.get('name', 'unknown')}\n"
         + f"VERSION {config.get('version', '1.0.0')}\n"
         + f"LINEAGE {config.get('lineage', 'nanogpt')}\n"
-        + f"BORN {config.get('born_at', '')}\n"
+        + f"BORN {repair_iso(config.get('born_at', ''))}\n"
         + f"BASEMODEL {config.get('base_model', '')}\n"
         + f"DESCRIPTION {config.get('description', '')}\n"
     )

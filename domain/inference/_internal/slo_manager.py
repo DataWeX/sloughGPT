@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from domain.shared import find_repo_root
+from domain.shared import find_repo_root, repair_iso
 
 logger = logging.getLogger("slo.soul_manager")
 
@@ -179,7 +179,7 @@ class SloManager:
                         description=description,
                         personality=personality,
                         traits=list(traits) if isinstance(traits, (list, tuple)) else [],
-                        born_at=config.get("born_at", ""),
+                        born_at=repair_iso(config.get("born_at", "")) or "",
                         training_dataset=config.get("training_dataset", ""),
                         epochs_trained=config.get("epochs_trained", 0) or 0,
                         final_train_loss=config.get("final_train_loss"),

@@ -1,12 +1,13 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { TrainingHistoryView } from './TrainingHistoryView'
 import { trainingJobsController } from '@/lib/training-controller'
 
 vi.mock('@/lib/training-controller', () => ({
   trainingJobsController: {
     list: vi.fn(),
+    recover: vi.fn(),
   },
 }))
 
@@ -21,13 +22,20 @@ vi.mock('@sloughgpt/strui', async () => {
     Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -54,16 +62,35 @@ vi.mock('@sloughgpt/strui', async () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 const JOBS = [
-  { id: '1', name: 'Job 1', status: 'completed', progress: 100, created_at: '2026-01-15T10:00:00Z', method: 'distill', loss: 0.5, epochs: 10, checkpoint: 'cp1' },
-  { id: '2', name: 'Job 2', status: 'failed', progress: 50, created_at: '2026-01-14T10:00:00Z', method: 'native', error: 'OOM' },
+  {
+    id: '1',
+    name: 'Job 1',
+    status: 'completed',
+    progress: 100,
+    created_at: '2026-01-15T10:00:00Z',
+    method: 'distill',
+    loss: 0.5,
+    epochs: 10,
+    checkpoint: 'cp1',
+  },
+  {
+    id: '2',
+    name: 'Job 2',
+    status: 'failed',
+    progress: 50,
+    created_at: '2026-01-14T10:00:00Z',
+    method: 'native',
+    error: 'OOM',
+  },
 ] as any[]
 
 describe('TrainingHistoryView', () => {
   const mockList = vi.mocked(trainingJobsController.list)
+  const mockRecover = vi.mocked(trainingJobsController.recover)
   const mockToast = vi.fn()
 
   beforeEach(() => {
@@ -90,6 +117,16 @@ describe('TrainingHistoryView', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Job 1').length).toBeGreaterThan(0)
       expect(screen.getAllByText('Job 2').length).toBeGreaterThan(0)
+    })
+  })
+
+  it('renders jobs without created_at (backend strips null fields)', async () => {
+    mockList.mockResolvedValue([
+      { id: '9', name: 'NoDateJob', status: 'running', progress: 10 } as any,
+    ])
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('NoDateJob').length).toBeGreaterThan(0)
     })
   })
 
@@ -136,7 +173,10 @@ describe('TrainingHistoryView', () => {
 
   it('paginates jobs at 20 per page', async () => {
     const manyJobs = Array.from({ length: 25 }, (_, i) => ({
-      id: `${i}`, name: `Job ${i}`, status: 'completed', progress: 100,
+      id: `${i}`,
+      name: `Job ${i}`,
+      status: 'completed',
+      progress: 100,
       created_at: `2026-01-${String(15 - (i % 15)).padStart(2, '0')}T10:00:00Z`,
     }))
     mockList.mockResolvedValue(manyJobs as any[])
@@ -165,5 +205,76 @@ describe('TrainingHistoryView', () => {
       expect(screen.getAllByText('Job 1').length).toBeGreaterThan(0)
     })
     expect(screen.queryByText('1–2 of 2')).toBeNull()
+  })
+
+  it('shows Resume only for interrupted/failed jobs', async () => {
+    mockList.mockResolvedValue([JOBS[0], { ...JOBS[1], status: 'interrupted' }] as any[])
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 2').length).toBeGreaterThan(0)
+    })
+    const resumeButtons = screen.getAllByRole('button', { name: 'Resume' })
+    expect(resumeButtons).toHaveLength(1)
+  })
+
+  it('does not show Resume for completed/running jobs', async () => {
+    mockList.mockResolvedValue([JOBS[0], { ...JOBS[1], status: 'running' }] as any[])
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 2').length).toBeGreaterThan(0)
+    })
+    expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull()
+  })
+
+  it('resumes a failed job and fires onRecovered', async () => {
+    mockRecover.mockResolvedValue({
+      status: 'recovered',
+      recovery_job_id: 'recovery_1',
+      message: 'Resumed from checkpoint',
+    })
+    const onRecovered = vi.fn()
+    render(<TrainingHistoryView addToast={mockToast} onRecovered={onRecovered} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 2').length).toBeGreaterThan(0)
+    })
+    await act(async () => {
+      screen.getByRole('button', { name: 'Resume' }).click()
+    })
+    await waitFor(() => {
+      expect(mockRecover).toHaveBeenCalledWith('2')
+      expect(mockToast).toHaveBeenCalledWith('Resumed from checkpoint', 'success')
+      expect(onRecovered).toHaveBeenCalledWith(
+        expect.objectContaining({ recovery_job_id: 'recovery_1' }),
+      )
+    })
+    expect(mockList).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows error toast when resume fails', async () => {
+    mockRecover.mockRejectedValue(new Error('no checkpoint'))
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 2').length).toBeGreaterThan(0)
+    })
+    await act(async () => {
+      screen.getByRole('button', { name: 'Resume' }).click()
+    })
+    await waitFor(() => {
+      expect(mockToast).toHaveBeenCalledWith('Could not resume job: no checkpoint', 'error')
+    })
+  })
+
+  it('disables Resume while a resume is in flight', async () => {
+    mockRecover.mockImplementation(() => new Promise(() => {}))
+    render(<TrainingHistoryView addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getAllByText('Job 2').length).toBeGreaterThan(0)
+    })
+    const btn = screen.getByRole('button', { name: 'Resume' })
+    await act(async () => {
+      btn.click()
+    })
+    expect(screen.getByRole('button', { name: 'Resuming…' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Resuming…' })).toBeDisabled()
   })
 })

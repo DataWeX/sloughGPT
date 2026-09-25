@@ -6,26 +6,44 @@ import { trainingJobsController, type TrainingJob } from '@/lib/training-control
 import { downloadJson } from '@/lib/download-utils'
 import { formatDuration } from '@/lib/formatDuration'
 import { formatDateTimeShort } from '@/lib/time-format'
+import { formatToastError } from '@/lib/error-utils'
 
 interface Props {
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  /** Fired after a successful resume so the host page can refresh KPIs / live poll. */
+  onRecovered?: (result: {
+    status: string
+    original_job_id?: string
+    recovery_job_id?: string
+    checkpoint_path?: string
+    message?: string
+  }) => void
 }
+
+const RESUMABLE = new Set(['interrupted', 'failed'])
 
 function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', status === 'completed' ? 'bg-success/15 text-success' :
-      status === 'running' ? 'bg-warning/15 text-warning' :
-      status === 'failed' ? 'bg-destructive/15 text-destructive' :
-      'bg-muted text-muted-foreground')}>{status}</span>
-  )
+  const tone =
+    status === 'completed'
+      ? 'bg-success/15 text-success'
+      : status === 'running'
+        ? 'bg-warning/15 text-warning'
+        : status === 'failed' || status === 'interrupted'
+          ? 'bg-destructive/15 text-destructive'
+          : 'bg-muted text-muted-foreground'
+  return <span className={cn('text-[10px] px-1.5 py-0.5 rounded font-medium', tone)}>{status}</span>
 }
 
-export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast }: Props) {
+export const TrainingHistoryView = memo(function TrainingHistoryView({
+  addToast,
+  onRecovered,
+}: Props) {
   const [jobs, setJobs] = useState<TrainingJob[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [page, setPage] = useState(0)
+  const [resuming, setResuming] = useState<string | null>(null)
   const PAGE_SIZE = 20
 
   const fetchJobs = useCallback(async () => {
@@ -43,7 +61,7 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
 
   const handleExport = useCallback(() => {
     if (jobs.length === 0) return
-    const exportData = jobs.map(j => ({
+    const exportData = jobs.map((j) => ({
       id: j.id,
       name: j.name,
       status: j.status,
@@ -65,6 +83,23 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
     addToast('Training history exported', 'success')
   }, [jobs, addToast])
 
+  const handleResume = useCallback(
+    async (jobId: string) => {
+      setResuming(jobId)
+      try {
+        const result = await trainingJobsController.recover(jobId)
+        addToast(result.message || 'Resume started', 'success')
+        void fetchJobs()
+        onRecovered?.(result)
+      } catch (e) {
+        addToast(formatToastError(e, 'Could not resume job'), 'error')
+      } finally {
+        setResuming(null)
+      }
+    },
+    [addToast, fetchJobs, onRecovered],
+  )
+
   useEffect(() => {
     let active = true
     const load = async () => {
@@ -82,11 +117,19 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [addToast])
 
-  const filtered = filter === 'all' ? jobs : jobs.filter(j => j.status === filter)
-  const statusCounts = jobs.reduce((acc, j) => { acc[j.status] = (acc[j.status] || 0) + 1; return acc }, {} as Record<string, number>)
+  const filtered = filter === 'all' ? jobs : jobs.filter((j) => j.status === filter)
+  const statusCounts = jobs.reduce(
+    (acc, j) => {
+      acc[j.status] = (acc[j.status] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
 
   return (
     <Card>
@@ -95,9 +138,13 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
           <CardTitle className="text-base">Training History ({jobs.length})</CardTitle>
           <div className="flex items-center gap-1">
             {jobs.length > 0 && (
-              <Button size="sm" variant="ghost" onClick={handleExport}>Export</Button>
+              <Button size="sm" variant="ghost" onClick={handleExport}>
+                Export
+              </Button>
             )}
-            <Button size="sm" variant="ghost" onClick={() => void fetchJobs()}>Refresh</Button>
+            <Button size="sm" variant="ghost" onClick={() => void fetchJobs()}>
+              Refresh
+            </Button>
           </div>
         </div>
       </CardHeader>
@@ -115,18 +162,33 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
         ) : (
           <>
             <div className="flex flex-wrap gap-1">
-              <Button size="sm" variant={filter === 'all' ? 'default' : 'ghost'} onClick={() => { setFilter('all'); setPage(0) }}>
+              <Button
+                size="sm"
+                variant={filter === 'all' ? 'default' : 'ghost'}
+                onClick={() => {
+                  setFilter('all')
+                  setPage(0)
+                }}
+              >
                 All ({jobs.length})
               </Button>
               {Object.entries(statusCounts).map(([status, count]) => (
-                <Button key={status} size="sm" variant={filter === status ? 'default' : 'ghost'} onClick={() => { setFilter(status); setPage(0) }}>
+                <Button
+                  key={status}
+                  size="sm"
+                  variant={filter === status ? 'default' : 'ghost'}
+                  onClick={() => {
+                    setFilter(status)
+                    setPage(0)
+                  }}
+                >
                   {status} ({count})
                 </Button>
               ))}
             </div>
 
             <div className="space-y-1">
-              {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map(job => (
+              {filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((job) => (
                 <div
                   key={job.id}
                   className="rounded border p-2.5 text-xs hover:bg-muted/30 transition-colors cursor-pointer"
@@ -138,7 +200,25 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
                       <span className="truncate font-medium">{job.name || job.id}</span>
                     </div>
                     <div className="flex items-center gap-3 text-muted-foreground shrink-0 ml-2">
-                      {job.method && <span className="text-[10px] bg-muted px-1 py-0.5 rounded">{job.method}</span>}
+                      {RESUMABLE.has(job.status) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-2"
+                          disabled={resuming === job.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void handleResume(job.id)
+                          }}
+                        >
+                          {resuming === job.id ? 'Resuming…' : 'Resume'}
+                        </Button>
+                      )}
+                      {job.method && (
+                        <span className="text-[10px] bg-muted px-1 py-0.5 rounded">
+                          {job.method}
+                        </span>
+                      )}
                       <span>{formatDateTimeShort(job.created_at)}</span>
                     </div>
                   </div>
@@ -147,7 +227,9 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
                     <div className="mt-2 pt-2 border-t border-border/30 grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-muted-foreground">
                       {job.loss != null && <div>Loss: {job.loss.toFixed(4)}</div>}
                       {job.epochs != null && <div>Epochs: {job.epochs}</div>}
-                      {job.elapsed_s != null && <div>Duration: {formatDuration(job.elapsed_s)}</div>}
+                      {job.elapsed_s != null && (
+                        <div>Duration: {formatDuration(job.elapsed_s)}</div>
+                      )}
                       {job.checkpoint && <div>Checkpoint: {job.checkpoint}</div>}
                       {job.dataset && <div>Dataset: {job.dataset}</div>}
                       {job.model && <div>Model: {job.model}</div>}
@@ -160,11 +242,28 @@ export const TrainingHistoryView = memo(function TrainingHistoryView({ addToast 
             {filtered.length > PAGE_SIZE && (
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/30">
                 <span className="text-[10px] text-muted-foreground">
-                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of {filtered.length}
+                  {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, filtered.length)} of{' '}
+                  {filtered.length}
                 </span>
                 <div className="flex gap-1">
-                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={page === 0} onClick={() => setPage(p => p - 1)}>Prev</Button>
-                  <Button size="sm" variant="ghost" className="text-[10px]" disabled={(page + 1) * PAGE_SIZE >= filtered.length} onClick={() => setPage(p => p + 1)}>Next</Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-[10px]"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    Prev
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="text-[10px]"
+                    disabled={(page + 1) * PAGE_SIZE >= filtered.length}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    Next
+                  </Button>
                 </div>
               </div>
             )}

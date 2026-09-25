@@ -1,11 +1,12 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Badge, Chip, Spinner } from '@sloughgpt/strui'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@sloughgpt/strui'
 import type { Soul, Checkpoint } from '@/lib/souls-controller'
+import { formatMonthDay } from '@/lib/time-format'
 
 interface PersonalitiesCardProps {
   souls: Soul[]
@@ -114,12 +115,7 @@ export default function PersonalitiesCard({
                           <SelectItem value="__base__">Switch (base)</SelectItem>
                           {soulCheckpoints.map((cp: Checkpoint) => {
                             const loss = cp.final_train_loss ?? cp.loss
-                            const date = cp.born_at
-                              ? new Date(cp.born_at).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                })
-                              : null
+                            const date = formatMonthDay(cp.born_at, 'en-US') || null
                             const meta = [loss != null ? `loss ${loss.toFixed(2)}` : null, date]
                               .filter(Boolean)
                               .join(' · ')

@@ -147,4 +147,43 @@ class TestCheckpointReadSideRepair:
 
         fp = self._write_soul(tmp_path, soul_name="ok", born_at="2026-09-24T09:47:33Z")
         row = _load_soul_from_path(fp)
-        assert row["born_at"] == "2026-09-24T09:47:33.000000Z"
+        assert row["born_at"] == "2026-09-24T09:47:33Z"
+
+    def test_date_only_born_at_preserved(self, tmp_path):
+        from domain.training._internal.checkpoints import _load_soul_from_path
+
+        fp = self._write_soul(tmp_path, soul_name="dateonly", born_at="2024-06-01")
+        row = _load_soul_from_path(fp)
+        assert row["born_at"] == "2024-06-01"
+
+
+class TestRepairIso:
+    """repair_iso rewrites only timestamps JS cannot parse."""
+
+    def test_repairs_duplicate_z(self):
+        from domain.shared import repair_iso
+
+        assert repair_iso("2026-09-24T08:48:15.788175+00:00Z") == "2026-09-24T08:48:15.788175Z"
+        assert repair_iso("2026-09-24T10:00:00-05:00Z") == "2026-09-24T15:00:00.000000Z"
+
+    def test_leaves_valid_values_verbatim(self):
+        from domain.shared import repair_iso
+
+        assert repair_iso("2026-09-24T09:47:33.835728Z") == "2026-09-24T09:47:33.835728Z"
+        assert repair_iso("2026-09-24T09:47:33Z") == "2026-09-24T09:47:33Z"
+        assert repair_iso("2024-06-01") == "2024-06-01"
+
+    def test_leaves_non_strings_untouched(self):
+        from domain.shared import repair_iso
+
+        assert repair_iso(None) is None
+        assert repair_iso("") == ""
+        assert repair_iso(12345) == 12345
+        assert repair_iso("Invalid Date") == "Invalid Date"
+        assert repair_iso("yesterday") == "yesterday"
+
+    def test_exported_from_package_surface(self):
+        from domain.shared import repair_iso
+        from domain.shared._internal.utils import repair_iso as facade_repair
+
+        assert repair_iso is facade_repair
