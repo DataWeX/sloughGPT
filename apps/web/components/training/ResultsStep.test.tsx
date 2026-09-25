@@ -6,6 +6,19 @@ import React from 'react'
 import { ResultsStep } from './ResultsStep'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 
+vi.mock('@/lib/training-controller', () => ({
+  trainingJobsController: {
+    recover: vi.fn().mockResolvedValue({
+      status: 'recovering',
+      recovery_job_id: 'recovery_j4',
+      original_job_id: 'j4',
+      message: 'Resumed recovery_j4 from checkpoint',
+    }),
+  },
+}))
+
+import { trainingJobsController } from '@/lib/training-controller'
+
 const emptyCheckpoints: UseTrainingCheckpointsReturn = {
   checkpoints: [],
   loadingCheckpoints: false,
@@ -51,6 +64,19 @@ const checkpointsWithJobs: UseTrainingCheckpointsReturn = {
       created_at: '2026-01-02T00:00:00Z',
     },
     { id: 'j3', name: 'job-c', status: 'failed', progress: 0, created_at: '2026-01-03T00:00:00Z' },
+  ],
+}
+
+const checkpointsWithInterrupted: UseTrainingCheckpointsReturn = {
+  ...emptyCheckpoints,
+  jobs: [
+    {
+      id: 'j4',
+      name: 'job-d',
+      status: 'interrupted',
+      progress: 42,
+      created_at: '2026-01-04T00:00:00Z',
+    },
   ],
 }
 
@@ -192,5 +218,56 @@ describe('ResultsStep', () => {
     renderStep({ ...checkpointsWithData, handleLoadCheckpoint }, addToast)
     screen.getAllByText('Load')[0].click()
     expect(handleLoadCheckpoint).toHaveBeenCalledWith('cp-1', addToast)
+  })
+
+  it('includes interrupted jobs in Recent runs with Interrupted badge', () => {
+    renderStep(checkpointsWithInterrupted)
+    expect(screen.getByText('Recent runs')).toBeDefined()
+    expect(screen.getByText('job-d')).toBeDefined()
+    expect(screen.getByText('Interrupted')).toBeDefined()
+  })
+
+  it('shows Resume for interrupted jobs and calls recover + onRecovered', async () => {
+    const addToast = vi.fn()
+    const onRecovered = vi.fn()
+    render(
+      <ResultsStep
+        checkpoints={checkpointsWithInterrupted}
+        goToTrain={vi.fn()}
+        onTest={vi.fn()}
+        addToast={addToast}
+        onRecovered={onRecovered}
+      />,
+    )
+    const resume = screen.getByRole('button', { name: 'Resume' })
+    resume.click()
+    await vi.waitFor(() => {
+      expect(trainingJobsController.recover).toHaveBeenCalledWith('j4')
+      expect(onRecovered).toHaveBeenCalled()
+    })
+    expect(addToast).toHaveBeenCalledWith(expect.stringContaining('recovery_j4'), 'success')
+  })
+
+  it('surfaces the backend reason when resume fails', async () => {
+    const addToast = vi.fn()
+    vi.mocked(trainingJobsController.recover).mockRejectedValueOnce(
+      new Error('No dataset recorded for this job.'),
+    )
+    render(
+      <ResultsStep
+        checkpoints={checkpointsWithInterrupted}
+        goToTrain={vi.fn()}
+        onTest={vi.fn()}
+        addToast={addToast}
+        onRecovered={vi.fn()}
+      />,
+    )
+    screen.getByRole('button', { name: 'Resume' }).click()
+    await vi.waitFor(() => {
+      expect(addToast).toHaveBeenCalledWith(
+        'Could not resume job: No dataset recorded for this job.',
+        'error',
+      )
+    })
   })
 })
