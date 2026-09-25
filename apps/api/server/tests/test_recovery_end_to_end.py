@@ -16,6 +16,7 @@ sync executor. This file pins the wiring the UI actually depends on:
 from __future__ import annotations
 
 import importlib
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi import FastAPI
@@ -140,3 +141,38 @@ def test_abandon_unknown_job_404s(store):
     resp = client.delete("/recovery/abandon/does-not-exist")
 
     assert resp.status_code == 404
+
+
+def _iso(delta_seconds: float) -> str:
+    """Heartbeat string the store writes, ``delta_seconds`` in the past."""
+    return (datetime.now(UTC) - timedelta(seconds=delta_seconds)).isoformat().replace("+00:00", "Z")
+
+
+def test_stats_count_matches_the_list_it_describes(store, tmp_path):
+    """/recovery/stats feeds the KPI and /recovery/recoverable feeds the list."""
+    live = tmp_path / "corpus.txt"
+    live.write_text("hello world\n" * 10, encoding="utf-8")
+    _seed(store, "ok", data_path=str(live))
+    _seed(store, "stale", data_path="")
+    _seed(store, "gone", data_path=str(tmp_path / "deleted.txt"))
+
+    stats = client.get("/recovery/stats").json()
+    listed = client.get("/recovery/recoverable").json()
+
+    assert stats["recoverable_jobs"] == listed["count"] == 1
+    assert [job["id"] for job in listed["jobs"]] == ["ok"]
+
+
+def test_check_reports_only_stale_active_jobs(store):
+    store.create("stale", "run", {}, "corpus")
+    store.update("stale", status="running", last_heartbeat=_iso(600))
+    store.create("fresh", "run", {}, "corpus")
+    store.update("fresh", status="running", last_heartbeat=_iso(1))
+
+    resp = client.get("/recovery/check?timeout_seconds=300")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["detected_crashes"] == 1
+    assert [job["id"] for job in body["jobs"]] == ["stale"]
+    assert body["message"] == "Found 1 potentially crashed job(s)"
