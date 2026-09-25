@@ -35,7 +35,9 @@ Deployment assets live under **`infra/`** (Docker, Kubernetes, Helm, etc.).
 
 ### Current state
 
-Two importable trees coexist:
+**The plural tree is gone.** `packages/core-py/domains/` was deleted (297 files) after the Phase A retarget pass (120 files, zero remaining `domains.*` imports). The ~27 real plural-only assets were re-homed into `domain/` (gpu C sources + shaders, pugqeep docs, shell `bios.asm`, inference `SPEC.md`); everything else was a shim. The census below is retained as the pre-deletion historical record.
+
+Historical snapshot when the trees coexisted:
 
 | Tree                    | Path                        | Import name | Role                                                                 |
 | ----------------------- | --------------------------- | ----------- | -------------------------------------------------------------------- |
@@ -78,3 +80,16 @@ Step 4 says to drop `domains*` from packaging `include`. Today nothing publishes
 `domain` is importable only because the repo root is on `sys.path`. Add the
 `domain` mapping to `package_dir` before deleting the plural tree —
 `DOMAIN_CONSOLIDATION.md` §5.
+
+## Post-port status (feat/domain-port, 2026-10-11)
+
+The dual-tree plan above was executed on this branch by porting the settled
+migration from `main` (commits `6dfd4f857`..`8e1a0c75c`): remaining plural real
+code migrated into `domain/`, `domains.*` imports/patches retargeted to
+`domain.*`, and `packages/core-py/domains/` deleted — with ONE deliberate
+exception: `packages/core-py/domains/infrastructure/pugqeep/` stays in place
+(real code, including in-flight work by another session; its engine launches
+`python -m domains.infrastructure.pugqeep.exec_worker`). It remains reachable
+via `domains.infrastructure.pugqeep` and the `domain.\u2026_internal.pugqeep`
+forward shims.
+

@@ -57,12 +57,12 @@ def test_inference_exposes_public_facades_over_its_instance() -> None:
 TESTS_DIR = Path(__file__).resolve().parents[2] / "apps" / "api" / "server" / "tests"
 
 # Legacy patch debt: ``patch("domains.<...>")`` targets that never take effect.
-# Production code resolves state through the ``domain.*`` shims or the canonical
-# ``domain.*._internal`` modules — never through the legacy ``domains.*``
-# namespace (the 49 shims are its only importers). A patch aimed at
-# ``domains.*`` therefore patches an object nothing binds, so the mock is inert
-# and the test passes vacuously. This is the recurring bug class fixed in
-# output_buffer / event_buffer / SLNCCompiler wiring.
+# Production code resolves state through the canonical ``domain.*`` /
+# ``domain.*._internal`` modules; the legacy ``domains`` namespace was deleted
+# in step 4 (2026-09-25), so a patch aimed at ``domains.*`` patches an object
+# nothing can import — the mock is inert and the test passes vacuously. This
+# is the recurring bug class fixed in output_buffer / event_buffer /
+# SLNCCompiler wiring.
 #
 # Each entry is ``<file>|<patch target>``. The contract only allows the set to
 # SHRINK (zero new inert patches); every line here is an entry to re-point at
@@ -74,9 +74,9 @@ _LEGACY_PATCH_TARGETS: frozenset[str] = frozenset()
 def test_no_new_legacy_domains_patch_targets() -> None:
     """Mock targets must bind the module the router actually resolves.
 
-    ``patch("domains.*")`` patches the legacy namespace that only the shims
-    import from, so the mock never intercepts the router's binding. The pinned
-    baseline below may only shrink; adding a target is a contract violation.
+    ``patch("domains.*")`` patches the legacy namespace (deleted in step 4),
+    so the mock never intercepts the router's binding. The pinned baseline
+    below may only shrink; adding a target is a contract violation.
     """
     targets = {
         f"{py.name}|{re.sub(r'patch\(\s*"', 'patch("', t)}"

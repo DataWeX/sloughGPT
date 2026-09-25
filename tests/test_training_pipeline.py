@@ -13,10 +13,9 @@ from pathlib import Path
 def load_module():
     path = (
         Path(__file__).resolve().parents[1]
-        / "packages"
-        / "core-py"
-        / "domains"
+        / "domain"
         / "infrastructure"
+        / "_internal"
         / "training_pipeline.py"
     )
     spec = spec_from_file_location("training_pipeline", path)
