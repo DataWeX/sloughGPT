@@ -161,4 +161,32 @@ describe('Dialog', () => {
     fireEvent.click(custom)
     expect(screen.getByRole('dialog')).toBeTruthy()
   })
+
+  it('portals content to document.body instead of the trigger tree', () => {
+    renderDialog()
+    fireEvent.click(screen.getByTestId('trigger'))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.parentElement).toBe(document.body)
+    expect(dialog.parentElement).not.toBe(screen.getByTestId('trigger').parentElement)
+  })
+
+  it('moves focus into the dialog after the portal mounts', () => {
+    renderDialog()
+    fireEvent.click(screen.getByTestId('trigger'))
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.contains(document.activeElement)).toBe(true)
+  })
+
+  it('restores focus to the trigger when closed', () => {
+    renderDialog()
+    const trigger = screen.getByTestId('trigger')
+    // jsdom does not focus on synthetic click, so focus it like a real browser would
+    trigger.focus()
+    fireEvent.click(trigger)
+    expect(document.activeElement).not.toBe(trigger)
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(trigger)
+  })
 })
