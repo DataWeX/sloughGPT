@@ -780,6 +780,26 @@ async def _build_context_frame(
     return frame, context_info
 
 
+def _consciousness_post_process(user_msg: str, full_response: str) -> dict[str, Any]:
+    """Level-gated consciousness post-processing for one chat response.
+
+    Returns {"narrative": str, "level": int}; empty narrative means nothing
+    to surface. Best-effort: any failure disables the event for this turn.
+    """
+    try:
+        from domain.core import get_consciousness
+
+        _ce = get_consciousness()
+        if not _ce.config.is_enabled():
+            return {"narrative": "", "level": 0}
+        narrative = _ce.process(user_msg or "", full_response)
+        _ce.save()
+        return {"narrative": narrative or "", "level": _ce.config.level}
+    except Exception as e:
+        logger.debug("Consciousness post-processing skipped: %s", e)
+        return {"narrative": "", "level": 0}
+
+
 def _run_post_gen_tasks(
     full_response: str,
     user_msg: str,
@@ -791,8 +811,12 @@ def _run_post_gen_tasks(
     bg_tasks: Any,
     bg_tasks_discard: Any,
     corr_id: str,
-) -> None:
-    """Launch fire-and-forget background tasks after chat generation completes."""
+) -> dict[str, Any]:
+    """Launch fire-and-forget background tasks after chat generation completes.
+
+    Returns the consciousness post-process result for the caller to surface
+    as a CONSCIOUSNESS SSE event.
+    """
     import state as _pgs_state
 
     from domain.core import get_rag_service as _pgs_rag
@@ -903,16 +927,8 @@ def _run_post_gen_tasks(
     except Exception as e:
         logger.warning("Entity extraction failed: %s", e)
 
-    # Consciousness post-processing
-    try:
-        from domain.core import get_consciousness as _pgs_ce
-
-        _ce = _pgs_ce()
-        if _ce.config.is_enabled():
-            _ce.process(user_msg or "", full_response)
-            _ce.save()
-    except Exception as e:
-        logger.debug("Consciousness post-processing skipped: %s", e)
+    # Consciousness post-processing (narrative surfaced by the caller)
+    return _consciousness_post_process(user_msg, full_response)
 
 
 class InferenceRouter:
@@ -2726,7 +2742,7 @@ class InferenceRouter:
                         extra={"tag": "INF"},
                     )
 
-                _run_post_gen_tasks(
+                _consciousness_result = _run_post_gen_tasks(
                     full_response,
                     user_msg or "",
                     session_id,
@@ -2738,6 +2754,18 @@ class InferenceRouter:
                     self._bg_tasks_lock_discard,
                     corr_id,
                 )
+
+                if _consciousness_result.get("narrative"):
+                    yield _sse_event(
+                        "chat",
+                        "CONSCIOUSNESS",
+                        "complete",
+                        data={
+                            "level": _consciousness_result["level"],
+                            "self_insight": _consciousness_result["narrative"],
+                        },
+                        message="Reflection updated",
+                    )
 
                 _memory_stored = False
                 _memory_fact = None
