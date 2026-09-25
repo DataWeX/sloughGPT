@@ -116,3 +116,27 @@ def test_recoverable_agrees_with_the_summary_flag(store, tmp_path):
 
     assert offered == {"ok"}
     assert summary_flags == {"ok": True}
+
+
+def test_abandon_marks_the_row_and_takes_it_off_the_list(store, tmp_path):
+    live = tmp_path / "corpus.txt"
+    live.write_text("hello world\n" * 10, encoding="utf-8")
+    _seed(store, "ok", data_path=str(live))
+    assert client.get("/recovery/recoverable").json()["count"] == 1
+
+    resp = client.delete("/recovery/abandon/ok")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "status": "abandoned",
+        "job_id": "ok",
+        "message": "Job marked as abandoned",
+    }
+    assert store.get("ok")["status"] == "abandoned"
+    assert client.get("/recovery/recoverable").json()["count"] == 0
+
+
+def test_abandon_unknown_job_404s(store):
+    resp = client.delete("/recovery/abandon/does-not-exist")
+
+    assert resp.status_code == 404
