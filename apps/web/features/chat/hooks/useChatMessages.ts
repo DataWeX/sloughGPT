@@ -22,7 +22,7 @@ import { chatController } from '@/lib/chat-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { multimodalController, type MultimodalCapabilities } from '@/lib/multimodal-controller'
 import { chatDB } from '@/lib/db'
-import { useErrorStore } from '@/lib/error-store'
+import { useErrorStore, addGlobalError } from '@/lib/error-store'
 import type { SoulNetWebGPU, SoulTransformerWebGPU } from '@/lib/soulnet-webgpu'
 import type { AgentDef } from '@/lib/agents'
 import type { Soul } from '@/lib/souls-controller'
@@ -657,7 +657,9 @@ export function useChatMessages(config: ChatMessagesConfig) {
           .replace(/[^\w\s-]/g, '')
           .trim()
         if (title.length > 5) {
-          sessions.renameSession(sessionIdRef.current!, title)
+          sessions
+            .renameSession(sessionIdRef.current!, title, { silent: true })
+            .catch((err) => addGlobalError(err, 'Chat:AutoRename'))
         }
       }
 

@@ -21,7 +21,15 @@ vi.mock('@sloughgpt/strui', () => ({
   IconCopy: () => <span data-testid="icon-copy">copy</span>,
   IconCheck: () => <span data-testid="icon-check">check</span>,
   Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
-    <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
+    <button
+      onClick={onClick}
+      className={className}
+      data-variant={variant}
+      data-size={size}
+      {...rest}
+    >
+      {children}
+    </button>
   ),
 }))
 
@@ -73,9 +81,20 @@ vi.mock('@/features/chat/contexts/ChatContext', () => ({
 import { ChatToolPanel } from './ChatToolPanel'
 
 const defaultCtx = {
-  health: { status: 'healthy', model_loaded: true, model_type: 'gpt2', uptime_seconds: 100,
-    request_count: 10, error_count: 0, inference_count: 5, total_tokens: 1000,
-    tokens_per_sec: 10, avg_tokens_per_request: 200, avg_latency_ms: 100, requests_per_minute: 5 },
+  health: {
+    status: 'healthy',
+    model_loaded: true,
+    model_type: 'gpt2',
+    uptime_seconds: 100,
+    request_count: 10,
+    error_count: 0,
+    inference_count: 5,
+    total_tokens: 1000,
+    tokens_per_sec: 10,
+    avg_tokens_per_request: 200,
+    avg_latency_ms: 100,
+    requests_per_minute: 5,
+  },
   refreshHealth: vi.fn(),
   model: 'gpt2',
   setModel: vi.fn(),
@@ -135,7 +154,17 @@ describe('ChatToolPanel', () => {
     const { container } = render(<ChatToolPanel open={false} onClose={onClose} sessionId="s1" />)
     const panel = container.querySelector('#chat-tool-panel')
     expect(panel?.className).toContain('w-0')
+    expect(panel?.className).toContain('border-l-0')
+    expect(panel?.className).not.toContain('border-l ')
     expect(screen.queryByText('Tools')).toBeNull()
+  })
+
+  it('paints left border only when open', () => {
+    const { container } = render(<ChatToolPanel open={true} onClose={onClose} sessionId="s1" />)
+    const panel = container.querySelector('#chat-tool-panel')
+    expect(panel?.className).toContain('w-[var(--tool-panel-width)]')
+    expect(panel?.className).not.toContain('border-l-0')
+    expect(panel?.className).toContain('border-l')
   })
 
   it('switches to vision mode when eye icon clicked', () => {
@@ -168,7 +197,9 @@ describe('ChatToolPanel', () => {
   it('calls onOpenSettings from footer', () => {
     render(<ChatToolPanel open={true} onClose={onClose} sessionId="s1" />)
     const settingsBtns = screen.getAllByText('Settings')
-    const footerBtn = settingsBtns.find(b => b.closest('[id="chat-tool-panel"]')?.querySelector('[data-testid="icon-settings"]'))
+    const footerBtn = settingsBtns.find((b) =>
+      b.closest('[id="chat-tool-panel"]')?.querySelector('[data-testid="icon-settings"]'),
+    )
     fireEvent.click(footerBtn!)
     expect(defaultCtx.onOpenSettings).toHaveBeenCalled()
   })

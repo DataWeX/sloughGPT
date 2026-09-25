@@ -109,6 +109,34 @@ class JobStore:
         """Convert a stored MogDB document to the job dict returned to callers."""
         return {k: v for k, v in doc.items() if k not in ("_id", "_created", "_updated")}
 
+    @staticmethod
+    def store_row_to_job(row: dict[str, Any]) -> dict[str, Any]:
+        """Map a durable store row to the in-memory job dict shape.
+
+        Store columns are ``checkpoint_path`` / ``total_epochs`` / nested
+        ``config.model``; the API and UI read ``checkpoint`` / ``epochs`` /
+        top-level ``model``. Without this, a job that left the live dict
+        (auto-purge after 1h, or a restart-seeded row never re-hydrated)
+        serializes with missing checkpoint/model/epochs — Resume and history
+        detail break for exactly the jobs that need them.
+
+        Side effects:
+            - None; returns a shallow-copied dict with API field aliases filled.
+        """
+        out = JobStore._doc_to_job(row)
+        config = out.get("config") if isinstance(out.get("config"), dict) else {}
+        if not out.get("checkpoint"):
+            out["checkpoint"] = out.get("checkpoint_path") or ""
+        if out.get("epochs") is None:
+            out["epochs"] = out.get("total_epochs")
+        if not out.get("model"):
+            out["model"] = (config or {}).get("model") or "sloughgpt"
+        if not out.get("method") and config:
+            out["method"] = config.get("method")
+        if out.get("checkpoint_path") is None and out.get("checkpoint"):
+            out["checkpoint_path"] = out["checkpoint"]
+        return out
+
     def create(
         self,
         job_id: str,
@@ -133,7 +161,7 @@ class JobStore:
         if not self.is_available:
             return None
         doc = self._jobs.find_one({"_id": job_id})
-        return self._doc_to_job(doc) if doc else None
+        return self.store_row_to_job(doc) if doc else None
 
     def list(
         self,
@@ -153,7 +181,7 @@ class JobStore:
             query["user_id"] = user_id
 
         docs = self._jobs.find(query, sort=[("created_at", -1)])
-        return [self._doc_to_job(d) for d in docs]
+        return [self.store_row_to_job(d) for d in docs]
 
     def list_by_workspace(self, workspace_id: str, status: str | None = None) -> list[dict]:
         """List jobs for a workspace."""
@@ -163,7 +191,7 @@ class JobStore:
         if status:
             query["status"] = status
         docs = self._jobs.find(query, sort=[("created_at", -1)])
-        return [self._doc_to_job(d) for d in docs]
+        return [self.store_row_to_job(d) for d in docs]
 
     def update(self, job_id: str, **kwargs) -> dict | None:
         """Update job fields."""
@@ -282,7 +310,7 @@ class JobStore:
                 "last_heartbeat": {"$lt": cutoff},
             }
         )
-        return [self._doc_to_job(d) for d in docs]
+        return [self.store_row_to_job(d) for d in docs]
 
     def get_recoverable_jobs(self) -> builtins.list[dict]:
         """Get jobs that can be recovered.
@@ -312,7 +340,7 @@ class JobStore:
 
         eligible = []
         for doc in recoverable:
-            job = self._doc_to_job(doc)
+            job = self.store_row_to_job(doc)
             if recovery_incompatibility(job) is None:
                 eligible.append(job)
         return eligible
@@ -440,6 +468,7 @@ class PersistentTrainingJobs:
             return self._live[key]
         store = self._store()
         if store:
+            # get() already maps store rows to the API job shape.
             doc = store.get(key)
             if doc is not None:
                 self._live[key] = doc
@@ -447,6 +476,10 @@ class PersistentTrainingJobs:
         return self._fallback[key]
 
     def __setitem__(self, key: str, value: dict[str, Any]) -> None:
+        # Most job-creation paths never set created_at; stamp it here so every
+        # job registered through training_jobs[id] = {...} has a timestamp.
+        if not value.get("created_at"):
+            value["created_at"] = datetime.now().isoformat()
         self._live[key] = value
         self._persist(key, value)
 
@@ -495,9 +528,20 @@ class PersistentTrainingJobs:
             raise KeyError(key)
         return self._fallback.pop(key, *args)
 
+    def discard_live(self, key: str) -> None:
+        """Drop a process-local live entry without touching the durable store.
+
+        Used by list auto-purge so finished jobs leave the in-memory hot path
+        while JobStore keeps history for restart / resume UI.
+        """
+        self._live.pop(key, None)
+        self._fallback.pop(key, None)
+
     def values(self):
         # Live objects win: in-place progress/status mutations between
         # persists must be visible to polling readers in the same process.
+        # Store rows are mapped to the API job shape so a job that left the
+        # live dict still exposes checkpoint/model/epochs after auto-purge.
         store = self._store()
         if store:
             merged = {j["id"]: j for j in store.list()}

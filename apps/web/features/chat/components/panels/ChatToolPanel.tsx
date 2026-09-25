@@ -3,7 +3,17 @@
 import { useState, memo } from 'react'
 
 import { cn, Button } from '@sloughgpt/strui'
-import { IconX, IconEye, IconSettings, IconDocument, IconSparkle, IconCode, IconBolt, IconChart, IconDownload } from '@sloughgpt/strui'
+import {
+  IconX,
+  IconEye,
+  IconSettings,
+  IconDocument,
+  IconSparkle,
+  IconCode,
+  IconBolt,
+  IconChart,
+  IconDownload,
+} from '@sloughgpt/strui'
 import { useChatContext } from '@/features/chat/contexts/ChatContext'
 import { SectionErrorBoundary } from '@/components/SectionErrorBoundary'
 import { KnowledgeTab } from './KnowledgeTab'
@@ -28,7 +38,15 @@ interface ChatToolPanelProps {
   messages?: import('@/lib/chat-utils').ChatMessage[]
 }
 
-export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessionId, bookmarks = [], onRemoveBookmark, onClearBookmarks, messages = [] }: ChatToolPanelProps) {
+export const ChatToolPanel = memo(function ChatToolPanel({
+  open,
+  onClose,
+  sessionId,
+  bookmarks = [],
+  onRemoveBookmark,
+  onClearBookmarks,
+  messages = [],
+}: ChatToolPanelProps) {
   const [showVision, setShowVision] = useState(false)
   const ctx = useChatContext()
 
@@ -36,8 +54,10 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
     <div
       id="chat-tool-panel"
       className={cn(
-        'border-l border-border/50 bg-background overflow-hidden transition-all duration-200 flex flex-col shrink-0 min-h-0',
-        open ? 'w-[var(--tool-panel-width)] min-w-[var(--tool-panel-width)]' : 'w-0 min-w-0',
+        'bg-background overflow-hidden transition-all duration-200 flex flex-col shrink-0 min-h-0',
+        open
+          ? 'border-l border-border/50 w-[var(--tool-panel-width)] min-w-[var(--tool-panel-width)]'
+          : 'border-l-0 w-0 min-w-0',
       )}
     >
       {open && (
@@ -60,7 +80,13 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
               >
                 <IconEye className="h-3.5 w-3.5" />
               </button>
-              <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose} aria-label="Close tools panel">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onClick={onClose}
+                aria-label="Close tools panel"
+              >
                 <IconX className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -76,7 +102,9 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 visionVocabSize={ctx.visionVocabSize}
                 sessionId={sessionId}
                 onGeneratedImage={(dataUrl, prompt) => {
-                  const event = new CustomEvent('insert-generated-image', { detail: { dataUrl, prompt } })
+                  const event = new CustomEvent('insert-generated-image', {
+                    detail: { dataUrl, prompt },
+                  })
                   window.dispatchEvent(event)
                 }}
               />
@@ -86,7 +114,9 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 <section aria-label="Knowledge">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Knowledge</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Knowledge
+                    </span>
                   </div>
                   <SectionErrorBoundary sectionName="Knowledge">
                     <KnowledgeTab
@@ -99,7 +129,9 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 <section aria-label="Memory">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconSparkle className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Memory</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Memory
+                    </span>
                   </div>
                   <SectionErrorBoundary sectionName="Memory">
                     <MemoryTab />
@@ -108,7 +140,9 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 <section aria-label="Context">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconCode className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Context</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Context
+                    </span>
                   </div>
                   <SectionErrorBoundary sectionName="Context">
                     <ContextTab />
@@ -117,7 +151,9 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 <section aria-label="Quick Prompts">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconBolt className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Quick Prompts</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Quick Prompts
+                    </span>
                   </div>
                   <SectionErrorBoundary sectionName="Quick Prompts">
                     <QuickPrompts onUsePrompt={(text) => ctx.setInput(text)} />
@@ -126,7 +162,9 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 <section aria-label="Summary">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDocument className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Summary</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Summary
+                    </span>
                   </div>
                   <SectionErrorBoundary sectionName="Summary">
                     <ConversationSummary messages={messages} />
@@ -135,7 +173,9 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 <section aria-label="Statistics">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconChart className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Statistics</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Statistics
+                    </span>
                   </div>
                   <SectionErrorBoundary sectionName="Statistics">
                     <ConversationStats messages={messages} />
@@ -144,14 +184,18 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
                 <section aria-label="Export">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconDownload className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Export</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Export
+                    </span>
                   </div>
                   <ConversationExport messages={messages} model={ctx.model} />
                 </section>
                 <section aria-label="Analytics">
                   <div className="flex items-center gap-1.5 mb-2">
                     <IconChart className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Analytics</span>
+                    <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                      Analytics
+                    </span>
                   </div>
                   <ChatAnalytics />
                 </section>
@@ -172,15 +216,30 @@ export const ChatToolPanel = memo(function ChatToolPanel({ open, onClose, sessio
 
           {/* ── Footer actions ── */}
           <div className="border-t border-border/50 p-2 flex gap-1 shrink-0">
-            <Button variant="ghost" size="sm" className="text-[10px] h-7 flex-1" onClick={ctx.onOpenConversationViewer}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-[10px] h-7 flex-1"
+              onClick={ctx.onOpenConversationViewer}
+            >
               <IconEye className="h-3 w-3 mr-1" />
               Log
             </Button>
-            <Button variant="ghost" size="sm" className="text-[10px] h-7 flex-1" onClick={ctx.onOpenSettings}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-[10px] h-7 flex-1"
+              onClick={ctx.onOpenSettings}
+            >
               <IconSettings className="h-3 w-3 mr-1" />
               Settings
             </Button>
-            <Button variant="ghost" size="sm" className="text-[10px] h-7 flex-1" onClick={ctx.onOpenShortcuts}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-[10px] h-7 flex-1"
+              onClick={ctx.onOpenShortcuts}
+            >
               <IconBolt className="h-3 w-3 mr-1" />
               Keys
             </Button>

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useCallback, useMemo, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { soulsController, multimodalController, modelController } from '@/lib/controllers'
@@ -11,6 +11,7 @@ import { useChatVision } from '@/features/chat/hooks/useChatVision'
 import { useChatAgents } from '@/features/chat/hooks/useChatAgents'
 import type { AgentDef } from '@/lib/agents'
 import { extractErrorMessage, formatToastError } from '@/lib/error-utils'
+import { addGlobalError } from '@/lib/error-store'
 import { PDF_ANALYSIS_MAX_TOKENS } from '@/lib/format-bytes'
 import { useChatLocalEngine } from '@/features/chat/hooks/useChatLocalEngine'
 import { useChatModelSettings } from '@/features/chat/hooks/useChatModelSettings'
@@ -176,7 +177,8 @@ export function useChatPageController(
       const name = prompt('Rename conversation:')
       if (name && name.trim()) {
         const sid = chat.sessionIdRef.current
-        if (sid) chat.renameSession(sid, name.trim())
+        if (sid)
+          chat.renameSession(sid, name.trim()).catch((err) => addGlobalError(err, 'Chat:Rename'))
         showToast(`Renamed to "${name.trim()}"`, 'success')
       }
     },
@@ -362,7 +364,7 @@ export function useChatPageController(
         },
         renameConversation: (name: string) => {
           const sid = chat.sessionIdRef.current
-          if (sid) chat.renameSession(sid, name)
+          if (sid) chat.renameSession(sid, name).catch((err) => addGlobalError(err, 'Chat:Rename'))
         },
         searchConversations: (query: string) => {
           ui.setShowConversationSearch(true)

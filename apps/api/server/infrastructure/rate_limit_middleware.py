@@ -7,6 +7,8 @@ BaseHTTPMiddleware, JSONResponse 429, header injection.
 Supports per-workspace rate limiting when auth is enabled.
 """
 
+from __future__ import annotations
+
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -93,8 +95,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._global_limiter = RateLimiter(max_requests, window_seconds)
         self._local_global_limiter = RateLimiter(max_requests * 10, window_seconds)
         self._route_limiters: dict[str, RateLimiter] = {}
+        # Localhost (dev) gets 10x on route limits too — matches the docstring;
+        # without it, dev polling of /models/ and /training/checkpoints (30/60)
+        # trips429s that production never sees.
+        self._route_limiters_local: dict[str, RateLimiter] = {}
         for prefix, (limit, window) in _ROUTE_LIMITS.items():
             self._route_limiters[prefix] = RateLimiter(limit, window)
+            self._route_limiters_local[prefix] = RateLimiter(limit * 10, window)
         # Per-workspace limiters: workspace_id -> RateLimiter
         self._workspace_limiters: dict[str, RateLimiter] = {}
 
@@ -139,9 +146,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Check route-specific limit first (stricter)
         route_prefix, route_limiter = self._match_route(path)
         if route_limiter is not None:
+            if is_local:
+                route_limiter = self._route_limiters_local[route_prefix]
             allowed, remaining = route_limiter.check(f"{client_ip}:{route_prefix}")
             if not allowed:
-                route_limit = _ROUTE_LIMITS[route_prefix][0]
+                route_limit = _ROUTE_LIMITS[route_prefix][0] * (10 if is_local else 1)
                 route_window = _ROUTE_LIMITS[route_prefix][1]
                 return JSONResponse(
                     status_code=429,

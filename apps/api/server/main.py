@@ -284,6 +284,9 @@ except Exception as exc:
     logger.warning("AuthMiddleware skipped: %s", exc, extra={"op": "infra.startup"})
 
 # CORS must be outermost — added after all other middleware so it wraps them.
+# expose_headers: without these, cross-origin JS (3000 → 8000) cannot read
+# Retry-After / rate-limit headers, so429 retries fire at 500ms instead of
+# honoring Retry-After: 60 and hammer the limiters.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get(
@@ -292,6 +295,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[
+        "Retry-After",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Reset",
+        "X-Request-ID",
+        "Content-Disposition",
+    ],
 )
 
 # Register health/status routes IMMEDIATELY — before lifespan runs.
