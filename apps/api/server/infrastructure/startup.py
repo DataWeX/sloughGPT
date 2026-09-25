@@ -31,6 +31,20 @@ from config import ServerConfig
 
 logger = logging.getLogger("slo.startup")
 
+
+def _advance_startup_phase(**fields: object) -> None:
+    """Advance STARTUP_PHASE unless the app already reported ready.
+
+    The staged BACKGROUND stage re-enters ``_phase3_wandb`` and
+    ``_phase4_multimodal`` after the terminal ``running``/``ready`` update.
+    Unconditional phase writes there regress the phase (9/9 -> 6/9) and pin
+    ``/health/ready``'s ``app_lifecycle`` at "starting" forever.
+    """
+    if STARTUP_PHASE.get("phase") in ("running", "ready"):
+        return
+    STARTUP_PHASE.update(fields)
+
+
 # Timeout constants for startup/shutdown hooks (seconds)
 _TIMEOUT_TASK_QUEUE = 10.0
 _TIMEOUT_CONFIG = 5.0
@@ -670,7 +684,7 @@ class StartupOrchestrator:
 
         Enable with SLO_WANDB=1 environment variable.
         """
-        STARTUP_PHASE.update(
+        _advance_startup_phase(
             phase="wandb_server", step=5, total=9, message="W&B: disabled by default"
         )
         enabled = os.environ.get("SLO_WANDB", "").lower() in ("1", "true", "yes")
@@ -718,7 +732,7 @@ class StartupOrchestrator:
         The multimodal engine (VisionCNN + models) is loaded on first use
         via the /multimodal/* endpoints, not at server startup.
         """
-        STARTUP_PHASE.update(
+        _advance_startup_phase(
             phase="multimodal", step=6, total=9, message="Multimodal: lazy-load enabled"
         )
         logger.info(
