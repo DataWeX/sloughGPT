@@ -8,16 +8,37 @@ Chat inference lives in chat.py.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 logger = logging.getLogger(__name__)
+
+
+def _sse_error_response(error: str, code: str, http_status: int) -> StreamingResponse:
+    """Single SSE error event for the regenerate stream (infer.py envelope shape)."""
+    payload = json.dumps(
+        {
+            "stream": "chat",
+            "phase": "REGENERATE",
+            "status": "error",
+            "data": {"error": error, "code": code, "http_status": http_status},
+            "meta": {},
+            "message": f"Error: {error}",
+        }
+    )
+
+    def _gen():
+        yield f"data: {payload}\n\n"
+
+    return StreamingResponse(_gen(), media_type="text/event-stream")
 
 
 class SessionContext(BaseModel):
@@ -40,6 +61,9 @@ class SessionRouter:
         )
         self.router.add_api_route(
             "/{session_id}/inspector", self.get_session_inspector, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/{session_id}/regenerate", self.regenerate_session, methods=["POST"]
         )
 
     @staticmethod
@@ -201,6 +225,37 @@ class SessionRouter:
         except Exception as e:
             logger.warning("Session inspector failed: %s", e)
             classify_and_raise(e, source="session_inspector")
+
+    @endpoint("session.regenerate_session")
+    async def regenerate_session(
+        self,
+        session_id: str,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> StreamingResponse:
+        """Regenerate the last assistant response for a session.
+
+        Public /session contract (session page + chat controller): SSE stream
+        that signals missing context / unloaded model as explicit ``status:
+        error`` events. The streaming itself delegates to the shared chat
+        regenerate handler so there is one implementation.
+        """
+        try:
+            from domain.infrastructure.session_core import SessionCore
+
+            if not SessionCore.get_messages(session_id):
+                return _sse_error_response("No session context found", "E_VAL_REQUEST", 400)
+
+            from domain.models._internal.provider import get_provider
+
+            if get_provider("default") is None:
+                return _sse_error_response("Model not loaded", "E_INFRA_REGISTRY", 503)
+
+            from routers.chat import ChatRouter
+
+            return await ChatRouter().regenerate(session_id, request, auth_user)
+        except Exception as e:
+            classify_and_raise(e, source="session.regenerate_session")
 
 
 router = SessionRouter().router

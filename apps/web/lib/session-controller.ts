@@ -2,7 +2,7 @@
  * Session Controller — axios-based API for conversation management.
  */
 
-import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
+import { apiGet, apiPost, apiPut, apiDelete, streamSSE } from './http-client'
 import { logger } from './dev-log'
 
 const _log = logger.child('session-controller')
@@ -95,16 +95,26 @@ export const sessionController = {
     try {
       return await apiGet<Session>('/chat/sessions/current')
     } catch (err) {
-      _log.debug('Failed to get current session', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to get current session', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },
 
-  async getSoul(): Promise<{ name: string; traits: string[]; personality?: Record<string, number> } | null> {
+  async getSoul(): Promise<{
+    name: string
+    traits: string[]
+    personality?: Record<string, number>
+  } | null> {
     try {
-      return await apiGet<{ name: string; traits: string[]; personality?: Record<string, number> }>('/souls/current')
+      return await apiGet<{ name: string; traits: string[]; personality?: Record<string, number> }>(
+        '/souls/current',
+      )
     } catch (err) {
-      _log.debug('Failed to get soul for session', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to get soul for session', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },
@@ -113,7 +123,16 @@ export const sessionController = {
     return apiPost<Session>('/chat/sessions', { name, session_id: id })
   },
 
-  async update(id: string, data: { name?: string; starred?: boolean; pinned?: boolean; archived?: boolean; unread?: boolean }): Promise<void> {
+  async update(
+    id: string,
+    data: {
+      name?: string
+      starred?: boolean
+      pinned?: boolean
+      archived?: boolean
+      unread?: boolean
+    },
+  ): Promise<void> {
     if (!id) return
     await apiPut(`/chat/sessions/${encodeURIComponent(id)}`, data)
   },
@@ -124,7 +143,9 @@ export const sessionController = {
 
   async search(q: string, limit = 20): Promise<SearchResult[]> {
     if (!q.trim()) return []
-    const data = await apiGet<SearchResult[] | { results: SearchResult[] }>(`/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`)
+    const data = await apiGet<SearchResult[] | { results: SearchResult[] }>(
+      `/chat/sessions/search?q=${encodeURIComponent(q)}&limit=${limit}`,
+    )
     return Array.isArray(data) ? data : (data.results ?? [])
   },
 
@@ -132,10 +153,19 @@ export const sessionController = {
     await apiPost(`/session/${id}/context`, { messages })
   },
 
-  async fetchMessages(id: string, opts?: { signal?: AbortSignal; silent?: boolean }): Promise<Array<{ role: string; content: string }>> {
+  async fetchMessages(
+    id: string,
+    opts?: { signal?: AbortSignal; silent?: boolean },
+  ): Promise<Array<{ role: string; content: string }>> {
     const data = opts
-      ? await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`, undefined, { signal: opts.signal, silent: opts.silent })
-      : await apiGet<{ messages: Array<{ role: string; content: string }> }>(`/session/${id}/messages`)
+      ? await apiGet<{ messages: Array<{ role: string; content: string }> }>(
+          `/session/${id}/messages`,
+          undefined,
+          { signal: opts.signal, silent: opts.silent },
+        )
+      : await apiGet<{ messages: Array<{ role: string; content: string }> }>(
+          `/session/${id}/messages`,
+        )
     return data?.messages ?? []
   },
 
@@ -144,10 +174,23 @@ export const sessionController = {
   },
 
   async regenerate(sessionId: string): Promise<{ status: string }> {
-    return apiPost<{ status: string }>(`/session/${sessionId}/regenerate`)
+    // SSE endpoint: drain the stream (never re-POST on partial failure) and
+    // surface error events — apiPost would JSON.parse the SSE body, throw,
+    // and retry, firing multiple regenerations per click.
+    for await (const event of streamSSE(`/session/${sessionId}/regenerate`, { maxRetries: 0 })) {
+      if (event.status === 'error') {
+        throw new Error(String(event.data?.error || event.message || 'Regeneration failed'))
+      }
+      if (event.status === 'complete') break
+    }
+    return { status: 'ok' }
   },
 
-  async forwardMessage(targetSessionId: string, content: string, role: string = 'user'): Promise<void> {
+  async forwardMessage(
+    targetSessionId: string,
+    content: string,
+    role: string = 'user',
+  ): Promise<void> {
     await apiPost(`/session/${targetSessionId}/context`, { messages: [{ role, content }] })
   },
 }

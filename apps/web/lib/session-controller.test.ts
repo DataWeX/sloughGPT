@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./auth', () => ({
   useAuthStore: {
@@ -16,10 +16,22 @@ setupApiMocks()
 import { sessionController } from './session-controller'
 
 describe('sessionController.list', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /chat/sessions and returns sessions', async () => {
-    const sessions = [{ id: 's1', name: 'Chat 1', created_at: '2026-01-01', updated_at: '2026-01-01', pinned: false, starred: false, message_count: 0 }]
+    const sessions = [
+      {
+        id: 's1',
+        name: 'Chat 1',
+        created_at: '2026-01-01',
+        updated_at: '2026-01-01',
+        pinned: false,
+        starred: false,
+        message_count: 0,
+      },
+    ]
     apiClient.apiGet.mockResolvedValue({ sessions })
 
     const result = await sessionController.list()
@@ -36,10 +48,20 @@ describe('sessionController.list', () => {
 })
 
 describe('sessionController.getCurrent', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /chat/sessions/current', async () => {
-    apiClient.apiGet.mockResolvedValue({ id: 's1', name: 'Current', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 })
+    apiClient.apiGet.mockResolvedValue({
+      id: 's1',
+      name: 'Current',
+      created_at: '',
+      updated_at: '',
+      pinned: false,
+      starred: false,
+      message_count: 0,
+    })
 
     const result = await sessionController.getCurrent()
     expect(result?.id).toBe('s1')
@@ -54,30 +76,51 @@ describe('sessionController.getCurrent', () => {
 })
 
 describe('sessionController.create', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /chat/sessions with name', async () => {
-    apiClient.apiPost.mockResolvedValue({ id: 's2', name: 'New Chat', created_at: '', updated_at: '', pinned: false, starred: false, message_count: 0 })
+    apiClient.apiPost.mockResolvedValue({
+      id: 's2',
+      name: 'New Chat',
+      created_at: '',
+      updated_at: '',
+      pinned: false,
+      starred: false,
+      message_count: 0,
+    })
 
     const result = await sessionController.create('New Chat')
     expect(result.id).toBe('s2')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat/sessions', { name: 'New Chat', session_id: undefined })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat/sessions', {
+      name: 'New Chat',
+      session_id: undefined,
+    })
   })
 })
 
 describe('sessionController.update', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('PUTs to /chat/sessions/{id}', async () => {
     apiClient.apiPut.mockResolvedValue(undefined)
 
     await sessionController.update('s1', { name: 'Renamed', starred: true })
-    expect(apiClient.apiPut).toHaveBeenCalledWith('/chat/sessions/s1', { name: 'Renamed', starred: true, pinned: undefined })
+    expect(apiClient.apiPut).toHaveBeenCalledWith('/chat/sessions/s1', {
+      name: 'Renamed',
+      starred: true,
+      pinned: undefined,
+    })
   })
 })
 
 describe('sessionController.delete', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('DELETEs /chat/sessions/{id}', async () => {
     apiClient.apiDelete.mockResolvedValue(undefined)
@@ -88,18 +131,24 @@ describe('sessionController.delete', () => {
 })
 
 describe('sessionController.saveContext', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /session/{id}/context', async () => {
     apiClient.apiPost.mockResolvedValue(undefined)
 
     await sessionController.saveContext('s1', [{ role: 'user', content: 'hi' }])
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/session/s1/context', { messages: [{ role: 'user', content: 'hi' }] })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/session/s1/context', {
+      messages: [{ role: 'user', content: 'hi' }],
+    })
   })
 })
 
 describe('sessionController.fetchMessages', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /session/{id}/messages', async () => {
     apiClient.apiGet.mockResolvedValue({ messages: [{ role: 'user', content: 'hello' }] })
@@ -120,13 +169,80 @@ describe('sessionController.fetchMessages', () => {
     apiClient.apiGet.mockResolvedValue({ messages: [{ role: 'user', content: 'hello' }] })
     const controller = new AbortController()
 
-    const result = await sessionController.fetchMessages('s1', { signal: controller.signal, silent: true })
+    const result = await sessionController.fetchMessages('s1', {
+      signal: controller.signal,
+      silent: true,
+    })
 
     expect(result).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith(
-      '/session/s1/messages',
-      undefined,
-      { signal: controller.signal, silent: true },
-    )
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/session/s1/messages', undefined, {
+      signal: controller.signal,
+      silent: true,
+    })
+  })
+})
+
+describe('sessionController.regenerate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  const stubSseFetch = (events: object[]) => {
+    const payload = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('')
+    let sent = false
+    return vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      body: {
+        getReader: () => ({
+          read: async () => {
+            if (sent) return { done: true, value: undefined }
+            sent = true
+            return { done: false, value: new TextEncoder().encode(payload) }
+          },
+          releaseLock: vi.fn(),
+        }),
+      },
+    } as unknown as Response)
+  }
+
+  it('drains the SSE stream and resolves on complete', async () => {
+    const fetchSpy = stubSseFetch([
+      {
+        stream: 'chat',
+        phase: 'STREAMING',
+        status: 'working',
+        data: { token: 'Hi' },
+        meta: {},
+        message: '',
+      },
+      { stream: 'chat', phase: 'STREAMING', status: 'complete', data: {}, meta: {}, message: '' },
+    ])
+
+    const result = await sessionController.regenerate('s1')
+
+    expect(result).toEqual({ status: 'ok' })
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('/session/s1/regenerate')
+  })
+
+  it('rejects with the SSE error payload and never re-POSTs', async () => {
+    const fetchSpy = stubSseFetch([
+      {
+        stream: 'chat',
+        phase: 'REGENERATE',
+        status: 'error',
+        data: { error: 'Model not loaded' },
+        meta: {},
+        message: 'Error: Model not loaded',
+      },
+    ])
+
+    await expect(sessionController.regenerate('s1')).rejects.toThrow('Model not loaded')
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
   })
 })

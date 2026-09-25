@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_app_error_handler
@@ -59,6 +60,16 @@ class TestStatus:
 
 
 class TestReady:
+    @pytest.fixture(autouse=True)
+    def _native_engine_available(self, monkeypatch):
+        """Stub the native engine: the shipped lib is a macOS .dylib, so on
+        Linux hosts readiness would always be False through no fault of the
+        endpoint. Tests here assert endpoint logic, not the host toolchain
+        (same convention as test_support's noop readiness middleware)."""
+        from domain.inference._internal.native import engine as engine_mod
+
+        monkeypatch.setattr(engine_mod, "get_engine", lambda: object())
+
     def test_ready_returns_true(self):
         resp = client.get("/ready")
         assert resp.status_code == 200

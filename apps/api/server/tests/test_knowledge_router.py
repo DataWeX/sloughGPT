@@ -1,5 +1,7 @@
 """Integration tests for the /knowledge router (CRUD + search + batch)."""
 
+from pathlib import Path
+
 from test_support import get_test_client
 
 
@@ -164,7 +166,9 @@ def test_search_files():
         "/knowledge/search-files",
         json={
             "query": "def function",
-            "path": "routers",
+            # Absolute: the handler resolves against cwd, which differs
+            # between pytest runs (repo root vs apps/api/server).
+            "path": str(Path(__file__).resolve().parents[1] / "routers"),
             "top_k": 3,
             "extensions": ["py"],
         },

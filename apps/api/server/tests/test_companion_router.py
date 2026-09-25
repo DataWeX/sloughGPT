@@ -32,16 +32,26 @@ def _traits(resp):
 
 @pytest.fixture(autouse=True)
 def _fresh_companion():
-    """Reset the companion singleton before each test."""
+    """Reset the companion singleton before each test.
+
+    Resets BOTH the router's cached reference and the real singleton in
+    ``_internal.companion``. The re-export shim (``domain.companion``)
+    has no state of its own — the old symbol pokes missed it silently,
+    so ``get_companion()`` kept re-serving the dirty instance. (The
+    DELETE endpoint is not a default reset: it recreates the "warm"
+    preset, warmth 0.9.)
+    """
     import routers.companion as comp_mod
 
-    import domain.companion as dom_mod
+    import domain.companion._internal.companion as comp_state
 
-    comp_mod._companion_router._companion = None
-    dom_mod._companion = None
+    def _reset():
+        comp_mod._companion_router._companion = None
+        comp_state._companion = None
+
+    _reset()
     yield
-    comp_mod._companion_router._companion = None
-    dom_mod._companion = None
+    _reset()
 
 
 class TestGetCompanionInfo:
