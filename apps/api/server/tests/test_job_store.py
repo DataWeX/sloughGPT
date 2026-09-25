@@ -298,3 +298,38 @@ def test_job_summary_omits_created_at_when_no_timestamps():
 
     summary = _job_summary({"id": "3"})
     assert "created_at" not in summary
+
+
+# ── _job_summary recoverable flag (Needs-resume count regression) ────────────
+# The KPI counts interrupted/failed rows; without this flag it also counts rows
+# a resume would 422 on, so the counter promises a Resume the card will not
+# offer. _job_summary strips nulls, so `recoverable: False` must survive.
+
+
+def test_job_summary_marks_a_job_without_a_dataset_unrecoverable(tmp_path):
+    from training.jobs_api import _job_summary
+
+    summary = _job_summary({"id": "1", "status": "interrupted"})
+    assert summary["recoverable"] is False
+
+
+def test_job_summary_marks_a_job_with_a_live_dataset_recoverable(tmp_path):
+    from training.jobs_api import _job_summary
+
+    data_file = tmp_path / "corpus.txt"
+    data_file.write_text("hello world\n" * 10, encoding="utf-8")
+
+    summary = _job_summary({"id": "1", "status": "interrupted", "data_path": str(data_file)})
+    assert summary["recoverable"] is True
+
+
+def test_job_summary_marks_a_non_slonet_job_unrecoverable(tmp_path):
+    from training.jobs_api import _job_summary
+
+    data_file = tmp_path / "corpus.txt"
+    data_file.write_text("hello world\n" * 10, encoding="utf-8")
+
+    summary = _job_summary(
+        {"id": "1", "status": "failed", "data_path": str(data_file), "type": "distill"}
+    )
+    assert summary["recoverable"] is False

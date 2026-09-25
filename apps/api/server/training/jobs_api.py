@@ -16,6 +16,7 @@ from schemas.common import raise_error
 from domain.training._internal.executor import get_training_executor
 
 from .jobs import training_jobs
+from .recovery_policy import recovery_incompatibility
 
 logger = logging.getLogger("slo")
 
@@ -47,6 +48,8 @@ def _job_summary(job: dict) -> dict:
         status_message = f"Training {model} on {dataset}, {progress}% done"
     elif status == "failed":
         status_message = f"Training failed: {job.get('error', 'unknown error')}"
+    elif status == "interrupted":
+        status_message = f"Training interrupted at {progress}% — resume from the last checkpoint"
     elif status == "queued":
         status_message = f"Training {model} on {dataset} is queued"
     elif status == "stopping":
@@ -76,9 +79,16 @@ def _job_summary(job: dict) -> dict:
         "checkpoint": job.get("checkpoint"),
         "checkpoint_dir": job.get("checkpoint_dir"),
         "error": job.get("error"),
-        "created_at": job.get("created_at"),
+        # Many job-creation paths never set created_at; fall back so the
+        # history UI always gets a sortable timestamp (nulls are stripped below).
+        "created_at": job.get("created_at") or job.get("started_at") or job.get("updated_at"),
         "started_at": job.get("started_at"),
         "completed_at": job.get("completed_at"),
+        # The backend's own verdict for this row, so the "Needs resume" count
+        # and the history Resume button agree with /recovery/recoverable instead
+        # of counting every interrupted row (including ones a resume would 422).
+        # Kept even when False — the summary drops only null values.
+        "recoverable": recovery_incompatibility(job) is None,
     }
     return {k: v for k, v in summary.items() if v is not None}
 
@@ -89,28 +99,34 @@ async def list_training_jobs(
 ):
     """List all tracked training jobs with plain-language status.
 
-    Auto-purges completed/failed jobs older than 1 hour to bound memory.
+    History is durable: rows live in JobStore and survive restarts. In-memory
+    entries older than 1h are dropped from the process view only — the store
+    row is never deleted here (delete/purge endpoints own durable removal).
     Filters by user_id when auth is enabled.
     """
     import time as _time
 
     now = _time.time()
 
-    # Get jobs, filtered by user if auth is enabled
     if auth_user and auth_user.get("sub"):
         user_id = auth_user["sub"]
         jobs = [j for j in training_jobs.values() if j.get("user_id", "") == user_id]
     else:
         jobs = list(training_jobs.values())
 
-    stale = [
-        jid
-        for jid, j in training_jobs.items()
-        if j.get("status") in ("completed", "failed", "stopped")
-        and now - _to_timestamp(j.get("updated_at") or j.get("started_at")) > 3600
-    ]
-    for jid in stale:
-        training_jobs.pop(jid, None)
+    # Bound process-local live dict only; keep JobStore history for resume UI.
+    for jid in list(training_jobs.keys()):
+        j = training_jobs.get(jid)
+        if not j:
+            continue
+        if (
+            j.get("status") in ("completed", "failed", "stopped")
+            and now - _to_timestamp(j.get("updated_at") or j.get("started_at")) > 3600
+        ):
+            try:
+                training_jobs.discard_live(jid)
+            except AttributeError:
+                pass
     return [_job_summary(j) for j in jobs]
 
 

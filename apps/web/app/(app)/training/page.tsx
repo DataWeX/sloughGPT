@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -18,6 +18,8 @@ import { useTestDialog } from '@/hooks/useTestDialog'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
 import { QuickTrainCard } from '@/components/training/QuickTrainCard'
 import { StopTrainingButton } from '@/components/training/StopTrainingButton'
+import { RecoveryCard } from '@/components/training/RecoveryCard'
+import { TrainingHistoryView } from '@/components/training/TrainingHistoryView'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function TrainingPage() {
@@ -49,8 +51,9 @@ export default function TrainingPage() {
   tickRef.current = () => {
     if (visibilityRef.current) {
       void checkpoints.fetchCheckpoints()
-      const hasRunning = form.allJobs.some((j) => j.status === 'running')
-      if (hasRunning) void checkpoints.fetchJobs()
+      // Always refresh job rows: recovery can start a run without a prior
+      // running job, and the hasRunning gate used to starve that first poll.
+      void checkpoints.fetchJobs()
     }
   }
   useEffect(() => {
@@ -136,6 +139,11 @@ export default function TrainingPage() {
     form.allJobs.find((j) => j.status === 'running')
   const completedCount = form.allJobs.filter((j) => j.status === 'completed').length
   const runningCount = form.allJobs.filter((j) => j.status === 'running').length
+  const resumeCount = form.allJobs.filter(
+    (j) =>
+      (j.status === 'interrupted' || j.status === 'failed' || j.status === 'recoverable') &&
+      j.recoverable !== false,
+  ).length
 
   // Hero status: the one thing the eye lands on.
   const liveTraining = session.turboRunning || runningJob != null
@@ -216,8 +224,35 @@ export default function TrainingPage() {
         <StatCard label="Corpora" value={datasets.datasets.length} numeric />
         <StatCard label="Active jobs" value={runningCount} numeric />
         <StatCard label="Finished jobs" value={completedCount} numeric />
+        <StatCard label="Needs resume" value={resumeCount} numeric />
         <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />
       </KpiGrid>
+
+      {/* Interrupted jobs from prior process — resume from last checkpoint */}
+      <RecoveryCard
+        addToast={addToast}
+        onRecovered={(result) => {
+          void checkpoints.fetchJobs()
+          const recoveryId = result.recovery_job_id
+          if (recoveryId) {
+            session.setPhase('TRAINING')
+            session.startStandardPoll(recoveryId, { addToast })
+          }
+        }}
+      />
+
+      {/* Full job history with Resume on interrupted/failed rows */}
+      <TrainingHistoryView
+        addToast={addToast}
+        onRecovered={(result) => {
+          void checkpoints.fetchJobs()
+          const recoveryId = result.recovery_job_id
+          if (recoveryId) {
+            session.setPhase('TRAINING')
+            session.startStandardPoll(recoveryId, { addToast })
+          }
+        }}
+      />
 
       {/* 3-step pipeline */}
       <SectionHeader title="Guided setup" description="Data, configure, train, results." />
@@ -232,6 +267,14 @@ export default function TrainingPage() {
         onStepChange={setPipelineStep}
         completedSteps={completedSteps}
         onStepComplete={(id) => setCompletedSteps((prev) => new Set(prev).add(id))}
+        onRecovered={(result) => {
+          void checkpoints.fetchJobs()
+          const recoveryId = result.recovery_job_id
+          if (recoveryId) {
+            session.setPhase('TRAINING')
+            session.startStandardPoll(recoveryId, { addToast })
+          }
+        }}
       />
 
       {/* Quick train alternative */}

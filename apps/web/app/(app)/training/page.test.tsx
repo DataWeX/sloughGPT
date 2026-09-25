@@ -99,7 +99,17 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 const mockSearchParams = vi.hoisted(() => ({ dataset: null as string | null }))
-const mockSession = vi.hoisted(() => ({ trainingRunning: false }))
+const mockSession = vi.hoisted(() => ({
+  trainingRunning: false,
+  setPhase: vi.fn(),
+  startStandardPoll: vi.fn(),
+  turboRunning: false,
+  turboPhase: null as string | null,
+  turboProgress: 0,
+  turboLoss: null as number | null,
+  turboError: null as string | null,
+  resetTraining: vi.fn(),
+}))
 const mockDatasets = vi.hoisted(() => ({
   datasets: [] as any[],
   selectedDataset: '',
@@ -154,7 +164,7 @@ const { mockExportMetrics, mockModelStatus, mockPreview, mockAddToast, mockTrain
     mockTrainingJobs: { stop: vi.fn() },
   }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => ({
     get: (k: string) => (mockSearchParams as Record<string, string | null>)[k] ?? null,
@@ -207,6 +217,19 @@ vi.mock('@/components/training/StopTrainingButton', () => ({
       Stop training
     </button>
   ),
+}))
+vi.mock('@/components/training/RecoveryCard', () => ({
+  RecoveryCard: ({ onRecovered }: { onRecovered?: (r: unknown) => void }) => (
+    <button
+      data-testid="recovery-card"
+      onClick={() => onRecovered?.({ recovery_job_id: 'recovery_x' })}
+    >
+      recovery
+    </button>
+  ),
+}))
+vi.mock('@/components/training/TrainingHistoryView', () => ({
+  TrainingHistoryView: () => <div data-testid="training-history" />,
 }))
 
 import Page from './page'
@@ -263,6 +286,52 @@ describe('TrainingPage', () => {
       expect(screen.getByText('jobs:3')).toBeTruthy()
     })
     expect(screen.getByText('pipeline:2')).toBeTruthy()
+  })
+
+  it('counts interrupted jobs under Needs resume and mounts RecoveryCard', async () => {
+    mockForm.allJobs = [
+      { id: 'a', status: 'running' },
+      { id: 'b', status: 'interrupted' },
+      { id: 'c', status: 'failed' },
+    ]
+    render(<Page />)
+    await waitFor(() => {
+      expect(screen.getByTestId('stat-Needs resume')).toBeTruthy()
+    })
+    expect(screen.getByTestId('stat-Needs resume').textContent).toContain('2')
+    expect(screen.getByTestId('recovery-card')).toBeTruthy()
+    expect(screen.getByTestId('training-history')).toBeTruthy()
+  })
+
+  it('does not count rows the backend ruled out of recovery', async () => {
+    // `recoverable: false` means POST /recovery/recover would 422, so the
+    // Recoverable Jobs card will not list it either — the counter must agree.
+    mockForm.allJobs = [
+      { id: 'a', status: 'interrupted', recoverable: false },
+      { id: 'b', status: 'interrupted' },
+      { id: 'c', status: 'failed', recoverable: true },
+    ]
+    render(<Page />)
+    await waitFor(() => {
+      expect(screen.getByTestId('stat-Needs resume')).toBeTruthy()
+    })
+    expect(screen.getByTestId('stat-Needs resume').textContent).toContain('2')
+  })
+
+  it('refreshes jobs when RecoveryCard reports a recovered run', async () => {
+    render(<Page />)
+    await waitFor(() => {
+      expect(screen.getByTestId('recovery-card')).toBeTruthy()
+    })
+    const before = (mockCheckpoints.fetchJobs as ReturnType<typeof vi.fn>).mock.calls.length
+    await act(async () => {
+      screen.getByTestId('recovery-card').click()
+    })
+    await waitFor(() => {
+      expect(
+        (mockCheckpoints.fetchJobs as ReturnType<typeof vi.fn>).mock.calls.length,
+      ).toBeGreaterThan(before)
+    })
   })
 
   it('fetches datasets, checkpoints, and jobs on mount', async () => {
