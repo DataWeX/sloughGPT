@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { formatBytes, formatRelativeTime, MS_PER_MINUTE, MS_PER_HOUR, MS_PER_DAY } from './format-bytes'
+import {
+  formatBytes,
+  formatRelativeTime,
+  MS_PER_MINUTE,
+  MS_PER_HOUR,
+  MS_PER_DAY,
+} from './format-bytes'
 
 describe('formatBytes', () => {
   it('returns — for zero', () => {
@@ -72,5 +78,13 @@ describe('formatRelativeTime', () => {
     const ts = now - 20 * MS_PER_DAY
     const date = new Date(Math.floor(ts / 1000) * 1000).toLocaleDateString()
     expect(formatRelativeTime(ts / 1000)).toBe(date)
+  })
+})
+
+describe('formatBytes guards bad input', () => {
+  it('returns — for negative and NaN', () => {
+    expect(formatBytes(-1)).toBe('—')
+    expect(formatBytes(Number.NaN)).toBe('—')
+    expect(formatBytes(Number.POSITIVE_INFINITY)).toBe('—')
   })
 })

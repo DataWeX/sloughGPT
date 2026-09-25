@@ -1,10 +1,14 @@
 /**
  * Duration formatting utilities.
- * 
+ *
  * - formatDuration: seconds → "2h 35m" or "5m 30s" or "30s"
  * - formatDurationMs: milliseconds → "1:05:35" or "05:35"
  * - formatDurationCompact: milliseconds → "1.25s" or "350ms"
+ *
+ * All formatters are total: bad input renders a placeholder, never NaN.
  */
+
+import { toDate } from './time-format'
 
 /** Format seconds to human-readable: "2h 35m", "5m 30s", "30s" */
 export function formatDuration(sec: number | null): string {
@@ -39,11 +43,17 @@ export function formatDurationCompact(ms: number): string {
 }
 
 /** Calculate elapsed time between two timestamps and format it. */
-export function formatElapsed(start: string | number | Date | null, end?: string | number | Date | null): string {
-  if (!start) return ''
-  const s = typeof start === 'number' ? start : new Date(start).getTime()
-  const e = end ? (typeof end === 'number' ? end : new Date(end).getTime()) : Date.now()
+export function formatElapsed(
+  start: string | number | Date | null | undefined,
+  end?: string | number | Date | null | undefined,
+): string {
+  if (start == null || start === '') return ''
+  const s = toDate(start)?.getTime()
+  if (s == null) return ''
+  const e = end == null || end === '' ? Date.now() : toDate(end)?.getTime()
+  if (e == null) return ''
   const ms = e - s
+  if (ms < 0) return ''
   if (ms < 1000) return `${ms}ms`
   if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
   const min = Math.floor(ms / 60000)
