@@ -1,13 +1,23 @@
 """Benchmark the SloEngine consciousness post-generation hook (Build Order #6).
 
-Measures generate() throughput with the hook off (default, ConsciousnessConfig
-level 0 — the production default) vs on (level 1), plus init cost of a
-SloEngine construction. Useful as a no-regression gate: "off" on this branch
-must match "off" on main (the hook is then a single None-check per generate).
+Three signals per mode (off = ConsciousnessConfig level 0, the production
+default; on = level 1):
+
+1. sloengine_init_us_avg — SloEngine() construction cost (init now includes
+   the one-time get_consciousness() handshake).
+2. generate:us_per_gen — full generate() cost. NOTE: dominated by pre-existing
+   HD-memory/quantum search (~1.6s/gen under load), so only large regressions
+   are visible here; the hook's own cost is measured directly by (3).
+3. hook:us_per_call — direct _post_consciousness() cost: off = the per-
+   generate gate overhead in production (expect sub-microseconds); on =
+   full process()+save() feature cost.
+
+No-regression gate: "off" hook cost must stay ~sub-µs; init cost must not
+regress materially vs main (run with --mode off on main for comparison).
 
 Usage:
-    python scripts/benchmark_consciousness_hook.py --iters 2000
-    python scripts/benchmark_consciousness_hook.py --mode off --iters 2000
+    python scripts/benchmark_consciousness_hook.py
+    python scripts/benchmark_consciousness_hook.py --mode off --iters 30
 """
 
 from __future__ import annotations
@@ -52,23 +62,35 @@ def _bench_init(count: int) -> float:
     return (time.perf_counter() - start) * 1e6 / count if count else 0.0
 
 
+def _bench_hook(mode: str) -> str:
+    eng = SloEngine()
+    if not hasattr(eng, "_post_consciousness"):
+        return "hook n/a (pre-wiring build)"
+    calls = 20000 if mode == "off" else 30
+    start = time.perf_counter()
+    for _ in range(calls):
+        eng._post_consciousness("prompt text", "generated response text")
+    elapsed = time.perf_counter() - start
+    return f"{(elapsed / calls) * 1e6:.3f} us/call (n={calls})"
+
+
 def run(mode: str, iters: int, init_count: int) -> None:
-    print(f"mode={mode} iters={iters}")
-    print(f"sloengine_init_us_avg={_bench_init(init_count):.1f} (n={init_count})")
+    print(f"mode={mode} iters={iters}", flush=True)
+    print(f"sloengine_init_us_avg={_bench_init(init_count):.1f} (n={init_count})", flush=True)
 
     store = tempfile.mkdtemp(prefix="consc-bench-")
     try:
         reset_consciousness()
-        if mode == "on":
-            get_consciousness(ConsciousnessConfig(level=1, store_path=store))
-        elif mode == "off":
-            get_consciousness(ConsciousnessConfig(level=0, store_path=store))
+        level = 1 if mode == "on" else 0
+        get_consciousness(ConsciousnessConfig(level=level, store_path=store))
 
         result = _bench_generate(iters)
         print(
-            f"generate: gens_per_s={result['gens_per_s']:.1f} "
-            f"us_per_gen={result['us_per_gen']:.1f} elapsed_s={result['elapsed_s']:.3f}"
+            f"generate: gens_per_s={result['gens_per_s']:.2f} "
+            f"us_per_gen={result['us_per_gen']:.1f} elapsed_s={result['elapsed_s']:.3f}",
+            flush=True,
         )
+        print(f"hook: {_bench_hook(mode)}", flush=True)
     finally:
         reset_consciousness()
         shutil.rmtree(store, ignore_errors=True)
@@ -77,8 +99,8 @@ def run(mode: str, iters: int, init_count: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mode", choices=("off", "on", "both"), default="both")
-    parser.add_argument("--iters", type=int, default=2000)
-    parser.add_argument("--init-count", type=int, default=200)
+    parser.add_argument("--iters", type=int, default=30)
+    parser.add_argument("--init-count", type=int, default=10)
     args = parser.parse_args()
 
     modes = ("off", "on") if args.mode == "both" else (args.mode,)
