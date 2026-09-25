@@ -59,6 +59,7 @@ vi.mock('next/dynamic', () => ({
 
 const {
   mockPush,
+  mockReplace,
   mockSearchParamsGet,
   mockSendMessage,
   mockNewChat,
@@ -81,6 +82,7 @@ const {
   mockChatSetInput,
 } = vi.hoisted(() => ({
   mockPush: vi.fn(),
+  mockReplace: vi.fn(),
   mockSearchParamsGet: vi.fn(),
   mockSendMessage: vi.fn(),
   mockNewChat: vi.fn(),
@@ -115,7 +117,7 @@ const state = vi.hoisted(() => ({
 }))
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => ({ push: mockPush, replace: mockReplace }),
   useSearchParams: () => ({ get: mockSearchParamsGet }),
 }))
 vi.mock('@/hooks/useLiveStatus', () => ({
@@ -342,7 +344,7 @@ vi.mock('@/features/chat/hooks/useChatMessages', async () => {
         // Record hook-side writes separately so tests can assert the
         // dual-write contract (store for display, hook for send paths).
         setInput: (...args: [string]) => {
-          ;(storeSetInput as (...a: [string]) => void)(...args)
+          (storeSetInput as (...a: [string]) => void)(...args)
           mockChatSetInput(...args)
         },
         loading,
@@ -562,6 +564,34 @@ describe('ChatPage', () => {
   it('does not load a session when none is present', async () => {
     await renderChat()
     expect(mockLoadSession).not.toHaveBeenCalled()
+  })
+
+  it('sends a /chat?q= deep link via send-text and strips the param', async () => {
+    window.history.replaceState({}, '', '/chat?q=Summarize%20this')
+    const listener = vi.fn()
+    window.addEventListener('send-text', listener)
+    try {
+      await renderChat()
+      expect(listener).toHaveBeenCalledTimes(1)
+      const event = listener.mock.calls[0][0] as CustomEvent
+      expect(event.detail.text).toBe('Summarize this')
+      expect(mockReplace).toHaveBeenCalledWith('/chat')
+    } finally {
+      window.removeEventListener('send-text', listener)
+      window.history.replaceState({}, '', '/')
+    }
+  })
+
+  it('does not send anything without a q param', async () => {
+    const listener = vi.fn()
+    window.addEventListener('send-text', listener)
+    try {
+      await renderChat()
+      expect(listener).not.toHaveBeenCalled()
+      expect(mockReplace).not.toHaveBeenCalled()
+    } finally {
+      window.removeEventListener('send-text', listener)
+    }
   })
 
   it('fetches suggestions when a model is loaded', async () => {

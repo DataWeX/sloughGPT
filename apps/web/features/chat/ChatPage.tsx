@@ -1,7 +1,8 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
 import { modelController } from '@/lib/controllers'
 import { useToastStore } from '@/lib/toast-store'
@@ -22,6 +23,25 @@ import { useChatStoreBridge } from '@/features/chat/hooks/useChatStoreBridge'
 
 export default function ChatPage() {
   const [consciousnessOpen, setConsciousnessOpen] = useState(false)
+  const router = useRouter()
+
+  // Deep link: /chat?q=<text> sends the message on arrival (used by the
+  // knowledge page's suggested-question chips). Child effects register the
+  // `send-text` listener before this parent effect runs. Handle once, then
+  // strip the param so refresh doesn't re-send. window.location.search is
+  // the true source at initial mount (same as useSearchParams on first load).
+  const qHandledRef = useRef(false)
+  useEffect(() => {
+    if (qHandledRef.current) return
+    const params = new URLSearchParams(window.location.search)
+    const q = params.get('q')
+    if (!q) return
+    qHandledRef.current = true
+    params.delete('q')
+    const qs = params.toString()
+    router.replace(qs ? `/chat?${qs}` : '/chat')
+    window.dispatchEvent(new CustomEvent('send-text', { detail: { text: q } }))
+  }, [router])
 
   const showToast = useCallback(
     (message: string, type: 'success' | 'error' | 'info' = 'success') => {

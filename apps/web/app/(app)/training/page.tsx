@@ -147,11 +147,11 @@ export default function TrainingPage() {
         ? 'destructive'
         : 'muted'
   const heroText = liveTraining
-    ? `Turbo training live — ${Math.round(session.turboProgress)}%${session.turboLoss != null ? ` · loss ${session.turboLoss.toFixed(4)}` : ''}`
+    ? `Training live — ${Math.round(session.turboProgress)}%${session.turboLoss != null ? ` · loss ${session.turboLoss.toFixed(4)}` : ''}`
     : session.turboPhase === 'complete'
-      ? 'Turbo run finished — review results below'
+      ? 'Training finished — review results below'
       : session.turboPhase === 'error'
-        ? `Turbo run failed — ${session.turboError ?? 'see details below'}`
+        ? `Training failed — ${session.turboError ?? 'see details below'}`
         : 'No active training — configure a run below'
 
   return (
@@ -213,7 +213,7 @@ export default function TrainingPage() {
 
       {/* At-a-glance counts */}
       <KpiGrid columns={4}>
-        <StatCard label="Corpora" value={datasets.datasets.length} numeric />
+        <StatCard label="Datasets" value={datasets.datasets.length} numeric />
         <StatCard label="Active jobs" value={runningCount} numeric />
         <StatCard label="Finished jobs" value={completedCount} numeric />
         <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />

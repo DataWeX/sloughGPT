@@ -1,6 +1,6 @@
 'use client'
 
-import { apiGet, apiPost, apiPatch, apiDelete } from './http-client'
+import { apiGet, apiPost, apiPostForm, apiPatch, apiDelete } from './http-client'
 
 export interface KnowledgeItem {
   id: string
@@ -84,6 +84,23 @@ export const kbController = {
 
   async ingestUrl(url: string, source = 'direct'): Promise<{ status: string; id?: string }> {
     return apiPost<{ status: string; id?: string }>('/knowledge/ingest-url', { url, source })
+  },
+
+  async ingestFile(
+    file: File,
+    topic = 'imported',
+  ): Promise<{
+    status: string
+    stored: number
+    total_chunks: number
+    topic: string
+    filename: string
+    file_size: number
+  }> {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('topic', topic)
+    return apiPostForm('/knowledge/ingest-file', form)
   },
 
   async batchIngest(

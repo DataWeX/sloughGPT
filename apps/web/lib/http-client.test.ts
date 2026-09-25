@@ -21,7 +21,7 @@ vi.stubGlobal('fetch', mockFetch)
 
 import { logger } from './dev-log'
 import {
-  ApiError, apiGet, apiPost, apiPut, apiDelete, apiPatch, createApiClient,
+  ApiError, apiGet, apiPost, apiPostForm, apiPut, apiDelete, apiPatch, createApiClient,
   InterceptorManager, HttpCache, CircuitBreaker, Throttler,
   httpClient, createHttpClient, streamSSE,
   type RequestConfig, type ResponseEnvelope, type SSEEvent,
@@ -225,6 +225,38 @@ describe('apiPost', () => {
     expect(url).toBe('http://127.0.0.1:9/items')
     expect(init.method).toBe('POST')
     expect(init.body).toBe(JSON.stringify({ name: 'test' }))
+  })
+})
+
+describe('apiPostForm', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+    mockGetState.mockReturnValue({ token: null })
+  })
+
+  it('sends FormData as-is without a JSON content-type header', async () => {
+    mockFetch.mockResolvedValue(mockOk({ status: 'imported' }))
+    const form = new FormData()
+    form.append('file', new Blob(['hello']), 'notes.txt')
+    await apiPostForm('/knowledge/ingest-file', form)
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    const [url, init] = mockFetch.mock.calls[0]
+    expect(url).toBe('http://127.0.0.1:9/knowledge/ingest-file')
+    expect(init.method).toBe('POST')
+    expect(init.body).toBe(form)
+    expect(init.headers['Content-Type']).toBeUndefined()
+  })
+
+  it('preserves caller headers and auth', async () => {
+    mockFetch.mockResolvedValue(mockOk({}))
+    mockGetState.mockReturnValue({ token: 'tok-1' })
+    const form = new FormData()
+    await apiPostForm('/upload', form, { headers: { 'X-Test': 'yes' } })
+    const [, init] = mockFetch.mock.calls[0]
+    expect(init.headers['X-Test']).toBe('yes')
+    expect(init.headers['Authorization']).toBe('Bearer tok-1')
+    expect(init.headers['Content-Type']).toBeUndefined()
   })
 })
 
