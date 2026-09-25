@@ -5,6 +5,7 @@ Public API:
     find_available_port, find_repo_root, find_server_python
     utc_now_iso, to_iso, parse_iso, normalize_iso, is_valid_iso, get_timestamp,
     repair_iso — read-path repair for broken "+00:00Z" values
+    normalize_local_iso — read-path repair treating naive input as server-local
     generate_id, hash_string, format_size, format_time, load_json, save_json
     merge_dicts, clamp, validate_config, retry, Timer, Cache, RateLimiter
 """
@@ -30,6 +31,7 @@ from domain.shared._internal.timestamps import (
     get_timestamp,
     is_valid_iso,
     normalize_iso,
+    normalize_local_iso,
     parse_iso,
     repair_iso,
     to_iso,
@@ -57,6 +59,7 @@ __all__ = [
     "load_json",
     "merge_dicts",
     "normalize_iso",
+    "normalize_local_iso",
     "parse_iso",
     "repair_iso",
     "retry",

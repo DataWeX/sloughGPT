@@ -1,6 +1,6 @@
 """Repo invariant: production timestamps must be JS-parseable *and* offset-carrying.
 
-Three historical failure modes are scanned for (all AST-based, so docstrings,
+Four historical failure modes are scanned for (all AST-based, so docstrings,
 comments, and string literals mentioning them do not trip the guard):
 
 1. ``<ts>.isoformat() + "Z"`` — ``isoformat()`` already ends with a numeric
@@ -11,6 +11,11 @@ comments, and string literals mentioning them do not trip the guard):
    the *viewer's* zone by JS (every non-matching zone sees a shifted clock).
 3. ``datetime.fromtimestamp(t).isoformat()`` without ``tz=`` — same naive
    local time, different spelling.
+4. ``strftime("%Y-%m-%dT%H:%M…")`` called without a UTC source (single
+   argument, or a non-``gmtime`` second argument) — naive local wall time;
+   the ``…%SZ`` spelling even *lies* about UTC (``+1h`` wrong for every
+   viewer). Bucket-key formats without ``%M`` (``%Y-%m-%dT%H:00``) are
+   grouping labels, not instants, and do not trip this rule.
 
 Every timestamp must come from :func:`domain.shared.utc_now_iso` (or ``to_iso``),
 which always emits ``...Z``.
@@ -119,6 +124,53 @@ class _NaiveFromtimestampIso(ast.NodeVisitor):
         self.generic_visit(node)
 
 
+class _NaiveIsoStrftime(ast.NodeVisitor):
+    """Collect ``strftime`` ISO date-time formats written without a UTC source.
+
+    ``time.strftime("%Y-%m-%dT%H:%M:%S")`` (single argument) serializes naive
+    *local* wall time — no offset for JavaScript to anchor on (shifted clock in
+    every non-server zone), and ``…%SZ`` labels local time as UTC (``+1h`` off
+    for everyone). Allowed: ``time.strftime(fmt, time.gmtime(...))``,
+    ``datetime.now(UTC).strftime(fmt)``, and bucket keys without ``%M``
+    (``%Y-%m-%dT%H:00`` — grouping labels, never parsed as instants). Write
+    ``utc_now_iso()`` instead.
+    """
+
+    def __init__(self) -> None:
+        self.hits: list[int] = []
+
+    @staticmethod
+    def _is_utc_source(second: ast.expr) -> bool:
+        return isinstance(second, ast.Call) and (
+            (isinstance(second.func, ast.Attribute) and second.func.attr == "gmtime")
+            or (isinstance(second.func, ast.Name) and second.func.id == "gmtime")
+        )
+
+    def visit_Call(self, node: ast.Call) -> None:
+        if (
+            isinstance(node.func, ast.Attribute)
+            and node.func.attr == "strftime"
+            and len(node.args) >= 1
+            and isinstance(node.args[0], ast.Constant)
+            and isinstance(node.args[0].value, str)
+            and "%Y-%m-%dT%H:%M" in node.args[0].value
+        ):
+            receiver = node.func.value
+            if len(node.args) == 1:
+                # ``datetime.now(UTC).strftime(...)`` (aware receiver) is fine.
+                aware_receiver = (
+                    isinstance(receiver, ast.Call)
+                    and isinstance(receiver.func, ast.Attribute)
+                    and receiver.func.attr in {"now", "fromtimestamp", "utcnow"}
+                    and bool(receiver.args or receiver.keywords)
+                )
+                if not aware_receiver:
+                    self.hits.append(node.lineno)
+            elif not self._is_utc_source(node.args[1]):
+                self.hits.append(node.lineno)
+        self.generic_visit(node)
+
+
 def _production_py_files() -> list[Path]:
     files: list[Path] = []
     for name in SCAN_DIRS:
@@ -135,8 +187,8 @@ def _production_py_files() -> list[Path]:
 def _collect(make_visitor) -> list[str]:
     """Run *make_visitor* over every scanned production file; return hits.
 
-    Only files mentioning ``isoformat`` can match, so the text prefilter keeps
-    the AST pass cheap.
+    Only files mentioning ``isoformat``/``strftime`` can match, so the text
+    prefilter keeps the AST pass cheap.
     """
     offenders: list[str] = []
     for path in _production_py_files():
@@ -144,7 +196,7 @@ def _collect(make_visitor) -> list[str]:
             text = path.read_text(encoding="utf-8")
         except UnicodeDecodeError:
             continue
-        if "isoformat" not in text:
+        if "isoformat" not in text and "strftime" not in text:
             continue
         try:
             tree = ast.parse(text, filename=str(path))
@@ -184,5 +236,16 @@ def test_no_naive_fromtimestamp_isoformat_writers():
         "datetime.fromtimestamp(t).isoformat() without tz= serializes naive "
         "local time; JS reads it as the viewer's zone. Pass tz=UTC or use "
         "domain.shared.to_iso() instead. "
+        f"Offenders: {offenders}"
+    )
+
+
+def test_no_naive_iso_strftime_writers():
+    offenders = _collect(_NaiveIsoStrftime)
+
+    assert not offenders, (
+        "strftime with an ISO date-time format and no UTC source writes naive "
+        "local wall time (and '…%SZ' lies about UTC). Use "
+        "domain.shared.utc_now_iso() / to_iso() instead. "
         f"Offenders: {offenders}"
     )

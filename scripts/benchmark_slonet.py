@@ -20,6 +20,7 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 from domain.inference import SloProfile, save_soul
+from domain.shared import utc_now_iso
 from domain.training._internal.slonet import (
     SloAdam,
     SloEmbedding,
@@ -682,7 +683,7 @@ def main():
 
     # Save results
     out = {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": utc_now_iso(),
         "summary": {
             "passed": sum(1 for r in results if r.passed),
             "total": len(results),

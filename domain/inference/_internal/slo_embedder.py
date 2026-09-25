@@ -31,7 +31,6 @@ import json
 import logging
 import os
 import struct
-import time
 from pathlib import Path
 
 import numpy as np
@@ -67,7 +66,7 @@ QUALITY_NN_K = 3  # nearest-neighbour count for n-gram agreement diagnostic
 
 from contextlib import contextmanager
 
-from domain.shared import find_repo_root
+from domain.shared import find_repo_root, utc_now_iso
 
 
 @contextmanager
@@ -1170,7 +1169,7 @@ def _save_checkpoint(
         "lineage": "slonet-embedder",
         "system_prompt": f"embed_dim={embed_dim} max_seq_len={max_seq_len} n_heads={n_heads} n_layers={n_layers}",
         "metadata": {"embed_dim": embed_dim, "max_seq_len": max_seq_len},
-        "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_at": utc_now_iso(),
     }
     if quality is not None:
         meta["quality"] = quality

@@ -34,6 +34,8 @@ from typing import Any
 
 import numpy as np
 
+from domain.shared import normalize_local_iso, utc_now_iso
+
 logger = logging.getLogger("slo.lora_eval")
 from dataclasses import dataclass
 
@@ -468,7 +470,7 @@ class LoRAEvaluator:
         personality = self._score_personality(last_gen, soul_name)
 
         result = EvalResult(
-            timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
+            timestamp=utc_now_iso(),
             adapter_path=adapter_path,
             prompts=len(self.eval_prompts),
             references=references,
@@ -682,7 +684,7 @@ class LoRAEvaluator:
                 "lora_rank": int(data.get("rank", 8)),
                 "lora_alpha": float(data.get("alpha", 16)),
                 "user_count": len(data.get("source_users", [])),
-                "exported_at": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "exported_at": utc_now_iso(),
                 "eval_delta": eval_delta_dict,
             },
         )
@@ -727,7 +729,12 @@ class LoRAEvaluator:
             try:
                 with open(f) as fp:
                     data = json.load(fp)
-                    results.append(EvalResult(**data))
+                    result = EvalResult(**data)
+                if result.timestamp:
+                    # Legacy files hold server-local wall time with no offset;
+                    # repair to UTC "…Z" so the UI shows the true instant.
+                    result.timestamp = normalize_local_iso(result.timestamp) or result.timestamp
+                results.append(result)
             except Exception as e:
                 import logging
 

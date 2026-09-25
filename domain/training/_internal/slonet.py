@@ -24,7 +24,10 @@ import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
-from domain.shared import find_repo_root  # noqa: F401 — kept for compatibility
+from domain.shared import (  # noqa: F401 — find_repo_root kept for compatibility
+    find_repo_root,
+    utc_now_iso,
+)
 
 logger = logging.getLogger("slo.slonet")
 
@@ -4082,7 +4085,7 @@ class SloNet:
         self.lineage = lineage
         self.metadata = metadata or {}
         self._step = 0
-        self._created_at = time.strftime("%Y-%m-%dT%H:%M:%SZ")
+        self._created_at = utc_now_iso()
         self._sd: dict[str, np.ndarray] = {}
         self._user_adapters: dict[str, SloAdapterLayer] = {}
         self._active_user_id: str | None = None
@@ -5120,7 +5123,7 @@ def import_from_sou(path: str) -> SloNet:
         )
         net.system_prompt = system_prompt
         net.metadata = md
-        net._created_at = meta.get("created_at", time.strftime("%Y-%m-%dT%H:%M:%SZ"))
+        net._created_at = meta.get("created_at", utc_now_iso())
         net._step = meta.get("step", 0)
         if weights:
             net.load_state_dict(weights, strict=False)

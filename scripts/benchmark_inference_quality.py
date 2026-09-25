@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass
 
 import numpy as np
 
+from domain.shared import utc_now_iso
 from domain.training._internal.slonet import (
     SloAdam,
     SloEmbedding,
@@ -315,7 +316,7 @@ def main():
     print()
 
     out = {
-        "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timestamp": utc_now_iso(),
         "perplexity": ppl,
         "results": [asdict(r) for r in results],
         "best_config": best.config_name,

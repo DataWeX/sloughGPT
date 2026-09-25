@@ -101,6 +101,29 @@ def normalize_iso(value: object) -> str:
     return _emit(parsed) if parsed is not None else ""
 
 
+def normalize_local_iso(value: object) -> str:
+    """Like :func:`normalize_iso`, but naive input is *server-local* wall time.
+
+    Use on read paths for legacy rows written by ``datetime.now()`` /
+    ``time.strftime`` — those carry no offset, so the naive clock reads as the
+    server's local time (``astimezone()``), not UTC. Emits a UTC ``...Z``
+    string pointing at the true instant; unparseable input returns ``""``.
+    """
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        text = _DUPLICATE_Z.sub(r"\g<offset>", value.strip())
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError:
+            return ""
+    else:
+        return ""
+    if parsed.tzinfo is None:
+        parsed = parsed.astimezone()
+    return _emit(parsed)
+
+
 def is_valid_iso(value: object) -> bool:
     """True when *value* parses as an ISO 8601 timestamp."""
     return parse_iso(value) is not None

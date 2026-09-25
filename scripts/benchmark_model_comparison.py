@@ -26,6 +26,7 @@ import math
 import sys
 import time
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "packages" / "co
 def log(msg: str = ""):
     """Print progress to stderr so JSON output stays clean."""
     print(msg, file=sys.stderr)
+
+
+def _utc_iso() -> str:
+    """Current UTC time as RFC 3339 ``…Z`` — same shape as domain.shared.utc_now_iso."""
+    return datetime.now(UTC).isoformat().removesuffix("+00:00") + "Z"
 
 
 EVAL_PROMPTS = {
@@ -647,14 +653,14 @@ def main():
                 report = ComparisonReport(
                     models=results,
                     eval_prompts=len(prompts),
-                    timestamp=time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    timestamp=_utc_iso(),
                 )
                 print(json.dumps(asdict(report), indent=2))
             else:
                 print_comparison(results)
             # Save to history
             entry = {
-                "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "timestamp": _utc_iso(),
                 "models": [asdict(r) for r in results],
                 "prompts": prompts,
             }
@@ -755,9 +761,7 @@ def main():
                 print(f"  Failed: {e}")
 
     if args.json:
-        report = ComparisonReport(
-            models=results, eval_prompts=len(prompts), timestamp=time.strftime("%Y-%m-%dT%H:%M:%S")
-        )
+        report = ComparisonReport(models=results, eval_prompts=len(prompts), timestamp=_utc_iso())
         print(json.dumps(asdict(report), indent=2))
     elif args.summary:
         print_summary(results)
@@ -769,7 +773,7 @@ def main():
         save_path = Path(args.save)
         save_path.parent.mkdir(parents=True, exist_ok=True)
         entry = {
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "timestamp": _utc_iso(),
             "models": [asdict(r) for r in results],
             "prompts": prompts,
             "max_new_tokens": args.max_new_tokens,
@@ -792,7 +796,7 @@ def main():
     already_saved = args.save and Path(args.save).resolve() == BENCH_HISTORY.resolve()
     if results and not already_saved:
         entry = {
-            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "timestamp": _utc_iso(),
             "models": [asdict(r) for r in results],
             "prompts": prompts,
         }

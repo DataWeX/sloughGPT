@@ -4,7 +4,14 @@ from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from domain.shared import is_valid_iso, normalize_iso, parse_iso, to_iso, utc_now_iso
+from domain.shared import (
+    is_valid_iso,
+    normalize_iso,
+    normalize_local_iso,
+    parse_iso,
+    to_iso,
+    utc_now_iso,
+)
 
 
 class TestUtcNowIso:
@@ -187,3 +194,39 @@ class TestRepairIso:
         from domain.shared._internal.utils import repair_iso as facade_repair
 
         assert repair_iso is facade_repair
+
+
+class TestNormalizeLocalIso:
+    """normalize_local_iso repairs legacy naive (server-local) read-path values."""
+
+    def test_naive_read_as_server_local_not_utc(self):
+        out = normalize_local_iso("2026-09-25T10:55:42")
+        assert out.endswith("Z")
+        assert "+" not in out
+        naive = datetime(2026, 9, 25, 10, 55, 42)
+        assert datetime.fromisoformat(out) == naive.astimezone()
+
+    def test_aware_converted_to_utc(self):
+        out = normalize_local_iso("2026-09-25T10:55:42+03:00")
+        assert out.endswith("Z")
+        assert datetime.fromisoformat(out).hour == 7
+
+    def test_duplicate_z_legacy_repaired(self):
+        out = normalize_local_iso("2026-09-25T10:55:42+00:00Z")
+        assert out == "2026-09-25T10:55:42.000000Z"
+
+    def test_already_z_passes_through(self):
+        assert normalize_local_iso("2026-09-25T10:55:42Z") == "2026-09-25T10:55:42.000000Z"
+
+    def test_unparseable_returns_empty(self):
+        assert normalize_local_iso("Invalid Date") == ""
+        assert normalize_local_iso("") == ""
+        assert normalize_local_iso(None) == ""
+        assert normalize_local_iso(12345) == ""
+
+    def test_differs_from_normalize_iso_on_naive_input(self):
+        """The point: parse_iso assumes UTC, normalize_local_iso assumes local."""
+        local = normalize_local_iso("2026-09-25T10:55:42")
+        as_utc = normalize_iso("2026-09-25T10:55:42")
+        if datetime.now().astimezone().utcoffset() != timedelta(0):
+            assert local != as_utc
