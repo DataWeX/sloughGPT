@@ -1,5 +1,5 @@
 """
-Tests for domains/infrastructure/pugqeep/point.py — Point data class.
+Tests for domain/infrastructure/_internal/pugqeep/point.py — Point data class.
 
 Covers:
     - generate(): periodic, linear, polynomial, cluster, raw, unknown type

@@ -1,4 +1,4 @@
-"""Tests for domains/companion.py — pure logic, no mocks."""
+"""Tests for domain/companion.py — pure logic, no mocks."""
 
 import pytest
 

@@ -1,6 +1,6 @@
 """
 Minimal in-memory document store providing the ``get_db()`` interface
-used by :mod:`domains.billing.token_service` and other modules.
+used by :mod:`domain.billing._internal.token_service` and other modules.
 
 Provides ``find(collection, query)``, ``upsert(collection, query, data)``,
 and ``insert(collection, data)``.

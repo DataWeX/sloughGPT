@@ -15,7 +15,7 @@ Storage: MogDB (``data/training_pipeline.db``) with three collections —
 
 Feedback ratings use the feedback-domain vocabulary ``"thumbs_up"`` /
 ``"thumbs_down"`` / ``"neutral"`` (None = unrated), matching
-``domains/feedback``.
+``domain/feedback``.
 """
 
 from __future__ import annotations

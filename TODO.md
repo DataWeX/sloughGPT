@@ -16,13 +16,13 @@
 - [x] `apps/api/server/routers/files.py` → `data/uploads_mogdb/` + `data/uploads_json/`
 
 ### Domain Module Migrations
-- [x] `packages/core-py/domains/context/managers.py` (trait_weights) → `data/trait_weights_mogdb/` + `data/trait_weights_json/`
-- [x] `packages/core-py/domains/feedback/model_health.py` → `data/model_health_mogdb/` + `data/model_health_json/`
+- [x] `domain/context/_internal/managers.py` (trait_weights) → `data/trait_weights_mogdb/` + `data/trait_weights_json/`
+- [x] `domain/feedback/_internal/model_health.py` → `data/model_health_mogdb/` + `data/model_health_json/`
 
 ### SLNC Memory-Mapped Inference (already implemented)
-- [x] `domains/infrastructure/slnc/spec.py` — Binary format with tensor table, CRC32, flags
-- [x] `domains/infrastructure/slnc/parser.py` — Zero-copy mmap loader, prefetch, parallel loading
-- [x] `domains/infrastructure/slnc/compiler.py` — Safetensors → .slnc converter
+- [x] `domain/infrastructure/_internal/slnc/spec.py` — Binary format with tensor table, CRC32, flags
+- [x] `domain/infrastructure/_internal/slnc/parser.py` — Zero-copy mmap loader, prefetch, parallel loading
+- [x] `domain/infrastructure/_internal/slnc/compiler.py` — Safetensors → .slnc converter
 - [x] Full integration in `slonet_provider.py` (from_slnc, lazy_from_slnc, quantization, mmap release)
 
 ### Other Features (from previous session)
@@ -120,11 +120,11 @@
 - `apps/api/server/routers/errors.py` — MogDB migration
 - `apps/api/server/routers/files.py` — MogDB migration
 - `apps/api/server/controllers/health.py` — Fixed readiness probe, added MogDB health
-- `packages/core-py/domains/context/managers.py` — MogDB migration
-- `packages/core-py/domains/feedback/model_health.py` — MogDB migration
-- `packages/core-py/domains/feedback/database.py` — Fixed N+1 query
-- `packages/core-py/domains/cognitive/rag_service.py` — MogDB persistence
-- `packages/core-py/domains/learner/knowledge.py` — MogDB persistence
+- `domain/context/_internal/managers.py` — MogDB migration
+- `domain/feedback/_internal/model_health.py` — MogDB migration
+- `domain/feedback/_internal/database.py` — Fixed N+1 query
+- `domain/cognitive/rag_service.py` — MogDB persistence
+- `domain/learner/_internal/knowledge.py` — MogDB persistence
 - `tests/test_error_handler.py` — Fixed test_timeout_error
 
 ---

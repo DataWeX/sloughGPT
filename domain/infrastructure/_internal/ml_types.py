@@ -123,7 +123,7 @@ def _cuda_available() -> bool:
     """Check if CUDA is available.
 
     Lazy CuPy detection — mirrors the CUDA accelerator backend
-    (``domains/training/gpu/accelerator.py``). Returns ``True`` only when a
+    (``domain/training/_internal/gpu/accelerator.py``). Returns ``True`` only when a
     CuPy CUDA runtime is importable. No torch import.
     """
     try:

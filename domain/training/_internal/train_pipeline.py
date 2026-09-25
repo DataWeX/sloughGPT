@@ -2,10 +2,10 @@
 """
 SloughGPT Training Pipeline (SloNet-native)
 
-Trains :class:`domains.models.SloughGPTModel` on pure NumPy via SloNet. There is
+Trains :class:`domain.models.SloughGPTModel` on pure NumPy via SloNet. There is
 no external framework dependency anywhere in the training path: the optimizer is
 ``SloAdamW`` (decoupled weight decay), scheduling is
-``domains.training.lr_schedulers``, and checkpoints are ``.soul``
+``domain.training._internal.lr_schedulers``, and checkpoints are ``.soul``
 (self-contained weights + vocab + training state) with a ``.npz`` fallback.
 
 Features:
@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
 try:
     from domain.models import SloughGPTModel
-except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
+except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.experience_adapter import (
@@ -863,7 +863,7 @@ class SloughGPTTrainer:
     """
     Unified trainer for SloughGPTModel (pure NumPy / SloNet).
 
-    Satisfies :class:`domains.training.trainer_protocol.TrainerProtocol` structurally (``train()``).
+    Satisfies :class:`domain.training._internal.trainer_protocol.TrainerProtocol` structurally (``train()``).
 
     Features:
     - Gradient accumulation
@@ -1616,7 +1616,7 @@ class SloughGPTTrainer:
             resume_path: Optional checkpoint path (.soul or .npz). Accepts full
                 ``CheckpointManager`` bundles (model + optimizer + scheduler + step/epoch) and
                 **weights-only** bundles (``model_state_dict`` or flat tensors) as normalized
-                by :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
+                by :func:`domain.training._internal.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
                 and scheduler load are best-effort.
             resume_checkpoint: Optional pre-loaded checkpoint bundle to restore
                 from, bypassing all disk I/O. Takes precedence over

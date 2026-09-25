@@ -76,14 +76,9 @@ sloughGPT/
 │   ├── mobile/                # React Native app
 │   ├── gateway/               # API gateway
 │   └── data/                  # Data utilities
+├── domain/                   # Core Python logic (training, inference, feedback, shell, infrastructure)
 ├── packages/
-│   ├── core-py/domains/       # Core Python logic
-│   │   ├── training/          # SloNet, training pipelines, distillation
-│   │   ├── inference/         # Vector store, context, model loading
-│   │   ├── feedback/          # LoRA adapters, DPO, workflow manager
-│   │   ├── multimodal/        # Vision encoder, cross-attention
-│   │   ├── shell/             # Interactive REPL
-│   │   └── infrastructure/    # Config, errors, rate-limiter, lifecycle
+│   ├── core-py/               # Python core (tests, utils)
 │   ├── strui/                 # @sloughgpt/strui component library
 │   ├── mogdb/                 # Document database
 │   ├── sdk-py/                # Python SDK

@@ -5,7 +5,7 @@
 Lightweight layout:
 
 - `apps/` — runnable apps (see **[apps/README.md](../apps/README.md)**): API (`apps/api/server/`), CLI (`apps/cli/`), web (`apps/web/`)
-- `packages/core-py/` — domains and shared Python core (`domains/`, `utils/`); see **[packages/core-py/README.md](../packages/core-py/README.md)**
+- `packages/core-py/` — shared Python core (`utils/`); domain code lives at repo-root `domain/`; see **[packages/core-py/README.md](../packages/core-py/README.md)**
 - `packages/sdk-py/sloughgpt_sdk/` — Python API client SDK (**[README.md](../packages/sdk-py/sloughgpt_sdk/README.md)**)
 - `packages/sdk-ts/typescript-sdk/` — TypeScript SDK (npm root; **[README.md](../packages/sdk-ts/typescript-sdk/README.md)**)
 - `packages/standards/` — standards docs and JSON schemas; see **[packages/standards/README.md](../packages/standards/README.md)**

@@ -1,6 +1,6 @@
 """Memory commands - inspect, search, store, consolidate, archive, and clear the auto-memory layer.
 
-Thin wrappers over ``domains.memory.memory_service`` (infrastructure before
+Thin wrappers over ``domain.memory.memory_service`` (infrastructure before
 endpoints): the chat loop writes facts automatically, and these commands give
 operators visibility and manual control over that store.
 """

@@ -1,4 +1,4 @@
-"""Tests for domains/infrastructure/deployment/__init__.py."""
+"""Tests for domain/infrastructure/deployment/__init__.py."""
 
 import asyncio
 

@@ -1,6 +1,6 @@
 """Memory API router - inspect, search, store, and clear the auto-memory layer.
 
-Thin HTTP wrapper over ``domains.memory.memory_service`` (endpoints are
+Thin HTTP wrapper over ``domain.memory.memory_service`` (endpoints are
 adapters; all logic lives in core). Exposed so frontends and integrations can
 manage the memory store the chat loop writes to automatically.
 """

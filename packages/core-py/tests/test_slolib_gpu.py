@@ -1,4 +1,4 @@
-"""Tests for the SloLib GPU accelerator layer (domains/slolib/gpu/__init__.py).
+"""Tests for the SloLib GPU accelerator layer (domain/slolib/gpu/__init__.py).
 
 In this environment torch/cupy/pyopencl are all unavailable, so the CPU backend
 (_CPUBackend) plus the base-class numpy implementations are the production path.

@@ -147,7 +147,7 @@ python -m pytest -n auto -x -q
 python -m pytest tests/test_training_infrastructure.py
 
 # Run with coverage
-python -m pytest --cov=domains tests/
+python -m pytest --cov=domain tests/
 
 # Verbose output
 python -m pytest -v tests/

@@ -197,14 +197,14 @@ class TestExceptionParsing:
         log = ConsoleLogger("slo.api")
         tb = (
             "Traceback (most recent call last):\n"
-            "  File 'domains/foo.py', line 42, in run\n"
+            "  File 'domain/foo.py', line 42, in run\n"
             "    do_thing()\n"
             "RuntimeError: exploded"
         )
         exc_type, exc_msg, file_info = log._parse_exception(tb)
         assert exc_type == "RuntimeError"
         assert exc_msg == "exploded"
-        assert file_info == "domains/foo.py:42 in run()"
+        assert file_info == "domain/foo.py:42 in run()"
 
     def test_get_exception_color_programming(self, ansi_on):
         log = ConsoleLogger("slo.api")

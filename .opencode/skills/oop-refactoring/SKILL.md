@@ -197,7 +197,7 @@ npm run test          # Full suite
 ## File Organization
 
 ```
-packages/core-py/domains/
+domain/
 ├── infrastructure/
 │   ├── singleton.py          # SingletonMeta metaclass
 │   ├── server_state.py       # AtomicRef with __slots__

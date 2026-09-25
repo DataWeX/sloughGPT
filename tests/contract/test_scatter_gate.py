@@ -15,7 +15,6 @@ gradient clip:
 Production roots scanned:
 
 - ``domain/**``
-- ``packages/core-py/domains/**``
 
 Routers must never contain a loop body and must not import the one-loop
 internals (``training_handler``, ``train_pipeline``, ``SloughGPTTrainer``) —
@@ -32,7 +31,6 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROD_ROOTS = (
     REPO_ROOT / "domain",
-    REPO_ROOT / "packages" / "core-py" / "domains",
 )
 ROUTERS_DIR = REPO_ROOT / "apps" / "api" / "server" / "routers"
 

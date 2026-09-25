@@ -1,5 +1,5 @@
 """
-Tests for domains/infrastructure/spaced_repetition_engine.py — spaced repetition scheduler.
+Tests for domain/infrastructure/spaced_repetition_engine.py — spaced repetition scheduler.
 
 Covers:
     - Review scheduling with different performance levels

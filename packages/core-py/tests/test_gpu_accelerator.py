@@ -1,4 +1,4 @@
-"""Tests for the SloNet GPU acceleration layer (domains/training/gpu/accelerator.py).
+"""Tests for the SloNet GPU acceleration layer (domain/training/_internal/gpu/accelerator.py).
 
 The three backend classes (CPU, CUDA, Metal) are all pure-numpy compute in this
 environment — cupy and MPS are unavailable, so the numpy fallback branches are

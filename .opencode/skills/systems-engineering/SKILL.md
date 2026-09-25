@@ -284,7 +284,7 @@ def my_function() -> None:
 - `# ── Section ──────────` dividers in large files
 - `__all__` in `__init__.py` for public API
 - Lazy `__getattr__` for optional dependencies in `__init__.py`
-- Domain-driven directory structure: `domains/<domain>/`
+- Domain-driven directory structure: `domain/<domain>/`
 
 ### `__init__.py` Pattern
 
@@ -369,24 +369,24 @@ def __getattr__(name):
 
 | Component | File | Key Classes |
 |-----------|------|-------------|
-| Kernel | `packages/core-py/domains/shell/kernel.py` | `Kernel`, `Scheduler`, `TensorMemory`, `SyscallTable` |
-| Init | `packages/core-py/domains/shell/init.py` | `InitSystem`, `ServiceManager`, `ServiceDefinition` |
-| Devices | `packages/core-py/domains/shell/devices.py` | `DeviceSystem`, `DeviceBus` |
-| Device Drivers | `packages/core-py/domains/shell/device_system.py` | `DeviceDriver`, fd-based I/O |
-| VFS | `packages/core-py/domains/shell/addons/filesystem.py` | `VFSAddon`, `MountTable` |
-| x86 VM | `packages/core-py/domains/shell/vm.py` | `X86CPU`, `X86Assembler`, `ProcessTable`, `Scheduler` |
-| VM Engine | `packages/core-py/domains/shell/vm_engine.py` | `VMEngine`, `Breakpoint`, `StepEvent` |
-| VM Syscalls | `packages/core-py/domains/shell/vm.py` | `SYSCALL_TABLE` (INT 0x80 dispatch) |
-| VM RBAC | `packages/core-py/domains/shell/vm_permissions.py` | `Role`, `Permission`, `X86RBAC` |
-| VM Training | `packages/core-py/domains/shell/vm_training_bridge.py` | `TrainingBridge` |
-| VM Programs | `packages/core-py/domains/shell/vm_programs.py` | Built-in assembly programs |
-| Addons | `packages/core-py/domains/shell/addons/` | `neural.py`, `filesystem.py`, `shell_ui.py` |
-| Runtime | `packages/core-py/domains/shell/runtime.py` | `DaitRuntime` (boot/shutdown orchestration) |
-| Shell TUI | `packages/core-py/domains/shell/tui_repl.py` | `TuiRepl`, `_draw_borders`, `_render_*` |
-| Pane Engine | `packages/core-py/domains/shell/pane.py` | `Rect`, `Border`, `Pane`, `PaneLayout` |
-| Surfaces | `packages/core-py/domains/shell/surface.py` | `TextSurface`, `LogSurface`, `clip`, `_display_width` |
-| Console | `packages/core-py/domains/shell/console.py` | `Console`, `_TuiSpinner` |
-| Shell IO | `packages/core-py/domains/shell/io.py` | `ShellIO`, `ConsoleIO`, `MemoryIO` |
+| Kernel | `domain/shell/_internal/kernel.py` | `Kernel`, `Scheduler`, `TensorMemory`, `SyscallTable` |
+| Init | `domain/shell/_internal/init.py` | `InitSystem`, `ServiceManager`, `ServiceDefinition` |
+| Devices | `domain/shell/_internal/devices.py` | `DeviceSystem`, `DeviceBus` |
+| Device Drivers | `domain/shell/_internal/device_system.py` | `DeviceDriver`, fd-based I/O |
+| VFS | `domain/shell/_internal/addons/filesystem.py` | `VFSAddon`, `MountTable` |
+| x86 VM | `domain/shell/_internal/vm.py` | `X86CPU`, `X86Assembler`, `ProcessTable`, `Scheduler` |
+| VM Engine | `domain/shell/_internal/vm_engine.py` | `VMEngine`, `Breakpoint`, `StepEvent` |
+| VM Syscalls | `domain/shell/_internal/vm.py` | `SYSCALL_TABLE` (INT 0x80 dispatch) |
+| VM RBAC | `domain/shell/_internal/vm_permissions.py` | `Role`, `Permission`, `X86RBAC` |
+| VM Training | `domain/shell/_internal/vm_training_bridge.py` | `TrainingBridge` |
+| VM Programs | `domain/shell/_internal/vm_programs.py` | Built-in assembly programs |
+| Addons | `domain/shell/_internal/addons` | `neural.py`, `filesystem.py`, `shell_ui.py` |
+| Runtime | `domain/shell/_internal/runtime.py` | `DaitRuntime` (boot/shutdown orchestration) |
+| Shell TUI | `domain/shell/_internal/tui_repl.py` | `TuiRepl`, `_draw_borders`, `_render_*` |
+| Pane Engine | `domain/shell/_internal/pane.py` | `Rect`, `Border`, `Pane`, `PaneLayout` |
+| Surfaces | `domain/shell/_internal/surface.py` | `TextSurface`, `LogSurface`, `clip`, `_display_width` |
+| Console | `domain/shell/_internal/console.py` | `Console`, `_TuiSpinner` |
+| Shell IO | `domain/shell/_internal/io.py` | `ShellIO`, `ConsoleIO`, `MemoryIO` |
 | v86 Controller | `apps/web/lib/v86-controller.ts` | `V86Controller` |
 | v86 Hook | `apps/web/hooks/useV86.ts` | `useV86()` |
 | VM API | `apps/api/server/routers/vm.py` | `/vm/run`, `/vm/builtins`, `/vm/info` |
@@ -424,7 +424,7 @@ The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 
 #### Adding a New Kernel Addon
 
-1. Create `packages/core-py/domains/shell/addons/<name>.py`
+1. Create `domain/shell/_internal/addons<name>.py`
 2. Implement the `Addon` protocol from `base.py`
 3. Register via `kernel.install_addon(<name>)` in `runtime.py`
 4. Add test in `tests/test_shell_runtime.py`

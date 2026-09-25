@@ -3,7 +3,7 @@
 """
 Consolidated SSE fallback utilities.
 
-When ``domains.api.sse_envelope`` is available, this module re-exports its
+When ``domain.api._internal.sse_envelope`` is available, this module re-exports its
 functions.  When it is not available (e.g. during testing or when the
 core-py package is not installed), this module provides canonical
 fallback implementations so that routers do not need to duplicate them.

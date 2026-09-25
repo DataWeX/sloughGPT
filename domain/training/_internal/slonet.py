@@ -4919,7 +4919,7 @@ class SloAdamW(SloAdam):
 # =============================================================================
 
 SOU_MAGIC = b"SOUL"
-SOU_VERSION = 1  # shared with domains.inference.slo_format
+SOU_VERSION = 1  # shared with domain.inference._internal.slo_format
 
 
 def _sanitize(obj):

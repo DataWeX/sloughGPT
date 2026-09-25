@@ -51,7 +51,7 @@ python3 -m pip install aiofiles aiohttp websockets
 python3 -c "
 import sys
 try:
-    import domains
+    import domain
     print('✅ domains package import OK')
 except ImportError as e:
     print(f'❌ Import failed: {e}')
@@ -237,7 +237,7 @@ except ImportError as e:
 # 3. Test basic functionality (after python3 -m pip install -e . from repo root)
 python3 -c "
 try:
-    import domains
+    import domain
     print('✅ domains package OK')
 except Exception as e:
     print(f'❌ Import error: {e}')

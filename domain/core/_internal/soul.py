@@ -1,5 +1,5 @@
 """
-domains/core/soul.py - SloEngine
+domain/core/_internal/soul.py - SloEngine
 
 SloEngine IS the core model wrapper. Every inference call goes through here.
 It wraps a ModelInterface (the neural brain) and integrates:

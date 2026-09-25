@@ -31,7 +31,7 @@ natural language interpretation — all in a single Python module.
 
 ## Installation
 
-The shell is part of `packages/core-py/domains/shell/`. There are no extra dependencies
+The shell is part of `domain/shell`. There are no extra dependencies
 beyond Python 3.9+ and `requests` (for API calls to the backend).
 
 ### Launching
@@ -658,7 +658,7 @@ set in the environment before launching the shell.
 ### Module Layout
 
 ```
-domains/shell/
+domain/shell/
 ├── __init__.py     # Package exports
 ├── kernel.py       # DaitRuntime + Kernel (process/resource management)
 ├── repl.py         # ShellREPL (40+ commands, pipelines, readline)

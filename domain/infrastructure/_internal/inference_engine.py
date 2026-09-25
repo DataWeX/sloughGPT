@@ -7,7 +7,7 @@ CPU-bound) runs in its own process.
 Usage::
 
     # As a subprocess launched by the API server:
-    python -m domains.infrastructure.inference_engine \\
+    python -m domain.infrastructure._internal.inference_engine \\
         --model-id Qwen/Qwen2.5-0.5B-Instruct \\
         --host 127.0.0.1 --port 9100
 

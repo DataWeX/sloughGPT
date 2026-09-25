@@ -1,5 +1,5 @@
 """
-Tests for TokenizerManager (domains/training/tokenizer_manager.py).
+Tests for TokenizerManager (domain/training/_internal/tokenizer_manager.py).
 """
 
 import os

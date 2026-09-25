@@ -1,4 +1,4 @@
-"""Tests for domains/infrastructure/health_flow.py — diagnostic pipeline."""
+"""Tests for domain/infrastructure/_internal/health_flow.py — diagnostic pipeline."""
 
 from domain.infrastructure._internal.health_flow import (
     HealthFlowResult,

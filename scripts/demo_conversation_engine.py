@@ -15,7 +15,7 @@ def demo_conversation_engine():
 
     # Load conversation engine - absolute path
     ce_path = Path(
-        "/Users/mac/sloughGPT/packages/core-py/domains/infrastructure/conversation_engine.py"
+        "/Users/mac/sloughGPT/domain/infrastructure/conversation_engine.py"
     )
     spec = spec_from_file_location("conversation_engine", ce_path)
     ce_module = module_from_spec(spec)

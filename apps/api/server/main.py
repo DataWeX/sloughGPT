@@ -702,7 +702,7 @@ if __name__ == "__main__":
         uvicorn_kw["app"] = "main:app"
         uvicorn_kw["reload_includes"] = [
             "apps/api/server/**/*.py",
-            "packages/core-py/domains/**/*.py",
+            "domain/**/*.py",
         ]
         uvicorn_kw["reload_excludes"] = [
             ".*/**",

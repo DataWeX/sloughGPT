@@ -1,6 +1,6 @@
 """
 Auto-Ingestion Pipeline - Scans the repo and ingests all code/docs into vector store.
-Run: python3 -m domains.infrastructure.auto_ingest --path . --provider chromadb
+Run: python3 -m domain.infrastructure._internal.auto_ingest --path . --provider chromadb
 """
 
 from __future__ import annotations

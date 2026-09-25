@@ -439,7 +439,7 @@ python3 -m pytest tests/test_*.py -v
 
 echo ""
 echo "Running with coverage..."
-python3 -m pytest tests/ --cov=domains --cov-report=html --cov-report=term
+python3 -m pytest tests/ --cov=domain --cov-report=html --cov-report=term
 EOF
     chmod +x test.sh
     print_status "Created test.sh"
@@ -447,37 +447,6 @@ EOF
     print_status "Keeping existing test.sh"
     fi
 
-    # Benchmark script
-    if [ ! -f benchmark.sh ]; then
-    cat > benchmark.sh << 'EOF'
-#!/bin/bash
-# Run performance benchmarks
-
-source .venv/bin/activate
-
-export CUDA_VISIBLE_DEVICES=""
-
-echo "Running benchmarks..."
-python3 -c "
-from domains.inference.engine import create_engine
-from domains.ml_infrastructure.benchmarking import benchmark_model
-
-print('Loading model...')
-engine = create_engine('gpt2', device='cpu')
-
-print('Running benchmark...')
-result = benchmark_model(engine.model, engine.tokenizer, device='cpu')
-print(f'Model: {result.model_name}')
-print(f'Parameters: {result.num_parameters:,}')
-print(f'Memory: {result.memory_mb:.2f} MB')
-print(f'Throughput: {result.throughput_tokens_per_sec:.2f} tokens/sec')
-"
-EOF
-    chmod +x benchmark.sh
-    print_status "Created benchmark.sh"
-    else
-    print_status "Keeping existing benchmark.sh"
-    fi
 
     echo ""
 }

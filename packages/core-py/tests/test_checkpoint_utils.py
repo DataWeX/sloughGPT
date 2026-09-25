@@ -1,4 +1,4 @@
-"""Tests for domains/training/checkpoint_utils.py — shared checkpoint helpers.
+"""Tests for domain/training/_internal/checkpoint_utils.py — shared checkpoint helpers.
 
 Exercises bundle normalization, state-dict extraction, hyperparameter
 resolution and real SloughGPTModel load round-trips against the numpy

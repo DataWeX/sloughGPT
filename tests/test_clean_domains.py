@@ -170,7 +170,7 @@ class TestChatDomain:
 
 
 # =============================================================================
-# CompanionSystem Tests (domains/companion.py)
+# CompanionSystem Tests (domain/companion.py)
 # =============================================================================
 
 

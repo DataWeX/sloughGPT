@@ -210,8 +210,8 @@ run_tests() {
     echo -e "${BLUE}   Testing SloughGPT import...${NC}"
     $PYTHON_CMD -c "
 try:
-    import domains
-    print('✅ domains package import successful')
+    import domain
+    print('✅ domain package import successful')
 except Exception as e:
     print(f'❌ Import failed: {e}')
     import sys

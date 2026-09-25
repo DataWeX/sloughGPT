@@ -31,7 +31,7 @@ class FileIndex:
     Usage::
 
         idx = FileIndex()
-        idx.index_directory("packages/core-py/domains")
+        idx.index_directory("domain")
         results = idx.search("how does the embedding work")
         for path, line, score, snippet in results:
             print(f"[{score:.3f}] {path}:{line} — {snippet}")

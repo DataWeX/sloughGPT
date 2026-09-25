@@ -65,7 +65,7 @@ class ResponseTracker:
     """
 
     def __init__(self, log_dir: str = "data/response_logs"):
-        # Navigate from domains/feedback to repo root
+        # Navigate from domain/feedback to repo root
         repo_root = find_repo_root(Path(__file__).resolve())
         self.log_dir = repo_root / log_dir
         self.log_dir.mkdir(parents=True, exist_ok=True)

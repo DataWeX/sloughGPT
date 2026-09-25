@@ -1,4 +1,4 @@
-"""``domains.training.lm_eval_char`` — SloughGPT char-LM perplexity on a text file.
+"""``domain.training._internal.lm_eval_char`` — SloughGPT char-LM perplexity on a text file.
 
 Vocabulary resolution and warnings: ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
 """

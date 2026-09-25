@@ -1,7 +1,7 @@
 # x86 VM Console
 
 The VM console (`/vm`) is a browser-based x86-32 assembly playground backed by the
-`X86VirtualSystem` in `packages/core-py/domains/shell/vm.py`. Programs run under an
+`X86VirtualSystem` in `domain/shell/_internal/vm.py`. Programs run under an
 RBAC role; training syscalls are gated behind the `ADMIN` role.
 
 ## Architecture
@@ -121,9 +121,9 @@ base64 URL hash takes precedence over the saved source on load.
 
 | File | Purpose |
 |------|---------|
-| `packages/core-py/domains/shell/vm.py` | `X86VirtualSystem`, `X86Assembler`, syscall handlers, `_perm_map` |
-| `packages/core-py/domains/shell/vm_permissions.py` | `Role`, `Permission`, `X86RBAC` |
-| `packages/core-py/domains/shell/vm_training_bridge.py` | `VMTrainingBridge`, `get_bridge()` |
+| `domain/shell/_internal/vm.py` | `X86VirtualSystem`, `X86Assembler`, syscall handlers, `_perm_map` |
+| `domain/shell/_internal/vm_permissions.py` | `Role`, `Permission`, `X86RBAC` |
+| `domain/shell/_internal/vm_training_bridge.py` | `VMTrainingBridge`, `get_bridge()` |
 | `apps/api/server/routers/vm.py` | `/vm/*` endpoints, role mapping |
 | `apps/web/app/(app)/vm/page.tsx` | Console UI: role selector, samples, Training card, permission banner |
 | `apps/web/lib/vm-controller.ts` | `vmController.run/builtins/info/trainingJob` |

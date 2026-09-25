@@ -1,4 +1,4 @@
-"""Tests for domains/infrastructure/metrics.py.
+"""Tests for domain/infrastructure/metrics.py.
 
 psutil is not installed in this environment; a minimal fake is injected into
 ``sys.modules`` for the duration of this test module (auto-restored) so the

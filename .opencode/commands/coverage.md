@@ -38,7 +38,7 @@ Systematic test coverage improvement for Python modules.
 ### Step 1: Measure
 ```bash
 python3 -m pytest tests/test_<module>*.py \
-  --cov=domains/<area>/<module> \
+  --cov=domain/<area>/<module> \
   --cov-report=term-missing -q
 ```
 
@@ -68,12 +68,12 @@ except ImportError:
 ### Step 5: Verify
 ```bash
 python3 -m pytest tests/test_<module>*.py -q
-python3 -m py_compile domains/<area>/<module>.py
+python3 -m py_compile domain/<area>/<module>.py
 ```
 
 ### Step 6: Report
 ```
-ROUND N: domains/<area>/<module>.py 100% (<total> stmts)
+ROUND N: domain/<area>/<module>.py 100% (<total> stmts)
 - Tests added: <count>
 - Coverage: <before>% -> <after>%
 - Bugs found: <count>
@@ -85,11 +85,11 @@ ROUND N: domains/<area>/<module>.py 100% (<total> stmts)
 
 | Priority | Area | Path |
 |----------|------|------|
-| 1 | Training | `domains/training/*.py` |
-| 2 | Infrastructure | `domains/infrastructure/*.py` |
-| 3 | Inference | `domains/inference/*.py` |
-| 4 | Feedback | `domains/feedback/*.py` |
-| 5 | Agents | `domains/agents/*.py` |
+| 1 | Training | `domain/training/*.py` |
+| 2 | Infrastructure | `domain/infrastructure/*.py` |
+| 3 | Inference | `domain/inference/*.py` |
+| 4 | Feedback | `domain/feedback/*.py` |
+| 5 | Agents | `domain/agents/*.py` |
 
 ## Rules
 

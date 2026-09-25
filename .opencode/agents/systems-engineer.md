@@ -220,7 +220,7 @@ make test-py ARGS="tests/test_shell_*.py -q"
 2. **Linting**: `ruff check <file>`
 3. **Type checking**: `mypy <file>` (if applicable)
 4. **Unit tests**: `pytest tests/test_<module>.py -x -v`
-5. **Coverage**: `pytest tests/ --cov=domains --cov-report=term-missing`
+5. **Coverage**: `pytest tests/ --cov=domain --cov-report=term-missing`
 6. **Integration**: `pytest tests/test_integration*.py -x -v`
 7. **No regressions**: Run full test suite before finishing
 

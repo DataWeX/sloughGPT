@@ -1,5 +1,5 @@
 """
-Tests for domains/ops/__init__.py — Fused operations (pure numpy).
+Tests for domain/ops/__init__.py — Fused operations (pure numpy).
 
 Covers:
     - FusedLayerNorm: forward correctness, bias/no-bias, float64→float32 cast
