@@ -17,7 +17,10 @@
       "import": "./dist/useSloughGPT.js"
     }
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "build:bun": "bun run build",
@@ -31,7 +34,14 @@
     "install:bun": "bun install",
     "install:yarn": "yarn install"
   },
-  "keywords": ["sloughgpt", "ai", "llm", "typescript", "react", "react-native"],
+  "keywords": [
+    "sloughgpt",
+    "ai",
+    "llm",
+    "typescript",
+    "react",
+    "react-native"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -49,7 +59,7 @@
     "react": ">=17.0.0"
   },
   "devDependencies": {
-    "@sloughgpt/eslint-config": "workspace:*",
+    "@sloughgpt/eslint-config": "file:../../eslint-config",
     "@types/react": "^19.2.18",
     "eslint": "^9.0.0",
     "typescript": "^5.0.0",

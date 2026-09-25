@@ -42,7 +42,7 @@
     "zustand": "^4.3.0"
   },
   "devDependencies": {
-    "@sloughgpt/eslint-config": "workspace:*",
+    "@sloughgpt/eslint-config": "file:../eslint-config",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.10.0",
