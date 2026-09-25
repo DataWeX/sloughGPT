@@ -492,22 +492,36 @@ describe('HttpCache', () => {
     expect(cache.stats.misses).toBe(1)
   })
 
-  it('evicts after TTL expires', async () => {
-    const cache = new HttpCache({ ttlMs: 10, staleWhileRevalidate: false })
-    cache.set('key1', 'value1')
-    await new Promise((r) => setTimeout(r, 15))
-    expect(cache.get('key1')).toBeUndefined()
+  it('evicts after TTL expires', () => {
+    // Fake timers: the live version slept 15ms against a 10ms window, so under
+    // load a late timer flipped the result either way.
+    vi.useFakeTimers()
+    try {
+      const cache = new HttpCache({ ttlMs: 10, staleWhileRevalidate: false })
+      cache.set('key1', 'value1')
+      vi.advanceTimersByTime(15)
+      expect(cache.get('key1')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
-  it('serves stale data within stale-while-revalidate window', async () => {
-    const cache = new HttpCache({ ttlMs: 10, staleWhileRevalidate: true })
-    cache.set('key1', 'value1')
-    await new Promise((r) => setTimeout(r, 15))
-    const hit = cache.get('key1')
-    expect(hit).toBeDefined()
-    expect(hit!.data).toBe('value1')
-    expect(hit!.stale).toBe(true)
-    expect(cache.stats.staleHits).toBe(1)
+  it('serves stale data within stale-while-revalidate window', () => {
+    // The window here is (10ms, 20ms] — a real sleep landing on either side of
+    // it made this test pass or fail depending on machine load.
+    vi.useFakeTimers()
+    try {
+      const cache = new HttpCache({ ttlMs: 10, staleWhileRevalidate: true })
+      cache.set('key1', 'value1')
+      vi.advanceTimersByTime(15)
+      const hit = cache.get('key1')
+      expect(hit).toBeDefined()
+      expect(hit!.data).toBe('value1')
+      expect(hit!.stale).toBe(true)
+      expect(cache.stats.staleHits).toBe(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('invalidate removes specific key', () => {
