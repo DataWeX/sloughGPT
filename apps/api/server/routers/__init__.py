@@ -7,6 +7,8 @@ heavy dependencies (JAX, sentence-transformers, PyTorch) at module-load time.
 This cuts API cold-start from ~100s to ~8s.
 """
 
+from __future__ import annotations
+
 import logging
 
 from fastapi import APIRouter
@@ -98,6 +100,7 @@ def get_all_routers() -> list[APIRouter]:
         "tools",
         "model_stack",
         "phoneme",
+        "collections",
     ]
 
     _cached_routers = []
