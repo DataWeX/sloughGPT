@@ -151,18 +151,23 @@ class TestStatus:
 class TestTranscribe:
     """POST /multimodal/transcribe"""
 
-    @patch(MGR_TARGET)
-    def test_transcribe_audio(self, mock_get):
-        mock_get.return_value = _mock_manager()
-        resp = client.post(
-            "/multimodal/transcribe",
-            files={"file": ("test.wav", b"fake-audio", "audio/wav")},
-            data={"language": "en"},
-        )
+    def test_transcribe_audio(self):
+        engine = MagicMock()
+        result = MagicMock()
+        result.success = True
+        result.data = "hello world"
+        result.metadata = {"language": "en"}
+        engine.recognize.return_value = result
+        with patch.object(multimodal_router, "_voice_engine", engine):
+            resp = client.post(
+                "/multimodal/transcribe",
+                files={"file": ("test.wav", b"fake-audio", "audio/wav")},
+                data={"language": "en"},
+            )
         assert resp.status_code == 200
         data = _get_data(resp)
         assert data["text"] == "hello world"
-        assert data["confidence"] == 0.9
+        assert data["language"] == "en"
 
     @patch(MGR_TARGET)
     def test_transcribe_rejects_non_audio(self, mock_get):
@@ -290,9 +295,6 @@ class TestDPO:
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_run(self):
-        import sys
-        import types
-
         class _FakeTrainer:
             def __init__(self, model, tokenizer, learning_rate):
                 self._lr = learning_rate
@@ -308,9 +310,10 @@ class TestDPO:
                     "pairs_trained": max_pairs,
                 }
 
-        fake_mod = types.ModuleType("domain.feedback._internal.hf_dpo")
-        fake_mod.HFDPOTrainer = _FakeTrainer
-        with patch.dict(sys.modules, {"domain.feedback._internal.hf_dpo": fake_mod}):
+        # The endpoint late-imports HFDPOTrainer from the facade; patch the
+        # facade attr directly so it works even when domain.feedback was already
+        # imported (eager-bound) by earlier tests in the same process.
+        with patch("domain.feedback.HFDPOTrainer", _FakeTrainer):
             with patch(
                 "apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
                 return_value=(object(), object()),
@@ -448,14 +451,16 @@ class TestAnalyze:
 class TestSynthesizeSpeech:
     """POST /multimodal/synthesize-speech"""
 
-    @patch("domain.multimodal._internal.tts.TTSEngine")
-    def test_synthesizes_waveform(self, mock_tts_cls):
+    def test_synthesizes_waveform(self):
         import numpy as np
 
-        tts = mock_tts_cls.return_value
-        tts.text_to_waveform.return_value = np.zeros(1600)
-        tts.sample_rate = 16000
-        resp = client.post("/multimodal/synthesize-speech", data={"text": "hi"})
+        engine = MagicMock()
+        result = MagicMock()
+        result.success = True
+        result.data = np.zeros(1600, dtype=np.float32)
+        engine.synthesize.return_value = result
+        with patch.object(multimodal_router, "_voice_engine", engine):
+            resp = client.post("/multimodal/synthesize-speech", data={"text": "hi"})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert "audio" in data
@@ -530,7 +535,7 @@ class TestProcessVideo:
         return engine
 
     @patch(MGR_TARGET)
-    @patch("domain.multimodal._internal.video.VideoProcessor")
+    @patch("domain.multimodal.VideoProcessor")
     def test_processes_video(self, mock_processor_cls, mock_get):
         import numpy as np
 
@@ -553,7 +558,7 @@ class TestProcessVideo:
         assert data["num_frames"] == 2
 
     @patch(MGR_TARGET)
-    @patch("domain.multimodal._internal.video.VideoProcessor")
+    @patch("domain.multimodal.VideoProcessor")
     def test_returns_500_when_engine_missing(self, mock_processor_cls, mock_get):
         import numpy as np
 

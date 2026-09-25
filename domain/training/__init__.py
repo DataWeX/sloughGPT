@@ -57,6 +57,13 @@ _LAZY_IMPORTS = {
     "get_training_engine": (".engine", "get_training_engine"),
     "TrainingFeedClient": ("._internal.training_feed", "TrainingFeedClient"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
+    "RepoImporter": ("._internal.data_import", "RepoImporter"),
+    "HuggingFaceImporter": ("._internal.data_import", "HuggingFaceImporter"),
+    "URLImporter": ("._internal.data_import", "URLImporter"),
+    "ISBNImporter": ("._internal.data_import", "ISBNImporter"),
+    "DataImporter": ("._internal.data_import", "DataImporter"),
+    "BooksSearch": ("._internal.data_import", "BooksSearch"),
+    "GitHubSearch": ("._internal.data_import", "GitHubSearch"),
 }
 
 
@@ -111,4 +118,11 @@ __all__ = [
     "get_training_engine",
     "TrainingFeedClient",
     "FeedBatchSampler",
+    "RepoImporter",
+    "HuggingFaceImporter",
+    "URLImporter",
+    "ISBNImporter",
+    "DataImporter",
+    "BooksSearch",
+    "GitHubSearch",
 ]

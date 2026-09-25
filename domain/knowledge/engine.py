@@ -64,6 +64,10 @@ class KnowledgeEngine:
             self._ingestor = get_knowledge_ingestor()
         return self._ingestor
 
+    def get_ingestor(self) -> Any:
+        """Return the canonical URL ingestor backing this engine."""
+        return self._get_ingestor()
+
     def _get_filter(self) -> Any:
         if self._filter is None:
             from domain.knowledge import get_data_filter

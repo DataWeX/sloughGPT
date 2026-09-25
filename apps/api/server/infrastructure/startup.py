@@ -62,7 +62,7 @@ _PREWARM_MODEL_LOAD_IMPORTS = [
     "domains.infrastructure.model_catalog",
     "domains.infrastructure.task_queue",
     "domains.infrastructure.training_queue",
-    "domains.api.sse_envelope",
+    "domain.api._internal.sse_envelope",
     "pydantic.v1",
 ]
 

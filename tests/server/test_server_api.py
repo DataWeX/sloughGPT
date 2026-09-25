@@ -184,7 +184,7 @@ class TestStatsEndpoints:
 class TestAutoTrainEndpoints:
     @pytest.mark.slow
     def test_list_checkpoints(self):
-        response = client.get("/auto-train/checkpoints")
+        response = client.get("/training/checkpoints")
         assert response.status_code == 200
         data = response.json()
         payload = data.get("data", data)

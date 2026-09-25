@@ -32,15 +32,25 @@ try:
 except Exception:
     pass
 
-# Disable the readiness gate for tests so schema-validation tests can
-# reach the router and trigger 422s instead of being blocked with 503.
+# Disable the readiness gate ONLY on the shared full-app test instance so
+# schema-validation tests can reach the router and trigger 422s instead of
+# being blocked with 503.
+#
+# This must NOT monkeypatch ReadinessGateMiddleware.dispatch globally: the
+# class-level patch leaks process-wide and silently disables the gate for
+# tests/server/test_readiness_gate.py (which adds the REAL middleware to its
+# own app), making its blocked-vs-passing assertions order-dependent.
 try:
     from infrastructure.middleware import ReadinessGateMiddleware as _RGM
+    from main import app as _main_app
 
-    async def _noop_readiness(self, request, call_next):
-        return await call_next(request)
-
-    _RGM.dispatch = _noop_readiness
+    _main_app.user_middleware = [
+        m for m in _main_app.user_middleware if getattr(m, "cls", None) is not _RGM
+    ]
+    # Force the middleware stack to rebuild on the first request so the
+    # removal takes effect even if the stack was already materialized.
+    if hasattr(_main_app, "middleware_stack"):
+        _main_app.middleware_stack = None
 except Exception:
     pass
 

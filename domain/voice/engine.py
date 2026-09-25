@@ -59,7 +59,9 @@ class VoiceEngine:
         if self._recognizer is None:
             from domain.voice._internal.speech import get_speech_recognizer
 
-            self._recognizer = get_speech_recognizer(use_server=False)
+            # Server-side engine: BrowserSpeechRecognizer has no recognize() —
+            # it only exposes Web Speech API config for the frontend JS.
+            self._recognizer = get_speech_recognizer(use_server=True)
         return self._recognizer
 
     def _get_encoder(self) -> Any:

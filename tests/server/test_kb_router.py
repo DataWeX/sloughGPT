@@ -199,17 +199,15 @@ class TestKnowledgeStats:
     @patch("domain.knowledge.get_knowledge_memory")
     def test_returns_stats(self, mock_get_mem, client):
         mem = mock_get_mem.return_value
-        mem.stats.return_value = {
-            "total_items": 1,
-            "topics": {"general": 1},
-            "topic_count": 1,
-            "sources": {"manual": 1},
-            "avg_importance": 0.5,
-            "searchable": True,
-        }
+        # KnowledgeEngine.stats() derives stats from memory.list_all(), not memory.stats().
+        mem.list_all.return_value = [
+            {"topic": "general", "source": "manual", "importance": 0.5, "content": "x"}
+        ]
         resp = client.get("/knowledge/stats")
         assert resp.status_code == 200
-        assert resp.json()["data"]["total_items"] == 1
+        data = resp.json()["data"]
+        assert data["total_items"] == 1
+        assert data["topic_count"] == 1
 
 
 class TestDeleteKnowledge:

@@ -457,10 +457,10 @@ class InferRouter:
                 try:
                     import numpy as np
 
+                    model_name = req.model or getattr(model, "model_id", "unknown")
                     vec = model.embed(req.text)
                     if isinstance(vec, np.ndarray):
                         vec = vec.tolist()
-                    model_name = req.model or getattr(model, "model_id", "unknown")
                     _elapsed_ms = (_time.monotonic() - _t0) * 1000
                     safe_audit_log(
                         "infer.embed",

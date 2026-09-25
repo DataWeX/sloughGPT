@@ -294,9 +294,10 @@ class TestPhaseConfigReady:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with (
             patch("domain.infrastructure._internal.config.get_config") as mock_cfg,
-            patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager"
-            ) as mock_rm,
+            # _phase_config late-imports the facade, which binds eagerly on first
+            # import — patch the facade so the call is intercepted regardless of
+            # whether domain.infrastructure.resource_manager was already imported.
+            patch("domain.infrastructure.resource_manager.get_resource_manager") as mock_rm,
         ):
             rm = mock_rm.return_value
             rm.apply_blas_env.return_value = None

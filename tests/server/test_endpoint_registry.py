@@ -163,7 +163,7 @@ class TestEndpointRegistry:
 
     # ── metrics ─────────────────────────────────────────────────────
     def test_metrics_root(self):
-        r = client.get("/metrics")
+        r = client.get("/system/metrics")
         assert r.status_code == 200
 
     # ── config ──────────────────────────────────────────────────────
@@ -212,11 +212,11 @@ class TestEndpointRegistry:
 
     # ── auto-train (no model loaded) ────────────────────────────────
     def test_auto_train_status(self):
-        r = client.get("/auto-train/status")
+        r = client.get("/settings/training/auto-train/status")
         assert r.status_code == 200
 
     def test_auto_train_checkpoints(self):
-        r = client.get("/auto-train/checkpoints")
+        r = client.get("/training/checkpoints")
         assert r.status_code == 200
         data = _data(r)
         assert isinstance(data, list)

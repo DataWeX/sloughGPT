@@ -3,12 +3,18 @@ Tests for the status router — /status, /ready, /live.
 """
 
 import time
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from apps.api.server.routers.status import StatusRouter
+
+# /ready's inference check calls get_engine(), which needs a platform build
+# artifact (libtransformer_forward.dylib) absent in most test environments.
+# Stub it so readiness assertions stay environment-independent.
+NATIVE_ENGINE_TARGET = "domain.inference._internal.native.engine.get_engine"
 
 
 @pytest.fixture
@@ -74,18 +80,21 @@ class TestGetStatus:
 class TestReadiness:
     """GET /ready"""
 
-    def test_returns_ready(self, client):
+    @patch(NATIVE_ENGINE_TARGET, return_value=MagicMock())
+    def test_returns_ready(self, _mock_engine, client):
         resp = client.get("/ready")
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
         assert body["data"]["ready"] is True
 
-    def test_ready_is_always_true(self, client):
+    @patch(NATIVE_ENGINE_TARGET, return_value=MagicMock())
+    def test_ready_is_always_true(self, _mock_engine, client):
         resp = client.get("/ready")
         assert resp.json()["data"]["ready"] is True
 
-    def test_ready_multiple_times(self, client):
+    @patch(NATIVE_ENGINE_TARGET, return_value=MagicMock())
+    def test_ready_multiple_times(self, _mock_engine, client):
         for _ in range(3):
             assert client.get("/ready").json()["data"]["ready"] is True
 
@@ -125,7 +134,8 @@ class TestLiveness:
         resp = client.post("/status")
         assert resp.status_code == 405
 
-    def test_ready_data_shape(self, client):
+    @patch(NATIVE_ENGINE_TARGET, return_value=MagicMock())
+    def test_ready_data_shape(self, _mock_engine, client):
         body = client.get("/ready").json()
         assert set(body["data"].keys()) >= {"ready"}
         assert body["data"]["ready"] is True

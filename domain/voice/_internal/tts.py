@@ -365,7 +365,7 @@ class TTSEngine:
     def __init__(
         self, vocab_size=NUM_PHONEMES, embed_dim=128, hidden_dim=256, n_mels=80, sample_rate=22050
     ):
-        _, _, SloAdam, _, _, _ = _get_slonet()
+        _, _, _, _, _, SloAdam = _get_slonet()
         self.decoder = SpectrogramDecoder(vocab_size, embed_dim, hidden_dim, n_mels)
         self.vocoder = GriffinLimVocoder(n_mels=n_mels, sample_rate=sample_rate)
         self.sample_rate = sample_rate

@@ -123,7 +123,7 @@ class TestRegister:
                 "password": "secret123",
             },
         )
-        assert set(resp.json()["user"].keys()) == {"id", "username", "email"}
+        assert set(resp.json()["user"].keys()) == {"id", "username", "email", "role", "status"}
 
     def test_register_persists_v1_hash(self, router, client):
         saved = {}
@@ -377,7 +377,7 @@ class TestGetMe:
             }
         )
         resp = client.get("/auth/me", headers={"Authorization": "Bearer t"})
-        assert set(resp.json().keys()) == {"id", "username", "email"}
+        assert set(resp.json().keys()) == {"id", "username", "email", "role", "status"}
 
     def test_me_wrong_method_405(self, client):
         resp = client.post("/auth/me")

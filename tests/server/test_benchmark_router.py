@@ -50,7 +50,7 @@ def _patch_server(provider):
     fake_core = MagicMock()
     fake_core.model.get.return_value = provider
     return patch(
-        "domain.infrastructure._internal.server_state.get_server_state", return_value=fake_core
+        "domain.infrastructure.server_state.get_server_state", return_value=fake_core
     )
 
 
@@ -294,7 +294,7 @@ class TestPerplexityPath:
     def test_perplexity_error_returns_500(self, client):
         with (
             patch(
-                "domain.infrastructure._internal.server_state.get_server_state",
+                "domain.infrastructure.server_state.get_server_state",
                 side_effect=RuntimeError("controller crash"),
             ),
             patch("domain.infrastructure._internal.errors.emit_error_event"),

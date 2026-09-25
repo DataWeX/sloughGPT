@@ -282,7 +282,7 @@ class TestResolveActiveModelId:
         registry = MagicMock()
         registry.default_id = "reg-model"
         with patch(
-            "domain.infrastructure._internal.model_registry.get_model_registry",
+            "domain.infrastructure.model_registry.get_model_registry",
             return_value=registry,
         ):
             assert ctrl._resolve_active_model_id() == "reg-model"
@@ -292,7 +292,7 @@ class TestResolveActiveModelId:
         registry.default_id = None
         with (
             patch(
-                "domain.infrastructure._internal.model_registry.get_model_registry",
+                "domain.infrastructure.model_registry.get_model_registry",
                 return_value=registry,
             ),
             patch("state.model_type", "state-model", create=True),
@@ -304,7 +304,7 @@ class TestResolveActiveModelId:
         registry.default_id = None
         with (
             patch(
-                "domain.infrastructure._internal.model_registry.get_model_registry",
+                "domain.infrastructure.model_registry.get_model_registry",
                 return_value=registry,
             ),
             patch("state.model_type", None, create=True),
