@@ -107,7 +107,7 @@ only through the same stable interfaces:
 
 | #   | Feature              | Status           | Domain module          | Notes                                                              |
 | --- | -------------------- | ---------------- | ---------------------- | ------------------------------------------------------------------ |
-| 15  | **Consciousness**    | Built, not wired | `consciousness`        | 27 sub-pages exist but cognitive engine not connected to inference |
+| 15  | **Consciousness**    | Wired           | `consciousness`        | Level-gated post-gen wiring (SloEngine hook + router `_run_post_gen_tasks`); narrative via reasoning_chain + `CONSCIOUSNESS` SSE; 27 sub-pages still need flow review |
 | 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works, but router bypasses domain        |
 | 17  | **Phoneme Learning** | Over-built       | `voice` (phoneme)      | 47 components, 12 tabs — needs flow restructure                    |
 | 18  | **Tokenizer**        | Over-built       | `training` (tokenizer) | 9 tabs, 12 sub-cards — needs consolidation                         |
@@ -241,7 +241,7 @@ Single /training router with sub-paths for each feature
 | `routers/session_store.py`      | Utility module, not a router              | Move to `controllers/` or `infrastructure/` |
 | Phoneme: 47 components          | Over-built for Alex's needs               | Keep components, restructure page into flow |
 | Tokenizer: 9 tabs, 12 sub-cards | Over-built                                | Consolidate into 2-3 sections               |
-| Consciousness: 27 sub-pages     | Premature — engine not wired              | Keep pages, wire engine first               |
+| Consciousness: 27 sub-pages     | Engine wired; pages still over-built        | Keep pages, review flows against UX_FLOWS.md |
 
 ---
 
@@ -252,7 +252,7 @@ Single /training router with sub-paths for each feature
 3. **Feature engines** — VoiceEngine, KnowledgeEngine, TrainingEngine (follow ToolsEngine pattern)
 4. **Wire routers** — point routers at engines, not internals
 5. **UI flows** — restructure phoneme, knowledge, training pages to follow UX_FLOWS.md
-6. **Consciousness** — wire cognitive engine to inference pipeline
+6. **Consciousness** ✅ — wire cognitive engine to inference pipeline (SloEngine post-gen hook + router single process, level-gated via `ConsciousnessConfig.level`; narrative surfaced through `reasoning_chain` and `CONSCIOUSNESS complete` SSE)
 7. **Test** — verify all user journeys pass
 
 ---

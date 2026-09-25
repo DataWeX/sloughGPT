@@ -129,6 +129,7 @@ class SloEngine:
             "session_turns": 0,
             "last_sentiment": 0.0,
             "last_emotion": "neutral",
+            "last_narrative": "",
         }
 
         self._generation_stats: dict[str, Any] = {
@@ -144,8 +145,10 @@ class SloEngine:
         self._hd_memory: HDMemoryStore | None = None
         self._semantic_cache: SemanticCache | None = None  # noqa: F821
         self._cache_enabled: bool = False
+        self._consciousness: Any | None = None
         self._init_cognitive()
         self._init_hd_memory()
+        self._init_consciousness()
 
         logger.info(
             "SloEngine initialized: soul=%s, device=%s",
@@ -193,6 +196,53 @@ class SloEngine:
         except Exception as e:
             logger.debug("HD Memory not available: %s", e)
             self._hd_memory = None
+
+    def _init_consciousness(self) -> None:
+        """Load the process-wide consciousness engine (Build Order #6).
+
+        Best-effort: any failure leaves the hook off for this instance.
+        The engine ref is held unconditionally; the level gate is evaluated
+        at process time in _post_consciousness so runtime level changes
+        (ConsciousnessConfig.level 0 <-> N) arm/disarm this instance without
+        a re-init.
+        """
+        try:
+            from domain.core import get_consciousness
+
+            self._consciousness = get_consciousness()
+        except Exception as e:
+            logger.debug("Consciousness init skipped: %s", e)
+            self._consciousness = None
+
+    def _post_consciousness(
+        self, prompt: str, response: str, reasoning_chain: list[str] | None = None
+    ) -> str:
+        """Post-generation consciousness processing: level-gated, best-effort.
+
+        Level is read from ConsciousnessConfig at call time (not cached at
+        init). Skips empty/placeholder responses; a failure never breaks
+        generation.
+        """
+        if self._consciousness is None or not response:
+            return ""
+        if not self._consciousness.config.is_enabled():
+            return ""
+        if response.startswith("[Error") or response.startswith("[Slo"):
+            return ""
+        try:
+            narrative = self._consciousness.process(prompt, response)
+            self._consciousness.save()
+            if narrative:
+                self._cognitive_state["last_narrative"] = narrative
+                if reasoning_chain is not None:
+                    reasoning_chain.append(
+                        f"consciousness: level={self._consciousness.config.level} "
+                        f"narrative={narrative}"
+                    )
+            return narrative or ""
+        except Exception as e:
+            logger.debug("Consciousness post-processing skipped: %s", e)
+            return ""
 
     def _init_semantic_cache(self) -> None:
         """Initialize semantic cache."""
@@ -562,6 +612,7 @@ class SloEngine:
                     tokens_generated = len(cached_response.split())
                     latency_ms = (time.time() - start_time) * 1000
                     self._generation_stats["total_generations"] += 1
+                    self._post_consciousness(prompt, cached_response, reasoning_chain)
                     if return_reasoning:
                         return cached_response, {
                             "reasoning_chain": reasoning_chain,
@@ -740,6 +791,9 @@ class SloEngine:
 
         if len(self._session_history) > 100:
             self._session_history = self._session_history[-100:]
+
+        # Consciousness: post-generation processing (level-gated)
+        self._post_consciousness(prompt, generated_text, reasoning_chain)
 
         self._apply_hebbian_learning(prompt.split()[:20], generated_text.split()[:20])
 
