@@ -206,6 +206,17 @@ def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
     return useful[-max_lines:] if useful else all_lines[-max_lines:]
 
 
+# Seconds the CLI waits for ``GET /health`` to start answering.
+#
+# ``/health`` cannot respond before the FastAPI lifespan yields (main.py), and
+# the lifespan blocks on Stage READY, whose ``model_ready`` hook polls for up to
+# 120s under a 130s hook timeout (server infrastructure/startup.py). Real boots
+# also spend ~40s in Stage CRITICAL before READY even begins, so the worst case
+# is roughly 155s. Anything below that kills a healthy server mid-model-load
+# and reports a bogus "error".
+API_STARTUP_TIMEOUT = 180
+
+
 def _check_api_ready(port: int) -> bool:
     """Check if API health endpoint responds."""
     try:
@@ -258,7 +269,7 @@ def _get_startup_progress(port: int) -> dict | None:
         return None
 
 
-def _wait_for_api_with_progress(port: int, timeout: int = 90) -> bool:
+def _wait_for_api_with_progress(port: int, timeout: int = API_STARTUP_TIMEOUT) -> bool:
     """Wait for API with live spinner showing startup phases."""
     from utils.progress import Spinner
 
@@ -452,7 +463,7 @@ def cmd_dev(args):
 
     # ── Wait for readiness (async poll) ──────────────────
     def _poll_services():
-        for _ in range(90):
+        for _ in range(API_STARTUP_TIMEOUT * 2):
             if status["api_ready"] and status["web_ready"]:
                 break
             if not status["api_ready"] and _check_api_ready(api_port):
@@ -684,7 +695,7 @@ def _cmd_api_only(args):
         api_status = "waiting..."
         _update_status()
         api_ready = False
-        for _ in range(90):
+        for _ in range(API_STARTUP_TIMEOUT):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
@@ -869,7 +880,7 @@ def _cmd_api_and_mobile(args):
         api_status = "waiting..."
         _update_status()
         api_ready = False
-        for _ in range(90):
+        for _ in range(API_STARTUP_TIMEOUT):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
@@ -1193,7 +1204,7 @@ def _cmd_api_and_web(args):
         api_status = "waiting..."
         _update_status()
         api_ready = False
-        for _ in range(90):
+        for _ in range(API_STARTUP_TIMEOUT):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
