@@ -4,10 +4,12 @@ Manages global training state: running, paused, idle.
 Provides unified control over all training operations.
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
@@ -105,7 +107,7 @@ class TrainingController:
             self._state = TrainingState.RUNNING
             self.current_job_id = job_id
             self.current_job_name = job_name
-            self.started_at = datetime.now()
+            self.started_at = datetime.now(UTC)
             self.paused_at = None
             self.total_jobs += 1
 
@@ -128,7 +130,7 @@ class TrainingController:
                 }
 
             self._state = TrainingState.PAUSED
-            self.paused_at = datetime.now()
+            self.paused_at = datetime.now(UTC)
 
             return {
                 "success": True,
@@ -149,7 +151,7 @@ class TrainingController:
 
             self._state = TrainingState.RUNNING
             resume_duration = (
-                (datetime.now() - self.paused_at).total_seconds() if self.paused_at else 0
+                (datetime.now(UTC) - self.paused_at).total_seconds() if self.paused_at else 0
             )
             self.paused_at = None
 
@@ -244,7 +246,7 @@ class TrainingController:
                 "started_at": self.started_at.isoformat() if self.started_at else None,
                 "paused_at": self.paused_at.isoformat() if self.paused_at else None,
                 "runtime_seconds": (
-                    (datetime.now() - self.started_at).total_seconds()
+                    (datetime.now(UTC) - self.started_at).total_seconds()
                     if self.started_at and self._state == TrainingState.RUNNING
                     else None
                 ),

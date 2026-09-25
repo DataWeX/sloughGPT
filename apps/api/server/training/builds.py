@@ -5,7 +5,7 @@ Extracted from execution.py to keep each module focused.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter
@@ -86,7 +86,7 @@ async def list_builds():
                         "build_type": "hf-finetuned-dir",
                         "model_path": str(d),
                         "size_mb": round(size_mb, 1),
-                        "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
+                        "created_at": datetime.fromtimestamp(d.stat().st_mtime, tz=UTC).isoformat(),
                         "model": d.name.split("_")[0].replace("--", "/"),
                         "dataset": d.name.split("_")[1] if "_" in d.name else "",
                     }

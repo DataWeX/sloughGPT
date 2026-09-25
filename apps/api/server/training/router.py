@@ -10,7 +10,7 @@ import logging
 import shutil
 import threading
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -141,7 +141,7 @@ async def list_finetuned_models():
                     "model_path": str(d),
                     "size_mb": round(size_bytes / (1024 * 1024), 1),
                     "size_bytes": size_bytes,
-                    "created_at": datetime.fromtimestamp(d.stat().st_mtime).isoformat(),
+                    "created_at": datetime.fromtimestamp(d.stat().st_mtime, tz=UTC).isoformat(),
                     "model": meta.get("model") or display_name,
                     "dataset": meta.get("dataset")
                     or (d.name.split("_")[1] if "_" in d.name else ""),

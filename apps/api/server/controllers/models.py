@@ -2,11 +2,13 @@
 Models Controller - Business logic for model management
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -413,7 +415,7 @@ class ModelsController:
             self._load_hf_model(model_id, resolved_device)
             self._current_model = model_id
             self._current_device = resolved_device
-            self._loaded_at = datetime.now()
+            self._loaded_at = datetime.now(UTC)
             return {
                 "status": "loaded",
                 "model_id": model_id,
@@ -499,9 +501,9 @@ class ModelsController:
             self._current_model = model_id
             self._current_device = getattr(guard, "device", "cpu") or "cpu"
             if self._loaded_at is None:
-                from datetime import datetime
+                from datetime import UTC, datetime
 
-                self._loaded_at = datetime.now()
+                self._loaded_at = datetime.now(UTC)
         logger.info(
             "ProcessGuard adopted for %s", model_id or guard.worker_id, extra={"tag": "MODEL"}
         )
@@ -688,7 +690,7 @@ class ModelsController:
 
             self._current_model = model_id
             self._current_device = "cpu"
-            self._loaded_at = datetime.now()
+            self._loaded_at = datetime.now(UTC)
 
             # The SloNet fine-tuned provider is served by the controller, not the
             # ModelRegistry. Drop any previously autoloaded/registered HF model
