@@ -164,7 +164,10 @@ const MAX_RETRIES = 2
 const BASE_DELAY = 500
 const DEFAULT_TIMEOUT_MS = 30_000
 
-const DOCSTORE_RETRYABLE_STATUSES = new Set([400, 408, 429, 500, 502, 503, 504])
+// 400 is intentionally NOT retryable: docstore 400s are client errors (e.g.
+// "error parsing the body" from an aborted request) — retrying amplifies
+// bursts without ever succeeding. 500 stays (docstore upsert races resolve).
+const DOCSTORE_RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504])
 const DOCSTORE_MAX_RETRIES = 4
 const DOCSTORE_BASE_DELAY = 300
 
@@ -196,6 +199,20 @@ function _trackCorrId(corrId: string, url: string) {
 
 function _isDocstoreUrl(url: string): boolean {
   return url.includes('/docstore/')
+}
+
+// Vite's apiRoutesPlugin serves the planner/calendar route handlers
+// (apps/web/app/api/**/route.ts) on the WEB origin in dev. Prefixing these
+// with PUBLIC_API_URL sends them to FastAPI, which has no such routes and
+// answers 404 — keep them same-origin. Must match API_SCOPES in
+// apps/web/vite/api-routes.ts (isScopedApiPath).
+const SAME_ORIGIN_RE = /^\/api\/(planner|calendar)(\/|$)/
+
+/** Resolve a request path against PUBLIC_API_URL, preserving scoped same-origin API routes. */
+function _resolveUrl(url: string): string {
+  if (/^https?:\/\//.test(url)) return url // already absolute
+  if (SAME_ORIGIN_RE.test(url)) return url // served by the web origin
+  return `${PUBLIC_API_URL}${url}`
 }
 
 // ── InterceptorManager ──────────────────────────────────────────────────────
@@ -490,7 +507,7 @@ async function request<T>(
   }
   headers['X-Correlation-ID'] = corrId
 
-  const fullUrl = `${PUBLIC_API_URL}${url}`
+  const fullUrl = _resolveUrl(url)
 
   const config: RequestConfig = _preBuiltConfig ?? {
     method,
@@ -1100,7 +1117,7 @@ function _createHttpClient(opts?: HttpClientOptions): HttpClient {
       const startTime = Date.now()
       const corrId = _corrId()
       _trackCorrId(corrId, url)
-      const fullUrl = `${PUBLIC_API_URL}${url}`
+      const fullUrl = _resolveUrl(url)
 
       const headers: Record<string, string> = {}
       if (!reqOpts?.raw) headers['Content-Type'] = 'application/json'
@@ -1264,7 +1281,7 @@ export async function* streamSSE(url: string, opts?: StreamSSEOptions): AsyncGen
 
     let res: Response
     try {
-      res = await fetch(`${PUBLIC_API_URL}${url}`, {
+      res = await fetch(_resolveUrl(url), {
         method,
         headers,
         body: opts?.body != null ? JSON.stringify(opts.body) : undefined,

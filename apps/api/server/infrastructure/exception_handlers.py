@@ -344,6 +344,44 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
     )
 
 
+def _register_starlette_http_exception_handler(app: FastAPI) -> None:
+    """Log starlette-raised HTTPExceptions (routing 404/405, body-parse 400).
+
+    ``fastapi.exceptions.HTTPException`` and ``starlette.exceptions.HTTPException``
+    are DIFFERENT classes. Routes that ``raise HTTPException(...)`` hit the
+    logging handler registered under the fastapi class, but exceptions raised by
+    the router itself (404 unmatched route, 405 method not allowed) and by
+    FastAPI's request-body parser (400 "There was an error parsing the body" on
+    client disconnect) are starlette instances — FastAPI's built-in handler
+    serves them with a silent ``{"detail": ...}`` response and no log line,
+    which made the docstore 400/405 storms invisible in server logs.
+
+    This handler keeps the ``{"detail": ...}`` body shape (client-compatible)
+    and only adds the missing log line.
+    """
+    from starlette.exceptions import HTTPException as StarletteHTTPException
+
+    async def handler(request: Request, exc: Exception) -> JSONResponse:
+        h = exc  # StarletteHTTPException
+        assert isinstance(h, StarletteHTTPException)
+        cid = _corr_id(request)
+        log_fn = logger.error if h.status_code >= 500 else logger.warning
+        log_fn(
+            "HTTP %d on %s %s",
+            h.status_code,
+            request.method,
+            request.url.path,
+            extra={
+                "tag": "REQ",
+                "context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code},
+            },
+        )
+        headers = getattr(h, "headers", None)
+        return JSONResponse({"detail": h.detail}, status_code=h.status_code, headers=headers)
+
+    app.add_exception_handler(StarletteHTTPException, handler)
+
+
 def register_app_error_handler(app: FastAPI):
     """Register only the AppError handler — minimal handler for test clients.
 
@@ -446,5 +484,11 @@ def register_all_handlers(app: FastAPI):
         logger.debug("PydanticSerializationError not available — serialization handler skipped")
 
     app.add_exception_handler(HTTPException, _http_exception_handler)
+
+    # starlette.exceptions.HTTPException is a DIFFERENT class from
+    # fastapi.HTTPException. Handler lookup walks the raised exception's MRO,
+    # so fastapi-raised exceptions still resolve to _http_exception_handler
+    # (first match wins) while starlette-raised ones resolve here.
+    _register_starlette_http_exception_handler(app)
 
     app.add_exception_handler(Exception, _unhandled_error_handler)

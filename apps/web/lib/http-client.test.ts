@@ -21,10 +21,23 @@ vi.stubGlobal('fetch', mockFetch)
 
 import { logger } from './dev-log'
 import {
-  ApiError, apiGet, apiPost, apiPut, apiDelete, apiPatch, createApiClient,
-  InterceptorManager, HttpCache, CircuitBreaker, Throttler,
-  httpClient, createHttpClient, streamSSE,
-  type RequestConfig, type ResponseEnvelope, type SSEEvent,
+  ApiError,
+  apiGet,
+  apiPost,
+  apiPut,
+  apiDelete,
+  apiPatch,
+  createApiClient,
+  InterceptorManager,
+  HttpCache,
+  CircuitBreaker,
+  Throttler,
+  httpClient,
+  createHttpClient,
+  streamSSE,
+  type RequestConfig,
+  type ResponseEnvelope,
+  type SSEEvent,
 } from './http-client'
 
 function mockOk(body: unknown = { data: 'test' }) {
@@ -47,7 +60,11 @@ function mockError(status: number, body: string = '{"detail":"err"}') {
 }
 
 describe('streamSSE', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset(); mockGetState.mockReturnValue({ token: null }) })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+    mockGetState.mockReturnValue({ token: null })
+  })
 
   it('does not log an error when the caller aborts its own stream', async () => {
     const controller = new AbortController()
@@ -57,7 +74,10 @@ describe('streamSSE', () => {
     const errorSpy = vi.spyOn(logger, 'error')
     try {
       const events: SSEEvent[] = []
-      for await (const ev of streamSSE('/system/stream', { method: 'GET', signal: controller.signal })) {
+      for await (const ev of streamSSE('/system/stream', {
+        method: 'GET',
+        signal: controller.signal,
+      })) {
         events.push(ev)
       }
       expect(errorSpy).not.toHaveBeenCalled()
@@ -83,7 +103,10 @@ describe('streamSSE', () => {
     const errorSpy = vi.spyOn(logger, 'error')
     try {
       const events: SSEEvent[] = []
-      for await (const ev of streamSSE('/system/stream', { method: 'GET', signal: new AbortController().signal })) {
+      for await (const ev of streamSSE('/system/stream', {
+        method: 'GET',
+        signal: new AbortController().signal,
+      })) {
         events.push(ev)
       }
       expect(errorSpy).not.toHaveBeenCalled()
@@ -109,7 +132,11 @@ describe('ApiError', () => {
 })
 
 describe('apiGet', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset(); mockGetState.mockReturnValue({ token: null }) })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+    mockGetState.mockReturnValue({ token: null })
+  })
 
   it('calls fetch with GET and correct URL', async () => {
     mockFetch.mockResolvedValue(mockOk())
@@ -162,9 +189,7 @@ describe('apiGet', () => {
   })
 
   it('retries on retryable status 503', async () => {
-    mockFetch
-      .mockResolvedValueOnce(mockError(503))
-      .mockResolvedValueOnce(mockOk({ ok: true }))
+    mockFetch.mockResolvedValueOnce(mockError(503)).mockResolvedValueOnce(mockOk({ ok: true }))
     const result = await apiGet('/flaky')
     expect(mockFetch).toHaveBeenCalledTimes(2)
     expect(result).toEqual({ ok: true })
@@ -181,7 +206,9 @@ describe('apiGet', () => {
     mockFetch.mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError'))
     controller.abort()
 
-    await expect(apiGet('/cancelled', undefined, { signal: controller.signal })).rejects.toThrow(DOMException)
+    await expect(apiGet('/cancelled', undefined, { signal: controller.signal })).rejects.toThrow(
+      DOMException,
+    )
 
     expect(mockFetch).toHaveBeenCalledTimes(1)
   })
@@ -215,7 +242,10 @@ describe('apiGet', () => {
 })
 
 describe('apiPost', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('calls fetch with POST and stringified body', async () => {
     mockFetch.mockResolvedValue(mockOk({ created: true }))
@@ -229,7 +259,10 @@ describe('apiPost', () => {
 })
 
 describe('apiPut', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('calls fetch with PUT and body', async () => {
     mockFetch.mockResolvedValue(mockOk())
@@ -241,7 +274,10 @@ describe('apiPut', () => {
 })
 
 describe('apiDelete', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('calls fetch with DELETE and no body', async () => {
     mockFetch.mockResolvedValue(mockOk())
@@ -253,7 +289,10 @@ describe('apiDelete', () => {
 })
 
 describe('apiPatch', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('calls fetch with PATCH and body', async () => {
     mockFetch.mockResolvedValue(mockOk())
@@ -264,8 +303,55 @@ describe('apiPatch', () => {
   })
 })
 
+describe('URL resolution (scoped same-origin routes)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
+
+  it('prefixes regular paths with PUBLIC_API_URL', async () => {
+    mockFetch.mockResolvedValue(mockOk())
+    await apiGet('/docstore/kv/foo')
+    expect(mockFetch.mock.calls[0][0]).toBe('http://127.0.0.1:9/docstore/kv/foo')
+  })
+
+  it('keeps /api/planner/* same-origin (Vite apiRoutesPlugin serves it)', async () => {
+    mockFetch.mockResolvedValue(mockOk())
+    await apiGet('/api/planner/tasks')
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/planner/tasks')
+  })
+
+  it('keeps /api/calendar/* same-origin', async () => {
+    mockFetch.mockResolvedValue(mockOk())
+    await apiPost('/api/calendar/events', { title: 'x' })
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/calendar/events')
+  })
+
+  it('prefixes look-alike paths outside the scoped prefix', async () => {
+    mockFetch.mockResolvedValue(mockOk())
+    await apiGet('/api/plannerx')
+    expect(mockFetch.mock.calls[0][0]).toBe('http://127.0.0.1:9/api/plannerx')
+  })
+})
+
+describe('docstore 400 handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
+
+  it('does NOT retry 400 (client error — retrying only amplifies bursts)', async () => {
+    mockFetch.mockResolvedValue(mockError(400, '{"detail":"There was an error parsing the body"}'))
+    await expect(apiPut('/docstore/kv/foo', { a: 1 })).rejects.toMatchObject({ status: 400 })
+    expect(mockFetch.mock.calls.length).toBe(1)
+  })
+})
+
 describe('createApiClient', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('returns client with get/post/put/delete/patch methods', () => {
     const client = createApiClient()
@@ -336,8 +422,14 @@ describe('InterceptorManager', () => {
   it('runs interceptors in order', async () => {
     const mgr = new InterceptorManager<string>()
     const order: string[] = []
-    mgr.use(async (v) => { order.push('a'); return v + '-a' })
-    mgr.use(async (v) => { order.push('b'); return v + '-b' })
+    mgr.use(async (v) => {
+      order.push('a')
+      return v + '-a'
+    })
+    mgr.use(async (v) => {
+      order.push('b')
+      return v + '-b'
+    })
     const result = await mgr.run('start')
     expect(result).toBe('start-a-b')
     expect(order).toEqual(['a', 'b'])
@@ -365,7 +457,9 @@ describe('InterceptorManager', () => {
   it('onRejected catches errors from fulfilled', async () => {
     const mgr = new InterceptorManager<string>()
     mgr.use(
-      async () => { throw new Error('fail') },
+      async () => {
+        throw new Error('fail')
+      },
       async () => 'recovered',
     )
     const result = await mgr.run('input')
@@ -401,14 +495,14 @@ describe('HttpCache', () => {
   it('evicts after TTL expires', async () => {
     const cache = new HttpCache({ ttlMs: 10, staleWhileRevalidate: false })
     cache.set('key1', 'value1')
-    await new Promise(r => setTimeout(r, 15))
+    await new Promise((r) => setTimeout(r, 15))
     expect(cache.get('key1')).toBeUndefined()
   })
 
   it('serves stale data within stale-while-revalidate window', async () => {
     const cache = new HttpCache({ ttlMs: 10, staleWhileRevalidate: true })
     cache.set('key1', 'value1')
-    await new Promise(r => setTimeout(r, 15))
+    await new Promise((r) => setTimeout(r, 15))
     const hit = cache.get('key1')
     expect(hit).toBeDefined()
     expect(hit!.data).toBe('value1')
@@ -475,7 +569,7 @@ describe('CircuitBreaker', () => {
     cb.recordFailure()
     cb.recordFailure()
     expect(cb.state).toBe('open')
-    await new Promise(r => setTimeout(r, 25))
+    await new Promise((r) => setTimeout(r, 25))
     expect(cb.state).toBe('half-open')
     expect(cb.allow()).toBe(true)
   })
@@ -484,7 +578,7 @@ describe('CircuitBreaker', () => {
     const cb = new CircuitBreaker({ failureThreshold: 2, resetTimeoutMs: 10, gracePeriodMs: 0 })
     cb.recordFailure()
     cb.recordFailure()
-    await new Promise(r => setTimeout(r, 30))
+    await new Promise((r) => setTimeout(r, 30))
     cb.recordSuccess()
     expect(cb.state).toBe('closed')
   })
@@ -507,9 +601,14 @@ describe('CircuitBreaker', () => {
   })
 
   it('half-open limits concurrent attempts', async () => {
-    const cb = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 10, halfOpenMax: 1, gracePeriodMs: 0 })
+    const cb = new CircuitBreaker({
+      failureThreshold: 1,
+      resetTimeoutMs: 10,
+      halfOpenMax: 1,
+      gracePeriodMs: 0,
+    })
     cb.recordFailure()
-    await new Promise(r => setTimeout(r, 15))
+    await new Promise((r) => setTimeout(r, 15))
     expect(cb.allow()).toBe(true) // first half-open attempt
     expect(cb.allow()).toBe(false) // second blocked
   })
@@ -532,8 +631,10 @@ describe('Throttler', () => {
     const t = new Throttler({ maxConcurrent: 1, queueTimeoutMs: 500 })
     await t.acquire()
     let acquired = false
-    const p = t.acquire().then(() => { acquired = true })
-    await new Promise(r => setTimeout(r, 10))
+    const p = t.acquire().then(() => {
+      acquired = true
+    })
+    await new Promise((r) => setTimeout(r, 10))
     expect(acquired).toBe(false)
     expect(t.queued).toBe(1)
     t.release()
@@ -548,14 +649,17 @@ describe('Throttler', () => {
     await t.acquire()
     t.acquire() // fills queue slot (will be queued, but we need to fill it first)
     // Wait for the first queued item to be added
-    await new Promise(r => setTimeout(r, 5))
+    await new Promise((r) => setTimeout(r, 5))
     await expect(t.acquire()).rejects.toThrow(ApiError)
     t.release()
   })
 })
 
 describe('httpClient singleton', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('has interceptors, cache, circuitBreaker, throttler', () => {
     expect(httpClient.interceptors).toBeDefined()
@@ -600,7 +704,10 @@ describe('httpClient singleton', () => {
 })
 
 describe('createHttpClient', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('creates isolated instance', () => {
     const c1 = createHttpClient()
@@ -613,9 +720,14 @@ describe('createHttpClient', () => {
     let interceptorCalled = false
     const client = createHttpClient({
       interceptors: {
-        request: [{
-          onFulfilled: async (config) => { interceptorCalled = true; return config },
-        }],
+        request: [
+          {
+            onFulfilled: async (config) => {
+              interceptorCalled = true
+              return config
+            },
+          },
+        ],
       },
     })
     mockFetch.mockResolvedValue(mockOk())
@@ -636,7 +748,10 @@ describe('createHttpClient', () => {
 })
 
 describe('apiGet with cache', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('caches GET response and returns from cache', async () => {
     mockFetch.mockResolvedValue(mockOk({ cached: true }))
@@ -659,7 +774,10 @@ describe('apiGet with cache', () => {
 })
 
 describe('apiGet with dedupTtlMs', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('deduplicates identical GETs within TTL window', async () => {
     mockFetch.mockResolvedValue(mockOk({ deduped: true }))
@@ -673,7 +791,10 @@ describe('apiGet with dedupTtlMs', () => {
 })
 
 describe('circuit breaker integration', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('throws ApiError on 500 errors', async () => {
     const client = createHttpClient({ circuitBreaker: { gracePeriodMs: 0 } })
@@ -683,7 +804,10 @@ describe('circuit breaker integration', () => {
 })
 
 describe('httpClient with hooks', () => {
-  beforeEach(() => { vi.clearAllMocks(); mockFetch.mockReset() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
 
   it('beforeRequest hook modifies config', async () => {
     const client = createHttpClient()

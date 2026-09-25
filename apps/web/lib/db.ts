@@ -108,6 +108,24 @@ function docUrl(collection: string, id?: string): string {
   return id ? `${base}/${encodeURIComponent(id)}` : base
 }
 
+/**
+ * Guard for id-scoped docstore writes.
+ *
+ * `docUrl(collection, '')` collapses to the COLLECTION path, so a write with a
+ * falsy id hits the wrong route: PUT/PATCH → 405 Method Not Allowed (the
+ * `405 on PUT /docstore/sessions` storms), DELETE → wipes the whole collection.
+ * Callers sometimes pass an empty session id (e.g. `sessionIdRef.current`
+ * before the first session exists), so fail fast and log instead.
+ */
+function hasDocId(id: string | undefined, collection: string, op: string): boolean {
+  if (id) return true
+  logger.warning(`chatDB.${op} skipped — empty document id for "${collection}"`, {
+    collection,
+    op,
+  })
+  return false
+}
+
 // ── In-flight request deduplication ────────────────────────────────────
 // When multiple components mount simultaneously (React StrictMode,
 // parallel effects), they fire the same GET for the same KV key.
@@ -169,6 +187,7 @@ function fromStored(session: StoredChatSession): ChatSession {
 export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
   return {
     async saveSession(session: ChatSession): Promise<void> {
+      if (!hasDocId(session.id, 'sessions', 'saveSession')) return
       const stored = toStored(session)
       stored.updatedAt = new Date().toISOString()
       stored.synced = false
@@ -184,11 +203,13 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async loadSession(id: string): Promise<ChatSession | undefined> {
+      if (!hasDocId(id, 'sessions', 'loadSession')) return undefined
       const session = await apiGet<StoredChatSession | null>(docUrl('sessions', id))
       return session ? fromStored(session) : undefined
     },
 
     async deleteSession(id: string): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'deleteSession')) return
       await apiDelete(docUrl('sessions', id))
     },
 
@@ -196,6 +217,7 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
       id: string,
       updates: { starred?: boolean; name?: string; pinned?: boolean; archived?: boolean },
     ): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'updateSession')) return
       await apiPatch(docUrl('sessions', id), {
         ...(updates.starred !== undefined && { starred: updates.starred }),
         ...(updates.name !== undefined && { name: updates.name }),
@@ -215,10 +237,12 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async markSynced(id: string): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'markSynced')) return
       await apiPatch(docUrl('sessions', id), { synced: true })
     },
 
     async markUnread(id: string, unread: boolean): Promise<void> {
+      if (!hasDocId(id, 'sessions', 'markUnread')) return
       await apiPatch(docUrl('sessions', id), { unread })
     },
 
@@ -232,6 +256,7 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async deletePendingMessage(id: string): Promise<void> {
+      if (!hasDocId(id, 'pendingMessages', 'deletePendingMessage')) return
       await apiDelete(docUrl('pendingMessages', id))
     },
 
@@ -340,11 +365,13 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async getDraft(sessionId: string): Promise<string> {
+      if (!hasDocId(sessionId, 'drafts', 'getDraft')) return ''
       const draft = await apiGet<Draft | null>(docUrl('drafts', sessionId))
       return draft?.text ?? ''
     },
 
     async saveDraft(sessionId: string, text: string): Promise<void> {
+      if (!hasDocId(sessionId, 'drafts', 'saveDraft')) return
       if (!text) {
         await apiDelete(docUrl('drafts', sessionId))
       } else {
@@ -353,6 +380,7 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async deleteDraft(sessionId: string): Promise<void> {
+      if (!hasDocId(sessionId, 'drafts', 'deleteDraft')) return
       await apiDelete(docUrl('drafts', sessionId))
     },
 
@@ -369,10 +397,12 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
     },
 
     async setKV(key: string, value: unknown): Promise<void> {
+      if (!hasDocId(key, 'kv', 'setKV')) return
       await apiPut(docUrl('kv', key), { key, value })
     },
 
     async deleteKV(key: string): Promise<void> {
+      if (!hasDocId(key, 'kv', 'deleteKV')) return
       await apiDelete(docUrl('kv', key))
     },
 
