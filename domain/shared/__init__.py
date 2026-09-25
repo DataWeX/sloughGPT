@@ -3,7 +3,8 @@
 Public API:
     TestFramework, TestResult, TestSuite, BenchmarkRunner, test_decorator
     find_available_port, find_repo_root, find_server_python
-    utc_now_iso, to_iso, parse_iso, normalize_iso, is_valid_iso, get_timestamp
+    utc_now_iso, to_iso, parse_iso, normalize_iso, is_valid_iso, get_timestamp,
+    repair_iso — read-path repair for broken "+00:00Z" values
     generate_id, hash_string, format_size, format_time, load_json, save_json
     merge_dicts, clamp, validate_config, retry, Timer, Cache, RateLimiter
 """
@@ -30,6 +31,7 @@ from domain.shared._internal.timestamps import (
     is_valid_iso,
     normalize_iso,
     parse_iso,
+    repair_iso,
     to_iso,
     utc_now_iso,
 )
@@ -56,6 +58,7 @@ __all__ = [
     "merge_dicts",
     "normalize_iso",
     "parse_iso",
+    "repair_iso",
     "retry",
     "save_json",
     "test_decorator",

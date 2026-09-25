@@ -10,7 +10,7 @@ import struct
 import time
 from pathlib import Path
 
-from domain.shared import normalize_iso
+from domain.shared import is_valid_iso, repair_iso
 
 from .helpers import (
     describe_checkpoint,
@@ -135,11 +135,11 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
                 },
             }
             # Repair legacy timestamps (e.g. "...+00:00Z") so the UI never
-            # renders "Invalid Date"; unparseable values become "".
+            # renders "Invalid Date"; values that stay unparseable are dropped.
             for _key in ("born_at", "created_at"):
                 if _key in row:
-                    row[_key] = normalize_iso(row[_key])
-                    if not row[_key]:
+                    row[_key] = repair_iso(row[_key])
+                    if not is_valid_iso(row[_key]):
                         del row[_key]
             return row
 

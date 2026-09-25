@@ -27,7 +27,15 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
-__all__ = ["get_timestamp", "is_valid_iso", "normalize_iso", "parse_iso", "to_iso", "utc_now_iso"]
+__all__ = [
+    "get_timestamp",
+    "is_valid_iso",
+    "normalize_iso",
+    "parse_iso",
+    "repair_iso",
+    "to_iso",
+    "utc_now_iso",
+]
 
 # "...+00:00Z" / "...+02:00Z" — an offset immediately followed by a Z designator.
 _DUPLICATE_Z = re.compile(r"(?P<offset>[+-]\d{2}:?\d{2})Z$")
@@ -96,6 +104,19 @@ def normalize_iso(value: object) -> str:
 def is_valid_iso(value: object) -> bool:
     """True when *value* parses as an ISO 8601 timestamp."""
     return parse_iso(value) is not None
+
+
+def repair_iso(value: object) -> object:
+    """Return *value* unchanged unless JS cannot parse it.
+
+    Rewrites only the ``...+00:00Z`` / ``...-05:00Z`` artifact to a canonical
+    ``...Z`` string. Valid timestamps (including date-only ``2024-06-01``) and
+    unparseable junk are returned verbatim, so read-path repair never
+    rewrites data that already renders correctly.
+    """
+    if not isinstance(value, str) or not value or not _DUPLICATE_Z.search(value):
+        return value
+    return normalize_iso(value) or value
 
 
 def get_timestamp() -> str:
