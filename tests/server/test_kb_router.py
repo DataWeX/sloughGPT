@@ -479,3 +479,100 @@ class TestMethodChecks:
 
     def test_knowledge_search_wrong_method_405(self, client):
         assert client.post("/knowledge/search").status_code == 405
+
+
+def _make_minimal_pdf(text: str) -> bytes:
+    """Hand-built single-page PDF with correct xref (extractable text)."""
+    content = f"BT /F1 24 Tf 72 720 Td ({text}) Tj ET".encode()
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        (
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>"
+        ),
+        b"<< /Length %d >>\nstream\n%s\nendstream" % (len(content), content),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, obj in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode() + obj + b"\nendobj\n"
+    xref_pos = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n".encode()
+    out += b"0000000000 65535 f \n"
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += (
+        f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_pos}\n%%EOF"
+    ).encode()
+    return bytes(out)
+
+
+class TestIngestFile:
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_ingest_text_file(self, mock_get_mem, client):
+        mem = mock_get_mem.return_value
+        mem.add_facts.return_value = 1
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={
+                "file": (
+                    "notes.txt",
+                    b"Slough is a town. The river runs through it.",
+                    "text/plain",
+                )
+            },
+            data={"topic": "imported"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["status"] == "imported"
+        assert data["filename"] == "notes.txt"
+        assert data["total_chunks"] >= 1
+        mem.add_facts.assert_called_once()
+
+    def test_ingest_docx_rejected_400(self, client):
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={"file": ("report.docx", b"PK\x03\x04junk", "application/octet-stream")},
+        )
+        assert resp.status_code == 400
+        assert "Word" in resp.text
+
+    @patch("apps.api.server.routers.kb.KBRouter._extract_pdf_text")
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_ingest_pdf_uses_extractor(self, mock_get_mem, mock_extract, client):
+        mock_extract.return_value = (
+            "Lease agreement text. The move-out notice period is 30 days. " * 3
+        )
+        mem = mock_get_mem.return_value
+        mem.add_facts.return_value = 1
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={"file": ("lease.pdf", b"%PDF-1.4 fake-bytes", "application/pdf")},
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["filename"] == "lease.pdf"
+        assert data["total_chunks"] >= 1
+        mock_extract.assert_called_once_with(b"%PDF-1.4 fake-bytes")
+
+    @patch("apps.api.server.routers.kb.KBRouter._extract_pdf_text")
+    @patch("domain.knowledge.get_knowledge_memory")
+    def test_ingest_pdf_blank_text_400(self, mock_get_mem, mock_extract, client):
+        mock_extract.return_value = "   \n  "
+        resp = client.post(
+            "/knowledge/ingest-file",
+            files={"file": ("blank.pdf", b"%PDF-1.4", "application/pdf")},
+        )
+        assert resp.status_code == 400
+
+    def test_extract_pdf_text_real_pypdf(self):
+        from apps.api.server.routers.kb import KBRouter
+
+        pdf = _make_minimal_pdf("Hello Slough lease agreement")
+        text = KBRouter._extract_pdf_text(pdf)
+        assert "Hello Slough lease agreement" in text

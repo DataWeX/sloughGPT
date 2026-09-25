@@ -75,7 +75,7 @@ class MockEventSource {
   static OPEN = 1
   static CLOSED = 2
   constructor(public url: string) {
-    ;(globalThis as any).__lastES = this
+    (globalThis as any).__lastES = this
   }
   dispatchMessage(data: string) {
     this.onmessage?.(new MessageEvent('message', { data }))
@@ -229,7 +229,7 @@ describe('useTrainingSession', () => {
     })
 
     expect(result.current.turboPhase).toBe('training')
-    expect(mockAddToast).toHaveBeenCalledWith('Turbo training started', 'info')
+    expect(mockAddToast).toHaveBeenCalledWith('Training started', 'info')
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(3000)
@@ -254,7 +254,7 @@ describe('useTrainingSession', () => {
     expect(result.current.finetunedModelPath).toBe('/models/turbo/final.soul')
     expect(result.current.progress).toBe(100)
     expect(result.current.avgQuality).toBe(4.3)
-    expect(mockAddToast).toHaveBeenCalledWith('Turbo training complete!', 'success')
+    expect(mockAddToast).toHaveBeenCalledWith('Training complete!', 'success')
   })
 
   it('startTurboTrain polls to error', async () => {
