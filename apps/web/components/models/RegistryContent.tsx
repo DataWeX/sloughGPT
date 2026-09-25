@@ -1,11 +1,28 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { cn, ActionCard, Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, SearchInput, Skeleton } from '@sloughgpt/strui'
+import {
+  cn,
+  ActionCard,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  StatCard,
+  KpiGrid,
+  SearchInput,
+  Skeleton,
+} from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
-import { registryController, type RegisteredModel, type RegistryStats } from '@/lib/registry-controller'
+import {
+  registryController,
+  type RegisteredModel,
+  type RegistryStats,
+} from '@/lib/registry-controller'
 import { RegistryHealthCard } from '@/components/registry/RegistryHealthCard'
 import { useToastStore } from '@/lib/toast-store'
+import { formatLocaleDate } from '@/lib/time-format'
 
 export default function RegistryContent() {
   const [models, setModels] = useState<RegisteredModel[]>([])
@@ -14,13 +31,19 @@ export default function RegistryContent() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [expandedModel, setExpandedModel] = useState<string | null>(null)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const fetchData = useCallback(async () => {
     try {
       const [modelsRes, statsRes, bestRes] = await Promise.all([
-        registryController.list().catch((e) => { addToast('Could not load models', 'error'); return [] }),
-        registryController.stats().catch((e) => { addToast('Could not load registry stats', 'error'); return null }),
+        registryController.list().catch((e) => {
+          addToast('Could not load models', 'error')
+          return []
+        }),
+        registryController.stats().catch((e) => {
+          addToast('Could not load registry stats', 'error')
+          return null
+        }),
         registryController.best().catch(() => null),
       ])
       setModels(modelsRes)
@@ -38,8 +61,14 @@ export default function RegistryContent() {
     const load = async () => {
       try {
         const [modelsRes, statsRes, bestRes] = await Promise.all([
-          registryController.list().catch((e) => { addToast('Could not load models', 'error'); return [] }),
-          registryController.stats().catch((e) => { addToast('Could not load registry stats', 'error'); return null }),
+          registryController.list().catch((e) => {
+            addToast('Could not load models', 'error')
+            return []
+          }),
+          registryController.stats().catch((e) => {
+            addToast('Could not load registry stats', 'error')
+            return null
+          }),
           registryController.best().catch(() => null),
         ])
         if (active) {
@@ -54,12 +83,15 @@ export default function RegistryContent() {
       }
     }
     void load()
-    return () => { active = false }
+    return () => {
+      active = false
+    }
   }, [])
 
-  const filteredModels = models.filter(m =>
-    m.model_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    m.status.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredModels = models.filter(
+    (m) =>
+      m.model_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.status.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
   if (loading) {
@@ -71,8 +103,16 @@ export default function RegistryContent() {
           <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
           <StatCard label="Loading" value={<Skeleton className="h-5 w-12" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card>
+          <CardContent>
+            <div className="h-32 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <div className="h-48 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
       </div>
     )
   }
@@ -105,70 +145,92 @@ export default function RegistryContent() {
           </Button>
         }
       >
-          {filteredModels.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {searchQuery ? 'No models match your search.' : 'No models registered. Load a model first.'}
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {filteredModels.map(m => (
-                <div key={m.model_id} className="rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium truncate">{m.model_id}</span>
-                        <span className={cn('text-xs px-1 rounded', m.status === 'loaded' ? 'bg-success/10 text-success' :
-                          m.status === 'failed' ? 'bg-destructive/10 text-destructive' :
-                          'bg-muted text-muted-foreground')}>{m.status}</span>
-                      </div>
-                      {m.registered_at && (
-                        <div className="text-xs text-muted-foreground mt-0.5">
-                          Registered {new Date(m.registered_at).toLocaleDateString()}
-                        </div>
-                      )}
-                    </div>
-                    {m.status === 'failed' && m.metrics && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setExpandedModel(expandedModel === m.model_id ? null : m.model_id)}
+        {filteredModels.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {searchQuery
+              ? 'No models match your search.'
+              : 'No models registered. Load a model first.'}
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {filteredModels.map((m) => (
+              <div
+                key={m.model_id}
+                className="rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{m.model_id}</span>
+                      <span
+                        className={cn(
+                          'text-xs px-1 rounded',
+                          m.status === 'loaded'
+                            ? 'bg-success/10 text-success'
+                            : m.status === 'failed'
+                              ? 'bg-destructive/10 text-destructive'
+                              : 'bg-muted text-muted-foreground',
+                        )}
                       >
-                        {expandedModel === m.model_id ? 'Hide' : 'Details'}
-                      </Button>
+                        {m.status}
+                      </span>
+                    </div>
+                    {formatLocaleDate(m.registered_at) && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Registered {formatLocaleDate(m.registered_at)}
+                      </div>
                     )}
                   </div>
-                  {expandedModel === m.model_id && m.metrics && (
-                    <div className="mt-2 rounded bg-muted/30 p-2">
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">Error Details</div>
-                      <div className="grid grid-cols-2 gap-1">
-                        {Object.entries(m.metrics).map(([k, v]) => (
-                          <div key={k} className="text-xs">
-                            <span className="text-muted-foreground">{k.replace(/_/g, ' ')}: </span>
-                            <span className="font-mono">{String(v)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  {m.status === 'failed' && m.metrics && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setExpandedModel(expandedModel === m.model_id ? null : m.model_id)
+                      }
+                    >
+                      {expandedModel === m.model_id ? 'Hide' : 'Details'}
+                    </Button>
                   )}
                 </div>
-              ))}
-            </div>
-          )}
+                {expandedModel === m.model_id && m.metrics && (
+                  <div className="mt-2 rounded bg-muted/30 p-2">
+                    <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                      Error Details
+                    </div>
+                    <div className="grid grid-cols-2 gap-1">
+                      {Object.entries(m.metrics).map(([k, v]) => (
+                        <div key={k} className="text-xs">
+                          <span className="text-muted-foreground">{k.replace(/_/g, ' ')}: </span>
+                          <span className="font-mono">{String(v)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </ActionCard>
 
-      {bestModel && Object.keys(bestModel).filter(k => !k.startsWith('_')).length > 0 && (
+      {bestModel && Object.keys(bestModel).filter((k) => !k.startsWith('_')).length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Best Model</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {Object.entries(bestModel).filter(([k]) => !k.startsWith('_')).map(([key, value]) => (
-                <div key={key} className="rounded-md bg-muted/30 p-3 text-center">
-                  <div className="text-xs text-muted-foreground capitalize">{key.replace(/_/g, ' ')}</div>
-                  <div className="text-sm font-mono font-medium">{String(value ?? '—')}</div>
-                </div>
-              ))}
+              {Object.entries(bestModel)
+                .filter(([k]) => !k.startsWith('_'))
+                .map(([key, value]) => (
+                  <div key={key} className="rounded-md bg-muted/30 p-3 text-center">
+                    <div className="text-xs text-muted-foreground capitalize">
+                      {key.replace(/_/g, ' ')}
+                    </div>
+                    <div className="text-sm font-mono font-medium">{String(value ?? '—')}</div>
+                  </div>
+                ))}
             </div>
           </CardContent>
         </Card>

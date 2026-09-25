@@ -16,6 +16,7 @@ import {
   StatusBadge,
 } from '@sloughgpt/strui'
 import { settingsController } from '@/lib/settings-controller'
+import { formatDateTime } from '@/lib/time-format'
 import {
   Clock,
   Download,
@@ -52,12 +53,8 @@ interface TrainingRun {
 }
 
 function formatDate(ts: number) {
-  if (!ts) return '-'
-  try {
-    return new Date(ts * 1000).toLocaleString()
-  } catch {
-    return String(ts)
-  }
+  if (!ts || !Number.isFinite(ts)) return '-'
+  return formatDateTime(new Date(ts * 1000)) || '-'
 }
 
 function formatDuration(secs?: number) {
