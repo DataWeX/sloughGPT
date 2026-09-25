@@ -529,8 +529,14 @@ class KBRouter:
                     "Internal/private host URLs not allowed", "E_BAD_REQUEST", status_code=400
                 )
 
-            ingestor = self._engine.get_ingestor()
-            result = ingestor.ingest_url(req.url)
+            engine_result = self._engine.ingest_url(req.url)
+            if not engine_result.success:
+                raise_error(
+                    engine_result.error or "URL ingestion failed",
+                    "E_UNHANDLED",
+                    status_code=500,
+                )
+            result = engine_result.data or {}
 
             if result.get("new_facts", 0) > 0:
                 try:

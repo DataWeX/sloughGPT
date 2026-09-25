@@ -117,7 +117,11 @@ class SecurityRouter:
         key = mgr.get(key_id)
         if key is None:
             raise_error("API key not found", "E_NOT_FOUND", status_code=404)
-        if auth_user.get("sub") != key.get("user_id") and auth_user.get("role") != "admin":
+        if (
+                auth_user is not None
+                and auth_user.get("sub") != key.get("user_id")
+                and auth_user.get("role") != "admin"
+            ):
             raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
         return success_response(data=key)
 
@@ -129,7 +133,11 @@ class SecurityRouter:
             key = mgr.get(key_id)
             if key is None:
                 raise_error("API key not found", "E_NOT_FOUND", status_code=404)
-            if auth_user.get("sub") != key.get("user_id") and auth_user.get("role") != "admin":
+            if (
+                auth_user is not None
+                and auth_user.get("sub") != key.get("user_id")
+                and auth_user.get("role") != "admin"
+            ):
                 raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
             mgr.revoke(key_id)
             return success_response(data={"revoked": True})
@@ -144,7 +152,11 @@ class SecurityRouter:
             key = mgr.get(key_id)
             if key is None:
                 raise_error("API key not found", "E_NOT_FOUND", status_code=404)
-            if auth_user.get("sub") != key.get("user_id") and auth_user.get("role") != "admin":
+            if (
+                auth_user is not None
+                and auth_user.get("sub") != key.get("user_id")
+                and auth_user.get("role") != "admin"
+            ):
                 raise_error("Not authorized to manage this key", code="auth/forbidden", status=403)
             new_key = mgr.rotate(key_id)
             return success_response(data=new_key)
