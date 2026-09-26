@@ -30,6 +30,8 @@ Environment variables:
                       File logs are always systemd-style syslog lines.
     SLO_LOG_DIR     — directory for log files (default: logs/ relative to repo root)
     SLO_LOG_NO_FILE — set to "1" to disable file logging
+    SLO_LOG_DEDUP_WINDOW — seconds before near-identical WARN+ lines are
+                      re-shown with a summary (default: 10; 0 disables)
     NO_COLOR        — set to "1" to disable ANSI colors
 """
 
@@ -40,7 +42,9 @@ import json
 import logging
 import logging.handlers
 import os
+import re
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -920,6 +924,138 @@ class ClientExtensionFilter(logging.Filter):
         return not any(p in msg for p in self._PATTERNS)
 
 
+# ── Repeat-suppression filter ─────────────────────────────────────────
+
+
+class RepeatSuppressionFilter(logging.Filter):
+    """Collapse bursts of near-identical WARN+ records into one line + summary.
+
+    Composes with the other filters in the pipeline (``ClientExtensionFilter``,
+    ``DashboardFilter``): those decide *whether* a record is interesting, this
+    one decides *how many times the same record may be shown*.
+
+    Behavior:
+      * Only WARN and above — INFO/DEBUG pass untouched.
+      * Records are fingerprinted by ``(logger, level, normalized message)``
+        where normalization strips digits/long hex tokens (correlation IDs,
+        durations, doc IDs) so template repeats match.
+      * First occurrence in a window (default 10s) passes; later ones are
+        suppressed and counted.
+      * When the window expires, one summary line is emitted:
+        ``suppressed N similar WARN lines: <first message>``.
+
+    Attach one instance per handler (console, file, OutputBuffer bridge) —
+    logger-level filters do NOT apply to records propagated from child
+    loggers, only handler filters see everything.
+
+    Env: ``SLO_LOG_DEDUP_WINDOW`` seconds (default 10; ``0`` disables).
+
+    Reentrancy: emitting the summary line re-enters this filter on the same
+    thread — a reentrancy flag plus the distinct fingerprint of the summary
+    message itself guarantees termination. The per-record decision is cached
+    on the record so a shared instance attached to several handlers makes the
+    same decision for every handler instead of counting itself as a repeat.
+    """
+
+    _MAX_KEYS = 500
+
+    def __init__(self, window_s: float | None = None, name: str = "") -> None:
+        super().__init__(name)
+        if window_s is None:
+            try:
+                window_s = float(os.environ.get("SLO_LOG_DEDUP_WINDOW", "10") or 0)
+            except ValueError:
+                window_s = 10.0
+        self.window_s = window_s
+        # key -> [window_start_monotonic, suppressed_count, sample_message]
+        self._state: dict[tuple[str, int, str], list] = {}
+        self._emitting = False
+
+    @staticmethod
+    def fingerprint(record: logging.LogRecord) -> tuple[str, int, str]:
+        """Normalized identity of a record: logger, level, message template."""
+        try:
+            msg = record.getMessage()
+        except Exception:
+            msg = str(record.msg)
+        msg = re.sub(r"[a-f0-9]{8,}", "ID", msg.lower())
+        msg = re.sub(r"\d+", "N", msg)
+        return (record.name, record.levelno, msg)
+
+    def _sweep(self, now: float) -> None:
+        """Emit summaries for windows that expired without a follow-up record.
+
+        Entries with no suppression are dropped silently — the summary is only
+        interesting when something was actually hidden.
+        """
+        expired = [key for key, entry in self._state.items() if (now - entry[0]) >= self.window_s]
+        for key in expired:
+            self._flush_summary(key, self._state.pop(key))
+
+    def _flush_summary(self, key: tuple[str, int, str], entry: list) -> None:
+        count = entry[1]
+        sample = entry[2]
+        if count <= 0 or self._emitting:
+            return
+        levelno, logger_name = key[1], key[0]
+        self._emitting = True
+        try:
+            logging.getLogger(logger_name).log(
+                levelno,
+                "suppressed %d similar lines in %.0fs: %s",
+                count,
+                self.window_s,
+                sample,
+                extra={"tag": "DEDUP", "context": {"suppressed": count}},
+            )
+        finally:
+            self._emitting = False
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self.window_s <= 0:
+            return True
+        if record.levelno < logging.WARNING:
+            return True
+        if self._emitting:
+            return True
+
+        # One shared instance is attached to several handlers, so the same
+        # record passes through filter() multiple times. Decide once, then
+        # replay the cached decision — otherwise handler #2 would count the
+        # record handler #1 just accepted as a "repeat" and suppress it there.
+        cached = getattr(record, "_slo_dedup_decision", None)
+        if cached is not None:
+            return bool(cached)
+
+        now = time.monotonic()
+        self._sweep(now)
+
+        key = self.fingerprint(record)
+        entry = self._state.get(key)
+        if entry is None or (now - entry[0]) >= self.window_s:
+            if entry is not None:  # expired window with suppressed count
+                self._flush_summary(key, entry)
+            if len(self._state) >= self._MAX_KEYS and key not in self._state:
+                # Bound memory: drop the oldest window rather than grow forever
+                oldest = min(self._state, key=lambda k: self._state[k][0])
+                self._state.pop(oldest, None)
+            try:
+                sample = record.getMessage()[:300]
+            except Exception:
+                sample = str(record.msg)[:300]
+            self._state[key] = [now, 0, sample]
+            decision = True
+        else:
+            entry[1] += 1
+            decision = False
+
+        try:
+            record._slo_dedup_decision = decision
+        except Exception:  # pragma: no cover - slots-restricted records
+            pass
+        return decision
+
+
 # ── File handler with rotation ────────────────────────────────────────
 
 
@@ -1035,6 +1171,15 @@ def setup_logging(
     for h in list(root.handlers):
         root.removeHandler(h)
 
+    # One shared RepeatSuppressionFilter instance across handlers: handler
+    # filters each see every record, but the state (window/count) must be
+    # global or the file and console handlers would emit duplicate summaries.
+    try:
+        dedup_filter = RepeatSuppressionFilter()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("RepeatSuppressionFilter unavailable: %s", exc)
+        dedup_filter = None
+
     # Console handler
     if enable_console:
         colors = _color_enabled(sys.stderr)
@@ -1051,6 +1196,8 @@ def setup_logging(
         console_handler.setLevel(log_level)
         console_handler.setFormatter(console_formatter)
         console_handler.addFilter(ClientExtensionFilter())
+        if dedup_filter is not None:
+            console_handler.addFilter(dedup_filter)
         root.addHandler(console_handler)
 
     # File handler
@@ -1058,6 +1205,8 @@ def setup_logging(
     if use_file:
         try:
             file_handler = _create_file_handler(log_path, level=logging.DEBUG, fmt=fmt)
+            if dedup_filter is not None:
+                file_handler.addFilter(dedup_filter)
             root.addHandler(file_handler)
         except Exception as e:
             # File logging is best-effort — warn once so operators know it failed
@@ -1067,6 +1216,8 @@ def setup_logging(
     bridge = None
     if enable_output_buffer:
         bridge = _install_output_buffer_bridge(root)
+        if bridge is not None and dedup_filter is not None:
+            bridge.addFilter(dedup_filter)
 
     # Dashboard event buffer filter (captures tagged events for CLI monitor)
     try:

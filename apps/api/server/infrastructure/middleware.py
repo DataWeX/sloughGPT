@@ -262,7 +262,8 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
     code so that errors are visible immediately in stdout:
 
         5xx  -> logger.error   (tag REQ)
-        4xx  -> logger.warning (tag REQ)
+        4xx  -> logger.warning (tag REQ)  - DEBUG if an exception handler
+                                            already logged it (single-owner)
         >1s  -> logger.warning (tag SLOW)  - unless path is in _COLD_START_PATHS
         else -> logger.debug   (tag REQ)
 
@@ -346,6 +347,41 @@ class UnifiedRequestMiddleware(BaseHTTPMiddleware):
                 },
             )
         elif sc >= 400:
+            # Extension-origin failures (wallet injections, devtools scripts)
+            # are not our bugs: add a DEBUG note so the WARN stays traceable
+            # without demanding attention.  This is the production home of the
+            # note ClientErrorFilterMiddleware used to emit as a separate
+            # outermost layer (it is no longer registered).
+            origin = request.headers.get("origin", "")
+            if "chrome-extension" in origin or "moz-extension" in origin:
+                logger.debug(
+                    "Extension error suppressed: %s %s %d",
+                    method,
+                    path,
+                    sc,
+                    extra={"op": "http.request"},
+                )
+            # Single-owner logging: when an exception handler already logged
+            # this failure (detail + code), keep only its WARN and demote our
+            # line to DEBUG so timing stays traceable without a duplicate WARN.
+            # The flag lives in request.scope — request.state does not
+            # propagate through call_next across BaseHTTPMiddleware layers.
+            if request.scope.get("slo.error_logged"):
+                logger.debug(
+                    "%d on %s %s (%s) corr=%s",
+                    sc,
+                    method,
+                    path,
+                    elapsed_str,
+                    corr_id,
+                    extra={
+                        "op": "http.request",
+                        "ok": False,
+                        "dur_ms": int(elapsed * 1000),
+                        "http": {"method": method, "path": path, "status": sc, "corr": corr_id},
+                    },
+                )
+                return response
             logger.warning(
                 "%d on %s %s (%s) corr=%s",
                 sc,
@@ -660,7 +696,7 @@ def get_configured_middleware(
     order, and the inbound request path is the reverse of it.
 
     Request path (inbound -> outbound):
-        ClientErrorFilter -> CorrelationId -> ReadinessGate -> UnifiedRequest -> Metrics -> RequestTimeout -> handler
+        CorrelationId -> ReadinessGate -> UnifiedRequest -> Metrics -> RequestTimeout -> handler
 
     CorrelationId MUST run before ReadinessGate so that the gate can
     include the correlation ID in its logs.  ReadinessGate MUST run
@@ -673,7 +709,6 @@ def get_configured_middleware(
         (SerializationGuardMiddleware, {}),
         (ReadinessGateMiddleware, {}),
         (CorrelationIdMiddleware, {}),
-        (ClientErrorFilterMiddleware, {}),
     ]
 
 
