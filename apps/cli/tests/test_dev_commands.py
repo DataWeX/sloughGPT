@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -581,3 +582,112 @@ class TestWebDevCmd:
 
         (web_root / "package.json").write_text('{"name": "web"}')
         assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
+
+
+class TestCmdDevFailureReporting:
+    """A dead or timing-out service must end the dev session with a visible error.
+
+    Previously only web death was noticed, `status["api"]` could never become
+    "error", and `_stop_check` required both services to be in error — so a
+    crashed API left the TUI showing "starting" forever with no message.
+    """
+
+    @staticmethod
+    def _scaffold(monkeypatch, tmp_path, stopped, api_dead=False, web_dead=False):
+        import commands.dev as mod
+
+        def fake_popen(cmd, **kwargs):
+            proc = MagicMock()
+            is_npm = bool(cmd) and cmd[0] in ("npm", "npx")
+            dead = web_dead if is_npm else api_dead
+            proc.poll.return_value = 1 if dead else None
+            proc.returncode = 1 if dead else None
+            return proc
+
+        class FakeDashboard:
+            def __init__(self, *a, **k):
+                pass
+
+            def set_status(self, *a, **k):
+                pass
+
+            def serve(self, stop_check=None):
+                import time as _t
+
+                for _ in range(200):  # up to 4s for the poll thread to react
+                    if stop_check is None or stop_check():
+                        stopped.append(True)
+                        return
+                    _t.sleep(0.02)
+                stopped.append(False)
+
+        ctx = (
+            patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch("commands.dev._repo_root", return_value=tmp_path),
+            patch("commands.dev._read_stream"),
+            patch("commands.dev._preflight_model_check"),
+            patch("commands.dev._check_api_ready", return_value=False),
+            patch("commands.dev._check_port", return_value=False),
+            patch("commands.dev._kill_port"),
+            patch("commands.dev._cleanup"),
+            patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
+            patch("commands.dev.signal"),
+            patch("commands.dev.time"),
+            patch("core.tui.DevDashboard", FakeDashboard),
+        )
+        return mod, ctx
+
+    @staticmethod
+    def _args(web_port=4590):
+        args = MagicMock()
+        args.model = None
+        args.port = 8177
+        args.web_port = web_port
+        args.watch_web = False
+        args.host = "localhost"
+        return args
+
+    @staticmethod
+    def _error_messages(mock_log):
+        return [str(c[0][0]) for c in mock_log.error.call_args_list]
+
+    def test_api_death_reports_and_stops(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, api_dead=True)
+        with ExitStack() as stack:
+            for c in ctx:
+                stack.enter_context(c)
+            mod.cmd_dev(self._args())
+
+        assert stopped == [True], "session must stop when the API dies"
+        assert any("API server exited" in m for m in self._error_messages(mock_log)), (
+            f"no API death message: {self._error_messages(mock_log)}"
+        )
+
+    def test_web_death_reports_and_stops(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, web_dead=True)
+        with ExitStack() as stack:
+            for c in ctx:
+                stack.enter_context(c)
+            mod.cmd_dev(self._args())
+
+        assert stopped == [True], "session must stop when the web server dies"
+        assert any("Web server exited" in m for m in self._error_messages(mock_log)), (
+            f"no web death message: {self._error_messages(mock_log)}"
+        )
+
+    def test_api_timeout_reports_error_instead_of_waiting_forever(
+        self, mock_log, monkeypatch, tmp_path
+    ):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped)  # both alive, never ready
+        with ExitStack() as stack:
+            for c in ctx:
+                stack.enter_context(c)
+            mod.cmd_dev(self._args())
+
+        assert stopped == [True], "session must stop when the startup budget runs out"
+        assert any("did not become ready within" in m for m in self._error_messages(mock_log)), (
+            f"no timeout message: {self._error_messages(mock_log)}"
+        )

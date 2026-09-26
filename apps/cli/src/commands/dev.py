@@ -525,8 +525,14 @@ def cmd_dev(args):
     web_thread.start()
 
     # ── Wait for readiness (async poll) ──────────────────
+    # Declared before the thread starts: _poll_services reads it on every
+    # iteration, and a late binding raises NameError, killing the thread.
+    shutdown = [False]
+
     def _poll_services():
         for _ in range(API_STARTUP_TIMEOUT * 2):
+            if shutdown[0]:
+                return
             if status["api_ready"] and status["web_ready"]:
                 break
             if not status["api_ready"] and _check_api_ready(api_port):
@@ -537,12 +543,23 @@ def cmd_dev(args):
                 status["web_ready"] = True
                 status["web"] = "ready"
                 _update_startup_status()
+            # Check if the API process died (import error, port conflict, crash)
+            if not status["api_ready"] and api_proc.poll() is not None:
+                status["api"] = "error"
+                _update_startup_status()
+                log.error(f"API server exited (code {api_proc.returncode})")
+                for line in _extract_error_lines(api_lines):
+                    log.info(f"  | {line}")
+                break
             # Check if web process died
             if not status["web_ready"] and web_proc.poll() is not None:
                 if _is_eaddrinuse(web_lines):
                     status["web"] = "eaddrinuse"
                 else:
                     status["web"] = "error"
+                    log.error(f"Web server exited (code {web_proc.returncode})")
+                    for line in _extract_error_lines(web_lines):
+                        log.info(f"  | {line}")
                 _update_startup_status()
                 break
             if not status["api_ready"]:
@@ -551,6 +568,14 @@ def cmd_dev(args):
                     status["api"] = f"waiting... {phase}"
                     _update_startup_status()
             time.sleep(0.5)
+        else:
+            # Budget exhausted — report it instead of showing "waiting" forever
+            if not status["api_ready"] and not shutdown[0]:
+                status["api"] = "error"
+                _update_startup_status()
+                log.error(f"API did not become ready within {API_STARTUP_TIMEOUT}s")
+                for line in _extract_error_lines(api_lines):
+                    log.info(f"  | {line}")
 
     poll_thread = threading.Thread(target=_poll_services, daemon=True)
     poll_thread.start()
@@ -571,7 +596,6 @@ def cmd_dev(args):
         },
     )
 
-    shutdown = [False]
     eaddrinuse_port = [None]  # Track EADDRINUSE for error display
 
     def _stop_check() -> bool:
@@ -582,9 +606,9 @@ def cmd_dev(args):
         if status["web"] == "eaddrinuse":
             eaddrinuse_port[0] = web_port
             return True
-        if status["api"] == "error" and status["web"] == "error":
-            return True
-        return False
+        # Either service dying ends the session — nothing here restarts them,
+        # and a dead service with no error report leaves the TUI stuck forever.
+        return status["api"] == "error" or status["web"] == "error"
 
     def _signal_handler(sig, frame):
         shutdown[0] = True
