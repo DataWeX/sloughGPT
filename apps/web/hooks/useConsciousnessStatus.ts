@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { consciousnessController } from '@/lib/consciousness-controller'
 
 export interface ConsciousnessStatus {
@@ -39,22 +39,28 @@ export function useConsciousnessStatus() {
   const [status, setStatus] = useState<ConsciousnessStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const fetchStatus = useCallback(async () => {
-    try {
-      const data = await consciousnessController.getStatus()
-      setStatus(data as unknown as ConsciousnessStatus)
-    } catch {
-      // Consciousness endpoint may not exist yet — degrade silently
-    } finally {
-      setLoading(false)
+  useEffect(() => {
+    let cancelled = false
+
+    const load = async () => {
+      try {
+        const data = await consciousnessController.getStatus()
+        if (cancelled) return
+        setStatus(data as unknown as ConsciousnessStatus)
+      } catch {
+        // Consciousness endpoint may not exist yet — degrade silently
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void load()
+    const id = setInterval(load, POLL_INTERVAL)
+    return () => {
+      cancelled = true
+      clearInterval(id)
     }
   }, [])
-
-  useEffect(() => {
-    fetchStatus()
-    const id = setInterval(fetchStatus, POLL_INTERVAL)
-    return () => clearInterval(id)
-  }, [fetchStatus])
 
   return { status, loading, levelLabel: getConsciousnessLevelLabel(status?.level ?? 0) }
 }

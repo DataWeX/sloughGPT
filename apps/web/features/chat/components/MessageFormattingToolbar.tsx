@@ -44,12 +44,16 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
     }
   }, [])
 
-  const handleFormat = useCallback((prefix: string, suffix: string) => {
-    const formatted = `${prefix}${text || 'text'}${suffix}`
-    onFormat(formatted)
-    setSelectedFormat(prefix)
-    setTimeout(() => setSelectedFormat(null), 200)
-  }, [text, onFormat])
+  const handleFormat = useCallback(
+    (prefix: string, suffix: string) => {
+      const formatted = `${prefix}${text || 'text'}${suffix}`
+      onFormat(formatted)
+      setSelectedFormat(prefix)
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => setSelectedFormat(null), 200)
+    },
+    [text, onFormat],
+  )
 
   const handleCopy = useCallback(() => {
     onCopy(text)
@@ -72,7 +76,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
 
       {expanded && (
         <>
-          {FORMAT_OPTIONS.map(option => (
+          {FORMAT_OPTIONS.map((option) => (
             <Button
               key={option.label}
               variant="ghost"
@@ -93,10 +97,7 @@ export const MessageFormattingToolbar = memo(function MessageFormattingToolbar({
       <Button
         variant="ghost"
         size="sm"
-        className={cn(
-          'text-[10px] h-6',
-          copied && 'bg-success/20 text-success',
-        )}
+        className={cn('text-[10px] h-6', copied && 'bg-success/20 text-success')}
         onClick={handleCopy}
       >
         {copied ? 'Copied!' : 'Copy'}
