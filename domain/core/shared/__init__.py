@@ -7,10 +7,12 @@ Public API:
     repair_iso — read-path repair for broken "+00:00Z" values
     normalize_local_iso — read-path repair treating naive input as server-local
     generate_id, hash_string, format_size, format_time, load_json, save_json
+    align_dim_ff, FF_ALIGN — feed-forward SIMD alignment contract (shared with loader)
     merge_dicts, clamp, validate_config, retry, Timer, Cache, RateLimiter
 """
 
 from domain.core.shared._internal.concurrency import Cache, RateLimiter, Timer, retry
+from domain.core.shared._internal.dims import FF_ALIGN, align_dim_ff
 from domain.core.shared._internal.formatting import format_size, format_time
 from domain.core.shared._internal.hashing import hash_string
 from domain.core.shared._internal.ids import generate_id
@@ -39,6 +41,7 @@ from domain.core.shared._internal.timestamps import (
 )
 
 __all__ = [
+    "FF_ALIGN",
     "BenchmarkRunner",
     "Cache",
     "RateLimiter",
@@ -47,6 +50,7 @@ __all__ = [
     "TestSuite",
     "Timer",
     "clamp",
+    "align_dim_ff",
     "data_root",
     "find_available_port",
     "find_repo_root",

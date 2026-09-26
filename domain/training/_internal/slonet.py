@@ -25,6 +25,7 @@ import numpy as np
 from domain.core.infrastructure._internal.atomic_write import atomic_writer
 from domain.core.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.core.shared import (  # noqa: F401 — find_repo_root kept for compatibility
+    align_dim_ff,
     find_repo_root,
     utc_now_iso,
 )
@@ -5505,7 +5506,7 @@ class SloTransformer(SloNet):
         _lazy: bool = False,
     ):
         dim_ff = intermediate_size or int(n_embed * 8 // 3)
-        dim_ff = ((dim_ff + 63) // 64) * 64
+        dim_ff = align_dim_ff(dim_ff)
         layers = []
         layers.append(SloEmbedding(vocab_size, n_embed, "tok_emb", _lazy=_lazy))
         if dropout > 0:
