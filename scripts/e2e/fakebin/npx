@@ -7,6 +7,13 @@ LOG="${FAKE_NPM_LOG:-/tmp/fake_npm.log}"
 echo "argv: $*" >> "$LOG"
 
 if [ "${1:-}" = "next" ] && [ "${2:-}" = "build" ]; then
+  if [ "${FAKE_NPX_FAIL:-0}" = "1" ]; then
+    # Real next build fails after tens of seconds — by then the API has
+    # already bound its port, so a missing cleanup leaves a live orphan.
+    sleep "${FAKE_NPX_DELAY:-0}"
+    echo "fake npx: forced build failure" >&2
+    exit 1
+  fi
   mkdir -p .next/standalone
   cat > .next/standalone/server.js <<'JS'
 const http = require("http");

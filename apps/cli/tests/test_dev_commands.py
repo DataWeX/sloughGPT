@@ -300,8 +300,41 @@ class TestCleanup:
         """_cleanup should not crash when api_proc or web_proc is None."""
         from commands.dev import _cleanup
 
-        with patch("commands.dev._kill_port"):
+        with patch("commands.dev._kill_port") as kp:
             _cleanup(None, None, 8000, 3000)
+        kp.assert_not_called()  # nothing was spawned → no port is ours to kill
+
+    def test_cleanup_never_kills_reused_api_port(self):
+        """api_proc=None means a reused (foreign) API — its port stays."""
+        from commands.dev import _cleanup
+
+        mock_web_proc = MagicMock()
+        mock_web_proc.poll.return_value = None
+        with patch("commands.dev._kill_port") as kp:
+            _cleanup(None, mock_web_proc, 8000, 3000)
+        mock_web_proc.terminate.assert_called_once()
+        kp.assert_called_once_with(3000)
+
+    def test_cleanup_never_kills_reused_web_port(self):
+        """web_proc=None means a reused (foreign) web — its port stays."""
+        from commands.dev import _cleanup
+
+        mock_api_proc = MagicMock()
+        mock_api_proc.poll.return_value = None
+        with patch("commands.dev._kill_port") as kp:
+            _cleanup(mock_api_proc, None, 8000, 3000)
+        mock_api_proc.terminate.assert_called_once()
+        kp.assert_called_once_with(8000)
+
+    def test_cleanup_kills_both_ports_it_spawned(self):
+        """Both procs spawned → both ports freed (stragglers incl.)."""
+        from commands.dev import _cleanup
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        with patch("commands.dev._kill_port") as kp:
+            _cleanup(mock_proc, mock_proc, 8000, 3000)
+        assert [c.args for c in kp.call_args_list] == [(8000,), (3000,)]
 
     def test_cleanup_with_api_proc_none(self):
         """_cleanup should handle api_proc=None and a valid web_proc."""

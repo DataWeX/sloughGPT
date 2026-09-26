@@ -642,7 +642,12 @@ def cmd_dev(args):
 
 
 def _cleanup(api_proc, web_proc, api_port, web_port):
-    """Terminate both subprocesses and free ports."""
+    """Terminate spawned subprocesses and free the ports they own.
+
+    A proc of None means the service was reused (started by someone else):
+    its port must not be killed, or our shutdown would take down a foreign
+    healthy server.
+    """
     for proc in [api_proc, web_proc]:
         if proc and proc.poll() is None:
             try:
@@ -654,8 +659,10 @@ def _cleanup(api_proc, web_proc, api_port, web_port):
                     proc.wait(timeout=2)
                 except (OSError, subprocess.TimeoutExpired):
                     pass
-    _kill_port(api_port)
-    _kill_port(web_port)
+    if api_proc is not None:
+        _kill_port(api_port)
+    if web_proc is not None:
+        _kill_port(web_port)
 
 
 def _print_summary(api_lines, web_lines, status, api_port=8000, web_port=3000):
@@ -1240,6 +1247,8 @@ def _cmd_api_and_web(args):
             for line in _extract_error_lines(build_lines):
                 build_log.info(f"  | {line}")
             stop_event.set()
+            # Own the API process here — returning without cleanup leaks it.
+            _cleanup(api_proc, None, api_port, web_port)
             return
         build_log.success("Build complete")
 
