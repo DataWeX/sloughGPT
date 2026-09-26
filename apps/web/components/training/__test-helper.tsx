@@ -37,6 +37,7 @@ export function makeForm(overrides: Record<string, any> = {}) {
     nativeLayers: 4,
     nativeHeads: 4,
     nativeBlockSize: 128,
+    quality: null as 'low' | 'medium' | 'high' | null,
     showAdvanced: false,
     algo: 'bpe',
     loadingFinetunedModel: false,
@@ -61,6 +62,7 @@ export function makeForm(overrides: Record<string, any> = {}) {
     setNativeLayers: vi.fn(),
     setNativeHeads: vi.fn(),
     setNativeBlockSize: vi.fn(),
+    setQuality: vi.fn(),
     setShowAdvanced: vi.fn(),
     setAlgo: vi.fn(),
     setLoadingFinetunedModel: vi.fn(),
@@ -141,7 +143,15 @@ export const passthrough = ({ children }: any) => <div>{children}</div>
 
 /** Button mock — renders a <button> with variant/size data attributes. */
 export const mockButton = ({ children, onClick, disabled, variant, size, className }: any) => (
-  <button onClick={onClick} disabled={disabled} data-variant={variant} data-size={size} className={className}>{children}</button>
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    data-variant={variant}
+    data-size={size}
+    className={className}
+  >
+    {children}
+  </button>
 )
 
 /** CardTitle mock — renders children with a data-testid. */

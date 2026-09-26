@@ -14,6 +14,24 @@ import { appShellStore, writeTraining } from '@/lib/app-shell'
 
 export type Method = 'distill' | 'finetune' | 'vlm' | 'native'
 export type InputMode = 'dataset' | 'text'
+export type Quality = 'low' | 'medium' | 'high'
+
+/** Architecture sizes behind the quality picker. Ranges are capped to the API's
+ *  validation (n_embed 16–1024, n_layer 1–12, n_head 1–16). */
+export const QUALITY_PRESETS: Record<Quality, { embed: number; layers: number; heads: number }> = {
+  low: { embed: 128, layers: 2, heads: 4 },
+  medium: { embed: 256, layers: 4, heads: 8 },
+  high: { embed: 512, layers: 6, heads: 8 },
+}
+
+/** Maps current dimensions back to a bucket, or null when they are custom. */
+export function qualityFor(embed: number, layers: number): Quality | null {
+  return (
+    (Object.keys(QUALITY_PRESETS) as Quality[]).find(
+      (q) => QUALITY_PRESETS[q].embed === embed && QUALITY_PRESETS[q].layers === layers,
+    ) ?? null
+  )
+}
 
 export interface TrainingPreset {
   name: string
@@ -103,6 +121,7 @@ export interface TrainingFormState {
   nativeLayers: number
   nativeHeads: number
   nativeBlockSize: number
+  quality: Quality | null
   loadingFinetunedModel: boolean
   resumeCheckpoint: string
   allJobs: TrainingJob[]
@@ -126,6 +145,7 @@ export interface TrainingFormState {
   setNativeLayers: (n: number) => void
   setNativeHeads: (n: number) => void
   setNativeBlockSize: (n: number) => void
+  setQuality: (q: Quality) => void
   setLoadingFinetunedModel: (v: boolean) => void
   setResumeCheckpoint: (s: string) => void
   clearOptimisticJobs: () => void
@@ -150,6 +170,10 @@ interface SavedConfig {
   useLoRA?: boolean
   loraRank?: number
   loraAlpha?: number
+  nativeEmbed?: number
+  nativeLayers?: number
+  nativeHeads?: number
+  nativeBlockSize?: number
 }
 
 export function useTrainingForm(
@@ -186,6 +210,10 @@ export function useTrainingForm(
         if (saved.useLoRA !== undefined) setUseLoRA(saved.useLoRA)
         if (saved.loraRank) setLoraRank(saved.loraRank)
         if (saved.loraAlpha) setLoraAlpha(saved.loraAlpha)
+        if (saved.nativeEmbed) setNativeEmbed(saved.nativeEmbed)
+        if (saved.nativeLayers) setNativeLayers(saved.nativeLayers)
+        if (saved.nativeHeads) setNativeHeads(saved.nativeHeads)
+        if (saved.nativeBlockSize) setNativeBlockSize(saved.nativeBlockSize)
       }
       setConfigLoaded(true)
     })
@@ -262,6 +290,10 @@ export function useTrainingForm(
       trainingBatchSize,
       selectedModel,
       useLoRA,
+      nativeEmbed,
+      nativeLayers,
+      nativeHeads,
+      nativeBlockSize,
     })
   }, [
     method,
@@ -272,6 +304,10 @@ export function useTrainingForm(
     trainingBatchSize,
     selectedModel,
     useLoRA,
+    nativeEmbed,
+    nativeLayers,
+    nativeHeads,
+    nativeBlockSize,
     configLoaded,
   ])
 
@@ -478,6 +514,18 @@ export function useTrainingForm(
     ],
   )
 
+  /** Quality picker: one click lands embed/layers/heads on a tested bucket. */
+  const setQuality = useCallback((q: Quality) => {
+    const size = QUALITY_PRESETS[q]
+    setNativeEmbed(size.embed)
+    setNativeLayers(size.layers)
+    setNativeHeads(size.heads)
+  }, [])
+
+  // Derived, not stored — dimensions are the source of truth so presets,
+  // saved configs, and the picker can never disagree.
+  const quality = qualityFor(nativeEmbed, nativeLayers)
+
   return {
     method,
     inputMode,
@@ -500,6 +548,7 @@ export function useTrainingForm(
     nativeLayers,
     nativeHeads,
     nativeBlockSize,
+    quality,
     loadingFinetunedModel,
     resumeCheckpoint,
     allJobs,
@@ -523,6 +572,7 @@ export function useTrainingForm(
     setNativeLayers,
     setNativeHeads,
     setNativeBlockSize,
+    setQuality,
     setLoadingFinetunedModel,
     setResumeCheckpoint,
     clearOptimisticJobs: () => setOptimisticJobs([]),

@@ -66,4 +66,28 @@ describe('ConfigureStep', () => {
     renderStep(baseForm)
     expect(screen.queryByLabelText(/Training text input/)).toBeNull()
   })
+
+  it('shows the quality picker for native training', () => {
+    renderStep({ ...baseForm, method: 'native' })
+    expect(screen.getByText('Quality')).toBeDefined()
+    expect(screen.getByTestId('quality-hint').textContent).toMatch(/Custom size/)
+  })
+
+  it('hides the quality picker for distill training', () => {
+    renderStep(baseForm)
+    expect(screen.queryByText('Quality')).toBeNull()
+    expect(screen.queryByTestId('quality-hint')).toBeNull()
+  })
+
+  it('applies the picked quality bucket', () => {
+    const form = makeForm({ method: 'native', quality: 'medium' })
+    renderStep(form)
+    screen.getByText('High').click()
+    expect(form.setQuality).toHaveBeenCalledWith('high')
+  })
+
+  it('explains what the selected quality means', () => {
+    renderStep(makeForm({ method: 'native', quality: 'high' }))
+    expect(screen.getByTestId('quality-hint').textContent).toMatch(/Bigger model/)
+  })
 })
