@@ -222,6 +222,7 @@ def test_list_jobs_serializes_with_internal_fields():
     import training.jobs as tj
 
     tj.training_jobs["job_1"] = {
+        "id": "job_1",
         "status": "running",
         "model": "gpt2",
         "dataset": "shakespeare",

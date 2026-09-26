@@ -1,7 +1,9 @@
 """Tests for apps/cli/src/commands/dev.py — dev server and health commands."""
 
+import json
 import os
 import sys
+from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -363,3 +365,392 @@ class TestCmdApiAndWebMonitorLoop:
 
             # Should not raise AttributeError: 'NoneType' object has no attribute 'poll'
             # The function should complete without crashing
+
+
+class TestStartupBudget:
+    """The CLI's API-wait budget must cover the server's real startup cost."""
+
+    def test_budget_covers_stage_ready_worst_case(self):
+        from commands.dev import API_STARTUP_TIMEOUT
+
+        # Stage READY's model_ready hook polls 120s (startup.py) under a 130s
+        # hook timeout, and Stage CRITICAL spends ~40s before READY begins.
+        # A budget below that kills a healthy server mid-model-load and
+        # reports it as "error".
+        assert API_STARTUP_TIMEOUT >= 160
+
+    def test_no_hardcoded_90s_api_waits_remain(self):
+        import commands.dev as mod
+
+        src = open(mod.__file__).read()
+        assert "range(90)" not in src, "reintroduced a hardcoded 90s API wait"
+        assert "timeout=90" not in src, "reintroduced a hardcoded 90s API wait"
+        # every readiness loop must be driven by the shared budget
+        assert src.count("API_STARTUP_TIMEOUT") >= 5
+
+
+class TestLatestStartupPhase:
+    """The wait loops surface the API's own startup markers while polling."""
+
+    def test_returns_latest_phase_marker(self):
+        from commands.dev import _latest_startup_phase
+
+        lines = [
+            "06:46:15 INF [START] startup Phase: all routers registered (61 routes)",
+            "06:46:30 INF [START] startup Phase 4: loading model Qwen (background)",
+            "06:47:00 INF [SYS] startup Startup complete — server ready for requests",
+        ]
+        assert _latest_startup_phase(lines) == "Startup complete — server ready for requests"
+
+    def test_prefers_stage_markers_over_older_phases(self):
+        from commands.dev import _latest_startup_phase
+
+        lines = [
+            "06:46:30 INF [START] startup Phase 4: loading model (background)",
+            "06:46:30 INF [START] startup Stage READY: running 2 hooks",
+        ]
+        assert _latest_startup_phase(lines) == "Stage READY: running 2 hooks"
+
+    def test_empty_when_no_marker(self):
+        from commands.dev import _latest_startup_phase
+
+        assert _latest_startup_phase([]) == ""
+        assert _latest_startup_phase(["06:46:15 INF [INFRA] quantization Quarantine"]) == ""
+
+    def test_ignores_non_startup_lines_and_truncates(self):
+        from commands.dev import _latest_startup_phase
+
+        lines = ["noise", "no marker here"]
+        assert _latest_startup_phase(lines) == ""
+        long_marker = "Phase 4: loading model " + "x" * 200
+        out = _latest_startup_phase([f"INF startup {long_marker}"])
+        assert len(out) <= 72
+
+
+class TestWebDevEnv:
+    """The web dev server must receive the requested port via PORT."""
+
+    def test_sets_port_and_keeps_other_env(self, monkeypatch, tmp_path):
+        from commands.dev import _web_dev_env
+
+        monkeypatch.setenv("NVM_DIR", str(tmp_path))  # no versions/node → PATH untouched
+        out = _web_dev_env({"PATH": "/base/bin", "FORCE_COLOR": "1"}, 3999)
+        assert out["PORT"] == "3999"
+        assert out["FORCE_COLOR"] == "1"
+        assert out["PATH"] == "/base/bin"
+
+    def test_prepends_nvm_node_to_path(self, monkeypatch, tmp_path):
+        from commands.dev import _web_dev_env
+
+        nvm = tmp_path / "nvm"
+        bin_dir = nvm / "versions" / "node" / "v22.0.0" / "bin"
+        bin_dir.mkdir(parents=True)
+        monkeypatch.setenv("NVM_DIR", str(nvm))
+
+        out = _web_dev_env({"PATH": "/base/bin"}, 3000)
+        assert out["PATH"].split(os.pathsep) == [str(bin_dir), "/base/bin"]
+
+    def test_node_env_does_not_mutate_input(self, monkeypatch, tmp_path):
+        from commands.dev import _node_env
+
+        nvm = tmp_path / "nvm"
+        (nvm / "versions" / "node" / "v22.0.0" / "bin").mkdir(parents=True)
+        monkeypatch.setenv("NVM_DIR", str(nvm))
+
+        base = {"PATH": "/base/bin"}
+        out = _node_env(base)
+        assert base == {"PATH": "/base/bin"}
+        assert out["PATH"].split(os.pathsep)[0].startswith(str(nvm))
+
+
+class TestCmdDevWebPort:
+    """`slo dev --web-port N` must make the dev server listen on N.
+
+    Next.js reads PORT from env; Vite ignores PORT and needs --port argv.
+    The web subprocess previously got neither, so Next always listened on
+    its default 3000 while the readiness check polled the requested port.
+    """
+
+    @pytest.mark.parametrize("watch_web", [False, True])
+    @pytest.mark.parametrize(
+        ("dev_script", "expected_tail"),
+        [
+            ("next dev", ["npm", "run", "dev"]),
+            ("vite", ["npm", "run", "dev", "--", "--port", "3999", "--host", "0.0.0.0"]),
+        ],
+    )
+    def test_web_subprocess_receives_web_port(
+        self, mock_log, monkeypatch, tmp_path, watch_web, dev_script, expected_tail
+    ):
+        import commands.dev as mod
+
+        web_root = tmp_path / "apps" / "web"
+        web_root.mkdir(parents=True)
+        (web_root / "package.json").write_text(
+            json.dumps({"scripts": {"dev": dev_script}}), encoding="utf-8"
+        )
+
+        popen_calls = []
+
+        def fake_popen(cmd, **kwargs):
+            popen_calls.append((list(cmd), kwargs))
+            proc = MagicMock()
+            proc.poll.return_value = None
+            return proc
+
+        class FakeDashboard:
+            def __init__(self, *a, **k):
+                pass
+
+            def serve(self, stop_check=None):
+                return None
+
+        with (
+            patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch("commands.dev._repo_root", return_value=tmp_path),
+            patch("commands.dev._read_stream"),
+            patch("commands.dev._preflight_model_check"),
+            patch("commands.dev._check_api_ready", return_value=False),
+            patch("commands.dev._check_port", return_value=False),
+            patch("commands.dev._kill_port"),
+            patch("commands.dev._cleanup"),
+            patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
+            patch("commands.dev.signal"),
+            patch("commands.dev.time"),
+            patch("core.tui.DevDashboard", FakeDashboard),
+        ):
+            args = MagicMock()
+            args.model = None
+            args.port = 8000
+            args.web_port = 3999
+            args.watch_web = watch_web
+            args.host = "localhost"
+
+            mod.cmd_dev(args)
+
+        web_calls = [c for c in popen_calls if c[0] and c[0][0] in ("npm", "npx")]
+        assert web_calls, f"web subprocess never spawned: {popen_calls}"
+        cmd, kwargs = web_calls[0]
+        assert cmd[-len(expected_tail) :] == expected_tail
+        assert kwargs["env"]["PORT"] == "3999"
+
+
+class TestWebDevCmd:
+    """package.json's dev script decides how the port reaches the server."""
+
+    @pytest.fixture
+    def web_root(self, tmp_path, monkeypatch):
+        root = tmp_path / "apps" / "web"
+        root.mkdir(parents=True)
+        monkeypatch.setattr("commands.dev._repo_root", lambda: tmp_path)
+        return root
+
+    def test_next_script_uses_plain_npm_run_dev(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text('{"scripts": {"dev": "next dev"}}')
+        assert _web_dev_cmd(3999) == ["npm", "run", "dev"]
+
+    def test_vite_script_appends_port_and_host(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text('{"scripts": {"dev": "vite"}}')
+        assert _web_dev_cmd(3999) == [
+            "npm",
+            "run",
+            "dev",
+            "--",
+            "--port",
+            "3999",
+            "--host",
+            "0.0.0.0",
+        ]
+
+    def test_missing_package_json_defaults_to_next_form(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
+
+    def test_malformed_package_json_defaults_to_next_form(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text("{not json")
+        assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
+
+    def test_package_json_without_scripts_defaults(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text('{"name": "web"}')
+        assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
+
+
+class TestCmdDevFailureReporting:
+    """A dead, port-busy, or timing-out service must end the session with a clear message.
+
+    Previously only web death was noticed, `status["api"]` could never become
+    "error", and `_stop_check` required both services to be in error — so a
+    crashed or port-conflicted API left the TUI showing "starting" forever.
+    """
+
+    @staticmethod
+    def _scaffold(
+        monkeypatch,
+        tmp_path,
+        stopped,
+        api_dead=False,
+        web_dead=False,
+        api_eaddrinuse=False,
+        web_eaddrinuse=False,
+    ):
+        import commands.dev as mod
+
+        api_marker = object()
+        web_marker = object()
+        seen = {"api": False, "web": False}
+
+        def fake_popen(cmd, **kwargs):
+            proc = MagicMock()
+            is_npm = bool(cmd) and cmd[0] in ("npm", "npx")
+            svc = "web" if is_npm else "api"
+            if is_npm:
+                proc.stderr = web_marker
+            else:
+                proc.stdout = api_marker
+            einuse = web_eaddrinuse if is_npm else api_eaddrinuse
+            dead = web_dead if is_npm else api_dead
+            if einuse:
+                # Exit only after the EADDRINUSE line has been captured, so
+                # _is_eaddrinuse() sees it deterministically (the read thread
+                # appends the line, then the poll reports death).
+                proc.poll.side_effect = lambda *a, **k: 1 if seen[svc] else None
+            else:
+                proc.poll.return_value = 1 if dead else None
+            proc.returncode = 1 if (dead or einuse) else None
+            return proc
+
+        def fake_read(stream, lines, *a, **k):
+            which = "api" if stream is api_marker else "web"
+            if (which == "api" and api_eaddrinuse) or (which == "web" and web_eaddrinuse):
+                lines.append("ERROR: [Errno 98] address already in use")
+            seen[which] = True
+
+        class FakeDashboard:
+            def __init__(self, *a, **k):
+                pass
+
+            def set_status(self, *a, **k):
+                pass
+
+            def serve(self, stop_check=None):
+                import time as _t
+
+                for _ in range(400):  # up to 8s for the poll thread to react
+                    if stop_check is None or stop_check():
+                        stopped.append(True)
+                        return
+                    _t.sleep(0.02)
+                stopped.append(False)
+
+        ctx = (
+            patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch(
+                "commands.dev.subprocess.run",
+                return_value=MagicMock(stdout="", returncode=0),
+            ),
+            patch("commands.dev._repo_root", return_value=tmp_path),
+            patch("commands.dev._read_stream", side_effect=fake_read),
+            patch("commands.dev._preflight_model_check"),
+            patch("commands.dev._check_api_ready", return_value=False),
+            patch("commands.dev._check_port", return_value=False),
+            patch("commands.dev._kill_port"),
+            patch("commands.dev._cleanup"),
+            patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
+            patch("commands.dev.signal"),
+            patch("commands.dev.time"),
+            patch("core.tui.DevDashboard", FakeDashboard),
+        )
+        return mod, ctx
+
+    @staticmethod
+    def _run(mod, ctx, args):
+        import time as real_time
+
+        with ExitStack() as stack:
+            for c in ctx:
+                stack.enter_context(c)
+            # Real (tiny) sleeps so background threads get scheduled while the
+            # poll loop runs; fully no-op sleeps starve them under the GIL.
+            mod.time.sleep.side_effect = lambda s: real_time.sleep(0.005)
+            mod.cmd_dev(args)
+
+    @staticmethod
+    def _args(web_port=4590):
+        args = MagicMock()
+        args.model = None
+        args.port = 8177
+        args.web_port = web_port
+        args.watch_web = False
+        args.host = "localhost"
+        return args
+
+    @staticmethod
+    def _error_messages(mock_log):
+        return [str(c[0][0]) for c in mock_log.error.call_args_list]
+
+    def test_api_death_reports_and_stops(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, api_dead=True)
+        self._run(mod, ctx, self._args())
+
+        assert stopped == [True], "session must stop when the API dies"
+        assert any("API server exited" in m for m in self._error_messages(mock_log)), (
+            f"no API death message: {self._error_messages(mock_log)}"
+        )
+
+    def test_web_death_reports_and_stops(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, web_dead=True)
+        self._run(mod, ctx, self._args())
+
+        assert stopped == [True], "session must stop when the web server dies"
+        assert any("Web server exited" in m for m in self._error_messages(mock_log)), (
+            f"no web death message: {self._error_messages(mock_log)}"
+        )
+
+    def test_api_timeout_reports_error_instead_of_waiting_forever(
+        self, mock_log, monkeypatch, tmp_path
+    ):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped)  # both alive, never ready
+        self._run(mod, ctx, self._args())
+
+        assert stopped == [True], "session must stop when the startup budget runs out"
+        assert any("did not become ready within" in m for m in self._error_messages(mock_log)), (
+            f"no timeout message: {self._error_messages(mock_log)}"
+        )
+
+    def test_api_eaddrinuse_gets_remediation_hint(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, api_eaddrinuse=True)
+        self._run(mod, ctx, self._args())
+
+        assert stopped == [True], "session must stop when the API port is busy"
+        assert not any("API server exited" in m for m in self._error_messages(mock_log)), (
+            "port conflict must use the remediation path, not the generic death message"
+        )
+        kv = [c[0] for c in mock_log.key_value.call_args_list]
+        assert ("api", "port 8177 in use") in kv, f"no api remediation: {kv}"
+        cmds = [str(c[0][0]) for c in mock_log.command.call_args_list]
+        assert any("kill -9" in m for m in cmds), f"no kill hint: {cmds}"
+
+    def test_web_eaddrinuse_gets_remediation_hint(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, web_eaddrinuse=True)
+        self._run(mod, ctx, self._args(web_port=4591))
+
+        assert stopped == [True], "session must stop when the web port is busy"
+        assert not any("Web server exited" in m for m in self._error_messages(mock_log)), (
+            "port conflict must use the remediation path, not the generic death message"
+        )
+        kv = [c[0] for c in mock_log.key_value.call_args_list]
+        assert ("web", "port 4591 in use") in kv, f"no web remediation: {kv}"

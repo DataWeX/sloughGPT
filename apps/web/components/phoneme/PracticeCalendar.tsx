@@ -23,11 +23,11 @@ function getColorClass(count: number): string {
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function PracticeCalendar() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
 
   const { calendarData, totalDays, totalWords, currentStreak, longestStreak } = useMemo(() => {
     const dayCounts: Record<string, number> = {}
-    history.forEach(entry => {
+    history.forEach((entry) => {
       if (entry.timestamp) {
         const day = new Date(entry.timestamp).toISOString().split('T')[0]
         dayCounts[day] = (dayCounts[day] || 0) + 1
@@ -81,7 +81,7 @@ export default function PracticeCalendar() {
     const todayKey = getDayKey(today)
     if (dayCounts[todayKey]) {
       let streak = 0
-      let checkDate = new Date(today)
+      const checkDate = new Date(today)
       while (dayCounts[getDayKey(checkDate)]) {
         streak++
         checkDate.setDate(checkDate.getDate() - 1)

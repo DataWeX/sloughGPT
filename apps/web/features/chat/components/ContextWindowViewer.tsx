@@ -35,7 +35,11 @@ const TYPE_LABELS: Record<string, string> = {
   assistant: 'Assistant Response',
 }
 
-function ContextWindowItemCard({ item, isExpanded, onToggle }: {
+function ContextWindowItemCard({
+  item,
+  isExpanded,
+  onToggle,
+}: {
   item: ContextWindowItem
   isExpanded: boolean
   onToggle: () => void
@@ -55,19 +59,19 @@ function ContextWindowItemCard({ item, isExpanded, onToggle }: {
         className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
       >
         <div className="flex items-center gap-2">
-          <span className={cn(
-            'text-[10px] font-medium px-1.5 py-0.5 rounded border',
-            TYPE_COLORS[item.type]
-          )}>
+          <span
+            className={cn(
+              'text-[10px] font-medium px-1.5 py-0.5 rounded border',
+              TYPE_COLORS[item.type],
+            )}
+          >
             {TYPE_LABELS[item.type]}
           </span>
           <span className="text-xs text-foreground/80">{item.label}</span>
         </div>
         <div className="flex items-center gap-2">
           {item.tokenCount && (
-            <span className="text-[10px] text-muted-foreground">
-              ~{item.tokenCount} tokens
-            </span>
+            <span className="text-[10px] text-muted-foreground">~{item.tokenCount} tokens</span>
           )}
           {isExpanded ? (
             <IconChevronDown className="h-3 w-3 text-muted-foreground" />
@@ -76,7 +80,7 @@ function ContextWindowItemCard({ item, isExpanded, onToggle }: {
           )}
         </div>
       </button>
-      
+
       {isExpanded && (
         <div className="px-3 pb-3">
           <div className="relative">
@@ -109,7 +113,7 @@ export const ContextWindowViewer = memo(function ContextWindowViewer({
   const [showAll, setShowAll] = useState(false)
 
   const toggleItem = useCallback((label: string) => {
-    setExpandedItems(prev => {
+    setExpandedItems((prev) => {
       const next = new Set(prev)
       if (next.has(label)) {
         next.delete(label)
@@ -124,10 +128,17 @@ export const ContextWindowViewer = memo(function ContextWindowViewer({
     if (showAll) {
       setExpandedItems(new Set())
     } else {
-      setExpandedItems(new Set(items.map(i => i.label)))
+      setExpandedItems(new Set(items.map((i) => i.label)))
     }
     setShowAll(!showAll)
   }, [showAll, items])
+
+  const estimatedTokens = useMemo(
+    () =>
+      totalTokens ??
+      items.reduce((sum, item) => sum + (item.tokenCount ?? Math.ceil(item.content.length / 4)), 0),
+    [totalTokens, items],
+  )
 
   if (items.length === 0) {
     return (
@@ -137,15 +148,11 @@ export const ContextWindowViewer = memo(function ContextWindowViewer({
     )
   }
 
-  const estimatedTokens = useMemo(() => totalTokens ?? items.reduce((sum, item) => sum + (item.tokenCount ?? Math.ceil(item.content.length / 4)), 0), [totalTokens, items])
-
   return (
     <div className={cn('space-y-2', className)}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-foreground/80">
-            Context Window
-          </span>
+          <span className="text-xs font-medium text-foreground/80">Context Window</span>
           <span className="text-[10px] text-muted-foreground">
             {items.length} items · ~{estimatedTokens.toLocaleString()} tokens
           </span>
@@ -161,9 +168,9 @@ export const ContextWindowViewer = memo(function ContextWindowViewer({
           </Button>
         </div>
       </div>
-      
+
       <div className="space-y-1">
-        {items.map(item => (
+        {items.map((item) => (
           <ContextWindowItemCard
             key={item.label}
             item={item}

@@ -47,12 +47,16 @@ export interface TrainingStatus {
   status: string
   job_id?: string
   progress?: number
+  message?: string
+  recovery_job_id?: string
 }
 
 export interface RecoverableJob {
   id: string
   name: string
   failed_at: string
+  updated_at?: string
+  progress?: number
 }
 
 export interface Webhook {
@@ -207,7 +211,10 @@ export const trainingJobsController = {
     await apiPost('/training/stop')
   },
 
-  async loadAdapter(adapterPath: string, merge: boolean = false): Promise<{
+  async loadAdapter(
+    adapterPath: string,
+    merge: boolean = false,
+  ): Promise<{
     status: string
     adapter_path: string
     rank: number
@@ -245,7 +252,7 @@ export const trainingJobsController = {
 
   async list(): Promise<TrainingJob[]> {
     const data = await apiGet<TrainingJob[] | { jobs: TrainingJob[] }>('/training/jobs')
-    return Array.isArray(data) ? data : data?.jobs ?? []
+    return Array.isArray(data) ? data : (data?.jobs ?? [])
   },
 
   async listCheckpoints(): Promise<Checkpoint[]> {
@@ -259,7 +266,9 @@ export const trainingJobsController = {
   },
 
   async listFineTuned(): Promise<FineTunedModel[]> {
-    const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>('/training/finetuned-models')
+    const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>(
+      '/training/finetuned-models',
+    )
     return Array.isArray(data) ? data : (data?.models ?? [])
   },
 
@@ -317,7 +326,9 @@ export const trainingJobsController = {
     return apiPost('/training/lora-finetune', params)
   },
 
-  async getSummary(jobId: string): Promise<{ job_id: string; summary: string; status: string; model: string; dataset: string }> {
+  async getSummary(
+    jobId: string,
+  ): Promise<{ job_id: string; summary: string; status: string; model: string; dataset: string }> {
     return apiGet(`/training/jobs/${jobId}/summary`)
   },
 
@@ -390,23 +401,49 @@ export const trainingJobsController = {
     return apiGet<WebhookStats>('/training/webhooks/stats')
   },
 
-  async getWebhookRetryQueue(): Promise<{ retries: Array<{
-    delivery_id: string; webhook_id: string; event: string; attempt_count: number; next_retry_at: number
-  }> }> {
-    const data = await apiGet<{ retries?: Array<{
-      delivery_id: string; webhook_id: string; event: string; attempt_count: number; next_retry_at: number
-    }> }>('/training/webhooks/retry-queue')
+  async getWebhookRetryQueue(): Promise<{
+    retries: Array<{
+      delivery_id: string
+      webhook_id: string
+      event: string
+      attempt_count: number
+      next_retry_at: number
+    }>
+  }> {
+    const data = await apiGet<{
+      retries?: Array<{
+        delivery_id: string
+        webhook_id: string
+        event: string
+        attempt_count: number
+        next_retry_at: number
+      }>
+    }>('/training/webhooks/retry-queue')
     return { retries: data?.retries ?? [] }
   },
 
-  async getWebhookDeadLetters(limit: number = 50): Promise<{ dead_letters: Array<{
-    delivery_id: string; webhook_id: string; event: string; error: string | null;
-    status_code: number | null; attempt_count: number; dead_lettered_at: string
-  }> }> {
-    const data = await apiGet<{ dead_letters?: Array<{
-      delivery_id: string; webhook_id: string; event: string; error: string | null;
-      status_code: number | null; attempt_count: number; dead_lettered_at: string
-    }> }>(`/training/webhooks/dead-letters?limit=${limit}`)
+  async getWebhookDeadLetters(limit: number = 50): Promise<{
+    dead_letters: Array<{
+      delivery_id: string
+      webhook_id: string
+      event: string
+      error: string | null
+      status_code: number | null
+      attempt_count: number
+      dead_lettered_at: string
+    }>
+  }> {
+    const data = await apiGet<{
+      dead_letters?: Array<{
+        delivery_id: string
+        webhook_id: string
+        event: string
+        error: string | null
+        status_code: number | null
+        attempt_count: number
+        dead_lettered_at: string
+      }>
+    }>(`/training/webhooks/dead-letters?limit=${limit}`)
     return { dead_letters: data?.dead_letters ?? [] }
   },
 
@@ -424,11 +461,30 @@ export const trainingJobsController = {
     return apiPost('/training/webhooks/test', { url })
   },
 
-  async getWebhookDeliveries(webhookId: string, limit?: number): Promise<Array<{
-    id: string; webhook_id: string; event: string; status: number; success: boolean; delivered_at: string
-  }>> {
+  async getWebhookDeliveries(
+    webhookId: string,
+    limit?: number,
+  ): Promise<
+    Array<{
+      id: string
+      webhook_id: string
+      event: string
+      status: number
+      success: boolean
+      delivered_at: string
+    }>
+  > {
     const qs = limit ? `?limit=${limit}` : ''
-    const data = await apiGet<{ deliveries: Array<{ id: string; webhook_id: string; event: string; status: number; success: boolean; delivered_at: string }> }>(`/training/webhooks/${webhookId}/deliveries${qs}`)
+    const data = await apiGet<{
+      deliveries: Array<{
+        id: string
+        webhook_id: string
+        event: string
+        status: number
+        success: boolean
+        delivered_at: string
+      }>
+    }>(`/training/webhooks/${webhookId}/deliveries${qs}`)
     return data?.deliveries ?? []
   },
 
@@ -437,14 +493,29 @@ export const trainingJobsController = {
     return apiGet<Record<string, unknown>>('/training/status')
   },
 
-  async trainFromFeedback(params?: { epochs?: number; batch_size?: number; learning_rate?: number; use_lora?: boolean }): Promise<{
-    status: string; job_id?: string; samples?: number; checkpoint?: string; message?: string
+  async trainFromFeedback(params?: {
+    epochs?: number
+    batch_size?: number
+    learning_rate?: number
+    use_lora?: boolean
+  }): Promise<{
+    status: string
+    job_id?: string
+    samples?: number
+    checkpoint?: string
+    message?: string
   }> {
     return apiPost('/training/from-feedback', params ?? {})
   },
 
-  async exportFeedbackPairs(minQuality: number, targetCount: number): Promise<Record<string, unknown>> {
-    return apiPost<Record<string, unknown>>('/training/export-text', { min_quality: minQuality, target_count: targetCount })
+  async exportFeedbackPairs(
+    minQuality: number,
+    targetCount: number,
+  ): Promise<Record<string, unknown>> {
+    return apiPost<Record<string, unknown>>('/training/export-text', {
+      min_quality: minQuality,
+      target_count: targetCount,
+    })
   },
 
   async loadCheckpoint(name: string): Promise<{ success: boolean }> {
@@ -456,9 +527,8 @@ export const trainingJobsController = {
   },
 
   async deleteCheckpointsBatch(names: string[]): Promise<{ deleted: number }> {
-    const self = this
-    const results = await Promise.allSettled(names.map(n => self.deleteCheckpoint(n)))
-    return { deleted: results.filter(r => r.status === 'fulfilled').length }
+    const results = await Promise.allSettled(names.map((n) => this.deleteCheckpoint(n)))
+    return { deleted: results.filter((r) => r.status === 'fulfilled').length }
   },
 
   async downloadCheckpoint(name: string): Promise<Blob> {
@@ -507,7 +577,14 @@ export const trainingJobsController = {
   }> {
     try {
       for await (const event of streamSSE('/mobile/train/from-sessions', { body: params ?? {} })) {
-        yield event as { stream: string; phase: string; status: string; data: Record<string, unknown>; meta: Record<string, unknown>; message: string }
+        yield event as {
+          stream: string
+          phase: string
+          status: string
+          data: Record<string, unknown>
+          meta: Record<string, unknown>
+          message: string
+        }
         if (event.status === 'complete' || event.status === 'error') return
       }
     } catch (err) {
@@ -565,7 +642,14 @@ export const trainingJobsController = {
   }> {
     try {
       for await (const event of streamSSE('/training/from-sessions-stream', { method: 'GET' })) {
-        yield event as { stream: string; phase: string; status: string; data: Record<string, unknown>; meta: Record<string, unknown>; message: string }
+        yield event as {
+          stream: string
+          phase: string
+          status: string
+          data: Record<string, unknown>
+          meta: Record<string, unknown>
+          message: string
+        }
         if (event.status === 'complete' || event.status === 'error') return
       }
     } catch (err) {
@@ -581,7 +665,10 @@ export const trainingJobsController = {
     return apiGet<AutoTrainStatus>('/mobile/train/auto-status')
   },
 
-  async updateAutoTrainConfig(params: { threshold?: number; interval_s?: number }): Promise<AutoTrainStatus> {
+  async updateAutoTrainConfig(params: {
+    threshold?: number
+    interval_s?: number
+  }): Promise<AutoTrainStatus> {
     const query = new URLSearchParams()
     if (params.threshold != null) query.set('threshold', String(params.threshold))
     if (params.interval_s != null) query.set('interval_s', String(params.interval_s))
@@ -598,7 +685,9 @@ export const trainingJobsController = {
   },
 
   async getPendingPairs(limit = 50): Promise<{ pairs: TrainingPair[]; count: number }> {
-    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>('/mobile/train/pending', { limit: String(limit) })
+    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>('/mobile/train/pending', {
+      limit: String(limit),
+    })
     return data
   },
 
@@ -606,11 +695,19 @@ export const trainingJobsController = {
     return apiGet('/lora-eval/history', { limit: String(limit) })
   },
 
-  async runEval(adapterPath: string = 'data/user_adapters/best_aggregated.npz', soul: string = 'assistant'): Promise<{
+  async runEval(
+    adapterPath: string = 'data/user_adapters/best_aggregated.npz',
+    soul: string = 'assistant',
+  ): Promise<{
     status: string
     baseline?: EvalResult
     with_adapter?: EvalResult
-    delta?: { perplexity_delta: number; bleu_delta: number; throughput_delta: number; verdict: string }
+    delta?: {
+      perplexity_delta: number
+      bleu_delta: number
+      throughput_delta: number
+      verdict: string
+    }
     report?: string
   }> {
     return apiPost('/lora-eval/run', { adapter_path: adapterPath, soul })
@@ -633,7 +730,9 @@ export const trainingJobsController = {
   },
 
   async getSessionPairs(sessionId: string): Promise<{ pairs: TrainingPair[]; count: number }> {
-    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>(`/mobile/train/session/${encodeURIComponent(sessionId)}`)
+    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>(
+      `/mobile/train/session/${encodeURIComponent(sessionId)}`,
+    )
     return data
   },
 
@@ -642,7 +741,9 @@ export const trainingJobsController = {
   },
 
   async updatePairQuality(pairId: string, quality: number): Promise<{ status: string }> {
-    return apiPatch<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`, { quality })
+    return apiPatch<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`, {
+      quality,
+    })
   },
 
   async deleteSyncedPairs(): Promise<{ status: string; count: number }> {
@@ -650,7 +751,7 @@ export const trainingJobsController = {
   },
 
   async deletePairsBulk(ids: string[]): Promise<{ status: string; count: number }> {
-    const params = ids.map(id => `ids=${encodeURIComponent(id)}`).join('&')
+    const params = ids.map((id) => `ids=${encodeURIComponent(id)}`).join('&')
     return apiDelete<{ status: string; count: number }>(`/mobile/train/pairs/bulk?${params}`)
   },
 
@@ -659,7 +760,10 @@ export const trainingJobsController = {
     return Array.isArray(data) ? data : []
   },
 
-  async getTrainingRecommendation(datasetPath: string = '', method: string = 'distill'): Promise<TrainingRecommendationResponse> {
+  async getTrainingRecommendation(
+    datasetPath: string = '',
+    method: string = 'distill',
+  ): Promise<TrainingRecommendationResponse> {
     const query: Record<string, string> = {}
     if (datasetPath) query.dataset_path = datasetPath
     if (method) query.method = method
@@ -680,7 +784,6 @@ export const trainingJobsController = {
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
-
 }
 
 export interface AutoTrainStatus {

@@ -45,6 +45,13 @@ REGRESSION_THRESHOLDS = {
         "dispatch_us": (50.0, "rel"),
         "peak_threads": (2, "abs"),
     },
+    "startup": {
+        # spawn → GET /health; the CLI kills the server past API_STARTUP_TIMEOUT
+        "time_to_health_s": (20.0, "rel"),
+        "time_to_ready_s": (20.0, "rel"),
+        # cold imports left for the background model-load thread = race risk
+        "preload_warnings": (0, "abs"),
+    },
 }
 
 
@@ -252,6 +259,12 @@ def do_record(args) -> int:
             data = _run_stability(args.url, args.runs)
         elif kind == "latency":
             data = _run_latency(args.url, args.runs, update_baseline=False)
+        elif kind == "startup":
+            print(
+                "[ERR] startup kind requires --json-file (from benchmark_startup.py)",
+                file=sys.stderr,
+            )
+            return 1
         elif kind == "training":
             print(
                 "[ERR] training kind requires --json-file (from benchmark_slonet_training.py)",
@@ -402,7 +415,9 @@ def main() -> int:
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
     p_rec.add_argument(
-        "--kind", required=True, choices=["stability", "latency", "execution", "training"]
+        "--kind",
+        required=True,
+        choices=["stability", "latency", "execution", "training", "startup"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -413,13 +428,15 @@ def main() -> int:
 
     p_h = sub.add_parser("history", help="list stored runs")
     p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training"]
+        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
     )
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
     p_c.add_argument(
-        "--kind", default="stability", choices=["stability", "latency", "execution", "training"]
+        "--kind",
+        default="stability",
+        choices=["stability", "latency", "execution", "training", "startup"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)

@@ -23,12 +23,15 @@ interface ChatResponse {
 }
 
 export const chatController = {
-  async send(message: string, options?: {
-    max_tokens?: number
-    temperature?: number
-    session_id?: string
-    waitForModel?: boolean
-  }): Promise<ChatResponse> {
+  async send(
+    message: string,
+    options?: {
+      max_tokens?: number
+      temperature?: number
+      session_id?: string
+      waitForModel?: boolean
+    },
+  ): Promise<ChatResponse> {
     let modelStatus = await modelController.status()
     if (!modelStatus.loaded) {
       if (options?.waitForModel) {
@@ -54,19 +57,22 @@ export const chatController = {
         done: true,
       }
     } catch (err) {
-      _log.warning('chat endpoint failed, falling back to /inference/generate', { error: err instanceof Error ? err.message : String(err) })
+      _log.warning('chat endpoint failed, falling back to /inference/generate', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       try {
         const { useToastStore } = await import('./toast-store')
-        useToastStore.getState().addToast('Using basic mode — conversation context unavailable', 'info')
-      } catch {}
-      const fallback = await apiPost<{ text?: string }>(
-        '/inference/generate',
-        {
-          prompt: `User: ${message}\nAssistant:`,
-          max_new_tokens: options?.max_tokens ?? 100,
-          temperature: options?.temperature ?? 0.8,
-        },
-      )
+        useToastStore
+          .getState()
+          .addToast('Using basic mode — conversation context unavailable', 'info')
+      } catch {
+        /* best-effort */
+      }
+      const fallback = await apiPost<{ text?: string }>('/inference/generate', {
+        prompt: `User: ${message}\nAssistant:`,
+        max_new_tokens: options?.max_tokens ?? 100,
+        temperature: options?.temperature ?? 0.8,
+      })
       return {
         message: fallback.text || '',
         session_id: options?.session_id || 'default',
@@ -75,18 +81,25 @@ export const chatController = {
     }
   },
 
-  async *stream(message: string, options?: {
-    max_tokens?: number
-    temperature?: number
-    waitForModel?: boolean
-  }): AsyncGenerator<string> {
+  async *stream(
+    message: string,
+    options?: {
+      max_tokens?: number
+      temperature?: number
+      waitForModel?: boolean
+    },
+  ): AsyncGenerator<string> {
     let modelStatus = await modelController.status()
     if (!modelStatus.loaded) {
       if (options?.waitForModel) {
         modelStatus = await modelController.waitForReady()
-        if (!modelStatus.loaded) { yield '[Model still loading — please wait.]'; return }
+        if (!modelStatus.loaded) {
+          yield '[Model still loading — please wait.]'
+          return
+        }
       } else {
-        yield '[No model loaded]'; return
+        yield '[No model loaded]'
+        return
       }
     }
 
@@ -114,7 +127,10 @@ export const chatController = {
     return modelController.status()
   },
 
-  async *regenerateStream(sessionId: string, messages: ChatMessage[]): AsyncGenerator<{ token?: string; done?: boolean; error?: string }> {
+  async *regenerateStream(
+    sessionId: string,
+    messages: ChatMessage[],
+  ): AsyncGenerator<{ token?: string; done?: boolean; error?: string }> {
     const body = { session_id: sessionId, messages, regenerate: true }
     try {
       for await (const event of streamSSE(`/chat/${sessionId}/regenerate`, { body })) {
@@ -123,7 +139,10 @@ export const chatController = {
           return
         }
         if (event.data?.token) yield { token: event.data.token as string }
-        if (event.status === 'complete') { yield { done: true }; return }
+        if (event.status === 'complete') {
+          yield { done: true }
+          return
+        }
       }
     } catch (err) {
       yield { error: `Connection error: ${err instanceof Error ? err.message : 'unknown'}` }
@@ -145,10 +164,14 @@ export const chatController = {
 
   async getSuggestions(): Promise<{ text: string; icon: string }[]> {
     try {
-      const data = await apiGet<{ suggestions?: { text: string; icon: string }[] }>('/chat/suggestions')
+      const data = await apiGet<{ suggestions?: { text: string; icon: string }[] }>(
+        '/chat/suggestions',
+      )
       return data?.suggestions ?? []
     } catch (err) {
-      _log.debug('Failed to fetch suggestions', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to fetch suggestions', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return []
     }
   },
@@ -157,12 +180,18 @@ export const chatController = {
     try {
       return await apiGet<ContextInspector>('/context/inspect')
     } catch (err) {
-      _log.debug('Failed to inspect context', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to inspect context', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },
 
-  async sendVoiceMessage(sessionId: string, audioBlob: Blob, language = 'en'): Promise<{
+  async sendVoiceMessage(
+    sessionId: string,
+    audioBlob: Blob,
+    language = 'en',
+  ): Promise<{
     audio_path: string
     audio_duration_ms: number
     transcript?: string

@@ -41,9 +41,12 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ children, title, toolbar }: any) => (
+  PageContainer: ({ children, title, subtitle, headerRight, toolbar }: any) => (
     <div data-testid="page-container" data-title={title}>
+      <h1>{title}</h1>
+      {subtitle ? <p>{subtitle}</p> : null}
       {toolbar}
+      {headerRight}
       {children}
     </div>
   ),

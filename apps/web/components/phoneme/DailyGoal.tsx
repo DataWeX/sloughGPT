@@ -32,16 +32,20 @@ function loadGoal(): GoalState {
 
 function saveGoal(state: GoalState) {
   if (typeof window === 'undefined') return
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)) } catch {}
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    /* best-effort */
+  }
 }
 
 export default function DailyGoal() {
   const [goal, setGoal] = useState<GoalState>(loadGoal)
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
 
   const todayCount = useMemo(() => {
     const today = getToday()
-    return history.filter(e => new Date(e.timestamp).toISOString().startsWith(today)).length
+    return history.filter((e) => new Date(e.timestamp).toISOString().startsWith(today)).length
   }, [history])
 
   useEffect(() => {
@@ -52,11 +56,14 @@ export default function DailyGoal() {
     }
   }, [todayCount])
 
-  const updateTarget = useCallback((target: number) => {
-    const updated = { ...goal, target }
-    setGoal(updated)
-    saveGoal(updated)
-  }, [goal])
+  const updateTarget = useCallback(
+    (target: number) => {
+      const updated = { ...goal, target }
+      setGoal(updated)
+      saveGoal(updated)
+    },
+    [goal],
+  )
 
   const progress = Math.min(100, (goal.completed / goal.target) * 100)
   const isComplete = goal.completed >= goal.target
@@ -69,20 +76,24 @@ export default function DailyGoal() {
           {isComplete ? (
             <Badge variant="default">Complete!</Badge>
           ) : (
-            <Badge variant="outline">{goal.completed}/{goal.target}</Badge>
+            <Badge variant="outline">
+              {goal.completed}/{goal.target}
+            </Badge>
           )}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Target:</span>
-          <Select value={String(goal.target)} onValueChange={v => updateTarget(Number(v))}>
+          <Select value={String(goal.target)} onValueChange={(v) => updateTarget(Number(v))}>
             <SelectTrigger className="w-[80px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {GOALS.map(g => (
-                <SelectItem key={g} value={String(g)}>{g} words</SelectItem>
+              {GOALS.map((g) => (
+                <SelectItem key={g} value={String(g)}>
+                  {g} words
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -91,7 +102,9 @@ export default function DailyGoal() {
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Today&apos;s progress</span>
-            <span className="font-medium">{goal.completed} / {goal.target} words</span>
+            <span className="font-medium">
+              {goal.completed} / {goal.target} words
+            </span>
           </div>
           <div className="h-3 rounded-full bg-muted overflow-hidden">
             <div

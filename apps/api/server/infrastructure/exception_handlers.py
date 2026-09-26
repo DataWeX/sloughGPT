@@ -40,6 +40,20 @@ def _corr_id(request: Request) -> str:
     return get_correlation_id() or request.scope.get("correlation_id", "-")
 
 
+def _mark_error_logged(request: Request) -> None:
+    """Record that an exception handler already logged this request's error.
+
+    Single-owner logging: the handler owns the error detail (code, cause),
+    ``UnifiedRequestMiddleware`` owns timing. The middleware checks this flag
+    and drops its own 4xx WARN to DEBUG so one failure produces one WARN line.
+
+    Stored in ``request.scope`` (NOT ``request.state``) because state is
+    per-``BaseHTTPMiddleware``-layer and does not propagate through
+    ``call_next`` — see the note in ``CorrelationIdMiddleware``.
+    """
+    request.scope["slo.error_logged"] = True
+
+
 async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch domain-layer exceptions (SloughGPTDomainError subclasses).
 
@@ -70,6 +84,7 @@ async def _domain_error_handler(request: Request, exc: Exception) -> JSONRespons
             },
         },
     )
+    _mark_error_logged(request)
     return JSONResponse(
         status_code=http_status,
         content=error_response(user_message, code),
@@ -103,6 +118,7 @@ async def _validation_error_handler(request: Request, exc: ValidationError) -> J
             },
         },
     )
+    _mark_error_logged(request)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=error_response(
@@ -175,6 +191,7 @@ async def _pydantic_serialization_error_handler(request: Request, exc: Exception
         traceback.format_exc(),
         extra={"tag": "REQ", "context": {"corr": cid}},
     )
+    _mark_error_logged(request)
 
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -202,6 +219,7 @@ async def _request_validation_error_handler(
         request.url.path,
         extra={"tag": "REQ", "context": {"corr": cid, "errors": len(_safe), "status": 422}},
     )
+    _mark_error_logged(request)
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
         content=error_response(
@@ -260,6 +278,7 @@ async def _http_exception_handler(request: Request, exc: Exception) -> JSONRespo
             "context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code},
         },
     )
+    _mark_error_logged(request)
     return JSONResponse(
         status_code=h.status_code,
         content=error_response(user_msg, error_code),
@@ -328,6 +347,10 @@ async def _unhandled_error_handler(request: Request, exc: Exception) -> JSONResp
             extra={"tag": "REQ", "context": {"corr": cid, "status": 500}},
         )
 
+    # Flag is only consulted by UnifiedRequestMiddleware's 4xx branch, so
+    # 5xx responses keep both the handler ERROR and the middleware ERROR line.
+    _mark_error_logged(request)
+
     if classified is not None:
         return JSONResponse(
             status_code=classified.http_status,
@@ -365,6 +388,11 @@ def _register_starlette_http_exception_handler(app: FastAPI) -> None:
         h = exc  # StarletteHTTPException
         assert isinstance(h, StarletteHTTPException)
         cid = _corr_id(request)
+        # FastAPI's body parser raises with `raise http_error from e` — the
+        # original exception tells us WHICH failure produced the 400:
+        # ClientDisconnect (client aborted mid-body) vs a real parse error.
+        # 404/405 are raised directly and have no cause.
+        cause = type(h.__cause__).__name__ if h.__cause__ is not None else None
         log_fn = logger.error if h.status_code >= 500 else logger.warning
         log_fn(
             "HTTP %d on %s %s",
@@ -373,9 +401,15 @@ def _register_starlette_http_exception_handler(app: FastAPI) -> None:
             request.url.path,
             extra={
                 "tag": "REQ",
-                "context": {"corr": cid, "detail": str(h.detail)[:120], "status": h.status_code},
+                "context": {
+                    "corr": cid,
+                    "detail": str(h.detail)[:120],
+                    "status": h.status_code,
+                    "cause": cause,
+                },
             },
         )
+        _mark_error_logged(request)
         headers = getattr(h, "headers", None)
         return JSONResponse({"detail": h.detail}, status_code=h.status_code, headers=headers)
 
@@ -451,6 +485,7 @@ def register_all_handlers(app: FastAPI):
                     "context": {"corr": cid, "code": exc.code, "status": exc.http_status},
                 },
             )
+            _mark_error_logged(request)
             return JSONResponse(
                 status_code=exc.http_status,
                 content=error_response(

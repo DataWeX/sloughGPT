@@ -26,10 +26,14 @@ describe('shellExec', () => {
 
     const result = await shellExec('echo hello')
 
-    expect(apiPost).toHaveBeenCalledWith('/shell/exec', {
-      command: 'echo hello',
-      timeout_ms: 30000,
-    }, { signal: undefined })
+    expect(apiPost).toHaveBeenCalledWith(
+      '/shell/exec',
+      {
+        command: 'echo hello',
+        timeout_ms: 30000,
+      },
+      { signal: undefined },
+    )
     expect(result.output).toBe('hello\n')
     expect(result.exit_code).toBe(0)
   })
@@ -43,10 +47,14 @@ describe('shellExec', () => {
 
     await shellExec('ls', 5000)
 
-    expect(apiPost).toHaveBeenCalledWith('/shell/exec', {
-      command: 'ls',
-      timeout_ms: 5000,
-    }, { signal: undefined })
+    expect(apiPost).toHaveBeenCalledWith(
+      '/shell/exec',
+      {
+        command: 'ls',
+        timeout_ms: 5000,
+      },
+      { signal: undefined },
+    )
   })
 })
 
@@ -57,9 +65,28 @@ describe('shellExecStream', () => {
 
   it('yields line events to onLine callback', async () => {
     const mockEvents = [
-      { stream: 'shell', phase: 'STREAMING', status: 'working', data: { line: 'hello', index: 0 }, message: '' },
-      { stream: 'shell', phase: 'STREAMING', status: 'working', data: { line: 'world', index: 1 }, message: '' },
-      { stream: 'shell', phase: 'STREAMING', status: 'complete', data: { exit_code: 0, lines: 2 }, meta: { elapsed_ms: 1.5 }, message: '' },
+      {
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'working',
+        data: { line: 'hello', index: 0 },
+        message: '',
+      },
+      {
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'working',
+        data: { line: 'world', index: 1 },
+        message: '',
+      },
+      {
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'complete',
+        data: { exit_code: 0, lines: 2 },
+        meta: { elapsed_ms: 1.5 },
+        message: '',
+      },
     ]
 
     async function* mockGen() {
@@ -93,8 +120,11 @@ describe('shellExecStream', () => {
   it('calls onError on STREAMING error phase', async () => {
     async function* mockGen() {
       yield {
-        stream: 'shell', phase: 'STREAMING', status: 'error',
-        data: { error: 'Command not found' }, message: 'Error: Command not found',
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'error',
+        data: { error: 'Command not found' },
+        message: 'Error: Command not found',
       } as any
     }
     vi.mocked(streamSSE).mockReturnValue(mockGen())
@@ -107,6 +137,7 @@ describe('shellExecStream', () => {
   })
 
   it('handles generator throwing (connection error propagation)', async () => {
+    // eslint-disable-next-line require-yield -- stub generator that throws before yielding
     async function* mockGen() {
       throw new Error('Network failure')
     }
@@ -122,8 +153,11 @@ describe('shellExecStream', () => {
   it('passes data.error from STREAMING error events', async () => {
     async function* mockGen() {
       yield {
-        stream: 'shell', phase: 'STREAMING', status: 'error',
-        data: { error: 'No such file or directory' }, message: '',
+        stream: 'shell',
+        phase: 'STREAMING',
+        status: 'error',
+        data: { error: 'No such file or directory' },
+        message: '',
       } as any
     }
     vi.mocked(streamSSE).mockReturnValue(mockGen())

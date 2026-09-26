@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import os from 'os'
 import { join } from 'path'
-import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'fs'
+import { mkdirSync, writeFileSync, readFileSync, existsSync, unlinkSync, rmdirSync } from 'fs'
 
 const tmpDir = join(os.tmpdir(), `planner-test-${Date.now()}`)
 const tmpKanban = join(tmpDir, '.kanban')
@@ -20,12 +20,36 @@ beforeEach(() => {
 
 afterEach(() => {
   process.cwd = originalCwd
-  try { require('fs').unlinkSync(tmpBoard) } catch {}
-  try { require('fs').unlinkSync(tmpNotes) } catch {}
-  try { require('fs').rmdirSync(tmpNotesDir) } catch {}
-  try { require('fs').rmdirSync(join(tmpDir, '.dev-notes')) } catch {}
-  try { require('fs').rmdirSync(tmpKanban) } catch {}
-  try { require('fs').rmdirSync(tmpDir) } catch {}
+  try {
+    unlinkSync(tmpBoard)
+  } catch {
+    /* best-effort cleanup */
+  }
+  try {
+    unlinkSync(tmpNotes)
+  } catch {
+    /* best-effort cleanup */
+  }
+  try {
+    rmdirSync(tmpNotesDir)
+  } catch {
+    /* best-effort cleanup */
+  }
+  try {
+    rmdirSync(join(tmpDir, '.dev-notes'))
+  } catch {
+    /* best-effort cleanup */
+  }
+  try {
+    rmdirSync(tmpKanban)
+  } catch {
+    /* best-effort cleanup */
+  }
+  try {
+    rmdirSync(tmpDir)
+  } catch {
+    /* best-effort cleanup */
+  }
 })
 
 const sampleBoard = {
@@ -37,16 +61,34 @@ const sampleBoard = {
   ],
   cards: [
     {
-      id: 'card-1', title: 'Task 1', description: 'Desc 1', column: 'todo',
-      priority: 'high', tags: ['frontend', 'bug'], due_date: '', assignee: '',
-      sprint: 'sprint-1', gh: '', notes: [],
-      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+      id: 'card-1',
+      title: 'Task 1',
+      description: 'Desc 1',
+      column: 'todo',
+      priority: 'high',
+      tags: ['frontend', 'bug'],
+      due_date: '',
+      assignee: '',
+      sprint: 'sprint-1',
+      gh: '',
+      notes: [],
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
     },
     {
-      id: 'card-2', title: 'Task 2', description: '', column: 'in_progress',
-      priority: 'low', tags: ['backend'], due_date: '', assignee: '',
-      sprint: '', gh: '', notes: [],
-      created_at: '2026-01-02T00:00:00Z', updated_at: '2026-01-02T00:00:00Z',
+      id: 'card-2',
+      title: 'Task 2',
+      description: '',
+      column: 'in_progress',
+      priority: 'low',
+      tags: ['backend'],
+      due_date: '',
+      assignee: '',
+      sprint: '',
+      gh: '',
+      notes: [],
+      created_at: '2026-01-02T00:00:00Z',
+      updated_at: '2026-01-02T00:00:00Z',
     },
   ],
 }
@@ -54,7 +96,7 @@ const sampleBoard = {
 function writeSampleBoard() {
   const lines = [
     JSON.stringify({ schema: 'planner/1', name: sampleBoard.name, columns: sampleBoard.columns }),
-    ...sampleBoard.cards.map(c => JSON.stringify(c)),
+    ...sampleBoard.cards.map((c) => JSON.stringify(c)),
   ]
   writeFileSync(tmpBoard, lines.join('\n') + '\n', 'utf-8')
 }
@@ -136,7 +178,7 @@ describe('createCard', () => {
   it('persists the card to disk', () => {
     createCard({ title: 'Persisted' })
     const board = readBoard()
-    expect(board.cards.find(c => c.title === 'Persisted')).toBeTruthy()
+    expect(board.cards.find((c) => c.title === 'Persisted')).toBeTruthy()
   })
 
   it('includes sprint and gh fields', () => {
@@ -163,7 +205,7 @@ describe('updateCard', () => {
   it('persists changes', () => {
     updateCard('card-1', { title: 'Persisted Update' })
     const board = readBoard()
-    expect(board.cards.find(c => c.id === 'card-1')!.title).toBe('Persisted Update')
+    expect(board.cards.find((c) => c.id === 'card-1')!.title).toBe('Persisted Update')
   })
 })
 
@@ -173,7 +215,7 @@ describe('deleteCard', () => {
   it('deletes an existing card', () => {
     expect(deleteCard('card-1')).toBe(true)
     const board = readBoard()
-    expect(board.cards.find(c => c.id === 'card-1')).toBeUndefined()
+    expect(board.cards.find((c) => c.id === 'card-1')).toBeUndefined()
   })
 
   it('returns false for nonexistent card', () => {
@@ -187,7 +229,7 @@ describe('moveCard', () => {
   it('moves a card to a new column', () => {
     expect(moveCard('card-1', 'done')).toBe(true)
     const board = readBoard()
-    expect(board.cards.find(c => c.id === 'card-1')!.column).toBe('done')
+    expect(board.cards.find((c) => c.id === 'card-1')!.column).toBe('done')
   })
 
   it('returns false for nonexistent card', () => {
@@ -226,9 +268,15 @@ describe('readNotes / writeNotes', () => {
 
   it('reads notes from JSONL file', () => {
     const note = {
-      id: 'n1', title: 'Test Note', body: 'body', status: 'open',
-      tags: ['tag1'], sprint: '', gh: '',
-      created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
+      id: 'n1',
+      title: 'Test Note',
+      body: 'body',
+      status: 'open',
+      tags: ['tag1'],
+      sprint: '',
+      gh: '',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
     }
     writeFileSync(tmpNotes, JSON.stringify(note) + '\n', 'utf-8')
     const notes = readNotes()
@@ -248,7 +296,7 @@ describe('createNote', () => {
   it('persists the note', () => {
     createNote({ title: 'Persisted Note' })
     const notes = readNotes()
-    expect(notes.find(n => n.title === 'Persisted Note')).toBeTruthy()
+    expect(notes.find((n) => n.title === 'Persisted Note')).toBeTruthy()
   })
 })
 
@@ -270,7 +318,7 @@ describe('deleteNote', () => {
   it('deletes an existing note', () => {
     const note = createNote({ title: 'To Delete' })
     expect(deleteNote(note.id)).toBe(true)
-    expect(readNotes().find(n => n.id === note.id)).toBeUndefined()
+    expect(readNotes().find((n) => n.id === note.id)).toBeUndefined()
   })
 
   it('returns false for nonexistent note', () => {

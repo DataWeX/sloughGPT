@@ -2,6 +2,7 @@
 Dev commands - Development server, health checks, and API status.
 """
 
+import json
 import os
 import re
 import signal
@@ -111,12 +112,16 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
     # Find what's using the port
     import shlex
 
-    result = subprocess.run(
-        shlex.split(f"lsof -ti:{port}"),
-        capture_output=True,
-        text=True,
-    )
-    pids = [pid for pid in result.stdout.strip().split() if pid.isdigit()]
+    try:
+        result = subprocess.run(
+            shlex.split(f"lsof -ti:{port}"),
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        pids = [pid for pid in result.stdout.strip().split() if pid.isdigit()]
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pids = []  # lsof missing or hung — skip pid listing, keep the hint
 
     if pids:
         for pid in pids:
@@ -129,7 +134,10 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
         log.blank()
 
     log.command(f"lsof -ti:{port} | xargs kill -9", "kill")
-    log.command("PORT=3001 slo dev --web-port 3001", "or use another port")
+    if service == "api":
+        log.command(f"slo dev --port {port + 1}", "or use another port")
+    else:
+        log.command("PORT=3001 slo dev --web-port 3001", "or use another port")
 
 
 def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
@@ -215,6 +223,25 @@ def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
 # is roughly 155s. Anything below that kills a healthy server mid-model-load
 # and reports a bogus "error".
 API_STARTUP_TIMEOUT = 180
+
+# Log markers that report startup progress (``slo.startup`` logger output).
+_PHASE_PREFIXES = ("Phase", "Stage", "Startup complete")
+
+
+def _latest_startup_phase(lines) -> str:
+    """Most recent ``startup Phase``/``startup Stage`` marker, status-line sized.
+
+    A server that has not bound its socket has no HTTP endpoint to poll, so
+    its stdout is the only progress signal while the CLI waits. Returns an
+    empty string when the log carries no marker yet.
+    """
+    for line in reversed(lines):
+        if "startup " not in line:
+            continue
+        marker = line.split("startup ", 1)[1].strip()
+        if marker.startswith(_PHASE_PREFIXES):
+            return marker[:72]
+    return ""
 
 
 def _check_api_ready(port: int) -> bool:
@@ -354,6 +381,47 @@ def _repo_root() -> Path:
     return find_repo_root(str(Path(__file__).resolve()))
 
 
+def _node_env(env: dict) -> dict:
+    """Return a copy of env with nvm-installed node/npx/npm prepended to PATH."""
+    env = dict(env)
+    nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
+    nvm_bin = os.path.join(nvm_dir, "versions", "node")
+    if os.path.isdir(nvm_bin):
+        for entry in os.listdir(nvm_bin):
+            candidate = os.path.join(nvm_bin, entry, "bin")
+            if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
+                env["PATH"] = candidate + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _web_dev_env(env: dict, web_port: int) -> dict:
+    """Env for the web dev server — Next.js reads PORT for its listen port."""
+    return {**_node_env(env), "PORT": str(web_port)}
+
+
+def _package_dev_script(web_root: Path) -> str:
+    """The web app's package.json ``dev`` script ("" when missing/unreadable)."""
+    try:
+        data = json.loads((web_root / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    scripts = data.get("scripts")
+    return str(scripts.get("dev", "")) if isinstance(scripts, dict) else ""
+
+
+def _web_dev_cmd(web_port: int) -> list[str]:
+    """npm argv for the web dev server.
+
+    Next.js reads PORT from env and rejects unknown argv flags; Vite ignores
+    PORT and needs ``--port``/``--host`` argv. Unreadable package.json falls
+    back to the Next-compatible form (safe for both, minus --host).
+    """
+    dev_script = _package_dev_script(_repo_root() / "apps" / "web")
+    if "vite" in dev_script:
+        return ["npm", "run", "dev", "--", "--port", str(web_port), "--host", "0.0.0.0"]
+    return ["npm", "run", "dev"]
+
+
 def cmd_dev(args):
     """Start API and Web servers with a live TUI dashboard."""
     # ── Pre-flight: check if model needs download ─────────
@@ -389,10 +457,12 @@ def cmd_dev(args):
     web_lines: deque = deque(maxlen=_LOG_BUF)
 
     # ── Start API ────────────────────────────────────────
-    env = os.environ.copy()
+    env = _node_env(os.environ.copy())
     env["FORCE_COLOR"] = "1"
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
+    web_env = _web_dev_env(env, web_port)
+    npm_cmd = _web_dev_cmd(web_port)
 
     python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
@@ -438,19 +508,19 @@ def cmd_dev(args):
                 "hooks",
                 "-e",
                 "ts,tsx,js,jsx",
-                "npm",
-                "run",
-                "dev",
+                *npm_cmd,
             ],
             cwd=str(web_cwd),
+            env=web_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
         )
     else:
         web_proc = subprocess.Popen(
-            ["npm", "run", "dev"],
+            npm_cmd,
             cwd=str(web_cwd),
+            env=web_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
@@ -462,8 +532,14 @@ def cmd_dev(args):
     web_thread.start()
 
     # ── Wait for readiness (async poll) ──────────────────
+    # Declared before the thread starts: _poll_services reads it on every
+    # iteration, and a late binding raises NameError, killing the thread.
+    shutdown = [False]
+
     def _poll_services():
         for _ in range(API_STARTUP_TIMEOUT * 2):
+            if shutdown[0]:
+                return
             if status["api_ready"] and status["web_ready"]:
                 break
             if not status["api_ready"] and _check_api_ready(api_port):
@@ -474,15 +550,42 @@ def cmd_dev(args):
                 status["web_ready"] = True
                 status["web"] = "ready"
                 _update_startup_status()
+            # Check if the API process died (import error, port conflict, crash)
+            if not status["api_ready"] and api_proc.poll() is not None:
+                if _is_eaddrinuse(api_lines):
+                    status["api"] = "eaddrinuse"
+                else:
+                    status["api"] = "error"
+                    log.error(f"API server exited (code {api_proc.returncode})")
+                    for line in _extract_error_lines(api_lines):
+                        log.info(f"  | {line}")
+                _update_startup_status()
+                break
             # Check if web process died
             if not status["web_ready"] and web_proc.poll() is not None:
                 if _is_eaddrinuse(web_lines):
                     status["web"] = "eaddrinuse"
                 else:
                     status["web"] = "error"
+                    log.error(f"Web server exited (code {web_proc.returncode})")
+                    for line in _extract_error_lines(web_lines):
+                        log.info(f"  | {line}")
                 _update_startup_status()
                 break
+            if not status["api_ready"]:
+                phase = _latest_startup_phase(api_lines)
+                if phase and phase != status["api"]:
+                    status["api"] = f"waiting... {phase}"
+                    _update_startup_status()
             time.sleep(0.5)
+        else:
+            # Budget exhausted — report it instead of showing "waiting" forever
+            if not status["api_ready"] and not shutdown[0]:
+                status["api"] = "error"
+                _update_startup_status()
+                log.error(f"API did not become ready within {API_STARTUP_TIMEOUT}s")
+                for line in _extract_error_lines(api_lines):
+                    log.info(f"  | {line}")
 
     poll_thread = threading.Thread(target=_poll_services, daemon=True)
     poll_thread.start()
@@ -503,7 +606,6 @@ def cmd_dev(args):
         },
     )
 
-    shutdown = [False]
     eaddrinuse_port = [None]  # Track EADDRINUSE for error display
 
     def _stop_check() -> bool:
@@ -512,11 +614,14 @@ def cmd_dev(args):
         dashboard.set_status("api", status["api"])
         dashboard.set_status("web", status["web"])
         if status["web"] == "eaddrinuse":
-            eaddrinuse_port[0] = web_port
+            eaddrinuse_port[0] = (web_port, "web")
             return True
-        if status["api"] == "error" and status["web"] == "error":
+        if status["api"] == "eaddrinuse":
+            eaddrinuse_port[0] = (api_port, "api")
             return True
-        return False
+        # Either service dying ends the session — nothing here restarts them,
+        # and a dead service with no error report leaves the TUI stuck forever.
+        return status["api"] == "error" or status["web"] == "error"
 
     def _signal_handler(sig, frame):
         shutdown[0] = True
@@ -530,7 +635,8 @@ def cmd_dev(args):
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
         if eaddrinuse_port[0]:
-            _handle_eaddrinuse(eaddrinuse_port[0], "web")
+            port, service = eaddrinuse_port[0]
+            _handle_eaddrinuse(port, service)
         else:
             _print_summary(api_lines, web_lines, status, api_port, web_port)
 
@@ -699,6 +805,10 @@ def _cmd_api_only(args):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
+            phase = _latest_startup_phase(api_lines)
+            if phase and phase != api_status:
+                api_status = f"waiting... {phase}"
+                _update_status()
             time.sleep(1)
         if not api_ready:
             api_status = "error"
@@ -884,6 +994,10 @@ def _cmd_api_and_mobile(args):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
+            phase = _latest_startup_phase(api_lines)
+            if phase and phase != api_status:
+                api_status = f"waiting... {phase}"
+                _update_status()
             time.sleep(1)
         if not api_ready:
             api_status = "error"
@@ -1041,13 +1155,7 @@ def _cmd_api_and_web(args):
     env["GIO_USE_PORTAL"] = "0"
 
     # Ensure nvm-installed node/npx/npm are on PATH for subprocesses
-    nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
-    nvm_bin = os.path.join(nvm_dir, "versions", "node")
-    if os.path.isdir(nvm_bin):
-        for entry in os.listdir(nvm_bin):
-            candidate = os.path.join(nvm_bin, entry, "bin")
-            if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
-                env["PATH"] = candidate + os.pathsep + env.get("PATH", "")
+    env = _node_env(env)
 
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
     if model:
@@ -1183,7 +1291,7 @@ def _cmd_api_and_web(args):
             )
         else:
             web_proc = subprocess.Popen(
-                ["npm", "run", "dev"],
+                _web_dev_cmd(web_port),
                 cwd=str(web_root.resolve()),
                 env=web_env,
                 stdout=subprocess.DEVNULL,
@@ -1208,6 +1316,10 @@ def _cmd_api_and_web(args):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
+            phase = _latest_startup_phase(api_lines)
+            if phase and phase != api_status:
+                api_status = f"waiting... {phase}"
+                _update_status()
             time.sleep(1)
         if not api_ready:
             api_status = "error"
@@ -1303,7 +1415,7 @@ def _cmd_api_and_web(args):
                     else str(web_root.resolve())
                 )
                 web_proc = subprocess.Popen(
-                    ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],
+                    ["node", "server.js"] if server_js.is_file() else _web_dev_cmd(web_port),
                     cwd=web_cwd,
                     env=web_env,
                     stdout=subprocess.DEVNULL,
