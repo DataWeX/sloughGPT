@@ -59,7 +59,7 @@ def _make_member(
         user_id=user_id,
         role=role,
     )
-    m.joined_at = "2025-01-01T00:00:00Z"
+    m.created_at = "2025-01-01T00:00:00Z"
     return m
 
 

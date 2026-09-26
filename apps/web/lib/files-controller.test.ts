@@ -18,8 +18,22 @@ beforeEach(() => {
 
 describe('filesController', () => {
   const backendFiles = [
-    { id: '1', filename: 'test.txt', extension: 'txt', size_bytes: 100, uploaded_at: '2026-01-01', tags: ['doc'] },
-    { id: '2', filename: 'data.csv', extension: 'csv', size_bytes: 200, uploaded_at: '2026-01-02', tags: [] },
+    {
+      id: '1',
+      filename: 'test.txt',
+      extension: 'txt',
+      size_bytes: 100,
+      uploaded_at: '2026-01-01',
+      tags: ['doc'],
+    },
+    {
+      id: '2',
+      filename: 'data.csv',
+      extension: 'csv',
+      size_bytes: 200,
+      uploaded_at: '2026-01-02',
+      tags: [],
+    },
   ]
 
   it('list returns mapped files from array response', async () => {
@@ -82,5 +96,35 @@ describe('filesController', () => {
     apiGet.mockResolvedValue(undefined)
     const result = await filesController.search('test')
     expect(result).toEqual([])
+  })
+
+  it('list converts epoch-seconds uploaded_at to an ISO string', async () => {
+    apiGet.mockResolvedValue([
+      { id: '1', filename: 'a.txt', extension: 'txt', size_bytes: 1, uploaded_at: 1767225600 },
+      { id: '2', filename: 'b.txt', extension: 'txt', size_bytes: 1, uploaded_at: '1767225600.5' },
+    ])
+    const result = await filesController.list()
+    expect(result[0].uploaded_at).toBe('2026-01-01T00:00:00.000Z')
+    expect(result[1].uploaded_at).toBe('2026-01-01T00:00:00.500Z')
+  })
+
+  it('list passes ISO and date-only uploaded_at through untouched', async () => {
+    apiGet.mockResolvedValue([
+      { id: '1', filename: 'a.txt', extension: 'txt', uploaded_at: '2026-09-25T10:55:42Z' },
+      { id: '2', filename: 'b.txt', extension: 'txt', uploaded_at: '2026-01-01' },
+    ])
+    const result = await filesController.list()
+    expect(result[0].uploaded_at).toBe('2026-09-25T10:55:42Z')
+    expect(result[1].uploaded_at).toBe('2026-01-01')
+  })
+
+  it('list maps missing or zero uploaded_at to empty string', async () => {
+    apiGet.mockResolvedValue([
+      { id: '1', filename: 'a.txt', extension: 'txt', uploaded_at: 0 },
+      { id: '2', filename: 'b.txt', extension: 'txt', uploaded_at: '' },
+      { id: '3', filename: 'c.txt', extension: 'txt' } as never,
+    ])
+    const result = await filesController.list()
+    expect(result.map((f) => f.uploaded_at)).toEqual(['', '', ''])
   })
 })

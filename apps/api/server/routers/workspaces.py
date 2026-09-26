@@ -91,6 +91,8 @@ class MemberResponse(BaseModel):
     username: str = ""
     role: str
     created_at: str
+    # Alias the UI renders ("Joined …"): membership creation time.
+    joined_at: str | None = None
 
 
 # ─── Router ────────────────────────────────────────────────────
@@ -267,6 +269,7 @@ class WorkspacesRouter:
                     username=target_user.username,
                     role=member.role.value,
                     created_at=member.created_at,
+                    joined_at=member.created_at,
                 ).model_dump()
             )
 
@@ -306,6 +309,7 @@ class WorkspacesRouter:
                         username=u.username if u else "",
                         role=m.role.value,
                         created_at=m.created_at,
+                        joined_at=m.created_at,
                     ).model_dump()
                 )
             return success_response(data=result, meta={"total": len(result)})
@@ -572,7 +576,7 @@ class WorkspacesRouter:
                     {
                         "user_id": m.user_id,
                         "role": m.role.value if hasattr(m.role, "value") else str(m.role),
-                        "joined_at": m.joined_at,
+                        "joined_at": m.created_at,
                     }
                 )
 

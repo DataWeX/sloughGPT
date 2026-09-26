@@ -8,6 +8,7 @@
  */
 
 import { apiGet, apiPost, apiDelete } from './http-client'
+import { toDateSeconds } from './time-format'
 
 export interface FileEntry {
   id: string
@@ -41,13 +42,33 @@ interface BackendFileItem {
   tags?: string[]
 }
 
+/**
+ * Backend stores `uploaded_at` as epoch seconds (float), but renderers parse
+ * ISO strings (`new Date("1767225600")` is Invalid Date). Convert numeric
+ * values here; ISO/date-only strings pass through; missing/zero values become
+ * `''` so the page renders its '—' fallback instead of garbage.
+ */
+function normalizeUploadedAt(value: string | number | null | undefined): string {
+  if (value == null) return ''
+  if (typeof value === 'number') {
+    return value > 0 ? (toDateSeconds(value)?.toISOString() ?? '') : ''
+  }
+  const trimmed = value.trim()
+  if (trimmed === '') return ''
+  if (/^\d+(?:\.\d+)?$/.test(trimmed)) {
+    const n = Number(trimmed)
+    return n > 0 ? (toDateSeconds(n)?.toISOString() ?? '') : ''
+  }
+  return value
+}
+
 function mapFileEntry(f: BackendFileItem): FileEntry {
   return {
     id: f.id,
     filename: f.filename,
     size: f.size_bytes ?? 0,
     content_type: f.extension ?? 'unknown',
-    uploaded_at: String(f.uploaded_at),
+    uploaded_at: normalizeUploadedAt(f.uploaded_at),
     ingested: (f.tags?.length ?? 0) > 0,
     extension: f.extension,
     tags: f.tags,
@@ -71,7 +92,7 @@ class FilesController {
   }
 
   async deleteBatch(ids: string[]): Promise<void> {
-    await Promise.all(ids.map(id => apiDelete(`/files/${id}`)))
+    await Promise.all(ids.map((id) => apiDelete(`/files/${id}`)))
   }
 
   async ingest(id: string): Promise<void> {

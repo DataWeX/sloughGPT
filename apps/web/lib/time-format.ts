@@ -16,17 +16,31 @@ const MS_PER_SECOND = 1000
 const MS_PER_MINUTE = 60 * MS_PER_SECOND
 const MS_PER_HOUR = 60 * MS_PER_MINUTE
 const MS_PER_DAY = 24 * MS_PER_HOUR
+/** Numbers below this are epoch seconds (real ms values passed as numbers are ≥1e11). */
+const EPOCH_MS_THRESHOLD = 1e11
+/** 10-digit strings with optional fraction (epoch seconds, e.g. str(time.time())); `"2026"` (a year) does not match. */
+const EPOCH_SECONDS_STRING = /^\d{10}(?:\.\d+)?$/
 
 /**
  * Parse a timestamp into a valid `Date`, or `null` when it is missing or
  * unparsable (e.g. the legacy `…+00:00Z` backend format, which `new Date`
  * reports as `Invalid Date`).
+ *
+ * Accepts ISO strings, `Date`s, epoch **milliseconds**, and — because several
+ * backend payloads emit epoch **seconds** (as numbers or 10-digit numeric
+ * strings like `"1767225600"`, which `new Date` rejects) — treats values below
+ * `1e11` as seconds. Read-path repair mirrors the Python-side
+ * `normalize_iso` / `normalize_local_iso` helpers: fix once, here, instead of
+ * at every call site.
  */
 export function toDate(value: DateInput): Date | null {
   if (value == null || value === '') return null
   let d: Date
   if (value instanceof Date) d = value
-  else if (typeof value === 'number') d = new Date(value)
+  else if (typeof value === 'number')
+    d = new Date(value < EPOCH_MS_THRESHOLD ? value * MS_PER_SECOND : value)
+  else if (typeof value === 'string' && EPOCH_SECONDS_STRING.test(value.trim()))
+    d = new Date(Number(value.trim()) * MS_PER_SECOND)
   else d = new Date(value)
   return Number.isNaN(d.getTime()) ? null : d
 }

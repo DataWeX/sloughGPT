@@ -236,6 +236,27 @@ describe('toDate', () => {
     expect(new Date('2026-09-24T09:47:33.835728+00:00Z').getTime()).toBeNaN()
     expect(toDate('2026-09-24T09:47:33.835728+00:00Z')).toBeNull()
   })
+
+  it('treats epoch-seconds numbers as seconds', () => {
+    expect(toDate(1767225600)?.toISOString()).toBe('2026-01-01T00:00:00.000Z')
+    expect(toDate(1767225600.5)?.toISOString()).toBe('2026-01-01T00:00:00.500Z')
+  })
+
+  it('keeps epoch-milliseconds numbers as milliseconds', () => {
+    expect(toDate(1767225600000)?.toISOString()).toBe('2026-01-01T00:00:00.000Z')
+    expect(toDate(Date.now())?.getTime()).toBeGreaterThan(1e12)
+  })
+
+  it('parses 10-digit epoch-seconds strings (backend str(time.time()))', () => {
+    // Regression: adapters page fed these to new Date() → Invalid Date → blank.
+    expect(toDate('1767225600')?.toISOString()).toBe('2026-01-01T00:00:00.000Z')
+    expect(toDate('1767225600.5')?.toISOString()).toBe('2026-01-01T00:00:00.500Z')
+    expect(formatLocaleDate('1767225600')).not.toBe('')
+  })
+
+  it('does not treat year-only strings as epoch seconds', () => {
+    expect(toDate('2026')?.toISOString()).toBe('2026-01-01T00:00:00.000Z')
+  })
 })
 
 describe('formatters never render "Invalid Date"', () => {
