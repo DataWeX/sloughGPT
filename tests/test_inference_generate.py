@@ -11,13 +11,10 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client():
-    from fastapi import FastAPI
-
     from apps.api.server.routers.inference import router
+    from tests.conftest import build_test_app
 
-    _app = FastAPI()
-    _app.include_router(router)
-    return TestClient(_app)
+    return TestClient(build_test_app(router))
 
 
 class AsyncIteratorMock:
@@ -35,6 +32,12 @@ class AsyncIteratorMock:
         return self._tokens.pop(0)
 
 
+def _passthrough_meta_weights(**kwargs):
+    kwargs.pop("user_message", None)
+    kwargs.pop("user_id", None)
+    return kwargs
+
+
 @pytest.fixture
 def mock_provider():
     """Mock the provider pipeline to avoid model loading."""
@@ -50,6 +53,13 @@ def mock_provider():
     provider.model_id = "test-model"
     with (
         patch("domain.models._internal.provider.get_provider", return_value=provider),
+        patch("apps.api.server.routers.inference.get_provider", return_value=provider),
+        patch("apps.api.server.routers.inference._model_ready", return_value=True),
+        patch(
+            "apps.api.server.routers.inference._apply_meta_weights",
+            side_effect=_passthrough_meta_weights,
+        ),
+        patch("state.model_type", "gpt2"),
         patch("state.model", MagicMock()),
     ):
         yield provider

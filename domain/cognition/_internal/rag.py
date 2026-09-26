@@ -272,9 +272,15 @@ class HybridRetriever:
             combined_scores[doc_id]["sparse"] = score / max_sparse
 
         # Calculate combined scores
+        w_dense = self.dense_weight if self.use_dense else 0.0
+        w_sparse = self.sparse_weight
+        active_total = w_dense + w_sparse
+        if active_total > 0:
+            w_dense /= active_total
+            w_sparse /= active_total
         results = []
         for doc_id, scores in combined_scores.items():
-            combined = self.dense_weight * scores["dense"] + self.sparse_weight * scores["sparse"]
+            combined = w_dense * scores["dense"] + w_sparse * scores["sparse"]
             results.append(
                 RetrievalResult(
                     chunk=self.chunks[doc_id],

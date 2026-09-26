@@ -171,7 +171,7 @@ class OnlineLoRAUpdater:
         gradients = {}
 
         if self.engine is None:
-            return gradients
+            return self._pseudo_gradients(feedback_batch)
 
         try:
             positive = [f for f in feedback_batch if f["rating"] == "thumbs_up"]
@@ -251,16 +251,19 @@ class OnlineLoRAUpdater:
             logger.debug(
                 "Real gradient computation failed, falling back to pseudo-gradients: %s", e
             )
-            # Fallback to simple pseudo-gradients
-            positive_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_up")
-            negative_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_down")
-            total = len(feedback_batch)
-            reinforcement = (positive_count - negative_count) / max(total, 1)
-            scale = self.learning_rate * reinforcement
-            for key, weight in self._lora_weights.items():
-                grad = np.random.randn(*weight.shape).astype(np.float32) * scale
-                gradients[key] = grad
+            return self._pseudo_gradients(feedback_batch)
 
+        return gradients
+
+    def _pseudo_gradients(self, feedback_batch: list) -> dict[str, np.ndarray]:
+        positive_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_up")
+        negative_count = sum(1 for f in feedback_batch if f["rating"] == "thumbs_down")
+        total = len(feedback_batch)
+        reinforcement = (positive_count - negative_count) / max(total, 1)
+        scale = self.learning_rate * reinforcement
+        gradients = {}
+        for key, weight in self._lora_weights.items():
+            gradients[key] = np.random.randn(*weight.shape).astype(np.float32) * scale
         return gradients
 
     def _apply_gradients(self, gradients: dict[str, np.ndarray]):
