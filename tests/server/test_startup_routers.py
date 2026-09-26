@@ -512,8 +512,26 @@ class TestInitLifecycle:
 # ── run() orchestration ───────────────────────────────────────────────────────
 
 
+async def _run_and_settle(orch, until, timeout_s: float = 180.0):
+    """Run startup, then let the post-bind task reach ``until``.
+
+    ``run()`` executes Stage CRITICAL inline and schedules READY → phase_ready
+    → BACKGROUND as a task, so the lifespan can yield (and uvicorn bind) before
+    the model finishes loading. Poll until ``until()`` is truthy (typically
+    "``_phase_ready`` was awaited") so the test waits for READY without also
+    paying for the real BACKGROUND stage, which is fire-and-forget in tests.
+    """
+    await orch.run()
+    steps = int(timeout_s / 0.05)
+    for _ in range(steps):
+        await asyncio.sleep(0.05)
+        if until():
+            return
+    raise AssertionError(f"post-bind startup task did not reach {until!r} in {timeout_s}s")
+
+
 class TestRun:
-    """run() — staged startup (CRITICAL → READY, BACKGROUND scheduled)."""
+    """run() — CRITICAL inline; READY + BACKGROUND run post-bind."""
 
     def _mocked_loader(self):
         loader = MagicMock()
@@ -547,11 +565,12 @@ class TestRun:
             p_db,
             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
         ):
-            asyncio.run(orch.run())
-        # CRITICAL + READY run inline; BACKGROUND is only scheduled.
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
+        # CRITICAL runs inline so the lifespan can yield; the post-bind task
+        # then runs READY and BACKGROUND.
         # (Count calls, not awaits: the loader mock records invocations;
         # awaiting is the loop's business.)
-        assert loader.run_stage.call_count == 2
+        assert loader.run_stage.call_count == 3
         mock_ready.assert_awaited_once()
         assert orch._profile_enum.value == "full"
 
@@ -571,7 +590,7 @@ class TestRun:
             p_db,
             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
         ):
-            asyncio.run(orch.run())
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
         lifecycle.start.assert_not_awaited()
         mock_ready.assert_awaited_once()
 
@@ -867,7 +886,7 @@ class TestRunDirectFallback:
             patch.object(StartupOrchestrator, "_phase6_routers", new=AsyncMock()) as mock_routers,
             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
         ):
-            asyncio.run(orch.run())
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
         assert mock_reg.call_count == 1
         assert mock_routers.call_count == 1
         mock_ready.assert_awaited()

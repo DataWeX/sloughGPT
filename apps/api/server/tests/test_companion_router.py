@@ -36,12 +36,15 @@ def _fresh_companion():
     import routers.companion as comp_mod
 
     import domain.companion as dom_mod
+    import domain.companion._internal.companion as dom_internal
 
     comp_mod._companion_router._companion = None
     dom_mod._companion = None
+    dom_internal._companion = None
     yield
     comp_mod._companion_router._companion = None
     dom_mod._companion = None
+    dom_internal._companion = None
 
 
 class TestGetCompanionInfo:

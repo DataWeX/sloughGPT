@@ -59,7 +59,10 @@ class TestStatus:
 
 
 class TestReady:
-    def test_ready_returns_true(self):
+    def test_ready_returns_true(self, monkeypatch):
+        from domain.inference._internal.native import engine as native_engine
+
+        monkeypatch.setattr(native_engine, "get_engine", lambda: object())
         resp = client.get("/ready")
         assert resp.status_code == 200
         data = _data(resp)

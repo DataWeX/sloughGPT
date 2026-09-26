@@ -14,6 +14,10 @@ vi.mock('@/hooks/useLocale', () => ({
 
 vi.mock('./ThemeSwitcher', () => ({ ThemeSwitcher: () => <div data-testid="theme-switcher" /> }))
 
+vi.mock('./consciousness/ConsciousnessSidebarWidget', () => ({
+  ConsciousnessSidebarWidget: () => null,
+}))
+
 vi.mock('@/lib/route-match', () => ({
   routeMatchesPath: (p: string, path: string) => p.startsWith(path),
 }))
