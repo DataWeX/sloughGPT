@@ -1,12 +1,46 @@
 /**
  * V86Controller — thin wrapper around v86 x86 emulator.
  * Handles init, save/restore state, and IndexedDB persistence.
+ *
+ * v86 is loaded at runtime from the vendored public asset /v86/libv86.js
+ * (UMD build, sets window.V86) instead of the npm package: the package ESM
+ * references node builtins (fs, crypto, perf_hooks) inside node-only branches
+ * that eager bundle resolvers (Turbopack) fail on. Loading it as a classic
+ * script keeps node builtins out of every build graph; those branches never
+ * execute in the browser.
  */
 
 const DB_NAME = 'v86-vm'
 const DB_VERSION = 1
 const STORE_NAME = 'state'
 const STATE_KEY = 'emulator'
+const V86_SCRIPT_URL = '/v86/libv86.js'
+
+let v86LoadPromise: Promise<unknown> | null = null
+
+async function loadV86Runtime(): Promise<unknown> {
+  if (window.V86) return window.V86
+  if (v86LoadPromise) return v86LoadPromise
+  v86LoadPromise = new Promise<unknown>((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = V86_SCRIPT_URL
+    script.async = true
+    script.onload = () => {
+      if (!window.V86) {
+        v86LoadPromise = null
+        reject(new Error('v86 runtime loaded but window.V86 is undefined'))
+        return
+      }
+      resolve(window.V86)
+    }
+    script.onerror = () => {
+      v86LoadPromise = null
+      reject(new Error('Failed to load v86 runtime from ' + V86_SCRIPT_URL))
+    }
+    document.head.appendChild(script)
+  })
+  return v86LoadPromise
+}
 
 async function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -28,20 +62,22 @@ export class V86Controller {
       vgaBiosUrl: string
       imageUrl: string
       imageSize?: number
+      imageKind?: 'hda' | 'kernel'
       memoryMb?: number
       wasmPath?: string
     },
   ): Promise<void> {
-    const mod = await import('v86')
-    this.V86Class = mod.V86 || (mod as any).default?.V86 || mod
+    this.V86Class = await loadV86Runtime()
+
+    const image = opts.imageSize
+      ? { url: opts.imageUrl, async: true, size: opts.imageSize }
+      : { url: opts.imageUrl }
 
     this.emulator = new this.V86Class({
       screen_container: screenContainer,
       bios: { url: opts.biosUrl },
       vga_bios: { url: opts.vgaBiosUrl },
-      hda: opts.imageSize
-        ? { url: opts.imageUrl, async: true, size: opts.imageSize }
-        : { url: opts.imageUrl },
+      ...(opts.imageKind === 'kernel' ? { bzimage: image } : { hda: image }),
       memory_size: (opts.memoryMb ?? 256) * 1024 * 1024,
       vga_memory_size: 8 * 1024 * 1024,
       autostart: true,

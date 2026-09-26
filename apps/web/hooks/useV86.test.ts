@@ -126,6 +126,79 @@ describe('useV86', () => {
     expect(result.current.error).toMatch(/buildroot\/build\.sh/)
   })
 
+  it('falls back to the local vendored kernel when no local hda exists', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes('bzimage68.bin')
+            ? {
+                ok: true,
+                status: 206,
+                headers: {
+                  get: (k: string) =>
+                    k.toLowerCase() === 'content-range' ? 'bytes 0-0/10068480' : null,
+                },
+              }
+            : { ok: false, status: 404, headers: { get: () => null } },
+        ),
+      ),
+    )
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86())
+    const container = document.createElement('div')
+
+    await act(async () => {
+      await result.current.init(container)
+    })
+
+    expect(result.current.isBooted).toBe(true)
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(instance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        imageUrl: '/buildroot/bzimage68.bin',
+        imageKind: 'kernel',
+      }),
+    )
+  })
+
+  it('falls back to the upstream i.copy.sh kernel when nothing is local', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) =>
+        Promise.resolve(
+          url.startsWith('https://i.copy.sh/')
+            ? {
+                ok: true,
+                status: 200,
+                headers: {
+                  get: (k: string) => (k.toLowerCase() === 'content-length' ? '10068480' : null),
+                },
+              }
+            : { ok: false, status: 404, headers: { get: () => null } },
+        ),
+      ),
+    )
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86())
+    const container = document.createElement('div')
+
+    await act(async () => {
+      await result.current.init(container)
+    })
+
+    expect(result.current.isBooted).toBe(true)
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(instance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        imageUrl: 'https://i.copy.sh/buildroot-bzimage68.bin',
+        imageKind: 'kernel',
+      }),
+    )
+  })
+
   it('auto-save persists while running and skips when not running', async () => {
     const { V86Controller } = await import('@/lib/v86-controller')
     const { result } = renderHook(() => useV86())

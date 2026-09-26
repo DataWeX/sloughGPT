@@ -9,15 +9,22 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { V86Controller } from '@/lib/v86-controller'
 import { logger, trackEvent } from '@/lib/dev-log'
 
-const LINUX_IMAGE_URL = 'https://copy.sh/v86/images/buildroot'
-// Local image produced by buildroot/build.sh (copied to apps/web/public/buildroot/).
-const LOCAL_IMAGE_URL = '/buildroot/buildroot.img'
+// Boot image resolution order:
+// 1. local hda produced by buildroot/build.sh (docker image build)
+// 2. local self-contained kernel vendored from upstream (no docker needed)
+// 3. upstream self-contained kernel — copy.sh moved images to i.copy.sh;
+//    the legacy copy.sh/v86/images/buildroot path is dead (404).
+const LOCAL_HDA_URL = '/buildroot/buildroot.img'
+const LOCAL_KERNEL_URL = '/buildroot/bzimage68.bin'
+const REMOTE_KERNEL_URL = 'https://i.copy.sh/buildroot-bzimage68.bin'
 const BIOS_URL = '/bios/seabios.bin'
 const VGA_BIOS_URL = '/bios/vgabios.bin'
 const WASM_PATH = '/v86/v86.wasm'
 const MEMORY_MB = 256
 const AUTO_SAVE_INTERVAL_MS = 30_000
 const IMAGE_PROBE_TIMEOUT_MS = 5_000
+
+export type V86ImageKind = 'hda' | 'kernel'
 
 interface ProbeResult {
   available: boolean
@@ -49,18 +56,25 @@ async function probeImage(url: string): Promise<ProbeResult> {
 }
 
 /**
- * Resolve the boot image: prefer the locally built image, then the upstream
- * copy.sh one (its buildroot files have been intermittently 404), and fail
- * fast with an actionable message instead of letting v86 retry a dead URL.
+ * Resolve the boot image: prefer the locally built hda, then a locally
+ * vendored self-contained kernel, then the upstream i.copy.sh kernel, and
+ * fail fast with an actionable message instead of letting v86 retry a dead
+ * URL.
  */
-async function resolveDefaultImage(): Promise<{ url: string; size?: number }> {
-  const local = await probeImage(LOCAL_IMAGE_URL)
-  if (local.available) return { url: LOCAL_IMAGE_URL, size: local.size }
-  const remote = await probeImage(LINUX_IMAGE_URL)
-  if (remote.available) return { url: LINUX_IMAGE_URL, size: remote.size }
+async function resolveDefaultImage(): Promise<{ url: string; size?: number; kind: V86ImageKind }> {
+  const localHda = await probeImage(LOCAL_HDA_URL)
+  if (localHda.available) return { url: LOCAL_HDA_URL, size: localHda.size, kind: 'hda' }
+  const localKernel = await probeImage(LOCAL_KERNEL_URL)
+  if (localKernel.available)
+    return { url: LOCAL_KERNEL_URL, size: localKernel.size, kind: 'kernel' }
+  const remoteKernel = await probeImage(REMOTE_KERNEL_URL)
+  if (remoteKernel.available)
+    return { url: REMOTE_KERNEL_URL, size: remoteKernel.size, kind: 'kernel' }
   throw new Error(
-    `Linux VM image not available: ${LOCAL_IMAGE_URL} not built and upstream copy.sh buildroot unreachable. ` +
-      'Run buildroot/build.sh to build the local image (installed at apps/web/public/buildroot/buildroot.img), then reload.',
+    `Linux VM image not available: ${LOCAL_HDA_URL} not built, ${LOCAL_KERNEL_URL} not vendored, ` +
+      `and upstream ${REMOTE_KERNEL_URL} unreachable. Run buildroot/build.sh to build the local image, ` +
+      'or curl -o apps/web/public/buildroot/bzimage68.bin ' +
+      `https://i.copy.sh/buildroot-bzimage68.bin, then reload.`,
   )
 }
 
@@ -69,6 +83,8 @@ export interface UseV86Options {
   imageUrl?: string
   /** Custom image size in bytes (required if imageUrl is provided) */
   imageSize?: number
+  /** How to attach a custom imageUrl: raw hard disk (hda) or kernel boot (bzimage). */
+  imageKind?: V86ImageKind
   /** Custom BIOS URL */
   biosUrl?: string
   /** Custom VGA BIOS URL */
@@ -115,7 +131,11 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
 
       try {
         const image = options.imageUrl
-          ? { url: options.imageUrl, size: options.imageSize }
+          ? {
+              url: options.imageUrl,
+              size: options.imageSize,
+              kind: options.imageKind || ('hda' as const),
+            }
           : await resolveDefaultImage()
 
         const ctrl = new V86Controller()
@@ -124,6 +144,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
           vgaBiosUrl: options.vgaBiosUrl || VGA_BIOS_URL,
           imageUrl: image.url,
           imageSize: image.size,
+          imageKind: image.kind,
           memoryMb: options.memoryMb || MEMORY_MB,
           wasmPath: options.wasmPath || WASM_PATH,
         })
@@ -159,6 +180,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
       options.vgaBiosUrl,
       options.imageUrl,
       options.imageSize,
+      options.imageKind,
       options.memoryMb,
       options.wasmPath,
     ],
