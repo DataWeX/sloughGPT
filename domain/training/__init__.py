@@ -66,6 +66,9 @@ _LAZY_IMPORTS = {
     "TrainingEngine": (".engine", "TrainingEngine"),
     "get_training_engine": (".engine", "get_training_engine"),
     "TrainingFeedClient": ("._internal.training_feed", "TrainingFeedClient"),
+    "TrainingOutcomeTracker": ("._internal.outcome_tracker", "TrainingOutcomeTracker"),
+    "AdaptiveConfigEngine": ("._internal.adaptive_config", "AdaptiveConfigEngine"),
+    "import_from_sou": ("._internal.slonet", "import_from_sou"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
 }
 
@@ -131,4 +134,7 @@ __all__ = [
     "get_training_engine",
     "TrainingFeedClient",
     "FeedBatchSampler",
+    "TrainingOutcomeTracker",
+    "AdaptiveConfigEngine",
+    "import_from_sou",
 ]
