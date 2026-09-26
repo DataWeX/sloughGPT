@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from pathlib import Path
 
 from domain.auth._internal.models import (
     Tenant,
@@ -11,10 +12,11 @@ from domain.auth._internal.models import (
     Workspace,
     WorkspaceMember,
 )
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.auth.repo")
 
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
+_REPO_ROOT = find_repo_root(Path(__file__).resolve())
 
 
 def _get_mogdb(db_path: str | None = None):
