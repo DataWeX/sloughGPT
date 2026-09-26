@@ -46,6 +46,7 @@ SAMPLE_DATASETS = [
         "size_bytes": 27851,
         "size_formatted": "27.2 KB",
         "num_samples": 100,
+        "created_at": "2026-01-15T12:00:00Z",
     },
     {
         "id": "poetry",
@@ -132,6 +133,7 @@ class TestListDatasets:
         data = resp.json()
         assert data["count"] == 2
         assert data["datasets"][0]["id"] == "shakespeare"
+        assert data["datasets"][0]["created_at"] == "2026-01-15T12:00:00Z"
 
     def test_list_with_query(self, mock_controller):
         client.get("/datasets?q=shake")

@@ -22,6 +22,7 @@ from schemas.common import (
 )
 
 from domain.infrastructure._internal.errors import AppError
+from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.api.collections")
 
@@ -56,6 +57,8 @@ class CollectRequest(BaseModel):
 class CollectionsRouter:
     def __init__(self):
         self.router = APIRouter(prefix="/collections", tags=["collections"])
+        # pipeline name -> UTC-Z ISO of its last successful run (session-scoped)
+        self._last_runs: dict[str, str] = {}
         self._register_routes()
 
     def _register_routes(self):
@@ -71,11 +74,38 @@ class CollectionsRouter:
 
     @endpoint("collections.list_pipelines")
     async def list_pipelines(self) -> dict:
-        """List all registered collection pipelines."""
+        """List all registered collection pipelines as enriched objects.
+
+        The frontend consumes ``{id, name, source_type, store_type,
+        records_count, last_run}`` per pipeline — the registry only stores
+        names, so details are pulled from each pipeline's stats here.
+        """
         from domain.collections import get_registry
 
         registry = get_registry()
-        pipelines = registry.list_pipelines()
+        pipelines = []
+        for name in registry.list_pipelines():
+            pipeline = registry.get_pipeline(name)
+            if pipeline is None:
+                continue
+            try:
+                stats = pipeline.stats
+                source_type = str(stats.get("source", ""))
+                store_type = str(stats.get("store", ""))
+                records_count = stats.get("store_count")
+            except Exception:
+                # Listing must survive a broken store/count on one pipeline.
+                source_type, store_type, records_count = "", "", None
+            pipelines.append(
+                {
+                    "id": name,
+                    "name": getattr(pipeline, "name", name),
+                    "source_type": source_type,
+                    "store_type": store_type,
+                    "records_count": records_count,
+                    "last_run": self._last_runs.get(name),
+                }
+            )
         sources = registry.list_sources()
         stores = registry.list_stores()
         filters = registry.list_filters()
@@ -155,6 +185,7 @@ class CollectionsRouter:
             pipeline = registry.get_pipeline(name)
             if not pipeline:
                 raise_error(f"Pipeline '{name}' not found", code="E_NOT_FOUND", status_code=404)
+            self._last_runs[name] = utc_now_iso()
             safe_audit_log(
                 "collection.run",
                 resource=name,

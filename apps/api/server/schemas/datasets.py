@@ -23,6 +23,8 @@ class DatasetInfo(BaseModel):
     samples: int = 0
     visual_metadata: dict[str, Any] | None = None
     workspace_id: str | None = None
+    # UTC-Z creation timestamp (content mtime proxy); optional for legacy callers.
+    created_at: str | None = None
 
 
 class DatasetCreate(BaseModel):

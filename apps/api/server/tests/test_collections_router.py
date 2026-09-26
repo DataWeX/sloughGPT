@@ -66,8 +66,37 @@ class TestListPipelines:
         resp = self.client.get("/collections")
         assert resp.status_code == 200
         data = _d(resp)
-        assert "p1" in data["pipelines"]
+        assert "p1" in [p["id"] for p in data["pipelines"]]
         assert data["counts"]["pipelines"] == 1
+
+    def test_list_returns_enriched_pipeline_objects(self):
+        from domain.collections._internal.registry import get_registry
+
+        registry = get_registry()
+        registry.create_pipeline("p1", "generator", "memory")
+        resp = self.client.get("/collections")
+        data = _d(resp)
+        (p,) = data["pipelines"]
+        assert p["id"] == "p1"
+        assert p["name"] == "p1"
+        assert p["source_type"] == "generator"
+        assert p["store_type"] == "memory"
+        assert p["records_count"] == 0
+        assert p["last_run"] is None
+
+    def test_last_run_recorded_after_run(self):
+        resp = self.client.post(
+            "/collections/create",
+            json={"name": "p1", "source_type": "generator", "store_type": "memory"},
+        )
+        assert resp.status_code == 200
+        resp = self.client.post("/collections/run?name=p1")
+        assert resp.status_code == 200
+        resp = self.client.get("/collections")
+        (p,) = _d(resp)["pipelines"]
+        assert p["last_run"] is not None
+        assert p["last_run"].endswith("Z")
+        assert p["records_count"] >= 1
 
 
 class TestCreatePipeline:
@@ -315,7 +344,7 @@ class TestPipelineLifecycle:
 
         # List
         resp = self.client.get("/collections")
-        assert "lifecycle" in _d(resp)["pipelines"]
+        assert "lifecycle" in [p["id"] for p in _d(resp)["pipelines"]]
 
         # Get
         resp = self.client.get("/collections/lifecycle")

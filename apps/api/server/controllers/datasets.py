@@ -5,11 +5,25 @@ Datasets Controller - Business logic for dataset management
 import json
 import logging
 import shutil
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+def _iso_mtime(path: Path) -> str | None:
+    """UTC-Z ISO timestamp of *path*'s mtime (created_at proxy), or None.
+
+    The UI renders this as the dataset's age; mtime of the content file is
+    the closest honest signal to creation time on disk.
+    """
+    from domain.shared import to_iso
+
+    try:
+        return to_iso(datetime.fromtimestamp(path.stat().st_mtime, tz=UTC))
+    except OSError:
+        return None
 
 
 class DatasetsController:
@@ -149,6 +163,13 @@ class DatasetsController:
             kind = classify_kind(d.name, d)
             tags = entry_tags(d, kind)
             primary = find_corpus_file(d)
+            created_src = (
+                corpus_file
+                if has_corpus
+                else (
+                    input_file if input_file.exists() else (primary if primary is not None else d)
+                )
+            )
             dataset = {
                 "id": d.name,
                 "name": d.name.replace("_", " ").title(),
@@ -163,6 +184,7 @@ class DatasetsController:
                 "size": size,
                 "num_samples": num_samples,
                 "samples": num_samples,
+                "created_at": _iso_mtime(created_src),
                 "description": self._describe_dataset(d, [], size)
                 if (corpus_file.exists() or input_file.exists())
                 else "",
@@ -197,13 +219,18 @@ class DatasetsController:
 
     def get_dataset(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset details"""
-        from domain.training._internal.cache_tags import classify_kind, entry_tags
+        from domain.training._internal.cache_tags import classify_kind, entry_tags, find_corpus_file
 
         path = self._locate(dataset_id)
         if path is None:
             return None
 
         kind = classify_kind(path.name, path)
+        created_src = path
+        if path.is_dir():
+            corpus = find_corpus_file(path)
+            if corpus is not None:
+                created_src = corpus
         return {
             "id": dataset_id,
             "name": path.name,
@@ -211,6 +238,7 @@ class DatasetsController:
             "exists": True,
             "kind": kind,
             "tags": entry_tags(path, kind),
+            "created_at": _iso_mtime(created_src),
         }
 
     def get_dataset_stats(self, dataset_id: str) -> dict[str, Any] | None:

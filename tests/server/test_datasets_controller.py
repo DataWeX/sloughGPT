@@ -47,6 +47,14 @@ class TestListDatasets:
             assert "size" in ds
             assert "num_samples" in ds
 
+    def test_created_at_is_utc_z(self, repo_with_datasets):
+        result = repo_with_datasets.list_datasets()
+        assert result
+        for ds in result:
+            assert ds["created_at"] is not None
+            assert ds["created_at"].endswith("Z")
+            assert "T" in ds["created_at"]
+
     def test_search_filter(self, repo_with_datasets):
         result = repo_with_datasets.list_datasets(q="Shakespeare")
         assert len(result) == 1
@@ -109,6 +117,8 @@ class TestGetDataset:
         assert result is not None
         assert result["id"] == "shakespeare"
         assert result["exists"] is True
+        assert result["created_at"] is not None
+        assert result["created_at"].endswith("Z")
 
     def test_nonexistent_dataset(self, repo_with_datasets):
         result = repo_with_datasets.get_dataset("nonexistent")

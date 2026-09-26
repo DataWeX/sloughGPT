@@ -797,8 +797,8 @@ class DatasetsRouter:
                 hyphens, underscores only).
 
         Returns:
-            DatasetInfo with id, name, description, created_at,
-            updated_at, row_count, and other metadata fields.
+            DatasetInfo with id, name, path, kind, tags, created_at, and
+            other metadata fields.
 
         Side effects:
             Validates dataset_id format (raises 422 on invalid chars).
