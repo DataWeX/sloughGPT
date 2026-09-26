@@ -979,13 +979,13 @@ class WorkspacesRouter:
 
             # Clean old training jobs
             try:
-                from domain.training.repository import TrainingRepository
+                from training.job_store import get_job_store
 
-                repo = TrainingRepository()
+                repo = get_job_store()
                 training_cutoff = now - (training_retention * 86400)
                 old_jobs = repo.list_by_workspace(workspace_id)
                 for job in old_jobs:
-                    created = getattr(job, "created_at", None)
+                    created = job.get("created_at")
                     if created:
                         try:
                             job_ts = datetime.fromisoformat(
@@ -994,8 +994,10 @@ class WorkspacesRouter:
                         except (ValueError, TypeError):
                             continue
                         if job_ts < training_cutoff:
-                            repo.delete(job.id)
-                            cleaned["training_jobs"] += 1
+                            job_id = job.get("id")
+                            if job_id:
+                                repo.delete(job_id)
+                                cleaned["training_jobs"] += 1
             except Exception as e:
                 logger.debug("Training job cleanup unavailable: %s", e)
 
@@ -1120,22 +1122,20 @@ class WorkspacesRouter:
 
             # Recent training job events
             try:
-                from domain.training.repository import TrainingRepository
+                from training.job_store import get_job_store
 
-                repo = TrainingRepository()
+                repo = get_job_store()
                 jobs = repo.list_by_workspace(workspace_id)
                 for job in jobs[-20:]:  # last 20
-                    status = getattr(job, "status", "")
+                    status = job.get("status", "")
                     if status in ("completed", "failed"):
                         notifications.append(
                             {
                                 "type": "training",
                                 "title": f"Training job {status}",
-                                "detail": getattr(job, "name", job.id),
+                                "detail": job.get("name") or job.get("id"),
                                 "status": status,
-                                "timestamp": getattr(
-                                    job, "updated_at", getattr(job, "created_at", "")
-                                ),
+                                "timestamp": job.get("updated_at") or job.get("created_at") or "",
                             }
                         )
             except Exception as e:
@@ -1258,17 +1258,17 @@ class WorkspacesRouter:
 
             # Search training jobs
             try:
-                from domain.training.repository import TrainingRepository
+                from training.job_store import get_job_store
 
-                repo = TrainingRepository()
+                repo = get_job_store()
                 jobs = repo.list_by_workspace(workspace_id)
                 for job in jobs:
                     results["training_jobs"].append(
                         {
-                            "id": job.id,
+                            "id": job.get("id"),
                             "type": "training",
-                            "title": getattr(job, "name", job.id),
-                            "detail": f"Status: {getattr(job, 'status', 'unknown')}",
+                            "title": job.get("name") or job.get("id"),
+                            "detail": f"Status: {job.get('status', 'unknown')}",
                         }
                     )
             except Exception as e:

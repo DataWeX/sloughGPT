@@ -20,6 +20,7 @@ from domain.infrastructure._internal.errors import (
     AppError,
     ErrorCode,
     classify_exception,
+    emit_error_event,
 )
 from domain.infrastructure._internal.event_bus import (
     EventBus,
@@ -47,6 +48,7 @@ __all__ = [
     "AppError",
     "ErrorCode",
     "classify_exception",
+    "emit_error_event",
     "get_db",
     "get_lifecycle_manager",
 ]
