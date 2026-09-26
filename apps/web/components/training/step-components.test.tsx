@@ -5,6 +5,10 @@ import React from 'react'
 import { makeForm, makeDatasets, makeCheckpoints } from './__test-helper'
 import type { ComponentType } from 'react'
 
+vi.mock('@/vite/next-compat/navigation', () => ({
+  useRouter: () => ({ push: vi.fn() }),
+}))
+
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   const button = ({ children, onClick, disabled, variant, size, className }: any) => (

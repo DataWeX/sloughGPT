@@ -17,6 +17,9 @@ vi.mock('@/lib/training-controller', () => ({
   },
 }))
 
+const mockPush = vi.fn()
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+
 import { trainingJobsController } from '@/lib/training-controller'
 
 const emptyCheckpoints: UseTrainingCheckpointsReturn = {
@@ -155,6 +158,43 @@ describe('ResultsStep', () => {
   it('hides Test model button when no checkpoints', () => {
     renderStep(emptyCheckpoints)
     expect(screen.queryByText('Test model')).toBeNull()
+  })
+
+  it('offers Try it now when there is a checkpoint to load', () => {
+    renderStep(checkpointsWithData)
+    expect(screen.getByText('Try it now')).toBeDefined()
+  })
+
+  it('hides Try it now when there is nothing to load', () => {
+    renderStep(emptyCheckpoints)
+    expect(screen.queryByText('Try it now')).toBeNull()
+  })
+
+  it('loads the best checkpoint, then jumps to chat', async () => {
+    mockPush.mockClear()
+    const cps = { ...checkpointsWithData, handleLoadCheckpoint: vi.fn().mockResolvedValue(true) }
+    const addToast = vi.fn()
+
+    renderStep(cps, addToast)
+    screen.getByText('Try it now').click()
+
+    await vi.waitFor(() => {
+      expect(cps.handleLoadCheckpoint).toHaveBeenCalledWith('cp-2', addToast)
+      expect(mockPush).toHaveBeenCalledWith('/chat')
+    })
+  })
+
+  it('stays on the results page when the load fails', async () => {
+    mockPush.mockClear()
+    const cps = { ...checkpointsWithData, handleLoadCheckpoint: vi.fn().mockResolvedValue(false) }
+
+    renderStep(cps)
+    screen.getByText('Try it now').click()
+
+    await vi.waitFor(() => {
+      expect(cps.handleLoadCheckpoint).toHaveBeenCalledWith('cp-2', expect.any(Function))
+    })
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it('has Train more button', () => {

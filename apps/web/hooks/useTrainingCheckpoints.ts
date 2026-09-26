@@ -23,7 +23,7 @@ export interface UseTrainingCheckpointsReturn {
   handleLoadCheckpoint: (
     name: string,
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
-  ) => Promise<void>
+  ) => Promise<boolean>
   handleDeleteCheckpoint: (
     name: string,
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
@@ -78,15 +78,22 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     }
   }, [])
 
+  /** Returns whether the checkpoint is now the served model — callers that
+   *  navigate away (Try it now) must know not to move on a failed load. */
   const handleLoadCheckpoint = useCallback(
-    async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
+    async (
+      name: string,
+      addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+    ): Promise<boolean> => {
       try {
         await trainingJobsController.loadCheckpoint?.(name)
         setActiveCheckpoint(name)
         trackEvent('checkpoint_loaded', { name })
         addToast(`Loaded trained version: ${name}`, 'success')
+        return true
       } catch (e) {
         addToast(formatToastError(e, 'Could not load trained version'), 'error')
+        return false
       }
     },
     [],

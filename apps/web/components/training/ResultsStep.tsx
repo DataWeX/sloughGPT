@@ -4,6 +4,7 @@ import { useMemo, useState, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, Button, Badge } from '@sloughgpt/strui'
 import { trainingJobsController } from '@/lib/training-controller'
 import { formatToastError } from '@/lib/error-utils'
+import { useRouter } from '@/vite/next-compat/navigation'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 
 interface ResultsStepProps {
@@ -85,11 +86,28 @@ export function ResultsStep({
   onRecovered,
 }: ResultsStepProps) {
   const [resuming, setResuming] = useState<string | null>(null)
+  const [trying, setTrying] = useState(false)
+  const router = useRouter()
   const bestName = useMemo(() => {
     const withLoss = checkpoints.checkpoints.filter((c) => c.loss != null && c.loss > 0)
     if (withLoss.length === 0) return null
     return withLoss.reduce((min, c) => (c.loss! < min.loss! ? c : min), withLoss[0]).name
   }, [checkpoints.checkpoints])
+
+  // The run's trained version: the best checkpoint when losses are known,
+  // otherwise simply the first one the list handed us.
+  const tryNowTarget = bestName ?? checkpoints.checkpoints[0]?.name ?? null
+
+  const handleTryNow = useCallback(async () => {
+    if (!tryNowTarget || trying) return
+    setTrying(true)
+    try {
+      const loaded = await checkpoints.handleLoadCheckpoint(tryNowTarget, addToast)
+      if (loaded) router.push('/chat')
+    } finally {
+      setTrying(false)
+    }
+  }, [addToast, checkpoints, router, trying, tryNowTarget])
 
   const qualityTrend = useMemo(() => {
     return checkpoints.jobs
@@ -251,6 +269,17 @@ export function ResultsStep({
         )}
 
         <div className="flex items-center gap-1.5 pt-1">
+          {tryNowTarget && (
+            <Button
+              size="sm"
+              variant="default"
+              className="h-7 text-[11px]"
+              disabled={trying}
+              onClick={handleTryNow}
+            >
+              {trying ? 'Loading…' : 'Try it now'}
+            </Button>
+          )}
           {checkpoints.checkpoints.length > 0 && (
             <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={onTest}>
               Test model
