@@ -112,12 +112,16 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
     # Find what's using the port
     import shlex
 
-    result = subprocess.run(
-        shlex.split(f"lsof -ti:{port}"),
-        capture_output=True,
-        text=True,
-    )
-    pids = [pid for pid in result.stdout.strip().split() if pid.isdigit()]
+    try:
+        result = subprocess.run(
+            shlex.split(f"lsof -ti:{port}"),
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+        pids = [pid for pid in result.stdout.strip().split() if pid.isdigit()]
+    except (FileNotFoundError, subprocess.TimeoutExpired, OSError):
+        pids = []  # lsof missing or hung — skip pid listing, keep the hint
 
     if pids:
         for pid in pids:
@@ -130,7 +134,10 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
         log.blank()
 
     log.command(f"lsof -ti:{port} | xargs kill -9", "kill")
-    log.command("PORT=3001 slo dev --web-port 3001", "or use another port")
+    if service == "api":
+        log.command(f"slo dev --port {port + 1}", "or use another port")
+    else:
+        log.command("PORT=3001 slo dev --web-port 3001", "or use another port")
 
 
 def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
@@ -545,11 +552,14 @@ def cmd_dev(args):
                 _update_startup_status()
             # Check if the API process died (import error, port conflict, crash)
             if not status["api_ready"] and api_proc.poll() is not None:
-                status["api"] = "error"
+                if _is_eaddrinuse(api_lines):
+                    status["api"] = "eaddrinuse"
+                else:
+                    status["api"] = "error"
+                    log.error(f"API server exited (code {api_proc.returncode})")
+                    for line in _extract_error_lines(api_lines):
+                        log.info(f"  | {line}")
                 _update_startup_status()
-                log.error(f"API server exited (code {api_proc.returncode})")
-                for line in _extract_error_lines(api_lines):
-                    log.info(f"  | {line}")
                 break
             # Check if web process died
             if not status["web_ready"] and web_proc.poll() is not None:
@@ -604,7 +614,10 @@ def cmd_dev(args):
         dashboard.set_status("api", status["api"])
         dashboard.set_status("web", status["web"])
         if status["web"] == "eaddrinuse":
-            eaddrinuse_port[0] = web_port
+            eaddrinuse_port[0] = (web_port, "web")
+            return True
+        if status["api"] == "eaddrinuse":
+            eaddrinuse_port[0] = (api_port, "api")
             return True
         # Either service dying ends the session — nothing here restarts them,
         # and a dead service with no error report leaves the TUI stuck forever.
@@ -622,7 +635,8 @@ def cmd_dev(args):
         stop_event.set()
         _cleanup(api_proc, web_proc, api_port, web_port)
         if eaddrinuse_port[0]:
-            _handle_eaddrinuse(eaddrinuse_port[0], "web")
+            port, service = eaddrinuse_port[0]
+            _handle_eaddrinuse(port, service)
         else:
             _print_summary(api_lines, web_lines, status, api_port, web_port)
 

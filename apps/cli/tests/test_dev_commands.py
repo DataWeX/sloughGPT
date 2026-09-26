@@ -585,24 +585,54 @@ class TestWebDevCmd:
 
 
 class TestCmdDevFailureReporting:
-    """A dead or timing-out service must end the dev session with a visible error.
+    """A dead, port-busy, or timing-out service must end the session with a clear message.
 
     Previously only web death was noticed, `status["api"]` could never become
     "error", and `_stop_check` required both services to be in error — so a
-    crashed API left the TUI showing "starting" forever with no message.
+    crashed or port-conflicted API left the TUI showing "starting" forever.
     """
 
     @staticmethod
-    def _scaffold(monkeypatch, tmp_path, stopped, api_dead=False, web_dead=False):
+    def _scaffold(
+        monkeypatch,
+        tmp_path,
+        stopped,
+        api_dead=False,
+        web_dead=False,
+        api_eaddrinuse=False,
+        web_eaddrinuse=False,
+    ):
         import commands.dev as mod
+
+        api_marker = object()
+        web_marker = object()
+        seen = {"api": False, "web": False}
 
         def fake_popen(cmd, **kwargs):
             proc = MagicMock()
             is_npm = bool(cmd) and cmd[0] in ("npm", "npx")
+            svc = "web" if is_npm else "api"
+            if is_npm:
+                proc.stderr = web_marker
+            else:
+                proc.stdout = api_marker
+            einuse = web_eaddrinuse if is_npm else api_eaddrinuse
             dead = web_dead if is_npm else api_dead
-            proc.poll.return_value = 1 if dead else None
-            proc.returncode = 1 if dead else None
+            if einuse:
+                # Exit only after the EADDRINUSE line has been captured, so
+                # _is_eaddrinuse() sees it deterministically (the read thread
+                # appends the line, then the poll reports death).
+                proc.poll.side_effect = lambda *a, **k: 1 if seen[svc] else None
+            else:
+                proc.poll.return_value = 1 if dead else None
+            proc.returncode = 1 if (dead or einuse) else None
             return proc
+
+        def fake_read(stream, lines, *a, **k):
+            which = "api" if stream is api_marker else "web"
+            if (which == "api" and api_eaddrinuse) or (which == "web" and web_eaddrinuse):
+                lines.append("ERROR: [Errno 98] address already in use")
+            seen[which] = True
 
         class FakeDashboard:
             def __init__(self, *a, **k):
@@ -614,7 +644,7 @@ class TestCmdDevFailureReporting:
             def serve(self, stop_check=None):
                 import time as _t
 
-                for _ in range(200):  # up to 4s for the poll thread to react
+                for _ in range(400):  # up to 8s for the poll thread to react
                     if stop_check is None or stop_check():
                         stopped.append(True)
                         return
@@ -623,8 +653,12 @@ class TestCmdDevFailureReporting:
 
         ctx = (
             patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch(
+                "commands.dev.subprocess.run",
+                return_value=MagicMock(stdout="", returncode=0),
+            ),
             patch("commands.dev._repo_root", return_value=tmp_path),
-            patch("commands.dev._read_stream"),
+            patch("commands.dev._read_stream", side_effect=fake_read),
             patch("commands.dev._preflight_model_check"),
             patch("commands.dev._check_api_ready", return_value=False),
             patch("commands.dev._check_port", return_value=False),
@@ -636,6 +670,18 @@ class TestCmdDevFailureReporting:
             patch("core.tui.DevDashboard", FakeDashboard),
         )
         return mod, ctx
+
+    @staticmethod
+    def _run(mod, ctx, args):
+        import time as real_time
+
+        with ExitStack() as stack:
+            for c in ctx:
+                stack.enter_context(c)
+            # Real (tiny) sleeps so background threads get scheduled while the
+            # poll loop runs; fully no-op sleeps starve them under the GIL.
+            mod.time.sleep.side_effect = lambda s: real_time.sleep(0.005)
+            mod.cmd_dev(args)
 
     @staticmethod
     def _args(web_port=4590):
@@ -654,10 +700,7 @@ class TestCmdDevFailureReporting:
     def test_api_death_reports_and_stops(self, mock_log, monkeypatch, tmp_path):
         stopped = []
         mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, api_dead=True)
-        with ExitStack() as stack:
-            for c in ctx:
-                stack.enter_context(c)
-            mod.cmd_dev(self._args())
+        self._run(mod, ctx, self._args())
 
         assert stopped == [True], "session must stop when the API dies"
         assert any("API server exited" in m for m in self._error_messages(mock_log)), (
@@ -667,10 +710,7 @@ class TestCmdDevFailureReporting:
     def test_web_death_reports_and_stops(self, mock_log, monkeypatch, tmp_path):
         stopped = []
         mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, web_dead=True)
-        with ExitStack() as stack:
-            for c in ctx:
-                stack.enter_context(c)
-            mod.cmd_dev(self._args())
+        self._run(mod, ctx, self._args())
 
         assert stopped == [True], "session must stop when the web server dies"
         assert any("Web server exited" in m for m in self._error_messages(mock_log)), (
@@ -682,12 +722,35 @@ class TestCmdDevFailureReporting:
     ):
         stopped = []
         mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped)  # both alive, never ready
-        with ExitStack() as stack:
-            for c in ctx:
-                stack.enter_context(c)
-            mod.cmd_dev(self._args())
+        self._run(mod, ctx, self._args())
 
         assert stopped == [True], "session must stop when the startup budget runs out"
         assert any("did not become ready within" in m for m in self._error_messages(mock_log)), (
             f"no timeout message: {self._error_messages(mock_log)}"
         )
+
+    def test_api_eaddrinuse_gets_remediation_hint(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, api_eaddrinuse=True)
+        self._run(mod, ctx, self._args())
+
+        assert stopped == [True], "session must stop when the API port is busy"
+        assert not any("API server exited" in m for m in self._error_messages(mock_log)), (
+            "port conflict must use the remediation path, not the generic death message"
+        )
+        kv = [c[0] for c in mock_log.key_value.call_args_list]
+        assert ("api", "port 8177 in use") in kv, f"no api remediation: {kv}"
+        cmds = [str(c[0][0]) for c in mock_log.command.call_args_list]
+        assert any("kill -9" in m for m in cmds), f"no kill hint: {cmds}"
+
+    def test_web_eaddrinuse_gets_remediation_hint(self, mock_log, monkeypatch, tmp_path):
+        stopped = []
+        mod, ctx = self._scaffold(monkeypatch, tmp_path, stopped, web_eaddrinuse=True)
+        self._run(mod, ctx, self._args(web_port=4591))
+
+        assert stopped == [True], "session must stop when the web port is busy"
+        assert not any("Web server exited" in m for m in self._error_messages(mock_log)), (
+            "port conflict must use the remediation path, not the generic death message"
+        )
+        kv = [c[0] for c in mock_log.key_value.call_args_list]
+        assert ("web", "port 4591 in use") in kv, f"no web remediation: {kv}"
