@@ -114,6 +114,146 @@ _NORM_BIAS_MAP: dict[str, str | None] = {
 _NO_TRANSPOSE: set[str] = {"embed.token", "embed.pos", "lm_head"}
 
 
+# ── Shape contracts (portable loader) ───────────────────────────────────────
+
+
+class ShapeMismatchError(ValueError):
+    """A file tensor cannot be assigned to its model parameter.
+
+    Raised BEFORE any parameter is written (plan-time validation), or at
+    write time if a shape slips through. Carries the full issue list so one
+    exception explains every mismatch, not just the first.
+    """
+
+    def __init__(self, issues: list[tuple[str, str, tuple, tuple]]):
+        self.issues = issues
+        lines = [f"shape mismatch loading {len(issues)} tensor(s):"]
+        for param_name, canonical, have, want in issues:
+            lines.append(
+                f"  {param_name} (canonical={canonical}): "
+                f"file {have} vs model {want}"
+            )
+        lines.append(
+            "FFN dims may pad to the next 64-multiple (align_dim_ff); "
+            "everything else must match exactly"
+        )
+        super().__init__("\n".join(lines))
+
+    @classmethod
+    def single(cls, param_name: str, canonical: str, have: tuple, want: tuple) -> ShapeMismatchError:
+        return cls([(param_name, canonical, have, want)])
+
+
+# FFN canonicals whose buffers are SIMD-aligned (may legitimately differ by
+# the align_dim_ff rounding — zero-padded at assign time).
+_FFN_SWIGLU_CANONICALS: frozenset[str] = frozenset(
+    {
+        "layers.{i}.ffn.gate.weight",
+        "layers.{i}.ffn.gate.bias",
+        "layers.{i}.ffn.up.weight",
+        "layers.{i}.ffn.up.bias",
+        "layers.{i}.ffn.down.weight",
+        "layers.{i}.ffn.down.bias",
+    }
+)
+_FFN_GELU_CANONICALS: frozenset[str] = frozenset(
+    {
+        "layers.{i}.ffn.up.weight",
+        "layers.{i}.ffn.up.bias",
+        "layers.{i}.ffn.down.weight",
+        "layers.{i}.ffn.down.bias",
+    }
+)
+
+
+@dataclass(frozen=True)
+class ArchShapePolicy:
+    """Per-architecture shape rules for the loader.
+
+    The ONE place per architecture where load-time quirks live. Today that
+    is only "which FFN canonicals may take alignment padding"; fused-QKV
+    layouts or quant packing get entries here later — never in the assign
+    loops.
+    """
+
+    name: str
+    ffn_pad_canonicals: frozenset[str]
+
+
+SHAPE_POLICIES: dict[str, ArchShapePolicy] = {
+    "Qwen2ForCausalLM": ArchShapePolicy("Qwen2ForCausalLM", _FFN_SWIGLU_CANONICALS),
+    "Qwen3ForCausalLM": ArchShapePolicy("Qwen3ForCausalLM", _FFN_SWIGLU_CANONICALS),
+    "GPT2LMHeadModel": ArchShapePolicy("GPT2LMHeadModel", _FFN_GELU_CANONICALS),
+}
+# Unknown arch: permit the union — alignment rules are structural, and
+# fail-loud still happens for any non-alignable difference.
+_DEFAULT_SHAPE_POLICY = ArchShapePolicy("default", _FFN_SWIGLU_CANONICALS | _FFN_GELU_CANONICALS)
+
+
+def get_shape_policy(arch_name: str) -> ArchShapePolicy:
+    """Resolve the shape policy for an architecture name (exact key first)."""
+    return SHAPE_POLICIES.get(arch_name, _DEFAULT_SHAPE_POLICY)
+
+
+def _is_align_pad(have: tuple, want: tuple) -> bool:
+    """True when ``want`` is ``have`` with exactly one axis rounded up by
+    the FFN SIMD alignment (``align_dim_ff``)."""
+    from domain.shared import align_dim_ff
+
+    if len(have) != len(want):
+        return False
+    diffs = [i for i in range(len(have)) if have[i] != want[i]]
+    if len(diffs) != 1:
+        return False
+    i = diffs[0]
+    return want[i] > have[i] and want[i] == align_dim_ff(have[i])
+
+
+def _assign_checked(param, arr: np.ndarray, param_name: str, canonical: str, policy) -> bool:
+    """Write ``arr`` into ``param.data`` under the shape contract.
+
+    Returns True when zero-padding for FFN alignment was applied. Raises
+    ShapeMismatchError for anything not covered by the policy.
+    """
+    dst = param.data
+    have, want = arr.shape, dst.shape
+    if have == want:
+        dst[...] = arr
+        return False
+    if canonical in policy.ffn_pad_canonicals and _is_align_pad(have, want):
+        dst[...] = 0
+        dst[tuple(slice(0, s) for s in have)] = arr
+        logger.debug(
+            "FFN alignment pad: %s %s -> %s (zero-filled)", param_name, have, want
+        )
+        return True
+    raise ShapeMismatchError.single(param_name, canonical, have, want)
+
+
+def _validate_plan_shapes(plan: LoadPlan, param_map: dict, shapes, policy) -> None:
+    """Plan-time validation: every mapped tensor checked against the model
+    BEFORE any parameter is written. ``shapes(file_name)`` returns the file
+    tensor's shape or None when absent."""
+    issues: list[tuple[str, str, tuple, tuple]] = []
+    for file_name, mapping in plan.tensor_map.items():
+        param = param_map.get(mapping.param_name)
+        if param is None:
+            continue
+        have = shapes(file_name)
+        if have is None:
+            continue
+        if mapping.needs_transpose and len(have) == 2:
+            have = (have[1], have[0])
+        want = param.data.shape
+        if have == want:
+            continue
+        if mapping.canonical in policy.ffn_pad_canonicals and _is_align_pad(have, want):
+            continue
+        issues.append((mapping.param_name, mapping.canonical, have, want))
+    if issues:
+        raise ShapeMismatchError(issues)
+
+
 def build_load_plan(
     state_dict: dict[str, np.ndarray],
     n_layer: int,
@@ -294,14 +434,22 @@ def _split_fused_qkv_weight(arr: np.ndarray) -> tuple[np.ndarray, np.ndarray, np
     return np.split(arr.T, 3, axis=0)  # type: ignore[return-value]
 
 
-def infer_arch_from_state_dict(state_dict: dict[str, np.ndarray]) -> dict:
-    """Infer model architecture from a state dict's tensor shapes.
+def infer_arch_from_state_dict(
+    state_dict: dict[str, np.ndarray], config: dict | None = None
+) -> dict:
+    """Infer model architecture dims from config (preferred) + tensor shapes.
 
     Centralizes the duplicated arch detection logic found in
     routers/souls.py, models/provider.py, and controllers/models.py.
 
+    Config-first: when ``config`` (config.json) is provided its values win;
+    tensor shapes fill gaps. Structural defaults (n_embed=128 etc.) only
+    apply when neither source has the value — and log a warning, since they
+    are last-ditch placeholders, not real architecture.
+
     Args:
         state_dict: Dict mapping param names → numpy arrays
+        config: Optional model config dict (same keys as dims_from_config).
 
     Returns:
         dict with keys: vocab_size, n_embed, n_layer, n_head, intermediate_size
@@ -314,29 +462,57 @@ def infer_arch_from_state_dict(state_dict: dict[str, np.ndarray]) -> dict:
         "intermediate_size": 512,
     }
 
-    # vocab_size and n_embed from tok_emb
+    # Config first — authoritative when present.
+    if config:
+        n_embed_cfg = config.get("n_embd", config.get("hidden_size"))
+        if n_embed_cfg is not None:
+            result["n_embed"] = n_embed_cfg
+        if config.get("vocab_size") is not None:
+            result["vocab_size"] = config["vocab_size"]
+        n_layer_cfg = config.get("n_layer", config.get("num_hidden_layers"))
+        if n_layer_cfg is not None:
+            result["n_layer"] = n_layer_cfg
+        n_head_cfg = config.get("n_head", config.get("num_attention_heads"))
+        if n_head_cfg is not None:
+            result["n_head"] = n_head_cfg
+        inter_cfg = config.get("n_inner") or config.get("intermediate_size")
+        if inter_cfg is not None:
+            result["intermediate_size"] = inter_cfg
+
+    # Shapes fill gaps (and are the sole source when no config is given).
     tok_emb = state_dict.get("tok_emb.weight")
     if tok_emb is not None and tok_emb.ndim == 2:
-        result["vocab_size"] = tok_emb.shape[0]
-        result["n_embed"] = tok_emb.shape[1]
+        if config is None or config.get("vocab_size") is None:
+            result["vocab_size"] = int(tok_emb.shape[0])
+        if (
+            config is None
+            or (config.get("n_embd") is None and config.get("hidden_size") is None)
+        ):
+            result["n_embed"] = int(tok_emb.shape[1])
 
     # n_layer from max block index
-    n_layer = 1
-    for key in state_dict:
-        if key.startswith("blocks.") and ".attn_norm.weight" in key:
-            try:
-                idx = int(key.split(".")[1])
-                n_layer = max(n_layer, idx + 1)
-            except (ValueError, IndexError):
-                pass
-    result["n_layer"] = n_layer
+    if config is None or (
+        config.get("n_layer") is None and config.get("num_hidden_layers") is None
+    ):
+        n_layer = 1
+        for key in state_dict:
+            if key.startswith("blocks.") and ".attn_norm.weight" in key:
+                try:
+                    idx = int(key.split(".")[1])
+                    n_layer = max(n_layer, idx + 1)
+                except (ValueError, IndexError):
+                    pass
+        result["n_layer"] = n_layer
 
     # n_head from q_proj shape
     n_embed = result["n_embed"]
     q_w = state_dict.get("blocks.0.attn.q_proj.weight")
     if q_w is None:
         q_w = state_dict.get("blocks.0.q_proj.weight")
-    if q_w is not None and q_w.ndim == 2:
+    if q_w is not None and q_w.ndim == 2 and (
+        config is None
+        or (config.get("n_head") is None and config.get("num_attention_heads") is None)
+    ):
         head_dim = n_embed // 8
         if head_dim > 0:
             detected = q_w.shape[0] // head_dim
@@ -344,36 +520,44 @@ def infer_arch_from_state_dict(state_dict: dict[str, np.ndarray]) -> dict:
                 result["n_head"] = detected
 
     # intermediate_size from w1/gate_proj shape
-    for key in state_dict:
-        if (
-            "mlp.w1.weight" in key
-            or "mlp.gate_proj.weight" in key
-            or "ff.w1.weight" in key
-            or "ff.gate_proj.weight" in key
-        ):
-            shape = state_dict[key].shape
-            if len(shape) >= 2:
-                result["intermediate_size"] = shape[0]
-            break
+    if config is None or (not config.get("n_inner") and not config.get("intermediate_size")):
+        for key in state_dict:
+            if (
+                "mlp.w1.weight" in key
+                or "mlp.gate_proj.weight" in key
+                or "ff.w1.weight" in key
+                or "ff.gate_proj.weight" in key
+            ):
+                shape = state_dict[key].shape
+                if len(shape) >= 2:
+                    result["intermediate_size"] = shape[0]
+                break
+
+    if config is None and tok_emb is None:
+        logger.warning(
+            "infer_arch_from_state_dict: no config and no tok_emb — "
+            "returning structural defaults (n_embed=128, intermediate=512); "
+            "pass config.json for real dims"
+        )
 
     return result
 
 
-def build_model_from_config(config: dict, _lazy: bool = True):
-    """Construct a SloTransformer from a config dict (SLNC or .soul metadata).
+def dims_from_config(config: dict) -> dict:
+    """Resolve every construction dim/flag from a config dict — config-first.
 
-    Auto-detects: RoPE vs absolute pos, RMSNorm vs LayerNorm, SwiGLU vs GELU,
-    GQA (n_kv_head < n_head), eps, rope_base.
+    Single extraction point shared by model construction, plan validation,
+    and callers that previously re-derived dims (or silently fell back to
+    hardcoded defaults). Unknown keys keep the historical defaults.
 
     Args:
-        config: Dict with keys like hidden_size, num_hidden_layers, etc.
-        _lazy: If True, skip weight initialization (for loading pre-trained weights)
+        config: HF or native model config (config.json / .soul metadata).
 
     Returns:
-        SloTransformer instance (uninitialized if _lazy=True)
+        Dict with keys: n_embed, n_head, n_layer, vocab_size,
+        intermediate_size, max_pos, max_seq_len, use_abs_pos, norm_type,
+        n_kv_head, activation, eps, rope_base.
     """
-    from domain.training._internal.slonet import SloTransformer
-
     n_embed = config.get("n_embd", config.get("hidden_size", 768))
     n_head = config.get("n_head", config.get("num_attention_heads", 12))
     n_layer = config.get("n_layer", config.get("num_hidden_layers", 12))
@@ -414,25 +598,61 @@ def build_model_from_config(config: dict, _lazy: bool = True):
     hidden_act = config.get("hidden_act", "gelu")
     activation = "silu" if hidden_act == "silu" else "gelu"
 
-    hf_eps = config.get("rms_norm_eps", 1e-5)
+    eps = config.get("rms_norm_eps", 1e-5)
+
+    return {
+        "n_embed": n_embed,
+        "n_head": n_head,
+        "n_layer": n_layer,
+        "vocab_size": vocab_size,
+        "intermediate_size": intermediate_size,
+        "max_pos": max_pos,
+        "max_seq_len": max_seq_len,
+        "use_abs_pos": use_abs_pos,
+        "norm_type": norm_type,
+        "n_kv_head": n_kv_head,
+        "activation": activation,
+        "eps": eps,
+        "rope_base": config.get("rope_theta", 10000.0),
+    }
+
+
+def build_model_from_config(config: dict, _lazy: bool = True):
+    """Construct a SloTransformer from a config dict (SLNC or .soul metadata).
+
+    Auto-detects: RoPE vs absolute pos, RMSNorm vs LayerNorm, SwiGLU vs GELU,
+    GQA (n_kv_head < n_head), eps, rope_base. All dim extraction lives in
+    ``dims_from_config`` (config-first, one source of truth).
+
+    Args:
+        config: Dict with keys like hidden_size, num_hidden_layers, etc.
+        _lazy: If True, skip weight initialization (for loading pre-trained weights)
+
+    Returns:
+        SloTransformer instance (uninitialized if _lazy=True)
+    """
+    from domain.training._internal.slonet import SloTransformer
+
+    d = dims_from_config(config)
+    use_abs_pos = d["use_abs_pos"]
 
     return SloTransformer(
-        vocab_size=vocab_size,
-        n_embed=n_embed,
-        n_layer=n_layer,
-        n_head=n_head,
-        n_kv_head=n_kv_head,
-        intermediate_size=intermediate_size,
-        block_size=max_pos,
-        max_seq_len=max_seq_len,
+        vocab_size=d["vocab_size"],
+        n_embed=d["n_embed"],
+        n_layer=d["n_layer"],
+        n_head=d["n_head"],
+        n_kv_head=d["n_kv_head"],
+        intermediate_size=d["intermediate_size"],
+        block_size=d["max_pos"],
+        max_seq_len=d["max_seq_len"],
         use_rope=not use_abs_pos,
-        rope_base=config.get("rope_theta", 10000.0),
+        rope_base=d["rope_base"],
         dropout=0.0,
-        eps=hf_eps,
+        eps=d["eps"],
         tie_weights=True,
         use_abs_pos_emb=use_abs_pos,
-        norm_type=norm_type,
-        activation=activation,
+        norm_type=d["norm_type"],
+        activation=d["activation"],
         _lazy=_lazy,
     )
 
@@ -459,6 +679,13 @@ def load_into_model(
     """
     _t0 = time.monotonic()
     param_map = dict(model._named_parameters())
+    policy = get_shape_policy(plan.arch_name)
+
+    def _shape_of(file_name: str) -> tuple | None:
+        arr = tensor_data.get(file_name)
+        return None if arr is None else arr.shape
+
+    _validate_plan_shapes(plan, param_map, _shape_of, policy)
 
     # Direct writes
     n_written = 0
@@ -470,9 +697,9 @@ def load_into_model(
         if arr is None:
             continue
         if mapping.needs_transpose and arr.ndim == 2:
-            param.data[:] = arr.T
+            _assign_checked(param, arr.T, mapping.param_name, mapping.canonical, policy)
         else:
-            param.data[:] = arr
+            _assign_checked(param, arr, mapping.param_name, mapping.canonical, policy)
         n_written += 1
 
     _t_direct = time.monotonic()
@@ -484,6 +711,7 @@ def load_into_model(
         if arr is None:
             continue
         is_bias = arr.ndim == 1
+        canonical = "layers.{i}.qkv.bias" if is_bias else "layers.{i}.qkv.weight"
         if is_bias:
             q, k, v = np.split(arr, 3, axis=-1)
         else:
@@ -491,7 +719,7 @@ def load_into_model(
         for pname, chunk in zip(param_names, [q, k, v], strict=False):
             p = param_map.get(pname)
             if p is not None:
-                p.data[:] = chunk
+                _assign_checked(p, chunk, pname, canonical, policy)
                 n_fused += 1
 
     _t_fused = time.monotonic()
@@ -499,7 +727,9 @@ def load_into_model(
     # Tied weights
     for dest, src in plan.tied_weights:
         if dest in param_map and src in param_map:
-            param_map[dest].data[:] = param_map[src].data
+            _assign_checked(
+                param_map[dest], param_map[src].data, dest, "lm_head.tie", policy
+            )
 
     # Synthesized params
     for param_name, fill_val, _shape_ref in plan.synthesized_params:
@@ -562,6 +792,15 @@ class DirectWeightLoader:
         plan = self._plan
         param_map = dict(model._named_parameters())
         parser = self._parser
+        policy = get_shape_policy(plan.arch_name)
+
+        def _shape_of(file_name: str) -> tuple | None:
+            if file_name not in parser.tensor_names:
+                return None
+            info = parser.get_tensor_info(file_name)
+            return tuple(info[1])
+
+        _validate_plan_shapes(plan, param_map, _shape_of, policy)
 
         n_written = 0
         for file_name, mapping in plan.tensor_map.items():
@@ -573,9 +812,9 @@ class DirectWeightLoader:
                 continue
 
             if mapping.needs_transpose and arr.ndim == 2:
-                param.data[:] = arr.T
+                _assign_checked(param, arr.T, mapping.param_name, mapping.canonical, policy)
             else:
-                param.data[:] = arr
+                _assign_checked(param, arr, mapping.param_name, mapping.canonical, policy)
             n_written += 1
 
         _t_direct = time.monotonic()
@@ -594,14 +833,16 @@ class DirectWeightLoader:
             for pname, chunk in zip(param_names, [q, k, v], strict=False):
                 p = param_map.get(pname)
                 if p is not None:
-                    p.data[:] = chunk
+                    _assign_checked(p, chunk, pname, "layers.{i}.qkv", policy)
                     n_fused += 1
 
         _t_fused = time.monotonic()
 
         for dest, src in plan.tied_weights:
             if dest in param_map and src in param_map:
-                param_map[dest].data[:] = param_map[src].data
+                _assign_checked(
+                    param_map[dest], param_map[src].data, dest, "lm_head.tie", policy
+                )
 
         for param_name, fill_val, _ in plan.synthesized_params:
             p = param_map.get(param_name)
