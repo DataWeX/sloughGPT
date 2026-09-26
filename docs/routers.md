@@ -322,21 +322,22 @@ Routes are split across focused sub-modules:
 
 ### Stream & Utility Routes (`router.py`)
 
-| Method   | Path                                    | Description                    |
-| -------- | --------------------------------------- | ------------------------------ |
-| `POST`   | `/training/stop`                        | Stop the active job.           |
-| `POST`   | `/training/turbo-start`                 | Start turbo training.          |
-| `GET`    | `/training/turbo/status`                | Turbo training status.         |
-| `GET`    | `/training/log`                         | Training log.                  |
-| `GET`    | `/training/stream`                      | SSE training stream.           |
-| `GET`    | `/training/from-sessions/cancel`        | Cancel session-based training. |
-| `GET`    | `/training/from-sessions-stream`        | SSE stream from sessions.      |
-| `GET`    | `/training/checkpoints`                 | List checkpoints.              |
-| `DELETE` | `/training/checkpoints/{name}`          | Delete a checkpoint.           |
-| `POST`   | `/training/checkpoints/{name}/load`     | Load a checkpoint.             |
-| `GET`    | `/training/checkpoints/{name}/download` | Download a checkpoint.         |
-| `GET`    | `/training/checkpoints/{name}/info`     | Checkpoint info.               |
-| `GET`    | `/training/metrics/export`              | Export training metrics.       |
+| Method   | Path                                    | Description                                              |
+| -------- | --------------------------------------- | -------------------------------------------------------- |
+| `POST`   | `/training/stop`                        | Stop the active job.                                     |
+| `POST`   | `/training/turbo-start`                 | Start turbo training.                                    |
+| `GET`    | `/training/turbo/status`                | Turbo training status.                                   |
+| `GET`    | `/training/log`                         | Training log.                                            |
+| `GET`    | `/training/stream`                      | SSE training stream.                                     |
+| `GET`    | `/training/from-sessions/cancel`        | Cancel session-based training.                           |
+| `GET`    | `/training/from-sessions-stream`        | SSE stream from sessions.                                |
+| `GET`    | `/training/checkpoints`                 | List checkpoints.                                        |
+| `DELETE` | `/training/checkpoints/{name}`          | Delete a checkpoint.                                     |
+| `POST`   | `/training/checkpoints/{name}/load`     | Load a checkpoint.                                       |
+| `GET`    | `/training/checkpoints/{name}/download` | Download a checkpoint.                                   |
+| `GET`    | `/training/checkpoints/{name}/info`     | Checkpoint info.                                         |
+| `POST`   | `/training/checkpoints/compare`         | Same prompt against two checkpoints — neither is served. |
+| `GET`    | `/training/metrics/export`              | Export training metrics.                                 |
 
 ### Recovery Routes (`router.py`)
 
