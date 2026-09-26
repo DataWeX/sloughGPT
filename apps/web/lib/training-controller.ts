@@ -533,6 +533,21 @@ export const trainingJobsController = {
     return apiPost(`/training/checkpoints/${encodeURIComponent(name)}/load`)
   },
 
+  /** Same prompt against two checkpoints — neither is served to chat. */
+  async compareCheckpoints(
+    a: string,
+    b: string,
+    prompt: string,
+    maxNewTokens = 128,
+  ): Promise<{ a: { name: string; text: string }; b: { name: string; text: string } }> {
+    return apiPost('/training/checkpoints/compare', {
+      a,
+      b,
+      prompt,
+      max_new_tokens: maxNewTokens,
+    })
+  },
+
   async deleteCheckpoint(name: string): Promise<{ success: boolean }> {
     return apiDelete(`/training/checkpoints/${encodeURIComponent(name)}`)
   },

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
 
 import { ResultsStep } from './ResultsStep'
@@ -195,6 +195,26 @@ describe('ResultsStep', () => {
       expect(cps.handleLoadCheckpoint).toHaveBeenCalledWith('cp-2', expect.any(Function))
     })
     expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('offers Compare when there are at least two checkpoints', () => {
+    renderStep(checkpointsWithData)
+    expect(screen.getByText('Compare')).toBeDefined()
+  })
+
+  it('hides Compare when a single checkpoint has nothing to compare against', () => {
+    renderStep({
+      ...emptyCheckpoints,
+      checkpoints: [{ name: 'solo', soul: 'soul-1', loss: 0.5, tags: [] }],
+    })
+    expect(screen.queryByText('Compare')).toBeNull()
+  })
+
+  it('opens the compare dialog', () => {
+    renderStep(checkpointsWithData)
+    fireEvent.click(screen.getByText('Compare'))
+    expect(screen.getByText('Compare checkpoints')).toBeDefined()
+    expect(screen.getByLabelText('Checkpoint A')).toBeDefined()
   })
 
   it('has Train more button', () => {

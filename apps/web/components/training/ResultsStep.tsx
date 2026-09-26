@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, Button, Badge } from '@slough
 import { trainingJobsController } from '@/lib/training-controller'
 import { formatToastError } from '@/lib/error-utils'
 import { useRouter } from '@/vite/next-compat/navigation'
+import { CheckpointCompareDialog } from '@/components/training/CheckpointCompareDialog'
 import type { UseTrainingCheckpointsReturn } from '@/hooks/useTrainingCheckpoints'
 
 interface ResultsStepProps {
@@ -87,6 +88,7 @@ export function ResultsStep({
 }: ResultsStepProps) {
   const [resuming, setResuming] = useState<string | null>(null)
   const [trying, setTrying] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   const router = useRouter()
   const bestName = useMemo(() => {
     const withLoss = checkpoints.checkpoints.filter((c) => c.loss != null && c.loss > 0)
@@ -285,10 +287,27 @@ export function ResultsStep({
               Test model
             </Button>
           )}
+          {checkpoints.checkpoints.length >= 2 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px]"
+              onClick={() => setCompareOpen(true)}
+            >
+              Compare
+            </Button>
+          )}
           <Button size="sm" variant="ghost" className="h-7 text-[11px]" onClick={goToTrain}>
             Train more
           </Button>
         </div>
+
+        <CheckpointCompareDialog
+          open={compareOpen}
+          onClose={() => setCompareOpen(false)}
+          checkpoints={checkpoints.checkpoints}
+          addToast={addToast}
+        />
       </CardContent>
     </Card>
   )

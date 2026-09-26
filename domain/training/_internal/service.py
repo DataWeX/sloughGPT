@@ -15,7 +15,9 @@ from __future__ import annotations
 
 # Re-export checkpoints
 from .checkpoints import (  # noqa: F401
+    build_checkpoint_provider,
     checkpoint_info,
+    compare_checkpoints,
     delete_checkpoint,
     download_checkpoint_path,
     export_all_metrics,

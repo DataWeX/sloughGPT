@@ -9,6 +9,7 @@ import re
 import struct
 import time
 from pathlib import Path
+from typing import Any
 
 from domain.shared import is_valid_iso, repair_iso
 
@@ -248,8 +249,13 @@ async def delete_checkpoint(name: str) -> list[str]:
     return deleted
 
 
-async def load_checkpoint(name: str) -> dict:
-    from domain.models._internal.provider import SloTransformerProvider, register_provider
+async def build_checkpoint_provider(name: str) -> tuple[Any, dict]:
+    """Load a checkpoint's weights into a provider WITHOUT registering it.
+
+    Registration decides which model the server serves, so inspection and
+    compare paths must never touch it.
+    """
+    from domain.models._internal.provider import SloTransformerProvider
     from domain.training._internal.slonet import import_from_sou
 
     cp = await asyncio.to_thread(find_checkpoint, name)
@@ -279,14 +285,12 @@ async def load_checkpoint(name: str) -> dict:
         itos=itos,
         model_id_str=cp.stem,
     )
-    register_provider("slonet", provider)
-    register_provider("default", provider)
 
     logger.info(
         "Loaded checkpoint %s (vocab=%d, params=%d)", cp.name, len(stoi), soul_net.num_parameters()
     )
 
-    return {
+    info = {
         "name": cp.name,
         "soul": soul_meta.get("soul_name", soul_net.soul_name),
         "loss": md.get("final_train_loss"),
@@ -297,6 +301,44 @@ async def load_checkpoint(name: str) -> dict:
         "params": soul_net.num_parameters(),
         "provider": "slonet",
     }
+    return provider, info
+
+
+async def load_checkpoint(name: str) -> dict:
+    from domain.models._internal.provider import register_provider
+
+    provider, info = await build_checkpoint_provider(name)
+    register_provider("slonet", provider)
+    register_provider("default", provider)
+    return info
+
+
+# Identical sampling for both sides of a comparison — differing params would
+# make the A/B a test of the sampler, not of the checkpoints.
+_COMPARE_SAMPLING = {"temperature": 0.7, "top_p": 0.85, "top_k": 40, "repetition_penalty": 1.15}
+
+
+async def compare_checkpoints(
+    name_a: str, name_b: str, prompt: str, max_new_tokens: int = 128
+) -> dict:
+    """Same prompt against two checkpoints, side by side.
+
+    Neither checkpoint is registered: the served model is untouched and each
+    provider is released as soon as its answer is in.
+    """
+    results: dict[str, dict] = {}
+    for key, name in (("a", name_a), ("b", name_b)):
+        provider, info = await build_checkpoint_provider(name)
+        try:
+            text = await provider.chat(
+                [{"role": "user", "content": prompt}],
+                max_tokens=max_new_tokens,
+                **_COMPARE_SAMPLING,
+            )
+            results[key] = {"name": info["name"], "text": text}
+        finally:
+            del provider
+    return results
 
 
 async def download_checkpoint_path(name: str) -> str | None:

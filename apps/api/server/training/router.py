@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Request
 from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
 from domain.shared import find_repo_root
@@ -639,6 +640,28 @@ async def training_checkpoint_info(name: str):
         return success_response(data=info)
     except Exception as e:
         classify_and_raise(e, source="training.checkpoint_info")
+
+
+class CompareCheckpointsRequest(BaseModel):
+    a: str = Field(..., min_length=1, max_length=255)
+    b: str = Field(..., min_length=1, max_length=255)
+    prompt: str = Field(..., min_length=1, max_length=4000)
+    max_new_tokens: int = Field(default=128, ge=1, le=1024)
+
+
+@router.post("/training/checkpoints/compare")
+async def training_compare_checkpoints(req: CompareCheckpointsRequest):
+    """Same prompt against two checkpoints. Neither is registered as the
+    served model — compare must never change what chat is talking to."""
+    from schemas.common import classify_and_raise, success_response
+
+    from domain.training._internal.service import compare_checkpoints
+
+    try:
+        result = await compare_checkpoints(req.a, req.b, req.prompt, req.max_new_tokens)
+        return success_response(data=result)
+    except Exception as e:
+        classify_and_raise(e, source="training.compare_checkpoints")
 
 
 @router.get("/training/metrics/export")
