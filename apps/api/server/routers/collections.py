@@ -133,16 +133,10 @@ class CollectionsRouter:
             from domain.collections import CollectionPipeline, get_registry
 
             registry = get_registry()
-            pipeline = registry.create_pipeline(
-                name=req.name,
-                source_name=req.source_type,
-                store_name=req.store_type,
-                filter_names=[fc.get("type", "") for fc in req.filter_chain if fc.get("type")],
-            )
-            if pipeline is None:
-                # Name-based lookup failed (type not registered — e.g. "file"
-                # with a path). Build instances from the request config instead;
-                # missing/invalid config maps to the same 400 contract.
+            if req.source_config or req.store_config:
+                # Config provided => authoritative: build instances from it
+                # (e.g. file source with a path). Missing/invalid config maps
+                # to the same 400 contract as unknown types.
                 try:
                     source = _build_source(req.source_type, req.source_config)
                     store = _build_store(req.store_type, req.store_config)
@@ -155,6 +149,22 @@ class CollectionsRouter:
                     )
                 pipeline = CollectionPipeline(source, store, filters, name=req.name)
                 registry.add_pipeline(pipeline)
+            else:
+                # Bare create (the UI sends no config): resolve by name against
+                # registered stock entries (generator/memory/length defaults).
+                pipeline = registry.create_pipeline(
+                    name=req.name,
+                    source_name=req.source_type,
+                    store_name=req.store_type,
+                    filter_names=[fc.get("type", "") for fc in req.filter_chain if fc.get("type")],
+                )
+                if pipeline is None:
+                    raise_error(
+                        f"Failed to create pipeline: source '{req.source_type}' or store "
+                        f"'{req.store_type}' is not registered and no config was provided",
+                        code="E_CREATE_FAILED",
+                        status_code=400,
+                    )
 
             safe_audit_log(
                 "collection.create",

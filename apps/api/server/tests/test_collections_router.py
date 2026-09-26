@@ -151,6 +151,67 @@ class TestCreatePipeline:
         resp = self.client.post("/collections/create", json={"name": "x", "store_type": "memory"})
         assert resp.status_code == 422
 
+    def test_create_with_config_builds_pipeline(self, tmp_path):
+        feed = tmp_path / "feed.txt"
+        feed.write_text("hello world line one\nsecond line here\n")
+        resp = self.client.post(
+            "/collections/create",
+            json={
+                "name": "cfg-pipe",
+                "source_type": "file",
+                "source_config": {"path": str(feed)},
+                "store_type": "memory",
+                "store_config": {"max_size": 5},
+            },
+        )
+        assert resp.status_code == 200
+        data = _d(resp)
+        assert data["name"] == "cfg-pipe"
+        assert data["source_type"] == "file"
+        # Config path is authoritative: pipeline runs and collects.
+        resp = self.client.post("/collections/run?name=cfg-pipe")
+        assert resp.status_code == 200
+        assert _d(resp)["collected"] >= 1
+        resp = self.client.get("/collections")
+        (p,) = _d(resp)["pipelines"]
+        assert p["records_count"] >= 1
+        assert p["last_run"].endswith("Z")
+
+    def test_create_bare_unregistered_type_returns_400(self):
+        resp = self.client.post(
+            "/collections/create",
+            json={"name": "bare-url", "source_type": "url", "store_type": "memory"},
+        )
+        assert resp.status_code == 400
+        assert _d(resp).get("code") == "E_CREATE_FAILED"
+
+    def test_create_with_config_unknown_type_returns_400(self):
+        resp = self.client.post(
+            "/collections/create",
+            json={
+                "name": "bad-cfg",
+                "source_type": "nonexistent",
+                "source_config": {"foo": 1},
+                "store_type": "memory",
+            },
+        )
+        assert resp.status_code == 400
+
+
+class TestRegistryDefaults:
+    def test_fresh_registry_gets_stock_defaults(self):
+        import domain.collections._internal.registry as reg_mod
+
+        reg_mod._default_registry = None
+        try:
+            reg = reg_mod.get_registry()
+            assert "generator" in reg.list_sources()
+            assert "memory" in reg.list_stores()
+            assert "length" in reg.list_filters()
+            assert reg.create_pipeline("dflt", "generator", "memory") is not None
+        finally:
+            reg_mod._default_registry = None
+
 
 class TestRunPipeline:
     def setup_method(self):

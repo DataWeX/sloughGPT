@@ -48,6 +48,10 @@ class CollectionRegistry:
         self._pipelines[name] = pipeline
         return pipeline
 
+    def add_pipeline(self, pipeline: CollectionPipeline) -> None:
+        """Register a pre-built pipeline (config-driven creation path)."""
+        self._pipelines[pipeline.name] = pipeline
+
     def get_pipeline(self, name: str) -> CollectionPipeline | None:
         return self._pipelines.get(name)
 
@@ -88,8 +92,24 @@ class CollectionRegistry:
 _default_registry: CollectionRegistry | None = None
 
 
+def _register_defaults(registry: CollectionRegistry) -> None:
+    """Stock entries so bare name-based creates (the UI sends no config) work.
+
+    Only applied when the singleton is first created — tests that swap in a
+    bare ``CollectionRegistry()`` keep full control of their fixtures.
+    """
+    from .filters import LengthFilter
+    from .sources import GeneratorSource
+    from .stores import MemoryStore
+
+    registry.register_source("generator", GeneratorSource(lambda: iter(()), name="generator"))
+    registry.register_store("memory", MemoryStore())
+    registry.register_filter("length", LengthFilter())
+
+
 def get_registry() -> CollectionRegistry:
     global _default_registry
     if _default_registry is None:
         _default_registry = CollectionRegistry()
+        _register_defaults(_default_registry)
     return _default_registry
