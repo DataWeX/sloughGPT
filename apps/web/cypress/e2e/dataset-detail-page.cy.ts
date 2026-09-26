@@ -13,10 +13,10 @@ describe('Dataset detail page', () => {
       const text = $body.text()
       expect(
         text.includes('Dataset') ||
-        text.includes('Not Found') ||
-        text.includes('not found') ||
-        text.includes('Error')
-      ).to.be.true
+          text.includes('Not Found') ||
+          text.includes('not found') ||
+          text.includes('Error'),
+      ).to.equal(true)
     })
   })
 

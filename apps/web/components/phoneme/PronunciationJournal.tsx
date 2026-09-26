@@ -30,16 +30,18 @@ function saveJournal(journal: JournalEntry[]) {
   if (typeof window === 'undefined') return
   try {
     localStorage.setItem(JOURNAL_KEY, JSON.stringify(journal))
-  } catch {}
+  } catch {
+    /* best-effort */
+  }
 }
 
 export default function PronunciationJournal() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
   const [journal, setJournal] = useState<JournalEntry[]>(() => loadJournal())
 
   const dailyEntries = useMemo(() => {
     const grouped: Record<string, HistoryEntry[]> = {}
-    history.forEach(entry => {
+    history.forEach((entry) => {
       const date = new Date(entry.timestamp).toISOString().split('T')[0]
       if (!grouped[date]) grouped[date] = []
       grouped[date].push(entry)
@@ -53,7 +55,7 @@ export default function PronunciationJournal() {
         averageScore: entries.reduce((sum, e) => sum + e.score, 0) / entries.length,
         bestStreak: entries.reduce((best, e, i) => {
           if (e.score >= 0.8) {
-            const streak = entries.slice(0, i + 1).filter(x => x.score >= 0.8).length
+            const streak = entries.slice(0, i + 1).filter((x) => x.score >= 0.8).length
             return Math.max(best, streak)
           }
           return best
@@ -64,10 +66,10 @@ export default function PronunciationJournal() {
 
   const handleSaveToJournal = useCallback(() => {
     const today = new Date().toISOString().split('T')[0]
-    const todayEntries = history.filter(e => 
-      new Date(e.timestamp).toISOString().split('T')[0] === today
+    const todayEntries = history.filter(
+      (e) => new Date(e.timestamp).toISOString().split('T')[0] === today,
     )
-    
+
     if (todayEntries.length === 0) return
 
     const entry: JournalEntry = {
@@ -77,14 +79,14 @@ export default function PronunciationJournal() {
       averageScore: todayEntries.reduce((sum, e) => sum + e.score, 0) / todayEntries.length,
       bestStreak: todayEntries.reduce((best, e, i) => {
         if (e.score >= 0.8) {
-          const streak = todayEntries.slice(0, i + 1).filter(x => x.score >= 0.8).length
+          const streak = todayEntries.slice(0, i + 1).filter((x) => x.score >= 0.8).length
           return Math.max(best, streak)
         }
         return best
       }, 0),
     }
 
-    const existingIndex = journal.findIndex(j => j.date === today)
+    const existingIndex = journal.findIndex((j) => j.date === today)
     let newJournal
     if (existingIndex >= 0) {
       newJournal = [...journal]
@@ -92,16 +94,19 @@ export default function PronunciationJournal() {
     } else {
       newJournal = [entry, ...journal]
     }
-    
+
     setJournal(newJournal)
     saveJournal(newJournal)
   }, [history, journal])
 
-  const handleDeleteEntry = useCallback((date: string) => {
-    const newJournal = journal.filter(j => j.date !== date)
-    setJournal(newJournal)
-    saveJournal(newJournal)
-  }, [journal])
+  const handleDeleteEntry = useCallback(
+    (date: string) => {
+      const newJournal = journal.filter((j) => j.date !== date)
+      setJournal(newJournal)
+      saveJournal(newJournal)
+    },
+    [journal],
+  )
 
   const handleExport = useCallback(() => {
     const data = JSON.stringify(journal, null, 2)
@@ -148,7 +153,7 @@ export default function PronunciationJournal() {
           </p>
         ) : (
           <div className="space-y-3">
-            {dailyEntries.map(day => (
+            {dailyEntries.map((day) => (
               <div key={day.date} className="p-3 rounded-lg bg-muted/30 space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -161,16 +166,12 @@ export default function PronunciationJournal() {
                     <span className="text-xs text-muted-foreground">
                       {day.totalAttempts} attempts
                     </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteEntry(day.date)}
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => handleDeleteEntry(day.date)}>
                       <IconTrash className="h-3 w-3" />
                     </Button>
                   </div>
                 </div>
-                
+
                 <div className="flex flex-wrap gap-1">
                   {day.entries.slice(0, 10).map((entry, i) => (
                     <Badge key={i} variant="outline" className="text-xs">
@@ -185,8 +186,10 @@ export default function PronunciationJournal() {
                 </div>
 
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span>Words practiced: {new Set(day.entries.map(e => e.target)).size}</span>
-                  <span>Languages: {[...new Set(day.entries.map(e => e.language))].join(', ')}</span>
+                  <span>Words practiced: {new Set(day.entries.map((e) => e.target)).size}</span>
+                  <span>
+                    Languages: {[...new Set(day.entries.map((e) => e.language))].join(', ')}
+                  </span>
                 </div>
               </div>
             ))}

@@ -1,6 +1,7 @@
 'use client'
 
-import { type ReactNode, useState, useRef, useCallback, KeyboardEvent } from 'react'
+import type { KeyboardEvent } from 'react'
+import { type ReactNode, useState, useRef, useCallback } from 'react'
 import { cn } from '../../lib/cn'
 
 /* ── Chip ───────────────────────────────────────────────────── */
@@ -32,7 +33,8 @@ export function Chip({
 }: ChipProps) {
   const Tag = onClick ? 'button' : 'span'
 
-  const baseStyles = 'inline-flex items-center gap-1 rounded-full font-medium transition-all duration-150 select-none'
+  const baseStyles =
+    'inline-flex items-center gap-1 rounded-full font-medium transition-all duration-150 select-none'
 
   const variantStyles = {
     default: selected
@@ -93,8 +95,19 @@ export function Chip({
             disabled && 'pointer-events-none',
           )}
         >
-          <svg className="h-2.5 w-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+          <svg
+            className="h-2.5 w-2.5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2.5}
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       )}
@@ -114,7 +127,15 @@ interface ChipsProps {
   className?: string
 }
 
-export function Chips({ value, onChange, options, max, variant = 'default', size = 'default', className }: ChipsProps) {
+export function Chips({
+  value,
+  onChange,
+  options,
+  max,
+  variant = 'default',
+  size = 'default',
+  className,
+}: ChipsProps) {
   const toggle = (optValue: string) => {
     if (value.includes(optValue)) {
       onChange(value.filter((v) => v !== optValue))
@@ -134,7 +155,9 @@ export function Chips({ value, onChange, options, max, variant = 'default', size
           icon={opt.icon}
           variant={variant}
           size={size}
-          disabled={opt.disabled || (!value.includes(opt.value) && max !== undefined && value.length >= max)}
+          disabled={
+            opt.disabled || (!value.includes(opt.value) && max !== undefined && value.length >= max)
+          }
         />
       ))}
     </div>
@@ -170,7 +193,10 @@ export function TagInput({
     (raw: string) => {
       const trimmed = raw.trim().replace(/,$/, '')
       if (!trimmed) return
-      if (value.includes(trimmed)) { setInput(''); return }
+      if (value.includes(trimmed)) {
+        setInput('')
+        return
+      }
       if (maxTags !== undefined && value.length >= maxTags) return
       onChange([...value, trimmed])
       setInput('')

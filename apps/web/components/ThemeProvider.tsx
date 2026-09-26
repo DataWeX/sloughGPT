@@ -1,6 +1,7 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useLayoutEffect } from 'react'
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
 import { trackEvent } from '@/lib/dev-log'
 import {

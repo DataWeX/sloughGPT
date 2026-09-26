@@ -56,7 +56,11 @@ describe('AlertPanel', () => {
   })
 
   it('renders up to 5 recent alerts', () => {
-    const alerts = Array.from({ length: 7 }, (_, i) => ({ time: `t${i}`, type: 'CPU', value: 90 + i }))
+    const alerts = Array.from({ length: 7 }, (_, i) => ({
+      time: `t${i}`,
+      type: 'CPU',
+      value: 90 + i,
+    }))
     renderPanel({ alerts })
     expect(screen.getByText('Recent alerts')).toBeDefined()
     expect(screen.getByText('CPU 94%')).toBeDefined()

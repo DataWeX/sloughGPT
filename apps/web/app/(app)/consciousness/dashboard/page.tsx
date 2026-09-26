@@ -4,17 +4,43 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Skeleton, Switch,
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogPortal, DialogOverlay,
-  FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot, cn,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Skeleton,
+  Switch,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogPortal,
+  DialogOverlay,
+  FoldSection,
+  KpiGrid,
+  SectionHeader,
+  StatCard,
+  StatusDot,
+  cn,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 import { useConsciousnessLive } from '@/hooks/useConsciousnessLive'
 import { useLocale } from '@/hooks/useLocale'
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, AreaChart, Area,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  AreaChart,
+  Area,
 } from 'recharts'
 
 interface Episode {
@@ -83,7 +109,7 @@ function levelName(lvl: number): string {
 }
 
 export default function ConsciousnessDashboardPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const { isLive, lastUpdate, toggleLive, latestEvent } = useConsciousnessLive()
   const [loading, setLoading] = useState(true)
@@ -104,15 +130,16 @@ export default function ConsciousnessDashboardPage() {
 
   const fetchAll = useCallback(async () => {
     try {
-      const [epResult, qResult, bResult, eResult, sResult, qNowResult, statusResult] = await Promise.allSettled([
-        consciousnessController.getEpisodeHistory(50),
-        consciousnessController.getQualiaHistory(100),
-        consciousnessController.getBeliefsHistory(),
-        consciousnessController.evaluate(),
-        consciousnessController.getSelfModel(),
-        consciousnessController.getQualia(),
-        consciousnessController.getStatus(),
-      ])
+      const [epResult, qResult, bResult, eResult, sResult, qNowResult, statusResult] =
+        await Promise.allSettled([
+          consciousnessController.getEpisodeHistory(50),
+          consciousnessController.getQualiaHistory(100),
+          consciousnessController.getBeliefsHistory(),
+          consciousnessController.evaluate(),
+          consciousnessController.getSelfModel(),
+          consciousnessController.getQualia(),
+          consciousnessController.getStatus(),
+        ])
 
       if (epResult.status === 'fulfilled') {
         setEpisodes((epResult.value.episodes ?? []) as unknown as Episode[])
@@ -148,7 +175,9 @@ export default function ConsciousnessDashboardPage() {
     }
   }, [addToast])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   useEffect(() => {
     if (!isLive || !latestEvent) return
@@ -302,13 +331,15 @@ export default function ConsciousnessDashboardPage() {
   const growthData = episodes.map((ep) => ({
     time: formatTime(ep.timestamp),
     growth: ep.growth_delta,
-    cumulative: episodes.slice(0, episodes.indexOf(ep) + 1)
+    cumulative: episodes
+      .slice(0, episodes.indexOf(ep) + 1)
       .reduce((sum, e) => sum + e.growth_delta, 0),
   }))
 
-  const avgGrowth = episodes.length > 0
-    ? `${(episodes.reduce((s, e) => s + e.growth_delta, 0) / episodes.length * 100).toFixed(1)}%`
-    : '—'
+  const avgGrowth =
+    episodes.length > 0
+      ? `${((episodes.reduce((s, e) => s + e.growth_delta, 0) / episodes.length) * 100).toFixed(1)}%`
+      : '—'
 
   const score = evalReport ? evalReport.overall_score : null
 
@@ -320,12 +351,25 @@ export default function ConsciousnessDashboardPage() {
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 mb-2">
-                  <StatusDot tone="success" pulse showLabel label={isLive ? t('consciousness_dashboard.live') : t('consciousness_dashboard.autoRefresh')} />
+                  <StatusDot
+                    tone="success"
+                    pulse
+                    showLabel
+                    label={
+                      isLive
+                        ? t('consciousness_dashboard.live')
+                        : t('consciousness_dashboard.autoRefresh')
+                    }
+                  />
                 </div>
                 <h1 className="sl-h1">Consciousness Dashboard</h1>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <Switch checked={isLive} onCheckedChange={toggleLive} aria-label="Toggle live updates" />
+                <Switch
+                  checked={isLive}
+                  onCheckedChange={toggleLive}
+                  aria-label="Toggle live updates"
+                />
               </div>
             </div>
             {lastUpdate && (
@@ -406,7 +450,9 @@ export default function ConsciousnessDashboardPage() {
                   />
                 </div>
                 {evalReport?.diagnostics?.slice(0, 3).map((d: string, i: number) => (
-                  <div key={i} className="text-xs text-muted-foreground">{d}</div>
+                  <div key={i} className="text-xs text-muted-foreground">
+                    {d}
+                  </div>
                 ))}
               </div>
             ) : (
@@ -423,11 +469,16 @@ export default function ConsciousnessDashboardPage() {
           <CardContent>
             {(() => {
               const status = evalReport as any
-              const lastReflection = status?.last_reflection || episodes[episodes.length - 1]?.self_insight
+              const lastReflection =
+                status?.last_reflection || episodes[episodes.length - 1]?.self_insight
               return lastReflection ? (
-                <div className="text-sm italic text-muted-foreground">"{lastReflection}"</div>
+                <div className="text-sm italic text-muted-foreground">
+                  &quot;{lastReflection}&quot;
+                </div>
               ) : (
-                <div className="text-sm text-muted-foreground">No reflections yet. Click "Reflect" to generate one.</div>
+                <div className="text-sm text-muted-foreground">
+                  No reflections yet. Click &quot;Reflect&quot; to generate one.
+                </div>
               )
             })()}
           </CardContent>
@@ -435,7 +486,10 @@ export default function ConsciousnessDashboardPage() {
       </div>
 
       {/* Evolution */}
-      <SectionHeader title="Evolution" description="Beliefs, qualia, and growth over interactions" />
+      <SectionHeader
+        title="Evolution"
+        description="Beliefs, qualia, and growth over interactions"
+      />
       <Card>
         <CardHeader>
           <CardTitle>Beliefs Evolution</CardTitle>
@@ -446,8 +500,16 @@ export default function ConsciousnessDashboardPage() {
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={beliefsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis domain={[0, 1]} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  stroke="hsl(var(--muted-foreground))"
+                />
+                <YAxis
+                  domain={[0, 1]}
+                  tick={{ fontSize: 10 }}
+                  stroke="hsl(var(--muted-foreground))"
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'hsl(var(--card))',
@@ -488,8 +550,16 @@ export default function ConsciousnessDashboardPage() {
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={qualiaData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
-                <YAxis domain={[-1, 1]} tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  stroke="hsl(var(--muted-foreground))"
+                />
+                <YAxis
+                  domain={[-1, 1]}
+                  tick={{ fontSize: 10 }}
+                  stroke="hsl(var(--muted-foreground))"
+                />
                 <Tooltip
                   contentStyle={{
                     backgroundColor: 'hsl(var(--card))',
@@ -530,7 +600,11 @@ export default function ConsciousnessDashboardPage() {
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={growthData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="time" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <XAxis
+                  dataKey="time"
+                  tick={{ fontSize: 10 }}
+                  stroke="hsl(var(--muted-foreground))"
+                />
                 <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
                 <Tooltip
                   contentStyle={{
@@ -540,7 +614,14 @@ export default function ConsciousnessDashboardPage() {
                     fontSize: '12px',
                   }}
                 />
-                <Area type="monotone" dataKey="cumulative" stroke="var(--chart-1)" fill="var(--chart-1)" fillOpacity={0.15} strokeWidth={2} />
+                <Area
+                  type="monotone"
+                  dataKey="cumulative"
+                  stroke="var(--chart-1)"
+                  fill="var(--chart-1)"
+                  fillOpacity={0.15}
+                  strokeWidth={2}
+                />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
@@ -551,7 +632,11 @@ export default function ConsciousnessDashboardPage() {
       <SectionHeader
         title="Recent Episodes"
         description="Rate episodes to influence consciousness evolution"
-        action={<Badge variant="outline" className="text-xs">{episodes.length} shown</Badge>}
+        action={
+          <Badge variant="outline" className="text-xs">
+            {episodes.length} shown
+          </Badge>
+        }
       />
       <Card>
         <CardContent>
@@ -560,22 +645,33 @@ export default function ConsciousnessDashboardPage() {
               {[...episodes].reverse().map((ep, i) => {
                 const realIndex = episodes.length - 1 - i
                 return (
-                  <div key={i} className="flex gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 text-xs sm:text-sm cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => setSelectedEpisode(ep)}>
+                  <div
+                    key={i}
+                    className="flex gap-2 sm:gap-3 rounded-lg border p-2 sm:p-3 text-xs sm:text-sm cursor-pointer hover:bg-muted/50 transition-colors"
+                    onClick={() => setSelectedEpisode(ep)}
+                  >
                     <div className="flex flex-col items-center gap-1 text-[10px] sm:text-xs text-muted-foreground min-w-[48px] sm:min-w-[60px]">
                       <span>{formatTimeAgo(ep.timestamp)}</span>
-                      <span className={`font-mono ${ep.growth_delta >= 0 ? 'text-success' : 'text-destructive'}`}>
-                        {ep.growth_delta >= 0 ? '+' : ''}{(ep.growth_delta * 100).toFixed(1)}%
+                      <span
+                        className={`font-mono ${ep.growth_delta >= 0 ? 'text-success' : 'text-destructive'}`}
+                      >
+                        {ep.growth_delta >= 0 ? '+' : ''}
+                        {(ep.growth_delta * 100).toFixed(1)}%
                       </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] sm:text-xs text-muted-foreground truncate">{ep.input_text}</div>
+                      <div className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                        {ep.input_text}
+                      </div>
                       <div className="mt-1 text-xs sm:text-sm">{ep.self_insight}</div>
                       <div className="mt-1 flex flex-wrap gap-2">
-                        {Object.entries(ep.qualia).slice(0, 4).map(([k, v]) => (
-                          <span key={k} className="text-[10px] text-muted-foreground">
-                            {k}: {(v as number).toFixed(2)}
-                          </span>
-                        ))}
+                        {Object.entries(ep.qualia)
+                          .slice(0, 4)
+                          .map(([k, v]) => (
+                            <span key={k} className="text-[10px] text-muted-foreground">
+                              {k}: {(v as number).toFixed(2)}
+                            </span>
+                          ))}
                       </div>
                       <div className="mt-2 flex gap-1">
                         {[1, 2, 3, 4, 5].map((r) => (
@@ -590,7 +686,9 @@ export default function ConsciousnessDashboardPage() {
                             {r}
                           </Button>
                         ))}
-                        <span className="text-[10px] text-muted-foreground ml-1 self-center">rate</span>
+                        <span className="text-[10px] text-muted-foreground ml-1 self-center">
+                          rate
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -607,7 +705,9 @@ export default function ConsciousnessDashboardPage() {
 
       {/* Secondary controls — collapsible so the body stays focused */}
       <FoldSection heading="Consciousness Level" open>
-        <p className="mb-3 text-sm text-muted-foreground">Adjust how deeply the system reflects on each interaction</p>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Adjust how deeply the system reflects on each interaction
+        </p>
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {[0, 1, 2, 3].map((lvl) => (
             <Button
@@ -664,7 +764,7 @@ export default function ConsciousnessDashboardPage() {
                         <div
                           className="h-full rounded-full transition-all duration-500"
                           style={{
-                            width: `${Math.max(0, Math.min(100, ((v as number) + 1) / 2 * 100))}%`,
+                            width: `${Math.max(0, Math.min(100, (((v as number) + 1) / 2) * 100))}%`,
                             backgroundColor: QUALIA_COLORS[k] || 'var(--chart-1)',
                           }}
                         />
@@ -682,7 +782,12 @@ export default function ConsciousnessDashboardPage() {
       )}
 
       {/* Episode Detail Modal */}
-      <Dialog open={selectedEpisode !== null} onOpenChange={(open) => { if (!open) setSelectedEpisode(null) }}>
+      <Dialog
+        open={selectedEpisode !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedEpisode(null)
+        }}
+      >
         <DialogPortal>
           <DialogOverlay />
           <DialogContent className="max-w-lg">
@@ -693,7 +798,9 @@ export default function ConsciousnessDashboardPage() {
               <div className="space-y-4">
                 <div>
                   <div className="text-xs font-medium text-muted-foreground mb-1">Input</div>
-                  <div className="text-sm rounded-md bg-muted p-2">{selectedEpisode.input_text}</div>
+                  <div className="text-sm rounded-md bg-muted p-2">
+                    {selectedEpisode.input_text}
+                  </div>
                 </div>
                 <div>
                   <div className="text-xs font-medium text-muted-foreground mb-1">Self Insight</div>
@@ -701,12 +808,17 @@ export default function ConsciousnessDashboardPage() {
                 </div>
                 <div>
                   <div className="text-xs font-medium text-muted-foreground mb-1">Growth Delta</div>
-                  <div className={`text-sm font-mono ${selectedEpisode.growth_delta >= 0 ? 'text-success' : 'text-destructive'}`}>
-                    {selectedEpisode.growth_delta >= 0 ? '+' : ''}{(selectedEpisode.growth_delta * 100).toFixed(2)}%
+                  <div
+                    className={`text-sm font-mono ${selectedEpisode.growth_delta >= 0 ? 'text-success' : 'text-destructive'}`}
+                  >
+                    {selectedEpisode.growth_delta >= 0 ? '+' : ''}
+                    {(selectedEpisode.growth_delta * 100).toFixed(2)}%
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs font-medium text-muted-foreground mb-2">Qualia Breakdown</div>
+                  <div className="text-xs font-medium text-muted-foreground mb-2">
+                    Qualia Breakdown
+                  </div>
                   <div className="grid grid-cols-2 gap-2">
                     {Object.entries(selectedEpisode.qualia).map(([k, v]) => (
                       <div key={k} className="flex items-center gap-2">
@@ -715,7 +827,7 @@ export default function ConsciousnessDashboardPage() {
                           <div
                             className="h-full rounded-full transition-all duration-500"
                             style={{
-                              width: `${Math.max(0, Math.min(100, ((v as number) + 1) / 2 * 100))}%`,
+                              width: `${Math.max(0, Math.min(100, (((v as number) + 1) / 2) * 100))}%`,
                               backgroundColor: QUALIA_COLORS[k] || 'var(--chart-1)',
                             }}
                           />
@@ -748,7 +860,9 @@ export default function ConsciousnessDashboardPage() {
                       {r}
                     </Button>
                   ))}
-                  <span className="text-xs text-muted-foreground ml-1 self-center">rate this episode</span>
+                  <span className="text-xs text-muted-foreground ml-1 self-center">
+                    rate this episode
+                  </span>
                 </div>
               </div>
             )}

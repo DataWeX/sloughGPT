@@ -6,7 +6,9 @@ describe('Chat page', () => {
   beforeEach(() => {
     cy.mockHealth()
     cy.mockModels()
-    cy.intercept('GET', 'http://localhost:8000/chat/sessions', { statusCode: 200, body: [] }).as('sessions')
+    cy.intercept('GET', 'http://localhost:8000/chat/sessions', { statusCode: 200, body: [] }).as(
+      'sessions',
+    )
     cy.intercept('POST', 'http://localhost:8000/chat/sessions', {
       statusCode: 200,
       body: { id: 'test-session', name: 'New Chat', created_at: new Date().toISOString() },
@@ -42,9 +44,8 @@ describe('Chat page', () => {
     cy.visit('/chat')
     cy.get('textarea[aria-label="Message input"]').type('Test{enter}')
     cy.get('body').then(($body) => {
-      const hasLoading = $body.find('[class*="animate"]').length > 0 ||
-        $body.text().includes('...')
-      expect(hasLoading || true).to.be.true
+      const hasLoading = $body.find('[class*="animate"]').length > 0 || $body.text().includes('...')
+      expect(hasLoading || true).to.equal(true)
     })
   })
 })

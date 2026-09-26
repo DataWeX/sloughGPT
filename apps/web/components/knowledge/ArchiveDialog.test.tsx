@@ -8,7 +8,8 @@ vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
   EmptyCard: ({ message }: any) => <div data-testid="empty-card">{message}</div>,
-  Dialog: ({ open, children, ...props }: any) => open ? <div data-testid="dialog">{children}</div> : null,
+  Dialog: ({ open, children, ...props }: any) =>
+    open ? <div data-testid="dialog">{children}</div> : null,
   DialogContent: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   DialogDescription: ({ children }: any) => <div>{children}</div>,
   DialogFooter: ({ children, ...props }: any) => <div {...props}>{children}</div>,
@@ -54,7 +55,14 @@ afterEach(() => cleanup())
 const defaultProps = {
   open: true,
   onOpenChange: vi.fn(),
-  archiveStats: { records: 5, bytes: 10240, path: 'mem:/archive', task_types: {}, oldest_ts: null, newest_ts: null },
+  archiveStats: {
+    records: 5,
+    bytes: 10240,
+    path: 'mem:/archive',
+    task_types: {},
+    oldest_ts: null,
+    newest_ts: null,
+  },
 }
 
 beforeEach(() => {

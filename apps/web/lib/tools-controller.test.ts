@@ -75,12 +75,7 @@ describe('generateTool', () => {
     }
     vi.mocked(streamSSE).mockReturnValue(mockGen())
 
-    await generateTool(
-      'translate',
-      { text: 'bonjour' },
-      {},
-      { max_tokens: 300, temperature: 0.5 },
-    )
+    await generateTool('translate', { text: 'bonjour' }, {}, { max_tokens: 300, temperature: 0.5 })
 
     expect(streamSSE).toHaveBeenCalledWith('/tools/translate/generate', {
       body: { payload: { text: 'bonjour' }, max_tokens: 300, temperature: 0.5 },
@@ -136,6 +131,7 @@ describe('generateTool', () => {
   })
 
   it('catches generator throw and calls onError', async () => {
+    // eslint-disable-next-line require-yield -- stub generator that throws before yielding
     async function* mockGen() {
       throw new Error('Network failure')
     }

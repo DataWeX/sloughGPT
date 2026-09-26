@@ -71,17 +71,29 @@ export async function shellExecStream(
         completed = true
         errored = true
         const msg = d.error || 'Could not command'
-        callbacks.onError?.(msg) ?? logger.error('shell command error', { exception: msg })
+        if (callbacks.onError) {
+          callbacks.onError(msg)
+        } else {
+          logger.error('shell command error', { exception: msg })
+        }
       } else if (event.status === 'error') {
         errored = true
         const msg = event.message || 'Unknown error'
-        callbacks.onError?.(msg) ?? logger.error('shell event error', { exception: msg })
+        if (callbacks.onError) {
+          callbacks.onError(msg)
+        } else {
+          logger.error('shell event error', { exception: msg })
+        }
       }
     }
   } catch (err) {
     errored = true
     const msg = err instanceof Error ? err.message : 'Connection error'
-    callbacks.onError?.(msg) ?? logger.error('shell connection error', { exception: msg })
+    if (callbacks.onError) {
+      callbacks.onError(msg)
+    } else {
+      logger.error('shell connection error', { exception: msg })
+    }
   }
 
   if (!completed && !errored) {
