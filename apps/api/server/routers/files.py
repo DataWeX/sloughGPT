@@ -37,6 +37,7 @@ class FileItem(BaseModel):
     filename: str
     extension: str
     size_bytes: int
+    chars: int = 0
     uploaded_at: float
     tags: list[str] = []
 
@@ -244,6 +245,7 @@ class FilesRouter:
                     filename=m["filename"],
                     extension=m.get("extension", ""),
                     size_bytes=m.get("size_bytes", 0),
+                    chars=m.get("chars", 0),
                     uploaded_at=m.get("uploaded_at", 0.0),
                     tags=m.get("tags", []),
                 )

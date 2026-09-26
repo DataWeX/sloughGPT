@@ -127,4 +127,43 @@ describe('filesController', () => {
     const result = await filesController.list()
     expect(result.map((f) => f.uploaded_at)).toEqual(['', '', ''])
   })
+
+  it('ingested is true when chars > 0 (post-ingest) even with no tags', async () => {
+    apiGet.mockResolvedValue([
+      {
+        id: '1',
+        filename: 'a.txt',
+        extension: 'txt',
+        uploaded_at: '2026-01-01',
+        chars: 63,
+        tags: [],
+      },
+    ])
+    const result = await filesController.list()
+    expect(result[0].ingested).toBe(true)
+  })
+
+  it('ingested falls back to tags when chars missing', async () => {
+    apiGet.mockResolvedValue([
+      { id: '1', filename: 'a.txt', extension: 'txt', uploaded_at: '2026-01-01', tags: ['doc'] },
+    ])
+    const result = await filesController.list()
+    expect(result[0].ingested).toBe(true)
+  })
+
+  it('ingested is false before ingest (chars 0, no tags)', async () => {
+    apiGet.mockResolvedValue([
+      {
+        id: '1',
+        filename: 'a.txt',
+        extension: 'txt',
+        uploaded_at: '2026-01-01',
+        chars: 0,
+        tags: [],
+      },
+      { id: '2', filename: 'b.txt', extension: 'txt', uploaded_at: '2026-01-01', tags: [] },
+    ])
+    const result = await filesController.list()
+    expect(result.map((f) => f.ingested)).toEqual([false, false])
+  })
 })

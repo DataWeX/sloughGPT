@@ -38,6 +38,7 @@ interface BackendFileItem {
   filename: string
   extension?: string
   size_bytes?: number
+  chars?: number
   uploaded_at: string | number
   tags?: string[]
 }
@@ -69,7 +70,7 @@ function mapFileEntry(f: BackendFileItem): FileEntry {
     size: f.size_bytes ?? 0,
     content_type: f.extension ?? 'unknown',
     uploaded_at: normalizeUploadedAt(f.uploaded_at),
-    ingested: (f.tags?.length ?? 0) > 0,
+    ingested: (f.chars ?? 0) > 0 || (f.tags?.length ?? 0) > 0,
     extension: f.extension,
     tags: f.tags,
   }

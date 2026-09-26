@@ -49,6 +49,29 @@ class TestListFiles:
         resp = client.get("/files")
         assert resp.json()["total"] >= 1
 
+    def test_list_chars_zero_before_ingest(self, client):
+        upload = client.post(
+            "/files/upload", files={"file": ("chars.txt", b"content", "text/plain")}
+        )
+        file_id = upload.json()["id"]
+        resp = client.get("/files")
+        item = next(f for f in resp.json()["files"] if f["id"] == file_id)
+        assert item["chars"] == 0
+
+    @patch("domain.cognition._internal.rag_service.get_rag_service")
+    def test_list_includes_chars_after_ingest(self, mock_get_rag, client):
+        mock_get_rag.return_value.add_document.return_value = ["chunk1"]
+        upload = client.post(
+            "/files/upload",
+            files={"file": ("ingest_chars.txt", b"some content for knowledge base", "text/plain")},
+        )
+        file_id = upload.json()["id"]
+        ingest = client.post(f"/files/{file_id}/ingest")
+        assert ingest.status_code == 200
+        resp = client.get("/files")
+        item = next(f for f in resp.json()["files"] if f["id"] == file_id)
+        assert item["chars"] > 0
+
 
 class TestUploadFile:
     """POST /files/upload"""
