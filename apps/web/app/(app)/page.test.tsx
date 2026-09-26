@@ -58,6 +58,10 @@ vi.mock('@sloughgpt/strui', () => {
     ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
 
+    StatusDot: ({ tone, className }: any) => (
+      <span data-testid="status-dot" data-tone={tone} className={className} />
+    ),
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
     ActionCard: ({ title, children }: any) => (

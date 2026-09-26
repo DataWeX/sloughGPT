@@ -34,9 +34,39 @@ import UsersAdminPage from './page'
 describe('UsersAdminPage', () => {
   const mockUsers = {
     data: [
-      { id: 'u1', username: 'alice', email: 'alice@test.com', role: 'admin', status: 'active', display_name: 'Alice', tenant_id: 't1', created_at: '2024-01-01T00:00:00Z', last_login_at: '2024-06-01T00:00:00Z' },
-      { id: 'u2', username: 'bob', email: 'bob@test.com', role: 'user', status: 'active', display_name: 'Bob', tenant_id: 't1', created_at: '2024-02-01T00:00:00Z', last_login_at: '2024-05-01T00:00:00Z' },
-      { id: 'u3', username: 'carol', email: 'carol@test.com', role: 'viewer', status: 'inactive', display_name: 'Carol', tenant_id: 't1', created_at: '2024-03-01T00:00:00Z', last_login_at: '' },
+      {
+        id: 'u1',
+        username: 'alice',
+        email: 'alice@test.com',
+        role: 'admin',
+        status: 'active',
+        display_name: 'Alice',
+        tenant_id: 't1',
+        created_at: '2024-01-01T00:00:00Z',
+        last_login_at: '2024-06-01T00:00:00Z',
+      },
+      {
+        id: 'u2',
+        username: 'bob',
+        email: 'bob@test.com',
+        role: 'user',
+        status: 'active',
+        display_name: 'Bob',
+        tenant_id: 't1',
+        created_at: '2024-02-01T00:00:00Z',
+        last_login_at: '2024-05-01T00:00:00Z',
+      },
+      {
+        id: 'u3',
+        username: 'carol',
+        email: 'carol@test.com',
+        role: 'viewer',
+        status: 'inactive',
+        display_name: 'Carol',
+        tenant_id: 't1',
+        created_at: '2024-03-01T00:00:00Z',
+        last_login_at: '',
+      },
     ],
     meta: { total: 3 },
   }
@@ -70,31 +100,28 @@ describe('UsersAdminPage', () => {
 
   it('displays KPI stats', async () => {
     render(<UsersAdminPage />)
-    await screen.findByText('Users')
-    expect(screen.getAllByText('Total Users').length).toBeGreaterThanOrEqual(1)
+    await screen.findByText('Total Users')
     expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Admins').length).toBeGreaterThanOrEqual(1)
   })
 
   it('displays user list', async () => {
     render(<UsersAdminPage />)
-    await screen.findByText('Users')
-    expect(screen.getAllByText('alice').length).toBeGreaterThanOrEqual(1)
+    await screen.findByText('alice')
     expect(screen.getAllByText('bob').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('carol').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows user roles and statuses', async () => {
     render(<UsersAdminPage />)
-    await screen.findByText('Users')
-    expect(screen.getAllByText('admin').length).toBeGreaterThanOrEqual(1)
+    await screen.findByText('admin')
     expect(screen.getAllByText('active').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('inactive').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows create user form', async () => {
     render(<UsersAdminPage />)
-    await screen.findByText('Users')
+    await screen.findAllByText('Create User')
     expect(screen.getAllByText('Create User').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByPlaceholderText('Username')).toBeTruthy()
     expect(screen.getByPlaceholderText('Email')).toBeTruthy()
@@ -102,20 +129,20 @@ describe('UsersAdminPage', () => {
 
   it('shows edit button for users', async () => {
     render(<UsersAdminPage />)
-    await screen.findByText('Users')
+    await screen.findAllByText('Edit')
     expect(screen.getAllByText('Edit').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows refresh button', async () => {
     render(<UsersAdminPage />)
-    await screen.findByText('Users')
+    await screen.findByText('Refresh')
     expect(screen.getAllByText('Refresh').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows empty state when no users', async () => {
     mockApiGet.mockResolvedValue({ data: [], meta: { total: 0 } })
     render(<UsersAdminPage />)
-    await screen.findByText('Users')
+    await screen.findByText(/no users/i)
     expect(screen.getAllByText(/no users/i).length).toBeGreaterThanOrEqual(1)
   })
 })
