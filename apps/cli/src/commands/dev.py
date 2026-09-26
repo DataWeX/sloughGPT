@@ -216,6 +216,25 @@ def _extract_error_lines(lines: deque, max_lines: int = 40) -> list[str]:
 # and reports a bogus "error".
 API_STARTUP_TIMEOUT = 180
 
+# Log markers that report startup progress (``slo.startup`` logger output).
+_PHASE_PREFIXES = ("Phase", "Stage", "Startup complete")
+
+
+def _latest_startup_phase(lines) -> str:
+    """Most recent ``startup Phase``/``startup Stage`` marker, status-line sized.
+
+    A server that has not bound its socket has no HTTP endpoint to poll, so
+    its stdout is the only progress signal while the CLI waits. Returns an
+    empty string when the log carries no marker yet.
+    """
+    for line in reversed(lines):
+        if "startup " not in line:
+            continue
+        marker = line.split("startup ", 1)[1].strip()
+        if marker.startswith(_PHASE_PREFIXES):
+            return marker[:72]
+    return ""
+
 
 def _check_api_ready(port: int) -> bool:
     """Check if API health endpoint responds."""
@@ -482,6 +501,11 @@ def cmd_dev(args):
                     status["web"] = "error"
                 _update_startup_status()
                 break
+            if not status["api_ready"]:
+                phase = _latest_startup_phase(api_lines)
+                if phase and phase != status["api"]:
+                    status["api"] = f"waiting... {phase}"
+                    _update_startup_status()
             time.sleep(0.5)
 
     poll_thread = threading.Thread(target=_poll_services, daemon=True)
@@ -699,6 +723,10 @@ def _cmd_api_only(args):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
+            phase = _latest_startup_phase(api_lines)
+            if phase and phase != api_status:
+                api_status = f"waiting... {phase}"
+                _update_status()
             time.sleep(1)
         if not api_ready:
             api_status = "error"
@@ -884,6 +912,10 @@ def _cmd_api_and_mobile(args):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
+            phase = _latest_startup_phase(api_lines)
+            if phase and phase != api_status:
+                api_status = f"waiting... {phase}"
+                _update_status()
             time.sleep(1)
         if not api_ready:
             api_status = "error"
@@ -1208,6 +1240,10 @@ def _cmd_api_and_web(args):
             if _check_api_ready(api_port):
                 api_ready = True
                 break
+            phase = _latest_startup_phase(api_lines)
+            if phase and phase != api_status:
+                api_status = f"waiting... {phase}"
+                _update_status()
             time.sleep(1)
         if not api_ready:
             api_status = "error"
