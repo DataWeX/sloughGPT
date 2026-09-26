@@ -46,8 +46,8 @@ export function useTestDialog(): UseTestDialogReturn {
     streamingRef.current = true
 
     let accumulated = ''
-    let model = ''
-    let tokensGenerated = 0
+    const model = ''
+    const tokensGenerated = 0
 
     try {
       await generateController.generateStream(
@@ -106,9 +106,17 @@ export function useTestDialog(): UseTestDialogReturn {
   }, [])
 
   return {
-    testDialogOpen, testPrompt, testResult, testLoading,
-    testStreaming, testStreamingText, responseFormat,
-    setTestDialogOpen, setTestPrompt, setResponseFormat,
-    handleTestModel, clearTest,
+    testDialogOpen,
+    testPrompt,
+    testResult,
+    testLoading,
+    testStreaming,
+    testStreamingText,
+    responseFormat,
+    setTestDialogOpen,
+    setTestPrompt,
+    setResponseFormat,
+    handleTestModel,
+    clearTest,
   }
 }

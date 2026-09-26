@@ -48,7 +48,12 @@ interface DropdownMenuRootProps {
   children: ReactNode
 }
 
-function DropdownMenu({ open: controlledOpen, defaultOpen = false, onOpenChange, children }: DropdownMenuRootProps) {
+function DropdownMenu({
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
+  children,
+}: DropdownMenuRootProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -118,7 +123,17 @@ function DropdownMenu({ open: controlledOpen, defaultOpen = false, onOpenChange,
 
   return (
     <DropdownMenuContext.Provider
-      value={{ open, onOpenChange: setOpen, triggerRef, registerItem, unregisterItem, focusFirst, focusLast, focusNext, focusPrev }}
+      value={{
+        open,
+        onOpenChange: setOpen,
+        triggerRef,
+        registerItem,
+        unregisterItem,
+        focusFirst,
+        focusLast,
+        focusNext,
+        focusPrev,
+      }}
     >
       {children}
     </DropdownMenuContext.Provider>
@@ -188,7 +203,8 @@ interface DropdownMenuContentProps extends HTMLAttributes<HTMLDivElement> {
 
 const DropdownMenuContent = forwardRef<HTMLDivElement, DropdownMenuContentProps>(
   ({ className, align = 'end', sideOffset = 6, children, ...props }, ref) => {
-    const { open, onOpenChange, triggerRef, focusFirst, focusNext, focusPrev } = useDropdownMenuContext()
+    const { open, onOpenChange, triggerRef, focusFirst, focusNext, focusPrev } =
+      useDropdownMenuContext()
     const contentRef = useRef<HTMLDivElement>(null)
     const previousActiveElement = useRef<HTMLElement | null>(null)
 
@@ -219,7 +235,9 @@ const DropdownMenuContent = forwardRef<HTMLDivElement, DropdownMenuContentProps>
           focusFirst()
         } else if (e.key === 'End') {
           e.preventDefault()
-          const items = contentRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]')
+          const items = contentRef.current?.querySelectorAll<HTMLElement>(
+            '[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]',
+          )
           items?.[items.length - 1]?.focus()
         }
       }
@@ -361,8 +379,18 @@ const DropdownMenuCheckboxItem = forwardRef<HTMLDivElement, DropdownMenuCheckbox
         {children}
         {checked && (
           <span className="ml-auto">
-            <svg className="h-4 w-4 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            <svg
+              className="h-4 w-4 text-primary"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
             </svg>
           </span>
         )}
@@ -387,9 +415,15 @@ interface DropdownMenuRadioGroupProps {
   children: ReactNode
 }
 
-function DropdownMenuRadioGroup({ value = '', onValueChange, children }: DropdownMenuRadioGroupProps) {
+function DropdownMenuRadioGroup({
+  value = '',
+  onValueChange,
+  children,
+}: DropdownMenuRadioGroupProps) {
   return (
-    <DropdownMenuRadioGroupContext.Provider value={{ value, onValueChange: onValueChange ?? (() => {}) }}>
+    <DropdownMenuRadioGroupContext.Provider
+      value={{ value, onValueChange: onValueChange ?? (() => {}) }}
+    >
       <div role="group">{children}</div>
     </DropdownMenuRadioGroupContext.Provider>
   )
@@ -459,7 +493,15 @@ interface DropdownMenuLabelProps extends HTMLAttributes<HTMLDivElement> {
 
 const DropdownMenuLabel = forwardRef<HTMLDivElement, DropdownMenuLabelProps>(
   ({ className, inset, ...props }, ref) => (
-    <div ref={ref} className={cn('px-2.5 py-2 text-xs font-semibold text-muted-foreground', inset && 'pl-8', className)} {...props} />
+    <div
+      ref={ref}
+      className={cn(
+        'px-2.5 py-2 text-xs font-semibold text-muted-foreground',
+        inset && 'pl-8',
+        className,
+      )}
+      {...props}
+    />
   ),
 )
 DropdownMenuLabel.displayName = 'DropdownMenuLabel'
@@ -467,7 +509,9 @@ DropdownMenuLabel.displayName = 'DropdownMenuLabel'
 /* ── Separator ──────────────────────────────────────────────────── */
 
 const DropdownMenuSeparator = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => <div ref={ref} role="separator" className={cn('my-1 h-px bg-border', className)} {...props} />,
+  ({ className, ...props }, ref) => (
+    <div ref={ref} role="separator" className={cn('my-1 h-px bg-border', className)} {...props} />
+  ),
 )
 DropdownMenuSeparator.displayName = 'DropdownMenuSeparator'
 
@@ -487,7 +531,12 @@ interface DropdownMenuSubProps {
   children: ReactNode
 }
 
-function DropdownMenuSub({ open: controlledOpen, defaultOpen = false, onOpenChange, children }: DropdownMenuSubProps) {
+function DropdownMenuSub({
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
+  children,
+}: DropdownMenuSubProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -500,7 +549,11 @@ function DropdownMenuSub({ open: controlledOpen, defaultOpen = false, onOpenChan
     [isControlled, onOpenChange],
   )
 
-  return <DropdownMenuSubContext.Provider value={{ open, onOpenChange: setOpen }}>{children}</DropdownMenuSubContext.Provider>
+  return (
+    <DropdownMenuSubContext.Provider value={{ open, onOpenChange: setOpen }}>
+      {children}
+    </DropdownMenuSubContext.Provider>
+  )
 }
 
 interface DropdownMenuSubTriggerProps extends HTMLAttributes<HTMLDivElement> {

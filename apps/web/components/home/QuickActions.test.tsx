@@ -27,23 +27,38 @@ vi.mock('@/lib/error-utils', () => ({
 }))
 
 vi.mock('@sloughgpt/strui', () => {
-  const passthrough = ({ children, className, ...rest }: any) => <div className={className} {...rest}>{children}</div>
+  const passthrough = ({ children, className, ...rest }: any) => (
+    <div className={className} {...rest}>
+      {children}
+    </div>
+  )
   return {
     Card: passthrough,
     CardContent: passthrough,
-    Button: ({ children, className, ...rest }: any) => <button className={className} {...rest}>{children}</button>,
+    Button: ({ children, className, ...rest }: any) => (
+      <button className={className} {...rest}>
+        {children}
+      </button>
+    ),
     cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -70,7 +85,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 import { QuickActions } from './QuickActions'
@@ -99,7 +114,9 @@ describe('QuickActions', () => {
   })
 
   it('renders nothing when model not loaded', () => {
-    const { container } = render(<QuickActionsWrapper modelStatus={{ loaded: false, model: null }} />)
+    const { container } = render(
+      <QuickActionsWrapper modelStatus={{ loaded: false, model: null }} />,
+    )
     expect(container.innerHTML).toBe('')
   })
 
@@ -110,10 +127,12 @@ describe('QuickActions', () => {
   })
 
   it('calls chatController.stream when Test model clicked', async () => {
-    mockStream.mockImplementation(async function* () { yield 'Hello back!' })
+    mockStream.mockImplementation(async function* () {
+      yield 'Hello back!'
+    })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
-    const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
+    const testBtn = Array.from(buttons).find((b) => b.textContent?.includes('Test model'))
     fireEvent.click(testBtn!)
     await waitFor(() => {
       expect(mockStream).toHaveBeenCalledWith('Hello!', { waitForModel: true })
@@ -121,10 +140,12 @@ describe('QuickActions', () => {
   })
 
   it('shows test response after model responds', async () => {
-    mockStream.mockImplementation(async function* () { yield 'Hello back!' })
+    mockStream.mockImplementation(async function* () {
+      yield 'Hello back!'
+    })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
-    const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
+    const testBtn = Array.from(buttons).find((b) => b.textContent?.includes('Test model'))
     fireEvent.click(testBtn!)
     await waitFor(() => {
       expect(container.textContent).toContain('Hello back!')
@@ -132,10 +153,13 @@ describe('QuickActions', () => {
   })
 
   it('shows error when model call fails', async () => {
-    mockStream.mockImplementation(async function* () { throw new Error('Connection refused') })
+    // eslint-disable-next-line require-yield -- stub generator that throws before yielding
+    mockStream.mockImplementation(async function* () {
+      throw new Error('Connection refused')
+    })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
-    const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
+    const testBtn = Array.from(buttons).find((b) => b.textContent?.includes('Test model'))
     fireEvent.click(testBtn!)
     await waitFor(() => {
       expect(container.textContent).toContain('Connection refused')
@@ -145,12 +169,14 @@ describe('QuickActions', () => {
   it('disables button while testing', async () => {
     let resolveTest: any
     mockStream.mockImplementation(async function* () {
-      await new Promise(r => { resolveTest = r })
+      await new Promise((r) => {
+        resolveTest = r
+      })
       yield 'done'
     })
     const { container } = render(<QuickActionsWrapper />)
     const buttons = container.querySelectorAll('button')
-    const testBtn = Array.from(buttons).find(b => b.textContent?.includes('Test model'))
+    const testBtn = Array.from(buttons).find((b) => b.textContent?.includes('Test model'))
     fireEvent.click(testBtn!)
     await waitFor(() => {
       expect(container.textContent).toContain('Testing...')
@@ -161,7 +187,9 @@ describe('QuickActions', () => {
   it('saves knowledge note on form submit', async () => {
     mockAdd.mockResolvedValue(undefined)
     const { container } = render(<QuickActionsWrapper />)
-    const input = container.querySelector('input[aria-label="Quick add knowledge"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Quick add knowledge"]',
+    ) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'I like TypeScript' } })
     fireEvent.submit(input.closest('form')!)
     await waitFor(() => {
@@ -172,7 +200,9 @@ describe('QuickActions', () => {
   it('increments knowledgeCount after saving', async () => {
     mockAdd.mockResolvedValue(undefined)
     const { container } = render(<QuickActionsWrapper />)
-    const input = container.querySelector('input[aria-label="Quick add knowledge"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Quick add knowledge"]',
+    ) as HTMLInputElement
     fireEvent.change(input, { target: { value: 'fact' } })
     fireEvent.submit(input.closest('form')!)
     await waitFor(() => {
@@ -182,7 +212,9 @@ describe('QuickActions', () => {
 
   it('does not save empty note', async () => {
     const { container } = render(<QuickActionsWrapper />)
-    const input = container.querySelector('input[aria-label="Quick add knowledge"]') as HTMLInputElement
+    const input = container.querySelector(
+      'input[aria-label="Quick add knowledge"]',
+    ) as HTMLInputElement
     fireEvent.submit(input.closest('form')!)
     expect(mockAdd).not.toHaveBeenCalled()
   })

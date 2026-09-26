@@ -26,26 +26,25 @@ export function ConsciousnessOnboardingWrapper({ children }: { children: React.R
   const handleComplete = () => {
     try {
       localStorage.setItem(ONBOARDING_KEY, 'true')
-    } catch {}
+    } catch {
+      /* best-effort */
+    }
     setShow(false)
   }
 
   const handleDismiss = () => {
     try {
       localStorage.setItem(ONBOARDING_KEY, 'true')
-    } catch {}
+    } catch {
+      /* best-effort */
+    }
     setShow(false)
   }
 
   return (
     <>
       {children}
-      {show && (
-        <ConsciousnessOnboarding
-          onComplete={handleComplete}
-          onDismiss={handleDismiss}
-        />
-      )}
+      {show && <ConsciousnessOnboarding onComplete={handleComplete} onDismiss={handleDismiss} />}
     </>
   )
 }
