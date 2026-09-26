@@ -101,9 +101,10 @@ def test_no_new_legacy_domains_patch_targets() -> None:
 # any new ``file|module`` pair is a contract violation.
 _INTERNAL_IMPORT = re.compile(r"^\s*(?:from|import)\s+(domain\.[\w.]*_internal(?:\.[\w.]*)?)", re.M)
 
-# Pinned baseline (49 entries after rewiring tokenizer / token_tree /
-# cloud_training onto domain.training engines and settings.py onto the
-# domain.settings / domain.training / domain.inference facades).
+# Pinned baseline (44 entries after rewiring tokenizer / token_tree /
+# cloud_training onto domain.training engines, settings.py onto the
+# domain.settings / domain.training / domain.inference facades, and
+# consciousness.py onto the domain.cognition facade).
 # Re-generate when reducing:
 #   python -c "import re,pathlib; ..."
 _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
@@ -114,11 +115,6 @@ _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
         "agents.py|domain.api._internal.sse_envelope",
         "benchmark.py|domain.feedback._internal.response_tracker",
         "benchmark.py|domain.infrastructure._internal.errors",
-        "consciousness.py|domain.cognition._internal.consciousness.evaluation",
-        "consciousness.py|domain.cognition._internal.consciousness.personality",
-        "consciousness.py|domain.cognition._internal.consciousness.qualia",
-        "consciousness.py|domain.cognition._internal.consciousness.self_model",
-        "consciousness.py|domain.cognition._internal.consciousness.training",
         "dashboard.py|domain.infrastructure._internal.event_buffer",
         "dashboard.py|domain.settings._internal.persistent",
         "dashboard.py|domain.training._internal.outcome_tracker",
