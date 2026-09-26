@@ -670,3 +670,85 @@ class TestCachedReplayChunking:
                 if tok:
                     tokens.append(tok)
         assert "".join(tokens) == cached
+
+
+class TestListSessionsAuthOwnership:
+    """Regression: with auth enabled, sessions saved without user_id were
+    filtered out of every list/search/current response (user_id == jwt sub
+    never matched), so chat history was always empty for logged-in users."""
+
+    @pytest.fixture
+    def auth_client(self, app):
+        from infrastructure.auth import require_auth_if_enabled
+
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {"sub": "user-A"}
+        try:
+            yield TestClient(app, raise_server_exceptions=False)
+        finally:
+            app.dependency_overrides.clear()
+
+    @patch.object(_inference_router, "_build_session_metadata_index")
+    def test_keeps_own_and_legacy_hides_others(self, mock_build, auth_client):
+        mock_build.return_value = [
+            {"id": "mine", "user_id": "user-A"},
+            {"id": "theirs", "user_id": "user-B"},
+            {"id": "legacy"},
+        ]
+        resp = auth_client.get("/chat/sessions")
+        assert resp.status_code == 200
+        ids = [s["id"] for s in resp.json()["data"]]
+        assert ids == ["mine", "legacy"]
+
+    @patch.object(_inference_router, "_build_session_metadata_index")
+    def test_archived_filter_still_applies(self, mock_build, auth_client):
+        mock_build.return_value = [
+            {"id": "mine-arch", "user_id": "user-A", "archived": True},
+            {"id": "mine", "user_id": "user-A", "archived": False},
+        ]
+        resp = auth_client.get("/chat/sessions?archived=false")
+        ids = [s["id"] for s in resp.json()["data"]]
+        assert ids == ["mine"]
+
+
+class TestSessionMetadataIndex:
+    """user_id must reach the index (list filters need it) and files >4KB
+    must not vanish (partial-read fallback promised by the docstring)."""
+
+    def test_includes_user_id_and_large_files(self, tmp_path, monkeypatch):
+        import json
+
+        sdir = tmp_path / "chat_sessions"
+        sdir.mkdir()
+        stamp = {"created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-02T00:00:00Z"}
+        (sdir / "small.json").write_text(
+            json.dumps(
+                {
+                    "id": "small",
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "user_id": "user-A",
+                    **stamp,
+                }
+            )
+        )
+        # >4KB with user_id at the END of the dict — worst case for prefix parse
+        (sdir / "big.json").write_text(
+            json.dumps(
+                {
+                    "id": "big",
+                    "messages": [{"role": "user", "content": "x" * 6000}],
+                    **stamp,
+                    "user_id": "user-A",
+                }
+            )
+        )
+        (sdir / "legacy.json").write_text(json.dumps({"id": "legacy", "messages": [], **stamp}))
+
+        monkeypatch.setattr(_inference_router, "_SESSIONS_DIR", sdir)
+        monkeypatch.setattr(_inference_router, "_session_metadata_cache", None)
+        idx = _inference_router._build_session_metadata_index()
+        by_id = {s["id"]: s for s in idx}
+
+        assert by_id["small"]["user_id"] == "user-A"
+        assert "big" in by_id, "files >4KB were dropped from the history index"
+        assert by_id["big"]["user_id"] == "user-A"
+        assert by_id["legacy"]["user_id"] == ""

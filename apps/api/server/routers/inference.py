@@ -1106,8 +1106,14 @@ class InferenceRouter:
                         raw = fh.read(4096)
                     if not raw.strip():
                         continue
-                    # Try to parse the partial JSON for header fields
-                    data = json.loads(raw)
+                    # Try to parse the partial JSON for header fields; fall
+                    # back to a full read when the prefix was truncated
+                    # (>4KB files must not vanish from history).
+                    try:
+                        data = json.loads(raw)
+                    except json.JSONDecodeError:
+                        with open(f) as fh:
+                            data = json.load(fh)
                     sid = data.get("id") or data.get("session_id") or f.stem
                     name = data.get("name", "") or ""
                     messages = data.get("messages", [])
@@ -1124,6 +1130,7 @@ class InferenceRouter:
                             "created_at": data.get("created_at", ""),
                             "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
                             "message_count": msg_count,
+                            "user_id": data.get("user_id", ""),
                         }
                     )
                 except (json.JSONDecodeError, OSError):
@@ -1981,6 +1988,10 @@ class InferenceRouter:
             )
 
             session_data = self._get_session(session_id)
+            # Ownership: stamp the authenticated user so list/search filters
+            # (user_id == jwt sub) can find this session when auth is enabled.
+            # Legacy sessions without user_id stay visible to every authed user.
+            session_data.setdefault("user_id", (auth_user or {}).get("sub") or "default")
             session_data.setdefault("messages", []).append(
                 {
                     "role": "user",
@@ -3024,6 +3035,7 @@ class InferenceRouter:
         await asyncio.to_thread(audio_path.write_bytes, content)
 
         session_data = self._get_session(session_id)
+        session_data.setdefault("user_id", (auth_user or {}).get("sub") or "default")
         session_data.setdefault("messages", []).append(
             {
                 "role": "user",
@@ -3080,11 +3092,14 @@ class InferenceRouter:
             sessions = await asyncio.to_thread(self._build_session_metadata_index)
             if archived is not None:
                 sessions = [s for s in sessions if s.get("archived", False) == archived]
-            # Filter by user_id if auth is enabled
+            # Filter by user_id if auth is enabled. Sessions without user_id
+            # (legacy / created before ownership stamping) stay visible.
             if auth_user:
                 user_id = auth_user.get("sub", "")
                 if user_id:
-                    sessions = [s for s in sessions if s.get("user_id", "") == user_id]
+                    sessions = [
+                        s for s in sessions if not s.get("user_id") or s.get("user_id") == user_id
+                    ]
             return success_response(data=sessions)
 
         except Exception as e:
@@ -3105,7 +3120,9 @@ class InferenceRouter:
             if auth_user:
                 user_id = auth_user.get("sub", "")
                 if user_id:
-                    results = [s for s in results if s.get("user_id", "") == user_id]
+                    results = [
+                        s for s in results if not s.get("user_id") or s.get("user_id") == user_id
+                    ]
             return success_response(data=results, meta={"query": q, "total": len(results)})
 
         except Exception as e:
@@ -3118,7 +3135,9 @@ class InferenceRouter:
             if auth_user:
                 user_id = auth_user.get("sub", "")
                 if user_id:
-                    sessions = [s for s in sessions if s.get("user_id", "") == user_id]
+                    sessions = [
+                        s for s in sessions if not s.get("user_id") or s.get("user_id") == user_id
+                    ]
             if not sessions:
                 return success_response(data=None)
             return success_response(data=sessions[0])
