@@ -100,3 +100,22 @@ class TestEnrichWithKnowledge:
         result = enrich_with_knowledge("test", auto_search=False)
         assert result["source"] == "memory"
         assert "short" not in result["facts"][0]
+
+
+class TestImportPaths:
+    def test_knowledge_facade_exports_enrich(self):
+        from domain.knowledge import enrich_with_knowledge as facade_export
+
+        assert callable(facade_export)
+
+    def test_inference_enrich_helper_resolves_facade_import(self, monkeypatch):
+        """Regression: `from domain.learner import enrich_with_knowledge` never
+        existed — every chat message logged 'Knowledge enrichment failed' and
+        returned source='error' since 2026-05-21. The helper must import the
+        canonical facade export."""
+        from apps.api.server.routers import inference
+        from domain import knowledge as knowledge_facade
+
+        sentinel = {"facts": ["fact"], "source": "mock", "topics": []}
+        monkeypatch.setattr(knowledge_facade, "enrich_with_knowledge", lambda *a, **k: sentinel)
+        assert inference._enrich_knowledge("hello", auto_search=False) == sentinel

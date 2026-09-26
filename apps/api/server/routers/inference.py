@@ -519,7 +519,7 @@ def _apply_meta_weights(
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
     """Search learned knowledge + optionally live web search. Returns {facts, source, topics}."""
     try:
-        from domain.learner import enrich_with_knowledge
+        from domain.knowledge import enrich_with_knowledge
 
         return enrich_with_knowledge(user_msg, auto_search=auto_search, max_facts=max_facts)
     except Exception as e:

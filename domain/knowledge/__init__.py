@@ -7,6 +7,7 @@ their meaning here (data filtering, search indexes, dedup, gap detection).
 """
 
 from domain.knowledge._internal.data_filter import DataFilter, get_data_filter
+from domain.knowledge._internal.knowledge_augmenter import enrich_with_knowledge
 from domain.knowledge._internal.knowledge_ops import (
     AutoCategorizer,
     BulkProcessor,
@@ -44,4 +45,5 @@ __all__ = [
     "DuplicateDetector",
     "FileIndex",
     "KnowledgeGapDetector",
+    "enrich_with_knowledge",
 ]
