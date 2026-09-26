@@ -29,6 +29,7 @@ import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { chatDB } from '@/lib/db'
 import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
+import { VmSessionPanel } from '@/components/shell/VmSessionPanel'
 
 const DEFAULT_MAX_STEPS = 5000
 const MAX_STEPS_LIMIT = 1_000_000
@@ -552,6 +553,9 @@ export default function VMPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trainingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Last value known to be on the server — mount-time effects must not
+  // re-PUT what loadState() just read (that's a 4-key write storm).
+  const persistedKV = useRef<Record<string, unknown>>({})
   useRefreshShortcut(() => {
     window.location.reload()
   })
@@ -668,43 +672,66 @@ export default function VMPage() {
       if (!sourceLoaded) {
         const saved = await chatDB.getKV<string>('vm-source')
         if (saved) setSource(saved)
+        // Nothing stored yet: treat the in-memory default as already
+        // persisted so mount doesn't echo it straight back out.
+        persistedKV.current['vm-source'] = saved ?? source
       }
       const [role, maxSteps, trainConfigData] = await Promise.all([
         loadRole(),
         loadMaxSteps(),
         loadTrainConfig(),
       ])
+      // Store the CLAMPED config in state so the mount effect compares the
+      // same object identity it persisted (raw vs clamped never match).
+      const clampedConfig = clampTrainConfig(trainConfigData)
       setRole(role)
       setMaxSteps(maxSteps)
-      setTrainConfig(trainConfigData)
+      setTrainConfig(clampedConfig)
+      persistedKV.current['vm-role'] = role
+      persistedKV.current['vm-max-steps'] = maxSteps
+      persistedKV.current['vm-train-config'] = clampedConfig
       setHydrated(true)
     }
 
     loadState()
   }, [])
 
+  // Skip writes that would just echo the value read during hydration.
+  // Structural compare: clampTrainConfig() returns a fresh object every call.
+  const persist = useCallback((key: string, value: unknown) => {
+    const prev = persistedKV.current[key]
+    const same =
+      prev === value ||
+      (typeof value === 'object' &&
+        value !== null &&
+        JSON.stringify(prev) === JSON.stringify(value))
+    if (same) return
+    persistedKV.current[key] = value
+    chatDB.setKV(key, value).catch(() => {})
+  }, [])
+
   // Save source to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    chatDB.setKV('vm-source', source).catch(() => {})
-  }, [source, hydrated])
+    persist('vm-source', source)
+  }, [source, hydrated, persist])
 
   // Save role and steps to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    chatDB.setKV('vm-role', role).catch(() => {})
-  }, [role, hydrated])
+    persist('vm-role', role)
+  }, [role, hydrated, persist])
 
   useEffect(() => {
     if (!hydrated) return
-    chatDB.setKV('vm-max-steps', maxSteps).catch(() => {})
-  }, [maxSteps, hydrated])
+    persist('vm-max-steps', maxSteps)
+  }, [maxSteps, hydrated, persist])
 
   // Save the training launch config to chatDB on change
   useEffect(() => {
     if (!hydrated) return
-    chatDB.setKV('vm-train-config', clampTrainConfig(trainConfig)).catch(() => {})
-  }, [trainConfig, hydrated])
+    persist('vm-train-config', clampTrainConfig(trainConfig))
+  }, [trainConfig, hydrated, persist])
 
   const handleRun = useCallback(
     async (step?: boolean, srcOverride?: string): Promise<VMRunResult | null> => {
@@ -1463,19 +1490,40 @@ export default function VMPage() {
         </TabsContent>
 
         <TabsContent value="browser">
-          <div className="space-y-4">
-            <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    Real Linux running in your browser via v86. Boot into a Buildroot image with
-                    BusyBox, Python, and the Dait shell.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-            <V86TerminalPanel className="h-[calc(100vh-12rem)]" />
-          </div>
+          <Tabs defaultValue="own">
+            <TabsList>
+              <TabsTrigger value="own">Our VM — Interactive</TabsTrigger>
+              <TabsTrigger value="linux">Linux (v86)</TabsTrigger>
+            </TabsList>
+            <TabsContent value="own">
+              <div className="space-y-4">
+                <Card>
+                  <CardContent className="p-3">
+                    <p className="text-xs text-muted-foreground">
+                      The project's own x86 VM (X86VirtualSystem) running the shell REPL kernel.
+                      Type commands — help, echo, about, clear, halt.
+                    </p>
+                  </CardContent>
+                </Card>
+                <VmSessionPanel className="h-[calc(100vh-16rem)]" />
+              </div>
+            </TabsContent>
+            <TabsContent value="linux">
+              <div className="space-y-4">
+                <Card>
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs text-muted-foreground">
+                        Real Linux running in your browser via v86. Boot into a Buildroot image with
+                        BusyBox, Python, and the Dait shell.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+                <V86TerminalPanel className="h-[calc(100vh-16rem)]" />
+              </div>
+            </TabsContent>
+          </Tabs>
         </TabsContent>
       </Tabs>
     </PageContainer>
