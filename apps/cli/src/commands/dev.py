@@ -2,6 +2,7 @@
 Dev commands - Development server, health checks, and API status.
 """
 
+import json
 import os
 import re
 import signal
@@ -391,6 +392,29 @@ def _web_dev_env(env: dict, web_port: int) -> dict:
     return {**_node_env(env), "PORT": str(web_port)}
 
 
+def _package_dev_script(web_root: Path) -> str:
+    """The web app's package.json ``dev`` script ("" when missing/unreadable)."""
+    try:
+        data = json.loads((web_root / "package.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    scripts = data.get("scripts")
+    return str(scripts.get("dev", "")) if isinstance(scripts, dict) else ""
+
+
+def _web_dev_cmd(web_port: int) -> list[str]:
+    """npm argv for the web dev server.
+
+    Next.js reads PORT from env and rejects unknown argv flags; Vite ignores
+    PORT and needs ``--port``/``--host`` argv. Unreadable package.json falls
+    back to the Next-compatible form (safe for both, minus --host).
+    """
+    dev_script = _package_dev_script(_repo_root() / "apps" / "web")
+    if "vite" in dev_script:
+        return ["npm", "run", "dev", "--", "--port", str(web_port), "--host", "0.0.0.0"]
+    return ["npm", "run", "dev"]
+
+
 def cmd_dev(args):
     """Start API and Web servers with a live TUI dashboard."""
     # ── Pre-flight: check if model needs download ─────────
@@ -431,6 +455,7 @@ def cmd_dev(args):
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
     web_env = _web_dev_env(env, web_port)
+    npm_cmd = _web_dev_cmd(web_port)
 
     python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
@@ -476,9 +501,7 @@ def cmd_dev(args):
                 "hooks",
                 "-e",
                 "ts,tsx,js,jsx",
-                "npm",
-                "run",
-                "dev",
+                *npm_cmd,
             ],
             cwd=str(web_cwd),
             env=web_env,
@@ -488,7 +511,7 @@ def cmd_dev(args):
         )
     else:
         web_proc = subprocess.Popen(
-            ["npm", "run", "dev"],
+            npm_cmd,
             cwd=str(web_cwd),
             env=web_env,
             stdout=subprocess.DEVNULL,
@@ -1230,7 +1253,7 @@ def _cmd_api_and_web(args):
             )
         else:
             web_proc = subprocess.Popen(
-                ["npm", "run", "dev"],
+                _web_dev_cmd(web_port),
                 cwd=str(web_root.resolve()),
                 env=web_env,
                 stdout=subprocess.DEVNULL,
@@ -1354,7 +1377,7 @@ def _cmd_api_and_web(args):
                     else str(web_root.resolve())
                 )
                 web_proc = subprocess.Popen(
-                    ["node", "server.js"] if server_js.is_file() else ["npm", "run", "dev"],
+                    ["node", "server.js"] if server_js.is_file() else _web_dev_cmd(web_port),
                     cwd=web_cwd,
                     env=web_env,
                     stdout=subprocess.DEVNULL,

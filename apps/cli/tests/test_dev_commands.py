@@ -1,5 +1,6 @@
 """Tests for apps/cli/src/commands/dev.py — dev server and health commands."""
 
+import json
 import os
 import sys
 from unittest.mock import MagicMock, patch
@@ -464,14 +465,29 @@ class TestWebDevEnv:
 class TestCmdDevWebPort:
     """`slo dev --web-port N` must make the dev server listen on N.
 
-    The web subprocess previously inherited the parent env (no PORT), so
-    Next.js always listened on 3000 while the readiness check polled the
-    requested port — custom ports never came up.
+    Next.js reads PORT from env; Vite ignores PORT and needs --port argv.
+    The web subprocess previously got neither, so Next always listened on
+    its default 3000 while the readiness check polled the requested port.
     """
 
     @pytest.mark.parametrize("watch_web", [False, True])
-    def test_web_subprocess_receives_web_port(self, mock_log, monkeypatch, watch_web):
+    @pytest.mark.parametrize(
+        ("dev_script", "expected_tail"),
+        [
+            ("next dev", ["npm", "run", "dev"]),
+            ("vite", ["npm", "run", "dev", "--", "--port", "3999", "--host", "0.0.0.0"]),
+        ],
+    )
+    def test_web_subprocess_receives_web_port(
+        self, mock_log, monkeypatch, tmp_path, watch_web, dev_script, expected_tail
+    ):
         import commands.dev as mod
+
+        web_root = tmp_path / "apps" / "web"
+        web_root.mkdir(parents=True)
+        (web_root / "package.json").write_text(
+            json.dumps({"scripts": {"dev": dev_script}}), encoding="utf-8"
+        )
 
         popen_calls = []
 
@@ -490,6 +506,7 @@ class TestCmdDevWebPort:
 
         with (
             patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch("commands.dev._repo_root", return_value=tmp_path),
             patch("commands.dev._read_stream"),
             patch("commands.dev._preflight_model_check"),
             patch("commands.dev._check_api_ready", return_value=False),
@@ -512,4 +529,55 @@ class TestCmdDevWebPort:
 
         web_calls = [c for c in popen_calls if c[0] and c[0][0] in ("npm", "npx")]
         assert web_calls, f"web subprocess never spawned: {popen_calls}"
-        assert web_calls[0][1]["env"]["PORT"] == "3999"
+        cmd, kwargs = web_calls[0]
+        assert cmd[-len(expected_tail) :] == expected_tail
+        assert kwargs["env"]["PORT"] == "3999"
+
+
+class TestWebDevCmd:
+    """package.json's dev script decides how the port reaches the server."""
+
+    @pytest.fixture
+    def web_root(self, tmp_path, monkeypatch):
+        root = tmp_path / "apps" / "web"
+        root.mkdir(parents=True)
+        monkeypatch.setattr("commands.dev._repo_root", lambda: tmp_path)
+        return root
+
+    def test_next_script_uses_plain_npm_run_dev(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text('{"scripts": {"dev": "next dev"}}')
+        assert _web_dev_cmd(3999) == ["npm", "run", "dev"]
+
+    def test_vite_script_appends_port_and_host(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text('{"scripts": {"dev": "vite"}}')
+        assert _web_dev_cmd(3999) == [
+            "npm",
+            "run",
+            "dev",
+            "--",
+            "--port",
+            "3999",
+            "--host",
+            "0.0.0.0",
+        ]
+
+    def test_missing_package_json_defaults_to_next_form(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
+
+    def test_malformed_package_json_defaults_to_next_form(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text("{not json")
+        assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
+
+    def test_package_json_without_scripts_defaults(self, web_root):
+        from commands.dev import _web_dev_cmd
+
+        (web_root / "package.json").write_text('{"name": "web"}')
+        assert _web_dev_cmd(3000) == ["npm", "run", "dev"]
