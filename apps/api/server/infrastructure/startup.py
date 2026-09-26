@@ -414,7 +414,7 @@ class StartupOrchestrator:
         loader.on(Stage.READY, "model_ready", _wait_for_model, timeout=130.0)
         loader.on(Stage.READY, "training_restore", _restore_training, timeout=15.0)
 
-        await loader.run_stage(Stage.READY)
+        # Stage READY is executed by ``_post_bind`` below — see the note there.
 
         # ── Stage 3: BACKGROUND ──────────────────────────────────
         # Non-critical services start after model is ready
@@ -468,17 +468,22 @@ class StartupOrchestrator:
         loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
         loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
 
-        # Schedule BACKGROUND stage to run after uvicorn binds the server socket.
-        # Firing it before yield starves the event loop, preventing
-        # loop.create_server() from completing (GIL starvation from heavy sync
-        # imports in background hooks).  A short delay lets the event loop
-        # finish the socket bind before BACKGROUND work begins.
-        loop = asyncio.get_running_loop()
-        loop.call_later(2.0, lambda: asyncio.ensure_future(loader.run_stage(Stage.BACKGROUND)))
+        # Stage 2 (READY) and Stage 3 (BACKGROUND) run *after* the socket binds.
+        # uvicorn refuses connections until the lifespan yields, and READY blocks
+        # on the model (120s poll / 130s hook timeout). Executing CRITICAL inline
+        # and yielding first lets GET /health answer as soon as routers are up;
+        # the model finishes loading behind a live server instead of holding the
+        # port closed. BACKGROUND is chained onto READY rather than fired on a
+        # timer — the socket is already bound, so its heavy sync imports can no
+        # longer starve ``loop.create_server()``.
+        async def _post_bind():
+            await loader.run_stage(Stage.READY)
+            STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
+            await self._phase_ready()
+            await loader.run_stage(Stage.BACKGROUND)
 
-        # Server is now READY (stage 2 complete)
-        STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
-        await self._phase_ready()
+        loop = asyncio.get_running_loop()
+        loop.call_soon(lambda: asyncio.ensure_future(_post_bind()))
 
     async def _phase2_model_load(self):
         """Start model load as a background task (non-blocking).
