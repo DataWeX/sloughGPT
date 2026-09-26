@@ -475,6 +475,181 @@ start:
 """
 
 
+def _shell() -> str:
+    return f"""; shell — interactive console REPL for the browser VM session.
+; Line-buffered stdin read loop: prompts, echoes typing, handles
+; backspace, then dispatches one of: help, echo <text>, about,
+; clear, halt.  Spins on empty keyboard buffer (SYS_READ returns 0)
+; until the session pump feeds keys via transfer_key().
+[BITS 32]
+[ORG 0x100000]
+    jmp start
+prompt: db 10, "sloughvm> ", 0
+msg_nl: db 10, 0
+msg_help: db "commands: help, echo <text>, about, clear, halt", 10, 0
+msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
+msg_unknown: db "unknown command - type help", 10, 0
+msg_clear: db 27, "[2J", 27, "[H", 0
+msg_bs: db 8, 32, 8, 0
+cmd_help: db "help", 0
+cmd_echo: db "echo", 0
+cmd_about: db "about", 0
+cmd_clear: db "clear", 0
+cmd_halt: db "halt", 0
+chbuf: times 4 db 0
+llen: times 1 db 0
+line: times 80 db 0
+start:
+repl:
+    xor eax, eax
+    mov [llen], al
+    mov esi, prompt
+    call print_str
+read_loop:
+    mov eax, {_NR_READ}
+    mov ebx, 0
+    mov ecx, chbuf
+    mov edx, 1
+    int 0x80
+    test eax, eax
+    jle read_loop
+    mov al, [chbuf]
+    cmp al, 10
+    je line_done
+    cmp al, 13
+    je line_done
+    cmp al, 8
+    je do_bs
+    cmp al, 127
+    je do_bs
+    xor ecx, ecx
+    mov cl, [llen]
+    cmp cl, 78
+    jae read_loop
+    mov edi, line
+    add edi, ecx
+    mov [edi], al
+    inc ecx
+    mov [llen], cl
+    mov eax, {_NR_WRITE}
+    mov ebx, 1
+    mov ecx, chbuf
+    mov edx, 1
+    int 0x80
+    jmp read_loop
+do_bs:
+    xor ecx, ecx
+    mov cl, [llen]
+    test cl, cl
+    jz read_loop
+    dec ecx
+    mov [llen], cl
+    mov edi, line
+    add edi, ecx
+    xor eax, eax
+    mov [edi], al
+    mov esi, msg_bs
+    call print_str
+    jmp read_loop
+line_done:
+    xor ecx, ecx
+    mov cl, [llen]
+    xor eax, eax
+    mov edi, line
+    add edi, ecx
+    mov [edi], al
+    mov esi, msg_nl
+    call print_str
+    test cl, cl
+    jz repl
+    mov esi, line
+    mov edi, cmd_help
+    call strcmp
+    jz do_help
+    mov esi, line
+    mov edi, cmd_about
+    call strcmp
+    jz do_about
+    mov esi, line
+    mov edi, cmd_clear
+    call strcmp
+    jz do_clear
+    mov esi, line
+    mov edi, cmd_halt
+    call strcmp
+    jz do_halt
+    mov esi, line
+    mov edi, cmd_echo
+    call prefix_match
+    test eax, eax
+    jnz do_echo
+    mov esi, msg_unknown
+    call print_str
+    jmp repl
+do_help:
+    mov esi, msg_help
+    call print_str
+    jmp repl
+do_about:
+    mov esi, msg_about
+    call print_str
+    jmp repl
+do_clear:
+    mov esi, msg_clear
+    call print_str
+    jmp repl
+do_halt:
+{_EXIT}
+do_echo:
+    mov esi, line
+    add esi, 4
+echo_skip:
+    mov al, [esi]
+    cmp al, ' '
+    jne echo_pr
+    inc esi
+    jmp echo_skip
+echo_pr:
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+strcmp:
+    mov al, [esi]
+    mov bl, [edi]
+    cmp al, bl
+    jne sc_ne
+    test al, al
+    jz sc_eq
+    inc esi
+    inc edi
+    jmp strcmp
+sc_ne:
+    mov eax, 1
+    ret
+sc_eq:
+    xor eax, eax
+    ret
+prefix_match:
+    mov al, [edi]
+    test al, al
+    jz pm_yes
+    mov bl, [esi]
+    cmp al, bl
+    jne pm_no
+    inc esi
+    inc edi
+    jmp prefix_match
+pm_yes:
+    mov eax, 1
+    ret
+pm_no:
+    xor eax, eax
+    ret
+{_PRINT_STR}
+"""
+
+
 # Each name maps to a builder that splices in the real syscall numbers.
 BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "hello": {"description": "Print 'Hello, VM!' to stdout", "program": _hello},
@@ -494,6 +669,10 @@ BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "train-status": {
         "description": "Poll a training job via SYS_TRAIN_STATUS (requires ADMIN role)",
         "program": _train_status,
+    },
+    "shell": {
+        "description": "Interactive console REPL (line-buffered commands over stdin)",
+        "program": _shell,
     },
 }
 

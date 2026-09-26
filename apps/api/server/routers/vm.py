@@ -3,14 +3,19 @@ VM Router — x86 assembly execution endpoints.
 
 Provides a sandboxed x86 virtual machine that runs assembly programs
 and returns execution results (registers, memory, output, trace).
+Also exposes interactive console sessions (shell REPL) with SSE output.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
 import time
+import uuid
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field, model_validator
 from schemas.common import endpoint, raise_error, safe_audit_log, success_response
@@ -426,3 +431,273 @@ async def vm_info() -> dict:
             ],
         }
     )
+
+
+# ── Interactive console sessions ──────────────────────────────────────────────
+
+_SESSION_TTL_SECONDS = 1800.0
+_MAX_SESSIONS = 8
+
+
+class VmConsoleSession:
+    """A live ``X86VirtualSystem`` running the ``shell`` REPL builtin.
+
+    Output is captured from the SYS_WRITE syscall into a history buffer
+    and mirrored to an asyncio queue consumed by the SSE stream endpoint.
+    A pump task runs the CPU in small chunks, calling ``transfer_key()``
+    between steps so buffered keyboard input is delivered.
+    """
+
+    def __init__(self, session_id: str, role: str) -> None:
+        from vm_builtins import get_builtin
+
+        from domain.shell._internal.vm import X86VirtualSystem
+        from domain.shell._internal.vm_permissions import Role
+
+        self.id = session_id
+        self.role = role
+        self.created_at = time.time()
+        self.last_active = time.monotonic()
+        self.closed = False
+        self.completed = False
+        self.history: list[str] = []
+        self.queue: asyncio.Queue[dict] = asyncio.Queue()
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._task: asyncio.Task | None = None
+
+        vs = X86VirtualSystem(memory_size=0x100000)
+        pid = vs.spawn("web_user", get_builtin("shell"))
+        if pid is None:
+            raise RuntimeError("shell process spawn failed")
+        role_map = {"user": Role.USER, "admin": Role.ADMIN, "kernel": Role.KERNEL}
+        vs._syscall._rbac.assign(pid, role_map.get(role, Role.USER))
+        vs.scheduler.start(vs.cpu)
+        current = vs.scheduler.current
+        if current is None:
+            raise RuntimeError("no scheduled process for shell session")
+        current.restore_to_cpu(vs.cpu)
+
+        original_write = vs._syscall._sys_write
+
+        def _captured_write(fd: int, buf_addr: int, count: int) -> int:
+            if fd in (1, 2):
+                data = bytes(vs.cpu._read8(buf_addr + i) for i in range(count))
+                text = data.decode("ascii", errors="replace")
+                # Append to history BEFORE emitting: the stream endpoint
+                # uses history length as a high-water mark to skip queue
+                # items it already included in the backlog (no duplicates).
+                self.history.append(text)
+                self._emit({"type": "output", "text": text, "seq": len(self.history) - 1})
+                return count
+            return original_write(fd, buf_addr, count)
+
+        vs._syscall._sys_write = _captured_write
+        self.vs = vs
+
+    def _emit(self, item: dict) -> None:
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        try:
+            loop.call_soon_threadsafe(self.queue.put_nowait, item)
+        except RuntimeError:
+            pass  # loop shut down between check and dispatch
+
+    def _run_chunk(self, max_steps: int = 2000) -> bool:
+        """Run up to ``max_steps`` instructions. True once the CPU halted."""
+        cpu = self.vs.cpu
+        for _ in range(max_steps):
+            if self.closed:
+                return True
+            cpu.transfer_key()
+            if not cpu.step():
+                return True
+        return False
+
+    async def _pump(self) -> None:
+        try:
+            while not self.closed:
+                halted = await asyncio.to_thread(self._run_chunk)
+                if halted:
+                    self.completed = True
+                    exit_code = self.vs.cpu._regs[0] & 0xFFFFFFFF
+                    self._emit({"type": "status", "status": "complete", "exit_code": exit_code})
+                    return
+                await asyncio.sleep(0.01)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.debug("VM session %s stopped: %s", self.id, exc)
+            self.completed = True
+            self._emit({"type": "status", "status": "error", "error": str(exc)})
+
+    def send_keys(self, text: str) -> int:
+        """Queue user input. Returns characters actually delivered."""
+        self.last_active = time.monotonic()
+        delivered = 0
+        for ch in text:
+            if ch in ("\b", "\x7f"):
+                self.vs.cpu.push_scancode(0x0E)
+                delivered += 1
+                continue
+            before = len(self.vs.cpu._kbd_buffer)
+            self.vs.cpu.push_key(ch)
+            if len(self.vs.cpu._kbd_buffer) > before:
+                delivered += 1
+        return delivered
+
+    async def close(self) -> None:
+        if self.closed:
+            return
+        self.closed = True
+        task = self._task
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        try:
+            self.queue.put_nowait({"type": "status", "status": "closed"})
+        except Exception:
+            pass
+
+
+_SESSIONS: dict[str, VmConsoleSession] = {}
+
+
+def _evict_stale_sessions() -> None:
+    now = time.monotonic()
+    stale = [sid for sid, s in _SESSIONS.items() if now - s.last_active > _SESSION_TTL_SECONDS]
+    for sid in stale:
+        session = _SESSIONS.pop(sid, None)
+        if session is not None:
+            session.closed = True
+            if session._task is not None:
+                session._task.cancel()
+
+
+def _get_session(session_id: str) -> VmConsoleSession:
+    _evict_stale_sessions()
+    session = _SESSIONS.get(session_id)
+    if session is None:
+        raise_error("VM session not found", "E_NOT_FOUND", status_code=404)
+    return session
+
+
+def _console_sse(phase: str, status: str, data: dict | None = None, message: str = "") -> str:
+    payload = {
+        "stream": "vm_console",
+        "phase": phase,
+        "status": status,
+        "data": data or {},
+        "meta": {},
+        "message": message,
+    }
+    return "data: " + json.dumps(payload) + "\n\n"
+
+
+class VMConsoleCreateRequest(BaseModel):
+    role: str = Field("user", max_length=20, description="Permission role for the shell")
+
+
+class VMConsoleInputRequest(BaseModel):
+    text: str = Field(..., max_length=2000, description="Characters to deliver to stdin")
+
+
+@router.post("/session")
+@endpoint("vm.session_create")
+async def create_console_session(
+    req: VMConsoleCreateRequest, auth_user: dict = Depends(require_auth_if_enabled)
+) -> dict:
+    """Start an interactive console session running the shell REPL."""
+    _evict_stale_sessions()
+    if len(_SESSIONS) >= _MAX_SESSIONS:
+        raise_error("Too many VM sessions — close one first", "E_RATE_LIMITED", status_code=429)
+    session_id = uuid.uuid4().hex[:16]
+    try:
+        session = VmConsoleSession(session_id, req.role)
+    except Exception as exc:
+        raise_error(f"Failed to start VM session: {exc}", "E_BAD_REQUEST", status_code=500)
+    session._loop = asyncio.get_running_loop()
+    session._task = asyncio.create_task(session._pump())
+    _SESSIONS[session_id] = session
+    safe_audit_log("vm.session_create", resource=session_id, detail=f"role={req.role}")
+    return success_response(data={"session_id": session_id, "role": req.role, "status": "running"})
+
+
+@router.post("/session/{session_id}/input")
+@endpoint("vm.session_input")
+async def console_session_input(
+    session_id: str,
+    req: VMConsoleInputRequest,
+    auth_user: dict = Depends(require_auth_if_enabled),
+) -> dict:
+    """Deliver characters to the session keyboard buffer."""
+    session = _get_session(session_id)
+    delivered = session.send_keys(req.text)
+    return success_response(data={"accepted": delivered})
+
+
+@router.get("/session/{session_id}/stream")
+@endpoint("vm.session_stream")
+async def console_session_stream(
+    session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+) -> StreamingResponse:
+    """SSE stream: backlog, then live output; ends on halt/error/close."""
+    session = _get_session(session_id)
+    session.last_active = time.monotonic()
+    # Copy first, then derive the high-water mark from the copy: output
+    # appended before the copy is in the backlog; anything arriving after
+    # carries a seq greater than the copy's last index.
+    history_snapshot = list(session.history)
+    backlog = "".join(history_snapshot)
+    backlog_upto = len(history_snapshot) - 1
+
+    async def _events():
+        yield _console_sse("start", "continue", {"session_id": session_id})
+        if backlog:
+            yield _console_sse("output", "continue", {"text": backlog, "backlog": True})
+        while True:
+            if session.queue.empty() and (session.completed or session.closed):
+                yield _console_sse("status", "complete", {"status": "closed"})
+                return
+            try:
+                item = await asyncio.wait_for(session.queue.get(), timeout=15.0)
+            except TimeoutError:
+                if session.closed or session.completed:
+                    yield _console_sse("status", "complete", {"status": "closed"})
+                    return
+                yield _console_sse("heartbeat", "continue")
+                continue
+            if item.get("type") == "output":
+                if int(item.get("seq", -1)) <= backlog_upto:
+                    continue  # already delivered via backlog
+                yield _console_sse("output", "continue", {"text": item.get("text", "")})
+            elif item.get("type") == "status":
+                data = {k: v for k, v in item.items() if k != "type"}
+                yield _console_sse("status", str(item.get("status", "complete")), data)
+                return
+
+    return StreamingResponse(
+        _events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.delete("/session/{session_id}")
+@endpoint("vm.session_delete")
+async def delete_console_session(
+    session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+) -> dict:
+    """Terminate a console session and release its VM."""
+    session = _get_session(session_id)
+    await session.close()
+    _SESSIONS.pop(session_id, None)
+    safe_audit_log("vm.session_close", resource=session_id, detail="delete")
+    return success_response(data={"closed": True})

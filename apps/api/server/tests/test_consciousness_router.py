@@ -815,7 +815,10 @@ class TestConsciousnessStream:
                 body.decode(),
             )
 
-        return asyncio.get_event_loop().run_until_complete(run())
+        # asyncio.run() creates its own loop — robust against prior tests
+        # leaving the MainThread default loop unset (get_event_loop raises
+        # RuntimeError then). Sync test, so no running-loop conflict.
+        return asyncio.run(run())
 
     def test_stream_returns_sse_headers(self):
         router_obj = self._make_router()
