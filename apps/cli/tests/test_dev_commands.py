@@ -423,3 +423,93 @@ class TestLatestStartupPhase:
         long_marker = "Phase 4: loading model " + "x" * 200
         out = _latest_startup_phase([f"INF startup {long_marker}"])
         assert len(out) <= 72
+
+
+class TestWebDevEnv:
+    """The web dev server must receive the requested port via PORT."""
+
+    def test_sets_port_and_keeps_other_env(self, monkeypatch, tmp_path):
+        from commands.dev import _web_dev_env
+
+        monkeypatch.setenv("NVM_DIR", str(tmp_path))  # no versions/node → PATH untouched
+        out = _web_dev_env({"PATH": "/base/bin", "FORCE_COLOR": "1"}, 3999)
+        assert out["PORT"] == "3999"
+        assert out["FORCE_COLOR"] == "1"
+        assert out["PATH"] == "/base/bin"
+
+    def test_prepends_nvm_node_to_path(self, monkeypatch, tmp_path):
+        from commands.dev import _web_dev_env
+
+        nvm = tmp_path / "nvm"
+        bin_dir = nvm / "versions" / "node" / "v22.0.0" / "bin"
+        bin_dir.mkdir(parents=True)
+        monkeypatch.setenv("NVM_DIR", str(nvm))
+
+        out = _web_dev_env({"PATH": "/base/bin"}, 3000)
+        assert out["PATH"].split(os.pathsep) == [str(bin_dir), "/base/bin"]
+
+    def test_node_env_does_not_mutate_input(self, monkeypatch, tmp_path):
+        from commands.dev import _node_env
+
+        nvm = tmp_path / "nvm"
+        (nvm / "versions" / "node" / "v22.0.0" / "bin").mkdir(parents=True)
+        monkeypatch.setenv("NVM_DIR", str(nvm))
+
+        base = {"PATH": "/base/bin"}
+        out = _node_env(base)
+        assert base == {"PATH": "/base/bin"}
+        assert out["PATH"].split(os.pathsep)[0].startswith(str(nvm))
+
+
+class TestCmdDevWebPort:
+    """`slo dev --web-port N` must make the dev server listen on N.
+
+    The web subprocess previously inherited the parent env (no PORT), so
+    Next.js always listened on 3000 while the readiness check polled the
+    requested port — custom ports never came up.
+    """
+
+    @pytest.mark.parametrize("watch_web", [False, True])
+    def test_web_subprocess_receives_web_port(self, mock_log, monkeypatch, watch_web):
+        import commands.dev as mod
+
+        popen_calls = []
+
+        def fake_popen(cmd, **kwargs):
+            popen_calls.append((list(cmd), kwargs))
+            proc = MagicMock()
+            proc.poll.return_value = None
+            return proc
+
+        class FakeDashboard:
+            def __init__(self, *a, **k):
+                pass
+
+            def serve(self, stop_check=None):
+                return None
+
+        with (
+            patch("commands.dev.subprocess.Popen", side_effect=fake_popen),
+            patch("commands.dev._read_stream"),
+            patch("commands.dev._preflight_model_check"),
+            patch("commands.dev._check_api_ready", return_value=False),
+            patch("commands.dev._check_port", return_value=False),
+            patch("commands.dev._kill_port"),
+            patch("commands.dev._cleanup"),
+            patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
+            patch("commands.dev.signal"),
+            patch("commands.dev.time"),
+            patch("core.tui.DevDashboard", FakeDashboard),
+        ):
+            args = MagicMock()
+            args.model = None
+            args.port = 8000
+            args.web_port = 3999
+            args.watch_web = watch_web
+            args.host = "localhost"
+
+            mod.cmd_dev(args)
+
+        web_calls = [c for c in popen_calls if c[0] and c[0][0] in ("npm", "npx")]
+        assert web_calls, f"web subprocess never spawned: {popen_calls}"
+        assert web_calls[0][1]["env"]["PORT"] == "3999"

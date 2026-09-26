@@ -373,6 +373,24 @@ def _repo_root() -> Path:
     return find_repo_root(str(Path(__file__).resolve()))
 
 
+def _node_env(env: dict) -> dict:
+    """Return a copy of env with nvm-installed node/npx/npm prepended to PATH."""
+    env = dict(env)
+    nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
+    nvm_bin = os.path.join(nvm_dir, "versions", "node")
+    if os.path.isdir(nvm_bin):
+        for entry in os.listdir(nvm_bin):
+            candidate = os.path.join(nvm_bin, entry, "bin")
+            if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
+                env["PATH"] = candidate + os.pathsep + env.get("PATH", "")
+    return env
+
+
+def _web_dev_env(env: dict, web_port: int) -> dict:
+    """Env for the web dev server — Next.js reads PORT for its listen port."""
+    return {**_node_env(env), "PORT": str(web_port)}
+
+
 def cmd_dev(args):
     """Start API and Web servers with a live TUI dashboard."""
     # ── Pre-flight: check if model needs download ─────────
@@ -408,10 +426,11 @@ def cmd_dev(args):
     web_lines: deque = deque(maxlen=_LOG_BUF)
 
     # ── Start API ────────────────────────────────────────
-    env = os.environ.copy()
+    env = _node_env(os.environ.copy())
     env["FORCE_COLOR"] = "1"
     if model:
         env["SLOUGHGT_MODEL_PATH"] = model
+    web_env = _web_dev_env(env, web_port)
 
     python = Path(find_server_python(root))
     api_proc = subprocess.Popen(
@@ -462,6 +481,7 @@ def cmd_dev(args):
                 "dev",
             ],
             cwd=str(web_cwd),
+            env=web_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
@@ -470,6 +490,7 @@ def cmd_dev(args):
         web_proc = subprocess.Popen(
             ["npm", "run", "dev"],
             cwd=str(web_cwd),
+            env=web_env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             text=True,
@@ -1073,13 +1094,7 @@ def _cmd_api_and_web(args):
     env["GIO_USE_PORTAL"] = "0"
 
     # Ensure nvm-installed node/npx/npm are on PATH for subprocesses
-    nvm_dir = os.environ.get("NVM_DIR", os.path.expanduser("~/.nvm"))
-    nvm_bin = os.path.join(nvm_dir, "versions", "node")
-    if os.path.isdir(nvm_bin):
-        for entry in os.listdir(nvm_bin):
-            candidate = os.path.join(nvm_bin, entry, "bin")
-            if os.path.isdir(candidate) and candidate not in env.get("PATH", ""):
-                env["PATH"] = candidate + os.pathsep + env.get("PATH", "")
+    env = _node_env(env)
 
     model = getattr(args, "model", None) or os.environ.get("SLOUGHGT_MODEL_PATH", "")
     if model:
