@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Fake npx for journey tests: `npx next build` "builds" a working standalone
+# server.js (node http server honouring PORT/HOSTNAME) instead of the real
+# multi-minute Next build + network fetch. Anything else is a no-op success.
+set -u
+LOG="${FAKE_NPM_LOG:-/tmp/fake_npm.log}"
+echo "argv: $*" >> "$LOG"
+
+if [ "${1:-}" = "next" ] && [ "${2:-}" = "build" ]; then
+  mkdir -p .next/standalone
+  cat > .next/standalone/server.js <<'JS'
+const http = require("http");
+const port = process.env.PORT || 3000;
+const host = process.env.HOSTNAME || "0.0.0.0";
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end("<html><body>standalone-ok</body></html>");
+  })
+  .listen(port, host, () => console.log("standalone listening on " + port));
+JS
+fi
+exit 0
