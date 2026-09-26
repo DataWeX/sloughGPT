@@ -359,6 +359,7 @@ export default function TrainingJobDetailPage() {
                           addToast(`Loaded trained version: ${job.checkpoint}`, 'success')
                         } catch (e) {
                           addToast(formatToastError(e, 'Could not load model'), 'error')
+                          return // a failed load means chat would run the wrong weights
                         }
                       }
                       router.push('/chat')
