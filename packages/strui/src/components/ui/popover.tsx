@@ -44,7 +44,12 @@ interface PopoverRootProps {
   onOpenChange?: (open: boolean) => void
 }
 
-export function Popover({ children, open: controlledOpen, defaultOpen = false, onOpenChange }: PopoverRootProps) {
+export function Popover({
+  children,
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
+}: PopoverRootProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -67,31 +72,32 @@ export function Popover({ children, open: controlledOpen, defaultOpen = false, o
 
 /* ─── Trigger ───────────────────────────────────────────────── */
 
-export const PopoverTrigger = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonElement> & { asChild?: boolean }>(
-  ({ onClick, children, ...props }, ref) => {
-    const { onOpenChange, open, triggerRef } = usePopoverContext()
+export const PopoverTrigger = forwardRef<
+  HTMLButtonElement,
+  HTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
+>(({ onClick, children, ...props }, ref) => {
+  const { onOpenChange, open, triggerRef } = usePopoverContext()
 
-    return (
-      <button
-        ref={(node) => {
-          ;(triggerRef as React.MutableRefObject<HTMLElement | null>).current = node
-          if (typeof ref === 'function') ref(node)
-          else if (ref) ref.current = node
-        }}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        onClick={(e) => {
-          onClick?.(e)
-          onOpenChange(!open)
-        }}
-        {...props}
-      >
-        {children}
-      </button>
-    )
-  },
-)
+  return (
+    <button
+      ref={(node) => {
+        ;(triggerRef as React.MutableRefObject<HTMLElement | null>).current = node
+        if (typeof ref === 'function') ref(node)
+        else if (ref) ref.current = node
+      }}
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={(e) => {
+        onClick?.(e)
+        onOpenChange(!open)
+      }}
+      {...props}
+    >
+      {children}
+    </button>
+  )
+})
 PopoverTrigger.displayName = 'PopoverTrigger'
 
 /* ─── Content ───────────────────────────────────────────────── */
@@ -171,10 +177,7 @@ export const PopoverContent = forwardRef<HTMLDivElement, PopoverContentProps>(
       if (!open || !closeOnOutsideClick) return
       const handler = (e: MouseEvent) => {
         const target = e.target as Node
-        if (
-          contentRef.current?.contains(target) ||
-          triggerRef.current?.contains(target)
-        ) return
+        if (contentRef.current?.contains(target) || triggerRef.current?.contains(target)) return
         onOpenChange(false)
       }
       document.addEventListener('mousedown', handler)

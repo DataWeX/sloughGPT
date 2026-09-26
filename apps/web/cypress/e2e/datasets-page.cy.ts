@@ -169,7 +169,7 @@ describe('Dataset Import Modal - layout', () => {
         expect(m.labelX, 'label aligned with input').to.be.closeTo(m.inputX, 0.5)
         expect(m.labelX, 'label aligned with title').to.be.closeTo(m.titleX, 0.5)
         expect(m.culprits, 'no overflowing elements').to.have.length(0)
-        expect(m.inBody, 'dialog is portaled to body').to.be.true
+        expect(m.inBody, 'dialog is portaled to body').to.equal(true)
       })
     })
   })

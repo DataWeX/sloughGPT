@@ -283,10 +283,11 @@ export const useChatStore = create<ChatState & ChatActions>()((set, get) => ({
     getOrCreateUserId().then((id) => set({ userId: id }))
 
     // Load draft
-    get().sessionId &&
+    if (get().sessionId) {
       chatDB.getDraft(get().sessionId).then((draft) => {
         if (draft) set({ input: draft })
       })
+    }
 
     // Load existing session
     setTimeout(() => {

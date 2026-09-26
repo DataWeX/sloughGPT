@@ -43,7 +43,12 @@ interface AlertDialogRootProps {
   children: ReactNode
 }
 
-function AlertDialog({ open: controlledOpen, defaultOpen = false, onOpenChange, children }: AlertDialogRootProps) {
+function AlertDialog({
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
+  children,
+}: AlertDialogRootProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -193,9 +198,15 @@ const AlertDialogContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElem
         const first = focusable[0]
         const last = focusable[focusable.length - 1]
         if (e.shiftKey) {
-          if (document.activeElement === first) { e.preventDefault(); last.focus() }
+          if (document.activeElement === first) {
+            e.preventDefault()
+            last.focus()
+          }
         } else {
-          if (document.activeElement === last) { e.preventDefault(); first.focus() }
+          if (document.activeElement === last) {
+            e.preventDefault()
+            first.focus()
+          }
         }
       }
       document.addEventListener('keydown', handler)
@@ -206,7 +217,9 @@ const AlertDialogContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElem
       if (!open) return
       const original = document.body.style.overflow
       document.body.style.overflow = 'hidden'
-      return () => { document.body.style.overflow = original }
+      return () => {
+        document.body.style.overflow = original
+      }
     }, [open])
 
     if (!open) return null
@@ -245,23 +258,41 @@ const AlertDialogHeader = ({ className, ...props }: HTMLAttributes<HTMLDivElemen
 )
 
 const AlertDialogFooter = ({ className, ...props }: HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)} {...props} />
+  <div
+    className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+    {...props}
+  />
 )
 
 const AlertDialogTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => {
     const { titleId } = useAlertDialogContext()
-    return <h2 ref={ref} id={titleId} className={cn('text-lg font-semibold text-foreground', className)} {...props} />
+    return (
+      <h2
+        ref={ref}
+        id={titleId}
+        className={cn('text-lg font-semibold text-foreground', className)}
+        {...props}
+      />
+    )
   },
 )
 AlertDialogTitle.displayName = 'AlertDialogTitle'
 
-const AlertDialogDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
-  ({ className, ...props }, ref) => {
-    const { descriptionId } = useAlertDialogContext()
-    return <p ref={ref} id={descriptionId} className={cn('text-sm text-muted-foreground', className)} {...props} />
-  },
-)
+const AlertDialogDescription = forwardRef<
+  HTMLParagraphElement,
+  HTMLAttributes<HTMLParagraphElement>
+>(({ className, ...props }, ref) => {
+  const { descriptionId } = useAlertDialogContext()
+  return (
+    <p
+      ref={ref}
+      id={descriptionId}
+      className={cn('text-sm text-muted-foreground', className)}
+      {...props}
+    />
+  )
+})
 AlertDialogDescription.displayName = 'AlertDialogDescription'
 
 /* ── Action / Cancel ────────────────────────────────────────────── */

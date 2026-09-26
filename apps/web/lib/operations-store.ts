@@ -8,7 +8,8 @@ import { logger, trackEvent } from './dev-log'
 const _log = logger.child('operations-store')
 
 export type OpType = 'training' | 'inference' | 'download' | 'import' | 'batch' | 'other'
-export type OpStatus = 'registered' | 'running' | 'cancelling' | 'cancelled' | 'completed' | 'failed'
+export type OpStatus =
+  'registered' | 'running' | 'cancelling' | 'cancelled' | 'completed' | 'failed'
 
 export interface Operation {
   id: string
@@ -51,9 +52,11 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
   fetch: async () => {
     try {
       set({ loading: true, error: null })
-      const res = await apiGet<{ operations: Operation[]; counts: Record<string, number> }>('/operations')
+      const res = await apiGet<{ operations: Operation[]; counts: Record<string, number> }>(
+        '/operations',
+      )
       const prevOps = get().operations
-      const prevMap = new Map(prevOps.map(o => [o.id, o.status]))
+      const prevMap = new Map(prevOps.map((o) => [o.id, o.status]))
       for (const op of res.operations) {
         const oldStatus = prevMap.get(op.id)
         if (oldStatus && oldStatus !== op.status) {
@@ -62,7 +65,10 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       }
       set({ operations: res.operations, counts: res.counts, loading: false })
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : 'Could not fetch operations', loading: false })
+      set({
+        error: err instanceof Error ? err.message : 'Could not fetch operations',
+        loading: false,
+      })
     }
   },
 
@@ -73,7 +79,10 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
       await get().fetch()
       return true
     } catch (e) {
-      _log.warning('Cancel failed for op', { opId, error: e instanceof Error ? e.message : String(e) })
+      _log.warning('Cancel failed for op', {
+        opId,
+        error: e instanceof Error ? e.message : String(e),
+      })
       return false
     }
   },
@@ -107,29 +116,27 @@ export const operationsStore = createStore<OperationsState>((set, get) => ({
 
   activeByType: (type: OpType) => {
     return get().operations.filter(
-      (op) => op.type === type && ['registered', 'running', 'cancelling'].includes(op.status)
+      (op) => op.type === type && ['registered', 'running', 'cancelling'].includes(op.status),
     )
   },
 
   isAnyActive: (type?: OpType) => {
     return get().operations.some(
       (op) =>
-        ['registered', 'running', 'cancelling'].includes(op.status) &&
-        (!type || op.type === type)
+        ['registered', 'running', 'cancelling'].includes(op.status) && (!type || op.type === type),
     )
   },
 
   hasActive: (type: OpType) => {
     return get().operations.some(
-      (op) => op.type === type && ['registered', 'running', 'cancelling'].includes(op.status)
+      (op) => op.type === type && ['registered', 'running', 'cancelling'].includes(op.status),
     )
   },
 }))
 
 export const useOperationsStore = Object.assign(
-  <T>(selector: (state: OperationsState) => T): T =>
-    useStore(operationsStore, selector),
-  { getState: operationsStore.getState }
+  <T>(selector: (state: OperationsState) => T): T => useStore(operationsStore, selector),
+  { getState: operationsStore.getState },
 )
 
 const ACTIVE_STATUSES = ['registered', 'running', 'cancelling'] as const
@@ -146,7 +153,7 @@ export function useHasActiveOperations(type?: OpType): boolean {
   return useOperationsStore((s) => s.operations.some((op) => _activeFilter(op, type)))
 }
 
-let _emptyOps: Operation[] = []
+const _emptyOps: Operation[] = []
 export function useActiveOperationsStable(type?: OpType): Operation[] {
   const result = useActiveOperations(type)
   if (result.length === 0) return _emptyOps

@@ -3,7 +3,10 @@
 import * as React from 'react'
 import { cn } from '../../lib/cn'
 
-export interface RadioProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type' | 'size'> {
+export interface RadioProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'type' | 'size'
+> {
   onCheckedChange?: (checked: boolean) => void
   size?: 'sm' | 'default' | 'lg'
   label?: React.ReactNode
@@ -48,7 +51,13 @@ const Radio = React.forwardRef<HTMLInputElement, RadioProps>(
     const s = sizeMap[size]
 
     const input = (
-      <span className={cn('relative inline-flex shrink-0 items-center justify-center', s.box, disabled && 'opacity-50')}>
+      <span
+        className={cn(
+          'relative inline-flex shrink-0 items-center justify-center',
+          s.box,
+          disabled && 'opacity-50',
+        )}
+      >
         <input
           ref={(node) => {
             ;(innerRef as React.MutableRefObject<HTMLInputElement | null>).current = node
@@ -62,9 +71,7 @@ const Radio = React.forwardRef<HTMLInputElement, RadioProps>(
           className={cn(
             'peer absolute inset-0 cursor-pointer appearance-none',
             'rounded-full border transition-all duration-150',
-            isChecked
-              ? 'border-primary bg-background'
-              : 'border-input bg-background',
+            isChecked ? 'border-primary bg-background' : 'border-input bg-background',
             'hover:border-primary/60',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
             'disabled:cursor-not-allowed disabled:hover:border-input',
@@ -130,9 +137,7 @@ const Radio = React.forwardRef<HTMLInputElement, RadioProps>(
             </span>
           )}
           {description && (
-            <span className="text-xs text-muted-foreground leading-relaxed">
-              {description}
-            </span>
+            <span className="text-xs text-muted-foreground leading-relaxed">{description}</span>
           )}
         </span>
       </label>

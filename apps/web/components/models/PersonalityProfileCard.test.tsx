@@ -16,7 +16,9 @@ vi.mock('@/lib/souls-controller', () => ({
 }))
 vi.mock('@/components/souls/SoulVisualizer', () => ({
   default: ({ traitWeights, currentSoulName }: any) => (
-    <div data-testid="soul-visualizer" data-name={currentSoulName}>visualizer</div>
+    <div data-testid="soul-visualizer" data-name={currentSoulName}>
+      visualizer
+    </div>
   ),
 }))
 vi.mock('@/components/souls/TraitEditor', () => ({
@@ -44,31 +46,62 @@ describe('PersonalityProfileCard', () => {
   })
 
   it('renders null when traitWeights is null', () => {
-    const { container } = render(<PersonalityProfileCard traitWeights={null} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    const { container } = render(
+      <PersonalityProfileCard
+        traitWeights={null}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     expect(container.innerHTML).toBe('')
   })
 
   it('renders card title and description', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Personality Profile')).toBeDefined()
     expect(screen.getByText(/Traits shape how your personality responds/)).toBeDefined()
   })
 
   it('shows SoulVisualizer in view mode by default', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     expect(screen.getByTestId('soul-visualizer')).toBeDefined()
     expect(screen.queryByTestId('trait-editor')).toBeNull()
   })
 
   it('toggles to TraitEditor when Edit clicked', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} currentSoulName="warm" onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        currentSoulName="warm"
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     fireEvent.click(screen.getByText('Edit'))
     expect(screen.getByTestId('trait-editor')).toBeDefined()
     expect(screen.queryByTestId('soul-visualizer')).toBeNull()
   })
 
   it('toggles back to SoulVisualizer when View clicked', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     fireEvent.click(screen.getByText('Edit'))
     expect(screen.getByTestId('trait-editor')).toBeDefined()
     fireEvent.click(screen.getByText('View'))
@@ -76,39 +109,83 @@ describe('PersonalityProfileCard', () => {
   })
 
   it('shows snapshots section with count', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     expect(screen.getByText('Snapshots (0)')).toBeDefined()
   })
 
   it('shows empty snapshot hint when no snapshots', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
-    expect(screen.getByText(/Save weight presets to switch between personalities quickly/)).toBeDefined()
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
+    expect(
+      screen.getByText(/Save weight presets to switch between personalities quickly/),
+    ).toBeDefined()
   })
 
   it('renders snapshot name input and Save button', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     expect(screen.getByPlaceholderText('Name this state...')).toBeDefined()
     expect(screen.getByText('Save')).toBeDefined()
   })
 
   it('Save button is disabled when snapshot name is empty', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     const saveBtn = screen.getByText('Save').closest('button')!
     expect(saveBtn.disabled).toBe(true)
   })
 
   it('saves snapshot when name is entered', async () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
-    fireEvent.change(screen.getByPlaceholderText('Name this state...'), { target: { value: 'my-snap' } })
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('Name this state...'), {
+      target: { value: 'my-snap' },
+    })
     fireEvent.click(screen.getByText('Save'))
     expect(soulsController.saveWeightSnapshot).toHaveBeenCalledWith('my-snap')
   })
 
   it('loads snapshot on Load click', async () => {
     const onTraitsChanged = vi.fn().mockResolvedValue(undefined)
-    ;(soulsController.listWeightSnapshots as any).mockResolvedValue([{ name: 'snap1', saved_at: '2025-01-01' }])
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={onTraitsChanged} />)
-    fireEvent.change(screen.getByPlaceholderText('Name this state...'), { target: { value: 'trigger-save' } })
+    ;(soulsController.listWeightSnapshots as any).mockResolvedValue([
+      { name: 'snap1', saved_at: '2025-01-01' },
+    ])
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={onTraitsChanged}
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('Name this state...'), {
+      target: { value: 'trigger-save' },
+    })
     fireEvent.click(screen.getByText('Save'))
     const loadBtn = await screen.findByText('Load')
     fireEvent.click(loadBtn)
@@ -117,8 +194,16 @@ describe('PersonalityProfileCard', () => {
 
   it('shows toast on save error', async () => {
     ;(soulsController.saveWeightSnapshot as any).mockRejectedValue(new Error('disk full'))
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
-    fireEvent.change(screen.getByPlaceholderText('Name this state...'), { target: { value: 'fail' } })
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('Name this state...'), {
+      target: { value: 'fail' },
+    })
     fireEvent.click(screen.getByText('Save'))
     await vi.waitFor(() => expect(mockAddToast).toHaveBeenCalledWith('disk full', 'error'))
   })
@@ -126,8 +211,16 @@ describe('PersonalityProfileCard', () => {
   it('shows toast on load error', async () => {
     ;(soulsController.loadWeightSnapshot as any).mockRejectedValue(new Error('not found'))
     ;(soulsController.listWeightSnapshots as any).mockResolvedValue([{ name: 'broken' }])
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
-    fireEvent.change(screen.getByPlaceholderText('Name this state...'), { target: { value: 'trigger' } })
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('Name this state...'), {
+      target: { value: 'trigger' },
+    })
     fireEvent.click(screen.getByText('Save'))
     const loadBtn = await screen.findByText('Load')
     fireEvent.click(loadBtn)
@@ -135,22 +228,45 @@ describe('PersonalityProfileCard', () => {
   })
 
   it('shows formatted date for snapshots', async () => {
-    ;(soulsController.listWeightSnapshots as any).mockResolvedValue([{ name: 's1', saved_at: '2025-06-15T10:30:00Z' }])
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
-    fireEvent.change(screen.getByPlaceholderText('Name this state...'), { target: { value: 'trigger' } })
+    ;(soulsController.listWeightSnapshots as any).mockResolvedValue([
+      { name: 's1', saved_at: '2025-06-15T10:30:00Z' },
+    ])
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
+    fireEvent.change(screen.getByPlaceholderText('Name this state...'), {
+      target: { value: 'trigger' },
+    })
     fireEvent.click(screen.getByText('Save'))
     expect(await screen.findByText('s1')).toBeDefined()
     expect(screen.getByText(/Jun 15/)).toBeDefined()
   })
 
   it('passes currentSoulName to SoulVisualizer', () => {
-    render(<PersonalityProfileCard traitWeights={defaultWeights} currentSoulName="wise" onTraitsSaved={vi.fn()} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        currentSoulName="wise"
+        onTraitsSaved={vi.fn()}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     expect(screen.getByTestId('soul-visualizer').getAttribute('data-name')).toBe('wise')
   })
 
   it('calls onTraitsSaved from TraitEditor', () => {
     const onSaved = vi.fn().mockResolvedValue(undefined)
-    render(<PersonalityProfileCard traitWeights={defaultWeights} onTraitsSaved={onSaved} onTraitsChanged={vi.fn()} />)
+    render(
+      <PersonalityProfileCard
+        traitWeights={defaultWeights}
+        onTraitsSaved={onSaved}
+        onTraitsChanged={vi.fn()}
+      />,
+    )
     fireEvent.click(screen.getByText('Edit'))
     fireEvent.click(screen.getByText('save'))
     expect(onSaved).toHaveBeenCalledWith({ personality: { warm: 0.9 } })

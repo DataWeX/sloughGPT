@@ -37,7 +37,9 @@ vi.mock('@sloughgpt/strui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@sloughgpt/strui')>()
   return {
     ...actual,
-    Skeleton: ({ className, ...props }: any) => <div className={className} data-testid="skeleton" {...props} />,
+    Skeleton: ({ className, ...props }: any) => (
+      <div className={className} data-testid="skeleton" {...props} />
+    ),
   }
 })
 
@@ -50,7 +52,15 @@ const mockHealthData = {
   episodes: 30,
   avg_growth: 0.05,
   positive_ratio: 0.75,
-  qualia: { valence: 0.8, arousal: 0.5, novelty: 0.6, coherence: 0.7, salience: 0.65, certainty: 0.6, complexity: 0.55 },
+  qualia: {
+    valence: 0.8,
+    arousal: 0.5,
+    novelty: 0.6,
+    coherence: 0.7,
+    salience: 0.65,
+    certainty: 0.6,
+    complexity: 0.55,
+  },
   beliefs: { 'Self-awareness': 0.7, 'Emotional range': 0.5, 'Context awareness': 0.8 },
 }
 
@@ -159,6 +169,12 @@ describe('ConsciousnessComparePage', () => {
       expect(screen.getAllByText('consciousness_compare.page_title').length).toBeGreaterThan(0)
     })
 
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('combobox').length).toBeGreaterThanOrEqual(2)
+      },
+      { timeout: 5000 },
+    )
     const selects = screen.getAllByRole('combobox')
     expect(selects[0]).toHaveValue('current')
     expect(selects[1]).toHaveValue('default')
@@ -214,8 +230,13 @@ describe('ConsciousnessComparePage', () => {
       expect(screen.getAllByText('consciousness_compare.page_title').length).toBeGreaterThan(0)
     })
 
-    expect(screen.getAllByText('Self-awareness').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Emotional range').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Context awareness').length).toBeGreaterThan(0)
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('Self-awareness').length).toBeGreaterThan(0)
+        expect(screen.getAllByText('Emotional range').length).toBeGreaterThan(0)
+        expect(screen.getAllByText('Context awareness').length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 },
+    )
   })
 })

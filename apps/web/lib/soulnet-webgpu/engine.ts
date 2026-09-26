@@ -17,7 +17,8 @@
  *   }
  */
 
-import { parseSou, SoulCheckpoint, SoulMetadata } from './weights'
+import type { SoulCheckpoint, SoulMetadata } from './weights'
+import { parseSou } from './weights'
 import { WeightCache } from './cache'
 import { logger } from '@/lib/dev-log'
 
@@ -74,7 +75,10 @@ const DEFAULT_CHARSET = " abcdefghijklmnopqrstuvwxyz0123456789.,!?-'"
 function buildVocab(charset: string): { stoi: Record<string, number>; itos: string[] } {
   const stoi: Record<string, number> = {}
   const itos: string[] = []
-  for (let i = 0; i < charset.length; i++) { stoi[charset[i]] = i; itos[i] = charset[i] }
+  for (let i = 0; i < charset.length; i++) {
+    stoi[charset[i]] = i
+    itos[i] = charset[i]
+  }
   return { stoi, itos }
 }
 
@@ -83,19 +87,19 @@ export class SoulNetWebGPU {
   private pipeline: GPUComputePipeline | null = null
 
   // GPU weight buffers (persistent)
-  private wIh: GPUBuffer[] = []            // per layer: [4*h, e]
-  private wHh: GPUBuffer[] = []            // per layer: [4*h, h]
-  private wFc: GPUBuffer | null = null     // [vocab, h]
-  private bFc: GPUBuffer | null = null     // [vocab]
+  private wIh: GPUBuffer[] = [] // per layer: [4*h, e]
+  private wHh: GPUBuffer[] = [] // per layer: [4*h, h]
+  private wFc: GPUBuffer | null = null // [vocab, h]
+  private bFc: GPUBuffer | null = null // [vocab]
 
   // GPU state buffers (updated each step)
-  private stateH: GPUBuffer[] = []         // per layer
+  private stateH: GPUBuffer[] = [] // per layer
   private stateC: GPUBuffer[] = []
-  private bufIn: GPUBuffer | null = null   // input to current layer
+  private bufIn: GPUBuffer | null = null // input to current layer
   private bufHOut: GPUBuffer | null = null // output from current layer
   private bufCOut: GPUBuffer | null = null
   private bufParams: GPUBuffer | null = null
-  private bufRead: GPUBuffer | null = null   // reusable staging buffer for readback
+  private bufRead: GPUBuffer | null = null // reusable staging buffer for readback
 
   // CPU-side copies (for embedding + fc_out ops done on CPU)
   private cpuEmb: Float32Array | null = null
@@ -119,9 +123,13 @@ export class SoulNetWebGPU {
   /** CPU LSTM cell: compute one step of LSTM.
    *  h_new, c_new = lstm_cell(x, h_prev, c_prev, W_ih, W_hh) */
   private cpuLstmCell(
-    x: Float32Array, hPrev: Float32Array, cPrev: Float32Array,
-    wIh: Float32Array, wHh: Float32Array,
-    inputDim: number, hiddenDim: number,
+    x: Float32Array,
+    hPrev: Float32Array,
+    cPrev: Float32Array,
+    wIh: Float32Array,
+    wHh: Float32Array,
+    inputDim: number,
+    hiddenDim: number,
   ): [Float32Array, Float32Array] {
     // gates = W_ih @ x + W_hh @ h_prev
     const gates = new Float32Array(4 * hiddenDim)
@@ -134,10 +142,10 @@ export class SoulNetWebGPU {
     const hNew = new Float32Array(hiddenDim)
     const cNew = new Float32Array(hiddenDim)
     for (let i = 0; i < hiddenDim; i++) {
-      const ig = 1 / (1 + Math.exp(-gates[i]))                         // input gate
-      const fg = 1 / (1 + Math.exp(-gates[hiddenDim + i]))             // forget gate
-      const cg = Math.tanh(gates[2 * hiddenDim + i])                    // cell gate
-      const og = 1 / (1 + Math.exp(-gates[3 * hiddenDim + i]))         // output gate
+      const ig = 1 / (1 + Math.exp(-gates[i])) // input gate
+      const fg = 1 / (1 + Math.exp(-gates[hiddenDim + i])) // forget gate
+      const cg = Math.tanh(gates[2 * hiddenDim + i]) // cell gate
+      const og = 1 / (1 + Math.exp(-gates[3 * hiddenDim + i])) // output gate
       cNew[i] = fg * cPrev[i] + ig * cg
       hNew[i] = og * Math.tanh(cNew[i])
     }
@@ -194,15 +202,22 @@ export class SoulNetWebGPU {
           const resp = await fetch(urlOrBuffer)
           if (!resp.ok) throw new Error(`HTTP ${resp.status} from ${urlOrBuffer}`)
           raw = await resp.arrayBuffer()
-          _weightCache.put(urlOrBuffer, raw).catch(e => { logger.debug('Could not weight cache put', { url: String(urlOrBuffer), exception: String(e) }) })
+          _weightCache.put(urlOrBuffer, raw).catch((e) => {
+            logger.debug('Could not weight cache put', {
+              url: String(urlOrBuffer),
+              exception: String(e),
+            })
+          })
         }
       } else {
         raw = urlOrBuffer
       }
       const cp = parseSou(raw)
-      this.metadata = cp.metadata; this.cfg = cfg
+      this.metadata = cp.metadata
+      this.cfg = cfg
       const { stoi, itos } = buildVocab(cfg.charset ?? DEFAULT_CHARSET)
-      this.stoi = stoi; this.itos = itos
+      this.stoi = stoi
+      this.itos = itos
       const w = cp.weights
       const p = (i: number) => w[`p${i}` as const]
       const { embedDim: e, hiddenDim: h, vocabSize: v, numLayers: nl } = cfg
@@ -229,8 +244,12 @@ export class SoulNetWebGPU {
       if (!this.cpuOnly && this.device) {
         const d = this.device!
         const mk = (data: Float32Array, usage = GPUBufferUsage.STORAGE): GPUBuffer => {
-          const b = d.createBuffer({ size: data.byteLength, usage: usage | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC })
-          d.queue.writeBuffer(b, 0, data.buffer, data.byteOffset, data.byteLength); return b
+          const b = d.createBuffer({
+            size: data.byteLength,
+            usage: usage | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+          })
+          d.queue.writeBuffer(b, 0, data.buffer, data.byteOffset, data.byteLength)
+          return b
         }
 
         for (let li = 0; li < nl; li++) {
@@ -263,7 +282,9 @@ export class SoulNetWebGPU {
 
       this.ready = true
       return cp
-    } finally { this.loading = false }
+    } finally {
+      this.loading = false
+    }
   }
 
   /** Reset LSTM hidden and cell state to zero. */
@@ -277,15 +298,24 @@ export class SoulNetWebGPU {
       }
       return
     }
-    const d = this.device!; const h = this.cfg.hiddenDim; const zero = new Float32Array(h)
+    const d = this.device!
+    const h = this.cfg.hiddenDim
+    const zero = new Float32Array(h)
     for (let li = 0; li < this.cfg.numLayers; li++) {
       d.queue.writeBuffer(this.stateH[li], 0, zero.buffer, zero.byteOffset, zero.byteLength)
       d.queue.writeBuffer(this.stateC[li], 0, zero.buffer, zero.byteOffset, zero.byteLength)
     }
   }
 
-  private _makeBG(inBuf: GPUBuffer, hPrev: GPUBuffer, cPrev: GPUBuffer,
-    wIh: GPUBuffer, wHh: GPUBuffer, hOut: GPUBuffer, cOut: GPUBuffer): GPUBindGroup {
+  private _makeBG(
+    inBuf: GPUBuffer,
+    hPrev: GPUBuffer,
+    cPrev: GPUBuffer,
+    wIh: GPUBuffer,
+    wHh: GPUBuffer,
+    hOut: GPUBuffer,
+    cOut: GPUBuffer,
+  ): GPUBindGroup {
     return this.device!.createBindGroup({
       layout: this.pipeline!.getBindGroupLayout(0),
       entries: [
@@ -306,7 +336,9 @@ export class SoulNetWebGPU {
   async forward(tokenId: number): Promise<Float32Array> {
     if (!this.cfg) throw new Error('Engine not ready')
     const cfg = this.cfg
-    const e = cfg.embedDim; const h = cfg.hiddenDim; const v = cfg.vocabSize
+    const e = cfg.embedDim
+    const h = cfg.hiddenDim
+    const v = cfg.vocabSize
 
     // 1. Embedding gather
     const embed = new Float32Array(e)
@@ -319,8 +351,13 @@ export class SoulNetWebGPU {
       for (let li = 0; li < cfg.numLayers; li++) {
         const inputDim = li === 0 ? e : h
         const [hNew, cNew] = this.cpuLstmCell(
-          x, this.cpuStateH[li], this.cpuStateC[li],
-          this.cpuWIh[li], this.cpuWHh[li], inputDim, h,
+          x,
+          this.cpuStateH[li],
+          this.cpuStateC[li],
+          this.cpuWIh[li],
+          this.cpuWHh[li],
+          inputDim,
+          h,
         )
         this.cpuStateH[li] = hNew
         this.cpuStateC[li] = cNew
@@ -345,9 +382,12 @@ export class SoulNetWebGPU {
       d.queue.writeBuffer(this.bufParams!, 8, new Uint32Array([inputDim]).buffer)
       const bg = this._makeBG(
         li === 0 ? this.bufIn! : this.bufHOut!,
-        this.stateH[li], this.stateC[li],
-        this.wIh[li], this.wHh[li],
-        this.bufHOut!, this.bufCOut!,
+        this.stateH[li],
+        this.stateC[li],
+        this.wIh[li],
+        this.wHh[li],
+        this.bufHOut!,
+        this.bufCOut!,
       )
       const enc = d.createCommandEncoder()
       const p = enc.beginComputePass()
@@ -362,7 +402,10 @@ export class SoulNetWebGPU {
     }
 
     if (!this.bufRead) {
-      this.bufRead = d.createBuffer({ size: h * 4, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ })
+      this.bufRead = d.createBuffer({
+        size: h * 4,
+        usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+      })
     }
     const renc = d.createCommandEncoder()
     renc.copyBufferToBuffer(this.bufHOut!, 0, this.bufRead, 0, h * 4)
@@ -392,9 +435,16 @@ export class SoulNetWebGPU {
       @param eosToken - stop generating when this token ID is produced (0 = no stop)
       @yields each generated character
   */
-  async *generate(prompt: string, maxTokens: number, temperature = 1.0, eosToken = 0): AsyncGenerator<string, void, unknown> {
+  async *generate(
+    prompt: string,
+    maxTokens: number,
+    temperature = 1.0,
+    eosToken = 0,
+  ): AsyncGenerator<string, void, unknown> {
     const ids: number[] = []
-    for (const ch of prompt.toLowerCase()) { if (ch in this.stoi) ids.push(this.stoi[ch]) }
+    for (const ch of prompt.toLowerCase()) {
+      if (ch in this.stoi) ids.push(this.stoi[ch])
+    }
     if (ids.length === 0) ids.push(this.stoi[' '] ?? 0)
     this.resetState()
     // Consume prompt silently to initialize LSTM state
@@ -411,20 +461,45 @@ export class SoulNetWebGPU {
   }
 
   destroy(): void {
-    for (const b of [this.bufIn, this.bufHOut, this.bufCOut, this.bufParams, this.bufRead,
-      ...this.wIh, ...this.wHh, this.wFc, this.bFc, ...this.stateH, ...this.stateC])
+    for (const b of [
+      this.bufIn,
+      this.bufHOut,
+      this.bufCOut,
+      this.bufParams,
+      this.bufRead,
+      ...this.wIh,
+      ...this.wHh,
+      this.wFc,
+      this.bFc,
+      ...this.stateH,
+      ...this.stateC,
+    ])
       b?.destroy()
     this.device?.destroy()
-    this.device = null; this.ready = false
+    this.device = null
+    this.ready = false
   }
 }
 
-function sampleArgmax(l: Float32Array): number { let b = 0; for (let i = 1; i < l.length; i++) if (l[i] > l[b]) b = i; return b }
+function sampleArgmax(l: Float32Array): number {
+  let b = 0
+  for (let i = 1; i < l.length; i++) if (l[i] > l[b]) b = i
+  return b
+}
 
 function sampleMultinomial(l: Float32Array, t: number): number {
-  let max = -Infinity; for (let i = 0; i < l.length; i++) if (l[i] > max) max = l[i]
-  let sum = 0; const s = new Float32Array(l.length)
-  for (let i = 0; i < l.length; i++) { s[i] = Math.exp((l[i] - max) / Math.max(t, 0.001)); sum += s[i] }
-  let r = Math.random() * sum; for (let i = 0; i < l.length; i++) { r -= s[i]; if (r <= 0) return i }
+  let max = -Infinity
+  for (let i = 0; i < l.length; i++) if (l[i] > max) max = l[i]
+  let sum = 0
+  const s = new Float32Array(l.length)
+  for (let i = 0; i < l.length; i++) {
+    s[i] = Math.exp((l[i] - max) / Math.max(t, 0.001))
+    sum += s[i]
+  }
+  let r = Math.random() * sum
+  for (let i = 0; i < l.length; i++) {
+    r -= s[i]
+    if (r <= 0) return i
+  }
   return l.length - 1
 }
