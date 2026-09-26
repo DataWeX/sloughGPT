@@ -47,16 +47,72 @@ _DYLIBS = {name: os.path.join(_HERE, f"{name}{_EXT}") for name in _SRCS}
 
 # ── Build ──────────────────────────────────────────────────────────
 
+_CPU_FEATURES_CACHE: set[str] | None = None
+
+
+def _cpu_features() -> set[str]:
+    """CPU feature set of the BUILD machine (== run machine: these libs are
+    compiled locally on demand). Cached; empty set where unreadable."""
+    global _CPU_FEATURES_CACHE
+    if _CPU_FEATURES_CACHE is None:
+        feats: set[str] = set()
+        try:
+            with open("/proc/cpuinfo") as f:
+                for line in f:
+                    if line.startswith("flags") or line.startswith("Features"):
+                        feats |= set(line.split(":", 1)[1].split())
+        except OSError:
+            pass
+        _CPU_FEATURES_CACHE = feats
+    return _CPU_FEATURES_CACHE
+
+
+def _target_flags() -> list[str]:
+    """gcc flags for THIS cpu.
+
+    AVX-512 codegen is only enabled when the CPU actually has AVX-512F+BW+VNNI.
+    The C kernels are CPUID-gated at runtime, but passing -mavx512f also lets
+    gcc emit scalar EVEX (e.g. vrndscales) OUTSIDE any guard — instant SIGILL
+    on non-AVX-512 CPUs (i5-9300H repro). Build ISA must match run ISA.
+    """
+    feats = _cpu_features()
+    flags: list[str] = []
+    if "avx2" in feats:
+        flags.append("-mavx2")
+    if {"avx512f", "avx512bw", "avx512vnni"} <= feats:
+        flags += ["-mavx512f", "-mavx512bw", "-mavx512vnni", "-fno-tree-vectorize"]
+    return flags
+
+
+def _stamp_path(name: str) -> str:
+    return _DYLIBS[name] + ".buildflags"
+
+
+def _stamp_matches(name: str) -> bool:
+    """True when the lib was built with exactly the current target flags."""
+    try:
+        with open(_stamp_path(name)) as f:
+            return f.read().strip() == " ".join(_target_flags())
+    except OSError:
+        return False
+
+
+def _write_stamp(name: str) -> None:
+    try:
+        with open(_stamp_path(name), "w") as f:
+            f.write(" ".join(_target_flags()))
+    except OSError:
+        pass
+
 
 def _build_one(name: str) -> bool:
     """Compile a single C extension with gcc/clang.
 
-    Builds with AVX-512 BW + VNNI (int8 dot-product in one instruction) when
-    the toolchain supports it, falling back to AVX2-only, then to numpy. The
-    compiled library is CPU-portable: the AVX-512 path is gated at runtime by
-    a CPUID check in C, so older CPUs use the AVX2/scalar kernels automatically.
-    ``-fno-tree-vectorize`` keeps the compiler from emitting 512-bit code
-    outside the explicitly-gated intrinsics (which would SIGILL on older CPUs).
+    Flags come from ``_target_flags()`` (this machine's CPUID): AVX-512
+    BW + VNNI only when the CPU has them, plain AVX2 otherwise, baseline
+    as last resort. The C kernels additionally CPUID-gate their AVX-512
+    paths at runtime; the flag gating exists because gcc emits scalar EVEX
+    outside those guards when -mavx512f is passed (SIGILL on older CPUs).
 
     Returns:
         True if the library was compiled successfully.
@@ -76,18 +132,12 @@ def _build_one(name: str) -> bool:
                 timeout=60,
             )
 
-        base = ["-mavx2"]
-        # AVX-512 BW + VNNI fused int8 dot-product (llama.cpp-style). Try it
-        # first; if the toolchain rejects the flags, retry plain AVX2.
-        avx512 = [
-            "-mavx512f",
-            "-mavx512bw",
-            "-mavx512vnni",
-            "-fno-tree-vectorize",
-        ]
-        result = _compile(base + avx512)
-        if result.returncode != 0:
-            result = _compile(base)
+        # Flags follow THIS machine's CPUID (see _target_flags) — never
+        # "gcc accepts it" — so the binary's ISA always matches the runner.
+        flags = _target_flags()
+        result = _compile(flags)
+        if result.returncode != 0 and flags:
+            result = _compile([])
 
         if result.returncode != 0:
             logger.warning(
@@ -97,7 +147,13 @@ def _build_one(name: str) -> bool:
                 extra={"tag": "INFRA"},
             )
             return False
-        logger.info("quant_core: compiled %s", dylib, extra={"tag": "INFRA"})
+        _write_stamp(name)
+        logger.info(
+            "quant_core: compiled %s [%s]",
+            dylib,
+            " ".join(flags) or "baseline",
+            extra={"tag": "INFRA"},
+        )
         return True
     except FileNotFoundError:
         logger.warning(
@@ -128,7 +184,7 @@ def _build_all(force: bool = False) -> bool:
     for name in _SRCS:
         src = _SRCS[name]
         dylib = _DYLIBS[name]
-        if force or not os.path.exists(dylib):
+        if force or not os.path.exists(dylib) or not _stamp_matches(name):
             ok = _build_one(name) or ok
             continue
         # Rebuild if the source is newer than the compiled library.
