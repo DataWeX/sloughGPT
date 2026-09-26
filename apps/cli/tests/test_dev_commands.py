@@ -363,3 +363,25 @@ class TestCmdApiAndWebMonitorLoop:
 
             # Should not raise AttributeError: 'NoneType' object has no attribute 'poll'
             # The function should complete without crashing
+
+
+class TestStartupBudget:
+    """The CLI's API-wait budget must cover the server's real startup cost."""
+
+    def test_budget_covers_stage_ready_worst_case(self):
+        from commands.dev import API_STARTUP_TIMEOUT
+
+        # Stage READY's model_ready hook polls 120s (startup.py) under a 130s
+        # hook timeout, and Stage CRITICAL spends ~40s before READY begins.
+        # A budget below that kills a healthy server mid-model-load and
+        # reports it as "error".
+        assert API_STARTUP_TIMEOUT >= 160
+
+    def test_no_hardcoded_90s_api_waits_remain(self):
+        import commands.dev as mod
+
+        src = open(mod.__file__).read()
+        assert "range(90)" not in src, "reintroduced a hardcoded 90s API wait"
+        assert "timeout=90" not in src, "reintroduced a hardcoded 90s API wait"
+        # every readiness loop must be driven by the shared budget
+        assert src.count("API_STARTUP_TIMEOUT") >= 5
