@@ -55,6 +55,13 @@ _LAZY_IMPORTS = {
     "get_training_engine": (".engine", "get_training_engine"),
     "TrainingFeedClient": ("._internal.training_feed", "TrainingFeedClient"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
+    "TrainingOutcomeTracker": ("._internal.outcome_tracker", "TrainingOutcomeTracker"),
+    "AdaptiveConfigEngine": ("._internal.adaptive_config", "AdaptiveConfigEngine"),
+    "get_auto_trainer": ("._internal.auto_trainer", "get_auto_trainer"),
+    "generate_model_card": ("._internal.model_card", "generate_model_card"),
+    "list_presets": ("._internal.presets", "list_presets"),
+    "get_preset": ("._internal.presets", "get_preset"),
+    "apply_preset": ("._internal.presets", "apply_preset"),
 }
 
 
@@ -108,4 +115,11 @@ __all__ = [
     "get_training_engine",
     "TrainingFeedClient",
     "FeedBatchSampler",
+    "TrainingOutcomeTracker",
+    "AdaptiveConfigEngine",
+    "get_auto_trainer",
+    "generate_model_card",
+    "list_presets",
+    "get_preset",
+    "apply_preset",
 ]

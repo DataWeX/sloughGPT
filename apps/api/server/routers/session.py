@@ -246,7 +246,7 @@ class SessionRouter:
             if not SessionCore.get_messages(session_id):
                 return _sse_error_response("No session context found", "E_VAL_REQUEST", 400)
 
-            from domain.models._internal.provider import get_provider
+            from domain.models import get_provider
 
             if get_provider("default") is None:
                 return _sse_error_response("Model not loaded", "E_INFRA_REGISTRY", 503)

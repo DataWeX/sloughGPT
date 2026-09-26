@@ -101,8 +101,10 @@ def test_no_new_legacy_domains_patch_targets() -> None:
 # any new ``file|module`` pair is a contract violation.
 _INTERNAL_IMPORT = re.compile(r"^\s*(?:from|import)\s+(domain\.[\w.]*_internal(?:\.[\w.]*)?)", re.M)
 
-# Pinned baseline (56 entries after rewiring tokenizer / token_tree /
-# cloud_training onto domain.training engines). Re-generate when reducing:
+# Pinned baseline (49 entries after rewiring tokenizer / token_tree /
+# cloud_training onto domain.training engines and settings.py onto the
+# domain.settings / domain.training / domain.inference facades).
+# Re-generate when reducing:
 #   python -c "import re,pathlib; ..."
 _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
     {
@@ -134,13 +136,6 @@ _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
         "models.py|domain.training._internal.export",
         "registry.py|domain.infrastructure._internal",
         "self_train.py|domain.infrastructure._internal.errors",
-        "settings.py|domain.inference._internal.api_provider",
-        "settings.py|domain.settings._internal.persistent",
-        "settings.py|domain.training._internal.adaptive_config",
-        "settings.py|domain.training._internal.auto_trainer",
-        "settings.py|domain.training._internal.model_card",
-        "settings.py|domain.training._internal.outcome_tracker",
-        "settings.py|domain.training._internal.presets",
         "shell.py|domain.shell._internal.io",
         "shell.py|domain.shell._internal.repl",
         "shell.py|domain.shell._internal.runtime",

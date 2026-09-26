@@ -21,7 +21,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure import AppError
 from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.api.collections")
@@ -130,7 +130,7 @@ class CollectionsRouter:
     ) -> dict:
         """Create and register a new collection pipeline."""
         try:
-            from domain.collections._internal.registry import get_registry
+            from domain.collections import CollectionPipeline, get_registry
 
             registry = get_registry()
             pipeline = registry.create_pipeline(
@@ -140,11 +140,21 @@ class CollectionsRouter:
                 filter_names=[fc.get("type", "") for fc in req.filter_chain if fc.get("type")],
             )
             if pipeline is None:
-                raise_error(
-                    f"Failed to create pipeline: source '{req.source_type}' or store '{req.store_type}' not registered",
-                    code="E_CREATE_FAILED",
-                    status_code=400,
-                )
+                # Name-based lookup failed (type not registered — e.g. "file"
+                # with a path). Build instances from the request config instead;
+                # missing/invalid config maps to the same 400 contract.
+                try:
+                    source = _build_source(req.source_type, req.source_config)
+                    store = _build_store(req.store_type, req.store_config)
+                    filters = [_build_filter(fc) for fc in req.filter_chain if fc.get("type")]
+                except (TypeError, ValueError) as e:
+                    raise_error(
+                        f"Failed to create pipeline: {e}",
+                        code="E_CREATE_FAILED",
+                        status_code=400,
+                    )
+                pipeline = CollectionPipeline(source, store, filters, name=req.name)
+                registry.add_pipeline(pipeline)
 
             safe_audit_log(
                 "collection.create",
@@ -177,7 +187,7 @@ class CollectionsRouter:
 
         try:
             _t0 = _time.monotonic()
-            from domain.collections._internal.registry import get_registry
+            from domain.collections import get_registry
 
             registry = get_registry()
             count = registry.collect(name)
@@ -259,7 +269,7 @@ class CollectionsRouter:
     @endpoint("collections.get_stats")
     async def get_stats(self) -> dict:
         """Get overall collection stats."""
-        from domain.collections._internal.registry import get_registry
+        from domain.collections import get_registry
 
         registry = get_registry()
         stats = registry.stats()
@@ -268,7 +278,7 @@ class CollectionsRouter:
     @endpoint("collections.get_pipeline")
     async def get_pipeline(self, pipeline_id: str) -> dict:
         """Get details of a specific pipeline."""
-        from domain.collections._internal.registry import get_registry
+        from domain.collections import get_registry
 
         registry = get_registry()
         pipeline = registry.get_pipeline(pipeline_id)
@@ -288,7 +298,7 @@ class CollectionsRouter:
     ) -> dict:
         """Delete a pipeline from the registry."""
         try:
-            from domain.collections._internal.registry import get_registry
+            from domain.collections import get_registry
 
             registry = get_registry()
             removed = registry.remove_pipeline(pipeline_id)
@@ -307,7 +317,7 @@ class CollectionsRouter:
     ) -> dict:
         """Run collection for a specific pipeline."""
         try:
-            from domain.collections._internal.registry import get_registry
+            from domain.collections import get_registry
 
             registry = get_registry()
             pipeline = registry.get_pipeline(pipeline_id)
@@ -336,7 +346,7 @@ class CollectionsRouter:
     ) -> dict:
         """Get records from a pipeline's store."""
         try:
-            from domain.collections._internal.registry import get_registry
+            from domain.collections import get_registry
 
             registry = get_registry()
             pipeline = registry.get_pipeline(pipeline_id)
@@ -362,7 +372,7 @@ class CollectionsRouter:
 
 def _build_source(source_type: str, config: dict):
     """Build a Source from type and config."""
-    from domain.collections._internal.sources import (
+    from domain.collections import (
         ApiSource,
         FileSource,
         GeneratorSource,
@@ -390,7 +400,7 @@ def _build_source(source_type: str, config: dict):
 
 def _build_store(store_type: str, config: dict):
     """Build a Store from type and config."""
-    from domain.collections._internal.stores import (
+    from domain.collections import (
         CallbackStore,
         ChainedStore,
         FileStore,
@@ -414,7 +424,7 @@ def _build_store(store_type: str, config: dict):
 
 def _build_filter(config: dict):
     """Build a Filter from config dict."""
-    from domain.collections._internal.filters import (
+    from domain.collections import (
         DedupFilter,
         KeywordFilter,
         LanguageFilter,
