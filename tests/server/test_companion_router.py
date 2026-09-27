@@ -2,8 +2,9 @@
 Tests for the companion router — personality, presets, chat, prompt.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -20,6 +21,16 @@ COMPANION_TARGET = "apps.api.server.routers.companion._companion_router._get_com
 
 def _mock_companion():
     comp = MagicMock()
+    comp.name = "Friend"
+    comp.warmth = 0.7
+    comp.curiosity = 0.6
+    comp.creativity = 0.5
+    comp.confidence = 0.5
+    comp.humor = 0.4
+    comp.traits = comp
+    comp.set_personality.side_effect = lambda **kw: [
+        setattr(comp, k, v) for k, v in kw.items() if v is not None
+    ]
     comp.to_dict.return_value = {
         "name": "Friend",
         "traits": {
@@ -157,7 +168,7 @@ class TestPatchPersonality:
 class TestResetCompanion:
     """DELETE /companion/"""
 
-    @patch("domain.companion._internal.create_companion")
+    @patch("domain.companion.create_companion")
     @patch(COMPANION_TARGET)
     def test_reset_companion(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -173,7 +184,7 @@ class TestResetCompanion:
 class TestPreset:
     """POST /companion/preset"""
 
-    @patch("domain.companion._internal.create_companion")
+    @patch("domain.companion.create_companion")
     @patch(COMPANION_TARGET)
     def test_use_preset(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -186,7 +197,7 @@ class TestPreset:
             body = resp.json()
             assert "traits" in body["data"]
 
-    @patch("domain.companion._internal.create_companion")
+    @patch("domain.companion.create_companion")
     @patch(COMPANION_TARGET)
     def test_use_preset_warm(self, mock_get, mock_create):
         new_comp = _mock_companion()
@@ -218,8 +229,7 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat(self, mock_get):
         comp = _mock_companion()
-        comp.generate = AsyncMock(return_value="Hello! I'm here for you.")
-        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
+        comp.respond = MagicMock(return_value="Hello! I'm here for you.")
         mock_get.return_value = comp
 
         resp = client.post("/companion/chat", json={"message": "Hello!"})
@@ -230,8 +240,7 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_with_mood(self, mock_get):
         comp = _mock_companion()
-        comp.generate = AsyncMock(return_value="I understand.")
-        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
+        comp.respond = MagicMock(return_value="I understand.")
         mock_get.return_value = comp
 
         resp = client.post(
@@ -246,8 +255,7 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_no_system_prompt(self, mock_get):
         comp = _mock_companion()
-        comp.generate = AsyncMock(return_value="Hi!")
-        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
+        comp.respond = MagicMock(return_value="Hi!")
         mock_get.return_value = comp
 
         resp = client.post(
@@ -264,8 +272,7 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_with_user_name(self, mock_get):
         comp = _mock_companion()
-        comp.generate = AsyncMock(return_value="Hello Alice!")
-        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
+        comp.respond = MagicMock(return_value="Hello Alice!")
         mock_get.return_value = comp
 
         resp = client.post(
@@ -282,8 +289,7 @@ class TestChat:
     @patch(COMPANION_TARGET)
     def test_chat_provider_error(self, mock_get):
         comp = _mock_companion()
-        comp.generate = AsyncMock(side_effect=Exception("model crash"))
-        comp.build_system_prompt = MagicMock(return_value="You are a warm friend.")
+        comp.respond = MagicMock(side_effect=Exception("model crash"))
         mock_get.return_value = comp
 
         resp = client.post("/companion/chat", json={"message": "Hello"})
@@ -292,6 +298,43 @@ class TestChat:
         assert "error" in data
 
 
+class _FakeCollection:
+    def __init__(self):
+        self._docs = []
+
+    def count(self):
+        return len(self._docs)
+
+    def find(self):
+        return list(self._docs)
+
+    def find_one(self, query):
+        for doc in self._docs:
+            if all(doc.get(k) == v for k, v in query.items()):
+                return doc
+        return None
+
+    def insert_one(self, doc):
+        self._docs.append(doc)
+
+
+class _FakeDb:
+    def __init__(self):
+        self._collections = {}
+
+    def collection(self, name):
+        if name not in self._collections:
+            self._collections[name] = _FakeCollection()
+        return self._collections[name]
+
+
+@pytest.fixture
+def isolated_presets():
+    with patch("apps.api.server.routers.companion._get_db", return_value=_FakeDb()):
+        yield
+
+
+@pytest.mark.usefixtures("isolated_presets")
 class TestListPresets:
     """GET /companion/presets"""
 
@@ -399,7 +442,7 @@ class TestChatValidation:
     @patch(COMPANION_TARGET)
     def test_no_provider_returns_error_response(self, mock_get):
         comp = _mock_companion()
-        comp.generate = AsyncMock(side_effect=Exception("No model loaded"))
+        comp.respond = MagicMock(side_effect=Exception("No model loaded"))
         mock_get.return_value = comp
         resp = client.post("/companion/chat", json={"message": "Hello"})
         assert resp.status_code == 500
