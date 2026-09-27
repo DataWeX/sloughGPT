@@ -19,7 +19,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, success_response
 
-from domain.billing._internal.token_service import (
+from domain.billing import (
     Tier,
     get_token_billing_service,
 )

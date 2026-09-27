@@ -412,7 +412,7 @@ class FilesRouter:
         # Integrate with RAG service
         facts_stored = 0
         try:
-            from domain.cognition._internal.rag_service import get_rag_service
+            from domain.cognition import get_rag_service
 
             rag = get_rag_service()
             chunk_ids = rag.add_document(
