@@ -233,6 +233,12 @@ describe('CompanionPage — traits display flow', () => {
       expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1)
     })
 
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('slider').length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 5000 },
+    )
     const sliders = screen.getAllByRole('slider')
     expect(sliders.length).toBeGreaterThanOrEqual(1)
     fireEvent.change(sliders[0], { target: { value: '0.9' } })
