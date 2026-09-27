@@ -13,6 +13,8 @@ Single language-agnostic entrypoint for all inference operations:
 Thin adapter: delegates to provider/domain logic, no business logic here.
 """
 
+from __future__ import annotations
+
 import datetime
 import logging
 import time as _time
@@ -229,7 +231,8 @@ class InferRouter:
         provider = get_provider("default")
         if provider is None:
             raise_error(
-                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500
+                "No provider available — load a model first",
+                "E_INFRA_REGISTRY",
             )
 
         prompt_text = req.prompt
@@ -343,7 +346,7 @@ class InferRouter:
                         "IDLE",
                         "No provider available — load a model first",
                         code="E_INFRA_REGISTRY",
-                        http_status=500,
+                        http_status=503,
                     )
                     return
 
@@ -457,10 +460,10 @@ class InferRouter:
                 try:
                     import numpy as np
 
+                    model_name = req.model or getattr(model, "model_id", "unknown")
                     vec = model.embed(req.text)
                     if isinstance(vec, np.ndarray):
                         vec = vec.tolist()
-                    model_name = req.model or getattr(model, "model_id", "unknown")
                     _elapsed_ms = (_time.monotonic() - _t0) * 1000
                     safe_audit_log(
                         "infer.embed",

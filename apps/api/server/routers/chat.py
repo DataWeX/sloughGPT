@@ -5,6 +5,8 @@ Handles all model interaction: respond, stream, regenerate, cancel.
 Session state lives in session.py.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -155,6 +157,9 @@ class ChatRouter:
             async def generate() -> AsyncIterator[str]:
                 _start = time.time()
                 _token_count = 0
+                yield self._sse_event(
+                    "chat", "REGENERATE", "thinking", data={}, message="Regenerating..."
+                )
                 try:
                     async for token in manager.stream(
                         messages=[],  # uses stored history

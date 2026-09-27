@@ -27,6 +27,15 @@ def client(app):
     return TestClient(app, raise_server_exceptions=False)
 
 
+@pytest.fixture(autouse=True)
+def _reset_chat_manager():
+    from domain.chat import reset_chat_manager
+
+    reset_chat_manager()
+    yield
+    reset_chat_manager()
+
+
 class TestSetSessionContext:
     """POST /session/{session_id}/context"""
 
@@ -227,8 +236,9 @@ class TestRegenerateSession:
         assert "No session context found" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.models.get_provider")
     @patch("domain.models._internal.provider.get_provider")
-    def test_regenerate_success(self, mock_get_provider, mock_get, client):
+    def test_regenerate_success(self, mock_inner_prov, mock_get_provider, mock_get, client):
         mock_get.return_value = [
             {"role": "user", "content": "Hello"},
         ]
@@ -240,13 +250,14 @@ class TestRegenerateSession:
 
         mock_prov.chat_stream = _stream
         mock_get_provider.return_value = mock_prov
+        mock_inner_prov.return_value = mock_prov
 
         resp = client.post("/session/sess-1/regenerate")
         assert resp.status_code == 200
         assert "Regenerated" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.models.get_provider")
     def test_regenerate_no_provider(self, mock_get_provider, mock_get, client):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_get_provider.return_value = None
@@ -255,8 +266,11 @@ class TestRegenerateSession:
         assert "Model not loaded" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.models.get_provider")
     @patch("domain.models._internal.provider.get_provider")
-    def test_regenerate_streams_multiple_tokens(self, mock_get_provider, mock_get, client):
+    def test_regenerate_streams_multiple_tokens(
+        self, mock_inner_prov, mock_get_provider, mock_get, client
+    ):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_prov = MagicMock()
 
@@ -266,6 +280,7 @@ class TestRegenerateSession:
 
         mock_prov.chat_stream = _stream
         mock_get_provider.return_value = mock_prov
+        mock_inner_prov.return_value = mock_prov
 
         resp = client.post("/session/sess-1/regenerate")
         assert resp.status_code == 200
@@ -273,8 +288,11 @@ class TestRegenerateSession:
         assert "world" in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.models.get_provider")
     @patch("domain.models._internal.provider.get_provider")
-    def test_regenerate_stream_emits_errors_as_sse(self, mock_get_provider, mock_get, client):
+    def test_regenerate_stream_emits_errors_as_sse(
+        self, mock_inner_prov, mock_get_provider, mock_get, client
+    ):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_prov = MagicMock()
 
@@ -284,6 +302,7 @@ class TestRegenerateSession:
 
         mock_prov.chat_stream = _stream
         mock_get_provider.return_value = mock_prov
+        mock_inner_prov.return_value = mock_prov
 
         resp = client.post("/session/sess-1/regenerate")
         assert resp.status_code == 200
@@ -361,9 +380,12 @@ class TestRegenerateDisconnect:
     """Regenerate streaming branch coverage."""
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.models.get_provider")
     @patch("domain.models._internal.provider.get_provider")
     @patch("fastapi.Request.is_disconnected")
-    def test_regenerate_stops_on_disconnect(self, mock_disc, mock_get_provider, mock_get, client):
+    def test_regenerate_stops_on_disconnect(
+        self, mock_disc, mock_inner_prov, mock_get_provider, mock_get, client
+    ):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_prov = MagicMock()
 
@@ -373,6 +395,7 @@ class TestRegenerateDisconnect:
 
         mock_prov.chat_stream = _stream
         mock_get_provider.return_value = mock_prov
+        mock_inner_prov.return_value = mock_prov
         mock_disc.side_effect = [False, True]
 
         resp = client.post("/session/sess-1/regenerate")
@@ -382,8 +405,11 @@ class TestRegenerateDisconnect:
         assert "Second" not in resp.text
 
     @patch("domain.infrastructure._internal.session_core.SessionCore.get_messages")
+    @patch("domain.models.get_provider")
     @patch("domain.models._internal.provider.get_provider")
-    def test_regenerate_emits_thinking_event(self, mock_get_provider, mock_get, client):
+    def test_regenerate_emits_thinking_event(
+        self, mock_inner_prov, mock_get_provider, mock_get, client
+    ):
         mock_get.return_value = [{"role": "user", "content": "Hello"}]
         mock_prov = MagicMock()
 
@@ -392,6 +418,7 @@ class TestRegenerateDisconnect:
 
         mock_prov.chat_stream = _stream
         mock_get_provider.return_value = mock_prov
+        mock_inner_prov.return_value = mock_prov
         resp = client.post("/session/sess-1/regenerate")
         assert resp.status_code == 200
         assert "thinking" in resp.text

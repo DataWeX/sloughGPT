@@ -1194,7 +1194,8 @@ class InferenceRouter:
         provider = get_provider("default")
         if provider is None:
             raise_error(
-                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=500
+                "No provider available — load a model first",
+                "E_INFRA_REGISTRY",
             )
 
         prompt_text = req.prompt
@@ -1335,7 +1336,7 @@ class InferenceRouter:
                     "IDLE",
                     "No provider available — load a model first",
                     code="E_INFRA_REGISTRY",
-                    http_status=500,
+                    http_status=503,
                 )
                 return
 
@@ -3077,7 +3078,15 @@ class InferenceRouter:
             resolved = await asyncio.to_thread(_resolve)
             if resolved is None:
                 raise_error("Audio not found", "E_NOT_FOUND", status_code=404)
-            return FileResponse(str(resolved), media_type="audio/m4a")
+            media_types = {
+                ".m4a": "audio/m4a",
+                ".wav": "audio/wav",
+                ".mp3": "audio/mpeg",
+                ".ogg": "audio/ogg",
+                ".webm": "audio/webm",
+            }
+            media_type = media_types.get(resolved.suffix.lower(), "audio/m4a")
+            return FileResponse(str(resolved), media_type=media_type)
 
         except Exception as e:
             classify_and_raise(e, source="inference.get_voice_audio")
