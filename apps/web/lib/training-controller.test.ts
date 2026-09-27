@@ -16,7 +16,9 @@ setupApiMocks()
 import { trainingJobsController } from './training-controller'
 
 describe('trainingJobsController.startAutoTrain', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/start with params', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started', teacher: 'gpt2', student: 'lstm' })
@@ -34,7 +36,9 @@ describe('trainingJobsController.startAutoTrain', () => {
 })
 
 describe('trainingJobsController.stopAutoTrain', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/stop', async () => {
     apiClient.apiPost.mockResolvedValue(undefined)
@@ -44,18 +48,25 @@ describe('trainingJobsController.stopAutoTrain', () => {
 })
 
 describe('trainingJobsController.loadAdapter', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/load-adapter with adapter_path and merge', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'loaded', rank: 8, merged: false })
     const result = await trainingJobsController.loadAdapter('/path/to/adapter.npz', false)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/load-adapter', { adapter_path: '/path/to/adapter.npz', merge: false })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/load-adapter', {
+      adapter_path: '/path/to/adapter.npz',
+      merge: false,
+    })
     expect(result.status).toBe('loaded')
   })
 })
 
 describe('trainingJobsController.startTurboTrain', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/turbo-start', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'done', final_loss: 0.5 })
@@ -66,10 +77,14 @@ describe('trainingJobsController.startTurboTrain', () => {
 })
 
 describe('trainingJobsController.list', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /training/jobs and returns array', async () => {
-    apiClient.apiGet.mockResolvedValue([{ id: 'j1', name: 'test', status: 'done', progress: 100, created_at: '' }])
+    apiClient.apiGet.mockResolvedValue([
+      { id: 'j1', name: 'test', status: 'done', progress: 100, created_at: '' },
+    ])
     const result = await trainingJobsController.list()
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('j1')
@@ -77,7 +92,9 @@ describe('trainingJobsController.list', () => {
   })
 
   it('handles {jobs: [...]} response shape', async () => {
-    apiClient.apiGet.mockResolvedValue({ jobs: [{ id: 'j2', name: 'test', status: 'running', progress: 50, created_at: '' }] })
+    apiClient.apiGet.mockResolvedValue({
+      jobs: [{ id: 'j2', name: 'test', status: 'running', progress: 50, created_at: '' }],
+    })
     const result = await trainingJobsController.list()
     expect(result).toHaveLength(1)
     expect(result[0].id).toBe('j2')
@@ -85,7 +102,9 @@ describe('trainingJobsController.list', () => {
 })
 
 describe('trainingJobsController.listCheckpoints', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /training/checkpoints', async () => {
     apiClient.apiGet.mockResolvedValue([{ name: 'v1', soul: 'friendly' }])
@@ -96,7 +115,9 @@ describe('trainingJobsController.listCheckpoints', () => {
 })
 
 describe('trainingJobsController.listBuilds', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /training/builds', async () => {
     apiClient.apiGet.mockResolvedValue({ builds: [{ name: 'b1', build_type: 'hf-finetune' }] })
@@ -107,10 +128,18 @@ describe('trainingJobsController.listBuilds', () => {
 })
 
 describe('trainingJobsController.get', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /training/jobs/{id}', async () => {
-    apiClient.apiGet.mockResolvedValue({ id: 'j1', name: 'test', status: 'done', progress: 100, created_at: '' })
+    apiClient.apiGet.mockResolvedValue({
+      id: 'j1',
+      name: 'test',
+      status: 'done',
+      progress: 100,
+      created_at: '',
+    })
     const result = await trainingJobsController.get('j1')
     expect(result?.id).toBe('j1')
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/jobs/j1')
@@ -124,7 +153,9 @@ describe('trainingJobsController.get', () => {
 })
 
 describe('trainingJobsController.create', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/start with params', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started', job_id: 'j1' })
@@ -149,7 +180,9 @@ describe('trainingJobsController.create', () => {
 })
 
 describe('trainingJobsController.startLoraFinetune', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/lora-finetune', async () => {
     apiClient.apiPost.mockResolvedValue({ job_id: 'lora1', status: 'queued', message: 'ok' })
@@ -182,10 +215,18 @@ describe('trainingJobsController.startLoraFinetune', () => {
 })
 
 describe('trainingJobsController.getSummary', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /training/jobs/{id}/summary', async () => {
-    apiClient.apiGet.mockResolvedValue({ job_id: 'j1', summary: 'test', status: 'done', model: 'gpt2', dataset: 'sh' })
+    apiClient.apiGet.mockResolvedValue({
+      job_id: 'j1',
+      summary: 'test',
+      status: 'done',
+      model: 'gpt2',
+      dataset: 'sh',
+    })
     const result = await trainingJobsController.getSummary('j1')
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/jobs/j1/summary')
     expect(result.job_id).toBe('j1')
@@ -193,7 +234,9 @@ describe('trainingJobsController.getSummary', () => {
 })
 
 describe('trainingJobsController.startVisualTrain', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/visual-start', async () => {
     apiClient.apiPost.mockResolvedValue({ job_id: 'visual1', status: 'ok', message: 'started' })
@@ -203,7 +246,9 @@ describe('trainingJobsController.startVisualTrain', () => {
 })
 
 describe('trainingJobsController.stop', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/jobs/{id}/stop', async () => {
     apiClient.apiPost.mockResolvedValue(undefined)
@@ -213,7 +258,9 @@ describe('trainingJobsController.stop', () => {
 })
 
 describe('trainingJobsController.delete', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('DELETEs /training/jobs/{id}', async () => {
     apiClient.apiDelete.mockResolvedValue(undefined)
@@ -223,7 +270,9 @@ describe('trainingJobsController.delete', () => {
 })
 
 describe('trainingJobsController.recoverable', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /recovery/recoverable', async () => {
     apiClient.apiGet.mockResolvedValue({ jobs: [{ id: 'r1', name: 'crashed', failed_at: '' }] })
@@ -234,7 +283,9 @@ describe('trainingJobsController.recoverable', () => {
 })
 
 describe('trainingJobsController.recover', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /recovery/recover/{id}', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'recovered' })
@@ -245,10 +296,14 @@ describe('trainingJobsController.recover', () => {
 })
 
 describe('trainingJobsController.webhooks', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('listWebhooks GETs /training/webhooks', async () => {
-    apiClient.apiGet.mockResolvedValue({ webhooks: [{ id: 'w1', url: 'http://hook', events: ['done'] }] })
+    apiClient.apiGet.mockResolvedValue({
+      webhooks: [{ id: 'w1', url: 'http://hook', events: ['done'] }],
+    })
     const result = await trainingJobsController.listWebhooks()
     expect(result).toHaveLength(1)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/webhooks')
@@ -257,7 +312,23 @@ describe('trainingJobsController.webhooks', () => {
   it('createWebhook POSTs to /training/webhooks', async () => {
     apiClient.apiPost.mockResolvedValue({ id: 'w2', url: 'http://new', events: ['start'] })
     await trainingJobsController.createWebhook('http://new', ['start'])
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/webhooks', { url: 'http://new', events: ['start'] })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/webhooks', {
+      url: 'http://new',
+      events: ['start'],
+    })
+  })
+
+  it('createWebhook surfaces deduplicated flag on idempotent re-create', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      id: 'w2',
+      url: 'http://new',
+      events: ['start'],
+      deduplicated: true,
+      message: 'Webhook already registered',
+    })
+    const result = await trainingJobsController.createWebhook('http://new', ['start'])
+    expect(result.deduplicated).toBe(true)
+    expect(result.message).toBe('Webhook already registered')
   })
 
   it('deleteWebhook DELETEs /training/webhooks/{id}', async () => {
@@ -267,7 +338,16 @@ describe('trainingJobsController.webhooks', () => {
   })
 
   it('webhookStats GETs /training/webhooks/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({ total_webhooks: 5, success_rate: 0.9, total_deliveries: 10, successful_deliveries: 9, failed_deliveries: 1, active_webhooks: 3, pending_retries: 0, dead_letters: 0 })
+    apiClient.apiGet.mockResolvedValue({
+      total_webhooks: 5,
+      success_rate: 0.9,
+      total_deliveries: 10,
+      successful_deliveries: 9,
+      failed_deliveries: 1,
+      active_webhooks: 3,
+      pending_retries: 0,
+      dead_letters: 0,
+    })
     const result = await trainingJobsController.webhookStats()
     expect(result.total_webhooks).toBe(5)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/webhooks/stats')
@@ -275,7 +355,9 @@ describe('trainingJobsController.webhooks', () => {
 })
 
 describe('trainingJobsController.recovery', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('getRecoveryStats GETs /recovery/stats', async () => {
     apiClient.apiGet.mockResolvedValue({ recovered: 3, failed: 1 })
@@ -293,17 +375,23 @@ describe('trainingJobsController.recovery', () => {
 })
 
 describe('trainingJobsController.testWebhook', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/webhooks/test', async () => {
     apiClient.apiPost.mockResolvedValue({ ok: true })
     await trainingJobsController.testWebhook('http://hook')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/webhooks/test', { url: 'http://hook' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/webhooks/test', {
+      url: 'http://hook',
+    })
   })
 })
 
 describe('trainingJobsController.getStatus', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /training/status', async () => {
     apiClient.apiGet.mockResolvedValue({ status: 'idle' })
@@ -314,18 +402,25 @@ describe('trainingJobsController.getStatus', () => {
 })
 
 describe('trainingJobsController.exportFeedbackPairs', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/export-text', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'ok', count: 10 })
     const result = await trainingJobsController.exportFeedbackPairs(0.5, 100)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/export-text', { min_quality: 0.5, target_count: 100 })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/export-text', {
+      min_quality: 0.5,
+      target_count: 100,
+    })
     expect(result.count).toBe(10)
   })
 })
 
 describe('trainingJobsController.loadCheckpoint', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/checkpoints/{name}/load', async () => {
     apiClient.apiPost.mockResolvedValue({ success: true })
@@ -336,7 +431,9 @@ describe('trainingJobsController.loadCheckpoint', () => {
 })
 
 describe('trainingJobsController.deleteCheckpoint', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('DELETEs /training/checkpoints/{name}', async () => {
     apiClient.apiDelete.mockResolvedValue({ success: true })
@@ -347,7 +444,9 @@ describe('trainingJobsController.deleteCheckpoint', () => {
 })
 
 describe('trainingJobsController.deleteCheckpointsBatch', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('deletes multiple checkpoints in parallel', async () => {
     apiClient.apiDelete.mockResolvedValue({ success: true })
@@ -367,11 +466,21 @@ describe('trainingJobsController.deleteCheckpointsBatch', () => {
 })
 
 describe('trainingJobsController.listFineTuned', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('returns models from /training/finetuned-models', async () => {
     apiClient.apiGet.mockResolvedValue({
-      models: [{ name: 'gpt2_dataset_1', model: 'gpt2', dataset: 'dataset_1', size_mb: 1.2, model_path: '/tmp/x' }],
+      models: [
+        {
+          name: 'gpt2_dataset_1',
+          model: 'gpt2',
+          dataset: 'dataset_1',
+          size_mb: 1.2,
+          model_path: '/tmp/x',
+        },
+      ],
     })
     const result = await trainingJobsController.listFineTuned()
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/finetuned-models')
@@ -380,7 +489,9 @@ describe('trainingJobsController.listFineTuned', () => {
   })
 
   it('accepts a bare array response', async () => {
-    apiClient.apiGet.mockResolvedValue([{ name: 'gpt2_dataset_1', model: 'gpt2', dataset: '', size_mb: 0, model_path: '/tmp/x' }])
+    apiClient.apiGet.mockResolvedValue([
+      { name: 'gpt2_dataset_1', model: 'gpt2', dataset: '', size_mb: 0, model_path: '/tmp/x' },
+    ])
     const result = await trainingJobsController.listFineTuned()
     expect(result).toHaveLength(1)
   })
@@ -392,10 +503,17 @@ describe('trainingJobsController.listFineTuned', () => {
 })
 
 describe('trainingJobsController.loadFineTuned', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/finetuned-models/{name}/load', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'loaded', name: 'gpt2_dataset_1', model_path: '/tmp/x', model_id: 'gpt2' })
+    apiClient.apiPost.mockResolvedValue({
+      status: 'loaded',
+      name: 'gpt2_dataset_1',
+      model_path: '/tmp/x',
+      model_id: 'gpt2',
+    })
     const result = await trainingJobsController.loadFineTuned('gpt2_dataset_1')
     expect(result.model_id).toBe('gpt2')
     expect(apiClient.apiPost).toHaveBeenCalledWith('/training/finetuned-models/gpt2_dataset_1/load')
@@ -409,7 +527,9 @@ describe('trainingJobsController.loadFineTuned', () => {
 })
 
 describe('trainingJobsController.deleteFineTuned', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('DELETEs /training/finetuned-models/{name}', async () => {
     apiClient.apiDelete.mockResolvedValue({ status: 'deleted', name: 'gpt2_dataset_1' })

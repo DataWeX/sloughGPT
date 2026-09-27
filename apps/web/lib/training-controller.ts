@@ -71,6 +71,8 @@ export interface Webhook {
   description?: string
   is_active?: boolean
   created_at?: string
+  deduplicated?: boolean
+  message?: string
 }
 
 export interface AutoTrainStartRequest {

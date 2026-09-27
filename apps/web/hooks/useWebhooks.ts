@@ -143,11 +143,17 @@ export function useWebhooks(): UseWebhooksReturn {
       if (!newUrl.trim()) return
       setAdding(true)
       try {
-        await trainingJobsController.createWebhook(newUrl.trim(), newEvents)
-        trackEvent('webhook_created', { url: newUrl.trim() })
+        const created = await trainingJobsController.createWebhook(newUrl.trim(), newEvents)
+        trackEvent('webhook_created', {
+          url: newUrl.trim(),
+          deduplicated: created?.deduplicated ?? false,
+        })
         setNewUrl('')
         setNewEvents(['training.completed'])
-        addToast('Webhook added', 'success')
+        addToast(
+          created?.deduplicated ? 'Webhook already registered' : 'Webhook added',
+          created?.deduplicated ? 'info' : 'success',
+        )
         await fetchWebhooks()
       } catch (err) {
         addToast(err instanceof Error ? err.message : 'Failed to add webhook', 'error')
