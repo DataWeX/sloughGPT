@@ -164,7 +164,7 @@ class TestDashboardEdgeCases:
             {"event": "another_event", "ts": 2.0},
         ]
         with patch(
-            "domain.infrastructure._internal.event_buffer.get_event_buffer",
+            "domain.infrastructure.get_event_buffer",
             return_value=mock_buffer,
         ):
             resp = TestClient(_app).get("/dashboard/events?n=10")

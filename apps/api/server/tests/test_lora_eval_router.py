@@ -125,7 +125,7 @@ class TestTriggerAggregation:
     def test_aggregation_success(self):
         client = get_test_client()
         store = _mock_per_user_lora()
-        with patch("domain.feedback._internal.per_user_lora.get_per_user_lora", return_value=store):
+        with patch("domain.feedback.get_per_user_lora", return_value=store):
             resp = client.post("/lora-eval/aggregate?top_k=5&min_feedback=3")
         assert resp.status_code == 200
         data = _data(resp)
@@ -137,7 +137,7 @@ class TestTriggerAggregation:
         client = get_test_client()
         store = MagicMock()
         store.aggregate_best_adapters.return_value = {"error": "no adapters found"}
-        with patch("domain.feedback._internal.per_user_lora.get_per_user_lora", return_value=store):
+        with patch("domain.feedback.get_per_user_lora", return_value=store):
             resp = client.post("/lora-eval/aggregate")
         assert resp.status_code == 200
         data = _data(resp)
@@ -146,7 +146,7 @@ class TestTriggerAggregation:
     def test_aggregation_params(self):
         client = get_test_client()
         store = _mock_per_user_lora()
-        with patch("domain.feedback._internal.per_user_lora.get_per_user_lora", return_value=store):
+        with patch("domain.feedback.get_per_user_lora", return_value=store):
             client.post("/lora-eval/aggregate?top_k=10&min_feedback=5&output_name=test_agg")
         store.aggregate_best_adapters.assert_called_once_with(
             top_k=10, min_feedback_count=5, output_name="test_agg", run_eval=True

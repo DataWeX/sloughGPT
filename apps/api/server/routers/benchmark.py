@@ -24,7 +24,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure import AppError
 
 
 def _numpy_perplexity(model, ids):
@@ -282,7 +282,7 @@ class BenchmarkRouter:
         """Get recent logged responses for review."""
         _t0 = _time.monotonic()
         try:
-            from domain.feedback._internal.response_tracker import get_response_tracker
+            from domain.feedback import get_response_tracker
 
             tracker = get_response_tracker()
             responses = tracker.get_responses(limit=limit, model=model)

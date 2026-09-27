@@ -160,7 +160,7 @@ class SystemRouter:
             Sends recent history first, then streams new lines as they arrive.
             Each event: {"text": "...", "level": "info|error|warning", "source": "...", "ts": 1234.5}
             """
-            from domain.infrastructure._internal.output_buffer import get_server_buffer
+            from domain.infrastructure import get_server_buffer
 
             buf = get_server_buffer()
             sub = buf.subscribe("http-" + str(id(request)))
@@ -189,7 +189,7 @@ class SystemRouter:
     @endpoint("system.tail_output")
     async def tail_output(self, n: int = Query(100, ge=1, le=1000)) -> dict:
         """Get last N lines of server output."""
-        from domain.infrastructure._internal.output_buffer import get_server_buffer
+        from domain.infrastructure import get_server_buffer
 
         buf = get_server_buffer()
         return success_response(

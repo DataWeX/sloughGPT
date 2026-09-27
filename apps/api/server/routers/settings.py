@@ -307,7 +307,7 @@ class SettingsRouter:
     @endpoint("settings.get_all")
     async def get_settings(self) -> dict:
         """Get all user settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         ps = _get()
         return success_response(data=ps.to_dict())
@@ -315,7 +315,7 @@ class SettingsRouter:
     @endpoint("settings.get_generation")
     async def get_generation(self) -> dict:
         """Get generation settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         s = _get().settings.generation
         from dataclasses import asdict
@@ -327,7 +327,7 @@ class SettingsRouter:
         self, req: GenerationSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update generation settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
@@ -342,7 +342,7 @@ class SettingsRouter:
     @endpoint("settings.get_training")
     async def get_training(self) -> dict:
         """Get training settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         s = _get().settings.training
         from dataclasses import asdict
@@ -354,7 +354,7 @@ class SettingsRouter:
         self, req: TrainingSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update training settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
@@ -369,7 +369,7 @@ class SettingsRouter:
     @endpoint("settings.get_adaptive")
     async def get_adaptive(self) -> dict:
         """Get adaptive settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         s = _get().settings.adaptive
         from dataclasses import asdict
@@ -381,7 +381,7 @@ class SettingsRouter:
         self, req: AdaptiveSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update adaptive settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
@@ -396,7 +396,7 @@ class SettingsRouter:
     @endpoint("settings.get_voice")
     async def get_voice(self) -> dict:
         """Get voice settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         s = _get().settings.voice
         from dataclasses import asdict
@@ -408,7 +408,7 @@ class SettingsRouter:
         self, req: VoiceSettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update voice settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
@@ -423,7 +423,7 @@ class SettingsRouter:
     @endpoint("settings.get_ui")
     async def get_ui(self) -> dict:
         """Get UI settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         s = _get().settings.ui
         from dataclasses import asdict
@@ -435,7 +435,7 @@ class SettingsRouter:
         self, req: UISettingsUpdate, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Update UI settings."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
@@ -450,7 +450,7 @@ class SettingsRouter:
     @endpoint("settings.get_providers_api")
     async def get_providers_api(self) -> dict:
         """Get external API provider settings (key never returned)."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         s = _get().settings.providers
         return success_response(data=_provider_public(s))
@@ -464,8 +464,8 @@ class SettingsRouter:
         """Update external API provider settings and apply at runtime."""
         from dataclasses import asdict
 
-        from domain.inference._internal.api_provider import configure_api_provider
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.inference import configure_api_provider
+        from domain.settings import get_settings as _get
 
         updates = {k: v for k, v in req.model_dump().items() if v is not None}
         if not updates:
@@ -489,7 +489,7 @@ class SettingsRouter:
     @endpoint("settings.reset")
     async def reset_settings(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Reset all settings to defaults."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         ps = _get()
         ps.reset()
@@ -501,7 +501,7 @@ class SettingsRouter:
     @endpoint("settings.adaptive_insights")
     async def get_adaptive_insights(self) -> dict:
         """Get adaptive training insights from history."""
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
         from domain.training import AdaptiveConfigEngine
 
         ps = _get()
@@ -658,7 +658,7 @@ class SettingsRouter:
         config = apply_preset(preset_name)
         if not config:
             return success_response(data={"error": f"Preset '{preset_name}' not found"})
-        from domain.settings._internal.persistent import get_settings as _get
+        from domain.settings import get_settings as _get
 
         ps = _get()
         ps.update("training", **config)

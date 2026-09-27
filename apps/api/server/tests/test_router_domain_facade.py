@@ -16,27 +16,7 @@ ROUTERS_DIR = Path(__file__).resolve().parents[1] / "routers"
 # Per-file `_internal` reach-in counts at phase A (2026-09-26, total 131).
 # Update DOWNWARD only as phases B/C route routers through facades/engines.
 _INTERNAL_BASELINE = {
-    "agents.py": 6,
-    "benchmark.py": 2,
-    "consciousness.py": 21,
-    "dashboard.py": 3,
-    "files.py": 1,
-    "lora_eval.py": 3,
-    "memory.py": 6,
-    "models.py": 5,
-    "registry.py": 2,
-    "self_train.py": 1,
-    "settings.py": 17,
-    "shell.py": 3,
-    "status.py": 1,
-    "system.py": 2,
-    "tenants.py": 2,
-    "tokens.py": 1,
-    "tools.py": 1,
-    "users.py": 2,
-    "vm.py": 4,
-    "workspaces.py": 5,
-    "world_render.py": 6,
+    "workspaces.py": 2,
 }
 
 

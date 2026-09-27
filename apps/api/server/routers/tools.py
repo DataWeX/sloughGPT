@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from schemas.common import endpoint, success_response
 
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
-from domain.models._internal.provider import get_provider
+from domain.models import get_provider
 from domain.tools import get_tools_engine
 
 logger = logging.getLogger("slo.tools")
