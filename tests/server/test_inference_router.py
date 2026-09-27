@@ -542,6 +542,24 @@ class TestVoice:
         resp = client.get("/chat/audio/missing-sess/does-not-exist")
         assert resp.status_code == 404
 
+    def test_audio_content_type_matches_extension(self, client):
+        import shutil
+
+        sess = "voice-media-type-test"
+        try:
+            upload = client.post(
+                f"/chat/voice/{sess}",
+                files={"file": ("clip.wav", b"RIFF\x00\x00\x00\x00WAVEfmt ", "audio/wav")},
+            )
+            assert upload.status_code == 200
+            msg_id = upload.json()["data"]["message_id"]
+            resp = client.get(f"/chat/audio/{sess}/{msg_id}")
+            assert resp.status_code == 200
+            assert resp.headers["content-type"].startswith("audio/wav")
+        finally:
+            client.delete(f"/chat/sessions/{sess}")
+            shutil.rmtree(_inference_router._VOICE_DIR / sess, ignore_errors=True)
+
 
 class TestProviders:
     """GET /providers"""
