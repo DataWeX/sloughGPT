@@ -113,7 +113,7 @@ class TestShellKernel:
         text = "".join(out)
         assert "sloughvm>" in text
         assert (
-            "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, cp <src> <dst>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 
@@ -201,6 +201,66 @@ class TestShellKernel:
 
         assert vs._fs.delete("motd")
         check("ls\n", "(no files)")
+
+    def test_shell_cp_command(self):
+        """REPL cp copies a file; missing source and usage paths report errors."""
+        from vm_builtins import get_builtin
+
+        from domain.shell._internal.vm import X86VirtualSystem
+        from domain.shell._internal.vm_permissions import Role
+
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._fs.write("orig", b"payload-data")
+        pid = vs.spawn("web_user", get_builtin("shell"))
+        assert pid is not None
+        vs._syscall._rbac.assign(pid, Role.USER)
+        vs.scheduler.start(vs.cpu)
+        vs.scheduler.current.restore_to_cpu(vs.cpu)
+
+        out: list[str] = []
+        original = vs._syscall._sys_write
+
+        def capture(fd, addr, count):
+            if fd in (1, 2):
+                out.append(
+                    bytes(vs.cpu._read8(addr + i) for i in range(count)).decode("ascii", "replace")
+                )
+                return count
+            return original(fd, addr, count)
+
+        vs._syscall._sys_write = capture
+
+        def feed(text: str) -> None:
+            for ch in text:
+                if ch in ("\b", "\x7f"):
+                    vs.cpu.push_scancode(0x0E)
+                else:
+                    vs.cpu.push_key(ch)
+
+        def run_steps(n: int) -> bool:
+            for _ in range(n):
+                vs.cpu.transfer_key()
+                if not vs.cpu.step():
+                    return True
+            return False
+
+        def check(cmd: str, expect: str) -> None:
+            out.clear()
+            feed(cmd)
+            assert not run_steps(60000), f"unexpected halt running {cmd!r}"
+            text = "".join(out)
+            assert expect in text, f"{cmd!r} -> {text!r}"
+
+        check("cp orig copy\n", "copied orig -> copy")
+        assert vs._fs.exists("copy")
+        assert vs._fs.read("copy").rstrip(b"\x00") == b"payload-data"
+        check("cat copy\n", "payload-data")
+        check("cp orig truncated\n", "copied orig -> truncated")
+        check("cp nofile x\n", "cp: no such file")
+        assert not vs._fs.exists("x")
+        check("cp\n", "usage: cp <src> <dst>")
+        check("cp orig\n", "usage: cp <src> <dst>")
+        check("cpfoo\n", "unknown command")
 
     def test_shell_train_commands(self, monkeypatch):
         """REPL train/train-status/train-result with a fake training bridge."""
@@ -326,7 +386,7 @@ class TestVMConsoleHTTP:
 
             text = _wait_history(session_id, "commands:")
             assert (
-                "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
+                "commands: help, ls, cat <file>, cp <src> <dst>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
                 in text
             )
 
@@ -436,7 +496,7 @@ class TestVMConsoleStream:
         await console_session_input(session_id, VMConsoleInputRequest(text="help\n"), auth_user={})
         text = await self._read_output(it, lambda t: "commands:" in t)
         assert (
-            "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, cp <src> <dst>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 

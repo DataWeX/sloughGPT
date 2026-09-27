@@ -495,7 +495,7 @@ def _shell() -> str:
 prompt: db 10, "sloughvm> ", 0
 msg_nl: db 10, 0
 msg_sp: db " ", 0
-msg_help: db "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
+msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
 msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
 msg_unknown: db "unknown command - type help", 10, 0
 msg_clear: db 27, "[2J", 27, "[H", 0
@@ -506,6 +506,11 @@ msg_no_file: db "cat: no such file", 10, 0
 msg_wrote: db "wrote ", 0
 msg_write_usage: db "usage: write <file> <text>", 10, 0
 msg_open_fail: db "write: cannot create file", 10, 0
+msg_copied: db "copied ", 0
+msg_arrow: db " -> ", 0
+msg_cp_usage: db "usage: cp <src> <dst>", 10, 0
+msg_cp_no_src: db "cp: no such file", 10, 0
+msg_cp_fail: db "cp: cannot create file", 10, 0
 msg_train_started: db "started job ", 0
 msg_train_fail: db "train: could not start job", 10, 0
 msg_denied: db "permission denied (ADMIN role required)", 10, 0
@@ -524,6 +529,7 @@ cmd_ls: db "ls", 0
 cmd_uname: db "uname", 0
 cmd_pid: db "pid", 0
 cmd_cat: db "cat", 0
+cmd_cp: db "cp", 0
 cmd_write: db "write", 0
 cmd_train: db "train", 0
 cmd_train_status: db "train-status", 0
@@ -647,6 +653,11 @@ line_done:
     call prefix_match
     test eax, eax
     jnz do_cat
+    mov esi, line
+    mov edi, cmd_cp
+    call prefix_match
+    test eax, eax
+    jnz do_cp
     mov esi, line
     mov edi, cmd_write
     call prefix_match
@@ -976,6 +987,121 @@ wr_usage:
     jmp repl
 wr_open_fail:
     mov esi, msg_open_fail
+    call print_str
+    jmp repl
+do_cp:
+    ; prefix "cp" matched — guard: must be followed by space or NUL
+    mov esi, line
+    add esi, 2
+    mov al, [esi]
+    test al, al
+    jz cp_usage
+    cmp al, ' '
+    jne do_unknown
+cp_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je cp_skip
+    test al, al
+    jz cp_usage
+    ; ESI = src start — scan to space, NUL-terminate
+    mov edi, esi
+cp_src_scan:
+    mov al, [edi]
+    test al, al
+    jz cp_no_dst
+    cmp al, ' '
+    je cp_src_end
+    inc edi
+    jmp cp_src_scan
+cp_src_end:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+cp_dst_skip:
+    mov al, [edi]
+    cmp al, ' '
+    je cp_dst_skip
+    test al, al
+    jz cp_no_dst
+    ; EDI = dst start — NUL-terminate at any trailing token
+    mov ebx, edi
+cp_dst_scan:
+    mov al, [ebx]
+    test al, al
+    jz cp_go
+    cmp al, ' '
+    je cp_dst_end
+    inc ebx
+    jmp cp_dst_scan
+cp_dst_end:
+    xor eax, eax
+    mov [ebx], al
+    jmp cp_go
+cp_no_dst:
+    jmp cp_usage
+cp_go:
+    ; ESI = src, EDI = dst
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl cp_src_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl cp_src_missing
+    mov edx, eax          ; bytes to write into dst
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov eax, {_NR_OPEN}
+    mov ebx, edi
+    mov ecx, 2            ; create+truncate
+    int 0x80
+    cmp eax, 0
+    jl cp_dst_fail
+    mov [catfd], al
+    mov ebx, eax
+    test edx, edx
+    jz cp_done
+    mov eax, {_NR_WRITE}
+    mov ecx, catbuf
+    int 0x80
+cp_done:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ebx, esi          ; keep src across prints
+    mov esi, msg_copied
+    call print_str
+    mov esi, ebx
+    call print_str
+    mov esi, msg_arrow
+    call print_str
+    mov esi, edi
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+cp_usage:
+    mov esi, msg_cp_usage
+    call print_str
+    jmp repl
+cp_src_missing:
+    mov esi, msg_cp_no_src
+    call print_str
+    jmp repl
+cp_dst_fail:
+    mov esi, msg_cp_fail
     call print_str
     jmp repl
 strcmp:
