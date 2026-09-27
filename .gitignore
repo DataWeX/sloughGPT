@@ -232,6 +232,7 @@ t.png
 
 # Compiled C extensions (build artifacts)
 *.so
+*.so.buildflags
 
 # Build output
 **/target/
