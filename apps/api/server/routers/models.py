@@ -556,8 +556,8 @@ class ModelsRouter:
         if server_state.model is None:
             raise_error("No model loaded", code="E_NOT_FOUND")
         try:
-            from domain.training._internal.export import ExportConfig
-            from domain.training._internal.export import export_model as do_export
+            from domain.training import ExportConfig
+            from domain.training import export_model as do_export
 
             config = ExportConfig(
                 input_path="current",
@@ -592,7 +592,7 @@ class ModelsRouter:
     @endpoint("models.get_export_formats")
     async def get_export_formats(self) -> dict:
         """Get list of supported export formats."""
-        from domain.training._internal.export import list_export_formats
+        from domain.training import list_export_formats
 
         return success_response(data=list_export_formats())
 

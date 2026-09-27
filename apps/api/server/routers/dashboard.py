@@ -82,7 +82,7 @@ def _get_active_processes() -> dict:
 
     # Auto-train turbo
     try:
-        from domain.training._internal.service import get_turbo_lock, get_turbo_state
+        from domain.training import get_turbo_lock, get_turbo_state
 
         with get_turbo_lock():
             turbo = dict(get_turbo_state())
@@ -227,7 +227,7 @@ class DashboardRouter:
         services_ok = 0
         services_total = 0
         try:
-            from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+            from domain.training import TrainingOutcomeTracker
 
             tracker = TrainingOutcomeTracker()
             stats = tracker.get_stats()
