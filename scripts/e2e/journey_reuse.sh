@@ -58,8 +58,11 @@ ok "ports $API_P + $WEB_P free"
 LOG1="$LOG_DIR/journey_reuse.phase1.log"
 rm -rf apps/web/.next
 rm -f "$LOG1" "$FAKE_NPM_LOG"
+# Headless `setsid -w`: pty teardown would SIGHUP the group and mask an
+# orphaned child before the leftover check; -w gives the exit code
+# (0 = handler ran, 130 = bare KeyboardInterrupt escaped).
 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
-  setsid script -qec "./sloughgpt serve --port $API_P --web --web-port $WEB_P --host localhost" /dev/null \
+  setsid -w ./sloughgpt serve --port $API_P --web --web-port $WEB_P --host localhost \
   > "$LOG1" 2>&1 < /dev/null &
 P1=$!
 P1PID=""
@@ -71,10 +74,19 @@ done
 if [ -z "$P1PID" ]; then
   bad "phase1: cli never started"
 else
-  # t+2: past interpreter boot + cli.py import (~0.9s total) so the
-  # entry-point handler is installed, but well before ready — the exact
-  # window where the interrupt used to be silently dropped.
-  sleep 2
+  # Wait for the uvicorn child instead of a fixed sleep: the child is
+  # spawned inside the command handler, after the entry-point signal
+  # registration — so once it exists the handler is guaranteed installed
+  # and we are in the pre-ready wait loop (the exact target window).
+  # A fixed t+2 races import time under load and can land pre-registration.
+  UVREADY=""
+  for i in $(seq 1 20); do
+    if pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" >/dev/null 2>&1; then
+      UVREADY=$i; break
+    fi
+    sleep 1
+  done
+  [ -n "$UVREADY" ] || bad "phase1: uvicorn never spawned within 20s"
   kill -INT "$P1PID" 2>/dev/null
   EXITED=""
   for i in $(seq 1 10); do
@@ -83,10 +95,12 @@ else
   done
   if [ -n "$EXITED" ]; then
     ok "phase1: startup SIGINT honoured (exit ${EXITED}s)"
-    if grep -qE "Stopped|Interrupted" <(sed $'s/\x1b\[[0-9;]*[A-Za-z]//g' "$LOG1"); then
-      ok "phase1: shutdown acknowledged (Stopped/Interrupted)"
+    wait "$P1" 2>/dev/null
+    EC=$?
+    if [ "$EC" = "0" ]; then
+      ok "phase1: handler path ran (exit 0; bare 'Interrupted' = 130)"
     else
-      bad "phase1: no shutdown acknowledgement after startup SIGINT"
+      bad "phase1: exit $EC after startup SIGINT (130 = handler never ran)"
     fi
   else
     bad "phase1: cli survived startup SIGINT (interrupt silently dropped?)"
