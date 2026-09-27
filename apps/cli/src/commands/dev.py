@@ -433,6 +433,19 @@ def cmd_dev(args):
     web_port = getattr(args, "web_port", 3000)
     watch_web = getattr(args, "watch_web", False)
 
+    # ── Signal handlers — installed before any spawn ──────
+    # Flag-only: the dashboard loop notices `shutdown` and the `finally`
+    # below owns cleanup. Registered at entry so an interrupt during
+    # startup (cli.py's default_int_handler would otherwise escape as a
+    # bare "Interrupted") still reaches the cleanup path.
+    shutdown = [False]
+
+    def _signal_handler(sig, frame):
+        shutdown[0] = True
+
+    signal.signal(signal.SIGINT, _signal_handler)
+    signal.signal(signal.SIGTERM, _signal_handler)
+
     # ── In-place status block during startup ──────────────
     from domain.logging._internal.cli_logger import _A
     from domain.logging._internal.cli_logger import _c as ansi_c
@@ -532,9 +545,8 @@ def cmd_dev(args):
     web_thread.start()
 
     # ── Wait for readiness (async poll) ──────────────────
-    # Declared before the thread starts: _poll_services reads it on every
-    # iteration, and a late binding raises NameError, killing the thread.
-    shutdown = [False]
+    # `shutdown` (declared at function entry) is read by _poll_services on
+    # every iteration; a late binding raises NameError, killing the thread.
 
     def _poll_services():
         for _ in range(API_STARTUP_TIMEOUT * 2):
@@ -622,12 +634,6 @@ def cmd_dev(args):
         # Either service dying ends the session — nothing here restarts them,
         # and a dead service with no error report leaves the TUI stuck forever.
         return status["api"] == "error" or status["web"] == "error"
-
-    def _signal_handler(sig, frame):
-        shutdown[0] = True
-
-    signal.signal(signal.SIGINT, _signal_handler)
-    signal.signal(signal.SIGTERM, _signal_handler)
 
     try:
         dashboard.serve(stop_check=_stop_check)
@@ -757,8 +763,13 @@ def _cmd_api_only(args):
 
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
+    shutdown = [False]
 
     def _update_status():
+        # A shutdown already ran (or is running): its final status
+        # block must not be overwritten by a lingering startup update.
+        if shutdown[0]:
+            return
         api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
         status.update(
             ansi_c("  SloughGPT API", _A.BOLD, log._colors),
@@ -780,6 +791,36 @@ def _cmd_api_only(args):
     stop_event = threading.Event()
 
     api_proc = None
+
+    # ── Signal handlers — installed before any long wait ──────────
+    # Registered at spawn time so an interrupt during the (up to 180s)
+    # readiness wait cleans up instead of escaping to main() as a bare
+    # "Interrupted" and orphaning the spawned uvicorn.
+
+    def _sig_handler(sig, frame):
+        if shutdown[0]:
+            return
+        shutdown[0] = True
+        status.update(
+            ansi_c("  SloughGPT API", _A.BOLD, log._colors),
+            f"  API: http://{args.host}:{api_port}",
+            "",
+            "  Shutting down...",
+        )
+        stop_event.set()
+        _cleanup(api_proc, None, api_port, 0)
+        status.update(
+            ansi_c("  SloughGPT API", _A.BOLD, log._colors),
+            f"  API: http://{args.host}:{api_port}",
+            "",
+            f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
+        )
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
+    if shutdown[0]:
+        return
     if not api_reused:
         python = Path(find_server_python(root))
         api_proc = subprocess.Popen(
@@ -809,6 +850,8 @@ def _cmd_api_only(args):
         _update_status()
         api_ready = False
         for _ in range(API_STARTUP_TIMEOUT):
+            if shutdown[0]:
+                return
             if _check_api_ready(api_port):
                 api_ready = True
                 break
@@ -824,7 +867,12 @@ def _cmd_api_only(args):
             for line in _extract_error_lines(api_lines):
                 api_log.info(f"  | {line}")
             stop_event.set()
+            # Own the spawned API here — returning without cleanup leaks it.
+            _cleanup(api_proc, None, api_port, 0)
             return
+
+    if shutdown[0]:
+        return
 
     api_status = "ok"
     status.update(
@@ -835,35 +883,6 @@ def _cmd_api_only(args):
         "",
         "  Press Ctrl+C to stop",
     )
-
-    shutdown = [False]
-
-    def _sig_handler(sig, frame):
-        if shutdown[0]:
-            return
-        shutdown[0] = True
-        status.update(
-            ansi_c("  SloughGPT API", _A.BOLD, log._colors),
-            f"  API: http://{args.host}:{api_port}",
-            "",
-            "  Shutting down...",
-        )
-        stop_event.set()
-        if api_proc is not None and api_proc.poll() is None:
-            try:
-                api_proc.terminate()
-                api_proc.wait(timeout=5)
-            except (OSError, subprocess.TimeoutExpired):
-                api_proc.kill()
-        status.update(
-            ansi_c("  SloughGPT API", _A.BOLD, log._colors),
-            f"  API: http://{args.host}:{api_port}",
-            "",
-            f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
-        )
-
-    signal.signal(signal.SIGINT, _sig_handler)
-    signal.signal(signal.SIGTERM, _sig_handler)
 
     try:
         if api_proc is not None:
@@ -913,8 +932,13 @@ def _cmd_api_and_mobile(args):
     status = StatusBlock(log)
     api_status = "ok (reusing)" if api_reused else "starting"
     mobile_status = "starting"
+    shutdown = [False]
 
     def _update_status():
+        # A shutdown already ran (or is running): its final status
+        # block must not be overwritten by a lingering startup update.
+        if shutdown[0]:
+            return
         api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
         mobile_color = _A.GREEN if "ok" in mobile_status else _A.YELLOW
         status.update(
@@ -953,6 +977,39 @@ def _cmd_api_and_mobile(args):
     stop_event = threading.Event()
 
     api_proc = None
+    mobile_proc = None
+    api_url = f"http://{args.host}:{api_port}"
+
+    # ── Signal handlers — installed before any spawn/wait ─────────
+    # Registered before the API and metro spawns so an interrupt during
+    # the readiness waits cleans up instead of escaping to main() as a
+    # bare "Interrupted" and orphaning both children.
+    def _sig_handler(sig, frame):
+        if shutdown[0]:
+            return
+        shutdown[0] = True
+        status.update(
+            ansi_c("  SloughGPT", _A.BOLD, log._colors),
+            f"  API:    {api_url}",
+            "  Mobile: metro bundler (8081)",
+            "",
+            "  Shutting down...",
+        )
+        stop_event.set()
+        _cleanup(api_proc, mobile_proc, api_port, 8081)
+        status.update(
+            ansi_c("  SloughGPT", _A.BOLD, log._colors),
+            f"  API:    {api_url}",
+            "  Mobile: metro bundler (8081)",
+            "",
+            f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
+        )
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
+
+    if shutdown[0]:
+        return
     if not api_reused:
         python = Path(find_server_python(root))
         api_proc = subprocess.Popen(
@@ -998,6 +1055,8 @@ def _cmd_api_and_mobile(args):
         _update_status()
         api_ready = False
         for _ in range(API_STARTUP_TIMEOUT):
+            if shutdown[0]:
+                return
             if _check_api_ready(api_port):
                 api_ready = True
                 break
@@ -1016,6 +1075,9 @@ def _cmd_api_and_mobile(args):
             _cleanup(api_proc, mobile_proc, api_port, 8081)
             return
 
+    if shutdown[0]:
+        return
+
     api_status = "ok"
     _update_status()
 
@@ -1023,6 +1085,8 @@ def _cmd_api_and_mobile(args):
     mobile_status = "waiting..."
     _update_status()
     for _ in range(30):
+        if shutdown[0]:
+            return
         if _check_port(8081):
             mobile_status = "ok"
             _update_status()
@@ -1041,9 +1105,10 @@ def _cmd_api_and_mobile(args):
         mobile_status = "timeout"
         _update_status()
 
-    # ── Ready ─────────────────────────────────────────────
-    api_url = f"http://{args.host}:{api_port}"
+    if shutdown[0]:
+        return
 
+    # ── Ready ─────────────────────────────────────────────
     status.update(
         ansi_c("  SloughGPT", _A.BOLD, log._colors),
         f"  API:    {api_url}",
@@ -1054,37 +1119,15 @@ def _cmd_api_and_mobile(args):
         "  Press Ctrl+C to stop",
     )
 
-    # ── Signal handlers ───────────────────────────────────
-    shutdown = [False]
-
-    def _sig_handler(sig, frame):
-        if shutdown[0]:
-            return
-        shutdown[0] = True
-        status.update(
-            ansi_c("  SloughGPT", _A.BOLD, log._colors),
-            f"  API:    {api_url}",
-            "  Mobile: metro bundler (8081)",
-            "",
-            "  Shutting down...",
-        )
-        stop_event.set()
-        _cleanup(api_proc, mobile_proc, api_port, 8081)
-        status.update(
-            ansi_c("  SloughGPT", _A.BOLD, log._colors),
-            f"  API:    {api_url}",
-            "  Mobile: metro bundler (8081)",
-            "",
-            f"  {ansi_c('ok', _A.GREEN, log._colors)} Stopped",
-        )
-
-    signal.signal(signal.SIGINT, _sig_handler)
-    signal.signal(signal.SIGTERM, _sig_handler)
-
     # ── Monitor loop ──────────────────────────────────────
     try:
         while not shutdown[0]:
             time.sleep(2)
+            # The handler may have run during the sleep — its cleanup
+            # already terminated the children; re-check before the body
+            # would mistake those exits for crashes and restart them.
+            if shutdown[0]:
+                break
             if api_proc is not None and api_proc.poll() is not None:
                 api_status = "error"
                 _update_status()
