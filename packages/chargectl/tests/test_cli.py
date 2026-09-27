@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from chargectl import cli
 from chargectl.cli import build_parser, main
+from chargectl.systemd import ServiceStatus
 
 
 def test_parser_defaults_to_status():
@@ -111,3 +113,84 @@ def test_daemon_once_writes_state(capsys: pytest.CaptureFixture[str], policy_env
     state = (policy_env / "state.json").read_text()
     assert '"dry_run": true' in state  # CHARGECTL_SYSFS points at an empty dir
     capsys.readouterr()
+
+
+# ── probe ──────────────────────────────────────────────────────────────────────
+
+
+def _svc(**overrides) -> ServiceStatus:
+    fields = dict(
+        systemd=True,
+        scope="system",
+        unit_installed=True,
+        unit_path="/etc/systemd/system/chargectl.service",
+        enabled="enabled",
+        active="active",
+        pid=4242,
+        exec_start="/opt/sloughGPT/.venv/bin/chargectl",
+        reason="running (system unit, pid 4242)",
+    )
+    fields.update(overrides)
+    return ServiceStatus(**fields)
+
+
+def test_probe_reports_systemd_unit_state(
+    capsys: pytest.CaptureFixture[str], policy_env: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(cli, "service_status", lambda *a, **k: _svc())
+    rc = cli.main(["probe"])
+    out = capsys.readouterr().out
+    assert "systemd      yes" in out
+    assert "unit         system unit /etc/systemd/system/chargectl.service" in out
+    assert "unit state   enabled · active (pid 4242)" in out
+    assert "exec start   /opt/sloughGPT/.venv/bin/chargectl" in out
+    assert rc in (0, 1)
+
+
+def test_probe_reports_missing_unit(
+    capsys: pytest.CaptureFixture[str], policy_env: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        cli,
+        "service_status",
+        lambda *a, **k: _svc(
+            scope=None,
+            unit_installed=False,
+            unit_path=None,
+            enabled=None,
+            active=None,
+            pid=None,
+            exec_start=None,
+            reason="not installed — run `sudo make charge-svc` (or `make charge-svc-user`)",
+        ),
+    )
+    cli.main(["probe"])
+    out = capsys.readouterr().out
+    assert "systemd      yes" in out
+    assert "unit         not installed" in out
+    assert "make charge-svc" in out
+    assert "unit state" not in out
+
+
+def test_probe_reports_host_without_systemd(
+    capsys: pytest.CaptureFixture[str], policy_env: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(
+        cli,
+        "service_status",
+        lambda *a, **k: _svc(
+            systemd=False,
+            scope=None,
+            unit_installed=False,
+            unit_path=None,
+            enabled=None,
+            active=None,
+            pid=None,
+            exec_start=None,
+            reason="no systemd (pid 1 is not systemd, or systemctl is missing)",
+        ),
+    )
+    cli.main(["probe"])
+    out = capsys.readouterr().out
+    assert "systemd      no" in out
+    assert "unit         — (no systemd" in out

@@ -11,6 +11,7 @@ from .control import clear_limit, probe, set_limit
 from .daemon import run_daemon
 from .policy import default_policy_path, explain, load_policy, normalize, save_policy
 from .status import BatteryReader, default_sys_base
+from .systemd import ServiceStatus, service_status
 
 BAR_WIDTH = 24
 
@@ -66,7 +67,23 @@ def _probe(sys_base: str | None = None) -> int:
     print(f"floor now    {cap.current_floor if cap.current_floor is not None else '—'}")
     print(f"incumbent    {cap.incumbent or 'none detected'}")
     print(f"reason       {cap.reason}")
+    _print_service(service_status())
     return 0 if cap.supported else 1
+
+
+def _print_service(svc: ServiceStatus) -> None:
+    """The enforcement half of the probe: is the daemon installed and alive?"""
+    print(f"systemd      {'yes' if svc.systemd else 'no'}")
+    if not svc.systemd:
+        print(f"unit         — ({svc.reason})")
+        return
+    if not svc.unit_installed:
+        print(f"unit         {svc.reason}")
+        return
+    state = " · ".join(part for part in (svc.enabled, svc.active) if part)
+    print(f"unit         {svc.scope} unit {svc.unit_path}")
+    print(f"unit state   {state or 'unknown'}" + (f" (pid {svc.pid})" if svc.pid else ""))
+    print(f"exec start   {svc.exec_start or '—'}")
 
 
 def _policy_show() -> int:

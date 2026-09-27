@@ -43,6 +43,7 @@ from .status import (
     default_sys_base,
     read_status,
 )
+from .systemd import ServiceStatus, service_status, systemd_available
 
 __version__ = "0.2.0"
 
@@ -55,6 +56,7 @@ __all__ = [
     "Directive",
     "OPTIMAL_LIMIT",
     "Policy",
+    "ServiceStatus",
     "SimulatedBattery",
     "clear_limit",
     "decide",
@@ -70,9 +72,11 @@ __all__ = [
     "read_status",
     "run_daemon",
     "save_policy",
+    "service_status",
     "set_band",
     "set_floor",
     "set_limit",
+    "systemd_available",
     "tick",
     "write_state",
     "__version__",
