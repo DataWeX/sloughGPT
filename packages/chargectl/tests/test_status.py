@@ -157,3 +157,37 @@ def test_every_kernel_status_is_readable(tmp_path: Path, status: str):
     st = read_status(make_sysfs(tmp_path, status=status, ac=status != "Discharging"))
     assert st.source == "sysfs"
     assert st.level == 55
+
+
+# ── health metrics ──────────────────────────────────────────────────────────
+
+
+def test_reads_health_metrics(tmp_path: Path):
+    base = make_sysfs(
+        tmp_path,
+        cycle_count="212",
+        energy_full="45000000",
+        energy_full_design="50000000",
+    )
+    st = read_status(base)
+    assert st.cycle_count == 212
+    assert st.energy_full == 45_000_000
+    assert st.energy_full_design == 50_000_000
+    assert st.health_percent == 90.0
+    assert st.as_dict()["cycle_count"] == 212
+
+
+def test_health_is_unknown_when_the_nodes_are_absent(tmp_path: Path):
+    st = read_status(make_sysfs(tmp_path))
+    assert st.cycle_count == -1
+    assert st.energy_full == -1
+    assert st.energy_full_design == -1
+    assert st.health_percent == -1.0
+
+
+def test_simulation_reports_health():
+    st = read_status(Path("/nonexistent"))
+    assert st.simulated is True
+    assert st.cycle_count == 12
+    assert st.energy_full_design == 50_000_000
+    assert st.health_percent == 96.0

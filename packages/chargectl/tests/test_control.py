@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 import pytest
-from chargectl.control import clear_limit, probe, set_limit
+from chargectl import control as control_mod
+from chargectl.control import clear_limit, probe, set_band, set_floor, set_limit
 
 
 def make_sysfs(tmp_path: Path, *, threshold: str | None = "100\n") -> Path:
@@ -122,3 +123,105 @@ def test_control_results_are_serialisable(tmp_path: Path):
     base = make_sysfs(tmp_path)
     assert set_limit(80, sys_base=base).as_dict()["applied"] is True
     assert probe(base).as_dict()["supported"] is True
+
+
+# ── floor / band ────────────────────────────────────────────────────────────
+
+
+def make_band_sysfs(tmp_path: Path, *, end: str = "100\n", start: str | None = "1\n") -> Path:
+    base = make_sysfs(tmp_path, threshold=end)
+    if start is not None:
+        (base / "BAT0" / "charge_control_start_threshold").write_text(start)
+    return base
+
+
+def test_probe_reports_floor_capability(tmp_path: Path):
+    cap = probe(make_band_sysfs(tmp_path, end="80\n", start="40\n"))
+    assert cap.supported is True
+    assert cap.start_supported is True
+    assert cap.current_floor == 40
+    assert cap.start_path is not None and cap.start_path.endswith("charge_control_start_threshold")
+    assert cap.as_dict()["current_floor"] == 40
+
+
+def test_probe_without_start_node_reports_no_floor(tmp_path: Path):
+    cap = probe(make_band_sysfs(tmp_path, start=None))
+    assert cap.start_supported is False
+    assert cap.current_floor is None
+    assert cap.start_path is None
+
+
+def test_set_floor_writes_start_threshold(tmp_path: Path):
+    base = make_band_sysfs(tmp_path, start="1\n")
+    result = set_floor(40, sys_base=base)
+    assert result.applied is True and result.limit == 40
+    assert (base / "BAT0" / "charge_control_start_threshold").read_text().strip() == "40"
+
+
+def test_set_floor_without_start_node_reports_unsupported(tmp_path: Path):
+    base = make_band_sysfs(tmp_path, start=None)
+    result = set_floor(40, sys_base=base)
+    assert result.applied is False and result.supported is False
+    assert "charge_control_start_threshold" in result.reason
+
+
+@pytest.mark.parametrize("bad", [0, 101, -5])
+def test_set_floor_rejects_out_of_range(tmp_path: Path, bad: int):
+    base = make_band_sysfs(tmp_path, start="1\n")
+    assert set_floor(bad, sys_base=base).applied is False
+    assert (base / "BAT0" / "charge_control_start_threshold").read_text().strip() == "1"
+
+
+def test_set_band_writes_both_thresholds(tmp_path: Path):
+    base = make_band_sysfs(tmp_path, end="100\n", start="1\n")
+    result = set_band(40, 80, sys_base=base)
+    assert result.applied is True
+    assert result.limit == 80
+    assert result.floor_limit == 40
+    bat = base / "BAT0"
+    assert bat.joinpath("charge_control_end_threshold").read_text().strip() == "80"
+    assert bat.joinpath("charge_control_start_threshold").read_text().strip() == "40"
+    assert "40-80" in result.reason
+
+
+def test_set_band_rejects_inverted_range(tmp_path: Path):
+    base = make_band_sysfs(tmp_path)
+    result = set_band(80, 40, sys_base=base)
+    assert result.applied is False
+    assert "floor" in result.reason
+    assert (base / "BAT0" / "charge_control_end_threshold").read_text().strip() == "100"
+
+
+def test_set_band_still_caps_without_a_floor_node(tmp_path: Path):
+    base = make_band_sysfs(tmp_path, start=None)
+    result = set_band(40, 80, sys_base=base)
+    assert result.applied is True
+    assert result.limit == 80
+    assert result.floor_limit is None
+    assert "no floor held" in result.reason
+
+
+def test_set_band_reports_permission_not_crash(tmp_path: Path):
+    if os.geteuid() == 0:
+        pytest.skip("root can write read-only files")
+    base = make_band_sysfs(tmp_path)
+    (base / "BAT0" / "charge_control_end_threshold").chmod(0o444)
+    result = set_band(40, 80, sys_base=base)
+    assert result.applied is False and "root" in result.reason
+
+
+def test_incumbent_detection(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    fake_tlp = tmp_path / "tlp.conf"
+    fake_tlp.write_text("# tlp\n")
+    monkeypatch.setattr(control_mod, "INCUMBENTS", {str(fake_tlp): "tlp"})
+    assert probe(make_sysfs(tmp_path / "a")).incumbent == "tlp"
+
+    monkeypatch.setattr(control_mod, "INCUMBENTS", {})
+    assert probe(make_sysfs(tmp_path / "b")).incumbent is None
+
+
+def test_garbage_sysfs_still_probes(tmp_path: Path):
+    base = make_band_sysfs(tmp_path, start="not-a-number")
+    cap = probe(base)
+    assert cap.start_supported is True
+    assert cap.current_floor is None

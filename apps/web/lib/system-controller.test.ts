@@ -290,6 +290,10 @@ describe('systemController.getBattery', () => {
         name: 'SIM0',
         level_band: 'ok',
         updated_at: 1,
+        cycle_count: 12,
+        energy_full: 48000000,
+        energy_full_design: 50000000,
+        health_percent: 96,
       },
       control: {
         supported: true,
@@ -297,11 +301,39 @@ describe('systemController.getBattery', () => {
         path: '/sys/BAT0/charge_control_end_threshold',
         current_limit: 80,
         reason: 'ready',
+        start_supported: true,
+        start_path: '/sys/BAT0/charge_control_start_threshold',
+        current_floor: 40,
+        incumbent: null,
       },
       advice: {
         limit: 80,
         action: 'maintain',
         reason: 'Battery 64% — on battery (optimal range 20–80%).',
+      },
+      policy: {
+        enabled: true,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+        file: '/root/.config/chargectl/policy.json',
+        error: null,
+        explain: 'policy on — holding 40-80%',
+      },
+      daemon: {
+        present: true,
+        active: true,
+        pid: 99,
+        age_seconds: 4,
+        owned: true,
+        dry_run: false,
+        last_action: 'set_ceiling',
+        last_value: 80,
+        last_reason: 're-asserting 80%',
+        last_outcome: 'charge threshold set to 80%',
+        explain: 'policy on — holding 40-80%',
       },
     }
     apiClient.apiGet.mockResolvedValue(mockBattery)
@@ -309,6 +341,8 @@ describe('systemController.getBattery', () => {
     expect(result.status.level).toBe(64)
     expect(result.control.supported).toBe(true)
     expect(result.advice.action).toBe('maintain')
+    expect(result.policy.band).toBe('40-80')
+    expect(result.daemon.active).toBe(true)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/system/battery', undefined, { silent: true })
   })
 })
@@ -323,6 +357,7 @@ describe('systemController.setBatteryLimit', () => {
       limit: 80,
       reason: 'charge capped at 80%',
       path: '/sys/BAT0/charge_control_end_threshold',
+      floor_limit: null,
     }
     apiClient.apiPost.mockResolvedValue(mockResult)
     const result = await systemController.setBatteryLimit(80)
@@ -330,5 +365,79 @@ describe('systemController.setBatteryLimit', () => {
     expect(apiClient.apiPost).toHaveBeenCalledWith('/system/battery/limit?percent=80', undefined, {
       silent: true,
     })
+  })
+})
+
+describe('systemController.setBatteryPolicy', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('PUTs only the fields that were provided', async () => {
+    const mockResult = {
+      ok: true,
+      error: null,
+      policy: {
+        enabled: true,
+        floor: 45,
+        ceiling: 70,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '45-70',
+      },
+      file: '/root/.config/chargectl/policy.json',
+      explain: 'policy on — holding 45-70%',
+    }
+    apiClient.apiPut.mockResolvedValue(mockResult)
+
+    const result = await systemController.setBatteryPolicy({
+      enabled: true,
+      floor: 45,
+      ceiling: 70,
+    })
+    expect(result.ok).toBe(true)
+    expect(result.policy.band).toBe('45-70')
+    expect(apiClient.apiPut).toHaveBeenCalledWith(
+      '/system/battery/policy?enabled=true&floor=45&ceiling=70',
+      undefined,
+      { silent: true },
+    )
+  })
+
+  it('omits unset fields so a partial update keeps the rest', async () => {
+    apiClient.apiPut.mockResolvedValue({
+      ok: true,
+      error: null,
+      policy: {
+        enabled: false,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+      },
+    })
+    await systemController.setBatteryPolicy({ enabled: false })
+    expect(apiClient.apiPut).toHaveBeenCalledWith(
+      '/system/battery/policy?enabled=false',
+      undefined,
+      { silent: true },
+    )
+  })
+
+  it('surfaces a rejected band instead of throwing', async () => {
+    apiClient.apiPut.mockResolvedValue({
+      ok: false,
+      error: 'floor (90%) must be below ceiling (60%)',
+      policy: {
+        enabled: true,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+      },
+    })
+    const result = await systemController.setBatteryPolicy({ floor: 90, ceiling: 60 })
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('floor')
   })
 })

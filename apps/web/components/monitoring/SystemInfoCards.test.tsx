@@ -27,12 +27,50 @@ const battery: BatteryInfo = {
     name: 'BAT0',
     level_band: 'ok',
     updated_at: 0,
+    cycle_count: 212,
+    energy_full: 45000000,
+    energy_full_design: 50000000,
+    health_percent: 90,
   },
-  control: { supported: true, writable: true, path: '/sys/x', current_limit: 80, reason: 'ready' },
+  control: {
+    supported: true,
+    writable: true,
+    path: '/sys/x',
+    current_limit: 80,
+    reason: 'ready',
+    start_supported: true,
+    start_path: '/sys/x_start',
+    current_floor: 40,
+    incumbent: null,
+  },
   advice: {
     limit: 80,
     action: 'cap_at_80',
     reason: 'At 72% and still charging — cap long-term charge to 80%.',
+  },
+  policy: {
+    enabled: true,
+    floor: 40,
+    ceiling: 80,
+    mode: 'band',
+    interval_seconds: 60,
+    band: '40-80',
+    file: '/home/user/.config/chargectl/policy.json',
+    error: null,
+    explain: 'policy on — holding 40-80%',
+  },
+  daemon: {
+    present: true,
+    active: true,
+    pid: 4242,
+    age_seconds: 3,
+    owned: true,
+    dry_run: false,
+    last_action: 'set_ceiling',
+    last_value: 80,
+    last_reason: 're-asserting 80%',
+    last_outcome: 'charge threshold set to 80%',
+    explain: 'policy on — holding 40-80%',
   },
 }
 const info = {
@@ -173,6 +211,7 @@ describe('BatteryCard', () => {
     const unsupported: BatteryInfo = {
       ...battery,
       control: {
+        ...battery.control,
         supported: false,
         writable: false,
         path: null,
@@ -196,5 +235,66 @@ describe('BatteryCard', () => {
     const sim: BatteryInfo = { ...battery, status: { ...battery.status, source: 'simulated' } }
     render(<BatteryCard battery={sim} />)
     expect(screen.getByText('simulated')).toBeDefined()
+  })
+
+  it('shows pack health and cycle count', () => {
+    render(<BatteryCard battery={battery} />)
+    expect(screen.getByText('90% health · 212 cyc')).toBeDefined()
+  })
+
+  // ── policy ────────────────────────────────────────────────────────────────
+
+  it('shows the band and marks it managed while the daemon is enforcing', () => {
+    render(<BatteryCard battery={battery} />)
+    const policy = screen.getByTestId('battery-policy')
+    expect(policy.textContent).toContain('Band 40-80%')
+    expect(policy.textContent).toContain('· managed')
+  })
+
+  it('says policy off when enforcement is disabled', () => {
+    const off: BatteryInfo = {
+      ...battery,
+      policy: { ...battery.policy, enabled: false },
+      daemon: { ...battery.daemon, present: false, active: false },
+    }
+    render(<BatteryCard battery={off} />)
+    const policy = screen.getByTestId('battery-policy')
+    expect(policy.textContent).toContain('Policy off')
+    expect(policy.textContent).not.toContain('managed')
+  })
+
+  it('shows the band without "managed" when the daemon is not keeping it', () => {
+    const stale: BatteryInfo = { ...battery, daemon: { ...battery.daemon, active: false } }
+    render(<BatteryCard battery={stale} />)
+    const policy = screen.getByTestId('battery-policy')
+    expect(policy.textContent).toContain('Band 40-80%')
+    expect(policy.textContent).not.toContain('managed')
+  })
+
+  it('toggles management off while the policy is on', () => {
+    const onTogglePolicy = vi.fn()
+    render(<BatteryCard battery={battery} onTogglePolicy={onTogglePolicy} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Stop' }))
+    expect(onTogglePolicy).toHaveBeenCalledWith(false)
+  })
+
+  it('offers to start management while the policy is off', () => {
+    const off: BatteryInfo = { ...battery, policy: { ...battery.policy, enabled: false } }
+    const onTogglePolicy = vi.fn()
+    render(<BatteryCard battery={off} onTogglePolicy={onTogglePolicy} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Manage' }))
+    expect(onTogglePolicy).toHaveBeenCalledWith(true)
+  })
+
+  it('hides the policy toggle when no handler is given', () => {
+    render(<BatteryCard battery={battery} />)
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull()
+  })
+
+  it('puts the policy explanation in the title', () => {
+    render(<BatteryCard battery={battery} />)
+    expect(screen.getByTestId('battery-policy').querySelector('span')?.getAttribute('title')).toBe(
+      battery.policy.explain,
+    )
   })
 })

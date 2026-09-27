@@ -97,6 +97,13 @@ install: build setup-git
 	.venv/bin/pip install -e packages/core-py/
 	.venv/bin/pip install -e packages/chargectl/
 
+# Install the chargectl enforcement daemon (root). Point ExecStart at .venv/bin/chargectl
+# when running from this repo — see packages/chargectl/systemd/chargectl.service.
+charge-svc:
+	install -m 644 packages/chargectl/systemd/chargectl.service /etc/systemd/system/chargectl.service
+	systemctl daemon-reload
+	@echo "Enable it with: sudo systemctl enable --now chargectl"
+
 # ── Tooling Setup ───────────────────────────────────────
 setup-git:
 	git config core.sshCommand "ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3"
