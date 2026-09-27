@@ -13,7 +13,12 @@ vi.mock('./config', () => ({
 import { setupApiMocks, apiClient } from './__test-helper'
 setupApiMocks()
 
-import { datasetController, humanizeDatasetName, isTrainingCorpus } from './dataset-controller'
+import {
+  datasetController,
+  humanizeDatasetName,
+  isTrainingCorpus,
+  sanitizeDatasetName,
+} from './dataset-controller'
 
 describe('isTrainingCorpus', () => {
   it('keeps dataset and untagged entries', () => {
@@ -50,6 +55,24 @@ describe('humanizeDatasetName', () => {
   it('returns original when empty after cleanup', () => {
     expect(humanizeDatasetName('_')).toBe('_')
     expect(humanizeDatasetName('')).toBe('')
+  })
+})
+
+describe('sanitizeDatasetName', () => {
+  it('strips the file extension', () => {
+    expect(sanitizeDatasetName('train-src.txt')).toBe('train-src')
+    expect(sanitizeDatasetName('notes.v2.md')).toBe('notes_v2')
+  })
+
+  it('replaces characters the dataset-id validator rejects', () => {
+    expect(sanitizeDatasetName('my notes (final).csv')).toBe('my_notes_final')
+    expect(sanitizeDatasetName('data 2026.csv')).toBe('data_2026')
+  })
+
+  it('never returns empty', () => {
+    expect(sanitizeDatasetName('.txt')).toBe('file')
+    expect(sanitizeDatasetName('🎉.png')).toBe('file')
+    expect(sanitizeDatasetName('')).toBe('file')
   })
 })
 

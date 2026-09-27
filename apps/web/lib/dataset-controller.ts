@@ -63,6 +63,8 @@ export interface Dataset {
   created_at: string
   updated_at?: string
   tags?: string[]
+  /** Uploaded file offered in the training selector; promoted to a real dataset on select. */
+  fromFile?: boolean
   vlm_metadata?: {
     type: string
     image_dir: string
@@ -89,6 +91,18 @@ export function humanizeDatasetName(name: string): string {
     .split(' ')
     .map((w) => (w === w.toLowerCase() ? w.charAt(0).toUpperCase() + w.slice(1) : w))
     .join(' ')
+}
+
+/**
+ * File name → dataset id: dataset ids allow only [A-Za-z0-9_-] (backend
+ * `_validate_dataset_id` rejects dots), so strip the extension and replace
+ * anything else with underscores. Falls back to 'file' when nothing usable
+ * survives (e.g. emoji-only names).
+ */
+export function sanitizeDatasetName(filename: string): string {
+  const stem = filename.replace(/\.[^./\\]+$/, '')
+  const safe = stem.replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '')
+  return safe || 'file'
 }
 
 export interface GitHubRepo {
