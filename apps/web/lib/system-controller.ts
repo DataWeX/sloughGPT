@@ -7,7 +7,7 @@
  *   for await (const line of systemController.streamOutput()) { ... }
  */
 
-import { apiGet, apiPost, streamSSE } from './http-client'
+import { apiGet, apiPost, apiPut, streamSSE } from './http-client'
 
 export interface SystemMetrics {
   cpu_percent: number
@@ -54,6 +54,10 @@ export interface BatteryStatus {
   name: string
   level_band: 'low' | 'ok' | 'high' | 'full'
   updated_at: number
+  cycle_count: number
+  energy_full: number
+  energy_full_design: number
+  health_percent: number
 }
 
 export interface BatteryControl {
@@ -62,6 +66,10 @@ export interface BatteryControl {
   path: string | null
   current_limit: number | null
   reason: string
+  start_supported: boolean
+  start_path: string | null
+  current_floor: number | null
+  incumbent: string | null
 }
 
 export interface BatteryAdvice {
@@ -70,10 +78,41 @@ export interface BatteryAdvice {
   reason: string
 }
 
+export interface BatteryPolicyValues {
+  enabled: boolean
+  floor: number
+  ceiling: number
+  mode: 'band' | 'ceiling'
+  interval_seconds: number
+  band: string
+}
+
+export interface BatteryPolicy extends BatteryPolicyValues {
+  file: string
+  error: string | null
+  explain: string
+}
+
+export interface BatteryDaemonState {
+  present: boolean
+  active: boolean
+  pid?: number | null
+  age_seconds?: number | null
+  owned?: boolean
+  dry_run?: boolean
+  last_action?: string | null
+  last_value?: number | null
+  last_reason?: string | null
+  last_outcome?: string | null
+  explain?: string | null
+}
+
 export interface BatteryInfo {
   status: BatteryStatus
   control: BatteryControl
   advice: BatteryAdvice
+  policy: BatteryPolicy
+  daemon: BatteryDaemonState
 }
 
 export interface BatteryLimitResult {
@@ -82,6 +121,23 @@ export interface BatteryLimitResult {
   limit: number | null
   reason: string
   path: string | null
+  floor_limit: number | null
+}
+
+export interface BatteryPolicyInput {
+  enabled?: boolean
+  floor?: number
+  ceiling?: number
+  mode?: 'band' | 'ceiling'
+}
+
+export interface BatteryPolicyResult {
+  ok: boolean
+  error: string | null
+  load_error?: string | null
+  policy: BatteryPolicyValues
+  file?: string
+  explain?: string
 }
 
 export interface KvSessionsInfo {
@@ -280,6 +336,18 @@ export const systemController = {
 
   async setBatteryLimit(percent: number): Promise<BatteryLimitResult> {
     return apiPost<BatteryLimitResult>(`/system/battery/limit?percent=${percent}`, undefined, {
+      silent: true,
+    })
+  },
+
+  async setBatteryPolicy(input: BatteryPolicyInput = {}): Promise<BatteryPolicyResult> {
+    const params = new URLSearchParams()
+    if (input.enabled !== undefined) params.set('enabled', String(input.enabled))
+    if (input.floor !== undefined) params.set('floor', String(input.floor))
+    if (input.ceiling !== undefined) params.set('ceiling', String(input.ceiling))
+    if (input.mode !== undefined) params.set('mode', input.mode)
+    const qs = params.toString()
+    return apiPut<BatteryPolicyResult>(`/system/battery/policy${qs ? `?${qs}` : ''}`, undefined, {
       silent: true,
     })
   },

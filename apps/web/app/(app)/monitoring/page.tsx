@@ -184,6 +184,27 @@ export default function SystemHealthPage() {
     [addToast],
   )
 
+  const handleBatteryPolicy = useCallback(
+    async (enabled: boolean) => {
+      try {
+        const result = await systemController.setBatteryPolicy({ enabled })
+        if (!result.ok) {
+          addToast(result.error || 'Could not update the charge policy', 'error')
+          return
+        }
+        const next = await systemController.getBattery().catch(() => null)
+        if (next) setBattery(next)
+        addToast(
+          result.policy.enabled ? 'Battery management on' : 'Battery management off',
+          'success',
+        )
+      } catch (e: unknown) {
+        addToast(extractErrorMessage(e, 'Could not update the charge policy'), 'error')
+      }
+    },
+    [addToast],
+  )
+
   const fetchAll = useCallback(async (showRefreshing = false): Promise<boolean> => {
     if (showRefreshing) setRefreshing(true)
     setError(null)
@@ -623,7 +644,11 @@ export default function SystemHealthPage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
               <DiskCard disk={disk ?? undefined} />
-              <BatteryCard battery={battery ?? undefined} onSetLimit={handleBatteryLimit} />
+              <BatteryCard
+                battery={battery ?? undefined}
+                onSetLimit={handleBatteryLimit}
+                onTogglePolicy={handleBatteryPolicy}
+              />
               <ServerInfoCard info={info ?? undefined} />
             </div>
             {detailed?.kv_sessions?.enabled && <KVCacheCard kvSessions={detailed.kv_sessions} />}

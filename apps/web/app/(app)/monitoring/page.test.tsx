@@ -69,6 +69,10 @@ vi.mock('@/lib/system-controller', () => ({
         name: 'SIM0',
         level_band: 'ok',
         updated_at: 0,
+        cycle_count: 12,
+        energy_full: 48000000,
+        energy_full_design: 50000000,
+        health_percent: 96,
       },
       control: {
         supported: false,
@@ -76,8 +80,24 @@ vi.mock('@/lib/system-controller', () => ({
         path: null,
         current_limit: null,
         reason: 'no battery device in sysfs',
+        start_supported: false,
+        start_path: null,
+        current_floor: null,
+        incumbent: null,
       },
       advice: { limit: 80, action: 'maintain', reason: 'ok' },
+      policy: {
+        enabled: false,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+        file: '/root/.config/chargectl/policy.json',
+        error: null,
+        explain: 'policy off — charge thresholds untouched',
+      },
+      daemon: { present: false, active: false },
     }),
     setBatteryLimit: vi.fn().mockResolvedValue({
       applied: false,
@@ -85,6 +105,21 @@ vi.mock('@/lib/system-controller', () => ({
       limit: null,
       reason: 'no battery device in sysfs',
       path: null,
+      floor_limit: null,
+    }),
+    setBatteryPolicy: vi.fn().mockResolvedValue({
+      ok: true,
+      error: null,
+      policy: {
+        enabled: true,
+        floor: 40,
+        ceiling: 80,
+        mode: 'band',
+        interval_seconds: 60,
+        band: '40-80',
+      },
+      file: '/root/.config/chargectl/policy.json',
+      explain: 'policy on — holding 40-80%',
     }),
     getInfo: vi.fn().mockResolvedValue({
       platform: 'linux',
@@ -267,6 +302,13 @@ describe('MonitoringPage — initial load flow', () => {
     render(<MonitoringPage />)
     await waitFor(() => {
       expect(screen.getAllByText(/system health/i).length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it('renders the battery card once the battery resolves', async () => {
+    render(<MonitoringPage />)
+    await waitFor(() => {
+      expect(screen.getByTestId('battery-card')).toBeDefined()
     })
   })
 })

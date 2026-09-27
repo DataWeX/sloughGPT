@@ -8,12 +8,21 @@ return the same value, so this is safe behind a cached ``GET`` handler.
 from __future__ import annotations
 
 import math
+import os
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 DEFAULT_SYS_BASE = "/sys/class/power_supply"
+SYSFS_ENV = "CHARGECTL_SYSFS"
+DESIGN_ENERGY = 50_000_000  # µWh — nominal pack size the simulation reports as "new"
+
+
+def default_sys_base() -> str:
+    """Where to read power_supply from. ``CHARGECTL_SYSFS`` overrides (tests, containers)."""
+    return os.environ.get(SYSFS_ENV) or DEFAULT_SYS_BASE
+
 
 CHARGING = "charging"
 DISCHARGING = "discharging"
@@ -36,10 +45,20 @@ class ChargeStatus:
     source: str  # "sysfs" | "simulated"
     name: str = "BAT0"
     updated_at: float = 0.0
+    cycle_count: int = -1  # charge cycles, -1 if unknown
+    energy_full: int = -1  # µWh the pack holds now, -1 if unknown
+    energy_full_design: int = -1  # µWh when new, -1 if unknown
 
     @property
     def simulated(self) -> bool:
         return self.source == "simulated"
+
+    @property
+    def health_percent(self) -> float:
+        """Current vs design capacity in percent, or ``-1`` when unknown."""
+        if self.energy_full_design > 0 and self.energy_full > 0:
+            return round(self.energy_full * 100.0 / self.energy_full_design, 1)
+        return -1.0
 
     @property
     def level_band(self) -> str:
@@ -67,6 +86,10 @@ class ChargeStatus:
             "name": self.name,
             "level_band": self.level_band,
             "updated_at": self.updated_at,
+            "cycle_count": self.cycle_count,
+            "energy_full": self.energy_full,
+            "energy_full_design": self.energy_full_design,
+            "health_percent": self.health_percent,
         }
 
 
@@ -84,6 +107,8 @@ class SimulatedBattery:
     since: float = field(default_factory=time.time)
     charge_rate: float = 4.0  # % per minute
     discharge_rate: float = 1.0  # % per minute
+    cycle_count: int = 12
+    health_percent: float = 96.0  # current vs design capacity
 
     def at(self, level: int, mode: str = IDLE, plugged: bool = False) -> SimulatedBattery:
         """Return a new battery re-anchored at ``level``/``mode`` from now."""
@@ -94,6 +119,8 @@ class SimulatedBattery:
             since=time.time(),
             charge_rate=self.charge_rate,
             discharge_rate=self.discharge_rate,
+            cycle_count=self.cycle_count,
+            health_percent=self.health_percent,
         )
 
     def level_at(self, now: float) -> int:
@@ -134,6 +161,9 @@ class SimulatedBattery:
             source="simulated",
             name="SIM0",
             updated_at=ts,
+            cycle_count=self.cycle_count,
+            energy_full=int(DESIGN_ENERGY * self.health_percent / 100),
+            energy_full_design=DESIGN_ENERGY,
         )
 
 
@@ -214,6 +244,9 @@ def _read_sysfs(base: Path, now: float) -> ChargeStatus | None:
             cap = -1
 
         health = (_read_str(bat / "health") or "Unknown").strip()
+        cycles = _read_int(bat / "cycle_count")
+        e_full = _read_int(bat / "energy_full")
+        e_design = _read_int(bat / "energy_full_design")
         t_full, t_empty = _estimates(level, is_charging, cur, cap)
 
         return ChargeStatus(
@@ -229,6 +262,9 @@ def _read_sysfs(base: Path, now: float) -> ChargeStatus | None:
             source="sysfs",
             name=bat.name,
             updated_at=now,
+            cycle_count=cycles if cycles is not None else -1,
+            energy_full=e_full if e_full is not None else -1,
+            energy_full_design=e_design if e_design is not None else -1,
         )
     except OSError:
         return None

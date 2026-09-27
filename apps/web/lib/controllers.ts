@@ -181,6 +181,11 @@ export type {
   BatteryControl,
   BatteryAdvice,
   BatteryLimitResult,
+  BatteryPolicy,
+  BatteryPolicyValues,
+  BatteryPolicyInput,
+  BatteryPolicyResult,
+  BatteryDaemonState,
 } from './system-controller'
 export type {
   TokenizerStats,

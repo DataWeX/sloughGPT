@@ -133,12 +133,14 @@ function fmtEta(min: number | null): string | null {
 export const BatteryCard = memo(function BatteryCard({
   battery,
   onSetLimit,
+  onTogglePolicy,
 }: {
   battery?: BatteryInfo
   onSetLimit?: (percent: number) => void
+  onTogglePolicy?: (enabled: boolean) => void
 }) {
   if (!battery) return null
-  const { status, control, advice } = battery
+  const { status, control, advice, policy, daemon } = battery
   const pct = status.level
   const color =
     status.level_band === 'low'
@@ -156,6 +158,15 @@ export const BatteryCard = memo(function BatteryCard({
       ? 'Charging'
       : 'On battery'
   const canWrite = control.supported && control.writable && !!onSetLimit
+  const healthLabel =
+    status.source === 'simulated'
+      ? 'simulated'
+      : status.health_percent >= 0
+        ? `${status.health_percent}% health`
+        : status.health
+  const cycleLabel =
+    status.source === 'simulated' || status.cycle_count < 0 ? null : `${status.cycle_count} cyc`
+  const packLabel = cycleLabel ? `${healthLabel} · ${cycleLabel}` : healthLabel
 
   return (
     <Card className="p-2.5">
@@ -180,7 +191,7 @@ export const BatteryCard = memo(function BatteryCard({
           />
         </div>
         <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono tabular-nums">
-          <span>{status.source === 'simulated' ? 'simulated' : status.health}</span>
+          <span>{packLabel}</span>
           <span>{pct}%</span>
         </div>
         <div className="flex items-center justify-between gap-2 pt-0.5">
@@ -202,6 +213,28 @@ export const BatteryCard = memo(function BatteryCard({
               onClick={() => onSetLimit?.(capped ? 100 : advice.limit)}
             >
               {capped ? 'Lift cap' : `Cap ${advice.limit}%`}
+            </Button>
+          )}
+        </div>
+        <div
+          className="flex items-center justify-between gap-2 pt-0.5"
+          data-testid="battery-policy"
+        >
+          <span
+            className="text-[9px] text-muted-foreground/60 font-mono truncate"
+            title={policy.explain}
+          >
+            {policy.enabled ? `Band ${policy.band}%` : 'Policy off'}
+            {daemon.present && daemon.active ? ' · managed' : ''}
+          </span>
+          {onTogglePolicy && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-[9px] h-6 shrink-0"
+              onClick={() => onTogglePolicy(!policy.enabled)}
+            >
+              {policy.enabled ? 'Stop' : 'Manage'}
             </Button>
           )}
         </div>

@@ -24,6 +24,37 @@ from schemas.common import (
 logger = logging.getLogger("slo.routers.system")
 
 
+def _daemon_summary(state: dict, policy) -> dict:
+    """Compact view of the enforcement loop for the UI — a summary, not a state dump.
+
+    ``active`` means the state file is fresh relative to the policy interval, which is
+    the signal the UI needs to distinguish "managed" from "policy set, nobody enforcing".
+    """
+    if not state:
+        return {"present": False, "active": False, "explain": None}
+    updated_at = state.get("updated_at") or 0
+    try:
+        age = max(0.0, time.time() - float(updated_at))
+    except (TypeError, ValueError):
+        age = None
+    ttl = max(180.0, float(getattr(policy, "interval_seconds", 60.0)) * 3)
+    action = state.get("action") or {}
+    result = state.get("result") or {}
+    return {
+        "present": True,
+        "active": age is not None and age <= ttl,
+        "pid": state.get("pid"),
+        "age_seconds": round(age, 1) if age is not None else None,
+        "owned": bool(state.get("owned")),
+        "dry_run": bool(state.get("dry_run")),
+        "last_action": action.get("action"),
+        "last_value": action.get("value"),
+        "last_reason": action.get("reason"),
+        "last_outcome": result.get("reason"),
+        "explain": state.get("explain"),
+    }
+
+
 class SystemRouter:
     def __init__(self):
         self._metrics_cache = {"data": None, "ts": 0.0}
@@ -38,6 +69,7 @@ class SystemRouter:
         self.router.add_api_route("/disk", self.get_disk, methods=["GET"])
         self.router.add_api_route("/battery", self.get_battery, methods=["GET"])
         self.router.add_api_route("/battery/limit", self.set_battery_limit, methods=["POST"])
+        self.router.add_api_route("/battery/policy", self.set_battery_policy, methods=["PUT"])
         self.router.add_api_route("/lifecycle", self.get_lifecycle_status, methods=["GET"])
         self.router.add_api_route(
             "/stream", self.stream_output, methods=["GET"], response_model=None
@@ -143,28 +175,110 @@ class SystemRouter:
 
     @endpoint("system.get_battery")
     async def get_battery(self) -> dict:
-        """Read charge state, charge-cap capability, and longevity advice.
+        """Read charge state, charge-cap capability, longevity advice, and policy.
 
         Reads are pure, so this is safe to poll. ``control.supported`` is false on
         machines whose kernel does not expose a charge threshold (VMs, containers,
-        many chassis) — that is a capability report, not an error.
+        many chassis) — that is a capability report, not an error. ``daemon`` reports
+        what the enforcement loop last did, if it has ever run.
         """
 
         def _read():
-            from chargectl import BatteryReader, optimize_hint, probe
+            from chargectl import (
+                BatteryReader,
+                default_policy_path,
+                default_state_path,
+                default_sys_base,
+                explain,
+                load_policy,
+                optimize_hint,
+                probe,
+                read_state,
+            )
 
-            status = BatteryReader().read()
-            capability = probe()
+            base = default_sys_base()
+            status = BatteryReader(sys_base=base).read()
+            capability = probe(base)
+            policy, policy_error = load_policy()
             return {
                 "status": status.as_dict(),
                 "control": capability.as_dict(),
                 "advice": optimize_hint(status),
+                "policy": {
+                    **policy.as_dict(),
+                    "file": str(default_policy_path()),
+                    "error": policy_error,
+                    "explain": explain(policy, capability),
+                },
+                "daemon": _daemon_summary(read_state(default_state_path()), policy),
             }
 
         try:
             return success_response(data=await asyncio.to_thread(_read))
         except Exception as e:
             classify_and_raise(e, source="system.battery")
+
+    @endpoint("system.set_battery_policy")
+    async def set_battery_policy(
+        self,
+        enabled: bool | None = Query(None),
+        floor: int | None = Query(None, ge=1, le=100),
+        ceiling: int | None = Query(None, ge=1, le=100),
+        mode: str | None = Query(None),
+        interval: float | None = Query(None, ge=1),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Persist the charge policy the daemon enforces.
+
+        Never fails hard: an invalid band comes back as ``ok: false`` with the reason
+        and the untouched policy, so the UI can show it inline instead of a 4xx.
+        """
+
+        def _write():
+            from chargectl import (
+                default_sys_base,
+                explain,
+                load_policy,
+                normalize,
+                probe,
+                save_policy,
+            )
+
+            base, load_error = load_policy()
+            policy, error = normalize(
+                floor=floor,
+                ceiling=ceiling,
+                mode=mode,
+                enabled=enabled,
+                interval_seconds=interval,
+                base=base,
+            )
+            if error:
+                return {"ok": False, "error": error, "policy": base.as_dict()}
+            path = save_policy(policy)
+            return {
+                "ok": True,
+                "error": None,
+                "load_error": load_error,
+                "policy": policy.as_dict(),
+                "file": str(path),
+                "explain": explain(policy, probe(default_sys_base())),
+            }
+
+        try:
+            result = await asyncio.to_thread(_write)
+            saved = result["policy"]
+            safe_audit_log(
+                "system.battery_policy",
+                resource="battery",
+                detail=(
+                    f"ok={result['ok']} enabled={saved.get('enabled')} "
+                    f"band={saved.get('band')} mode={saved.get('mode')}"
+                ),
+            )
+            return success_response(data=result)
+        except Exception as e:
+            classify_and_raise(e, source="system.battery_policy")
 
     @endpoint("system.set_battery_limit")
     async def set_battery_limit(
