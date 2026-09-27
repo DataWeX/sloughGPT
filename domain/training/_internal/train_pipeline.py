@@ -1645,6 +1645,8 @@ class SloughGPTTrainer:
                         "done": done,
                         "done_reason": done_reason,
                         "avg_quality": self._avg_quality,
+                        "checkpoint_path": self._last_checkpoint_path,
+                        "checkpoint_dir": str(self.config.checkpoint_dir),
                     }
                 )
             except Exception:
@@ -2167,6 +2169,9 @@ class SloughGPTTrainer:
 
         Args:
             path: Output path without the extension; ``.soul`` is appended.
+                A trailing ``.soul`` on ``path`` is stripped rather than
+                duplicated, so callers may pass either form and the recorded
+                checkpoint path always matches the file on disk.
             format: DEPRECATED and ignored. Retained for backward compatibility;
                 ``SloughGPTTrainer.save()`` always writes ``.soul`` regardless of
                 this value. Passing a non-None value emits a
@@ -2202,6 +2207,9 @@ class SloughGPTTrainer:
             )
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+
+        if path.endswith(".soul"):
+            path = path[: -len(".soul")]
 
         from domain.inference import create_soul_profile, save_soul
         from domain.inference._internal.slo_format import PersonalityCore
