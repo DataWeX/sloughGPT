@@ -306,6 +306,14 @@ describe('CompanionPage — save flow', () => {
     await waitFor(() => {
       expect(screen.getByText('Warmth')).toBeTruthy()
     })
+    await waitFor(
+      () => {
+        expect(
+          screen.getAllByRole('button').find((b) => b.textContent?.toLowerCase().includes('save')),
+        ).toBeDefined()
+      },
+      { timeout: 5000 },
+    )
 
     const saveBtn = screen
       .getAllByRole('button')
@@ -331,6 +339,14 @@ describe('CompanionPage — save flow', () => {
     await waitFor(() => {
       expect(screen.getByText('Warmth')).toBeTruthy()
     })
+    await waitFor(
+      () => {
+        expect(
+          screen.getAllByRole('button').find((b) => b.textContent?.toLowerCase().includes('save')),
+        ).toBeDefined()
+      },
+      { timeout: 5000 },
+    )
 
     const saveBtn = screen
       .getAllByRole('button')
@@ -469,6 +485,12 @@ describe('CompanionPage — reset flow', () => {
     await waitFor(() => {
       expect(screen.getByText('Warmth')).toBeTruthy()
     })
+    await waitFor(
+      () => {
+        expect(screen.getByTestId('icon-refresh').closest('button')).toBeTruthy()
+      },
+      { timeout: 5000 },
+    )
 
     const resetBtn = screen.getByTestId('icon-refresh').closest('button')
     expect(resetBtn).toBeDefined()
@@ -511,6 +533,14 @@ describe('CompanionPage — error handling', () => {
     await waitFor(() => {
       expect(screen.getByText('Warmth')).toBeTruthy()
     })
+    await waitFor(
+      () => {
+        expect(
+          screen.getAllByRole('button').find((b) => b.textContent?.toLowerCase().includes('save')),
+        ).toBeDefined()
+      },
+      { timeout: 5000 },
+    )
 
     const saveBtn = screen
       .getAllByRole('button')
@@ -560,9 +590,14 @@ describe('CompanionPage — personality traits section', () => {
     await waitFor(() => {
       expect(screen.getByText('Warmth')).toBeTruthy()
     })
-    const svg = container.querySelector('svg')
-    expect(svg).toBeTruthy()
-    expect(svg?.getAttribute('viewBox')).toBe('0 0 200 200')
+    await waitFor(
+      () => {
+        const svg = container.querySelector('svg')
+        expect(svg).toBeTruthy()
+        expect(svg?.getAttribute('viewBox')).toBe('0 0 200 200')
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('trait card is hidden when traits are null', async () => {

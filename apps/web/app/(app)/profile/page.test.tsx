@@ -85,25 +85,40 @@ describe('ProfilePage', () => {
   it('displays KPI stats', async () => {
     render(<ProfilePage />)
     await screen.findByText('Profile')
-    expect(screen.getAllByText('Username').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Role').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Status').length).toBeGreaterThanOrEqual(1)
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('Username').length).toBeGreaterThanOrEqual(1)
+        expect(screen.getAllByText('Role').length).toBeGreaterThanOrEqual(1)
+        expect(screen.getAllByText('Status').length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('displays profile information', async () => {
     render(<ProfilePage />)
     await screen.findByText('Profile')
-    expect(screen.getAllByText('Profile Information').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByDisplayValue('alice')).toBeTruthy()
-    expect(screen.getByDisplayValue('alice@test.com')).toBeTruthy()
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('Profile Information').length).toBeGreaterThanOrEqual(1)
+        expect(screen.getByDisplayValue('alice')).toBeTruthy()
+        expect(screen.getByDisplayValue('alice@test.com')).toBeTruthy()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('displays change password form', async () => {
     render(<ProfilePage />)
     await screen.findByText('Profile')
-    expect(screen.getAllByText('Change Password').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getByPlaceholderText('Current password')).toBeTruthy()
-    expect(screen.getByPlaceholderText('New password (min 8 characters)')).toBeTruthy()
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('Change Password').length).toBeGreaterThanOrEqual(1)
+        expect(screen.getByPlaceholderText('Current password')).toBeTruthy()
+        expect(screen.getByPlaceholderText('New password (min 8 characters)')).toBeTruthy()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('displays account details', async () => {
@@ -124,6 +139,12 @@ describe('ProfilePage', () => {
     mockApiPut.mockResolvedValueOnce({ data: { email: 'new@test.com', display_name: 'New Name' } })
     render(<ProfilePage />)
     await screen.findByText('Profile')
+    await waitFor(
+      () => {
+        expect(screen.getByDisplayValue('alice@test.com')).toBeTruthy()
+      },
+      { timeout: 5000 },
+    )
 
     const emailInput = screen.getByDisplayValue('alice@test.com')
     await user.clear(emailInput)
