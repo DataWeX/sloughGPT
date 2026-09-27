@@ -112,7 +112,7 @@ class TestShellKernel:
         assert not run_steps(40000)
         text = "".join(out)
         assert "sloughvm>" in text
-        assert "commands: help, echo <text>, about, clear, halt" in text
+        assert "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt" in text
 
         out.clear()
         feed("echo hello\n")
@@ -139,6 +139,66 @@ class TestShellKernel:
         halted = run_steps(40000)
         assert halted, "halt command must terminate the process"
 
+    def test_shell_fs_and_system_commands(self):
+        from vm_builtins import get_builtin
+
+        from domain.shell._internal.vm import X86VirtualSystem
+        from domain.shell._internal.vm_permissions import Role
+
+        vs = X86VirtualSystem(memory_size=0x100000)
+        vs._fs.write("motd", b"hello from flatfs")
+        pid = vs.spawn("web_user", get_builtin("shell"))
+        assert pid is not None
+        vs._syscall._rbac.assign(pid, Role.USER)
+        vs.scheduler.start(vs.cpu)
+        vs.scheduler.current.restore_to_cpu(vs.cpu)
+
+        out: list[str] = []
+        original = vs._syscall._sys_write
+
+        def capture(fd, addr, count):
+            if fd in (1, 2):
+                out.append(
+                    bytes(vs.cpu._read8(addr + i) for i in range(count)).decode("ascii", "replace")
+                )
+                return count
+            return original(fd, addr, count)
+
+        vs._syscall._sys_write = capture
+
+        def feed(text: str) -> None:
+            for ch in text:
+                if ch in ("\b", "\x7f"):
+                    vs.cpu.push_scancode(0x0E)
+                else:
+                    vs.cpu.push_key(ch)
+
+        def run_steps(n: int) -> bool:
+            for _ in range(n):
+                vs.cpu.transfer_key()
+                if not vs.cpu.step():
+                    return True
+            return False
+
+        def check(cmd: str, expect: str) -> None:
+            out.clear()
+            feed(cmd)
+            assert not run_steps(60000), f"unexpected halt running {cmd!r}"
+            text = "".join(out)
+            assert expect in text, f"{cmd!r} -> {text!r}"
+
+        check("ls\n", "motd")
+        check("uname\n", "SloughOS sloughvm 0.1.0 #1 SMP i686")
+        check("pid\n", str(pid))
+        check("cat motd\n", "hello from flatfs")
+        check("cat nofile\n", "cat: no such file")
+        check("cat\n", "usage: cat <file>")
+        check("cat   motd\n", "hello from flatfs")
+        check("catalog\n", "unknown command")
+
+        assert vs._fs.delete("motd")
+        check("ls\n", "(no files)")
+
 
 class TestVMConsoleHTTP:
     """Session lifecycle over HTTP: create, input, delete, errors."""
@@ -159,7 +219,10 @@ class TestVMConsoleHTTP:
             assert resp.json()["data"]["accepted"] == 5
 
             text = _wait_history(session_id, "commands:")
-            assert "commands: help, echo <text>, about, clear, halt" in text
+            assert (
+                "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt"
+                in text
+            )
 
             resp = client.post(f"/vm/session/{session_id}/input", json={"text": "echo zebra9x\n"})
             assert resp.status_code == 200
@@ -266,7 +329,7 @@ class TestVMConsoleStream:
         # Live output: input help, expect the commands line
         await console_session_input(session_id, VMConsoleInputRequest(text="help\n"), auth_user={})
         text = await self._read_output(it, lambda t: "commands:" in t)
-        assert "commands: help, echo <text>, about, clear, halt" in text
+        assert "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt" in text
 
         # halt → status complete ends the stream
         await console_session_input(session_id, VMConsoleInputRequest(text="halt\n"), auth_user={})

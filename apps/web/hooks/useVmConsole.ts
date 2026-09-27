@@ -29,6 +29,32 @@ export interface UseVmConsoleResult {
   disconnect: () => Promise<void>
 }
 
+const ANSI_RE = /\x1b\[[0-9;]*[A-Za-z]/g
+
+/**
+ * Sanitize one output chunk against the accumulated buffer.
+ *
+ * - `ESC[2J` (kernel `clear` command) wipes the buffer; only the
+ *   remainder of the chunk follows on the cleared screen.
+ * - Other ANSI sequences are stripped for plain `<pre>` display.
+ * - `\b` erases the previous character of the merged buffer, giving
+ *   terminal-style backspace handling for kernel echo (`\b \b`).
+ */
+export function sanitizeVmOutput(prev: string, text: string): string {
+  const parts = text.split('\x1b[2J')
+  const cleared = parts.length > 1
+  const body = cleared ? parts[parts.length - 1] : text
+  const clean = body.replace(ANSI_RE, '')
+  const merged = (cleared ? '' : prev) + clean
+  if (!clean.includes('\b')) return merged
+  const out: string[] = []
+  for (const ch of merged) {
+    if (ch === '\b') out.pop()
+    else out.push(ch)
+  }
+  return out.join('')
+}
+
 /**
  * Interactive VM console session over SSE.
  *
@@ -54,7 +80,7 @@ export function useVmConsole(): UseVmConsoleResult {
         if (env.stream !== 'vm_console') return
         if (env.phase === 'output' && typeof env.data?.text === 'string') {
           const text = env.data.text
-          setOutput((prev) => prev + text)
+          setOutput((prev) => sanitizeVmOutput(prev, text))
         } else if (env.phase === 'start') {
           setPhase('live')
         } else if (env.phase === 'status') {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { useVmConsole, type VmConsolePhase } from '@/hooks/useVmConsole'
 
@@ -39,6 +39,8 @@ export function VmSessionPanel({ className }: VmSessionPanelProps) {
   const [input, setInput] = useState('')
   const startedRef = useRef(false)
   const scrollRef = useRef<HTMLPreElement>(null)
+  const historyRef = useRef<string[]>([])
+  const histIdxRef = useRef(-1)
 
   useEffect(() => {
     if (startedRef.current) return
@@ -55,7 +57,33 @@ export function VmSessionPanel({ className }: VmSessionPanelProps) {
     e.preventDefault()
     const text = input
     setInput('')
+    histIdxRef.current = -1
+    if (text.trim() !== '') {
+      historyRef.current.push(text)
+      if (historyRef.current.length > 50) historyRef.current.shift()
+    }
     void sendInput(text.trim() === '' ? '\n' : `${text}\n`)
+  }
+
+  const onInputKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return
+    const hist = historyRef.current
+    if (hist.length === 0) return
+    e.preventDefault()
+    let idx = histIdxRef.current
+    if (e.key === 'ArrowUp') {
+      idx = idx < 0 ? hist.length - 1 : Math.max(0, idx - 1)
+    } else {
+      if (idx < 0) return
+      idx += 1
+      if (idx >= hist.length) {
+        histIdxRef.current = -1
+        setInput('')
+        return
+      }
+    }
+    histIdxRef.current = idx
+    setInput(hist[idx])
   }
 
   return (
@@ -109,7 +137,8 @@ export function VmSessionPanel({ className }: VmSessionPanelProps) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="type a command (help, echo …)"
+          onKeyDown={onInputKeyDown}
+          placeholder="type a command (help, ls, cat …)"
           aria-label="VM console input"
           data-testid="vm-session-input"
           className="flex-1 bg-transparent font-mono text-[12px] text-foreground outline-none placeholder:text-muted-foreground"

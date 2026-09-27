@@ -1501,7 +1501,8 @@ export default function VMPage() {
                   <CardContent className="p-3">
                     <p className="text-xs text-muted-foreground">
                       The project's own x86 VM (X86VirtualSystem) running the shell REPL kernel.
-                      Type commands — help, echo, about, clear, halt.
+                      Type commands — help, ls, cat &lt;file&gt;, uname, pid, echo, about, clear,
+                      halt. Use ↑/↓ for input history.
                     </p>
                   </CardContent>
                 </Card>

@@ -70,6 +70,43 @@ describe('VmSessionPanel', () => {
     expect(mockSendInput).toHaveBeenCalledWith('\n')
   })
 
+  it('ArrowUp recalls submitted commands from history', () => {
+    render(<VmSessionPanel />)
+    const input = screen.getByTestId('vm-session-input') as HTMLInputElement
+
+    fireEvent.change(input, { target: { value: 'help' } })
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
+    fireEvent.change(input, { target: { value: 'ls' } })
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input.value).toBe('ls')
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input.value).toBe('help')
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input.value).toBe('help')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(input.value).toBe('ls')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(input.value).toBe('')
+  })
+
+  it('ArrowUp with empty history does nothing', () => {
+    render(<VmSessionPanel />)
+    const input = screen.getByTestId('vm-session-input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'draft' } })
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input.value).toBe('draft')
+  })
+
+  it('blank submissions are not recorded in history', () => {
+    render(<VmSessionPanel />)
+    const input = screen.getByTestId('vm-session-input') as HTMLInputElement
+    fireEvent.submit(input.closest('form') as HTMLFormElement)
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    expect(input.value).toBe('')
+  })
+
   it('restart button starts a new session', () => {
     render(<VmSessionPanel />)
     expect(mockStart).toHaveBeenCalledTimes(1)

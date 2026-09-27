@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, cleanup, act } from '@testing-library/react'
-import { useVmConsole } from './useVmConsole'
+import { useVmConsole, sanitizeVmOutput } from './useVmConsole'
 
 const mockApiPost = vi.fn()
 const mockApiDelete = vi.fn()
@@ -154,5 +154,54 @@ describe('useVmConsole', () => {
     expect(mockApiDelete).toHaveBeenCalledWith('/vm/session/sid-1')
     expect(result.current.sessionId).toBeNull()
     expect(result.current.phase).toBe('closed')
+  })
+
+  it('clear command (ESC[2J) resets the output buffer', async () => {
+    const { result } = renderHook(() => useVmConsole())
+    await act(async () => {
+      await result.current.start()
+    })
+    act(() => {
+      emit({ stream: 'vm_console', phase: 'output', data: { text: 'old screen\n' } })
+      emit({ stream: 'vm_console', phase: 'output', data: { text: '\x1b[2J\x1b[Hfresh\n' } })
+    })
+    expect(result.current.output).toBe('fresh\n')
+  })
+
+  it('kernel backspace echo erases the previous character', async () => {
+    const { result } = renderHook(() => useVmConsole())
+    await act(async () => {
+      await result.current.start()
+    })
+    act(() => {
+      emit({ stream: 'vm_console', phase: 'output', data: { text: 'echx' } })
+      emit({ stream: 'vm_console', phase: 'output', data: { text: '\b \b' } })
+      emit({ stream: 'vm_console', phase: 'output', data: { text: 'o ok\n' } })
+    })
+    expect(result.current.output).toBe('echo ok\n')
+  })
+})
+
+describe('sanitizeVmOutput', () => {
+  it('appends plain text unchanged', () => {
+    expect(sanitizeVmOutput('abc', 'def')).toBe('abcdef')
+  })
+
+  it('strips non-clear ANSI sequences', () => {
+    expect(sanitizeVmOutput('', 'a\x1b[31mred\x1b[0m b')).toBe('ared b')
+  })
+
+  it('clear wipes the buffer and keeps only post-clear text', () => {
+    expect(sanitizeVmOutput('old', '\x1b[2J\x1b[Hnew')).toBe('new')
+    expect(sanitizeVmOutput('old', 'before\x1b[2Jafter')).toBe('after')
+  })
+
+  it('backspaces apply across chunk boundaries', () => {
+    expect(sanitizeVmOutput('abc', '\b \b')).toBe('ab')
+    expect(sanitizeVmOutput('', 'ab\b\b')).toBe('')
+  })
+
+  it('backspace on an empty buffer is a no-op', () => {
+    expect(sanitizeVmOutput('', '\b')).toBe('')
   })
 })

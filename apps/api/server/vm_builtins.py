@@ -43,6 +43,11 @@ _NR_WRITE = _syscall_num("SYS_WRITE")
 _NR_TRAIN_START = _syscall_num("SYS_TRAIN_START")
 _NR_TRAIN_STATUS = _syscall_num("SYS_TRAIN_STATUS")
 _NR_TRAIN_GET_RESULT = _syscall_num("SYS_TRAIN_GET_RESULT")
+_NR_OPEN = _syscall_num("SYS_OPEN")
+_NR_CLOSE = _syscall_num("SYS_CLOSE")
+_NR_READDIR = _syscall_num("SYS_READDIR")
+_NR_UNAME = _syscall_num("SYS_UNAME")
+_NR_GETPID = _syscall_num("SYS_GETPID")
 
 
 # ── Shared subroutines (spliced into each program) ───────────────────────────
@@ -478,27 +483,41 @@ start:
 def _shell() -> str:
     return f"""; shell — interactive console REPL for the browser VM session.
 ; Line-buffered stdin read loop: prompts, echoes typing, handles
-; backspace, then dispatches one of: help, echo <text>, about,
-; clear, halt.  Spins on empty keyboard buffer (SYS_READ returns 0)
-; until the session pump feeds keys via transfer_key().
+; backspace, then dispatches one of: help, ls, cat <file>, uname,
+; pid, echo <text>, about, clear, halt.  Spins on empty keyboard
+; buffer (SYS_READ returns 0) until the session pump feeds keys
+; via transfer_key().
 [BITS 32]
 [ORG 0x100000]
     jmp start
 prompt: db 10, "sloughvm> ", 0
 msg_nl: db 10, 0
-msg_help: db "commands: help, echo <text>, about, clear, halt", 10, 0
+msg_sp: db " ", 0
+msg_help: db "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt", 10, 0
 msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
 msg_unknown: db "unknown command - type help", 10, 0
 msg_clear: db 27, "[2J", 27, "[H", 0
 msg_bs: db 8, 32, 8, 0
+msg_ls_empty: db "(no files)", 10, 0
+msg_cat_usage: db "usage: cat <file>", 10, 0
+msg_no_file: db "cat: no such file", 10, 0
 cmd_help: db "help", 0
 cmd_echo: db "echo", 0
 cmd_about: db "about", 0
 cmd_clear: db "clear", 0
 cmd_halt: db "halt", 0
+cmd_ls: db "ls", 0
+cmd_uname: db "uname", 0
+cmd_pid: db "pid", 0
+cmd_cat: db "cat", 0
 chbuf: times 4 db 0
 llen: times 1 db 0
 line: times 80 db 0
+dirents: times 320 db 0
+catbuf: times 201 db 0
+unamebuf: times 325 db 0
+catfd: times 4 db 0
+{_SCRATCH}
 start:
 repl:
     xor eax, eax
@@ -579,6 +598,23 @@ line_done:
     call strcmp
     jz do_halt
     mov esi, line
+    mov edi, cmd_ls
+    call strcmp
+    jz do_ls
+    mov esi, line
+    mov edi, cmd_uname
+    call strcmp
+    jz do_uname
+    mov esi, line
+    mov edi, cmd_pid
+    call strcmp
+    jz do_pid
+    mov esi, line
+    mov edi, cmd_cat
+    call prefix_match
+    test eax, eax
+    jnz do_cat
+    mov esi, line
     mov edi, cmd_echo
     call prefix_match
     test eax, eax
@@ -600,6 +636,125 @@ do_clear:
     jmp repl
 do_halt:
 {_EXIT}
+do_ls:
+    mov eax, {_NR_READDIR}
+    mov ebx, dirents
+    mov ecx, 10
+    int 0x80
+    test eax, eax
+    jz ls_empty
+    mov esi, dirents
+    mov ecx, eax
+ls_loop:
+    test ecx, ecx
+    jz ls_done
+    push esi
+    call print_str
+    pop esi
+    push esi
+    mov esi, msg_nl
+    call print_str
+    pop esi
+    add esi, 32
+    dec ecx
+    jmp ls_loop
+ls_done:
+    jmp repl
+ls_empty:
+    mov esi, msg_ls_empty
+    call print_str
+    jmp repl
+do_uname:
+    mov eax, {_NR_UNAME}
+    mov ebx, unamebuf
+    int 0x80
+    mov esi, unamebuf
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 65
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 130
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 195
+    call print_str
+    call print_sp
+    mov esi, unamebuf
+    add esi, 260
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+do_pid:
+    mov eax, {_NR_GETPID}
+    int 0x80
+    call print_num
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+do_cat:
+    ; prefix matched: line must be exactly "cat" or "cat <args>"
+    mov esi, line
+    add esi, 3
+    mov al, [esi]
+    test al, al
+    jz cat_usage
+    cmp al, ' '
+    jne do_unknown
+cat_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je cat_skip
+    test al, al
+    jz cat_usage
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    mov ecx, 0
+    int 0x80
+    cmp eax, 0
+    jl cat_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl cat_read_err
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov esi, catbuf
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+cat_usage:
+    mov esi, msg_cat_usage
+    call print_str
+    jmp repl
+cat_missing:
+    mov esi, msg_no_file
+    call print_str
+    jmp repl
+cat_read_err:
+    mov esi, msg_no_file
+    call print_str
+    jmp repl
+do_unknown:
+    mov esi, msg_unknown
+    call print_str
+    jmp repl
 do_echo:
     mov esi, line
     add esi, 4
@@ -646,6 +801,13 @@ pm_yes:
 pm_no:
     xor eax, eax
     ret
+print_sp:
+    push esi
+    mov esi, msg_sp
+    call print_str
+    pop esi
+    ret
+{_PRINT_NUM}
 {_PRINT_STR}
 """
 
