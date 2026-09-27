@@ -344,11 +344,11 @@ export default function SessionPage() {
             {inspector.session.messages.length > 0 && (
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-xs">Recent Messages ({inspector.session.messages.length})</CardTitle>
+                  <CardTitle className="text-xs">Recent Messages ({(inspector.session.messages ?? []).length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-1 max-h-[240px] overflow-y-auto">
-                    {inspector.session.messages.map((msg, i) => (
+                    {(inspector.session.messages ?? []).map((msg, i) => (
                       <div key={i} className={cn('rounded p-1.5 text-[10px]', msg.role === 'assistant' ? 'bg-primary/5' : 'bg-muted/30')}>
                         <div className="flex items-center gap-1 mb-0.5">
                           <span className={cn('text-[10px] font-medium', msg.role === 'assistant' ? 'text-primary' : 'text-muted-foreground/60')}>

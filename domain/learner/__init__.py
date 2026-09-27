@@ -9,9 +9,11 @@ from domain.learner._internal.continual import (
     get_learner,
 )
 from domain.learner._internal.entity_extractor import extract_and_store
+from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
 
 __all__ = [
     "ContinualLearner",
-    "get_learner",
+    "enrich_with_knowledge",
     "extract_and_store",
+    "get_learner",
 ]

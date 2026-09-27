@@ -287,7 +287,13 @@ except Exception as exc:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get(
-        "SLO_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000"
+        # Vite dev servers (5173 default, 5175 our journey port) must be
+        # allowed or the browser frontend gets "Disallowed CORS origin" →
+        # NetworkError on every fetch.
+        "SLO_CORS_ORIGINS",
+        "http://localhost:3000,http://localhost:5173,http://localhost:5175,"
+        "http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5175,"
+        "http://localhost:8000",
     ).split(","),
     allow_credentials=True,
     allow_methods=["*"],
