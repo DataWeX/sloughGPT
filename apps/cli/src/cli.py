@@ -1096,10 +1096,17 @@ def main():
         _cmd_parts.append(_a)
     _cmd_path = _cmd_parts[0] if _cmd_parts else ""
 
+    _exit_code = 0
     try:
         cli(obj={})
-    except SystemExit:
-        pass
+    except SystemExit as e:
+        if e.code is None:
+            _exit_code = 0
+        elif isinstance(e.code, int):
+            _exit_code = e.code
+        else:
+            print(e.code, file=sys.stderr)
+            _exit_code = 1
     except KeyboardInterrupt:
         # Interrupted during dispatch, before a command handler took over.
         _p()
@@ -1113,6 +1120,9 @@ def main():
             _p()
             _p(f"  {_c('💡', _DIM)} {_c('Tip:', _BOLD)} {_c(f'sloughgpt {_tip}', _CYAN)}")
             _p()
+
+    if _exit_code:
+        sys.exit(_exit_code)
 
 
 if __name__ == "__main__":
