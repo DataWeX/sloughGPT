@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Fake npx for journey tests: `npx next build` "builds" a working standalone
 # server.js (node http server honouring PORT/HOSTNAME) instead of the real
-# multi-minute Next build + network fetch. Anything else is a no-op success.
+# multi-minute Next build + network fetch. `npx react-native start` (metro)
+# serves on PORT so _check_port sees a live bundler. Anything else is a
+# no-op success.
 set -u
 LOG="${FAKE_NPM_LOG:-/tmp/fake_npm.log}"
 echo "argv: $*" >> "$LOG"
@@ -26,5 +28,12 @@ http
   })
   .listen(port, host, () => console.log("standalone listening on " + port));
 JS
+fi
+
+if [ "${1:-}" = "react-native" ] && [ "${2:-}" = "start" ]; then
+  # Metro: _cmd_api_and_mobile sets PORT=8081 and waits on _check_port(8081).
+  # Exiting early would trip the metro-dead error path and end the session;
+  # this exec replaces the shell so SIGTERM lands on the server directly.
+  exec python3 -m http.server "${PORT:-8081}" --bind 0.0.0.0
 fi
 exit 0
