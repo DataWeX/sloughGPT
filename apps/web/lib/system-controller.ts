@@ -7,7 +7,7 @@
  *   for await (const line of systemController.streamOutput()) { ... }
  */
 
-import { apiGet, streamSSE } from './http-client'
+import { apiGet, apiPost, streamSSE } from './http-client'
 
 export interface SystemMetrics {
   cpu_percent: number
@@ -40,6 +40,50 @@ export interface GPUInfo {
   memory_hint: string
 }
 
+export interface BatteryStatus {
+  level: number
+  is_charging: boolean
+  is_plugged: boolean
+  health: string
+  capacity: number
+  voltage_mv: number
+  current_ma: number
+  time_to_full_min: number | null
+  time_to_empty_min: number | null
+  source: 'sysfs' | 'simulated'
+  name: string
+  level_band: 'low' | 'ok' | 'high' | 'full'
+  updated_at: number
+}
+
+export interface BatteryControl {
+  supported: boolean
+  writable: boolean
+  path: string | null
+  current_limit: number | null
+  reason: string
+}
+
+export interface BatteryAdvice {
+  limit: number
+  action: 'unplug' | 'cap_at_80' | 'plug_in' | 'maintain'
+  reason: string
+}
+
+export interface BatteryInfo {
+  status: BatteryStatus
+  control: BatteryControl
+  advice: BatteryAdvice
+}
+
+export interface BatteryLimitResult {
+  applied: boolean
+  supported: boolean
+  limit: number | null
+  reason: string
+  path: string | null
+}
+
 export interface KvSessionsInfo {
   enabled?: boolean
   active_sessions?: number
@@ -59,14 +103,27 @@ export interface DetailedHealth {
   p95_latency_ms: number
   requests_per_minute: number
   path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
-  recent_errors: Array<{ path: string; method: string; status: number; message: string; error_type: string; ts: number }>
+  recent_errors: Array<{
+    path: string
+    method: string
+    status: number
+    message: string
+    error_type: string
+    ts: number
+  }>
   inference_count: number
   total_tokens: number
   tokens_per_sec: number
   avg_tokens_per_request: number
   health_score: { score: number; status: string }
   status_message: string
-  model_metrics: Array<{ model: string; count: number; total_tokens: number; tokens_per_sec: number; avg_tokens: number }>
+  model_metrics: Array<{
+    model: string
+    count: number
+    total_tokens: number
+    tokens_per_sec: number
+    avg_tokens: number
+  }>
   model_events: Array<{ type: string; model: string; detail: string; ts: number }>
   health_history: Array<{ score: number; status: string; ts: number }>
   memory_history: Array<{ rss_mb: number; virtual_mb: number; system_percent: number; ts: number }>
@@ -99,7 +156,15 @@ export interface DetailedHealth {
   kv_sessions?: KvSessionsInfo
   quantization?: unknown
   training_pool?: { active_jobs: number; max_workers: number; total_tracked: number } | null
-  lifecycle?: { phase: string; profile?: string; is_running: boolean; is_draining?: boolean; uptime?: number; in_flight?: number; error?: string }
+  lifecycle?: {
+    phase: string
+    profile?: string
+    is_running: boolean
+    is_draining?: boolean
+    uptime?: number
+    in_flight?: number
+    error?: string
+  }
   resource_allocation?: {
     mode?: string
     compute_threads?: number
@@ -121,7 +186,12 @@ export interface DetailedHealth {
     enabled?: boolean
     health?: { alive: boolean; memory_mb?: number; restarts?: number }
   } | null
-  memory_pressure?: { current_mb?: number; peak_mb?: number; pressure_level?: string; tracked_count?: number } | null
+  memory_pressure?: {
+    current_mb?: number
+    peak_mb?: number
+    pressure_level?: string
+    tracked_count?: number
+  } | null
   registry?: { healthy: boolean; default_model?: string; models?: Array<Record<string, unknown>> }
   versions?: {
     app?: string
@@ -204,6 +274,16 @@ export const systemController = {
     return apiGet<DiskUsage>('/system/disk', undefined, { silent: true })
   },
 
+  async getBattery(): Promise<BatteryInfo> {
+    return apiGet<BatteryInfo>('/system/battery', undefined, { silent: true })
+  },
+
+  async setBatteryLimit(percent: number): Promise<BatteryLimitResult> {
+    return apiPost<BatteryLimitResult>(`/system/battery/limit?percent=${percent}`, undefined, {
+      silent: true,
+    })
+  },
+
   async getDetailedHealth(): Promise<DetailedHealth> {
     return apiGet<DetailedHealth>('/health/detailed', undefined, { silent: true })
   },
@@ -214,9 +294,18 @@ export const systemController = {
 
   async *streamOutput(tail: number = 50, signal?: AbortSignal): AsyncGenerator<OutputLine> {
     try {
-      for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET', signal })) {
+      for await (const event of streamSSE(`/system/stream?tail=${tail}`, {
+        method: 'GET',
+        signal,
+      })) {
         const d = event.data
-        if (d && typeof d.text === 'string' && typeof d.level === 'string' && typeof d.source === 'string' && typeof d.ts === 'number') {
+        if (
+          d &&
+          typeof d.text === 'string' &&
+          typeof d.level === 'string' &&
+          typeof d.source === 'string' &&
+          typeof d.ts === 'number'
+        ) {
           const line: OutputLine = { text: d.text, level: d.level, source: d.source, ts: d.ts }
           yield line
         }

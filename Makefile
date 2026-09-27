@@ -95,6 +95,7 @@ buildroot-status:
 install: build setup-git
 	cd apps/web && npm ci
 	.venv/bin/pip install -e packages/core-py/
+	.venv/bin/pip install -e packages/chargectl/
 
 # ── Tooling Setup ───────────────────────────────────────
 setup-git:
