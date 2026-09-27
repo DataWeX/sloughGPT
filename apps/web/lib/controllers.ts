@@ -176,6 +176,11 @@ export type {
   DiskUsage,
   GPUInfo,
   KvSessionsInfo,
+  BatteryInfo,
+  BatteryStatus,
+  BatteryControl,
+  BatteryAdvice,
+  BatteryLimitResult,
 } from './system-controller'
 export type {
   TokenizerStats,

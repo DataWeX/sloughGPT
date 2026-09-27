@@ -36,6 +36,8 @@ class SystemRouter:
         self.router.add_api_route("/metrics", self.get_metrics, methods=["GET"])
         self.router.add_api_route("/info", self.get_info, methods=["GET"])
         self.router.add_api_route("/disk", self.get_disk, methods=["GET"])
+        self.router.add_api_route("/battery", self.get_battery, methods=["GET"])
+        self.router.add_api_route("/battery/limit", self.set_battery_limit, methods=["POST"])
         self.router.add_api_route("/lifecycle", self.get_lifecycle_status, methods=["GET"])
         self.router.add_api_route(
             "/stream", self.stream_output, methods=["GET"], response_model=None
@@ -138,6 +140,59 @@ class SystemRouter:
             return success_response(data=await asyncio.to_thread(_read))
         except Exception as e:
             classify_and_raise(e, source="system.disk")
+
+    @endpoint("system.get_battery")
+    async def get_battery(self) -> dict:
+        """Read charge state, charge-cap capability, and longevity advice.
+
+        Reads are pure, so this is safe to poll. ``control.supported`` is false on
+        machines whose kernel does not expose a charge threshold (VMs, containers,
+        many chassis) — that is a capability report, not an error.
+        """
+
+        def _read():
+            from chargectl import BatteryReader, optimize_hint, probe
+
+            status = BatteryReader().read()
+            capability = probe()
+            return {
+                "status": status.as_dict(),
+                "control": capability.as_dict(),
+                "advice": optimize_hint(status),
+            }
+
+        try:
+            return success_response(data=await asyncio.to_thread(_read))
+        except Exception as e:
+            classify_and_raise(e, source="system.battery")
+
+    @endpoint("system.set_battery_limit")
+    async def set_battery_limit(
+        self,
+        percent: int = Query(80, ge=1, le=100),
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        """Cap charge at ``percent`` to prevent overcharge (100 lifts the cap).
+
+        Never fails hard: an unsupported or read-only kernel returns
+        ``applied: false`` with a human reason.
+        """
+
+        def _write():
+            from chargectl import set_limit
+
+            return set_limit(percent)
+
+        try:
+            result = await asyncio.to_thread(_write)
+            safe_audit_log(
+                "system.battery_limit",
+                resource="battery",
+                detail=f"percent={percent} applied={result.applied} reason={result.reason}",
+            )
+            return success_response(data=result.as_dict())
+        except Exception as e:
+            classify_and_raise(e, source="system.battery_limit")
 
     @endpoint("system.get_lifecycle_status")
     async def get_lifecycle_status(self) -> dict:

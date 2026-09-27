@@ -133,3 +133,76 @@ class TestInferencePool:
         assert "initialized" in data
         assert "max_workers" in data
         assert "queue_timeout" in data
+
+
+class TestBattery:
+    def test_get_battery_structure(self):
+        resp = client.get("/system/battery")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert {"status", "control", "advice"}.issubset(data.keys())
+
+        status = data["status"]
+        assert 0 <= status["level"] <= 100
+        assert status["source"] in ("sysfs", "simulated")
+        assert status["level_band"] in ("low", "ok", "high", "full")
+        assert isinstance(status["is_charging"], bool)
+
+        control = data["control"]
+        assert {"supported", "writable", "reason"}.issubset(control.keys())
+        assert isinstance(control["supported"], bool)
+
+        advice = data["advice"]
+        assert advice["action"] in ("unplug", "cap_at_80", "plug_in", "maintain")
+        assert advice["reason"]
+        assert 1 <= advice["limit"] <= 100
+
+    def test_get_battery_reports_capability_not_error(self):
+        """Unsupported kernels must answer 200 with supported=false, not 5xx."""
+        resp = client.get("/system/battery")
+        assert resp.status_code == 200
+        control = _data(resp)["control"]
+        if not control["supported"]:
+            assert control["reason"]
+
+    def test_set_limit_returns_control_result(self, monkeypatch):
+        import chargectl
+        from chargectl import ControlResult
+
+        seen = {}
+
+        def fake_set_limit(percent, sys_base=None):
+            seen["percent"] = percent
+            return ControlResult(True, True, percent, "stubbed")
+
+        monkeypatch.setattr(chargectl, "set_limit", fake_set_limit)
+        resp = client.post("/system/battery/limit", params={"percent": 80})
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data == {
+            "applied": True,
+            "supported": True,
+            "limit": 80,
+            "reason": "stubbed",
+            "path": None,
+        }
+        assert seen["percent"] == 80
+
+    def test_set_limit_rejects_out_of_range(self):
+        assert client.post("/system/battery/limit", params={"percent": 0}).status_code == 422
+        assert client.post("/system/battery/limit", params={"percent": 101}).status_code == 422
+
+    def test_set_limit_defaults_to_80(self, monkeypatch):
+        import chargectl
+        from chargectl import ControlResult
+
+        seen = {}
+
+        def fake_set_limit(percent, sys_base=None):
+            seen["percent"] = percent
+            return ControlResult(True, True, percent, "stubbed")
+
+        monkeypatch.setattr(chargectl, "set_limit", fake_set_limit)
+        resp = client.post("/system/battery/limit")
+        assert resp.status_code == 200
+        assert seen["percent"] == 80
