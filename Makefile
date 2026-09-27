@@ -97,12 +97,59 @@ install: build setup-git
 	.venv/bin/pip install -e packages/core-py/
 	.venv/bin/pip install -e packages/chargectl/
 
-# Install the chargectl enforcement daemon (root). Point ExecStart at .venv/bin/chargectl
-# when running from this repo — see packages/chargectl/systemd/chargectl.service.
+# Install the chargectl enforcement daemon. Both targets rewrite ExecStart to this
+# checkout's .venv console script when it exists, so the installed unit runs exactly
+# the code you are looking at — see packages/chargectl/systemd/chargectl.service.
+CHARGE_UNIT := packages/chargectl/systemd/chargectl.service
+
+# System unit (root): needs a real charge node, e.g. a laptop.
 charge-svc:
-	install -m 644 packages/chargectl/systemd/chargectl.service /etc/systemd/system/chargectl.service
+	@test -f $(CHARGE_UNIT) || { echo "charge-svc: missing $(CHARGE_UNIT)"; exit 1; }
+	@command -v systemctl >/dev/null 2>&1 || { echo "charge-svc: systemctl not found (this host does not run systemd)"; exit 1; }
+	@if [ "$$(id -u)" -ne 0 ]; then echo "charge-svc: needs root — run: sudo make charge-svc"; exit 1; fi
+	@tmp=$$(mktemp); \
+	trap 'rm -f "$$tmp"' EXIT; \
+	if [ -x .venv/bin/chargectl ]; then \
+		sed "s|^ExecStart=.*|ExecStart=\"$(CURDIR)/.venv/bin/chargectl\" daemon|" $(CHARGE_UNIT) > "$$tmp"; \
+		echo "charge-svc: ExecStart -> $(CURDIR)/.venv/bin/chargectl"; \
+	else \
+		cp $(CHARGE_UNIT) "$$tmp"; \
+		echo "charge-svc: ExecStart -> /usr/local/bin/chargectl (no .venv — run 'make install' first)"; \
+	fi; \
+	install -m 644 "$$tmp" /etc/systemd/system/chargectl.service
+	install -d -m 755 /etc/chargectl /var/lib/chargectl
 	systemctl daemon-reload
-	@echo "Enable it with: sudo systemctl enable --now chargectl"
+	systemctl enable --now chargectl
+	@systemctl --no-pager --lines=0 status chargectl || true
+
+# User unit (no root): dev boxes and VMs — threshold writes are a dry run there anyway.
+charge-svc-user:
+	@test -f $(CHARGE_UNIT) || { echo "charge-svc-user: missing $(CHARGE_UNIT)"; exit 1; }
+	@command -v systemctl >/dev/null 2>&1 || { echo "charge-svc-user: systemctl not found (this host does not run systemd)"; exit 1; }
+	@systemctl --user is-system-running >/dev/null 2>&1 || { echo "charge-svc-user: no user systemd session (is $$XDG_RUNTIME_DIR set?)"; exit 1; }
+	@test -x .venv/bin/chargectl || { echo "charge-svc-user: .venv/bin/chargectl missing — run 'make install' first"; exit 1; }
+	@mkdir -p ~/.config/systemd/user
+	@sed -e "s|^ExecStart=.*|ExecStart=\"$(CURDIR)/.venv/bin/chargectl\" daemon|" \
+		-e "s|^Environment=CHARGECTL_POLICY=.*|Environment=CHARGECTL_POLICY=%h/.config/chargectl/policy.json|" \
+		-e "s|^Environment=CHARGECTL_STATE=.*|Environment=CHARGECTL_STATE=%h/.local/state/chargectl/state.json|" \
+		-e "s|^After=multi-user.target|After=default.target|" \
+		-e "s|^WantedBy=.*|WantedBy=default.target|" \
+		-e "/^ReadWritePaths=/d" -e "/^ProtectSystem=/d" -e "/^ProtectHome=/d" \
+		$(CHARGE_UNIT) > ~/.config/systemd/user/chargectl.service
+	@echo "charge-svc-user: ExecStart -> $(CURDIR)/.venv/bin/chargectl"
+	systemctl --user daemon-reload
+	systemctl --user enable --now chargectl
+	@systemctl --user --no-pager --lines=0 status chargectl || true
+
+# Remove both units (policy + state files are left alone — they are user data).
+charge-svc-down:
+	@-systemctl disable --now chargectl 2>/dev/null || true
+	@-rm -f /etc/systemd/system/chargectl.service
+	@-systemctl daemon-reload
+	@-systemctl --user disable --now chargectl 2>/dev/null || true
+	@-rm -f ~/.config/systemd/user/chargectl.service
+	@-systemctl --user daemon-reload 2>/dev/null || true
+	@echo "chargectl units removed (policy + state files left in place)"
 
 # ── Tooling Setup ───────────────────────────────────────
 setup-git:
