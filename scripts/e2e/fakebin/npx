@@ -32,8 +32,15 @@ fi
 
 if [ "${1:-}" = "react-native" ] && [ "${2:-}" = "start" ]; then
   # Metro: _cmd_api_and_mobile sets PORT=8081 and waits on _check_port(8081).
-  # Exiting early would trip the metro-dead error path and end the session;
-  # this exec replaces the shell so SIGTERM lands on the server directly.
-  exec python3 -m http.server "${PORT:-8081}" --bind 0.0.0.0
+  # Run the server in ITS OWN session: the CLI's pty teardown (script SIGHUP
+  # on session exit) must not kill an orphaned metro before the journey's
+  # orphan check runs — that check exists to catch exactly that leak. Green
+  # path: the handler's terminate hits this shell (trap → kills the child)
+  # and _kill_port(8081) is the backstop.
+  setsid python3 -m http.server "${PORT:-8081}" --bind 0.0.0.0 &
+  KP=$!
+  trap 'kill -TERM "$KP" 2>/dev/null' TERM
+  wait "$KP"
+  exit $?
 fi
 exit 0

@@ -55,6 +55,10 @@ done
 ok "ports $API_P + $METRO_P free"
 
 launch() {
+  # `script -qec` (pty) is required for StatusBlock's shutdown ack — in
+  # non-tty it prints nothing. The orphan check still works because the
+  # fake metro runs in its OWN session (see fakebin/npx) and survives the
+  # pty teardown that would otherwise mask the leak.
   NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
     setsid script -qec "./sloughgpt serve --mobile --port $API_P --host localhost" /dev/null \
     > "$1" 2>&1 < /dev/null &
