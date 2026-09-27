@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel
 from schemas.common import raise_error
 
 from .webhooks import (
     TRAINING_EVENTS,
+    WebhookStore,
     get_webhook_store,
 )
 
@@ -41,20 +42,65 @@ async def list_webhooks():
     }
 
 
+class WebhookCreateRequest(BaseModel):
+    """JSON body accepted by POST /training/webhooks (frontend contract)."""
+
+    url: str
+    events: list[str]
+    description: str = ""
+    secret: str | None = None
+
+
+def _parse_events(events: str | list[str]) -> list[str]:
+    """Parse and normalize the events field (query gives JSON str, body gives list)."""
+    if isinstance(events, str):
+        try:
+            parsed = json.loads(events)
+        except json.JSONDecodeError:
+            raise_error(
+                "Invalid events format. Must be JSON array.", "E_BAD_REQUEST", status_code=400
+            )
+            return []
+    else:
+        parsed = events
+    if not isinstance(parsed, list) or not all(isinstance(e, str) for e in parsed):
+        raise_error("events must be a list of strings.", "E_BAD_REQUEST", status_code=400)
+        return []
+    return WebhookStore._normalize_events(parsed)
+
+
 @router.post("/training/webhooks")
 async def register_webhook(
-    url: str,
-    events: str,
-    description: str = "",
-    secret: str | None = None,
+    payload: WebhookCreateRequest | None = Body(None),
+    url: str | None = Query(None),
+    events: str | None = Query(None),
+    description: str | None = Query(None),
+    secret: str | None = Query(None),
 ):
-    """Register a new webhook endpoint."""
-    try:
-        events_list = json.loads(events) if isinstance(events, str) else events
-    except json.JSONDecodeError:
-        raise_error("Invalid events format. Must be JSON array.", "E_BAD_REQUEST", status_code=400)
-    if not url.startswith(("http://", "https://")):
+    """Register a webhook endpoint. Accepts JSON body or query params.
+
+    Idempotent on (url, event set): re-registering the same combination
+    returns the existing webhook with ``deduplicated: true``.
+    """
+    raw_url = url if url is not None else (payload.url if payload else None)
+    effective_events = events if events is not None else (payload.events if payload else None)
+    if raw_url is None or effective_events is None:
+        raise_error(
+            "url and events are required (JSON body or query params).",
+            "E_BAD_REQUEST",
+            status_code=400,
+        )
+    effective_url = raw_url.strip()
+    effective_description = (
+        description if description is not None else (payload.description if payload else "")
+    )
+    effective_secret = secret if secret is not None else (payload.secret if payload else None)
+
+    if not effective_url.startswith(("http://", "https://")):
         raise_error("URL must start with http:// or https://", "E_BAD_REQUEST", status_code=400)
+    events_list = _parse_events(effective_events)
+    if not events_list:
+        raise_error("events must not be empty.", "E_BAD_REQUEST", status_code=400)
     invalid_events = [e for e in events_list if e not in TRAINING_EVENTS]
     if invalid_events:
         raise_error(
@@ -63,11 +109,11 @@ async def register_webhook(
             status_code=400,
         )
     store = get_webhook_store()
-    webhook_id = store.register(
-        url=url,
+    webhook_id, created = store.register(
+        url=effective_url,
         events=events_list,
-        secret=secret,
-        description=description,
+        secret=effective_secret,
+        description=effective_description,
         headers=None,
     )
 
@@ -78,18 +124,21 @@ async def register_webhook(
 
         get_audit_logger().log(
             "training.webhook.register",
-            resource=url,
-            extra={"webhook_id": webhook_id, "events": events_list},
+            resource=effective_url,
+            extra={"webhook_id": webhook_id, "events": events_list, "deduplicated": not created},
         )
     except Exception as e:
         logger.warning("Audit log failed for webhook registration %s: %s", webhook_id, e)
 
     return {
         "id": webhook_id,
-        "url": url,
-        "events": events,
+        "url": webhook.url if webhook else effective_url,
+        "events": events_list,
         "secret": webhook.secret if webhook else None,
-        "message": "Webhook registered successfully",
+        "deduplicated": not created,
+        "message": (
+            "Webhook already registered" if not created else "Webhook registered successfully"
+        ),
     }
 
 
@@ -126,7 +175,7 @@ async def test_webhook(req: TestWebhookRequest):
     """Send a test notification to a URL."""
     store = get_webhook_store()
 
-    webhook_id = store.register(
+    webhook_id, created = store.register(
         url=req.url,
         events=TRAINING_EVENTS,
         description="Temporary test webhook",
@@ -144,7 +193,10 @@ async def test_webhook(req: TestWebhookRequest):
         retries=1,
     )
 
-    store.unregister(webhook_id)
+    # Only remove the hook if we created it here - a dedup hit means it is a
+    # real registered webhook the caller already owns.
+    if created:
+        store.unregister(webhook_id)
 
     return {
         "success": delivery.success,

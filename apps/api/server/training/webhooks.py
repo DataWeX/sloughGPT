@@ -113,6 +113,23 @@ class WebhookStore:
         """Whether the backing store is usable."""
         return self._db is not None and self._webhooks is not None
 
+    @staticmethod
+    def _normalize_events(events: list[str] | None) -> list[str]:
+        """Strip, drop blanks, and de-duplicate while preserving input order."""
+        seen: set[str] = set()
+        normalized: list[str] = []
+        for event in events or []:
+            event = (event or "").strip()
+            if event and event not in seen:
+                seen.add(event)
+                normalized.append(event)
+        return normalized
+
+    @staticmethod
+    def _events_key(events: list[str] | None) -> tuple[str, ...]:
+        """Order-insensitive natural-key component for an event list."""
+        return tuple(sorted({(e or "").strip() for e in events or [] if (e or "").strip()}))
+
     def register(
         self,
         url: str,
@@ -120,10 +137,22 @@ class WebhookStore:
         secret: str | None = None,
         description: str = "",
         headers: dict[str, str] | None = None,
-    ) -> str:
-        """Register a new webhook."""
+    ) -> tuple[str, bool]:
+        """Register a webhook idempotently.
+
+        Natural key: (url, event set). Re-registering an existing active
+        webhook with the same url and the same event set returns the
+        existing id with ``created=False`` instead of inserting a duplicate.
+
+        Returns:
+            ``(webhook_id, created)`` - created is False on a dedup hit.
+        """
         if not self.is_available:
             raise RuntimeError("Webhook store unavailable (MogDB failed to initialise)")
+
+        url = (url or "").strip()
+        events_norm = self._normalize_events(events)
+        events_key = self._events_key(events_norm)
 
         webhook_id = hashlib.sha256(f"{url}{time.time()}".encode()).hexdigest()[:16]
 
@@ -134,11 +163,20 @@ class WebhookStore:
         now = utc_now_iso()
 
         with self._lock:
+            for doc in self._webhooks.find({"url": url}):
+                if doc.get("is_active", True) and self._events_key(doc.get("events")) == events_key:
+                    logger.info(
+                        "Webhook dedup hit for %s -> existing %s",
+                        url,
+                        doc["_id"],
+                        extra={"tag": "TRAIN"},
+                    )
+                    return doc["_id"], False
             self._webhooks.insert_one(
                 {
                     "_id": webhook_id,
                     "url": url,
-                    "events": events,
+                    "events": events_norm,
                     "secret": secret,
                     "description": description,
                     "is_active": True,
@@ -148,7 +186,7 @@ class WebhookStore:
             )
 
         logger.info("Registered webhook %s for %s", webhook_id, url, extra={"tag": "TRAIN"})
-        return webhook_id
+        return webhook_id, True
 
     def unregister(self, webhook_id: str) -> bool:
         """Unregister a webhook."""

@@ -16,7 +16,8 @@ def _mk_store(tmp_path):
 
 
 def _register(store, url="https://example.com/hook", events=("training.started",), secret=None):
-    return store.register(url, list(events), secret=secret, description="test hook")
+    webhook_id, _created = store.register(url, list(events), secret=secret, description="test hook")
+    return webhook_id
 
 
 def test_register_generates_secret_and_id(tmp_path):
@@ -92,7 +93,7 @@ def test_get_secret_and_sign_payload(tmp_path):
 def test_get_stats_counts(tmp_path):
     store = _mk_store(tmp_path)
     a = _register(store)
-    _register(store)
+    _register(store, url="https://second.example/hook")
     store.unregister(a)
 
     stats = store.get_stats()
@@ -112,6 +113,58 @@ def test_delivery_log_trimmed_at_max_size(tmp_path):
 
     assert len(store.delivery_log) == 3
     assert store.delivery_log[0].payload == "2"
+
+
+# ── natural-key dedup (idempotent create) ──────────────────────────────
+
+
+def test_register_same_url_and_events_is_idempotent(tmp_path):
+    store = _mk_store(tmp_path)
+    first, created_first = store.register("https://a.example/hook", ["training.started"])
+    second, created_second = store.register("https://a.example/hook", ["training.started"])
+
+    assert created_first is True
+    assert created_second is False
+    assert second == first
+    assert len(store.list()) == 1
+
+
+def test_register_dedup_ignores_event_order_and_duplicates(tmp_path):
+    store = _mk_store(tmp_path)
+    first, _ = store.register("https://a.example/hook", ["training.started", "training.failed"])
+    second, created = store.register(
+        "https://a.example/hook", ["training.failed", "training.started", "training.failed"]
+    )
+
+    assert created is False
+    assert second == first
+
+
+def test_register_different_events_create_distinct_hooks(tmp_path):
+    store = _mk_store(tmp_path)
+    first, created_first = store.register("https://a.example/hook", ["training.started"])
+    second, created_second = store.register("https://a.example/hook", ["training.completed"])
+
+    assert created_first is True
+    assert created_second is True
+    assert second != first
+    assert len(store.list()) == 2
+
+
+def test_register_normalizes_stored_events(tmp_path):
+    store = _mk_store(tmp_path)
+    wid, _ = store.register("https://a.example/hook", [" training.started ", "training.started"])
+
+    assert store.get(wid).events == ["training.started"]
+
+
+def test_register_strips_url_whitespace(tmp_path):
+    store = _mk_store(tmp_path)
+    first, _ = store.register("https://a.example/hook", ["training.started"])
+    second, created = store.register("  https://a.example/hook  ", ["training.started"])
+
+    assert created is False
+    assert second == first
 
 
 def _delivery(store, wid, payload):

@@ -460,14 +460,21 @@ class TestTrainingRouterAudit:
         logger.log.assert_not_called()
 
     @patch("infrastructure.auth.get_audit_logger")
-    def test_register_webhook_logs_event(self, mock_logger, training_router_client):
-        resp = training_router_client.post(
-            "/training/webhooks",
-            params={
-                "url": "https://example.com/hook",
-                "events": '["training.completed","training.failed"]',
-            },
-        )
+    def test_register_webhook_logs_event(self, mock_logger, training_router_client, tmp_path):
+        from apps.api.server.training.webhooks import WebhookStore
+
+        store = WebhookStore(str(tmp_path / "webhooks.db"))
+        with patch(
+            "apps.api.server.training.webhook_endpoints.get_webhook_store",
+            return_value=store,
+        ):
+            resp = training_router_client.post(
+                "/training/webhooks",
+                params={
+                    "url": "https://example.com/hook",
+                    "events": '["training.completed","training.failed"]',
+                },
+            )
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_once()
@@ -478,17 +485,22 @@ class TestTrainingRouterAudit:
         assert kwargs["extra"]["webhook_id"] == resp.json()["id"]
 
     @patch("infrastructure.auth.get_audit_logger")
-    def test_unregister_webhook_logs_event(self, mock_logger, training_router_client):
-        from apps.api.server.training.webhooks import get_webhook_store
+    def test_unregister_webhook_logs_event(self, mock_logger, training_router_client, tmp_path):
+        from apps.api.server.training.webhooks import WebhookStore
 
-        webhook_id = get_webhook_store().register(
+        store = WebhookStore(str(tmp_path / "webhooks.db"))
+        webhook_id, _created = store.register(
             url="https://example.com/hook",
             events=["training.completed"],
             secret=None,
             description="",
             headers=None,
         )
-        resp = training_router_client.delete(f"/training/webhooks/{webhook_id}")
+        with patch(
+            "apps.api.server.training.webhook_endpoints.get_webhook_store",
+            return_value=store,
+        ):
+            resp = training_router_client.delete(f"/training/webhooks/{webhook_id}")
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_once()
