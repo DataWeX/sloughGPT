@@ -495,7 +495,7 @@ def _shell() -> str:
 prompt: db 10, "sloughvm> ", 0
 msg_nl: db 10, 0
 msg_sp: db " ", 0
-msg_help: db "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt", 10, 0
+msg_help: db "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
 msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
 msg_unknown: db "unknown command - type help", 10, 0
 msg_clear: db 27, "[2J", 27, "[H", 0
@@ -503,6 +503,9 @@ msg_bs: db 8, 32, 8, 0
 msg_ls_empty: db "(no files)", 10, 0
 msg_cat_usage: db "usage: cat <file>", 10, 0
 msg_no_file: db "cat: no such file", 10, 0
+msg_wrote: db "wrote ", 0
+msg_write_usage: db "usage: write <file> <text>", 10, 0
+msg_open_fail: db "write: cannot create file", 10, 0
 msg_train_started: db "started job ", 0
 msg_train_fail: db "train: could not start job", 10, 0
 msg_denied: db "permission denied (ADMIN role required)", 10, 0
@@ -521,6 +524,7 @@ cmd_ls: db "ls", 0
 cmd_uname: db "uname", 0
 cmd_pid: db "pid", 0
 cmd_cat: db "cat", 0
+cmd_write: db "write", 0
 cmd_train: db "train", 0
 cmd_train_status: db "train-status", 0
 cmd_train_result: db "train-result", 0
@@ -643,6 +647,11 @@ line_done:
     call prefix_match
     test eax, eax
     jnz do_cat
+    mov esi, line
+    mov edi, cmd_write
+    call prefix_match
+    test eax, eax
+    jnz do_write
     mov esi, line
     mov edi, cmd_echo
     call prefix_match
@@ -885,6 +894,88 @@ echo_skip:
 echo_pr:
     call print_str
     mov esi, msg_nl
+    call print_str
+    jmp repl
+do_write:
+    ; prefix "write" matched — line must be "write <file> [text]"
+    mov esi, line
+    add esi, 5
+    mov al, [esi]
+    test al, al
+    jz wr_usage
+    cmp al, ' '
+    jne do_unknown
+wr_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je wr_skip
+    test al, al
+    jz wr_usage
+    ; ESI = filename start — scan to separator, terminate it
+    mov edi, esi
+wr_scan:
+    mov al, [edi]
+    test al, al
+    jz wr_no_content
+    cmp al, ' '
+    je wr_has_content
+    inc edi
+    jmp wr_scan
+wr_has_content:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+wr_no_content:
+    ; EDI = content start, ESI = filename — strlen(content) -> EDX
+    xor edx, edx
+    push edi
+wr_strlen:
+    mov al, [edi]
+    test al, al
+    jz wr_strlen_done
+    inc edx
+    inc edi
+    jmp wr_strlen
+wr_strlen_done:
+    pop edi
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    mov ecx, 2            ; create+truncate
+    int 0x80
+    cmp eax, 0
+    jl wr_open_fail
+    mov ebx, eax          ; fd — kept for SYS_CLOSE
+    test edx, edx
+    jz wr_zero
+    mov eax, {_NR_WRITE}
+    mov ecx, edi
+    int 0x80              ; EAX = bytes written
+    jmp wr_done
+wr_zero:
+    xor eax, eax
+wr_done:
+    mov edi, esi          ; filename for the confirmation line
+    push eax              ; count
+    mov esi, msg_wrote
+    call print_str
+    mov esi, edi
+    call print_str
+    mov esi, msg_sp
+    call print_str
+    pop eax
+    call print_num
+    mov esi, msg_nl
+    call print_str
+    mov eax, {_NR_CLOSE}
+    int 0x80
+    jmp repl
+wr_usage:
+    mov esi, msg_write_usage
+    call print_str
+    jmp repl
+wr_open_fail:
+    mov esi, msg_open_fail
     call print_str
     jmp repl
 strcmp:

@@ -1175,9 +1175,11 @@ class BlockDevice(Device):
 
         if not (0 <= sector_idx < len(self._sectors)):
             raise DeviceFault(f"sector out of range: {sector_idx}")
+        if len(data) < self.SECTOR_SIZE:
+            data = data + b"\x00" * (self.SECTOR_SIZE - len(data))
         self._writes += 1
         self._bytes_written += self.SECTOR_SIZE
-        self._sectors[sector_idx][: len(data)] = data[: self.SECTOR_SIZE]
+        self._sectors[sector_idx][: self.SECTOR_SIZE] = data[: self.SECTOR_SIZE]
 
     def read_sectors(self, sector: int, count: int) -> bytes:
         """Read multiple contiguous sectors.
@@ -2211,8 +2213,8 @@ class FlatFS:
 
         # Find free sectors (simple: use sectors after all existing files)
         used = set()
-        for _, (_, count) in self._files.items():
-            for s in range(self.DATA_START, self.DATA_START + count):
+        for _, (start, count) in self._files.items():
+            for s in range(start, start + count):
                 used.add(s)
 
         free_sectors = []

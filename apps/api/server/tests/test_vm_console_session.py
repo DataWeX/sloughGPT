@@ -113,7 +113,7 @@ class TestShellKernel:
         text = "".join(out)
         assert "sloughvm>" in text
         assert (
-            "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 
@@ -326,7 +326,7 @@ class TestVMConsoleHTTP:
 
             text = _wait_history(session_id, "commands:")
             assert (
-                "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt"
+                "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
                 in text
             )
 
@@ -436,7 +436,7 @@ class TestVMConsoleStream:
         await console_session_input(session_id, VMConsoleInputRequest(text="help\n"), auth_user={})
         text = await self._read_output(it, lambda t: "commands:" in t)
         assert (
-            "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 

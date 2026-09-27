@@ -329,6 +329,26 @@ class TestFlatFSWithBlockDevice:
 
             dev.close()
 
+    def test_second_file_does_not_clobber_first(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "test.img")
+            dev = BlockDevice(path, block_size=4096, algo=CompressionAlgo.GZIP, create=True)
+            dev.allocate_blocks(100)
+
+            fs = FlatFS(dev)
+            fs.write("first.txt", b"alpha")
+            fs.write("second.txt", b"beta")
+
+            assert fs.read("first.txt")[:5] == b"alpha"
+            assert fs.read("second.txt")[:4] == b"beta"
+
+            fs.write("third.txt", b"gamma")
+            assert fs.read("first.txt")[:5] == b"alpha"
+            assert fs.read("second.txt")[:4] == b"beta"
+            assert fs.read("third.txt")[:5] == b"gamma"
+
+            dev.close()
+
     def test_delete_file(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "test.img")

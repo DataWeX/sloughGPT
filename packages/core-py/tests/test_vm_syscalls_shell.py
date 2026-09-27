@@ -188,6 +188,18 @@ class TestSyscallHandlerOpenClose:
         assert fd == 3
         assert vs.filesystem.exists("new.txt")
 
+    def test_open_mode2_truncates_existing_file(self):
+        vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
+        vs.filesystem.write("t.txt", b"old content")
+        vs._syscall._write_string(0x20000, "t.txt")
+        fd = vs._syscall._sys_open(0x20000, 2)
+        assert fd == 3
+        # FlatFS reads are sector-padded — check no old content survives.
+        assert vs.filesystem.read("t.txt").rstrip(b"\x00") == b""
+        vs.cpu._write8(0x40000, ord("n"))
+        assert vs._syscall._sys_write(fd, 0x40000, 1) == 1
+        assert vs.filesystem.read("t.txt").rstrip(b"\x00") == b"n"
+
     def test_close_valid_and_invalid_fd(self):
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
         vs.filesystem.write("e.txt", b"data")
