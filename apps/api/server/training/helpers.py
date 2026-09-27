@@ -60,10 +60,18 @@ def notify_push(title: str, body: str, **kwargs: Any) -> None:
 
 
 def _finish_job(job_id: str, status: str, error: str | None = None) -> None:
-    """Set job status and notify CancelManager so operations store stays in sync."""
+    """Set job status and notify CancelManager so operations store stays in sync.
+
+    Mutates the record in place. ``TrainingRuntime`` holds a reference to this
+    same dict; replacing it here left the runtime syncing a stale record to the
+    JobStore, so completed runs persisted as ``running`` and were flipped to
+    ``interrupted`` on restart — reappearing in the Resume/recoverable list.
+    """
     job = training_jobs.get(job_id)
     if job is not None:
-        training_jobs[job_id] = {**job, "status": status, **({"error": error} if error else {})}
+        job["status"] = status
+        if error:
+            job["error"] = error
     try:
         from domain.infrastructure.cancel_manager import OpStatus, get_cancel_manager
 
@@ -100,7 +108,7 @@ def _sloughgpt_trainer_kwds(req_snapshot: dict[str, Any]) -> dict[str, Any]:
             if req_snapshot.get("max_grad_norm") is not None
             else 1.0
         ),
-        "checkpoint_dir": str(req_snapshot.get("checkpoint_dir") or "checkpoints"),
+        "checkpoint_dir": str(req_snapshot.get("checkpoint_dir") or "models/auto-training"),
         "checkpoint_interval": int(req_snapshot.get("checkpoint_interval") or 500),
         "save_best_only": bool(req_snapshot.get("save_best_only", False)),
         "max_checkpoints": int(req_snapshot.get("max_checkpoints") or 5),
