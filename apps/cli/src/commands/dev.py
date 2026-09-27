@@ -1121,6 +1121,34 @@ def _cmd_api_and_web(args):
     root = _repo_root()
     api_port = getattr(args, "port", 8000)
     web_port = getattr(args, "web_port", 3000)
+    shutdown = [False]
+
+    # ── Stream buffers + signal handlers — first thing in the command
+    # bash backgrounds (`cmd &`) start with SIGINT set to ignore and
+    # CPython honours the inherited disposition: any interrupt before
+    # our handler was installed was silently dropped (Ctrl+C did
+    # nothing, forever, depending on startup timing) and SIGTERM was
+    # default-kill (leaking whatever had been spawned). Registered at
+    # function entry the handler covers the entire lifecycle; the
+    # startup flow checks `shutdown` at each phase boundary so the
+    # main thread stops where it stands.
+    api_lines: deque = deque(maxlen=_LOG_BUF)
+    web_lines: deque = deque(maxlen=_LOG_BUF)
+    stop_event = threading.Event()
+    api_ready_event = threading.Event()  # suppress echo until API is ready
+
+    def _sig_handler(sig, frame):
+        if shutdown[0]:
+            return
+        shutdown[0] = True
+        log.blank()
+        log.info("Shutting down...")
+        stop_event.set()
+        _cleanup(api_proc, web_proc, api_port, web_port)
+        log.success("Stopped")
+
+    signal.signal(signal.SIGINT, _sig_handler)
+    signal.signal(signal.SIGTERM, _sig_handler)
 
     # ── Reuse existing healthy services or find free ports ────────
     api_reused = False
@@ -1144,6 +1172,10 @@ def _cmd_api_and_web(args):
     web_status = "ok (reusing)" if web_reused else "starting"
 
     def _update_status():
+        # A shutdown already ran (or is running): its final status
+        # block must not be overwritten by a lingering startup update.
+        if shutdown[0]:
+            return
         # Only print status when TTY cursor manipulation works
         # Otherwise print once at the end when both services are ready
         api_color = _A.GREEN if "ok" in api_status else _A.YELLOW
@@ -1176,15 +1208,12 @@ def _cmd_api_and_web(args):
     if "NEXTAUTH_URL" not in env:
         env["NEXTAUTH_URL"] = f"http://localhost:{web_port}"
 
-    # ── Stream buffers ──────────────────────────────────────────
-    api_lines: deque = deque(maxlen=_LOG_BUF)
-    web_lines: deque = deque(maxlen=_LOG_BUF)
-    stop_event = threading.Event()
-    api_ready_event = threading.Event()  # suppress echo until API is ready
-
     # ── Start FastAPI server ─────────────────────────────────────
+    if shutdown[0]:
+        return
     python = Path(find_server_python(root))
     api_proc = None
+    web_proc = None
     if not api_reused:
         api_proc = subprocess.Popen(
             [
@@ -1251,6 +1280,8 @@ def _cmd_api_and_web(args):
             _cleanup(api_proc, None, api_port, web_port)
             return
         build_log.success("Build complete")
+        if shutdown[0]:
+            return
 
     # ── Copy static assets for standalone ───────────────────────
     standalone_root = server_js.parent
@@ -1287,7 +1318,6 @@ def _cmd_api_and_web(args):
         ),
     }
 
-    web_proc = None
     if not web_reused:
         if server_js.is_file():
             web_proc = subprocess.Popen(
@@ -1322,6 +1352,8 @@ def _cmd_api_and_web(args):
         _update_status()
         api_ready = False
         for _ in range(API_STARTUP_TIMEOUT):
+            if shutdown[0]:
+                return
             if _check_api_ready(api_port):
                 api_ready = True
                 break
@@ -1349,6 +1381,8 @@ def _cmd_api_and_web(args):
     web_status = "waiting..."
     _update_status()
     for _ in range(60):
+        if shutdown[0]:
+            return
         if _check_port(web_port):
             web_status = "ok"
             _update_status()
@@ -1371,6 +1405,9 @@ def _cmd_api_and_web(args):
         web_status = "timeout"
         _update_status()
 
+    if shutdown[0]:
+        return
+
     # ── Ready ────────────────────────────────────────────────────
     web_url = f"http://localhost:{web_port}"
     api_status = "ok"
@@ -1388,26 +1425,15 @@ def _cmd_api_and_web(args):
     browser_thread = threading.Thread(target=_open_browser, daemon=True)
     browser_thread.start()
 
-    # ── Signal handlers for clean shutdown ──────────────────────
-    shutdown = [False]
-
-    def _sig_handler(sig, frame):
-        if shutdown[0]:
-            return
-        shutdown[0] = True
-        log.blank()
-        log.info("Shutting down...")
-        stop_event.set()
-        _cleanup(api_proc, web_proc, api_port, web_port)
-        log.success("Stopped")
-
-    signal.signal(signal.SIGINT, _sig_handler)
-    signal.signal(signal.SIGTERM, _sig_handler)
-
     # ── Monitor loop: restart crashed web, detect API death ─────
     try:
         while not shutdown[0]:
             time.sleep(2)
+            # The handler may have run during the sleep — its cleanup
+            # already terminated the children; re-check before the body
+            # would mistake those exits for crashes and restart them.
+            if shutdown[0]:
+                break
             # API crashed (only if we own the process)
             if api_proc is not None and api_proc.poll() is not None:
                 log.error(f"API server exited (code {api_proc.returncode})")
