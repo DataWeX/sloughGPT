@@ -24,7 +24,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure import AppError
 
 
 def _numpy_perplexity(model, ids):
@@ -258,7 +258,7 @@ class BenchmarkRouter:
         """
         _t0 = _time.monotonic()
         try:
-            from domains import get_benchmark_domain
+            from domain.benchmark import get_benchmark_domain
 
             bench = get_benchmark_domain()
             result = bench.evaluate_latest(limit=limit)
@@ -282,7 +282,7 @@ class BenchmarkRouter:
         """Get recent logged responses for review."""
         _t0 = _time.monotonic()
         try:
-            from domain.feedback._internal.response_tracker import get_response_tracker
+            from domain.feedback import get_response_tracker
 
             tracker = get_response_tracker()
             responses = tracker.get_responses(limit=limit, model=model)
@@ -319,7 +319,7 @@ class BenchmarkRouter:
         """Get response tracker statistics - uses BenchmarkDomain."""
         _t0 = _time.monotonic()
         try:
-            from domains import get_benchmark_domain
+            from domain.benchmark import get_benchmark_domain
 
             bench = get_benchmark_domain()
             result = bench.get_stats()
@@ -335,7 +335,7 @@ class BenchmarkRouter:
     @endpoint("benchmark.clear_history")
     async def clear_history(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Clear benchmark history and logged responses."""
-        from domains import get_benchmark_domain
+        from domain.benchmark import get_benchmark_domain
 
         bench = get_benchmark_domain()
         bench.clear_history()
