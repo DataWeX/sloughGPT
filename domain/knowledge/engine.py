@@ -383,7 +383,9 @@ class KnowledgeEngine:
             from domain.knowledge import FileIndex
 
             index = FileIndex()
-            extensions_set = set(extensions) if extensions else None
+            # Accept both "py" and ".py" — index_directory matches on the
+            # dotted suffix, so undotted inputs silently matched nothing.
+            extensions_set = {"." + e.lstrip(".") for e in extensions} if extensions else None
             indexed = (
                 index.index_directory(path, extensions=extensions_set)
                 if hasattr(index, "index_directory")
@@ -394,7 +396,7 @@ class KnowledgeEngine:
                 success=True,
                 data={
                     "results": results,
-                    "indexed_files": len(indexed),
+                    "indexed_files": int(indexed.get("files_indexed", 0)),
                     "query": query,
                     "path": path,
                 },
@@ -571,7 +573,9 @@ class KnowledgeEngine:
             if hasattr(detector, "load_from_store") and hasattr(memory, "_vector_store"):
                 detector.load_from_store(memory._vector_store)
             gaps = (
-                detector.find_gaps(seed_topics=seed_topics) if hasattr(detector, "find_gaps") else []
+                detector.find_gaps(seed_topics=seed_topics)
+                if hasattr(detector, "find_gaps")
+                else []
             )
             total = len(memory.list_all(top_k=5000)) if hasattr(memory, "list_all") else 0
             return KnowledgeResult(success=True, data={"gaps": gaps, "total_facts": total})
@@ -594,7 +598,9 @@ class KnowledgeEngine:
         try:
             from domain.knowledge import BulkProcessor
 
-            texts = [i["content"] if isinstance(i, dict) and "content" in i else str(i) for i in items]
+            texts = [
+                i["content"] if isinstance(i, dict) and "content" in i else str(i) for i in items
+            ]
             processor = BulkProcessor(knowledge_memory=self._get_memory())
             report = processor.ingest_texts(
                 texts, topic=topic, source=source, dedup_threshold=dedup_threshold
