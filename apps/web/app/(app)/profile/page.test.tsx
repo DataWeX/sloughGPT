@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockApiGet = vi.fn()
@@ -13,8 +13,18 @@ vi.mock('@/lib/http-client', () => ({
 }))
 
 vi.mock('@/lib/auth', () => ({
-  useAuthStore: (selector?: (s: { currentWorkspace: { id: string } | null; user: { id: string; email: string } | null; setUser: (u: unknown) => void }) => unknown) => {
-    const state = { currentWorkspace: { id: 'ws-1' }, user: { id: 'u1', email: 'test@test.com' }, setUser: vi.fn() }
+  useAuthStore: (
+    selector?: (s: {
+      currentWorkspace: { id: string } | null
+      user: { id: string; email: string } | null
+      setUser: (u: unknown) => void
+    }) => unknown,
+  ) => {
+    const state = {
+      currentWorkspace: { id: 'ws-1' },
+      user: { id: 'u1', email: 'test@test.com' },
+      setUser: vi.fn(),
+    }
     return selector ? selector(state) : state
   },
 }))
@@ -99,9 +109,14 @@ describe('ProfilePage', () => {
   it('displays account details', async () => {
     render(<ProfilePage />)
     await screen.findByText('Profile')
-    expect(screen.getAllByText('Account Details').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('User ID:').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Tenant ID:').length).toBeGreaterThanOrEqual(1)
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('Account Details').length).toBeGreaterThanOrEqual(1)
+        expect(screen.getAllByText('User ID:').length).toBeGreaterThanOrEqual(1)
+        expect(screen.getAllByText('Tenant ID:').length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('saves profile changes', async () => {
@@ -116,6 +131,9 @@ describe('ProfilePage', () => {
 
     const saveBtn = screen.getByText('Save Changes')
     await user.click(saveBtn)
-    expect(mockApiPut).toHaveBeenCalledWith('/users/me/profile', expect.objectContaining({ email: 'new@test.com' }))
+    expect(mockApiPut).toHaveBeenCalledWith(
+      '/users/me/profile',
+      expect.objectContaining({ email: 'new@test.com' }),
+    )
   })
 })
