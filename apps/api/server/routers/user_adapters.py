@@ -2,6 +2,8 @@
 User Adapters Router - Per-user LoRA adapter management
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
@@ -113,7 +115,8 @@ class UserAdaptersRouter:
         """Update a user's LoRA adapter with new feedback rating."""
         try:
             store = self._get_store()
-            store.update_adapter(user_id, rating=req.rating)
+            signal = {"thumbs_up": 1.0, "thumbs_down": -1.0}.get(req.rating, 0.0)
+            store.update_adapter(user_id, feedback_signal=signal)
             logger.info("Adapter updated (user=%s, rating=%s)", user_id, req.rating)
             safe_audit_log("adapter.update", resource=user_id, detail=f"rating={req.rating}")
             return success_response(data={"status": "updated", "user_id": user_id})

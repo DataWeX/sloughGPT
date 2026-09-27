@@ -466,23 +466,35 @@ class TrainingEngine:
             logger.error("Training store stats failed: %s", e)
             return TrainingResult(success=False, error=str(e))
 
-    def extract_pairs_from_sessions(self, sessions: list[dict]) -> TrainingResult:
+    def extract_pairs_from_sessions(
+        self,
+        limit: int = 50,
+        min_length: int = 5,
+        session_ids: list[str] | None = None,
+    ) -> TrainingResult:
         """Extract training pairs from session data."""
         try:
             from domain.training._internal.pair_extractor import extract_pairs_from_sessions
 
-            pairs = extract_pairs_from_sessions(sessions)
+            pairs = extract_pairs_from_sessions(
+                limit=limit, min_length=min_length, session_ids=session_ids
+            )
             return TrainingResult(success=True, data=pairs)
         except Exception as e:
             logger.error("Extract pairs from sessions failed: %s", e)
             return TrainingResult(success=False, error=str(e))
 
-    def extract_pairs_from_logs(self, logs: list[str]) -> TrainingResult:
+    def extract_pairs_from_logs(
+        self,
+        limit: int = 100,
+        min_length: int = 5,
+        model: str | None = None,
+    ) -> TrainingResult:
         """Extract training pairs from log data."""
         try:
             from domain.training._internal.pair_extractor import extract_pairs_from_logs
 
-            pairs = extract_pairs_from_logs(logs)
+            pairs = extract_pairs_from_logs(limit=limit, min_length=min_length, model=model)
             return TrainingResult(success=True, data=pairs)
         except Exception as e:
             logger.error("Extract pairs from logs failed: %s", e)

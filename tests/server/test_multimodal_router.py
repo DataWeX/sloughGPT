@@ -5,6 +5,7 @@ Tests for the multimodal router — status, train, batch, transcribe, generate.
 import os
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
@@ -15,6 +16,14 @@ app = FastAPI()
 register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
+
+
+@pytest.fixture(autouse=True)
+def _reset_voice_engine():
+    multimodal_router._voice_engine = None
+    yield
+    multimodal_router._voice_engine = None
+
 
 MGR_TARGET = "apps.api.server.routers.multimodal.get_multimodal_manager"
 ROUTER = "apps.api.server.routers.multimodal.MultimodalRouter"
@@ -151,9 +160,13 @@ class TestStatus:
 class TestTranscribe:
     """POST /multimodal/transcribe"""
 
-    @patch(MGR_TARGET)
-    def test_transcribe_audio(self, mock_get):
-        mock_get.return_value = _mock_manager()
+    @patch("domain.voice.get_voice_engine")
+    def test_transcribe_audio(self, mock_get_engine):
+        engine = MagicMock()
+        engine.recognize.return_value = MagicMock(
+            success=True, data="hello world", metadata={"confidence": 0.9}
+        )
+        mock_get_engine.return_value = engine
         resp = client.post(
             "/multimodal/transcribe",
             files={"file": ("test.wav", b"fake-audio", "audio/wav")},
@@ -162,7 +175,8 @@ class TestTranscribe:
         assert resp.status_code == 200
         data = _get_data(resp)
         assert data["text"] == "hello world"
-        assert data["confidence"] == 0.9
+        assert data["language"] == "en"
+        assert data["metadata"]["confidence"] == 0.9
 
     @patch(MGR_TARGET)
     def test_transcribe_rejects_non_audio(self, mock_get):
@@ -530,7 +544,7 @@ class TestProcessVideo:
         return engine
 
     @patch(MGR_TARGET)
-    @patch("domain.multimodal._internal.video.VideoProcessor")
+    @patch("domain.multimodal.VideoProcessor")
     def test_processes_video(self, mock_processor_cls, mock_get):
         import numpy as np
 
@@ -553,7 +567,7 @@ class TestProcessVideo:
         assert data["num_frames"] == 2
 
     @patch(MGR_TARGET)
-    @patch("domain.multimodal._internal.video.VideoProcessor")
+    @patch("domain.multimodal.VideoProcessor")
     def test_returns_500_when_engine_missing(self, mock_processor_cls, mock_get):
         import numpy as np
 

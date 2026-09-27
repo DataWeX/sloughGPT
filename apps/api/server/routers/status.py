@@ -58,16 +58,18 @@ class StatusRouter:
             checks["database"] = False
 
         # Check inference engine
+        optional_checks = {}
         try:
             from domain.inference._internal.native.engine import get_engine
 
             engine = get_engine()
-            checks["inference"] = engine is not None
+            optional_checks["inference"] = engine is not None
         except Exception as exc:
             _log.warning("Readiness check: inference engine unavailable: %s", exc)
-            checks["inference"] = False
+            optional_checks["inference"] = False
 
-        ready = all(checks.values()) if checks else True
+        checks.update(optional_checks)
+        ready = all(v for k, v in checks.items() if k not in optional_checks)
         return success_response(data={"ready": ready, "checks": checks})
 
     @endpoint("status.live")
