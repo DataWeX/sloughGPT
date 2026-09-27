@@ -64,11 +64,12 @@ describe('Visual — AppRouteHeader across all pages', () => {
     it(`header: ${name} (${path})`, () => {
       cy.visit(path, { failOnStatusCode: false })
       cy.get('body').then(($body) => {
-        if (
-          $body.find('[class*="sl-page-header"], [class*="app-route-header"], header, nav').length >
-          0
-        ) {
+        const headers = $body.find(
+          '[class*="sl-page-header"], [class*="app-route-header"], header, nav',
+        )
+        if (headers.filter(':visible').length > 0) {
           cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+            .filter(':visible')
             .first()
             .screenshot(`headers/${name}`)
         } else {
@@ -88,6 +89,7 @@ describe('Visual — Header responsive breakpoints', () => {
   it('header at desktop (1280px)', () => {
     cy.viewport(1280, 800)
     cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .filter(':visible')
       .first()
       .screenshot('headers/responsive-desktop')
   })
@@ -95,6 +97,7 @@ describe('Visual — Header responsive breakpoints', () => {
   it('header at tablet (768px)', () => {
     cy.viewport(768, 1024)
     cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .filter(':visible')
       .first()
       .screenshot('headers/responsive-tablet')
   })
@@ -102,6 +105,7 @@ describe('Visual — Header responsive breakpoints', () => {
   it('header at mobile (375px)', () => {
     cy.viewport(375, 667)
     cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .filter(':visible')
       .first()
       .screenshot('headers/responsive-mobile')
   })

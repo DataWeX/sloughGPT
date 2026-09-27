@@ -35,5 +35,20 @@ declare namespace Cypress {
 
     /** Mock /vm/run, /vm/builtins, /vm/info, and training job endpoints */
     mockVm(runOverrides?: Record<string, unknown>): Chainable<null>
+
+    /** Full-page screenshot into screenshots/interactions/<name> */
+    screenshotPage(name: string, options?: { fullPage?: boolean }): Chainable<null>
+
+    /** Run an interaction, then screenshot */
+    screenshotInteraction(name: string, interaction: () => void): Chainable<null>
+
+    /** Screenshot a single element */
+    screenshotElement(selector: string, name: string): Chainable<null>
+
+    /** Screenshot each step of a labeled interaction sequence */
+    screenshotSequence(
+      name: string,
+      steps: Array<{ label: string; action: () => void }>,
+    ): Chainable<null>
   }
 }

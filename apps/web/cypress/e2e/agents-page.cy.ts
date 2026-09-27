@@ -1,8 +1,17 @@
 describe('Agents page', () => {
   beforeEach(() => {
+    cy.mockApiFallback()
     cy.mockHealth()
     cy.mockAgents()
     cy.visit('/agents')
+    // Startup overlay (z-9999) can cover the card actions — hide it like the
+    // chat/datasets specs do so clicks land on the real buttons.
+    cy.window().then((win) => {
+      win.document.head.insertAdjacentHTML(
+        'beforeend',
+        '<style>[class*="9999"]{display:none !important}</style>',
+      )
+    })
   })
 
   it('renders the page with agent list', () => {
