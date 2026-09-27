@@ -112,7 +112,10 @@ class TestShellKernel:
         assert not run_steps(40000)
         text = "".join(out)
         assert "sloughvm>" in text
-        assert "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt" in text
+        assert (
+            "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt"
+            in text
+        )
 
         out.clear()
         feed("echo hello\n")
@@ -199,6 +202,109 @@ class TestShellKernel:
         assert vs._fs.delete("motd")
         check("ls\n", "(no files)")
 
+    def test_shell_train_commands(self, monkeypatch):
+        """REPL train/train-status/train-result with a fake training bridge."""
+        from vm_builtins import get_builtin
+
+        from domain.shell._internal import vm_training_bridge
+        from domain.shell._internal.vm import X86VirtualSystem
+        from domain.shell._internal.vm_permissions import Role
+
+        class FakeBridge:
+            def __init__(self):
+                self.start_ret = 5
+                self.status_val = "completed"
+                self.result = '{"final_loss":0.5}'
+                self.start_calls = 0
+                self.last_cfg: str | None = None
+
+            def start(self, cfg: str) -> int:
+                self.start_calls += 1
+                self.last_cfg = cfg
+                return self.start_ret
+
+            def status(self, job_id: int) -> dict:
+                return {"status": self.status_val}
+
+            def get_result_json(self, job_id: int) -> str | None:
+                return self.result
+
+        fake = FakeBridge()
+        monkeypatch.setattr(vm_training_bridge, "get_bridge", lambda: fake)
+
+        def make_shell(role):
+            vs = X86VirtualSystem(memory_size=0x100000)
+            pid = vs.spawn("web_user", get_builtin("shell"))
+            assert pid is not None
+            vs._syscall._rbac.assign(pid, role)
+            vs.scheduler.start(vs.cpu)
+            vs.scheduler.current.restore_to_cpu(vs.cpu)
+            out: list[str] = []
+            original = vs._syscall._sys_write
+
+            def capture(fd, addr, count):
+                if fd in (1, 2):
+                    out.append(
+                        bytes(vs.cpu._read8(addr + i) for i in range(count)).decode(
+                            "ascii", "replace"
+                        )
+                    )
+                    return count
+                return original(fd, addr, count)
+
+            vs._syscall._sys_write = capture
+
+            def feed(text: str) -> None:
+                for ch in text:
+                    if ch in ("\b", "\x7f"):
+                        vs.cpu.push_scancode(0x0E)
+                    else:
+                        vs.cpu.push_key(ch)
+
+            def run_steps(n: int) -> bool:
+                for _ in range(n):
+                    vs.cpu.transfer_key()
+                    if not vs.cpu.step():
+                        return True
+                return False
+
+            def check(cmd: str, expect: str) -> None:
+                out.clear()
+                feed(cmd)
+                assert not run_steps(60000), f"unexpected halt running {cmd!r}"
+                text = "".join(out)
+                assert expect in text, f"{cmd!r} -> {text!r}"
+
+            return check
+
+        check = make_shell(Role.ADMIN)
+        check("train-status\n", "no training job yet")
+        check("train\n", "started job 5")
+        check("train-status\n", "status: completed")
+        check("train-result\n", '{"final_loss":0.5}')
+        check("help\n", "train, train-status, train-result")
+        fake.start_ret = -1
+        check("train\n", "train: could not start job")
+        assert fake.last_cfg is not None and '"dataset":"shakespeare"' in fake.last_cfg
+
+        calls_before = fake.start_calls
+        check_user = make_shell(Role.USER)
+        check_user("train\n", "permission denied (ADMIN role required)")
+        check_user("train-result\n", "permission denied (ADMIN role required)")
+        assert fake.start_calls == calls_before, "bridge must not run without TRAINING perm"
+
+    def test_session_train_denied_over_http(self):
+        with TestClient(test_app) as client:
+            _reset_sessions()
+            resp = client.post("/vm/session", json={"role": "user"})
+            assert resp.status_code == 200
+            session_id = resp.json()["data"]["session_id"]
+            resp = client.post(f"/vm/session/{session_id}/input", json={"text": "train\n"})
+            assert resp.status_code == 200
+            text = _wait_history(session_id, "permission denied", timeout=8.0)
+            assert "permission denied (ADMIN role required)" in text
+            client.delete(f"/vm/session/{session_id}")
+
 
 class TestVMConsoleHTTP:
     """Session lifecycle over HTTP: create, input, delete, errors."""
@@ -220,7 +326,7 @@ class TestVMConsoleHTTP:
 
             text = _wait_history(session_id, "commands:")
             assert (
-                "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt"
+                "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt"
                 in text
             )
 
@@ -329,7 +435,10 @@ class TestVMConsoleStream:
         # Live output: input help, expect the commands line
         await console_session_input(session_id, VMConsoleInputRequest(text="help\n"), auth_user={})
         text = await self._read_output(it, lambda t: "commands:" in t)
-        assert "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt" in text
+        assert (
+            "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt"
+            in text
+        )
 
         # halt → status complete ends the stream
         await console_session_input(session_id, VMConsoleInputRequest(text="halt\n"), auth_user={})

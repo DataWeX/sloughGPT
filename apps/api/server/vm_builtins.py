@@ -48,6 +48,7 @@ _NR_CLOSE = _syscall_num("SYS_CLOSE")
 _NR_READDIR = _syscall_num("SYS_READDIR")
 _NR_UNAME = _syscall_num("SYS_UNAME")
 _NR_GETPID = _syscall_num("SYS_GETPID")
+_NR_GETROLE = _syscall_num("SYS_GETROLE")
 
 
 # ── Shared subroutines (spliced into each program) ───────────────────────────
@@ -484,7 +485,8 @@ def _shell() -> str:
     return f"""; shell — interactive console REPL for the browser VM session.
 ; Line-buffered stdin read loop: prompts, echoes typing, handles
 ; backspace, then dispatches one of: help, ls, cat <file>, uname,
-; pid, echo <text>, about, clear, halt.  Spins on empty keyboard
+; pid, echo <text>, train, train-status, train-result, about,
+; clear, halt.  Spins on empty keyboard
 ; buffer (SYS_READ returns 0) until the session pump feeds keys
 ; via transfer_key().
 [BITS 32]
@@ -493,7 +495,7 @@ def _shell() -> str:
 prompt: db 10, "sloughvm> ", 0
 msg_nl: db 10, 0
 msg_sp: db " ", 0
-msg_help: db "commands: help, ls, cat <file>, uname, pid, echo <text>, about, clear, halt", 10, 0
+msg_help: db "commands: help, ls, cat <file>, uname, pid, echo <text>, train, train-status, train-result, about, clear, halt", 10, 0
 msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
 msg_unknown: db "unknown command - type help", 10, 0
 msg_clear: db 27, "[2J", 27, "[H", 0
@@ -501,6 +503,15 @@ msg_bs: db 8, 32, 8, 0
 msg_ls_empty: db "(no files)", 10, 0
 msg_cat_usage: db "usage: cat <file>", 10, 0
 msg_no_file: db "cat: no such file", 10, 0
+msg_train_started: db "started job ", 0
+msg_train_fail: db "train: could not start job", 10, 0
+msg_denied: db "permission denied (ADMIN role required)", 10, 0
+msg_no_job: db "no training job yet - run train first", 10, 0
+msg_status_running: db "status: running", 10, 0
+msg_status_completed: db "status: completed", 10, 0
+msg_status_failed: db "status: failed", 10, 0
+msg_status_notfound: db "status: job not found", 10, 0
+msg_no_result: db "no result yet", 10, 0
 cmd_help: db "help", 0
 cmd_echo: db "echo", 0
 cmd_about: db "about", 0
@@ -510,6 +521,9 @@ cmd_ls: db "ls", 0
 cmd_uname: db "uname", 0
 cmd_pid: db "pid", 0
 cmd_cat: db "cat", 0
+cmd_train: db "train", 0
+cmd_train_status: db "train-status", 0
+cmd_train_result: db "train-result", 0
 chbuf: times 4 db 0
 llen: times 1 db 0
 line: times 80 db 0
@@ -517,6 +531,9 @@ dirents: times 320 db 0
 catbuf: times 201 db 0
 unamebuf: times 325 db 0
 catfd: times 4 db 0
+lastjob: times 4 db 0
+resultbuf: times 201 db 0
+cfg: db '{{"dataset":"shakespeare","epochs":3}}', 0
 {_SCRATCH}
 start:
 repl:
@@ -610,6 +627,18 @@ line_done:
     call strcmp
     jz do_pid
     mov esi, line
+    mov edi, cmd_train
+    call strcmp
+    jz do_train
+    mov esi, line
+    mov edi, cmd_train_status
+    call strcmp
+    jz do_train_status
+    mov esi, line
+    mov edi, cmd_train_result
+    call strcmp
+    jz do_train_result
+    mov esi, line
     mov edi, cmd_cat
     call prefix_match
     test eax, eax
@@ -694,6 +723,95 @@ do_pid:
     int 0x80
     call print_num
     mov esi, msg_nl
+    call print_str
+    jmp repl
+do_train:
+    mov eax, {_NR_TRAIN_START}
+    mov ebx, cfg
+    int 0x80            ; EAX = job_id (>=1), -1 = error, -2 = denied
+    test eax, eax
+    js train_err
+    mov [lastjob], al
+    mov esi, msg_train_started
+    call print_str
+    call print_num
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+train_err:
+    cmp eax, -2
+    je denied_out
+    mov esi, msg_train_fail
+    call print_str
+    jmp repl
+do_train_status:
+    mov eax, {_NR_GETROLE}
+    int 0x80
+    test eax, eax
+    jz denied_out        ; role 0 (USER) -> ADMIN required
+    xor ebx, ebx
+    mov bl, [lastjob]
+    test ebx, ebx
+    jz no_job_out
+    mov eax, {_NR_TRAIN_STATUS}
+    int 0x80            ; EAX: 0 running 1 completed 2 failed -1 not found -2 denied
+    test eax, eax
+    js st_err
+    cmp eax, 0
+    je st_running
+    cmp eax, 1
+    je st_completed
+    mov esi, msg_status_failed
+    call print_str
+    jmp repl
+st_running:
+    mov esi, msg_status_running
+    call print_str
+    jmp repl
+st_completed:
+    mov esi, msg_status_completed
+    call print_str
+    jmp repl
+st_err:
+    cmp eax, -2
+    je denied_out
+    mov esi, msg_status_notfound
+    call print_str
+    jmp repl
+do_train_result:
+    mov eax, {_NR_GETROLE}
+    int 0x80
+    test eax, eax
+    jz denied_out        ; role 0 (USER) -> ADMIN required
+    xor ebx, ebx
+    mov bl, [lastjob]
+    test ebx, ebx
+    jz no_job_out
+    mov eax, {_NR_TRAIN_GET_RESULT}
+    mov ecx, resultbuf
+    mov edx, 200
+    int 0x80            ; EAX = bytes written, 0 = not ready, -2 = denied
+    test eax, eax
+    jz res_none
+    js res_err
+    mov esi, resultbuf
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+res_err:
+    cmp eax, -2
+    je denied_out
+res_none:
+    mov esi, msg_no_result
+    call print_str
+    jmp repl
+no_job_out:
+    mov esi, msg_no_job
+    call print_str
+    jmp repl
+denied_out:
+    mov esi, msg_denied
     call print_str
     jmp repl
 do_cat:

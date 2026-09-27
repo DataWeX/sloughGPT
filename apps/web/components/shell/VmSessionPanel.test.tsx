@@ -32,6 +32,23 @@ describe('VmSessionPanel', () => {
     expect(mockStart).toHaveBeenCalledTimes(1)
   })
 
+  it('passes the role prop to start on mount and restart', () => {
+    render(<VmSessionPanel role="admin" />)
+    expect(mockStart).toHaveBeenLastCalledWith('admin')
+    fireEvent.click(screen.getByText('Restart'))
+    expect(mockStart).toHaveBeenLastCalledWith('admin')
+    expect(mockStart).toHaveBeenCalledTimes(2)
+  })
+
+  it('role change does not restart a running session', () => {
+    const { rerender } = render(<VmSessionPanel role="user" />)
+    expect(mockStart).toHaveBeenCalledTimes(1)
+    rerender(<VmSessionPanel role="admin" />)
+    expect(mockStart).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByText('Restart'))
+    expect(mockStart).toHaveBeenLastCalledWith('admin')
+  })
+
   it('renders console output', () => {
     mockOutput = 'sloughvm> help\ncommands: help, echo <text>'
     render(<VmSessionPanel />)

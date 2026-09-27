@@ -6,6 +6,8 @@ import { useVmConsole, type VmConsolePhase } from '@/hooks/useVmConsole'
 
 export interface VmSessionPanelProps {
   className?: string
+  /** Role passed to POST /vm/session (default 'user'). Admin enables train commands. */
+  role?: string
 }
 
 const PHASE_LABEL: Record<VmConsolePhase, string> = {
@@ -34,7 +36,7 @@ const PHASE_DOT: Record<VmConsolePhase, string> = {
  * <VmSessionPanel className="h-96" />
  * ```
  */
-export function VmSessionPanel({ className }: VmSessionPanelProps) {
+export function VmSessionPanel({ className, role }: VmSessionPanelProps) {
   const { phase, output, error, start, sendInput } = useVmConsole()
   const [input, setInput] = useState('')
   const startedRef = useRef(false)
@@ -45,8 +47,8 @@ export function VmSessionPanel({ className }: VmSessionPanelProps) {
   useEffect(() => {
     if (startedRef.current) return
     startedRef.current = true
-    void start()
-  }, [start])
+    void start(role)
+  }, [start, role])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -100,7 +102,7 @@ export function VmSessionPanel({ className }: VmSessionPanelProps) {
         <span className="text-xs text-muted-foreground">own VM · X86VirtualSystem</span>
         <button
           type="button"
-          onClick={() => void start()}
+          onClick={() => void start(role)}
           className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           Restart

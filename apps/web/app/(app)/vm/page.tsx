@@ -1501,12 +1501,12 @@ export default function VMPage() {
                   <CardContent className="p-3">
                     <p className="text-xs text-muted-foreground">
                       The project's own x86 VM (X86VirtualSystem) running the shell REPL kernel.
-                      Type commands — help, ls, cat &lt;file&gt;, uname, pid, echo, about, clear,
-                      halt. Use ↑/↓ for input history.
+                      Type commands — help, ls, cat &lt;file&gt;, uname, pid, echo, about, train,
+                      train-status, train-result, clear, halt. Use ↑/↓ for input history.
                     </p>
                   </CardContent>
                 </Card>
-                <VmSessionPanel className="h-[calc(100vh-16rem)]" />
+                <VmSessionPanel className="h-[calc(100vh-16rem)]" role={role} />
               </div>
             </TabsContent>
             <TabsContent value="linux">
