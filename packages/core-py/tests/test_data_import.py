@@ -467,11 +467,11 @@ class TestBooksSearch:
 
     def test_isbn_10(self):
         b = BooksSearch()
-        assert b._is_isbn("0-306-40615-2") == "isbn:0306406152"
+        assert b._is_isbn("0-306-40615-2") == "0306406152"
 
     def test_isbn_13(self):
         b = BooksSearch()
-        assert b._is_isbn("978-0-306-40615-7") == "isbn:9780306406157"
+        assert b._is_isbn("978-0-306-40615-7") == "9780306406157"
 
     def test_isbn_invalid(self):
         b = BooksSearch()
@@ -509,7 +509,7 @@ class TestBooksSearch:
         assert r["cover"] == 5
         assert (
             calls[0][0]
-            == "https://openlibrary.org/search.json?q=title:hello%20world&limit=10&fields=title,author_name,first_publish_year,cover_i,isbn,key"
+            == "https://openlibrary.org/search.json?q=title:hello%20world&limit=10&fields=title,author_name,first_publish_year,cover_i,isbn,key,subject,publisher,physical_format,number_of_pages_median"
         )
 
     def test_search_isbn(self, fake_urlopen):
@@ -517,7 +517,7 @@ class TestBooksSearch:
         responses.append(FakeResponse(json.dumps({"docs": []})))
         b = BooksSearch()
         b.search("0306406152")
-        assert "isbn:0306406152" in calls[0][0]
+        assert "openlibrary.org/isbn/0306406152" in calls[0][0]
 
     def test_search_empty_results(self, fake_urlopen):
         _, responses = fake_urlopen
@@ -737,11 +737,13 @@ class TestGitHubSearch:
 class TestISBNImporter:
     def test_import_not_found(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "datasets"))
+        monkeypatch.setattr(imp._books_search, "get_by_isbn", lambda *a, **k: None)
         monkeypatch.setattr(imp._books_search, "search", lambda *a, **k: [])
         result = imp.import_from_isbn("0306406152", "book")
         assert result.success is False
         assert "not found" in result.error
-        assert (tmp_path / "datasets" / "book").is_dir()
+        # Failed imports return before mkdir — no empty dataset dirs.
+        assert not (tmp_path / "datasets" / "book").exists()
 
     def test_import_with_gutenberg_text(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "datasets"))
@@ -750,7 +752,7 @@ class TestISBNImporter:
             "search",
             lambda *a, **k: [{"title": "Book", "author": "Writer", "first_publish_year": 1900}],
         )
-        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: "FULL TEXT")
+        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a, isbn: "FULL TEXT")
         result = imp.import_from_isbn("0306406152", "book")
         assert result.success is True
         assert result.files_imported == 1
@@ -763,7 +765,7 @@ class TestISBNImporter:
         monkeypatch.setattr(
             imp._books_search, "search", lambda *a, **k: [{"title": "Book", "author": "Writer"}]
         )
-        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: None)
+        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a, isbn: None)
         result = imp.import_from_isbn("0306406152", "book")
         assert result.success is True
         meta = json.loads((tmp_path / "datasets" / "book" / "metadata.json").read_text())
@@ -772,24 +774,24 @@ class TestISBNImporter:
 
     def test_fetch_gutenberg_no_search_terms(self):
         imp = ISBNImporter()
-        assert imp._fetch_gutenberg_text("", "") is None
+        assert imp._fetch_gutenberg_text("", "", "") is None
 
     def test_fetch_gutenberg_no_results(self, fake_urlopen):
         _, responses = fake_urlopen
         responses.append(FakeResponse(json.dumps({"results": []})))
-        assert ISBNImporter()._fetch_gutenberg_text("Title", "Author") is None
+        assert ISBNImporter()._fetch_gutenberg_text("Title", "Author", "") is None
 
     def test_fetch_gutenberg_success(self, fake_urlopen):
         _, responses = fake_urlopen
         responses.append(FakeResponse(json.dumps({"results": [{"id": 123}]})))
         responses.append(FakeResponse("gutenberg text"))
-        text = ISBNImporter()._fetch_gutenberg_text("Title", "Author")
+        text = ISBNImporter()._fetch_gutenberg_text("Title", "Author", "")
         assert text == "gutenberg text"
 
     def test_fetch_gutenberg_error(self, fake_urlopen):
         _, responses = fake_urlopen
         responses.append(urllib.error.URLError("no net"))
-        assert ISBNImporter()._fetch_gutenberg_text("Title", "Author") is None
+        assert ISBNImporter()._fetch_gutenberg_text("Title", "Author", "") is None
 
 
 # ---------------------------------------------------------------------------
@@ -965,7 +967,12 @@ class TestImportData:
             calls.append((args, kwargs))
             return ImportResult(True, "n", "s", 1, 1, "p")
 
-        monkeypatch.setattr(DataImporter, method, fake)
+        target, real_method = {
+            "import_from_github": (RepoImporter, "import_from_github"),
+            "import_from_huggingface": (HuggingFaceImporter, "download_dataset"),
+            "import_from_url": (URLImporter, "import_from_url"),
+        }.get(method, (DataImporter, method))
+        monkeypatch.setattr(target, real_method, fake)
         return calls
 
     def test_auto_github(self, tmp_path, monkeypatch):
@@ -1532,16 +1539,16 @@ class TestBooksSearchExtended:
         assert BooksSearch()._sanitize_query("hello&world=yes") == "hello%26world%3Dyes"
 
     def test_isbn_10_no_dashes(self):
-        assert BooksSearch()._is_isbn("0306406152") == "isbn:0306406152"
+        assert BooksSearch()._is_isbn("0306406152") == "0306406152"
 
     def test_isbn_13_no_dashes(self):
-        assert BooksSearch()._is_isbn("9780306406157") == "isbn:9780306406157"
+        assert BooksSearch()._is_isbn("9780306406157") == "9780306406157"
 
     def test_isbn_with_underscores(self):
-        assert BooksSearch()._is_isbn("978_0_306_40615_7") == "isbn:9780306406157"
+        assert BooksSearch()._is_isbn("978_0_306_40615_7") == "9780306406157"
 
     def test_isbn_with_spaces(self):
-        assert BooksSearch()._is_isbn("978 0 306 40615 7") == "isbn:9780306406157"
+        assert BooksSearch()._is_isbn("978 0 306 40615 7") == "9780306406157"
 
     def test_isbn_wrong_length(self):
         assert BooksSearch()._is_isbn("12345") is None
@@ -1739,15 +1746,16 @@ class TestISBNImporterExtended:
         monkeypatch.setattr(
             imp._books_search, "search", lambda *a, **k: [{"title": "T", "author": "A"}]
         )
-        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: None)
+        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a, isbn: None)
         imp.import_from_isbn("1234567890", "mybook")
         assert (tmp_path / "books" / "mybook").is_dir()
 
     def test_import_gutenberg_metadata_fields(self, tmp_path, monkeypatch):
         imp = ISBNImporter(output_dir=str(tmp_path / "books"))
         book = {"title": "Test Book", "author": "Author", "year": 1999}
+        monkeypatch.setattr(imp._books_search, "get_by_isbn", lambda *a, **k: None)
         monkeypatch.setattr(imp._books_search, "search", lambda *a, **k: [book])
-        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: "text")
+        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a, isbn: "text")
         imp.import_from_isbn("12345", "ds")
         meta = json.loads((tmp_path / "books" / "ds" / "metadata.json").read_text())
         assert meta["title"] == "Test Book"
@@ -1762,7 +1770,7 @@ class TestISBNImporterExtended:
             "search",
             lambda *a, **k: [{"title": "T", "author": "A", "year": 2000}],
         )
-        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a: None)
+        monkeypatch.setattr(imp, "_fetch_gutenberg_text", lambda t, a, isbn: None)
         imp.import_from_isbn("999", "ds")
         info = (tmp_path / "books" / "ds" / "ds_info.txt").read_text()
         assert "Title: T" in info
@@ -1773,7 +1781,7 @@ class TestISBNImporterExtended:
         _, responses = fake_urlopen
         responses.append(FakeResponse(json.dumps({"results": []})))
         long_title = "A" * 300
-        ISBNImporter()._fetch_gutenberg_text(long_title, "Author")
+        ISBNImporter()._fetch_gutenberg_text(long_title, "Author", "")
         # Query should be truncated to 200 chars
         assert True  # no crash
 
@@ -1782,7 +1790,7 @@ class TestISBNImporterExtended:
         responses.append(FakeResponse(json.dumps({"results": [{"id": 42}]})))
         text_bytes = b"Hello World"
         responses.append(FakeResponse(text_bytes))
-        result = ISBNImporter()._fetch_gutenberg_text("Title", "Author")
+        result = ISBNImporter()._fetch_gutenberg_text("Title", "Author", "")
         assert result == "Hello World"
 
 

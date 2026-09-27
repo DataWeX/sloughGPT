@@ -1198,6 +1198,8 @@ class ISBNImporter:
 
     def _find_gutenberg_id_by_isbn(self, isbn: str) -> int | None:
         """Try to find a Gutenberg book by ISBN via Gutendex."""
+        if not isbn:
+            return None
         import urllib.parse
 
         q = urllib.parse.quote(f"isbn:{isbn}", safe="")
