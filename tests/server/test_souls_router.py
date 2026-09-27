@@ -239,7 +239,7 @@ class TestSoulChat:
         resp = client.post(
             "/souls/chat",
             json={
-                "checkpoint_name": "test",
+                "checkpoint_name": "no-such-checkpoint-for-test",
                 "prompt": "Hello",
                 "max_new_tokens": 10,
             },
@@ -271,7 +271,7 @@ class TestSoulChat:
 class TestSaveTraitWeights:
     """POST /souls/weights"""
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_save_flattens_groups(self, mock_get_config, client):
         config = MagicMock()
         mock_get_config.return_value = config
@@ -286,7 +286,7 @@ class TestSaveTraitWeights:
         assert resp.json()["status"] == "success"
         config.set_many.assert_called_once_with({"warmth": 0.8, "curiosity": 0.3})
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_save_empty_body(self, mock_get_config, client):
         config = MagicMock()
         mock_get_config.return_value = config
@@ -294,7 +294,7 @@ class TestSaveTraitWeights:
         assert resp.status_code == 200
         config.set_many.assert_called_once_with({})
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_save_propagates_error(self, mock_get_config, client):
         mock_get_config.side_effect = RuntimeError("boom")
         resp = client.post("/souls/weights", json={"personality": {"warmth": 0.5}})
@@ -305,7 +305,7 @@ class TestSaveTraitWeights:
 class TestWeightSnapshotLifecycle:
     """CRUD for /souls/weights/snapshot/{name}"""
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_save_snapshot(self, mock_get_config, client):
         config = MagicMock()
         config.save_snapshot.return_value = "/tmp/snap_1.json"
@@ -317,7 +317,7 @@ class TestWeightSnapshotLifecycle:
         assert body["data"]["path"] == "/tmp/snap_1.json"
         config.save_snapshot.assert_called_once_with("preset-a")
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_load_snapshot(self, mock_get_config, client):
         config = MagicMock()
         config.load_snapshot.return_value = 7
@@ -327,7 +327,7 @@ class TestWeightSnapshotLifecycle:
         assert resp.json()["data"]["traits_loaded"] == 7
         config.load_snapshot.assert_called_once_with("preset-a")
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_delete_snapshot(self, mock_get_config, client):
         config = MagicMock()
         config.delete_snapshot.return_value = True
@@ -336,7 +336,7 @@ class TestWeightSnapshotLifecycle:
         assert resp.status_code == 200
         assert resp.json()["data"]["deleted"] is True
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_delete_missing_snapshot(self, mock_get_config, client):
         config = MagicMock()
         config.delete_snapshot.return_value = False
@@ -345,7 +345,7 @@ class TestWeightSnapshotLifecycle:
         assert resp.status_code == 200
         assert resp.json()["data"]["deleted"] is False
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_snapshot_error_propagates(self, mock_get_config, client):
         mock_get_config.side_effect = RuntimeError("disk full")
         resp = client.post("/souls/weights/snapshot/x")
@@ -356,7 +356,7 @@ class TestWeightSnapshotLifecycle:
 class TestListWeightSnapshotsPatched:
     """GET /souls/weights/snapshots with manager patched."""
 
-    @patch("domain.context._internal.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_returns_names(self, mock_get_config, client):
         config = MagicMock()
         config.list_snapshots.return_value = ["a", "b"]

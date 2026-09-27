@@ -62,6 +62,14 @@ _LAZY_IMPORTS = {
     "list_presets": ("._internal.presets", "list_presets"),
     "get_preset": ("._internal.presets", "get_preset"),
     "apply_preset": ("._internal.presets", "apply_preset"),
+    "RepoImporter": ("._internal.data_import", "RepoImporter"),
+    "HuggingFaceImporter": ("._internal.data_import", "HuggingFaceImporter"),
+    "URLImporter": ("._internal.data_import", "URLImporter"),
+    "ISBNImporter": ("._internal.data_import", "ISBNImporter"),
+    "DataImporter": ("._internal.data_import", "DataImporter"),
+    "BooksSearch": ("._internal.data_import", "BooksSearch"),
+    "GitHubSearch": ("._internal.data_import", "GitHubSearch"),
+    "import_from_sou": ("._internal.slonet", "import_from_sou"),
 }
 
 
@@ -122,4 +130,12 @@ __all__ = [
     "list_presets",
     "get_preset",
     "apply_preset",
+    "RepoImporter",
+    "HuggingFaceImporter",
+    "URLImporter",
+    "ISBNImporter",
+    "DataImporter",
+    "BooksSearch",
+    "GitHubSearch",
+    "import_from_sou",
 ]
