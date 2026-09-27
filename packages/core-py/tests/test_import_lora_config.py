@@ -714,19 +714,19 @@ class TestDataImporterLocal:
 class TestBooksSearchISBN:
     def test_isbn10_valid(self):
         bs = BooksSearch()
-        assert bs._is_isbn("0321125215") == "isbn:0321125215"
+        assert bs._is_isbn("0321125215") == "0321125215"
 
     def test_isbn13_valid(self):
         bs = BooksSearch()
-        assert bs._is_isbn("9780321125217") == "isbn:9780321125217"
+        assert bs._is_isbn("9780321125217") == "9780321125217"
 
     def test_isbn_with_dashes(self):
         bs = BooksSearch()
-        assert bs._is_isbn("0-321-12521-5") == "isbn:0321125215"
+        assert bs._is_isbn("0-321-12521-5") == "0321125215"
 
     def test_isbn_with_spaces(self):
         bs = BooksSearch()
-        assert bs._is_isbn("0 321 12521 5") == "isbn:0321125215"
+        assert bs._is_isbn("0 321 12521 5") == "0321125215"
 
     def test_not_isbn_too_short(self):
         bs = BooksSearch()
@@ -746,7 +746,7 @@ class TestBooksSearchISBN:
 
     def test_isbn_with_underscores(self):
         bs = BooksSearch()
-        assert bs._is_isbn("0_321_12521_5") == "isbn:0321125215"
+        assert bs._is_isbn("0_321_12521_5") == "0321125215"
 
 
 # ---------------------------------------------------------------------------
