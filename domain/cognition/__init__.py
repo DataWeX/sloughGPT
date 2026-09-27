@@ -87,3 +87,18 @@ __all__ = [
     "get_consciousness",
     "reset_consciousness",
 ]
+
+_LAZY_IMPORTS = {
+    "ConsciousnessTrainer": ("._internal.consciousness.training", "ConsciousnessTrainer"),
+    "TrainingConfig": ("._internal.consciousness.training", "TrainingConfig"),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_IMPORTS:
+        module_path, attr = _LAZY_IMPORTS[name]
+        import importlib
+
+        mod = importlib.import_module(module_path, package=__name__)
+        return getattr(mod, attr)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

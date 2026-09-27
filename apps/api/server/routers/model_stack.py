@@ -8,7 +8,7 @@ from infrastructure.auth import require_auth_if_enabled
 from schemas.common import classify_and_raise, endpoint, success_response
 
 from domain.infrastructure.model_stack import ModelBase, ModelStack, StackLayer
-from domain.training._internal.cache_tags import get_cache_root
+from domain.training import get_cache_root
 
 logger = logging.getLogger(__name__)
 

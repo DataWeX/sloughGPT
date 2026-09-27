@@ -36,6 +36,31 @@ from domain.shell._internal.vm import (
 
 _dait_instance = None
 
+_LAZY_IMPORTS = {
+    "ShellREPL": ("._internal.repl", "ShellREPL"),
+    "InsFault": ("._internal.vm", "InsFault"),
+    "MemFault": ("._internal.vm", "MemFault"),
+    "Role": ("._internal.vm_permissions", "Role"),
+    "get_bridge": ("._internal.vm_training_bridge", "get_bridge"),
+    "WorldGrid": ("._internal.simulation", "WorldGrid"),
+    "SimScene": ("._internal.simulation", "SimScene"),
+    "Simulation": ("._internal.simulation", "Simulation"),
+    "WorldParams": ("._internal.simulation", "WorldParams"),
+    "RenderBridge": ("._internal.world_render", "RenderBridge"),
+    "RenderConfig": ("._internal.world_render", "RenderConfig"),
+    "NeuralRenderBridge": ("._internal.world_render", "NeuralRenderBridge"),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_IMPORTS:
+        module_path, attr = _LAZY_IMPORTS[name]
+        import importlib
+
+        mod = importlib.import_module(module_path, package=__name__)
+        return mod if attr is None else getattr(mod, attr)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 def get_dait_runtime() -> DaitRuntime:
     global _dait_instance
@@ -59,4 +84,16 @@ __all__ = [
     "Resource",
     "get_dait_runtime",
     "X86VirtualSystem",
+    "ShellREPL",
+    "InsFault",
+    "MemFault",
+    "Role",
+    "get_bridge",
+    "WorldGrid",
+    "SimScene",
+    "Simulation",
+    "WorldParams",
+    "RenderBridge",
+    "RenderConfig",
+    "NeuralRenderBridge",
 ]

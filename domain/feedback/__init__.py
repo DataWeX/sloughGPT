@@ -51,3 +51,17 @@ __all__ = [
     "get_message_feedback",
     "HFDPOTrainer",
 ]
+
+_LAZY_IMPORTS = {
+    "get_lora_evaluator": ("._internal.lora_eval", "get_lora_evaluator"),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_IMPORTS:
+        module_path, attr = _LAZY_IMPORTS[name]
+        import importlib
+
+        mod = importlib.import_module(module_path, package=__name__)
+        return getattr(mod, attr)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

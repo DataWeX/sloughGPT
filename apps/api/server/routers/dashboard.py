@@ -82,7 +82,7 @@ def _get_active_processes() -> dict:
 
     # Auto-train turbo
     try:
-        from domain.training._internal.service import get_turbo_lock, get_turbo_state
+        from domain.training import get_turbo_lock, get_turbo_state
 
         with get_turbo_lock():
             turbo = dict(get_turbo_state())
@@ -190,7 +190,7 @@ def _get_health_summary() -> dict:
 
 def _build_snapshot() -> dict:
     """Build a single dashboard snapshot."""
-    from domain.infrastructure._internal.event_buffer import get_event_buffer
+    from domain.infrastructure import get_event_buffer
 
     return {
         "stream": "dashboard",
@@ -227,7 +227,7 @@ class DashboardRouter:
         services_ok = 0
         services_total = 0
         try:
-            from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+            from domain.training import TrainingOutcomeTracker
 
             tracker = TrainingOutcomeTracker()
             stats = tracker.get_stats()
@@ -238,7 +238,7 @@ class DashboardRouter:
             services_total += 1
 
         try:
-            from domain.settings._internal.persistent import get_settings
+            from domain.settings import get_settings
 
             get_settings()
             services_total += 1
@@ -299,7 +299,7 @@ class DashboardRouter:
         self, n: int = 20, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Return the last N dashboard events as JSON."""
-        from domain.infrastructure._internal.event_buffer import get_event_buffer
+        from domain.infrastructure import get_event_buffer
 
         events = get_event_buffer().recent(n)
         return success_response(data={"events": events, "count": len(events)})

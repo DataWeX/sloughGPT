@@ -15,8 +15,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error, safe_audit_log, success_response
 
-from domain.auth._internal.models import Role, User, Workspace, WorkspaceMember
-from domain.auth._internal.repositories import UserRepository, WorkspaceRepository
+from domain.auth import Role, User, UserRepository, Workspace, WorkspaceMember, WorkspaceRepository
 from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.workspaces")
@@ -1276,7 +1275,7 @@ class WorkspacesRouter:
 
             # Search datasets
             try:
-                from domain.dataset._internal.repository import DatasetRepository
+                from domain.infrastructure import DatasetRepository
 
                 ds_repo = DatasetRepository()
                 datasets = ds_repo.list_by_workspace(workspace_id)
@@ -1294,7 +1293,7 @@ class WorkspacesRouter:
 
             # Search knowledge
             try:
-                from domain.learner._internal.knowledge import KnowledgeRepository
+                from domain.infrastructure import KnowledgeRepository
 
                 k_repo = KnowledgeRepository()
                 facts = k_repo.list_by_workspace(workspace_id)
@@ -1323,7 +1322,7 @@ class WorkspacesRouter:
             if not member and not user.is_admin:
                 raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
 
-            from domain.auth._internal.models import ROLE_PERMISSIONS, Permission
+            from domain.auth import ROLE_PERMISSIONS, Permission
 
             # Build permission matrix
             roles = {}

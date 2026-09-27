@@ -67,6 +67,20 @@ _LAZY_IMPORTS = {
     "get_training_engine": (".engine", "get_training_engine"),
     "TrainingFeedClient": ("._internal.training_feed", "TrainingFeedClient"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
+    "get_turbo_lock": ("._internal.service", "get_turbo_lock"),
+    "get_turbo_state": ("._internal.service", "get_turbo_state"),
+    "TrainingOutcomeTracker": ("._internal.outcome_tracker", "TrainingOutcomeTracker"),
+    "get_cache_root": ("._internal.cache_tags", "get_cache_root"),
+    "ExportConfig": ("._internal.export", "ExportConfig"),
+    "export_model": ("._internal.export", "export_model"),
+    "list_export_formats": ("._internal.export", "list_export_formats"),
+    "AdaptiveConfigEngine": ("._internal.adaptive_config", "AdaptiveConfigEngine"),
+    "generate_model_card": ("._internal.model_card", "generate_model_card"),
+    "list_presets": ("._internal.presets", "list_presets"),
+    "get_preset": ("._internal.presets", "get_preset"),
+    "apply_preset": ("._internal.presets", "apply_preset"),
+    "get_auto_trainer": ("._internal.auto_trainer", "get_auto_trainer"),
+    "executor": ("._internal.executor", None),
 }
 
 
@@ -76,7 +90,7 @@ def __getattr__(name):
         import importlib
 
         mod = importlib.import_module(module_path, package=__name__)
-        return getattr(mod, attr)
+        return mod if attr is None else getattr(mod, attr)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -131,4 +145,18 @@ __all__ = [
     "get_training_engine",
     "TrainingFeedClient",
     "FeedBatchSampler",
+    "get_turbo_lock",
+    "get_turbo_state",
+    "TrainingOutcomeTracker",
+    "get_cache_root",
+    "ExportConfig",
+    "export_model",
+    "list_export_formats",
+    "AdaptiveConfigEngine",
+    "generate_model_card",
+    "list_presets",
+    "get_preset",
+    "apply_preset",
+    "get_auto_trainer",
+    "executor",
 ]

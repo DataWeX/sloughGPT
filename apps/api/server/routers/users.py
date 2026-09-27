@@ -14,8 +14,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, success_response
 
-from domain.auth._internal.models import Role, User, UserRole
-from domain.auth._internal.repositories import UserRepository
+from domain.auth import Role, User, UserRepository, UserRole
 from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.users")
