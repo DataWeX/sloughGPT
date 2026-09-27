@@ -21,10 +21,10 @@ describe('Home page - dashboard', () => {
 
   it('shows quick actions with agent-forward labels', () => {
     cy.get('.sl-app-content').within(() => {
-      cy.contains('Start chatting').should('be.visible')
-      cy.contains('Personalities').should('be.visible')
-      cy.contains('Teach me').should('be.visible')
-      cy.contains('Datasets').should('be.visible')
+      cy.contains('Start chatting').scrollIntoView().should('be.visible')
+      cy.contains('Personalities').scrollIntoView().should('be.visible')
+      cy.contains('Teach me').scrollIntoView().should('be.visible')
+      cy.contains('Datasets').scrollIntoView().should('be.visible')
     })
   })
 

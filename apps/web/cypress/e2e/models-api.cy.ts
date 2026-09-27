@@ -1,12 +1,14 @@
+import { apiBase } from '../support/api-base'
 /**
  * Models catalog (Developer tab) - behavioral tests
  * Tests model listing, loading, and health display.
  */
 describe('Models catalog', () => {
   beforeEach(() => {
+    cy.mockAll()
     cy.mockHealth({ model_loaded: true, model_type: 'gpt2' })
     cy.mockSystem()
-    cy.intercept('GET', 'http://localhost:8000/models/hf', {
+    cy.intercept('GET', `${apiBase}/models/hf`, {
       statusCode: 200,
       body: [
         {
@@ -27,11 +29,11 @@ describe('Models catalog', () => {
         },
       ],
     }).as('modelsHf')
-    cy.intercept('GET', 'http://localhost:8000/souls', {
+    cy.intercept('GET', `${apiBase}/souls`, {
       statusCode: 200,
       body: [],
     }).as('souls')
-    cy.intercept('GET', 'http://localhost:8000/souls/current', {
+    cy.intercept('GET', `${apiBase}/souls/current`, {
       statusCode: 200,
       body: { name: 'default', description: 'Default personality' },
     }).as('currentSoul')
