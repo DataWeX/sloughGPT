@@ -10,8 +10,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from arken import Arken, ElementLocator
-from arken.core.task import Task, TaskStatus, TaskStep
+from avion import Arken, ElementLocator
+from avion.core.task import Task, TaskStatus, TaskStep
 from test_autoclicker import FakeBackend
 
 

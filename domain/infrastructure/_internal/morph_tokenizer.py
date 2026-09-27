@@ -533,12 +533,17 @@ class MorphTokenizer:
         else:
             vocab = {item[0]: item[1] for item in raw_vocab}
 
-        # Parse merges
+        # Parse merges — tokenizer.json serializes as either "a b" strings
+        # (legacy) or [left, right] pairs (current HF); accept both.
         try:
             raw_merges = tok_data["model"]["merges"]
         except (KeyError, TypeError):
             raw_merges = []
-        merges = [tuple(m.split(" ", 1)) for m in raw_merges]
+        merges = [
+            tuple(m.split(" ", 1)) if isinstance(m, str) else tuple(m)
+            for m in raw_merges
+        ]
+        merges = [m for m in merges if len(m) == 2]
 
         # Detect byte-level BPE (GPT-2, Qwen2, etc)
         byte_level = False

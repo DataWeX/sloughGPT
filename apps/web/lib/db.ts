@@ -174,7 +174,7 @@ export function isDBDead(): boolean {
 function toStored(session: ChatSession): StoredChatSession {
   return {
     ...session,
-    messages: session.messages.map((m) => ({
+    messages: (session.messages ?? []).map((m) => ({
       ...m,
       timestamp: typeof m.timestamp === 'string' ? m.timestamp : m.timestamp.toISOString(),
     })),
@@ -184,7 +184,7 @@ function toStored(session: ChatSession): StoredChatSession {
 function fromStored(session: StoredChatSession): ChatSession {
   return {
     ...session,
-    messages: session.messages.map((m) => ({
+    messages: (session.messages ?? []).map((m) => ({
       ...m,
       timestamp: new Date(m.timestamp),
     })),

@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from arken.core.element import Element, ElementLocator, SelectorStrategy
+from avion.core.element import Element, ElementLocator, SelectorStrategy
 
 
 def _websockets():

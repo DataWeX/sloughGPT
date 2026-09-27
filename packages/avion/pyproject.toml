@@ -3,9 +3,9 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "arken"
+name = "avion"
 version = "0.1.0"
-description = "Arken — minimal web autoclicker: find, click, type via Playwright."
+description = "Avion — web autoclicker/agent: find, click, type via Playwright (formerly arken/voyager)."
 requires-python = ">=3.11"
 dependencies = []
 

@@ -1,8 +1,8 @@
 """AI package — models, learning, verification, and the computer-use agent."""
 
-from arken.ai.agent import Agent, AgentConfig, AgentResult
-from arken.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
-from arken.ai.models import (
+from avion.ai.agent import Agent, AgentConfig, AgentResult
+from avion.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
+from avion.ai.models import (
     ACTION_CARDS,
     Action,
     ActionCard,
@@ -17,7 +17,7 @@ from arken.ai.models import (
     tool_cards_text,
     validate_action,
 )
-from arken.ai.verifier import GoalCheck, Verifier, VerifyResult
+from avion.ai.verifier import GoalCheck, Verifier, VerifyResult
 
 __all__ = [
     "ACTION_CARDS",

@@ -1,6 +1,6 @@
 """Perf package — timing markers and reports."""
 
-from arken.perf.markers import (
+from avion.perf.markers import (
     MarkerCheckpoint,
     MarkerSummary,
     PerformanceMarker,

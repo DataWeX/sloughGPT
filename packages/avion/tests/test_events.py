@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 
-from arken.events import Event, EventRecorder, EventType
+from avion.events import Event, EventRecorder, EventType
 
 
 class TestRecord:

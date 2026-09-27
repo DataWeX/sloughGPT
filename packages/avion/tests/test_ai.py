@@ -5,7 +5,7 @@ import base64
 import os
 import tempfile
 
-from arken.ai import (
+from avion.ai import (
     Action,
     ActionType,
     Agent,
@@ -212,32 +212,32 @@ class TestAgent:
 
 class TestToolCards:
     def test_every_action_has_card(self):
-        from arken.ai.models import ACTION_CARDS, ActionCard
+        from avion.ai.models import ACTION_CARDS, ActionCard
 
         assert set(ACTION_CARDS) == set(ActionType)
         for card in ACTION_CARDS.values():
             assert isinstance(card, ActionCard) and card.description
 
     def test_validate_ok(self):
-        from arken.ai.models import validate_action
+        from avion.ai.models import validate_action
 
         assert validate_action(Action(ActionType.MOUSE_CLICK, {"x": 1, "y": 2})) is None
 
     def test_validate_missing_params(self):
-        from arken.ai.models import validate_action
+        from avion.ai.models import validate_action
 
         err = validate_action(Action(ActionType.MOUSE_CLICK, {}))
         assert err is not None and "x" in err and "y" in err
 
     def test_validate_bad_types(self):
-        from arken.ai.models import validate_action
+        from avion.ai.models import validate_action
 
         assert "number" in validate_action(Action(ActionType.MOUSE_CLICK, {"x": "a", "y": 1}))
         assert "non-empty list" in validate_action(Action(ActionType.KEYBOARD_HOTKEY, {"keys": []}))
         assert "empty" in validate_action(Action(ActionType.NAVIGATE, {"url": "  "}))
 
     def test_cards_text(self):
-        from arken.ai.models import tool_cards_text
+        from avion.ai.models import tool_cards_text
 
         assert "mouse_click" in tool_cards_text()
 
@@ -324,7 +324,7 @@ class TestStopRules:
 
 class TestVerifier:
     def test_url_and_text_checks(self):
-        from arken.ai.verifier import GoalCheck, Verifier
+        from avion.ai.verifier import GoalCheck, Verifier
 
         v = Verifier()
         r = run(
@@ -341,7 +341,7 @@ class TestVerifier:
         assert r.passed is True and r.checked == 3
 
     def test_failures_listed(self):
-        from arken.ai.verifier import GoalCheck, Verifier
+        from avion.ai.verifier import GoalCheck, Verifier
 
         r = run(
             Verifier().verify(
@@ -353,8 +353,8 @@ class TestVerifier:
         assert r.passed is False and len(r.failed) == 2
 
     def test_element_present(self):
-        from arken.ai.verifier import GoalCheck, Verifier
-        from arken.core.element import ElementLocator
+        from avion.ai.verifier import GoalCheck, Verifier
+        from avion.core.element import ElementLocator
 
         backend = AgentBackend()
 

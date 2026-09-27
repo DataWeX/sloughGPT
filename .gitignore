@@ -232,6 +232,7 @@ t.png
 
 # Compiled C extensions (build artifacts)
 *.so
+*.so.buildflags
 
 # Build output
 **/target/
@@ -261,3 +262,6 @@ y
 .dev-notes/*.md
 # Hoplite platform metadata (per-thread sandbox artifacts)
 .hoplite/
+
+# avion journey-engine test artifacts
+arken_output/

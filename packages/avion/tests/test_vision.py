@@ -3,8 +3,8 @@
 import io
 
 import pytest
-from arken.interact.primitives import BoundingBox
-from arken.vision import ImageAnalyzer, MatchMethod, VisualMatch
+from avion.interact.primitives import BoundingBox
+from avion.vision import ImageAnalyzer, MatchMethod, VisualMatch
 
 
 class TestHash:

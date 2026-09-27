@@ -2,7 +2,7 @@
 
 import asyncio
 
-from arken.waits import SmartWaiter, WaitCondition, WaitConfig
+from avion.waits import SmartWaiter, WaitCondition, WaitConfig
 
 
 def run(coro):

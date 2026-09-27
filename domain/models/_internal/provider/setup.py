@@ -236,7 +236,7 @@ def setup_providers(
             )
 
             cfg = get_config()
-            default_model = cfg.autoload_model
+            default_model = cfg.model.name if cfg.model.autoload else None
             if default_model:
                 _cache_dir = _get_model_dir(default_model)
                 _slnc = _cache_dir / "model.slnc"
