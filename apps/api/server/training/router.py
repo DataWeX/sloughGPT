@@ -797,6 +797,59 @@ router.include_router(_turbo_router)
 router.include_router(_webhook_router)
 
 
+def _count_dataset_examples(raw: str, repo_root: Path) -> int:
+    """Line-count the dataset the recommend banner is advising about.
+
+    The frontend passes a dataset *id* (or a just-cache path) — the same
+    values training resolves via ``resolve_training_inputs`` — so sizing only
+    repo datasets/ and data/ dirs made every imported dataset report
+    "0 examples" and get generic advice.
+    """
+    from domain.training._internal.cache_tags import find_corpus_file, get_cache_root
+
+    from .resolution import resolve_training_inputs
+
+    allowed_roots = [
+        (repo_root / "datasets").resolve(),
+        (repo_root / "data").resolve(),
+        Path(get_cache_root()).resolve(),
+    ]
+
+    def _lines(fp: Path) -> int:
+        try:
+            with open(fp, encoding="utf-8", errors="ignore") as f:
+                return sum(1 for _ in f)
+        except OSError:
+            return 0
+
+    try:
+        resolved = Path(raw).expanduser().resolve()
+    except OSError:
+        resolved = Path(raw).expanduser()
+
+    if any(resolved.is_relative_to(root) for root in allowed_roots):
+        if resolved.is_file():
+            return _lines(resolved)
+        if resolved.is_dir():
+            corpus = find_corpus_file(resolved)
+            if corpus is not None:
+                return _lines(Path(corpus))
+            total = 0
+            for pattern in ("*.jsonl", "*.json", "*.txt"):
+                for fp in resolved.rglob(pattern):
+                    total += _lines(fp)
+            return total
+        return 0
+
+    # Not a path we are allowed to read — treat it as a dataset id and reuse
+    # the exact resolver training will use (cache first, legacy dirs second).
+    try:
+        data_path, *_rest = resolve_training_inputs(raw, None, None)
+    except Exception:
+        return 0
+    return _lines(Path(data_path))
+
+
 @router.get("/training/recommend")
 async def get_training_recommendation(
     dataset_path: str = "",
@@ -836,6 +889,11 @@ async def get_training_recommendation(
                             + list(dp.rglob("*.txt"))
                         )
                         dataset_size = len(data_files)
+            else:
+                # Not a repo datasets/ or data/ path — the journey flow sends
+                # a dataset *id* or a just-cache path; size the same file
+                # training will consume instead of reporting "0 examples".
+                dataset_size = _count_dataset_examples(dataset_path, repo_root)
 
         # Get recommendation
         recommendation = recommend_training_config(

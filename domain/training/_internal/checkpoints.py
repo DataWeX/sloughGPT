@@ -17,20 +17,31 @@ from .helpers import (
     describe_checkpoint,
     read_slo_json_header,
 )
-from .state import CHECKPOINTS_DIR, LORA_DIR, TURBO_DIR, VALID_CKPT_NAME
+from .state import CHECKPOINTS_DIR, LORA_DIR, REPO_ROOT, TURBO_DIR, VALID_CKPT_NAME
+
+# Final job saves: trainer.save(f"models/<stem>_trained.soul") — a third root,
+# outside auto-training/turbo-trained, and the exact path job records point at.
+TRAINED_DIR = REPO_ROOT / "models"
 
 logger = logging.getLogger("slo.training")
 
 
 def find_checkpoint(name: str) -> Path | None:
+    # Callers hand back either a bare file name or the job record's
+    # "models/<stem>_trained.soul" path style. Every search root is a flat
+    # directory, so stripping directory components is safe — and it is what
+    # keeps `{name}` route segments and traversal attempts working.
+    name = Path(name).name
+    if not name:
+        return None
     if name.endswith((".soul", ".slo")):
-        for base in (CHECKPOINTS_DIR, TURBO_DIR):
+        for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
             candidate = (base / name).resolve()
             if candidate.exists() and str(candidate).startswith(str(base.resolve())):
                 return candidate
         return None
     for ext in (".soul", ".slo"):
-        for base in (CHECKPOINTS_DIR, TURBO_DIR):
+        for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
             candidate = (base / (name + ext)).resolve()
             if candidate.exists() and str(candidate).startswith(str(base.resolve())):
                 return candidate
@@ -199,6 +210,23 @@ def _scan_all_checkpoints() -> list[dict]:
         info = _load_soul_from_path(f, st)
         if info:
             info["source"] = "turbo"
+            checkpoints.append(info)
+
+    # Final job saves (models/<stem>_trained.soul) — what job records and the
+    # results card hand back for "Load for chat".
+    for f in sorted(TRAINED_DIR.glob("*_trained.soul"), key=_stat_key, reverse=True):
+        if f.name in seen:
+            continue
+        seen.add(f.name)
+        try:
+            st = f.stat()
+        except OSError:
+            continue
+        if st.st_size < 4096:
+            continue
+        info = _load_soul_from_path(f, st)
+        if info:
+            info["source"] = "trained"
             checkpoints.append(info)
 
     for npz in sorted(LORA_DIR.glob("*.soul"), key=_stat_key, reverse=True):

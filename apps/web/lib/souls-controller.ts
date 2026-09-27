@@ -58,7 +58,12 @@ export interface Checkpoint {
   training_duration_s?: number
   source?: string
   avg_quality?: number
-  data_quality?: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number }
+  data_quality?: {
+    avg_quality: number
+    repetition_rate: number
+    diversity: number
+    language_quality: number
+  }
 }
 
 export interface SoulsResponse {
@@ -76,14 +81,16 @@ export const soulsController = {
     const souls = await apiGet<Soul[]>('/souls')
     // _meta is attached as non-enumerable by http-client StandardResponse unwrapper
     const meta = (souls as unknown as { _meta?: { current_soul?: string } })?._meta
-    return {souls: souls || [], current_soul: meta?.current_soul}
+    return { souls: souls || [], current_soul: meta?.current_soul }
   },
 
   async getCurrent(): Promise<Soul | null> {
     try {
       return await apiGet<Soul>('/souls/current')
     } catch (err) {
-      _log.debug('Failed to get current soul', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to get current soul', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },
@@ -97,11 +104,30 @@ export const soulsController = {
   async listCheckpoints(): Promise<CheckpointsResponse> {
     const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/training/checkpoints')
     const checkpoints = Array.isArray(data) ? data : (data?.checkpoints ?? [])
-    return {checkpoints}
+    return { checkpoints }
   },
 
-  async loadCheckpoint(name: string): Promise<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }> {
-    return apiPost<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }>(`/training/checkpoints/${encodeURIComponent(name)}/load`)
+  async loadCheckpoint(name: string): Promise<{
+    status: string
+    name: string
+    soul?: string
+    loss?: number
+    steps?: number
+    traits?: Record<string, number>
+    path?: string
+  }> {
+    // Job records store the final save as "models/<stem>_trained.soul" but the
+    // route's {name} segment cannot contain "/" — send the bare file name.
+    const fileName = name.split('/').pop() || name
+    return apiPost<{
+      status: string
+      name: string
+      soul?: string
+      loss?: number
+      steps?: number
+      traits?: Record<string, number>
+      path?: string
+    }>(`/training/checkpoints/${encodeURIComponent(fileName)}/load`)
   },
 
   // ── Trait Weights ──
@@ -118,7 +144,12 @@ export const soulsController = {
 
   async getModes(): Promise<{
     personality: { label: string; confidence: number; scores?: Record<string, number> }
-    memory: { label: string; confidence: number; capacity?: number; scores?: Record<string, number> }
+    memory: {
+      label: string
+      confidence: number
+      capacity?: number
+      scores?: Record<string, number>
+    }
     style: { label: string; confidence: number; scores?: Record<string, number> }
     task: { label: string; confidence: number; scores?: Record<string, number> }
   }> {
@@ -126,33 +157,38 @@ export const soulsController = {
   },
 
   async listWeightSnapshots(): Promise<{ name: string; saved_at?: string; label?: string }[]> {
-    const data = await apiGet<{ name: string; saved_at?: string; label?: string }[] | { snapshots: { name: string; saved_at?: string; label?: string }[] }>('/souls/weights/snapshots')
+    const data = await apiGet<
+      | { name: string; saved_at?: string; label?: string }[]
+      | { snapshots: { name: string; saved_at?: string; label?: string }[] }
+    >('/souls/weights/snapshots')
     // Handle both StandardResponse (unwrapped array) and legacy {snapshots: [...]}
     return Array.isArray(data) ? data : (data?.snapshots ?? [])
   },
 
   async saveWeightSnapshot(name: string): Promise<string> {
     const res = await apiPost<{ path: string } | { status: string; path: string }>(
-      `/souls/weights/snapshot/${encodeURIComponent(name)}`
+      `/souls/weights/snapshot/${encodeURIComponent(name)}`,
     )
     return res.path
   },
 
   async loadWeightSnapshot(name: string): Promise<number> {
-    const res = await apiPost<{ traits_loaded: number } | { status: string; traits_loaded: number }>(
-      `/souls/weights/snapshot/${encodeURIComponent(name)}/load`
-    )
+    const res = await apiPost<
+      { traits_loaded: number } | { status: string; traits_loaded: number }
+    >(`/souls/weights/snapshot/${encodeURIComponent(name)}/load`)
     return res.traits_loaded
   },
 
   async deleteWeightSnapshot(name: string): Promise<boolean> {
-    const res = await apiDelete<{ deleted: boolean } | { status: string; data: { deleted: boolean } }>(
-      `/souls/weights/snapshot/${encodeURIComponent(name)}`
-    )
+    const res = await apiDelete<
+      { deleted: boolean } | { status: string; data: { deleted: boolean } }
+    >(`/souls/weights/snapshot/${encodeURIComponent(name)}`)
     return 'deleted' in res ? (res as { deleted: boolean }).deleted : false
   },
 
-  async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {
+  async saveTraitWeights(
+    weights: Record<string, Record<string, number>>,
+  ): Promise<{ status: string }> {
     return apiPost<{ status: string }>('/souls/weights', weights)
   },
 
@@ -169,7 +205,11 @@ export const soulsController = {
     }
   },
 
-  async getStats(): Promise<{ total_souls: number; current_soul: string | null; available_souls: string[] }> {
+  async getStats(): Promise<{
+    total_souls: number
+    current_soul: string | null
+    available_souls: string[]
+  }> {
     return apiGet('/souls/stats')
   },
 
@@ -177,7 +217,9 @@ export const soulsController = {
     try {
       return await apiGet<Checkpoint>(`/training/checkpoints/${encodeURIComponent(name)}/info`)
     } catch (err) {
-      _log.debug('Failed to get checkpoint info', { error: err instanceof Error ? err.message : String(err) })
+      _log.debug('Failed to get checkpoint info', {
+        error: err instanceof Error ? err.message : String(err),
+      })
       return null
     }
   },

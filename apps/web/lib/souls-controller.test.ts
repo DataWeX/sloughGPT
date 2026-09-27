@@ -16,10 +16,14 @@ setupApiMocks()
 import { soulsController } from './souls-controller'
 
 describe('soulsController.list', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /souls and returns souls', async () => {
-    apiClient.apiGet.mockResolvedValue([{ name: 'friendly', description: 'Friendly soul', traits: ['warm'] }])
+    apiClient.apiGet.mockResolvedValue([
+      { name: 'friendly', description: 'Friendly soul', traits: ['warm'] },
+    ])
 
     const result = await soulsController.list()
     expect(result.souls).toHaveLength(1)
@@ -29,10 +33,17 @@ describe('soulsController.list', () => {
 })
 
 describe('soulsController.getCurrent', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /souls/current', async () => {
-    apiClient.apiGet.mockResolvedValue({ name: 'friendly', description: '', traits: ['warm'], personality: { warmth: 0.8 } })
+    apiClient.apiGet.mockResolvedValue({
+      name: 'friendly',
+      description: '',
+      traits: ['warm'],
+      personality: { warmth: 0.8 },
+    })
 
     const result = await soulsController.getCurrent()
     expect(result?.name).toBe('friendly')
@@ -47,7 +58,9 @@ describe('soulsController.getCurrent', () => {
 })
 
 describe('soulsController.switch', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /souls/switch with name in body', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'ok' })
@@ -60,12 +73,17 @@ describe('soulsController.switch', () => {
     apiClient.apiPost.mockResolvedValue({ status: 'ok' })
 
     await soulsController.switch('friendly', 'v2')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch', { name: 'friendly', checkpoint_name: 'v2' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/souls/switch', {
+      name: 'friendly',
+      checkpoint_name: 'v2',
+    })
   })
 })
 
 describe('soulsController.listCheckpoints', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /training/checkpoints', async () => {
     apiClient.apiGet.mockResolvedValue([{ name: 'v1', soul: 'friendly' }])
@@ -77,7 +95,9 @@ describe('soulsController.listCheckpoints', () => {
 })
 
 describe('soulsController.loadCheckpoint', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /training/checkpoints/{name}/load', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'loaded', name: 'v1', soul: 'friendly' })
@@ -86,10 +106,21 @@ describe('soulsController.loadCheckpoint', () => {
     expect(result.status).toBe('loaded')
     expect(apiClient.apiPost).toHaveBeenCalledWith('/training/checkpoints/v1/load')
   })
+
+  it('sends only the file name for job-record paths ({name} cannot contain "/")', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'loaded', name: 'journey_select_trained.soul' })
+
+    await soulsController.loadCheckpoint('models/journey_select_trained.soul')
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/training/checkpoints/journey_select_trained.soul/load',
+    )
+  })
 })
 
 describe('soulsController.listWeightSnapshots', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('GETs /souls/weights/snapshots and returns array', async () => {
     apiClient.apiGet.mockResolvedValue([{ name: 'preset-1', saved_at: '2026-01-01' }])
@@ -109,7 +140,9 @@ describe('soulsController.listWeightSnapshots', () => {
 })
 
 describe('soulsController.saveWeightSnapshot', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /souls/weights/snapshot/{name} and returns path', async () => {
     apiClient.apiPost.mockResolvedValue({ path: '/snapshots/p1.json' })
@@ -128,7 +161,9 @@ describe('soulsController.saveWeightSnapshot', () => {
 })
 
 describe('soulsController.loadWeightSnapshot', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('POSTs to /souls/weights/snapshot/{name}/load and returns count', async () => {
     apiClient.apiPost.mockResolvedValue({ traits_loaded: 13 })
@@ -140,7 +175,9 @@ describe('soulsController.loadWeightSnapshot', () => {
 })
 
 describe('soulsController.deleteWeightSnapshot', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('DELETEs /souls/weights/snapshot/{name} and returns boolean', async () => {
     apiClient.apiDelete.mockResolvedValue({ deleted: true })
