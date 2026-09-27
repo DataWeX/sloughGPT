@@ -16,6 +16,11 @@ from domain.auth._internal.models import (
     WorkspaceMember,
 )
 from domain.auth._internal.rbac import RBAC, get_rbac
+from domain.auth._internal.repositories import (
+    TenantRepository,
+    UserRepository,
+    WorkspaceRepository,
+)
 
 _LAZY_IMPORTS = {
     "TenantRepository": ("._internal.repositories", "TenantRepository"),

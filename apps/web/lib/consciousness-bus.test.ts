@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { emitConsciousness, onConsciousness, ConsciousnessEvent } from './consciousness-bus'
+import type { ConsciousnessEvent } from './consciousness-bus'
+import { emitConsciousness, onConsciousness } from './consciousness-bus'
 
 function makeEvent(overrides: Partial<ConsciousnessEvent> = {}): ConsciousnessEvent {
   return {

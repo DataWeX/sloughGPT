@@ -63,7 +63,8 @@ __all__ = [
     "PDFVLMProcessor",
     "_ngram_embed",
     "SloNetChatProvider",
-    "VectorEntry",
+    "get_engine",
+    "configure_api_provider",
 ]
 
 

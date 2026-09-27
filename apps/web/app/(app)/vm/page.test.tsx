@@ -6,7 +6,9 @@ const kvStore = new Map<string, unknown>()
 vi.mock('@/lib/db', () => ({
   chatDB: {
     getKV: vi.fn(async (key: string) => kvStore.get(key) ?? null),
-    setKV: vi.fn(async (key: string, value: unknown) => { kvStore.set(key, value) }),
+    setKV: vi.fn(async (key: string, value: unknown) => {
+      kvStore.set(key, value)
+    }),
   },
 }))
 
@@ -70,7 +72,9 @@ describe('VMPage', () => {
     vi.clearAllMocks()
     kvStore.clear()
     vi.mocked(chatDB.getKV).mockImplementation(async (key: string) => kvStore.get(key) ?? null)
-    vi.mocked(chatDB.setKV).mockImplementation(async (key: string, value: unknown) => { kvStore.set(key, value) })
+    vi.mocked(chatDB.setKV).mockImplementation(async (key: string, value: unknown) => {
+      kvStore.set(key, value)
+    })
     mockedRun.mockResolvedValue(fakeResult())
     mockedDatasets.mockResolvedValue([])
   })
@@ -147,8 +151,9 @@ describe('VMPage', () => {
 
   it('passes selected role to run', async () => {
     const { container } = render(<VMPage />)
-    within(container).getAllByLabelText('VM role')[0] as HTMLSelectElement
-    fireEvent.change(within(container).getAllByLabelText('VM role')[0], { target: { value: 'admin' } })
+    fireEvent.change(within(container).getAllByLabelText('VM role')[0], {
+      target: { value: 'admin' },
+    })
     fireEvent.click(within(container).getAllByRole('button', { name: 'Run' })[0])
 
     await waitFor(() => {
@@ -182,9 +187,11 @@ describe('VMPage', () => {
   })
 
   it('runs assembly and shows result', async () => {
-    mockedRun.mockResolvedValue(fakeResult({
-      registers: [{ name: 'EAX', value: 42, hex: '0x0000002A' }],
-    }))
+    mockedRun.mockResolvedValue(
+      fakeResult({
+        registers: [{ name: 'EAX', value: 42, hex: '0x0000002A' }],
+      }),
+    )
 
     render(<VMPage />)
     fireEvent.click(screen.getAllByRole('button', { name: 'Run' })[0])
@@ -196,11 +203,13 @@ describe('VMPage', () => {
   })
 
   it('shows error banner on failure', async () => {
-    mockedRun.mockResolvedValue(fakeResult({
-      success: false,
-      status: 'error',
-      error: 'assembly failed',
-    }))
+    mockedRun.mockResolvedValue(
+      fakeResult({
+        success: false,
+        status: 'error',
+        error: 'assembly failed',
+      }),
+    )
 
     render(<VMPage />)
     fireEvent.click(screen.getAllByRole('button', { name: 'Run' })[0])
@@ -222,14 +231,16 @@ describe('VMPage', () => {
   })
 
   it('shows registers card after run', async () => {
-    mockedRun.mockResolvedValue(fakeResult({
-      registers: [
-        { name: 'EAX', value: 1, hex: '0x00000001' },
-        { name: 'ESP', value: 0xBFF00, hex: '0x000BFF00' },
-      ],
-      eip: 10,
-      eip_hex: '0x0000000A',
-    }))
+    mockedRun.mockResolvedValue(
+      fakeResult({
+        registers: [
+          { name: 'EAX', value: 1, hex: '0x00000001' },
+          { name: 'ESP', value: 0xbff00, hex: '0x000BFF00' },
+        ],
+        eip: 10,
+        eip_hex: '0x0000000A',
+      }),
+    )
 
     render(<VMPage />)
     fireEvent.click(screen.getAllByRole('button', { name: 'Run' })[0])
@@ -254,12 +265,14 @@ describe('VMPage', () => {
   })
 
   it('shows trace when debug enabled', async () => {
-    mockedRun.mockResolvedValue(fakeResult({
-      trace: [
-        { step: 0, eip: '0x00000000', opcode: 'MOV', operands: 'EAX, 42' },
-        { step: 1, eip: '0x00000002', opcode: 'HLT', operands: '' },
-      ],
-    }))
+    mockedRun.mockResolvedValue(
+      fakeResult({
+        trace: [
+          { step: 0, eip: '0x00000000', opcode: 'MOV', operands: 'EAX, 42' },
+          { step: 1, eip: '0x00000002', opcode: 'HLT', operands: '' },
+        ],
+      }),
+    )
 
     render(<VMPage />)
     const checkboxes = screen.getAllByRole('checkbox')
@@ -306,7 +319,12 @@ describe('VMPage', () => {
 
   it('disables Run button while running', async () => {
     let resolveRun: any
-    mockedRun.mockImplementation(() => new Promise((r) => { resolveRun = r }))
+    mockedRun.mockImplementation(
+      () =>
+        new Promise((r) => {
+          resolveRun = r
+        }),
+    )
 
     render(<VMPage />)
     const runBtn = screen.getAllByRole('button', { name: 'Run' })[0]
@@ -339,9 +357,11 @@ describe('VMPage', () => {
   })
 
   it('renders memory dump in debug mode', async () => {
-    mockedRun.mockResolvedValue(fakeResult({
-      memory_dump: '000BFF00  48 65 6C 6C 6F  Hello',
-    }))
+    mockedRun.mockResolvedValue(
+      fakeResult({
+        memory_dump: '000BFF00  48 65 6C 6C 6F  Hello',
+      }),
+    )
 
     render(<VMPage />)
     const checkboxes = screen.getAllByRole('checkbox')
@@ -523,9 +543,7 @@ describe('VMPage', () => {
   it('renders the training launch card with default config', () => {
     const { container } = render(<VMPage />)
     expect(screen.getAllByText('Training launch').length).toBeGreaterThanOrEqual(1)
-    expect(within(container).getAllByLabelText('Training dataset')[0]).toHaveValue(
-      'shakespeare',
-    )
+    expect(within(container).getAllByLabelText('Training dataset')[0]).toHaveValue('shakespeare')
     expect(within(container).getAllByLabelText('Training epochs')[0]).toHaveValue(1)
     expect(within(container).getAllByLabelText('Training embed size')[0]).toHaveValue(128)
   })
@@ -556,7 +574,12 @@ describe('VMPage', () => {
         expect.objectContaining({ role: 'user' }),
       )
     })
-    expect(screen.getAllByText('halted').length).toBeGreaterThanOrEqual(1)
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('halted').length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('launch training respects the selected role', async () => {
@@ -575,12 +598,14 @@ describe('VMPage', () => {
   })
 
   it('shows a launch confirmation when the job starts successfully', async () => {
-    mockedRun.mockResolvedValue(fakeResult({
-      registers: [
-        { name: 'EAX', value: 7, hex: '0x00000007' },
-        { name: 'ECX', value: 0, hex: '0x00000000' },
-      ],
-    }))
+    mockedRun.mockResolvedValue(
+      fakeResult({
+        registers: [
+          { name: 'EAX', value: 7, hex: '0x00000007' },
+          { name: 'ECX', value: 0, hex: '0x00000000' },
+        ],
+      }),
+    )
     const { container } = render(<VMPage />)
     fireEvent.change(within(container).getAllByLabelText('VM role')[0], {
       target: { value: 'admin' },
@@ -588,9 +613,7 @@ describe('VMPage', () => {
     fireEvent.click(within(container).getAllByRole('button', { name: 'Launch training' })[0])
 
     await waitFor(() => {
-      expect(
-        within(container).getByText(/Launched training job #7/),
-      ).toBeTruthy()
+      expect(within(container).getByText(/Launched training job #7/)).toBeTruthy()
     })
   })
 
@@ -601,33 +624,29 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(mockedRun).toHaveBeenCalled()
     })
-    expect(
-      within(container).queryByText(/Launched training job/),
-    ).toBeNull()
+    expect(within(container).queryByText(/Launched training job/)).toBeNull()
   })
 
   it('dismisses the launch confirmation', async () => {
-    mockedRun.mockResolvedValue(fakeResult({
-      registers: [
-        { name: 'EAX', value: 2, hex: '0x00000002' },
-        { name: 'ECX', value: 0, hex: '0x00000000' },
-      ],
-    }))
+    mockedRun.mockResolvedValue(
+      fakeResult({
+        registers: [
+          { name: 'EAX', value: 2, hex: '0x00000002' },
+          { name: 'ECX', value: 0, hex: '0x00000000' },
+        ],
+      }),
+    )
     const { container } = render(<VMPage />)
     fireEvent.change(within(container).getAllByLabelText('VM role')[0], {
       target: { value: 'admin' },
     })
     fireEvent.click(within(container).getAllByRole('button', { name: 'Launch training' })[0])
     await waitFor(() => {
-      expect(
-        within(container).getByText(/Launched training job #2/),
-      ).toBeTruthy()
+      expect(within(container).getByText(/Launched training job #2/)).toBeTruthy()
     })
 
     fireEvent.click(within(container).getByRole('button', { name: 'Dismiss' }))
-    expect(
-      within(container).queryByText(/Launched training job/),
-    ).toBeNull()
+    expect(within(container).queryByText(/Launched training job/)).toBeNull()
   })
 
   it('renders a dataset dropdown populated from the backend', async () => {
@@ -638,15 +657,13 @@ describe('VMPage', () => {
 
     const { container } = render(<VMPage />)
     await waitFor(() => {
-      expect(
-        within(container).getAllByLabelText('Training dataset')[0].tagName,
-      ).toBe('SELECT')
+      expect(within(container).getAllByLabelText('Training dataset')[0].tagName).toBe('SELECT')
     })
     const select = within(container).getAllByLabelText('Training dataset')[0] as HTMLSelectElement
     expect(select.value).toBe('shakespeare')
-    expect(
-      Array.from(select.options).map((o) => o.value),
-    ).toEqual(expect.arrayContaining(['shakespeare', 'tinyshakespeare', '__custom__']))
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(
+      expect.arrayContaining(['shakespeare', 'tinyshakespeare', '__custom__']),
+    )
   })
 
   it('launching with a selected dataset uses it in the generated source', async () => {
@@ -657,9 +674,7 @@ describe('VMPage', () => {
 
     const { container } = render(<VMPage />)
     await waitFor(() => {
-      expect(
-        within(container).getAllByLabelText('Training dataset')[0].tagName,
-      ).toBe('SELECT')
+      expect(within(container).getAllByLabelText('Training dataset')[0].tagName).toBe('SELECT')
     })
     fireEvent.change(within(container).getAllByLabelText('Training dataset')[0], {
       target: { value: 'tinyshakespeare' },
@@ -675,15 +690,11 @@ describe('VMPage', () => {
   })
 
   it('custom dataset option reveals a text input used at launch', async () => {
-    mockedDatasets.mockResolvedValue([
-      { name: 'shakespeare', source: 'local', size: 1 },
-    ] as any)
+    mockedDatasets.mockResolvedValue([{ name: 'shakespeare', source: 'local', size: 1 }] as any)
 
     const { container } = render(<VMPage />)
     await waitFor(() => {
-      expect(
-        within(container).getAllByLabelText('Training dataset')[0].tagName,
-      ).toBe('SELECT')
+      expect(within(container).getAllByLabelText('Training dataset')[0].tagName).toBe('SELECT')
     })
     fireEvent.change(within(container).getAllByLabelText('Training dataset')[0], {
       target: { value: '__custom__' },
@@ -710,9 +721,7 @@ describe('VMPage', () => {
 
     const { container } = render(<VMPage />)
     await waitFor(() => {
-      expect(
-        within(container).getAllByLabelText('Training dataset')[0].tagName,
-      ).toBe('SELECT')
+      expect(within(container).getAllByLabelText('Training dataset')[0].tagName).toBe('SELECT')
     })
     fireEvent.change(within(container).getAllByLabelText('Training dataset')[0], {
       target: { value: '__custom__' },
@@ -726,15 +735,11 @@ describe('VMPage', () => {
   })
 
   it('omits the unknown-dataset warning for a known custom name', async () => {
-    mockedDatasets.mockResolvedValue([
-      { name: 'shakespeare', source: 'local', size: 1 },
-    ] as any)
+    mockedDatasets.mockResolvedValue([{ name: 'shakespeare', source: 'local', size: 1 }] as any)
 
     const { container } = render(<VMPage />)
     await waitFor(() => {
-      expect(
-        within(container).getAllByLabelText('Training dataset')[0].tagName,
-      ).toBe('SELECT')
+      expect(within(container).getAllByLabelText('Training dataset')[0].tagName).toBe('SELECT')
     })
     fireEvent.change(within(container).getAllByLabelText('Training dataset')[0], {
       target: { value: '__custom__' },
@@ -784,8 +789,7 @@ describe('VMPage', () => {
       ).toBe('5')
     })
     expect(
-      (within(second.container).getAllByLabelText('Training dataset')[0] as HTMLInputElement)
-        .value,
+      (within(second.container).getAllByLabelText('Training dataset')[0] as HTMLInputElement).value,
     ).toBe('tinyshakespeare')
     const saved = kvStore.get('vm-train-config') as Record<string, unknown>
     expect(saved.epochs).toBe(5)
@@ -793,15 +797,11 @@ describe('VMPage', () => {
   })
 
   it('reset config restores defaults and clears a custom dataset', async () => {
-    mockedDatasets.mockResolvedValue([
-      { name: 'shakespeare', source: 'local', size: 1 },
-    ] as any)
+    mockedDatasets.mockResolvedValue([{ name: 'shakespeare', source: 'local', size: 1 }] as any)
 
     const { container } = render(<VMPage />)
     await waitFor(() => {
-      expect(
-        within(container).getAllByLabelText('Training dataset')[0].tagName,
-      ).toBe('SELECT')
+      expect(within(container).getAllByLabelText('Training dataset')[0].tagName).toBe('SELECT')
     })
     fireEvent.change(within(container).getAllByLabelText('Training epochs')[0], {
       target: { value: '12' },
@@ -832,13 +832,11 @@ describe('VMPage', () => {
   it('warns and offers switch to admin when the role is user', async () => {
     const { container } = render(<VMPage />)
     await act(async () => {})
-    expect(
-      within(container).getByText(/Training is denied for the user role/),
-    ).toBeTruthy()
+    expect(within(container).getByText(/Training is denied for the user role/)).toBeTruthy()
     fireEvent.click(within(container).getAllByRole('button', { name: 'Switch to admin' })[0])
-    expect(
-      (within(container).getAllByLabelText('VM role')[0] as HTMLSelectElement).value,
-    ).toBe('admin')
+    expect((within(container).getAllByLabelText('VM role')[0] as HTMLSelectElement).value).toBe(
+      'admin',
+    )
     await waitFor(() => {
       expect(kvStore.get('vm-role')).toBe('admin')
     })
@@ -866,9 +864,7 @@ describe('VMPage', () => {
       target: { value: '' },
     })
     expect(within(container).getByText(hintText('Epochs: using default 1'))).toBeTruthy()
-    expect(
-      within(container).getByText(hintText('Learning rate: using default 0.001')),
-    ).toBeTruthy()
+    expect(within(container).getByText(hintText('Learning rate: using default 0.001'))).toBeTruthy()
     expect(
       within(container).getByText(hintText('Dataset: using default "shakespeare"')),
     ).toBeTruthy()
@@ -942,9 +938,9 @@ describe('VMPage', () => {
 
     const second = render(<VMPage />)
     await waitFor(() => {
-      expect(
-        (within(second.container).getByLabelText('Steps:') as HTMLInputElement).value,
-      ).toBe('250')
+      expect((within(second.container).getByLabelText('Steps:') as HTMLInputElement).value).toBe(
+        '250',
+      )
     })
     expect(kvStore.get('vm-max-steps')).toBe(250)
   })

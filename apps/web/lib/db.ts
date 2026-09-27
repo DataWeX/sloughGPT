@@ -133,6 +133,14 @@ function hasDocId(id: string | undefined, collection: string, op: string): boole
 // at a time; subsequent callers receive the same promise.
 const _inflightKV = new Map<string, Promise<unknown>>()
 
+// ── In-flight write coalescing (last-write-wins) ──────────────────────
+// A slow server + a chatty caller (sidebar effects, settings flush) used to
+// stack one PUT per change into the same key.  When a write for a key is
+// already in flight, the newest value replaces the queued one and exactly
+// ONE follow-up PUT fires once the in-flight request settles — callers see
+// the combined promise.
+const _pendingKVWrite = new Map<string, { value: unknown; promise: Promise<void> | null }>()
+
 // ── Server circuit breaker ────────────────────────────────────────────
 // When the API server is unreachable every failed write re-throws, which
 // fires window.onerror, which calls chatDB.addError(), which fails again —
@@ -398,7 +406,27 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
 
     async setKV(key: string, value: unknown): Promise<void> {
       if (!hasDocId(key, 'kv', 'setKV')) return
-      await apiPut(docUrl('kv', key), { key, value })
+      const pending = _pendingKVWrite.get(key)
+      if (pending) {
+        // Last-write-wins: fold this write into the in-flight one.
+        pending.value = value
+        return pending.promise!
+      }
+      const entry: { value: unknown; promise: Promise<void> | null } = { value, promise: null }
+      entry.promise = (async () => {
+        try {
+          let sent = value
+          for (;;) {
+            await apiPut(docUrl('kv', key), { key, value: sent })
+            if (Object.is(sent, entry.value)) break
+            sent = entry.value // a newer value arrived mid-flight — send it
+          }
+        } finally {
+          _pendingKVWrite.delete(key)
+        }
+      })()
+      _pendingKVWrite.set(key, entry)
+      return entry.promise
     },
 
     async deleteKV(key: string): Promise<void> {

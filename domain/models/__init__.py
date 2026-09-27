@@ -18,6 +18,7 @@ from domain.models._internal.provider import (
     apply_processors,
     get_provider,
     list_providers,
+    update_personality_traits,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "apply_processors",
     "get_provider",
     "list_providers",
+    "update_personality_traits",
 ]

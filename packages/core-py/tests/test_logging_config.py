@@ -37,6 +37,7 @@ if str(_CORE_PY) not in sys.path:
 from domain.logging._internal.config import (
     ClientExtensionFilter,
     LogFormatter,
+    RepeatSuppressionFilter,
     SyslogFormatter,
     _collect_extras,
     _enriched_record_factory,
@@ -303,6 +304,132 @@ class TestClientExtensionFilter:
         f = ClientExtensionFilter()
         record = _make_record(msg="0 0 connection lost")
         assert f.filter(record) is False
+
+
+# ── RepeatSuppressionFilter tests ─────────────────────────────────────
+
+
+class TestRepeatSuppressionFilter:
+    @staticmethod
+    def _warn(msg="HTTP 400 on PUT /docstore/kv/x"):
+        return _make_record(name="slo.exception_handlers", level=logging.WARNING, msg=msg)
+
+    def test_first_record_passes_repeat_suppressed(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        assert f.filter(self._warn()) is True
+        assert f.filter(self._warn()) is False
+        assert f.filter(self._warn()) is False
+
+    def test_debug_and_info_always_pass(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        info = _make_record(level=logging.INFO, msg="hello")
+        debug = _make_record(level=logging.DEBUG, msg="hello")
+        assert f.filter(info) is True
+        assert f.filter(debug) is True
+
+    def test_distinct_messages_not_suppressed(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        assert f.filter(self._warn("HTTP 400 on PUT /a")) is True
+        assert f.filter(self._warn("HTTP 404 on GET /b")) is True
+        assert f.filter(self._warn("HTTP 400 on PUT /a")) is False
+
+    def test_digits_and_corr_ids_normalized(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        assert f.filter(self._warn("GET /models 200 (1.234s) corr=abc123de")) is True
+        # Different corr/duration, same template -> suppressed
+        assert f.filter(self._warn("GET /models 200 (9.876s) corr=deadbeef")) is False
+
+    def test_shared_instance_same_decision_per_record(self):
+        """One instance on 3 handlers: handlers 2/3 must replay handler 1's
+        decision, not count the record they just accepted as a repeat."""
+        f = RepeatSuppressionFilter(window_s=60)
+        record = self._warn()
+        assert [f.filter(record) for _ in range(3)] == [True, True, True]
+        dup = self._warn()
+        assert [f.filter(dup) for _ in range(3)] == [False, False, False]
+
+    def test_summary_emitted_after_window(self, caplog):
+        f = RepeatSuppressionFilter(window_s=0.05)
+        with caplog.at_level(logging.WARNING, logger="slo.exception_handlers"):
+            assert f.filter(self._warn()) is True
+            for _ in range(4):
+                assert f.filter(self._warn()) is False
+            # Force the sweep by waiting out the window and passing a new record
+            import time as _time
+
+            _time.sleep(0.06)
+            assert f.filter(self._warn()) is True
+        summaries = [r.getMessage() for r in caplog.records if "suppressed" in r.getMessage()]
+        assert any("suppressed 4 similar lines" in s for s in summaries), summaries
+
+    def test_zero_window_disables(self):
+        f = RepeatSuppressionFilter(window_s=0)
+        for _ in range(5):
+            assert f.filter(self._warn()) is True
+
+    def test_state_is_bounded(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        for i in range(600):
+            f.filter(self._warn(f"HTTP 400 on PUT /docstore/kv/key{i}"))
+        assert len(f._state) <= f._MAX_KEYS
+
+
+class TestRepeatSuppressionIntegration:
+    """setup_logging wiring + an end-to-end docstore 400 storm."""
+
+    @staticmethod
+    def _dedup_filters(handler) -> list[RepeatSuppressionFilter]:
+        return [f for f in handler.filters if isinstance(f, RepeatSuppressionFilter)]
+
+    def test_setup_logging_attaches_one_shared_filter_to_every_handler(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = setup_logging(log_dir=tmpdir, enable_output_buffer=False)
+            root = logging.getLogger()
+            handlers_with_filter = []
+            for h in root.handlers:
+                filters = self._dedup_filters(h)
+                if filters:
+                    handlers_with_filter.append((h, filters[0]))
+            assert len(handlers_with_filter) >= 2, "console + file must both dedup"
+            assert len({id(f) for _, f in handlers_with_filter}) == 1, "must be one shared instance"
+            assert result["file_handler"] is not None
+
+    def test_env_window_is_honored(self):
+        with patch.dict(os.environ, {"SLO_LOG_DEDUP_WINDOW": "0"}):
+            f = RepeatSuppressionFilter()
+        assert f.window_s == 0.0
+
+    def test_docstore_400_storm_collapses_to_one_line_plus_summary(self):
+        """24 identical failures must not print 24 (or 48) WARN lines."""
+        f = RepeatSuppressionFilter(window_s=60)
+
+        class Capture(logging.Handler):
+            def __init__(self):
+                super().__init__(logging.WARNING)
+                self.records = []
+
+            def emit(self, record):
+                self.records.append(record)
+
+        capture = Capture()
+        capture.addFilter(f)
+        logger = logging.getLogger("slo.exception_handlers")
+        logger.addHandler(capture)
+        logger.setLevel(logging.WARNING)
+        old_propagate = logger.propagate
+        logger.propagate = False
+        try:
+            for i in range(24):
+                logger.warning(
+                    "HTTP 400 on PUT /docstore/kv/conv_%08x",
+                    0xABCD1234 + i,
+                    extra={"context": {"corr": f"{i:08x}"}},
+                )
+        finally:
+            logger.removeHandler(capture)
+            logger.propagate = old_propagate
+        assert len(capture.records) == 1, [r.getMessage() for r in capture.records]
+        assert "400" in capture.records[0].getMessage()
 
 
 # ── _collect_extras tests ─────────────────────────────────────────────

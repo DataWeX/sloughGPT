@@ -743,7 +743,11 @@ html {
 
 @keyframes viewFadeIn {
   from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  /* End at `none` (not translateY(0)) so the element does not keep a
+     composited transform after the animation — a lingering transform would
+     make .sl-page the containing block for position:fixed descendants
+     (dialogs), breaking viewport-centered positioning. */
+  to { opacity: 1; transform: none; }
 }
 
 .view-pane {

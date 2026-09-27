@@ -199,9 +199,9 @@ class SystemRouter:
     @endpoint("system.get_executor_status")
     async def get_executor_status(self) -> dict:
         """Get TrainingExecutor pool status and job list."""
-        from domain.training import executor as executor_mod
+        from domain.training import peek_training_executor
 
-        _instance = executor_mod._instance
+        _instance = peek_training_executor()
 
         if _instance is None:
             return success_response(
@@ -226,9 +226,9 @@ class SystemRouter:
     @endpoint("system.get_executor_job")
     async def get_executor_job(self, job_id: str) -> dict:
         """Get metadata for a single training job by ID."""
-        from domain.training import executor as executor_mod
+        from domain.training import peek_training_executor
 
-        _instance = executor_mod._instance
+        _instance = peek_training_executor()
 
         if _instance is None:
             raise_error("executor not initialized", "E_INFRA_STARTUP")
@@ -240,9 +240,9 @@ class SystemRouter:
     @endpoint("system.get_executor_job_result")
     async def get_executor_job_result(self, job_id: str) -> dict:
         """Get shape/dtype summary for a completed job's trained weights."""
-        from domain.training import executor as executor_mod
+        from domain.training import peek_training_executor
 
-        _instance = executor_mod._instance
+        _instance = peek_training_executor()
 
         if _instance is None:
             raise_error("executor not initialized", "E_INFRA_STARTUP")
@@ -262,9 +262,9 @@ class SystemRouter:
     ) -> dict:
         """Remove completed/failed/cancelled jobs older than max_age_s."""
         try:
-            from domain.training import executor as executor_mod
+            from domain.training import peek_training_executor
 
-            _instance = executor_mod._instance
+            _instance = peek_training_executor()
 
             if _instance is None:
                 return success_response(data={"purged": 0})
@@ -284,9 +284,9 @@ class SystemRouter:
     ) -> dict:
         """Request cancellation for a training job."""
         try:
-            from domain.training import executor as executor_mod
+            from domain.training import peek_training_executor
 
-            _instance = executor_mod._instance
+            _instance = peek_training_executor()
 
             if _instance is None:
                 return success_response(

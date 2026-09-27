@@ -7,8 +7,18 @@ cmd_* functions in commands/ modules.
 
 import logging
 import os
+import signal
 import sys
 from pathlib import Path
+
+# bash backgrounds (`cmd &`) start with SIGINT set to SIG_IGN, and CPython
+# honours the inherited disposition — Ctrl+C during CLI startup would be
+# silently dropped until a command installs its own handler (see the
+# entry-point registration in commands/dev.py). default_int_handler
+# restores standard KeyboardInterrupt semantics for the whole window, so
+# early interrupts are honoured and `except KeyboardInterrupt` cleanup
+# paths in commands keep firing.
+signal.signal(signal.SIGINT, signal.default_int_handler)
 
 # Ensure repo root (domain shims), CLI core, and core-py domains are on the path
 _CLI_DIR = Path(__file__).resolve().parent
@@ -1090,6 +1100,11 @@ def main():
         cli(obj={})
     except SystemExit:
         pass
+    except KeyboardInterrupt:
+        # Interrupted during dispatch, before a command handler took over.
+        _p()
+        _p(f"  {_c('Interrupted', _BOLD)}")
+        sys.exit(130)
 
     # Show post-command suggestions (TTY only)
     if _cmd_path and sys.stdout.isatty():

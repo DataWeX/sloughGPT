@@ -32,6 +32,18 @@ from domain.feedback._internal.response_tracker import (
 from domain.feedback._internal.training import create_training_pipeline
 from domain.feedback._internal.workflow import WorkflowConfig, get_feedback_workflow
 
+
+def __getattr__(name):
+    _lazy = {
+        "get_lora_evaluator": "domain.feedback._internal.lora_eval",
+    }
+    if name in _lazy:
+        import importlib
+
+        return getattr(importlib.import_module(_lazy[name]), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "FeedbackDB",
     "get_feedback_db",

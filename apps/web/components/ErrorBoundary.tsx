@@ -1,6 +1,7 @@
 'use client'
 
-import { Component, ReactNode } from 'react'
+import type { ReactNode } from 'react'
+import { Component } from 'react'
 import { Button } from '@sloughgpt/strui'
 import { IconAlert } from '@sloughgpt/strui'
 import { addGlobalError } from '@/lib/error-store'
@@ -31,7 +32,7 @@ const NON_FATAL_ERROR_PATTERNS = [
 ]
 
 function isNonFatalError(error: Error): boolean {
-  return NON_FATAL_ERROR_PATTERNS.some(pattern => pattern.test(error.message || ''))
+  return NON_FATAL_ERROR_PATTERNS.some((pattern) => pattern.test(error.message || ''))
 }
 
 export class ErrorBoundary extends Component<Props, State> {
@@ -55,7 +56,10 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack?: string }) {
-    logger.error('ErrorBoundary caught', { exception: error.message, stack: errorInfo.componentStack || '' })
+    logger.error('ErrorBoundary caught', {
+      exception: error.message,
+      stack: errorInfo.componentStack || '',
+    })
     try {
       addGlobalError(error, errorInfo.componentStack || 'componentDidCatch')
     } catch {
@@ -70,7 +74,9 @@ export class ErrorBoundary extends Component<Props, State> {
       }
 
       const error = this.state.error
-      const errorMessage = error ? extractErrorMessage(error, 'No error message') : 'Something went wrong'
+      const errorMessage = error
+        ? extractErrorMessage(error, 'No error message')
+        : 'Something went wrong'
       const errorType = error ? getErrorType(error) : null
       const stackFrames = error ? formatStackTrace(error.stack) : []
 
@@ -111,17 +117,25 @@ export class ErrorBoundary extends Component<Props, State> {
                 <pre className="whitespace-pre-wrap break-all text-muted-foreground/60">
                   {stackFrames.length > 0
                     ? stackFrames.map((frame, i) => <div key={i}>{frame}</div>)
-                    : error.stack || error.message
-                  }
+                    : error.stack || error.message}
                 </pre>
               </div>
             )}
 
             <div className="flex items-center justify-center gap-2">
-              <Button onClick={() => window.location.reload()} size="sm" className="h-7 text-[11px]">
+              <Button
+                onClick={() => window.location.reload()}
+                size="sm"
+                className="h-7 text-[11px]"
+              >
                 Reload page
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = '/'} size="sm" className="h-7 text-[11px]">
+              <Button
+                variant="outline"
+                onClick={() => (window.location.href = '/')}
+                size="sm"
+                className="h-7 text-[11px]"
+              >
                 Go home
               </Button>
             </div>

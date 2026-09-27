@@ -533,9 +533,11 @@ describe('HttpCache', () => {
   })
 
   it('serves stale data within stale-while-revalidate window', async () => {
-    const cache = new HttpCache({ ttlMs: 10, staleWhileRevalidate: true })
+    // stale zone is (ttlMs, ttlMs*2] — wide margins so event-loop stalls
+    // under parallel load cannot overshoot the window
+    const cache = new HttpCache({ ttlMs: 200, staleWhileRevalidate: true })
     cache.set('key1', 'value1')
-    await new Promise((r) => setTimeout(r, 15))
+    await new Promise((r) => setTimeout(r, 250))
     const hit = cache.get('key1')
     expect(hit).toBeDefined()
     expect(hit!.data).toBe('value1')

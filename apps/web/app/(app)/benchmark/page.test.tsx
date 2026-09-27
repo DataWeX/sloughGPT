@@ -6,12 +6,16 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
-const {
-  mockRun, mockMetrics, mockQuality, mockStats, mockHistory, mockApiPost, mockAddToast,
-} = vi.hoisted(() => ({
-  mockRun: vi.fn(), mockMetrics: vi.fn(), mockQuality: vi.fn(), mockStats: vi.fn(), mockHistory: vi.fn(),
-  mockApiPost: vi.fn(), mockAddToast: vi.fn(),
-}))
+const { mockRun, mockMetrics, mockQuality, mockStats, mockHistory, mockApiPost, mockAddToast } =
+  vi.hoisted(() => ({
+    mockRun: vi.fn(),
+    mockMetrics: vi.fn(),
+    mockQuality: vi.fn(),
+    mockStats: vi.fn(),
+    mockHistory: vi.fn(),
+    mockApiPost: vi.fn(),
+    mockAddToast: vi.fn(),
+  }))
 
 vi.mock('@sloughgpt/strui', () => {
   const iconMock = (name: string) => {
@@ -21,23 +25,42 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: ({ children, ...props }: any) => <div {...props}>{children}</div>, CardContent: passthrough, CardHeader: passthrough,
+    Card: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled, variant }: any) => (
-      <button onClick={onClick} disabled={disabled} data-variant={variant}>{children}</button>
+      <button onClick={onClick} disabled={disabled} data-variant={variant}>
+        {children}
+      </button>
     ),
     Textarea: ({ value, onChange, placeholder }: any) => (
       <textarea value={value} onChange={onChange} placeholder={placeholder} />
     ),
-    StatCard: ({ label, value }: any) => <div data-testid={'stat-' + label}><span>{label}</span><span>{String(value)}</span></div>,
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={'stat-' + label}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: iconMock('refresh'),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    EmptyCard: ({ title, description }: any) => <div data-testid="empty-card"><div>{title}</div><div>{description}</div></div>,
-  
+    EmptyCard: ({ title, description }: any) => (
+      <div data-testid="empty-card">
+        <div>{title}</div>
+        <div>{description}</div>
+      </div>
+    ),
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
@@ -69,7 +92,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/benchmark-controller', () => ({
@@ -92,7 +115,10 @@ vi.mock('@/lib/toast-store', () => ({
 
 vi.mock('@/components/benchmark/BenchmarkInsightsCard', () => ({
   BenchmarkInsightsCard: ({ metrics, quality }: any) => (
-    <div data-testid="benchmark-insights">{metrics && 'has-metrics'}{quality && 'has-quality'}</div>
+    <div data-testid="benchmark-insights">
+      {metrics && 'has-metrics'}
+      {quality && 'has-quality'}
+    </div>
   ),
 }))
 
@@ -104,14 +130,33 @@ beforeEach(() => {
   vi.clearAllMocks()
   mockRun.mockResolvedValue({ throughput: 10, latency_p50: 200, latency_p95: 500 })
   mockMetrics.mockResolvedValue({
-    model: 'gpt2', model_loaded: true, inference_count: 5, total_tokens: 210,
-    tokens_per_second: 42, memory_mb: 512, num_parameters: 124000000, latency_ms: 200,
-    throughput: 10, throughput_tokens_per_sec: 42, inference_time_ms: 200,
+    model: 'gpt2',
+    model_loaded: true,
+    inference_count: 5,
+    total_tokens: 210,
+    tokens_per_second: 42,
+    memory_mb: 512,
+    num_parameters: 124000000,
+    latency_ms: 200,
+    throughput: 10,
+    throughput_tokens_per_sec: 42,
+    inference_time_ms: 200,
   })
-  mockQuality.mockResolvedValue({ coherence_score: 0.85, quality_score: 0.78, repetition_rate: 0.12 })
+  mockQuality.mockResolvedValue({
+    coherence_score: 0.85,
+    quality_score: 0.78,
+    repetition_rate: 0.12,
+  })
   mockStats.mockResolvedValue({ total: 15, avg_tokens: 42, models: ['gpt2'] })
   mockHistory.mockResolvedValue([
-    { timestamp: '2026-08-07T10:00:00Z', user_message: 'Hello', assistant_response: 'Hi there', model: 'gpt2', tokens_generated: 10, duration_ms: 200 },
+    {
+      timestamp: '2026-08-07T10:00:00Z',
+      user_message: 'Hello',
+      assistant_response: 'Hi there',
+      model: 'gpt2',
+      tokens_generated: 10,
+      duration_ms: 200,
+    },
   ])
   mockApiPost.mockResolvedValue({})
 })
@@ -152,13 +197,17 @@ describe('BenchmarkPage — metrics tab flow', () => {
 
   it('refresh metrics button triggers re-run', async () => {
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(mockMetrics).toHaveBeenCalledTimes(1) })
+    await waitFor(() => {
+      expect(mockMetrics).toHaveBeenCalledTimes(1)
+    })
 
-    const refreshBtns = screen.getAllByRole('button').filter(b =>
-      b.textContent?.includes('refresh') || b.textContent?.includes('Refresh')
-    )
+    const refreshBtns = screen
+      .getAllByRole('button')
+      .filter((b) => b.textContent?.includes('refresh') || b.textContent?.includes('Refresh'))
     if (refreshBtns.length > 0) {
-      await act(async () => { fireEvent.click(refreshBtns[0]) })
+      await act(async () => {
+        fireEvent.click(refreshBtns[0])
+      })
       await waitFor(() => {
         expect(mockRun).toHaveBeenCalledTimes(1)
       })
@@ -169,11 +218,13 @@ describe('BenchmarkPage — metrics tab flow', () => {
 describe('BenchmarkPage — quality tab flow', () => {
   it('switches to quality tab and shows scores', async () => {
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(mockQuality).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(mockQuality).toHaveBeenCalled()
+    })
 
-    const qualityTab = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('quality')
-    )
+    const qualityTab = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('quality'))
     if (qualityTab) {
       fireEvent.click(qualityTab)
       await waitFor(() => {
@@ -186,11 +237,19 @@ describe('BenchmarkPage — quality tab flow', () => {
 describe('BenchmarkPage — responses tab flow', () => {
   it('switches to responses tab and loads history', async () => {
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(screen.getByText('Benchmark')).toBeTruthy() })
-
-    const responsesTab = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('response')
+    await waitFor(() => {
+      expect(screen.getByText('Benchmark')).toBeTruthy()
+    })
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('button').length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 },
     )
+
+    const responsesTab = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('response'))
     if (responsesTab) {
       fireEvent.click(responsesTab)
       await waitFor(() => {
@@ -201,11 +260,19 @@ describe('BenchmarkPage — responses tab flow', () => {
 
   it('shows logged responses after loading', async () => {
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(screen.getByText('Benchmark')).toBeTruthy() })
-
-    const responsesTab = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('response')
+    await waitFor(() => {
+      expect(screen.getByText('Benchmark')).toBeTruthy()
+    })
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('button').length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 },
     )
+
+    const responsesTab = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('response'))
     if (responsesTab) {
       fireEvent.click(responsesTab)
       await waitFor(() => {
@@ -219,11 +286,19 @@ describe('BenchmarkPage — responses tab flow', () => {
 describe('BenchmarkPage — perplexity tab flow', () => {
   it('switches to perplexity tab', async () => {
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(screen.getByText('Benchmark')).toBeTruthy() })
-
-    const pplxTab = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('perplexity')
+    await waitFor(() => {
+      expect(screen.getByText('Benchmark')).toBeTruthy()
+    })
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('button').length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 },
     )
+
+    const pplxTab = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('perplexity'))
     if (pplxTab) {
       fireEvent.click(pplxTab)
       await waitFor(() => {
@@ -267,20 +342,32 @@ describe('BenchmarkPage — clear history flow', () => {
   it('clear button clears responses', async () => {
     mockApiPost.mockResolvedValue({})
     render(<BenchmarkPage />)
-    await waitFor(() => { expect(screen.getByText('Benchmark')).toBeTruthy() })
-
-    const responsesTab = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('response')
+    await waitFor(() => {
+      expect(screen.getByText('Benchmark')).toBeTruthy()
+    })
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('button').length).toBeGreaterThan(0)
+      },
+      { timeout: 5000 },
     )
+
+    const responsesTab = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('response'))
     if (responsesTab) {
       fireEvent.click(responsesTab)
-      await waitFor(() => { expect(mockHistory).toHaveBeenCalled() })
+      await waitFor(() => {
+        expect(mockHistory).toHaveBeenCalled()
+      })
 
-      const clearBtn = screen.getAllByRole('button').find(b =>
-        b.textContent?.toLowerCase().includes('clear')
-      )
+      const clearBtn = screen
+        .getAllByRole('button')
+        .find((b) => b.textContent?.toLowerCase().includes('clear'))
       if (clearBtn) {
-        await act(async () => { fireEvent.click(clearBtn) })
+        await act(async () => {
+          fireEvent.click(clearBtn)
+        })
         await waitFor(() => {
           expect(mockApiPost).toHaveBeenCalled()
         })
