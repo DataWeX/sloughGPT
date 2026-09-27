@@ -71,6 +71,11 @@ describe('Sidebar', () => {
     expect(screen.getByText('app.console')).toBeDefined()
   })
 
+  it('renders the Man brand mark', () => {
+    render(<Sidebar />)
+    expect(screen.getByTestId('man-mark')).toHaveTextContent('M')
+  })
+
   it('hides nav labels and section labels when collapsed', () => {
     render(<Sidebar collapsed />)
     expect(screen.queryByText('nav.chat')).toBeNull()

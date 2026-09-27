@@ -1,9 +1,19 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+} from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { PageContainer } from '@/components/PageContainer'
+import { ManLockup } from '@/components/brand/ManMark'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
 import { AuthWorkspaceCard } from '@/components/auth/AuthWorkspaceCard'
 import { AuthTokenCard } from '@/components/auth/AuthTokenCard'
@@ -29,16 +39,23 @@ export default function AuthPage() {
 
   useEffect(() => {
     let cancelled = false
-    chatDB.getKV<string>('auth_token').then(saved => {
+    chatDB.getKV<string>('auth_token').then((saved) => {
       if (cancelled) return
       if (saved) {
         setToken(saved)
-        authController.getMe(saved)
-          .then(d => setCurrentUser(d))
+        authController
+          .getMe(saved)
+          .then((d) => setCurrentUser(d))
           .then(() => authController.getWorkspaces(saved!))
-          .then(ws => { if (!cancelled) setWorkspaces(ws) })
+          .then((ws) => {
+            if (!cancelled) setWorkspaces(ws)
+          })
           .catch(async () => {
-            try { await chatDB.deleteKV('auth_token') } catch { /* best-effort */ }
+            try {
+              await chatDB.deleteKV('auth_token')
+            } catch {
+              /* best-effort */
+            }
             setToken(null)
           })
           .finally(() => setChecking(false))
@@ -46,7 +63,9 @@ export default function AuthPage() {
         setChecking(false)
       }
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,9 +73,10 @@ export default function AuthPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = mode === 'login'
-        ? await authController.login(username, password)
-        : await authController.register(username, email, password)
+      const data =
+        mode === 'login'
+          ? await authController.login(username, password)
+          : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
       // Sync to zustand store
@@ -93,14 +113,26 @@ export default function AuthPage() {
           <StatCard label="Loading" value="..." />
           <StatCard label="Loading" value="..." />
         </KpiGrid>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        <Card><CardContent><div className="h-24 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card>
+          <CardContent>
+            <div className="h-32 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <div className="h-24 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }
 
   return (
-    <PageContainer title="Auth" subtitle={currentUser ? `Logged in as ${currentUser.username}` : 'Authentication'}>
+    <PageContainer
+      title="Auth"
+      subtitle={currentUser ? `Logged in as ${currentUser.username}` : 'Authentication'}
+    >
+      {!currentUser && <ManLockup />}
       <KpiGrid>
         <StatCard label="Status" value={currentUser ? 'Logged In' : 'Guest'} />
         <StatCard label="User" value={currentUser?.username ?? '—'} />
@@ -128,7 +160,9 @@ export default function AuthPage() {
                   <div className="text-sm font-mono font-medium truncate">{currentUser.id}</div>
                 </div>
               </div>
-              <Button size="sm" variant="outline" onClick={handleLogout}>Logout</Button>
+              <Button size="sm" variant="outline" onClick={handleLogout}>
+                Logout
+              </Button>
             </CardContent>
           </Card>
           <AuthSessionInfoCard token={token} user={currentUser} onLogout={handleLogout} />
@@ -145,7 +179,7 @@ export default function AuthPage() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <Input
                 value={username}
-                onChange={e => setUsername(e.target.value)}
+                onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
                 required
               />
@@ -153,7 +187,7 @@ export default function AuthPage() {
                 <Input
                   type="email"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email"
                   required
                 />
@@ -161,7 +195,7 @@ export default function AuthPage() {
               <Input
                 type="password"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
                 required
               />
@@ -173,7 +207,10 @@ export default function AuthPage() {
                 <button
                   type="button"
                   className="text-xs text-primary hover:text-primary/80"
-                  onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null) }}
+                  onClick={() => {
+                    setMode(mode === 'login' ? 'register' : 'login')
+                    setError(null)
+                  }}
                 >
                   {mode === 'login' ? 'Create account' : 'Already have an account?'}
                 </button>
@@ -192,7 +229,9 @@ export default function AuthPage() {
             <div className="space-y-2">
               <div className="rounded-md bg-muted/30 p-3">
                 <div className="text-xs text-muted-foreground mb-1">JWT Token</div>
-                <div className="text-[10px] font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
+                <div className="text-[10px] font-mono break-all text-muted-foreground">
+                  {token.slice(0, 60)}...
+                </div>
               </div>
               <Button
                 size="sm"

@@ -59,6 +59,9 @@ describe('RootLayout', () => {
   it('exports the platform metadata', () => {
     expect(metadata.title).toBe('Man - AI Platform')
     expect(metadata.icons).toEqual({ icon: '/favicon.svg' })
+    expect(metadata.description).toContain('personal AI')
+    expect(metadata.description).not.toContain('Enterprise-grade')
+    expect(metadata.manifest).toBe('/manifest.json')
   })
 
   it('exports a mobile-safe viewport', () => {

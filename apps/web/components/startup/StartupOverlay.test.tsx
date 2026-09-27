@@ -38,6 +38,12 @@ afterEach(() => {
 })
 
 describe('StartupOverlay', () => {
+  it('shows the Man brand mark', () => {
+    useLiveStatusMock.mockReturnValue(status())
+    render(<StartupOverlay />)
+    expect(screen.getByTestId('man-mark')).toHaveTextContent('M')
+  })
+
   it('shows indeterminate shimmer bar when stage is unknown', () => {
     useLiveStatusMock.mockReturnValue(status())
     const { container } = render(<StartupOverlay />)

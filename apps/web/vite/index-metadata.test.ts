@@ -19,6 +19,14 @@ describe('index.html ↔ document-meta parity', () => {
     expect(html).toContain(`name="description" content="${metadata.description}"`)
   })
 
+  it('manifest link matches metadata.manifest and manifest.json agrees', () => {
+    expect(html).toContain(`<link rel="manifest" href="${metadata.manifest}" />`)
+    const manifest = JSON.parse(readFileSync(join(webRoot, 'public', 'manifest.json'), 'utf-8'))
+    expect(manifest.name).toBe(metadata.title)
+    expect(manifest.short_name).toBe('Man')
+    expect(manifest.description).toBe(metadata.description)
+  })
+
   it('favicon matches icons.icon', () => {
     expect(html).toContain(`rel="icon" href="${metadata.icons.icon}"`)
   })

@@ -4,6 +4,7 @@ import Link from '@/vite/next-compat/link'
 import { usePathname } from '@/vite/next-compat/navigation'
 import { cn, Button } from '@sloughgpt/strui'
 import { IconClose } from '@/components/icons/NavIcons'
+import { ManMark } from '@/components/brand/ManMark'
 import { routeMatchesPath } from '@/lib/route-match'
 import { ThemeSwitcher } from './ThemeSwitcher'
 import { TrainingIndicator } from './TrainingIndicator'
@@ -23,7 +24,13 @@ export type SidebarProps = {
   onClose?: () => void
 }
 
-export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollapse: _onToggleCollapse, onNavigate, onClose }: SidebarProps) {
+export function Sidebar({
+  variant = 'desktop',
+  collapsed = false,
+  onToggleCollapse: _onToggleCollapse,
+  onNavigate,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname()
   const isDrawer = variant === 'drawer'
   const isCollapsed = collapsed && !isDrawer
@@ -45,9 +52,7 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
       <aside
         className={cn(
           'sl-sidebar-surface flex flex-col w-full min-w-0 overflow-hidden',
-          isDrawer
-            ? 'h-full pb-[max(0px,env(safe-area-inset-bottom))]'
-            : 'h-dvh',
+          isDrawer ? 'h-full pb-[max(0px,env(safe-area-inset-bottom))]' : 'h-dvh',
         )}
         data-collapsed={isCollapsed ? 'true' : undefined}
         aria-label="Main navigation"
@@ -69,12 +74,12 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
             aria-label={t('sidebar.home')}
             onClick={afterNav}
           >
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/60 font-mono text-[11px] font-bold leading-none tracking-tight text-primary-foreground shadow-sm">
-              S
-            </div>
+            <ManMark />
             {!isCollapsed && (
               <div className="flex min-w-0 flex-col justify-center gap-px leading-none">
-                <span className="truncate text-[11px] font-semibold tracking-tight text-foreground">{t('app.name')}</span>
+                <span className="truncate text-[11px] font-semibold tracking-tight text-foreground">
+                  {t('app.name')}
+                </span>
                 {!isDrawer && (
                   <span className="text-[8px] uppercase leading-tight tracking-wider text-muted-foreground/60">
                     {t('app.console')}
@@ -86,13 +91,15 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
         </div>
 
         <nav
-          className={cn(
-            'flex min-h-0 flex-1 flex-col',
-            isCollapsed ? 'w-fit p-2' : 'p-3',
-          )}
+          className={cn('flex min-h-0 flex-1 flex-col', isCollapsed ? 'w-fit p-2' : 'p-3')}
           aria-label="Primary"
         >
-          <div className={cn('min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide', isCollapsed && 'w-fit')}>
+          <div
+            className={cn(
+              'min-h-0 flex-1 overscroll-contain overflow-y-auto scrollbar-hide',
+              isCollapsed && 'w-fit',
+            )}
+          >
             {(() => {
               // Longest-prefix match so /workspace/members highlights Members, not Dashboard
               const allRoutes = NAV_SECTIONS.flatMap((s) => s.routes)
@@ -105,56 +112,64 @@ export function Sidebar({ variant = 'desktop', collapsed = false, onToggleCollap
                 }
               }
               return NAV_SECTIONS.map((section, si) => (
-              <div key={si}>
-                {si > 0 && (
-                  <div className="my-2 border-t border-border/30 dark:border-border/40" />
-                )}
-                {!isCollapsed && (
-                  <p className="mb-1 mt-2.5 px-2.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground/60 first:mt-0.5">
-                    {t(section.labelKey)}
-                  </p>
-                )}
-                <ul className="space-y-0.5">
-                  {section.routes.map((route) => {
-                    const active = route.path === bestPath
-                    const RouteIcon = SIDEBAR_ICONS[route.path]
-                    return (
-                      <li key={route.path}>
-                        <Link
-                          href={route.path}
-                          prefetch={false}
-                          aria-current={active ? 'page' : undefined}
-                          className={navLinkClass(active)}
-                          onClick={afterNav}
-                          title={isCollapsed ? t(route.labelKey) : undefined}
-                        >
-                          {RouteIcon && (
-                            <RouteIcon
-                              className={cn(NAV_ICON, active ? 'opacity-100' : 'opacity-90 dark:opacity-80')}
-                              aria-hidden
-                            />
-                          )}
-                          {!isCollapsed && (
-                            <span className="flex-1 truncate">{t(route.labelKey)}</span>
-                          )}
-                        </Link>
-                      </li>
-                    )
-                  })}
-                  {!isCollapsed && t('nav.section.ai') === t(section.labelKey) && (
-                    <li className="mt-0.5">
-                      <ConsciousnessSidebarWidget />
-                    </li>
+                <div key={si}>
+                  {si > 0 && (
+                    <div className="my-2 border-t border-border/30 dark:border-border/40" />
                   )}
-                </ul>
-              </div>
-            ))
+                  {!isCollapsed && (
+                    <p className="mb-1 mt-2.5 px-2.5 text-[9px] font-medium uppercase tracking-wider text-muted-foreground/60 first:mt-0.5">
+                      {t(section.labelKey)}
+                    </p>
+                  )}
+                  <ul className="space-y-0.5">
+                    {section.routes.map((route) => {
+                      const active = route.path === bestPath
+                      const RouteIcon = SIDEBAR_ICONS[route.path]
+                      return (
+                        <li key={route.path}>
+                          <Link
+                            href={route.path}
+                            prefetch={false}
+                            aria-current={active ? 'page' : undefined}
+                            className={navLinkClass(active)}
+                            onClick={afterNav}
+                            title={isCollapsed ? t(route.labelKey) : undefined}
+                          >
+                            {RouteIcon && (
+                              <RouteIcon
+                                className={cn(
+                                  NAV_ICON,
+                                  active ? 'opacity-100' : 'opacity-90 dark:opacity-80',
+                                )}
+                                aria-hidden
+                              />
+                            )}
+                            {!isCollapsed && (
+                              <span className="flex-1 truncate">{t(route.labelKey)}</span>
+                            )}
+                          </Link>
+                        </li>
+                      )
+                    })}
+                    {!isCollapsed && t('nav.section.ai') === t(section.labelKey) && (
+                      <li className="mt-0.5">
+                        <ConsciousnessSidebarWidget />
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              ))
             })()}
           </div>
         </nav>
 
         {!isDrawer && (
-          <div className={cn('shrink-0 border-t border-border/50 px-2.5 py-2.5', isCollapsed && 'w-fit')}>
+          <div
+            className={cn(
+              'shrink-0 border-t border-border/50 px-2.5 py-2.5',
+              isCollapsed && 'w-fit',
+            )}
+          >
             {!isCollapsed && <TrainingIndicator />}
             <ThemeSwitcher />
           </div>
