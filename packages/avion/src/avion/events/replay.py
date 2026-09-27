@@ -11,8 +11,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from arken.core.element import ElementLocator
-from arken.events.models import Event, EventType
+from avion.core.element import ElementLocator
+from avion.events.models import Event, EventType
 
 
 def parse_locator(description: str) -> ElementLocator | None:

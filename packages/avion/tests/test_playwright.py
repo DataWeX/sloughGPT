@@ -7,10 +7,10 @@ the real browser path Arken drives in production.
 import asyncio
 
 import pytest
-from arken import Arken, ElementLocator
-from arken.backends.playwright import PlaywrightBackend
-from arken.network import MockResponse, MockRule, NetworkMocker
-from arken.tabs import TabManager
+from avion import Arken, ElementLocator
+from avion.backends.playwright import PlaywrightBackend
+from avion.network import MockResponse, MockRule, NetworkMocker
+from avion.tabs import TabManager
 
 pytestmark = pytest.mark.skipif(
     __import__("importlib").util.find_spec("playwright") is None,
@@ -40,7 +40,7 @@ class TestLiveBasics:
         run(main())
 
     def test_run_task_live(self):
-        from arken.core.task import Task, TaskStep
+        from avion.core.task import Task, TaskStep
 
         async def main():
             async with Arken(headless=True) as a:

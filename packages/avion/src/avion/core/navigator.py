@@ -11,7 +11,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from arken.core.element import Backend, ElementFinder, ElementLocator
+from avion.core.element import Backend, ElementFinder, ElementLocator
 
 
 @dataclass

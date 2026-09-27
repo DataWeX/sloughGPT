@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from arken.core.element import Element, ElementLocator, SelectorStrategy
+from avion.core.element import Element, ElementLocator, SelectorStrategy
 
 
 def _appium():
