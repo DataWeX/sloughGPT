@@ -18,7 +18,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.api._internal.sse_envelope import sse_complete, sse_error, sse_event
+from domain.api import sse_complete, sse_error, sse_event
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -85,7 +85,7 @@ class AgentsRouter:
 
     def _get_system(self):
         """Get the agent system singleton."""
-        from domain.agents._internal.system import get_agent_system
+        from domain.agents import get_agent_system
 
         return get_agent_system()
 
@@ -221,8 +221,7 @@ class AgentsRouter:
             Streams plan → per-level task execution → composition → complete.
             Uses async HTTP for non-blocking inference calls.
             """
-            from domain.agents._internal.multi import MultiAgentOrchestrator
-            from domain.agents._internal.run_history import get_agent_run_store
+            from domain.agents import MultiAgentOrchestrator, get_agent_run_store
 
             store = get_agent_run_store()
 
@@ -409,7 +408,7 @@ class AgentsRouter:
     @endpoint("agents.list_runs")
     async def list_runs(self, limit: int = 20) -> dict:
         """List orchestration run history, newest first."""
-        from domain.agents._internal.run_history import get_agent_run_store
+        from domain.agents import get_agent_run_store
 
         runs = await asyncio.to_thread(
             get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200))
@@ -419,7 +418,7 @@ class AgentsRouter:
     @endpoint("agents.get_run")
     async def get_run(self, run_id: str) -> dict:
         """Return a single orchestration run record."""
-        from domain.agents._internal.run_history import get_agent_run_store
+        from domain.agents import get_agent_run_store
 
         record = await asyncio.to_thread(get_agent_run_store().get, run_id)
         if record is None:

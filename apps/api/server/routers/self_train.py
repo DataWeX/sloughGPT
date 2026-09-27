@@ -21,7 +21,7 @@ from schemas.common import (
     success_response,
 )
 
-from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure import AppError
 
 logger = logging.getLogger("slo.api.self_train")
 

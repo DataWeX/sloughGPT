@@ -412,6 +412,11 @@ def get_training_executor() -> TrainingExecutor:
         return _instance
 
 
+def peek_training_executor() -> TrainingExecutor | None:
+    """Return the global TrainingExecutor singleton if it exists, without creating it."""
+    return _instance
+
+
 # ── Checkpoint Compression ──────────────────────────────────────────────
 
 

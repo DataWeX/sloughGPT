@@ -14,6 +14,19 @@ Public API:
     get_consciousness, reset_consciousness
 """
 
+
+def __getattr__(name):
+    _lazy = {
+        "ConsciousnessTrainer": "domain.cognition._internal.consciousness.training",
+        "TrainingConfig": "domain.cognition._internal.consciousness.training",
+    }
+    if name in _lazy:
+        import importlib
+
+        return getattr(importlib.import_module(_lazy[name]), name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 from domain.cognition._internal.base import (
     CognitiveDomain,
     CognitiveException,

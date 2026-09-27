@@ -189,7 +189,7 @@ class TestExecuteAgent:
 
         system = MagicMock()
         system.execute = AsyncMock(return_value={"response": "Hello!", "success": True})
-        with patch("domain.agents._internal.system.get_agent_system", return_value=system):
+        with patch("domain.agents.get_agent_system", return_value=system):
             yield system
 
     def test_execute_calls_system(self, _mock_system):

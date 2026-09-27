@@ -556,8 +556,8 @@ class ModelsRouter:
         if server_state.model is None:
             raise_error("No model loaded", code="E_NOT_FOUND")
         try:
-            from domain.training._internal.export import ExportConfig
-            from domain.training._internal.export import export_model as do_export
+            from domain.training import ExportConfig
+            from domain.training import export_model as do_export
 
             config = ExportConfig(
                 input_path="current",
@@ -592,7 +592,7 @@ class ModelsRouter:
     @endpoint("models.get_export_formats")
     async def get_export_formats(self) -> dict:
         """Get list of supported export formats."""
-        from domain.training._internal.export import list_export_formats
+        from domain.training import list_export_formats
 
         return success_response(data=list_export_formats())
 
@@ -1354,7 +1354,7 @@ class ModelsRouter:
                 raise_error(f"mode must be symmetric or asymmetric, got {mode}", "E_BAD_REQUEST")
 
             # Find the active provider (try SloNet first, then HuggingFace)
-            from domain.models._internal.provider import get_provider
+            from domain.models import get_provider
 
             provider = get_provider("slonet")
             model_type = "slonet"
@@ -1465,7 +1465,7 @@ class ModelsRouter:
         Returns:
             Status report with number of layers reset.
         """
-        from domain.models._internal.provider import get_provider
+        from domain.models import get_provider
 
         provider = get_provider("slonet")
         model_type = "slonet"
@@ -1541,7 +1541,7 @@ class ModelsRouter:
             """
             import numpy as np
 
-            from domain.slolib._internal.gpu import get_accelerator, set_accelerator_precision
+            from domain.slolib import get_accelerator, set_accelerator_precision
 
             acc = get_accelerator()
             acc_mode = req.mode
@@ -1564,7 +1564,7 @@ class ModelsRouter:
 
                 # If int8/int4 selected, apply quantization
                 if suggestion["format"] in ("int8", "int4"):
-                    from domain.models._internal.provider import get_provider
+                    from domain.models import get_provider
 
                     provider = get_provider("slonet") or get_provider("hf-default")
                     if provider is not None:
@@ -1763,7 +1763,7 @@ class ModelsRouter:
         """
         import state as server_state
 
-        from domain.models._internal.provider import get_provider, list_providers
+        from domain.models import get_provider, list_providers
 
         providers = {}
         for name in list_providers():

@@ -1,7 +1,8 @@
+import { apiBase } from '../support/api-base'
 describe('Teach me page', () => {
   beforeEach(() => {
     cy.mockAll()
-    cy.intercept('GET', 'http://localhost:8000/datasets', {
+    cy.intercept('GET', `${apiBase}/datasets`, {
       statusCode: 200,
       body: {
         datasets: [
@@ -26,14 +27,18 @@ describe('Teach me page', () => {
   })
 
   it('accepts pasted text input', () => {
-    cy.contains('button', 'Show advanced settings').click()
-    cy.contains('button', /^Paste text$/).click()
-    cy.get('textarea[aria-label="Training text input"]').should('exist').type('This is test training data.')
-    cy.get('textarea[aria-label="Training text input"]').should('have.value', 'This is test training data.')
+    cy.contains('button', 'Next: Configure').click()
+    cy.contains('button', 'Paste text').click()
+    cy.get('textarea[aria-label="Training text input"]')
+      .should('exist')
+      .type('This is test training data.')
+    cy.get('textarea[aria-label="Training text input"]').should(
+      'have.value',
+      'This is test training data.',
+    )
   })
 
-  it('shows the trained models card on the history tab', () => {
-    cy.contains('button', 'History').click()
-    cy.contains('Trained models').scrollIntoView().should('be.visible')
+  it('shows the training history card', () => {
+    cy.contains('Training History').scrollIntoView().should('be.visible')
   })
 })

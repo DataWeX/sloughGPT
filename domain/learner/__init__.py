@@ -1,7 +1,7 @@
 """learner — Continual learner (ingests data, fine-tunes incrementally).
 
 Public API:
-    ContinualLearner, get_learner, extract_and_store
+    ContinualLearner, get_learner, extract_and_store, enrich_with_knowledge
 """
 
 from domain.learner._internal.continual import (

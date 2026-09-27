@@ -67,7 +67,7 @@ class LoraEvalRouter:
         try:
             import time as _time
 
-            from domain.feedback._internal.lora_eval import get_lora_evaluator
+            from domain.feedback import get_lora_evaluator
 
             evaluator = get_lora_evaluator()
             adapter_file = adapter_path
@@ -135,7 +135,7 @@ class LoraEvalRouter:
             - reads from LoRAEvaluator history
         """
         try:
-            from domain.feedback._internal.lora_eval import get_lora_evaluator
+            from domain.feedback import get_lora_evaluator
 
             evaluator = get_lora_evaluator()
             results = evaluator.get_history(limit=limit)
@@ -159,7 +159,7 @@ class LoraEvalRouter:
         then runs LoRAEvaluator before/after to measure quality delta.
         """
         try:
-            from domain.feedback._internal.per_user_lora import get_per_user_lora
+            from domain.feedback import get_per_user_lora
 
             store = get_per_user_lora()
             result = store.aggregate_best_adapters(

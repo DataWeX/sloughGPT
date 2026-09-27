@@ -574,7 +574,12 @@ describe('VMPage', () => {
         expect.objectContaining({ role: 'user' }),
       )
     })
-    expect(screen.getAllByText('halted').length).toBeGreaterThanOrEqual(1)
+    await waitFor(
+      () => {
+        expect(screen.getAllByText('halted').length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('launch training respects the selected role', async () => {

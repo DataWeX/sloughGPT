@@ -1,7 +1,9 @@
 """Tests for apps/cli/src/commands/dev.py — dev server and health commands."""
 
+import io
 import json
 import os
+import signal
 import sys
 from contextlib import ExitStack
 from unittest.mock import MagicMock, patch
@@ -300,8 +302,41 @@ class TestCleanup:
         """_cleanup should not crash when api_proc or web_proc is None."""
         from commands.dev import _cleanup
 
-        with patch("commands.dev._kill_port"):
+        with patch("commands.dev._kill_port") as kp:
             _cleanup(None, None, 8000, 3000)
+        kp.assert_not_called()  # nothing was spawned → no port is ours to kill
+
+    def test_cleanup_never_kills_reused_api_port(self):
+        """api_proc=None means a reused (foreign) API — its port stays."""
+        from commands.dev import _cleanup
+
+        mock_web_proc = MagicMock()
+        mock_web_proc.poll.return_value = None
+        with patch("commands.dev._kill_port") as kp:
+            _cleanup(None, mock_web_proc, 8000, 3000)
+        mock_web_proc.terminate.assert_called_once()
+        kp.assert_called_once_with(3000)
+
+    def test_cleanup_never_kills_reused_web_port(self):
+        """web_proc=None means a reused (foreign) web — its port stays."""
+        from commands.dev import _cleanup
+
+        mock_api_proc = MagicMock()
+        mock_api_proc.poll.return_value = None
+        with patch("commands.dev._kill_port") as kp:
+            _cleanup(mock_api_proc, None, 8000, 3000)
+        mock_api_proc.terminate.assert_called_once()
+        kp.assert_called_once_with(8000)
+
+    def test_cleanup_kills_both_ports_it_spawned(self):
+        """Both procs spawned → both ports freed (stragglers incl.)."""
+        from commands.dev import _cleanup
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        with patch("commands.dev._kill_port") as kp:
+            _cleanup(mock_proc, mock_proc, 8000, 3000)
+        assert [c.args for c in kp.call_args_list] == [(8000,), (3000,)]
 
     def test_cleanup_with_api_proc_none(self):
         """_cleanup should handle api_proc=None and a valid web_proc."""
@@ -754,3 +789,112 @@ class TestCmdDevFailureReporting:
         )
         kv = [c[0] for c in mock_log.key_value.call_args_list]
         assert ("web", "port 4591 in use") in kv, f"no web remediation: {kv}"
+
+
+class TestApiOnlySignalHandling:
+    """_cmd_api_only must own its spawned API on every exit path."""
+
+    @staticmethod
+    def _args():
+        args = MagicMock()
+        args.host = "localhost"
+        args.port = 8000
+        args.model = None
+        return args
+
+    @staticmethod
+    def _mock_proc():
+        proc = MagicMock()
+        proc.stdout = io.StringIO("")
+        proc.poll.return_value = None
+        return proc
+
+    @staticmethod
+    def _ctx():
+        return [
+            patch("commands.dev._check_api_ready", return_value=False),
+            patch("commands.dev._is_port_bound", return_value=False),
+            patch("commands.dev.find_server_python", return_value="/usr/bin/python3"),
+            patch("commands.dev.subprocess"),
+            patch("commands.dev._kill_port"),
+            patch("commands.dev.time"),
+        ]
+
+    def test_startup_timeout_terminates_spawned_api(self, mock_log, monkeypatch):
+        """Budget exhausted → the spawned uvicorn is terminated, port freed."""
+        import time as real_time
+
+        import commands.dev as mod
+        from commands.dev import _cmd_api_only
+
+        proc = self._mock_proc()
+        monkeypatch.setattr(mod, "API_STARTUP_TIMEOUT", 2)
+
+        with ExitStack() as stack:
+            subs, kp, t = (stack.enter_context(c) for c in self._ctx()[3:])
+            for c in self._ctx()[:3]:
+                stack.enter_context(c)
+            subs.Popen.return_value = proc
+            t.sleep.side_effect = lambda s: real_time.sleep(0.005)
+            _cmd_api_only(self._args())
+
+        proc.terminate.assert_called_once(), "startup timeout leaked the spawned API"
+        kp.assert_called_once_with(8000)
+
+    def test_startup_sigint_terminates_spawned_api(self, mock_log, monkeypatch):
+        """A SIGINT during the wait loop runs the registered handler's cleanup."""
+        import os
+        import time as real_time
+
+        import commands.dev as mod
+        from commands.dev import _cmd_api_only
+
+        proc = self._mock_proc()
+        monkeypatch.setattr(mod, "API_STARTUP_TIMEOUT", 10)
+        ready_calls = {"n": 0}
+
+        def ready(port):
+            ready_calls["n"] += 1
+            if ready_calls["n"] == 2:
+                # first call is the reuse probe; this one is inside the wait loop
+                os.kill(os.getpid(), signal.SIGINT)
+            return False
+
+        old_int = signal.getsignal(signal.SIGINT)
+        old_term = signal.getsignal(signal.SIGTERM)
+        try:
+            with ExitStack() as stack:
+                stack.enter_context(patch("commands.dev._check_api_ready", side_effect=ready))
+                for c in self._ctx()[1:3]:
+                    stack.enter_context(c)
+                subs, kp, t = (stack.enter_context(c) for c in self._ctx()[3:])
+                subs.Popen.return_value = proc
+                t.sleep.side_effect = lambda s: real_time.sleep(0.005)
+                _cmd_api_only(self._args())
+        finally:
+            signal.signal(signal.SIGINT, old_int)
+            signal.signal(signal.SIGTERM, old_term)
+
+        assert ready_calls["n"] >= 2, "wait loop never ran"
+        proc.terminate.assert_called_once(), "SIGINT during wait leaked the spawned API"
+        kp.assert_called_once_with(8000)
+
+    def test_signal_registration_precedes_spawn_in_every_variant(self):
+        """Registration must sit before the first spawn in every serve/dev path:
+        an interrupt in the gap escapes to main() as a bare "Interrupted" and
+        orphans the children."""
+        import commands.dev as mod
+
+        src = open(mod.__file__).read()
+        for fn in ("cmd_dev", "_cmd_api_only", "_cmd_api_and_mobile"):
+            part = src.split(f"def {fn}(", 1)[1]
+            nxt = part.find("\ndef ")
+            body = part[: nxt if nxt != -1 else len(part)]
+            reg = body.find("signal.signal(signal.SIGINT")
+            spawn = body.find("subprocess.Popen")
+            assert reg != -1, f"{fn}: no SIGINT registration found"
+            assert spawn != -1, f"{fn}: no subprocess.Popen found"
+            assert reg < spawn, (
+                f"{fn}: SIGINT registered after spawn — an interrupt in the gap "
+                "orphan-leaks the children"
+            )

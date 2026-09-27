@@ -36,9 +36,67 @@ for P in $API_P $WEB_P; do
 done
 ok "ports $API_P + $WEB_P free"
 
+MODE="${1:-success}"
+CLEAN=$LOG_DIR/journey_serve.clean
+
 # Fresh build path every run (stale .next would skip the npx build step)
 rm -rf apps/web/.next
 rm -f "$LOG" "$NPMLOG"
+
+if [ "$MODE" = "buildfail" ]; then
+  # ── Negative path: build fails → CLI exits AND must not leak the API ──
+  # Plain setsid (no `script` pty): script's exit SIGHUPs the process group
+  # and would mask the leak by killing the orphaned uvicorn for us.
+  FAKE_NPX_FAIL=1 FAKE_NPX_DELAY=20 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
+    setsid ./sloughgpt serve --port $API_P --web --web-port $WEB_P --host localhost \
+    > "$LOG" 2>&1 < /dev/null &
+  SPID=$!
+
+  CLI_PID=""
+  DEAD=""
+  for i in $(seq 1 30); do
+    if [ -z "$CLI_PID" ]; then
+      CLI_PID=$(pgrep -f "cli.py .*--web-port $WEB_P" | head -1 || true)
+    elif ! kill -0 "$CLI_PID" 2>/dev/null; then
+      DEAD=$i; break
+    fi
+    sleep 1
+  done
+  if [ -n "$DEAD" ]; then ok "cli exited after build failure (${DEAD}s)"
+  else bad "cli still alive 30s after build failure"; fi
+
+  sed 's/\x1b\[[0-9;]*[A-Za-z]//g' "$LOG" > "$CLEAN"
+  if grep -q "Next.js build failed" "$CLEAN"; then ok "build failure reported"
+  else bad "no build-failure message in log"; fi
+
+  # Leak check: a leaked uvicorn finishes importing and binds ~10s in —
+  # watch the API port for 15s after CLI exit.
+  C="CLOSED"
+  for i in $(seq 1 15); do
+    C=$(port_state "$API_P")
+    [ "$C" = "OPEN" ] && break
+    sleep 1
+  done
+  if [ "$C" = "CLOSED" ]; then ok "api port not leaked (closed for 15s after exit)"
+  else bad "LEAK: api port $API_P open after build failure"; fi
+  LEFT=$(pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" || true)
+  if [ -z "$LEFT" ]; then ok "no orphan uvicorn"
+  else kill -9 $LEFT 2>/dev/null; bad "orphan uvicorn: $LEFT"; fi
+
+  if grep -A8 "Traceback" "$CLEAN" | grep -q "cli.py\|commands/dev.py"; then
+    bad "CLI traceback in log"
+    grep -A8 "Traceback" "$CLEAN" | head -8 | sed 's/^/  | /'
+  else ok "no CLI traceback"; fi
+
+  kill -TERM "$SPID" 2>/dev/null
+  sleep 1
+  LEFT=$(pgrep -f "cli.py .*--web-port $WEB_P" || true)
+  if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "leftover cli"; fi
+  rm -f "$CLEAN"
+  echo "RESULT[serve-buildfail]: $([ $FAIL -eq 0 ] && echo ALL PASS || echo FAILURES)"
+  exit $FAIL
+fi
+
 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
   setsid script -qec "./sloughgpt serve --port $API_P --web --web-port $WEB_P --host localhost" /dev/null \
   > "$LOG" 2>&1 < /dev/null &

@@ -59,7 +59,7 @@ class StatusRouter:
 
         # Check inference engine
         try:
-            from domain.inference._internal.native.engine import get_engine
+            from domain.inference import get_engine
 
             engine = get_engine()
             checks["inference"] = engine is not None

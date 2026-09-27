@@ -107,8 +107,7 @@ async def run_assembly(
     t0 = time.monotonic()
 
     try:
-        from domain.shell._internal.vm import InsFault, MemFault, X86VirtualSystem
-        from domain.shell._internal.vm_permissions import Role
+        from domain.shell import InsFault, MemFault, Role, X86VirtualSystem
     except ImportError as e:
         raise_error(f"VM module not available: {e}", "E_BAD_REQUEST", status_code=503)
 
@@ -340,7 +339,7 @@ async def training_job_status(job_id: str) -> dict:
     except ValueError:
         raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
     try:
-        from domain.shell._internal.vm_training_bridge import get_bridge
+        from domain.shell import get_bridge
     except ImportError as e:
         raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
 
@@ -374,7 +373,7 @@ async def training_job_stop(
     except ValueError:
         raise_error("Training job not found", "E_NOT_FOUND", status_code=404)
     try:
-        from domain.shell._internal.vm_training_bridge import get_bridge
+        from domain.shell import get_bridge
     except ImportError as e:
         raise_error(f"VM training bridge unavailable: {e}", "E_BAD_REQUEST", status_code=503)
 

@@ -1,8 +1,9 @@
+import { apiBase } from '../support/api-base'
 /**
  * Datasets page - import, list, export, delete datasets
  */
 
-const API = 'http://localhost:8000'
+const API = `${apiBase}`
 
 describe('Datasets page', () => {
   beforeEach(() => {
@@ -11,11 +12,11 @@ describe('Datasets page', () => {
   })
 
   it('renders the page header', () => {
-    cy.contains('h1', 'Datasets').should('be.visible')
+    cy.contains('h1', 'My Files').should('be.visible')
   })
 
-  it('shows Import button', () => {
-    cy.contains('button', /^Import$/).should('be.visible')
+  it('shows Add file button', () => {
+    cy.contains('button', /^Add file$/).should('be.visible')
   })
 
   it('shows Refresh button', () => {
@@ -23,14 +24,16 @@ describe('Datasets page', () => {
   })
 
   it('shows empty state when no datasets', () => {
-    cy.contains('No datasets yet').should('be.visible')
-    cy.contains('button', 'Import Dataset').should('be.visible')
+    cy.contains('No files yet').should('be.visible')
+    cy.contains('button', 'Add file').should('be.visible')
   })
 
   it('opens the Import Dataset modal', () => {
-    cy.contains('button', /^Import$/).click()
+    cy.contains('button', /^Add file$/)
+      .first()
+      .click()
     cy.contains('Import Dataset').should('be.visible')
-    cy.get('input[placeholder="Dataset name (optional)"]').should('exist')
+    cy.get('input[placeholder="my-dataset"]').should('exist')
   })
 })
 
@@ -38,12 +41,14 @@ describe('Dataset Import Modal', () => {
   beforeEach(() => {
     cy.mockAll()
     cy.visit('/datasets')
-    cy.contains('button', /^Import$/).click()
+    cy.contains('button', /^Add file$/)
+      .first()
+      .click()
   })
 
-  it('defaults to Local Path source', () => {
-    cy.get('[role="dialog"]').contains('button', 'Local Path').should('be.visible')
-    cy.get('input[placeholder="/path/to/dataset/folder"]').should('be.visible')
+  it('defaults to GitHub source', () => {
+    cy.get('[role="radio"][aria-checked="true"]').should('contain', 'GitHub')
+    cy.get('#github-search').should('be.visible')
   })
 
   it('shows all source tabs', () => {
@@ -53,8 +58,9 @@ describe('Dataset Import Modal', () => {
   })
 
   it('switches to GitHub source', () => {
-    cy.get('[role="dialog"]').contains('button', 'GitHub').click()
-    cy.get('input[placeholder="https://github.com/user/repo"]').should('be.visible')
+    cy.get('[role="radio"][aria-label^="HuggingFace:"]').click()
+    cy.get('[role="radio"][aria-label^="GitHub:"]').click()
+    cy.get('#github-search').should('be.visible')
   })
 
   it('switches to HuggingFace source', () => {
@@ -63,12 +69,17 @@ describe('Dataset Import Modal', () => {
   })
 
   it('switches to URL source', () => {
-    cy.get('[role="dialog"]').contains('button', 'URL').click()
+    cy.get('[role="radio"][aria-label^="URL:"]').click()
     cy.get('input[placeholder="https://example.com/data.txt"]').should('be.visible')
   })
 
+  it('switches to Folder Path source', () => {
+    cy.get('[role="radio"][aria-label^="Folder Path:"]').click()
+    cy.get('input[placeholder="/Users/mac/sloughGPT/datasets/my_data"]').should('be.visible')
+  })
+
   it('shows dataset name input', () => {
-    cy.get('input[placeholder="Dataset name (optional)"]').should('be.visible')
+    cy.get('#name').scrollIntoView().should('be.visible')
   })
 
   it('has an Import action', () => {
