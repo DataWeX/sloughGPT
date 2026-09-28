@@ -37,6 +37,9 @@ except Exception:
 try:
     from infrastructure.middleware import ReadinessGateMiddleware as _RGM
 
+    if not hasattr(_RGM, "_ORIGINAL_DISPATCH"):
+        _RGM._ORIGINAL_DISPATCH = _RGM.dispatch
+
     async def _noop_readiness(self, request, call_next):
         return await call_next(request)
 

@@ -48,6 +48,7 @@ def model_not_ready():
     from unittest.mock import patch
 
     import state as server_state
+    from infrastructure.middleware import ReadinessGateMiddleware as _RGM
     from startup_progress import STARTUP_PHASE
 
     from domain.infrastructure.server_state import get_server_state
@@ -57,6 +58,9 @@ def model_not_ready():
     saved_provider = server_state.provider
     saved_phase = STARTUP_PHASE["phase"]
     saved_core_model = core_state.model.get()
+    saved_dispatch = _RGM.dispatch
+    if hasattr(_RGM, "_ORIGINAL_DISPATCH"):
+        _RGM.dispatch = _RGM._ORIGINAL_DISPATCH
 
     server_state.model = None
     server_state.provider = None
@@ -79,6 +83,7 @@ def model_not_ready():
     finally:
         status_patch.stop()
         gate_patch.stop()
+        _RGM.dispatch = saved_dispatch
         server_state.model = saved_model
         server_state.provider = saved_provider
         core_state.model.set(saved_core_model)
