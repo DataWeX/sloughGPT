@@ -50,6 +50,9 @@ own persistent-block-device filesystem that resets with the session.
 | `cat <file>`                            | Print a file                      |
 | `cp <src> <dst>`                        | Copy a file (truncates dst)       |
 | `grep <pattern> <file>`                 | Search a file for matching lines  |
+| `wc <file>`                             | Count lines, words, bytes         |
+| `head <file> [n]`                       | First n lines (default 10)        |
+| `tail <file> [n]`                       | Last n lines (default 10)         |
 | `write <file> <text>`                   | Create/overwrite a file with text |
 | `echo <text>`                           | Print text; `echo <text> > <file>` writes the file (create/truncate) instead |
 | `uname`                                 | Kernel name/version               |
@@ -63,8 +66,8 @@ Line editing is client-side: Up/Down recall history, Backspace sends `0x0E`. If 
 connection drops, the error banner's **Reconnect** button re-subscribes the same
 session — the server re-sends the full scrollback as backlog (sequence-deduplicated),
 so the session filesystem and history survive; only **Restart** (a new session)
-resets them. The kernel has no `>` redirect (the keyboard path has no shift state) — use
-`write`/`cp` instead; `rm`/`mv` await `SYS_UNLINK` in the VM. Unknown input replies with
+resets them. `echo <text> > <file>` writes files (the keyboard path preserves printable
+shift symbols); `rm`/`mv` await `SYS_UNLINK` in the VM. Unknown input replies with
 the usage/unknown banner. Latency and throughput baselines come from
 `scripts/benchmark_vm_shell.py`.
 

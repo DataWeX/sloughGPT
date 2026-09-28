@@ -495,7 +495,7 @@ def _shell() -> str:
 prompt: db 10, "sloughvm> ", 0
 msg_nl: db 10, 0
 msg_sp: db " ", 0
-msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
+msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, wc <file>, head <file> [n], tail <file> [n], uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
 msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
 msg_unknown: db "unknown command - type help", 10, 0
 msg_clear: db 27, "[2J", 27, "[H", 0
@@ -514,6 +514,15 @@ msg_cp_fail: db "cp: cannot create file", 10, 0
 msg_grep_usage: db "usage: grep <pattern> <file>", 10, 0
 msg_echo_usage: db "usage: echo <text> > <file>", 10, 0
 msg_grep_no_file: db "grep: no such file", 10, 0
+msg_wc_usage: db "usage: wc <file>", 10, 0
+msg_wc_no_file: db "wc: no such file", 10, 0
+msg_head_usage: db "usage: head <file> [n]", 10, 0
+msg_head_no_file: db "head: no such file", 10, 0
+msg_tail_usage: db "usage: tail <file> [n]", 10, 0
+msg_tail_no_file: db "tail: no such file", 10, 0
+msg_wcl: db " lines, ", 0
+msg_wcw: db " words, ", 0
+msg_wcb: db " bytes", 10, 0
 msg_train_started: db "started job ", 0
 msg_train_fail: db "train: could not start job", 10, 0
 msg_denied: db "permission denied (ADMIN role required)", 10, 0
@@ -538,11 +547,15 @@ cmd_write: db "write", 0
 cmd_train: db "train", 0
 cmd_train_status: db "train-status", 0
 cmd_train_result: db "train-result", 0
+cmd_wc: db "wc", 0
+cmd_head: db "head", 0
+cmd_tail: db "tail", 0
 chbuf: times 4 db 0
 llen: times 1 db 0
 line: times 80 db 0
 dirents: times 320 db 0
 catbuf: times 201 db 0
+ntmp: times 4 db 0
 unamebuf: times 325 db 0
 catfd: times 4 db 0
 grep_ptr: times 4 db 0
@@ -678,6 +691,21 @@ line_done:
     call prefix_match
     test eax, eax
     jnz do_echo
+    mov esi, line
+    mov edi, cmd_wc
+    call prefix_match
+    test eax, eax
+    jnz do_wc
+    mov esi, line
+    mov edi, cmd_head
+    call prefix_match
+    test eax, eax
+    jnz do_head
+    mov esi, line
+    mov edi, cmd_tail
+    call prefix_match
+    test eax, eax
+    jnz do_tail
     mov esi, msg_unknown
     call print_str
     jmp repl
@@ -897,6 +925,400 @@ cat_missing:
     jmp repl
 cat_read_err:
     mov esi, msg_no_file
+    call print_str
+    jmp repl
+; parse_n — optional [n] argument after a tokenized filename.
+; EDI = rest-of-line pointer (already past the filename's NUL).
+; Returns EAX=1 with ECX=n (default 10), or EAX=0 → caller prints usage.
+parse_n:
+    mov ecx, 10
+pn_lsp:
+    mov al, [edi]
+    cmp al, ' '
+    jne pn_pre
+    inc edi
+    jmp pn_lsp
+pn_pre:
+    test al, al
+    jz pn_ok
+    cmp al, '0'
+    jb pn_fail
+    cmp al, '9'
+    ja pn_fail
+    xor ecx, ecx
+    mov edx, 10
+pn_loop:
+    mov al, [edi]
+    cmp al, '0'
+    jb pn_end
+    cmp al, '9'
+    ja pn_fail
+    sub al, '0'
+    xor ebx, ebx
+    mov bl, al
+    mov eax, ecx
+    imul eax, edx
+    mov ecx, eax
+    add ecx, ebx
+    inc edi
+    jmp pn_loop
+pn_end:
+pn_esp:
+    mov al, [edi]
+    cmp al, ' '
+    jne pn_echk
+    inc edi
+    jmp pn_esp
+pn_echk:
+    test al, al
+    jz pn_ok
+pn_fail:
+    xor eax, eax
+    ret
+pn_ok:
+    mov eax, 1
+    ret
+do_wc:
+    mov esi, line
+    add esi, 2
+    mov al, [esi]
+    test al, al
+    jz wc_usage
+    cmp al, ' '
+    jne do_unknown
+wc_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je wc_skip
+    test al, al
+    jz wc_usage
+    mov edi, esi
+wc_tok:
+    mov al, [edi]
+    test al, al
+    jz wc_rest
+    cmp al, ' '
+    je wc_tok_sp
+    inc edi
+    jmp wc_tok
+wc_tok_sp:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+wc_rest:
+    mov al, [edi]
+    test al, al
+    jz wc_open
+    cmp al, ' '
+    jne wc_usage
+wc_rsp:
+    inc edi
+    mov al, [edi]
+    test al, al
+    jz wc_open
+    cmp al, ' '
+    je wc_rsp
+    jmp wc_usage
+wc_open:
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl wc_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl wc_readerr
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al           ; NUL at hard end (buffer is 201)
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov esi, edi            ; ESI = hard end (survives int 0x80)
+    mov edi, catbuf
+wc_fend:
+    cmp edi, esi
+    jge wc_fend_ok
+    mov al, [edi]
+    test al, al
+    jz wc_fend_ok
+    inc edi
+    jmp wc_fend
+wc_fend_ok:
+    mov esi, edi            ; ESI = logical end (first NUL, sector padding excluded)
+    mov edi, catbuf
+    xor ebx, ebx            ; lines
+    xor ecx, ecx            ; words
+    xor edx, edx            ; bytes
+    mov ebp, 1              ; previous byte was whitespace (start of file counts)
+wc_loop:
+    cmp edi, esi
+    jge wc_out
+    mov al, [edi]
+    inc edx
+    cmp al, 10
+    je wc_nl
+    cmp al, ' '
+    je wc_sp
+    test ebp, ebp
+    jz wc_nxt
+    inc ecx
+    xor ebp, ebp
+    jmp wc_nxt
+wc_sp:
+    mov ebp, 1
+    jmp wc_nxt
+wc_nl:
+    inc ebx
+    mov ebp, 1
+wc_nxt:
+    inc edi
+    jmp wc_loop
+wc_out:
+    mov eax, ebx
+    call print_num
+    mov esi, msg_wcl
+    call print_str
+    mov eax, ecx
+    call print_num
+    mov esi, msg_wcw
+    call print_str
+    mov eax, edx
+    call print_num
+    mov esi, msg_wcb
+    call print_str
+    jmp repl
+wc_readerr:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+wc_missing:
+    mov esi, msg_wc_no_file
+    call print_str
+    jmp repl
+wc_usage:
+    mov esi, msg_wc_usage
+    call print_str
+    jmp repl
+do_head:
+    mov esi, line
+    add esi, 4
+    mov al, [esi]
+    test al, al
+    jz head_usage
+    cmp al, ' '
+    jne do_unknown
+head_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je head_skip
+    test al, al
+    jz head_usage
+    mov edi, esi
+head_tok:
+    mov al, [edi]
+    test al, al
+    jz head_rest
+    cmp al, ' '
+    je head_tok_sp
+    inc edi
+    jmp head_tok
+head_tok_sp:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+head_rest:
+    call parse_n
+    test eax, eax
+    jz head_usage
+    mov [ntmp], ecx
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl head_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl head_readerr
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ecx, [ntmp]
+    test ecx, ecx
+    jz head_noop            ; head <file> 0 prints nothing
+    mov esi, catbuf
+head_scan:
+    cmp esi, edi
+    jge head_hard
+    mov al, [esi]
+    test al, al
+    jz head_hard
+    cmp al, 10
+    jne head_snx
+    dec ecx
+    jz head_found
+head_snx:
+    inc esi
+    jmp head_scan
+head_found:
+    inc esi                 ; stop after the nth newline
+head_hard:
+    xor eax, eax
+    mov [esi], al
+    mov esi, catbuf
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+head_noop:
+    jmp repl
+head_readerr:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+head_missing:
+    mov esi, msg_head_no_file
+    call print_str
+    jmp repl
+head_usage:
+    mov esi, msg_head_usage
+    call print_str
+    jmp repl
+do_tail:
+    mov esi, line
+    add esi, 4
+    mov al, [esi]
+    test al, al
+    jz tail_usage
+    cmp al, ' '
+    jne do_unknown
+tail_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je tail_skip
+    test al, al
+    jz tail_usage
+    mov edi, esi
+tail_tok:
+    mov al, [edi]
+    test al, al
+    jz tail_rest
+    cmp al, ' '
+    je tail_tok_sp
+    inc edi
+    jmp tail_tok
+tail_tok_sp:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+tail_rest:
+    call parse_n
+    test eax, eax
+    jz tail_usage
+    mov [ntmp], ecx
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl tail_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl tail_readerr
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ebx, catbuf         ; scan bound (EBX free after close)
+    mov esi, catbuf
+tail_fend:
+    cmp esi, edi
+    jge tail_fe
+    mov al, [esi]
+    test al, al
+    jz tail_fe
+    inc esi
+    jmp tail_fend
+tail_fe:
+    mov ecx, [ntmp]
+    test ecx, ecx
+    jz tail_noop            ; tail <file> 0 prints nothing
+    cmp esi, ebx
+    jle tail_noop           ; empty file
+    mov edi, esi
+    dec edi
+    mov al, [edi]
+    cmp al, 10
+    je tail_bset            ; exclude the file's trailing newline
+    inc edi
+tail_bset:
+tail_lp:
+    cmp edi, ebx
+    jle tail_from0
+    dec edi
+    mov al, [edi]
+    cmp al, 10
+    jne tail_lp
+    dec ecx
+    jnz tail_lp
+    inc edi
+    jmp tail_pr
+tail_from0:
+    mov edi, catbuf         ; fewer newlines than n — whole file
+tail_pr:
+    xor eax, eax
+    mov [esi], al           ; NUL at logical end (ESI = L, kept through the scan)
+    mov esi, edi
+    call print_str
+    mov esi, msg_nl
+    call print_str
+    jmp repl
+tail_noop:
+    jmp repl
+tail_readerr:
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+tail_missing:
+    mov esi, msg_tail_no_file
+    call print_str
+    jmp repl
+tail_usage:
+    mov esi, msg_tail_usage
     call print_str
     jmp repl
 do_unknown:

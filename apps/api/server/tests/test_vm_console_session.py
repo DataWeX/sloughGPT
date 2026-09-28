@@ -113,7 +113,7 @@ class TestShellKernel:
         text = "".join(out)
         assert "sloughvm>" in text
         assert (
-            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, wc <file>, head <file> [n], tail <file> [n], uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 
@@ -406,6 +406,98 @@ class TestShellKernel:
         check("echo hi >\n", "usage: echo <text> > <file>")
         check("echo hi > f.txt extra\n", "usage: echo <text> > <file>")
 
+    def test_shell_wc_head_tail(self):
+        """REPL wc/head/tail count and slice files; usage + missing-file paths."""
+        from vm_builtins import get_builtin
+
+        from domain.shell._internal.vm import X86VirtualSystem
+        from domain.shell._internal.vm_permissions import Role
+
+        vs = X86VirtualSystem(memory_size=0x100000)
+        pid = vs.spawn("web_user", get_builtin("shell"))
+        assert pid is not None
+        vs._syscall._rbac.assign(pid, Role.USER)
+        vs.scheduler.start(vs.cpu)
+        vs.scheduler.current.restore_to_cpu(vs.cpu)
+
+        out: list[str] = []
+        original = vs._syscall._sys_write
+
+        def capture(fd, addr, count):
+            if fd in (1, 2):
+                out.append(
+                    bytes(vs.cpu._read8(addr + i) for i in range(count)).decode("ascii", "replace")
+                )
+                return count
+            return original(fd, addr, count)
+
+        vs._syscall._sys_write = capture
+
+        def feed(text: str) -> None:
+            for ch in text:
+                vs.cpu.push_key(ch)
+
+        def run_steps(n: int) -> bool:
+            for _ in range(n):
+                vs.cpu.transfer_key()
+                if not vs.cpu.step():
+                    return True
+            return False
+
+        def check(cmd: str, expect: str) -> None:
+            out.clear()
+            feed(cmd)
+            assert not run_steps(60000), f"unexpected halt running {cmd!r}"
+            text = "".join(out)
+            assert expect in text, f"{cmd!r} -> {text!r}"
+
+        data = b"alpha beta\ngamma delta epsilon\n\nomega\n"
+        vs._fs.write("lines.txt", data)
+        nlines = data.count(b"\n")
+        nwords = len(data.split())
+        nbytes = len(data)
+
+        # wc counts logical bytes — FlatFS sector padding must not count.
+        check("wc lines.txt\n", f"{nlines} lines, {nwords} words, {nbytes} bytes")
+
+        # head: default 10 (file has 4 lines), explicit n, n=1.
+        check("head lines.txt\n", data.decode())
+        check("head lines.txt 2\n", "alpha beta\ngamma delta epsilon\n")
+        check("head lines.txt 1\n", "alpha beta\n")
+
+        # tail: last line, last two (crossing the blank line), default.
+        check("tail lines.txt 1\n", "omega\n")
+        check("tail lines.txt 2\n", "\nomega\n")
+        check("tail lines.txt\n", data.decode())
+
+        # wc over an echo-redirect file (12 bytes, one line, two words).
+        out.clear()
+        feed("echo hello world > hw.txt\n")
+        assert not run_steps(60000)
+        check("wc hw.txt\n", "1 lines, 2 words, 12 bytes")
+
+        # Empty file → all zeros.
+        vs._fs.write("empty.txt", b"")
+        check("wc empty.txt\n", "0 lines, 0 words, 0 bytes")
+
+        # head/tail 0 print nothing after the command.
+        out.clear()
+        feed("head lines.txt 0\n")
+        assert not run_steps(60000)
+        text = "".join(out)
+        assert "alpha" not in text.rsplit("sloughvm> ", 1)[-1], text
+
+        # Missing files, usage, and unknown-command paths.
+        check("wc nope.txt\n", "wc: no such file")
+        check("wc\n", "usage: wc <file>")
+        check("wc lines.txt x\n", "usage: wc <file>")
+        check("head nope.txt\n", "head: no such file")
+        check("head lines.txt x\n", "usage: head <file> [n]")
+        check("tail nope.txt\n", "tail: no such file")
+        check("tail\n", "usage: tail <file> [n]")
+        check("wcz lines.txt\n", "unknown command")
+        check("headshot\n", "unknown command")
+
     def test_shell_train_commands(self, monkeypatch):
         """REPL train/train-status/train-result with a fake training bridge."""
         from vm_builtins import get_builtin
@@ -530,7 +622,7 @@ class TestVMConsoleHTTP:
 
             text = _wait_history(session_id, "commands:")
             assert (
-                "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
+                "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, wc <file>, head <file> [n], tail <file> [n], uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
                 in text
             )
 
@@ -640,7 +732,7 @@ class TestVMConsoleStream:
         await console_session_input(session_id, VMConsoleInputRequest(text="help\n"), auth_user={})
         text = await self._read_output(it, lambda t: "commands:" in t)
         assert (
-            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, wc <file>, head <file> [n], tail <file> [n], uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 
