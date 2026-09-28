@@ -18,6 +18,9 @@ const LOCAL_HDA_URL = '/buildroot/buildroot.img'
 const LOCAL_KERNEL_URL = '/buildroot/bzimage68.bin'
 const REMOTE_KERNEL_URL = 'https://i.copy.sh/buildroot-bzimage68.bin'
 const LOCAL_ISO_URL = '/buildroot/buildroot.iso'
+// Hosted open-source boot CD (MikeOS, 3.3 MB, CORS-open i.copy.sh CDN) —
+// fallback until buildroot produces a local ISO. ISOs are read-only media.
+const REMOTE_ISO_URL = 'https://i.copy.sh/mikeos.iso'
 const BIOS_URL = '/bios/seabios.bin'
 const VGA_BIOS_URL = '/bios/vgabios.bin'
 const WASM_PATH = '/v86/v86.wasm'
@@ -34,7 +37,7 @@ export type V86BootMedia = 'auto' | V86ImageKind
 export const IMAGE_URLS: Record<V86ImageKind, readonly string[]> = {
   hda: [LOCAL_HDA_URL],
   kernel: [LOCAL_KERNEL_URL, REMOTE_KERNEL_URL],
-  iso: [LOCAL_ISO_URL],
+  iso: [LOCAL_ISO_URL, REMOTE_ISO_URL],
 }
 
 interface ProbeResult {
