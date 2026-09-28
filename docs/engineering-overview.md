@@ -138,17 +138,17 @@ React Native 0.86. 32 screens, 32 services.
 
 ### 5. Gateway (`apps/gateway/`)
 
-Rust/Axum reverse proxy (`slough-gateway`). Standalone it binds `:8080`;
-in the dev cascade it binds the inner port `:8081` behind the node socket
-relay (`scripts/edge-proxy.mjs`, `:8080` — a dumb byte pipe so the CDP
-harness can own the public port while Rust owns all policy).
+Rust/Axum reverse proxy (`slough-gateway`) — **the** edge, bound to
+`:8080`. No proxy in front of it: the gateway itself owns the public
+socket, CORS, and every transport policy. (`scripts/edge-proxy.mjs` is an
+optional harness socket only — not part of the serving topology.)
 
-**Cascade, each layer with one job:**
+**Three hops, each with one job:**
 
 ```
-browser ─► edge-proxy :8080 ─► slough-gateway :8081 ─► FastAPI :8000 ─► domain/ + infrastructure/
-           socket relay,        filters, health,        routers, envelope,
-           CORS preflight       compression             error taxonomy
+browser ─► slough-gateway :8080 ─► FastAPI :8000 ─► domain/ + infrastructure/
+           CORS, filters, health,   routers, envelope,
+           compression              error taxonomy
 ```
 
 **Edge owns compression — one encoder, one hop, no double-encode.** The relay
@@ -271,7 +271,7 @@ cd apps/gateway && cargo run                # Gateway :8080 (MAN_GATEWAY_PORT to
 
 # Or one shot (API + Web; opt-in edge):
 ./scripts/dev-stack.sh
-MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh    # + gateway → API (MAN_GATEWAY_PORT=8081 if edge-proxy holds :8080)
+MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh    # + gateway :8080 → API
 
 # CLI
 pip install -e .

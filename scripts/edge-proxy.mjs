@@ -1,10 +1,9 @@
 import http from 'node:http'
-// Edge socket relay — browser/harness → :8080 (here) → slough-gateway → core.
+// OPTIONAL harness socket relay — NOT part of the serving topology.
+// slough-gateway owns :8080 directly (policy, CORS, compression, health);
+// this dumb byte pipe exists only for harnesses that want to hold a port
+// themselves: EDGE_PORT=8080 TARGET_PORT=<gateway> node scripts/edge-proxy.mjs
 // Ported from ~/.cache/opencode-cdp/edge-proxy.mjs (repo-owned now).
-//
-// This process is a dumb byte pipe: CORS preflight answers, header override,
-// forward, pipe back. All policy (compression, health contract, path filters,
-// timeouts) lives in the Rust gateway behind it — TARGET_PORT points there.
 const TARGET = {
   host: '127.0.0.1',
   port: Number(process.env.TARGET_PORT || 8081),
