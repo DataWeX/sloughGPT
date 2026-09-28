@@ -5771,6 +5771,13 @@ def _char_to_scancode(char: str) -> int:
     return _CHAR_TO_SCANCODE.get(char.lower(), -1)
 
 
+# Tag for buffer entries that carry plain ASCII instead of a real scancode.
+# US shift symbols ('>', '%', ...) have no unshifted set-1 mapping; the kernel
+# stdin consumes ASCII at [0x400] only, so printable chars without a scancode
+# are queued tagged rather than silently dropped.
+_KBD_ASCII_TAG = 0x10000
+
+
 def _scancode_to_char(sc: int) -> str:
     """Convert a PS/2 set-1 make scancode to character. Returns 0 if unknown."""
     if 0 <= sc < len(_SCANDATA):
@@ -5786,6 +5793,10 @@ def _default_kbd_handler(cpu):
     """Default IRQ1 handler: reads scancode from buffer, stores ASCII in [0x400]."""
     if cpu._kbd_buffer:
         sc = cpu._kbd_buffer.pop(0)
+        if sc & _KBD_ASCII_TAG:
+            cpu._mem[0x400] = sc & 0xFF
+            cpu._mem[0x401] = 0
+            return
         ch = _scancode_to_char(sc)
         if ch and ch != "\0":
             cpu._mem[0x400] = ord(ch)  # keyboard buffer at 0x400
@@ -5862,6 +5873,10 @@ class X86CPU:
         scancode = _char_to_scancode(char)
         if scancode >= 0:
             self._kbd_buffer.append(scancode)
+        elif len(char) == 1 and 0x20 <= ord(char) <= 0x7E:
+            # Printable ASCII without a set-1 scancode (US shift symbols like
+            # '>', '%') — queue it tagged so it still reaches [0x400].
+            self._kbd_buffer.append(_KBD_ASCII_TAG | ord(char))
 
     def push_scancode(self, scancode: int):
         """Push a raw PS/2 scancode into the keyboard buffer. Does NOT fire IRQ."""
@@ -5874,6 +5889,10 @@ class X86CPU:
         """
         if self._mem[0x400] == 0 and self._kbd_buffer:
             sc = self._kbd_buffer.pop(0)
+            if sc & _KBD_ASCII_TAG:
+                self._mem[0x400] = sc & 0xFF
+                self._mem[0x401] = 0
+                return
             ch = _scancode_to_char(sc)
             if ch and ch != "\0":
                 self._mem[0x400] = ord(ch)
