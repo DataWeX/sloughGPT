@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
+import { ManMark } from '@/components/brand/ManMark'
 import { logStateEvent } from '@/lib/state-events'
 import { cn } from '@/lib/utils'
 
@@ -117,9 +118,7 @@ export function StartupOverlay() {
     >
       {/* Logo */}
       <div className="mb-8">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0a7aff] to-[#5856d6] flex items-center justify-center shadow-lg shadow-[#0a7aff]/20">
-          <span className="text-white font-bold text-lg">S</span>
-        </div>
+        <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
       </div>
 
       {/* Stage label */}

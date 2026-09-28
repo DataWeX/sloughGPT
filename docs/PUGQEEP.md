@@ -81,8 +81,9 @@ model_tree.load_weights(model.state_dict(), num_workers=4)
 weight = model_tree.get_weight("blocks.0.attn.c_attn.weight")
 
 # Process management
-future = engine.submit(my_fn, arg1, arg2)
-result = future.result(timeout=10.0)
+proc = engine.spawn(my_fn, arg1, arg2)
+engine.wait_for(proc.id, timeout=10.0)
+result = proc.result
 ```
 
 ## Point interface
@@ -403,11 +404,11 @@ except Exception as e:
 
 ```bash
 # All pugqeep tests
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep*.py tests/test_producer_consumer.py -v
+PYTHONPATH=. python3 -m pytest packages/core-py/tests/test_pugqeep*.py packages/core-py/tests/test_producer_consumer.py -v
 
 # Specific suites
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep_point_interface.py -v  # Point protocol + views
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep_parallel.py -v         # Parallel batch ops
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep_producer_consumer.py -v # Integration tests
-PYTHONPATH=. python3 -m pytest tests/test_producer_consumer.py -v         # Queue unit tests
+PYTHONPATH=. python3 -m pytest packages/core-py/tests/test_pugqeep_point_interface.py -v  # Point protocol + views
+PYTHONPATH=. python3 -m pytest packages/core-py/tests/test_pugqeep_parallel.py -v         # Parallel batch ops
+PYTHONPATH=. python3 -m pytest packages/core-py/tests/test_pugqeep_producer_consumer.py -v # Integration tests
+PYTHONPATH=. python3 -m pytest packages/core-py/tests/test_producer_consumer.py -v         # Queue unit tests
 ```

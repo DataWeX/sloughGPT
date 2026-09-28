@@ -3,6 +3,7 @@
 import asyncio
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock
 
 import numpy as np
@@ -142,7 +143,7 @@ class TestGenerate:
     async def test_generate_returns_string(self, server):
         result = await server.generate("hello")
         assert isinstance(result, str)
-        assert result == "hello world"
+        assert result == "world"
 
     async def test_generate_passes_prompt(self, server):
         await server.generate("test prompt")
@@ -172,7 +173,7 @@ class TestGenerate:
     async def test_generate_queue_full_isolation(self, server):
         tasks = [server.generate("hello") for _ in range(2)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        assert all(r == "hello world" for r in results)
+        assert all(r == "world" for r in results)
 
     async def test_generate_timeout(self, mock_model, mock_tokenizer):
         def _slow(*a, **kw):
@@ -293,6 +294,32 @@ class TestGenerate:
         cancel.set()
         with pytest.raises(asyncio.CancelledError, match="cancelled before start"):
             await server.generate("hello", cancel_event=cancel)
+
+    async def test_generate_timeout_runs_on_dedicated_bulkhead_executor(
+        self, mock_model, mock_tokenizer, monkeypatch
+    ):
+        seen: dict = {}
+
+        def _slow(*a, **kw):
+            seen["thread"] = threading.current_thread()
+            time.sleep(1.5)
+            return "done"
+
+        s = SloNetServer(mock_model, mock_tokenizer, generate_timeout=0.1, enable_warmup=False)
+        monkeypatch.setattr(s, "_generate_sync", _slow)
+        with pytest.raises(TimeoutError, match="timed out after"):
+            await s.generate("hello")
+        assert seen["thread"].name.startswith("slonet-gen")
+
+        loop = asyncio.get_running_loop()
+        old = getattr(loop, "_default_executor", None)
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+        try:
+            probe = await asyncio.wait_for(asyncio.to_thread(lambda: 42), timeout=0.8)
+        finally:
+            if old is not None:
+                loop.set_default_executor(old)
+        assert probe == 42
 
 
 # ---------------------------------------------------------------------------
@@ -423,22 +450,12 @@ class TestGenerateStream:
 
         def _slow_gen(*a, **kw):
             yield "tok"
-            block.wait()
+            block.wait(timeout=10)
 
         server._generate_stream_sync = _slow_gen
-
-        real_wait_for = asyncio.wait_for
-        state = {"calls": 0}
-
-        async def _fake_wait_for(aw, timeout):
-            state["calls"] += 1
-            if state["calls"] == 1:
-                await asyncio.sleep(0.05)
-                aw.close()
-                raise TimeoutError()
-            return await real_wait_for(aw, timeout)
-
-        monkeypatch.setattr(asyncio, "wait_for", _fake_wait_for)
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02
+        )
 
         results = []
 
@@ -447,11 +464,61 @@ class TestGenerateStream:
                 results.append(t)
 
         task = asyncio.create_task(_consume())
-        await asyncio.sleep(0.05)
-        assert state["calls"] >= 1
+        await asyncio.sleep(0.07)
+        assert not task.done()
         block.set()
         await asyncio.wait_for(task, timeout=5)
         assert results == ["tok"]
+
+    async def test_stream_deadline_raises_timeout(self, mock_model, mock_tokenizer, monkeypatch):
+        hang = threading.Event()
+
+        def _hang(*a, **kw):
+            hang.wait(timeout=2)
+            yield np.int64(1)
+
+        mock_model.generate_numpy_stream.return_value = _hang()
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02
+        )
+        s = SloNetServer(mock_model, mock_tokenizer, generate_timeout=0.1, enable_warmup=False)
+        cancel = threading.Event()
+
+        async def _consume():
+            async for _t in s.generate_stream("hi", cancel_event=cancel):
+                pass
+
+        with pytest.raises(TimeoutError, match="timed out after"):
+            await asyncio.wait_for(_consume(), timeout=5)
+        assert cancel.is_set()
+        assert s.get_metrics()["requests_timed_out"] >= 1
+
+    async def test_stream_timeout_leaves_default_executor_free(
+        self, mock_model, mock_tokenizer, monkeypatch
+    ):
+        hang = threading.Event()
+
+        def _hang(*a, **kw):
+            hang.wait(timeout=2)
+            yield np.int64(1)
+
+        mock_model.generate_numpy_stream.return_value = _hang()
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.slonet_server.STREAM_POLL_S", 0.02
+        )
+        s = SloNetServer(mock_model, mock_tokenizer, generate_timeout=0.1, enable_warmup=False)
+        loop = asyncio.get_running_loop()
+        old = getattr(loop, "_default_executor", None)
+        loop.set_default_executor(ThreadPoolExecutor(max_workers=1))
+        try:
+            with pytest.raises(TimeoutError, match="timed out after"):
+                async for _t in s.generate_stream("hi"):
+                    pass
+            probe = await asyncio.wait_for(asyncio.to_thread(lambda: 7), timeout=0.8)
+        finally:
+            if old is not None:
+                loop.set_default_executor(old)
+        assert probe == 7
 
 
 # ---------------------------------------------------------------------------
@@ -693,7 +760,9 @@ class TestPoolMode:
         factory.return_value = model
         tokenizer = MagicMock()
         tokenizer.encode.return_value = [10, 20, 30]
-        tokenizer.decode.return_value = "pool result"
+        tokenizer.decode.side_effect = (
+            lambda ids: "hello" if list(ids) == [10, 20, 30] else "hello pool result"
+        )
         tokenizer.eos_token_id = 0
 
         s = SloNetServer(
@@ -816,6 +885,9 @@ class TestProcessGuardDelegation:
         self, mock_model, mock_tokenizer
     ):
         dead = _FakeGuard(alive=False)
+        mock_tokenizer.decode.side_effect = (
+            lambda ids: "hi" if list(ids) == [10, 20, 30] else "hi hello world"
+        )
         srv = SloNetServer(
             model=mock_model,
             tokenizer=mock_tokenizer,

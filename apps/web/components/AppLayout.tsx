@@ -25,6 +25,7 @@ import { WhatsNewDialog } from '@/components/WhatsNewDialog'
 import { initLiveStatus } from '@/hooks/useLiveStatus'
 import { ConvSidebarProvider, useConvSidebar } from '@/features/chat/contexts/ConvSidebarContext'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
+import { useLocale } from '@/hooks/useLocale'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -36,6 +37,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
 function AppLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const { t } = useLocale()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [portalMounted, setPortalMounted] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
@@ -147,7 +149,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
           href="/"
           className="min-w-0 truncate text-[11px] font-semibold tracking-tight text-foreground hover:text-primary transition-colors"
         >
-          sloughGPT
+          {t('app.name')}
         </Link>
       </header>
 
@@ -230,7 +232,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             >
               <span className="sr-only">Main navigation</span>
               <span className="sr-only">
-                Primary navigation for the sloughGPT console. Choose a section or close this panel.
+                Primary navigation for the Man console. Choose a section or close this panel.
               </span>
               <Sidebar variant="drawer" onClose={closeMobileNav} onNavigate={closeMobileNav} />
             </div>

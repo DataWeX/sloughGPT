@@ -31,6 +31,7 @@ export default defineConfig({
       'components/**/*.test.{ts,tsx}',
       'app/**/*.test.{ts,tsx}',
       'features/**/*.test.{ts,tsx}',
+      'vite/**/*.test.ts',
     ],
     passWithNoTests: true,
     exclude: ['app/(app)/model/[id]/ModelDetailPage.test.tsx'],

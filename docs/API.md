@@ -6,17 +6,28 @@ are no simulated, in-memory, or local-only API methods.
 
 ## Response Envelope
 
-Most routers wrap responses in a `StandardResponse` envelope:
+Two sanctioned response styles; both are enforced by
+`tests/contract/test_api_envelope.py`:
+
+**1. Envelope (default).** Most endpoints wrap responses in `StandardResponse`
+via `success_response()`:
 
 ```json
 { "status": "success", "data": { ... } }
 ```
 
-List-returning endpoints put the array inside `data` (e.g. `/registry/models` →
-`data: { "models": [...], "count": N }`, `/knowledge` → `data: { "items": [...], "count": N }`).
+List-returning enveloped endpoints put the array inside `data` (e.g.
+`/registry/models` → `data: { "models": [...], "count": N }`).
 
-All SDK client methods unwrap this envelope automatically, so callers receive the
-payload, not the envelope. Bare responses (non-enveloped lists/dicts) pass through unchanged.
+**2. Typed.** A route registered with `response_model=X` returns the bare typed
+payload — `GET /knowledge` → `list[KnowledgeItemOut]`, `POST /shell/exec` →
+`ShellExecResponse`, `POST /inference/generate` → `InferResponse`. The type is
+the contract (declared in OpenAPI).
+
+All SDK client methods unwrap the envelope automatically, so callers receive
+the payload either way: enveloped responses unwrap to `data`, typed responses
+pass through unchanged (`http-client.ts` unwraps iff `status` and `data` are
+both present). An endpoint must not mix the two styles.
 
 ## Shared Core Contract (one system image)
 
@@ -77,8 +88,17 @@ lines `data: {json}` with no `event:` name, framed per `domain/api` SSE envelope
 
 Structured errors via `classify_and_raise(e, source="router.method")`:
 `E_INFRA_STARTUP` (503), `E_NOT_FOUND` (404), `E_DOMAIN` (422/400), `E_AUTH`
-(401/403), plus envelope `{ "status": "error", "error": { "code", "message", "source", ... } }`.
-Contract tests in `tests/contract/` pin these shapes; the executor/`/system/*` read-model
+(401/403). The error body is **flat** (built by `schemas.common.error_response()`,
+the single source of truth) — it is *not* wrapped in a `status`/`data` envelope:
+
+```json
+{ "error": "human message", "code": "E_NOT_FOUND", "details": { ... }, "correlation_id": "..." }
+```
+
+`details` and `correlation_id` are present when available (`correlation_id`
+comes from `CorrelationIdMiddleware`). Clients read `j.error` / `j.code` /
+`j.correlation_id` (`apps/web/lib/http-client.ts`). Shapes are pinned by
+`tests/contract/test_api_envelope.py`; the executor/`/system/*` read-model
 is covered by `tests/server/test_system_router.py`.
 
 ## Python SDK (`packages/sdk-py`)
@@ -140,7 +160,7 @@ client-side registry state.
 
 ## Endpoint Coverage
 
-The backend exposes **412 routes across 43 routers** (`apps/api/server/routers`).
+The backend exposes **617 routes across 56 routers** (`apps/api/server/routers`).
 The SDK covers the primary consumer-facing surface; the complete server-side route
 list is documented in [`docs/routers.md`](routers.md).
 

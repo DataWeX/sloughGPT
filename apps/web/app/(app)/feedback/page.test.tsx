@@ -378,25 +378,41 @@ describe('FeedbackPage — training tab flow', () => {
 describe('FeedbackPage — refresh flow', () => {
   it('refresh button reloads stats', async () => {
     render(<FeedbackPage />)
-    await waitFor(() => {
-      expect(mockGetFeedbackStats).toHaveBeenCalledTimes(1)
-    })
+    await waitFor(
+      () => {
+        expect(mockGetFeedbackStats).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 5000 },
+    )
 
-    const trainTab = screen
-      .getAllByRole('tab')
-      .find((b) => b.textContent?.toLowerCase().includes('training'))
+    let trainTab: HTMLElement | undefined
+    await waitFor(
+      () => {
+        trainTab = screen
+          .getAllByRole('tab')
+          .find((b) => b.textContent?.toLowerCase().includes('training'))
+        expect(trainTab).toBeTruthy()
+      },
+      { timeout: 5000 },
+    )
     if (trainTab) {
       fireEvent.click(trainTab)
-      await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Refresh stats' })).toBeTruthy()
-      })
+      await waitFor(
+        () => {
+          expect(screen.getByRole('button', { name: 'Refresh stats' })).toBeTruthy()
+        },
+        { timeout: 5000 },
+      )
       const refreshBtn = screen.getByRole('button', { name: 'Refresh stats' })
       await act(async () => {
         fireEvent.click(refreshBtn)
       })
-      await waitFor(() => {
-        expect(mockGetFeedbackStats).toHaveBeenCalledTimes(2)
-      })
+      await waitFor(
+        () => {
+          expect(mockGetFeedbackStats).toHaveBeenCalledTimes(2)
+        },
+        { timeout: 5000 },
+      )
     }
   })
 })

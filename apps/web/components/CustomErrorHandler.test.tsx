@@ -26,7 +26,9 @@ function createError(message: string, name = 'Error'): Error & { digest?: string
 describe('CustomErrorHandler', () => {
   const reset = vi.fn()
 
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
   afterEach(cleanup)
 
   it('renders error message', () => {
@@ -37,6 +39,11 @@ describe('CustomErrorHandler', () => {
   it('shows "Something went wrong" for generic errors', () => {
     render(<CustomErrorHandler error={createError('test error')} reset={reset} />)
     expect(screen.getByText('Something went wrong')).toBeDefined()
+  })
+
+  it('shows the Man brand footer', () => {
+    render(<CustomErrorHandler error={createError('test error')} reset={reset} />)
+    expect(screen.getByText('Man - AI Platform')).toBeDefined()
   })
 
   it('shows "Connection Error" for network errors', () => {
@@ -85,6 +92,8 @@ describe('CustomErrorHandler', () => {
     render(<CustomErrorHandler error={createError('test')} reset={reset} />)
     fireEvent.click(screen.getByText('Details'))
     fireEvent.click(screen.getByText('Copy'))
-    await waitFor(() => { expect(writeText).toHaveBeenCalled() })
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalled()
+    })
   })
 })

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chargectl"
+version = "0.1.0"
+description = "Zero-dependency Linux battery charge reader, overcharge control, and longevity advice."
+readme = "README.md"
+license = "MIT"
+authors = [{name = "sloughGPT"}]
+requires-python = ">=3.10"
+keywords = ["battery", "charge", "sysfs", "power", "overcharge", "linux"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Hardware",
+]
+dependencies = []
+
+[project.scripts]
+chargectl = "chargectl.cli:entry"
+
+[tool.setuptools.packages.find]
+where = ["src"]

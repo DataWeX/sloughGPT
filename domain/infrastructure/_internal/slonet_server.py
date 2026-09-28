@@ -15,6 +15,8 @@ import numpy as np
 from .constants import DEFAULT_GENERATE_TIMEOUT
 from .model_server import CircuitBreaker, ModelMetrics
 
+STREAM_POLL_S = 30.0
+
 logger = logging.getLogger("slo.infrastructure.slonet_server")
 
 # Stop-marker truncation — defense-in-depth beyond token-id stop.
@@ -85,6 +87,10 @@ class SloNetServer:
         self._warmup_prompt = warmup_prompt
         self._provider = provider
         self._max_workers = max_workers
+
+        self._gen_executor = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="slonet-gen"
+        )
 
         self._read_semaphores: dict[int, asyncio.Semaphore] = {}
         self._max_readers = max_workers * 4
@@ -305,9 +311,9 @@ class SloNetServer:
                 repetition_penalty=repetition_penalty,
             )
             full = result.get("text", "")
-            # Worker returns full decode (prompt+gen) — strip prompt echo before truncating.
-            if prompt and prompt in full:
-                full = full.split(prompt)[-1]
+            # Worker may return full decode (prompt+gen) — strip a real prefix echo only.
+            if prompt and full.startswith(prompt):
+                full = full[len(prompt) :]
             text = _truncate_at_stop_markers(full).strip()
             logger.debug(
                 "generate_sync",
@@ -350,14 +356,14 @@ class SloNetServer:
                         text = ""
                 else:
                     text = self._tokenizer.decode(result[0].tolist())
-                    # Strip prompt echo if present
-                    if prompt and prompt in text:
-                        text = text.split(prompt)[-1].strip()
+                    # Strip prompt echo only when the decode actually starts with it.
+                    if prompt and text.startswith(prompt):
+                        text = text[len(prompt) :].strip()
                     else:
                         try:
                             pt = self._tokenizer.decode(tokens)
-                            if pt and pt in text:
-                                text = text.split(pt)[-1].strip()
+                            if pt and text.startswith(pt):
+                                text = text[len(pt) :].strip()
                         except Exception:
                             pass
                 text = _truncate_at_stop_markers(text).strip()
@@ -515,8 +521,10 @@ class SloNetServer:
 
         start = time.monotonic()
         try:
+            loop = asyncio.get_running_loop()
             result = await asyncio.wait_for(
-                asyncio.to_thread(
+                loop.run_in_executor(
+                    self._gen_executor,
                     self._generate_sync,
                     prompt,
                     max_new_tokens,
@@ -598,12 +606,31 @@ class SloNetServer:
         _timeout_count = 0
         try:
             while True:
-                try:
-                    token = await asyncio.wait_for(
-                        asyncio.to_thread(q_buf.get),
-                        timeout=30.0,
+                remaining = (start + self._generate_timeout) - time.monotonic()
+                if remaining <= 0:
+                    _timeout_count += 1
+                    elapsed = time.monotonic() - start
+                    logger.warning(
+                        "STREAM_CONSUMER: deadline hit after %.1fs, pump_alive=%s, tokens=%d, session=%s",
+                        elapsed,
+                        pump_thread.is_alive(),
+                        tokens,
+                        session_id,
                     )
-                except TimeoutError:
+                    if cancel_event:
+                        cancel_event.set()
+                    with self._metrics_lock:
+                        self._metrics.record_timeout()
+                    if self._circuit_breaker:
+                        self._circuit_breaker.record_failure()
+                    raise TimeoutError(
+                        f"SloNet generation timed out after {self._generate_timeout}s"
+                    ) from None
+                try:
+                    token = await asyncio.to_thread(
+                        q_buf.get, True, min(STREAM_POLL_S, remaining)
+                    )
+                except queue.Empty:
                     _timeout_count += 1
                     elapsed = time.monotonic() - start
                     logger.warning(
@@ -633,7 +660,7 @@ class SloNetServer:
                         raise RuntimeError(
                             f"SloNet stream error: {exc}"
                         ) from None  # pragma: no cover
-                    continue  # pragma: no cover
+                    continue
 
                 if token is sentinel:
                     if not err_q.empty():

@@ -10,32 +10,61 @@ vi.mock('@sloughgpt/strui', () => {
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     CardContent: passthrough,
     Button: ({ children, onClick, disabled, className, 'aria-label': ariaLabel }: any) => (
-      <button onClick={onClick} disabled={disabled} className={className} aria-label={ariaLabel}>{children}</button>
+      <button onClick={onClick} disabled={disabled} className={className} aria-label={ariaLabel}>
+        {children}
+      </button>
     ),
-    Badge: ({ children, variant, style }: any) => <span data-variant={variant} style={style}>{children}</span>,
+    Badge: ({ children, variant, style }: any) => (
+      <span data-variant={variant} style={style}>
+        {children}
+      </span>
+    ),
     Input: ({ placeholder, disabled, className, 'aria-label': ariaLabel, ...rest }: any) => (
-      <input placeholder={placeholder} disabled={disabled} className={className} aria-label={ariaLabel} {...rest} />
+      <input
+        placeholder={placeholder}
+        disabled={disabled}
+        className={className}
+        aria-label={ariaLabel}
+        {...rest}
+      />
     ),
     Separator: () => <hr data-testid="separator" />,
     Switch: ({ checked, onCheckedChange, 'aria-label': ariaLabel }: any) => (
-      <button role="switch" aria-checked={checked} aria-label={ariaLabel} onClick={() => onCheckedChange(!checked)} />
+      <button
+        role="switch"
+        aria-checked={checked}
+        aria-label={ariaLabel}
+        onClick={() => onCheckedChange(!checked)}
+      />
     ),
     Checkbox: ({ checked, onCheckedChange, 'aria-label': ariaLabel }: any) => (
-      <input type="checkbox" checked={checked} aria-label={ariaLabel} onChange={(e) => onCheckedChange(e.target.checked)} />
+      <input
+        type="checkbox"
+        checked={checked}
+        aria-label={ariaLabel}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+      />
     ),
     Progress: ({ value, className, 'aria-label': ariaLabel }: any) => (
       <div role="progressbar" aria-valuenow={value} className={className} aria-label={ariaLabel} />
     ),
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
     TooltipContent: ({ children }: any) => <>{children}</>,
@@ -60,7 +89,7 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/components/PageContainer', () => ({
@@ -92,7 +121,9 @@ describe('MagazinePage', () => {
   it('renders page header with title and subtitle', () => {
     render(<MagazinePage />)
     expect(screen.getAllByRole('heading', { name: /Noir Violet/ }).length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('A design system reference for sloughGPT').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('A design system reference for Man').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
 
   it('renders hero section with primary color swatch', () => {
@@ -153,7 +184,7 @@ describe('MagazinePage', () => {
   it('renders button variants', () => {
     render(<MagazinePage />)
     const buttons = screen.getAllByRole('button')
-    const buttonTexts = buttons.map(b => b.textContent)
+    const buttonTexts = buttons.map((b) => b.textContent)
     expect(buttonTexts).toContain('Primary')
     expect(buttonTexts).toContain('Secondary')
     expect(buttonTexts).toContain('Destructive')
@@ -164,9 +195,9 @@ describe('MagazinePage', () => {
 
   it('renders disabled buttons', () => {
     render(<MagazinePage />)
-    const disabledButtons = screen.getAllByRole('button').filter(b => b.hasAttribute('disabled'))
-    const disabledTexts = disabledButtons.map(b => b.textContent)
-    expect(disabledTexts.filter(t => t === 'Disabled').length).toBeGreaterThanOrEqual(1)
+    const disabledButtons = screen.getAllByRole('button').filter((b) => b.hasAttribute('disabled'))
+    const disabledTexts = disabledButtons.map((b) => b.textContent)
+    expect(disabledTexts.filter((t) => t === 'Disabled').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders form input elements', () => {
@@ -255,7 +286,7 @@ describe('MagazinePage', () => {
   it('renders Apply buttons for accent themes', () => {
     render(<MagazinePage />)
     const allButtons = screen.getAllByRole('button')
-    const applyButtons = allButtons.filter(b => b.textContent === 'Apply')
+    const applyButtons = allButtons.filter((b) => b.textContent === 'Apply')
     expect(applyButtons.length).toBe(7)
   })
 
@@ -267,7 +298,7 @@ describe('MagazinePage', () => {
 
   it('renders footer with branding text', () => {
     render(<MagazinePage />)
-    expect(screen.getAllByText(/sloughGPT.*Noir Violet Design System/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText(/Man.*Noir Violet Design System/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Locked').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('v1.0').length).toBeGreaterThanOrEqual(1)
   })

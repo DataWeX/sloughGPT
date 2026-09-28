@@ -6,6 +6,7 @@ Implements the Backend protocol using Playwright's async API.
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any
 
 from avion.core.element import (
@@ -291,7 +292,9 @@ class PlaywrightBackend:
         pw_selector = self._to_playwright_selector(selector)
         if pw_selector is None:
             return None
-        raw = await self._page.wait_for_selector(pw_selector, timeout=timeout * 1000)
+        loc = self._page.locator(pw_selector).first
+        await loc.wait_for(state="visible", timeout=timeout * 1000)
+        raw = await loc.element_handle()
         if raw is None:
             return None
         return await self._wrap_element(raw, selector)
@@ -304,7 +307,7 @@ class PlaywrightBackend:
             return value
         if strategy == SelectorStrategy.TEXT:
             if selector.exact:
-                return f"text={value}"
+                return f"text={json.dumps(value, ensure_ascii=False)}"
             return f"text={value}"
         if strategy == SelectorStrategy.TEST_ID:
             return f"[data-testid='{value}']"
