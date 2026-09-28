@@ -158,13 +158,15 @@ def test_get_context():
 # ═══════════════════════════════════════════════════════════════════════
 
 
-def test_search_files():
+def test_search_files(tmp_path):
     client = get_test_client()
+    sample = tmp_path / "sample.py"
+    sample.write_text("def function(arg):\n    return arg\n")
     resp = client.post(
         "/knowledge/search-files",
         json={
             "query": "def function",
-            "path": "routers",
+            "path": str(tmp_path),
             "top_k": 3,
             "extensions": ["py"],
         },
@@ -174,6 +176,7 @@ def test_search_files():
     assert "results" in body
     assert "indexed_files" in body
     assert isinstance(body["results"], list)
+    assert len(body["results"]) >= 1
 
 
 def test_check_duplicate_unique():
@@ -328,16 +331,26 @@ def test_stats_with_many_facts_terminates():
     client = get_test_client()
     _cleanup(client)
 
-    for i in range(250):
+    # Seed via one bulk-ingest request: 250 individual POSTs each rebuild
+    # the dedup index (~210s), tripping the 300s timeout under load.
+    # dedup_threshold=1.0 keeps every fact (template texts are near-dups).
+    # Distinct text ranges per topic: exact duplicates score 1.0 and
+    # `score >= threshold` skips them even at dedup_threshold=1.0.
+    for topic, start in (("bulk", 0), ("misc", 125)):
         resp = client.post(
-            "/knowledge",
+            "/knowledge/bulk-ingest",
             json={
-                "content": f"Fact number {i} about vector search and retrieval",
-                "topic": "bulk" if i % 2 == 0 else "misc",
+                "items": [
+                    f"Fact number {i} about vector search and retrieval"
+                    for i in range(start, start + 125)
+                ],
+                "topic": topic,
                 "source": "regression",
+                "dedup_threshold": 1.0,
             },
         )
         assert resp.status_code == 200
+        assert _data(resp)["added"] == 125
 
     resp = client.get("/knowledge/stats")
     assert resp.status_code == 200

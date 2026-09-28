@@ -694,6 +694,7 @@ def _show_error(group: Group, cmd_name: str) -> None:
         p()
         p(f"  {c("Tip: Use 'sloughgpt --help' to see all commands", DIM)}")
         p()
+    sys.exit(1)
 
 
 def resolve_and_run(

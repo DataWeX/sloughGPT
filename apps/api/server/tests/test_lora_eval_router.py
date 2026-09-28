@@ -60,7 +60,7 @@ class TestRunEval:
         client = get_test_client()
         ev = _mock_evaluator()
         ev.run.side_effect = [MagicMock(to_dict=lambda: {"perplexity": 2.5})]
-        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback.get_lora_evaluator", return_value=ev):
             resp = client.post("/lora-eval/run")
         assert resp.status_code == 200
         data = _data(resp)
@@ -71,7 +71,7 @@ class TestRunEval:
         client = get_test_client()
         ev = _mock_evaluator()
         with (
-            patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev),
+            patch("domain.feedback.get_lora_evaluator", return_value=ev),
             patch("pathlib.Path.exists", return_value=True),
         ):
             resp = client.post("/lora-eval/run?adapter_path=data/user_adapters/test.npz")
@@ -85,7 +85,7 @@ class TestRunEval:
     def test_run_eval_custom_soul(self):
         client = get_test_client()
         ev = _mock_evaluator()
-        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback.get_lora_evaluator", return_value=ev):
             resp = client.post("/lora-eval/run?soul=custom_soul")
         assert resp.status_code == 200
         ev.run.assert_called()
@@ -95,7 +95,7 @@ class TestEvalHistory:
     def test_get_history(self):
         client = get_test_client()
         ev = _mock_evaluator()
-        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback.get_lora_evaluator", return_value=ev):
             resp = client.get("/lora-eval/history")
         assert resp.status_code == 200
         data = _data(resp)
@@ -105,7 +105,7 @@ class TestEvalHistory:
     def test_get_history_with_limit(self):
         client = get_test_client()
         ev = _mock_evaluator()
-        with patch("domain.feedback._internal.lora_eval.get_lora_evaluator", return_value=ev):
+        with patch("domain.feedback.get_lora_evaluator", return_value=ev):
             resp = client.get("/lora-eval/history?limit=5")
         assert resp.status_code == 200
         ev.get_history.assert_called_with(limit=5)

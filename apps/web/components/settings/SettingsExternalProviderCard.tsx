@@ -1,8 +1,24 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Button, Input, Switch, Badge, Skeleton } from '@sloughgpt/strui'
-import { settingsController, type ProviderApiSettings, type ProviderApiSettingsUpdate } from '@/lib/settings-controller'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Button,
+  Input,
+  Switch,
+  Badge,
+  Skeleton,
+} from '@sloughgpt/strui'
+import {
+  settingsController,
+  type ProviderApiSettings,
+  type ProviderApiSettingsUpdate,
+} from '@/lib/settings-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
 
@@ -11,7 +27,7 @@ interface SettingsExternalProviderCardProps {
 }
 
 export function SettingsExternalProviderCard({ version }: SettingsExternalProviderCardProps) {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [enabled, setEnabled] = useState(false)
@@ -35,15 +51,20 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
 
   useEffect(() => {
     let cancelled = false
-    settingsController.getProviderApi()
-      .then(p => { if (!cancelled) applyProvider(p) })
-      .catch(e => {
+    settingsController
+      .getProviderApi()
+      .then((p) => {
+        if (!cancelled) applyProvider(p)
+      })
+      .catch((e) => {
         if (!cancelled) {
           setLoadError(extractErrorMessage(e, 'Could not load provider settings'))
           setLoaded(true)
         }
       })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [applyProvider])
 
   const handleSave = async () => {
@@ -101,7 +122,9 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
       <CardHeader>
         <div>
           <CardTitle className="text-base">External model provider</CardTitle>
-          <CardDescription>OpenRouter or any OpenAI-compatible endpoint — separate from the service API URL</CardDescription>
+          <CardDescription>
+            OpenRouter or any OpenAI-compatible endpoint — separate from the service API URL
+          </CardDescription>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -112,14 +135,20 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
           </div>
         )}
         {loadError && (
-          <p className="text-xs text-destructive" role="alert">{loadError}</p>
+          <p className="text-xs text-destructive" role="alert">
+            {loadError}
+          </p>
         )}
         {loaded && (
           <>
             <div className="flex items-center justify-between gap-3">
               <div className="space-y-0.5">
-                <label htmlFor="settings-provider-enabled" className="text-sm font-medium">Use external provider</label>
-                <p className="text-[11px] text-muted-foreground">Route chat through the external endpoint when registered.</p>
+                <label htmlFor="settings-provider-enabled" className="text-sm font-medium">
+                  Use external provider
+                </label>
+                <p className="text-[11px] text-muted-foreground">
+                  Route chat through the external endpoint when registered.
+                </p>
               </div>
               <Switch
                 id="settings-provider-enabled"
@@ -129,7 +158,9 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="settings-provider-url" className="text-sm font-medium">Endpoint URL</label>
+              <label htmlFor="settings-provider-url" className="text-sm font-medium">
+                Endpoint URL
+              </label>
               <Input
                 id="settings-provider-url"
                 value={apiUrl}
@@ -144,17 +175,27 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
                 aria-describedby={urlError ? 'providerurl-error' : 'providerurl-help'}
               />
               {urlError && (
-                <p id="providerurl-error" className="text-xs text-destructive" role="alert">{urlError}</p>
+                <p id="providerurl-error" className="text-xs text-destructive" role="alert">
+                  {urlError}
+                </p>
               )}
               <p id="providerurl-help" className="text-[11px] text-muted-foreground">
-                Base URL for /chat/completions. Not the sloughGPT service address above.
+                Base URL for /chat/completions. Not the Man service address above.
               </p>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <label htmlFor="settings-provider-key" className="text-sm font-medium">API key</label>
+                <label htmlFor="settings-provider-key" className="text-sm font-medium">
+                  API key
+                </label>
                 {apiKeySet && (
-                  <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px]" onClick={handleClearKey} disabled={saving}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={handleClearKey}
+                    disabled={saving}
+                  >
                     Clear key
                   </Button>
                 )}
@@ -176,7 +217,9 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
               </p>
             </div>
             <div className="space-y-2">
-              <label htmlFor="settings-provider-model" className="text-sm font-medium">Model id</label>
+              <label htmlFor="settings-provider-model" className="text-sm font-medium">
+                Model id
+              </label>
               <Input
                 id="settings-provider-model"
                 value={model}
@@ -185,7 +228,9 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
                 className="font-mono text-xs"
                 aria-label="External provider model id"
               />
-              <p className="text-[11px] text-muted-foreground">Model identifier sent to the endpoint.</p>
+              <p className="text-[11px] text-muted-foreground">
+                Model identifier sent to the endpoint.
+              </p>
             </div>
             <div className="flex items-center gap-2 pt-2">
               <Button size="sm" className="h-9 text-xs" onClick={handleSave} disabled={saving}>
@@ -203,7 +248,10 @@ export function SettingsExternalProviderCard({ version }: SettingsExternalProvid
       </CardContent>
       <CardFooter className="justify-end">
         {version && (
-          <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/40">
+          <Badge
+            variant="outline"
+            className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/40"
+          >
             v {version}
           </Badge>
         )}

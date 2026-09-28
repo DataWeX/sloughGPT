@@ -35,6 +35,25 @@ from domain.infrastructure._internal.lifecycle import (
 )
 from domain.infrastructure._internal.output_buffer import get_server_buffer
 
+_LAZY_IMPORTS = {
+    "get_event_buffer": ("._internal.event_buffer", "get_event_buffer"),
+    "get_server_buffer": ("._internal.output_buffer", "get_server_buffer"),
+    "DatasetRepository": ("._internal.entity_repositories", "DatasetRepository"),
+    "KnowledgeRepository": ("._internal.entity_repositories", "KnowledgeRepository"),
+    "artifact_registry": ("._internal.artifact_registry", None),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_IMPORTS:
+        module_path, attr = _LAZY_IMPORTS[name]
+        import importlib
+
+        mod = importlib.import_module(module_path, package=__name__)
+        return mod if attr is None else getattr(mod, attr)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "AppConfig",
     "get_config",
@@ -53,6 +72,8 @@ __all__ = [
     "artifact_registry",
     "classify_exception",
     "emit_error_event",
-    "get_db",
-    "get_lifecycle_manager",
+    "get_event_buffer",
+    "get_server_buffer",
+    "DatasetRepository",
+    "KnowledgeRepository",
 ]

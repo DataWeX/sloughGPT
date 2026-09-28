@@ -47,7 +47,12 @@ ok "port $API_P free"
 # ── Phase A: startup SIGINT (pre-ready, wait loop) ──
 LOGA="$LOG_DIR/journey_serve_api.phaseA.log"
 rm -f "$LOGA"
-setsid script -qec "./sloughgpt serve --port $API_P --host localhost" /dev/null \
+# Headless `setsid -w` (NOT `script`): a pty leader's exit SIGHUPs the
+# group and would kill an orphaned uvicorn before the orphan check runs,
+# masking the leak this phase exists to catch. -w propagates the CLI's
+# exit code: 0 = our handler ran; 130 = bare KeyboardInterrupt escaped
+# to main() (handler never registered).
+setsid -w ./sloughgpt serve --port $API_P --host localhost \
   > "$LOGA" 2>&1 < /dev/null &
 SPA=$!
 APID=""
@@ -59,10 +64,18 @@ done
 if [ -z "$APID" ]; then
   bad "phaseA: cli never started"
 else
-  # t+2: past interpreter boot (~0.9s) and preflight — the CLI is spawned
-  # and polling readiness, the exact window where the interrupt used to
-  # escape to main() as a bare "Interrupted" and orphan the child.
-  sleep 2
+  # Wait for the uvicorn child instead of a fixed sleep: it is spawned
+  # inside the command handler after signal registration, so its presence
+  # proves the handler ran and we are inside the pre-ready wait loop —
+  # the exact window where a missing early handler orphans the child.
+  UVREADY=""
+  for i in $(seq 1 20); do
+    if pgrep -f "uvicorn apps.api.server.main:app.*--port $API_P" >/dev/null 2>&1; then
+      UVREADY=$i; break
+    fi
+    sleep 1
+  done
+  [ -n "$UVREADY" ] || bad "phaseA: uvicorn never spawned within 20s"
   kill -INT "$APID" 2>/dev/null
   EXITED=""
   for i in $(seq 1 10); do
@@ -71,10 +84,12 @@ else
   done
   if [ -n "$EXITED" ]; then
     ok "phaseA: startup SIGINT honoured (exit ${EXITED}s)"
-    if grep -qE "Stopped|Interrupted" <(sed $'s/\x1b\[[0-9;]*[A-Za-z]//g' "$LOGA"); then
-      ok "phaseA: shutdown acknowledged (Stopped/Interrupted)"
+    wait "$SPA" 2>/dev/null
+    EC=$?
+    if [ "$EC" = "0" ]; then
+      ok "phaseA: handler path ran (exit 0; bare 'Interrupted' = 130)"
     else
-      bad "phaseA: no shutdown acknowledgement after startup SIGINT"
+      bad "phaseA: exit $EC after startup SIGINT (130 = handler never ran)"
     fi
   else
     bad "phaseA: cli survived startup SIGINT (interrupt dropped?)"

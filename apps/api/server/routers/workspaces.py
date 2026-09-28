@@ -1275,7 +1275,7 @@ class WorkspacesRouter:
 
             # Search datasets
             try:
-                from domain.dataset._internal.repository import DatasetRepository
+                from domain.infrastructure import DatasetRepository
 
                 ds_repo = DatasetRepository()
                 datasets = ds_repo.list_by_workspace(workspace_id)
@@ -1293,7 +1293,7 @@ class WorkspacesRouter:
 
             # Search knowledge
             try:
-                from domain.learner._internal.knowledge import KnowledgeRepository
+                from domain.infrastructure import KnowledgeRepository
 
                 k_repo = KnowledgeRepository()
                 facts = k_repo.list_by_workspace(workspace_id)

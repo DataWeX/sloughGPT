@@ -498,8 +498,10 @@ class TestRun:
 
         with patch("sys.argv", ["cli", "xyz"]):
             with patch("sys.stdin.isatty", return_value=False):
-                run(my_cli)
+                with pytest.raises(SystemExit) as ei:
+                    run(my_cli)
 
+        assert ei.value.code == 1
         captured = capsys.readouterr()
         assert "Unknown command" in captured.out
 

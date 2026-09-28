@@ -110,8 +110,8 @@ class TestModelAudit:
         resp = models_client.post("/models/load", json={"model_id": "gpt2", "device": "cpu"})
         assert resp.status_code == 200
 
-    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.infrastructure.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_quantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
         provider = MagicMock()
@@ -135,8 +135,8 @@ class TestModelAudit:
             "model_type": "slonet",
         }
 
-    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.infrastructure.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_dequantize_model_logs_event(
         self, mock_logger, mock_provider, mock_walk, models_client
@@ -156,8 +156,8 @@ class TestModelAudit:
         assert kwargs["detail"] == "model_type=slonet"
         assert kwargs["extra"] == {"layers_reset": 0}
 
-    @patch("domain.models._internal.provider.get_provider", return_value=None)
-    @patch("domain.slolib._internal.gpu.get_accelerator")
+    @patch("domain.models.get_provider", return_value=None)
+    @patch("domain.slolib.get_accelerator")
     @patch("infrastructure.auth.get_audit_logger")
     def test_set_precision_logs_event(self, mock_logger, mock_acc, mock_provider, models_client):
         acc = MagicMock()
@@ -641,7 +641,7 @@ def agents_client():
 class TestAgentsAudit:
     """Agent CRUD + execution emit audit events."""
 
-    @patch("domain.agents._internal.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_create_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -665,7 +665,7 @@ class TestAgentsAudit:
         assert kwargs["resource"] == "researcher"
         assert kwargs["detail"] == "Researcher"
 
-    @patch("domain.agents._internal.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -686,7 +686,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.update"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domain.agents._internal.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -698,7 +698,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.delete"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domain.agents._internal.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_execute_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -710,7 +710,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.execute"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domain.agents._internal.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_execute_error_no_audit(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -971,7 +971,7 @@ def lora_eval_client():
 class TestLoraEvalAudit:
     """POST /lora-eval/aggregate emits an audit event."""
 
-    @patch("domain.feedback._internal.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_aggregate_logs_event(self, mock_logger, mock_store, lora_eval_client):
         store = mock_store.return_value

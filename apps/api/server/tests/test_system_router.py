@@ -133,3 +133,197 @@ class TestInferencePool:
         assert "initialized" in data
         assert "max_workers" in data
         assert "queue_timeout" in data
+
+
+class TestBattery:
+    def test_get_battery_structure(self):
+        resp = client.get("/system/battery")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert {"status", "control", "advice"}.issubset(data.keys())
+
+        status = data["status"]
+        assert 0 <= status["level"] <= 100
+        assert status["source"] in ("sysfs", "simulated")
+        assert status["level_band"] in ("low", "ok", "high", "full")
+        assert isinstance(status["is_charging"], bool)
+
+        control = data["control"]
+        assert {"supported", "writable", "reason"}.issubset(control.keys())
+        assert isinstance(control["supported"], bool)
+
+        advice = data["advice"]
+        assert advice["action"] in ("unplug", "cap_at_80", "plug_in", "maintain")
+        assert advice["reason"]
+        assert 1 <= advice["limit"] <= 100
+
+    def test_get_battery_reports_capability_not_error(self):
+        """Unsupported kernels must answer 200 with supported=false, not 5xx."""
+        resp = client.get("/system/battery")
+        assert resp.status_code == 200
+        control = _data(resp)["control"]
+        if not control["supported"]:
+            assert control["reason"]
+
+    def test_set_limit_returns_control_result(self, monkeypatch):
+        import chargectl
+        from chargectl import ControlResult
+
+        seen = {}
+
+        def fake_set_limit(percent, sys_base=None):
+            seen["percent"] = percent
+            return ControlResult(True, True, percent, "stubbed")
+
+        monkeypatch.setattr(chargectl, "set_limit", fake_set_limit)
+        resp = client.post("/system/battery/limit", params={"percent": 80})
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data == {
+            "applied": True,
+            "supported": True,
+            "limit": 80,
+            "reason": "stubbed",
+            "path": None,
+            "floor_limit": None,
+        }
+        assert seen["percent"] == 80
+
+    def test_set_limit_rejects_out_of_range(self):
+        assert client.post("/system/battery/limit", params={"percent": 0}).status_code == 422
+        assert client.post("/system/battery/limit", params={"percent": 101}).status_code == 422
+
+    def test_set_limit_defaults_to_80(self, monkeypatch):
+        import chargectl
+        from chargectl import ControlResult
+
+        seen = {}
+
+        def fake_set_limit(percent, sys_base=None):
+            seen["percent"] = percent
+            return ControlResult(True, True, percent, "stubbed")
+
+        monkeypatch.setattr(chargectl, "set_limit", fake_set_limit)
+        resp = client.post("/system/battery/limit")
+        assert resp.status_code == 200
+        assert seen["percent"] == 80
+
+
+class TestBatteryPolicy:
+    def test_get_battery_includes_policy_and_daemon(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CHARGECTL_POLICY", str(tmp_path / "policy.json"))
+        monkeypatch.setenv("CHARGECTL_STATE", str(tmp_path / "state.json"))
+
+        data = _data(client.get("/system/battery"))
+        assert {"policy", "daemon"}.issubset(data.keys())
+
+        policy = data["policy"]
+        assert policy["enabled"] is False
+        assert policy["band"] == "40-80"
+        assert policy["error"] is None
+        assert policy["explain"]
+        assert str(policy["file"]).endswith("policy.json")
+
+        assert data["daemon"]["present"] is False
+        assert data["daemon"]["active"] is False
+        assert str(data["daemon"]["state_file"]).endswith("state.json")
+
+    def test_get_battery_reports_an_unreadable_policy(self, monkeypatch, tmp_path):
+        path = tmp_path / "policy.json"
+        path.write_text("{ not json")
+        monkeypatch.setenv("CHARGECTL_POLICY", str(path))
+
+        policy = _data(client.get("/system/battery"))["policy"]
+        assert policy["error"]
+        assert policy["enabled"] is False  # falls back to defaults, still 200
+
+    def _write_state(self, tmp_path, monkeypatch, age_seconds: float) -> dict:
+        import time
+
+        from chargectl import write_state
+
+        state_path = tmp_path / "state.json"
+        write_state(
+            {
+                "pid": 4242,
+                "updated_at": time.time() - age_seconds,
+                "owned": True,
+                "dry_run": False,
+                "explain": "policy on — holding 40-80%",
+                "action": {
+                    "action": "set_ceiling",
+                    "value": 80,
+                    "reason": "charge cap is 100% — re-asserting 80% (band mode)",
+                },
+                "result": {"applied": True, "reason": "charge threshold set to 80%"},
+            },
+            state_path,
+        )
+        monkeypatch.setenv("CHARGECTL_STATE", str(state_path))
+        monkeypatch.setenv("CHARGECTL_POLICY", str(tmp_path / "policy.json"))
+        return _data(client.get("/system/battery"))["daemon"]
+
+    def test_fresh_daemon_state_reads_as_active(self, monkeypatch, tmp_path):
+        daemon = self._write_state(tmp_path, monkeypatch, age_seconds=5)
+        assert daemon["present"] is True
+        assert daemon["active"] is True
+        assert daemon["pid"] == 4242
+        assert daemon["owned"] is True
+        assert daemon["dry_run"] is False
+        assert daemon["last_action"] == "set_ceiling"
+        assert daemon["last_value"] == 80
+        assert "re-asserting" in daemon["last_reason"]
+        assert "set to 80%" in daemon["last_outcome"]
+        assert "40-80" in daemon["explain"]
+
+    def test_stale_daemon_state_reads_as_inactive(self, monkeypatch, tmp_path):
+        daemon = self._write_state(tmp_path, monkeypatch, age_seconds=60 * 60)
+        assert daemon["present"] is True
+        assert daemon["active"] is False  # policy set, nobody enforcing
+
+    def test_put_policy_persists_the_band(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CHARGECTL_POLICY", str(tmp_path / "policy.json"))
+
+        resp = client.put(
+            "/system/battery/policy",
+            params={"enabled": "true", "floor": 45, "ceiling": 70},
+        )
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert data["ok"] is True
+        assert data["error"] is None
+        assert data["policy"]["enabled"] is True
+        assert data["policy"]["band"] == "45-70"
+        assert data["explain"]
+
+        # the next GET reflects it — policy is shared through the file, not memory
+        assert _data(client.get("/system/battery"))["policy"]["band"] == "45-70"
+
+    def test_put_policy_is_partial(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CHARGECTL_POLICY", str(tmp_path / "policy.json"))
+        client.put("/system/battery/policy", params={"floor": 50, "ceiling": 75})
+        data = _data(client.put("/system/battery/policy", params={"ceiling": 90}))
+        assert data["ok"] is True
+        assert data["policy"]["floor"] == 50
+        assert data["policy"]["ceiling"] == 90
+
+    def test_put_policy_rejects_an_inverted_band(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CHARGECTL_POLICY", str(tmp_path / "policy.json"))
+        client.put("/system/battery/policy", params={"floor": 45, "ceiling": 75})
+
+        data = _data(client.put("/system/battery/policy", params={"floor": 90, "ceiling": 60}))
+        assert data["ok"] is False
+        assert "floor" in data["error"]
+        # the previously saved policy is untouched
+        assert data["policy"]["band"] == "45-75"
+
+    def test_put_policy_validates_ranges(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CHARGECTL_POLICY", str(tmp_path / "policy.json"))
+        assert client.put("/system/battery/policy", params={"floor": 0}).status_code == 422
+        assert client.put("/system/battery/policy", params={"ceiling": 101}).status_code == 422
+
+    def test_put_policy_can_be_disabled(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CHARGECTL_POLICY", str(tmp_path / "policy.json"))
+        client.put("/system/battery/policy", params={"enabled": "true"})
+        data = _data(client.put("/system/battery/policy", params={"enabled": "false"}))
+        assert data["ok"] is True and data["policy"]["enabled"] is False

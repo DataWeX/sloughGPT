@@ -46,6 +46,6 @@ export const discoveredRoutes: DiscoveredRoute[] = buildRoutes()
 
 export const routePathList: string[] = discoveredRoutes.map((r) => r.path)
 
-if (import.meta.env.DEV) {
+if (import.meta.env.DEV && typeof window !== 'undefined') {
   ;(window as unknown as { __vite_routes?: string[] }).__vite_routes = routePathList
 }

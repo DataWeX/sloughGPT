@@ -82,6 +82,7 @@ _LAZY_IMPORTS = {
     "get_turbo_state": ("._internal.state", "get_turbo_state"),
     "peek_training_executor": ("._internal.executor", "peek_training_executor"),
     "FeedBatchSampler": ("._internal.training_feed", "FeedBatchSampler"),
+    "executor": ("._internal.executor", None),
 }
 
 
@@ -91,7 +92,7 @@ def __getattr__(name):
         import importlib
 
         mod = importlib.import_module(module_path, package=__name__)
-        return getattr(mod, attr)
+        return mod if attr is None else getattr(mod, attr)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
@@ -146,19 +147,20 @@ __all__ = [
     "get_training_engine",
     "TrainingFeedClient",
     "FeedBatchSampler",
+    "get_turbo_lock",
+    "get_turbo_state",
     "TrainingOutcomeTracker",
-    "AdaptiveConfigEngine",
-    "import_from_sou",
+    "get_cache_root",
     "ExportConfig",
     "export_model",
     "list_export_formats",
-    "get_cache_root",
+    "AdaptiveConfigEngine",
+    "generate_model_card",
+    "import_from_sou",
     "list_presets",
     "get_preset",
     "apply_preset",
     "get_auto_trainer",
-    "generate_model_card",
-    "get_turbo_lock",
-    "get_turbo_state",
+    "executor",
     "peek_training_executor",
 ]

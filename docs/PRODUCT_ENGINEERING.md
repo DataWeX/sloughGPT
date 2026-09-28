@@ -249,8 +249,8 @@ Single /training router with sub-paths for each feature
 
 1. **Write this doc** ✅ (you're reading it)
 2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed
-3. **Feature engines** — VoiceEngine, KnowledgeEngine, TrainingEngine (follow ToolsEngine pattern)
-4. **Wire routers** — point routers at engines, not internals
+3. **Feature engines** ✅ — VoiceEngine, KnowledgeEngine, TrainingEngine (ToolsEngine pattern) + `get_*_engine` facade exports, routers wired
+4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across 22 router files; facade lazy exports added for heavy symbols; tests patch facade paths)
 5. **UI flows** — restructure phoneme, knowledge, training pages to follow UX_FLOWS.md
 6. **Consciousness** ✅ — wire cognitive engine to inference pipeline (SloEngine post-gen hook + router single process, level-gated via `ConsciousnessConfig.level`; narrative surfaced through `reasoning_chain` and `CONSCIOUSNESS complete` SSE)
 7. **Test** — verify all user journeys pass

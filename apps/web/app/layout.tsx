@@ -3,7 +3,13 @@ import type { Metadata, Viewport } from 'next'
 import localFont from 'next/font/local'
 
 import { Providers } from './Providers'
-import { MODE_STORAGE_KEY, THEME_IDS, THEME_STORAGE_KEY, PALETTE_IDS, PALETTE_STORAGE_KEY } from '@/lib/theme-storage'
+import {
+  MODE_STORAGE_KEY,
+  THEME_IDS,
+  THEME_STORAGE_KEY,
+  PALETTE_IDS,
+  PALETTE_STORAGE_KEY,
+} from '@/lib/theme-storage'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { ErrorLifecycle } from '@/components/ErrorLifecycle'
 import WebVitals from '@/components/WebVitals'
@@ -23,8 +29,26 @@ const jetbrainsMono = localFont({
 
 export const metadata: Metadata = {
   title: 'Man - AI Platform',
-  description: 'Enterprise-grade AI framework with production-ready ML infrastructure',
+  description:
+    'Man — your personal AI. Train it on your own data, then chat, write and learn together.',
   icons: { icon: '/favicon.svg' },
+  manifest: '/manifest.json',
+  openGraph: {
+    title: 'Man - AI Platform',
+    description:
+      'Man — your personal AI. Train it on your own data, then chat, write and learn together.',
+    type: 'website',
+    siteName: 'Man - AI Platform',
+    locale: 'en_US',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Man - AI Platform' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Man - AI Platform',
+    description:
+      'Man — your personal AI. Train it on your own data, then chat, write and learn together.',
+    images: ['/og.png'],
+  },
 }
 
 /** Enables `env(safe-area-inset-*)` under notches / home indicators on mobile. */
@@ -36,15 +60,14 @@ export const viewport: Viewport = {
 
 /** Runs before React hydrates; ``useLayoutEffect`` in ThemeProvider re-syncs after any className reconciliation. */
 const themeBootstrapInline = `!function(){try{var k=${JSON.stringify([...THEME_IDS])};var p=${JSON.stringify([...PALETTE_IDS])};var t=localStorage.getItem(${JSON.stringify(THEME_STORAGE_KEY)});var m=localStorage.getItem(${JSON.stringify(MODE_STORAGE_KEY)});var pl=localStorage.getItem(${JSON.stringify(PALETTE_STORAGE_KEY)});var r=document.documentElement;var th=k.indexOf(t)>=0?t:"purple";var mo="light"===m||"dark"===m?m:"dark";var pa=p.indexOf(pl)>=0?pl:"noir-violet";r.classList.remove("light","dark");k.forEach(function(id){r.classList.remove("theme-"+id)});p.forEach(function(id){r.classList.remove("palette-"+id)});r.classList.add(mo,"theme-"+th);if(pa!=="noir-violet"){r.classList.add("palette-"+pa);}}catch(e){}}();`
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${rubik.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
-      <head>
-      </head>
+    <html
+      lang="en"
+      className={`${rubik.variable} ${jetbrainsMono.variable}`}
+      suppressHydrationWarning
+    >
+      <head></head>
       <body className="font-sans antialiased" suppressHydrationWarning>
         <script dangerouslySetInnerHTML={{ __html: themeBootstrapInline }} />
         <WebVitals />

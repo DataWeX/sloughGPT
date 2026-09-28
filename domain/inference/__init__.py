@@ -63,7 +63,6 @@ __all__ = [
     "PDFVLMProcessor",
     "_ngram_embed",
     "SloNetChatProvider",
-    "VectorEntry",
     "get_engine",
     "configure_api_provider",
 ]
@@ -81,8 +80,8 @@ def __getattr__(name):
         "SloNetChatProvider": "domain.inference._internal.slonet_provider",
         "VectorEntry": "domain.inference._internal.vector_store",
         "PineconeVectorStore": "domain.inference._internal.vector_stores.pinecone_store",
-        "get_engine": "domain.inference._internal.native.engine",
         "configure_api_provider": "domain.inference._internal.api_provider",
+        "get_engine": "domain.inference._internal.native.engine",
     }
     if name in _lazy:
         import importlib
