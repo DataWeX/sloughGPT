@@ -146,7 +146,7 @@ def main() -> None:
         entry["file"] = str(args.file)
         entry["raw_bytes"] = len(data)
     history.append(entry)
-    args.out.write_text(json.dumps(history, indent=2))
+    args.out.write_text(json.dumps(history, indent=2) + "\n")
     print(f"\nrecorded → {args.out}")
 
 
