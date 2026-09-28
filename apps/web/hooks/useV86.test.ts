@@ -224,4 +224,80 @@ describe('useV86', () => {
     })
     expect(instance.persistState).toHaveBeenCalledTimes(1)
   })
+
+  it('boots explicit iso media as cdrom with probed size', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86({ bootMedia: 'iso' }))
+    const container = document.createElement('div')
+
+    await act(async () => {
+      await result.current.init(container)
+    })
+
+    expect(result.current.isBooted).toBe(true)
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(instance.init).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        imageUrl: '/buildroot/buildroot.iso',
+        imageSize: 8388608,
+        imageKind: 'iso',
+      }),
+    )
+  })
+
+  it('fails fast with an actionable error when the ISO is missing', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: false, status: 404, headers: { get: () => null } }),
+    )
+    const { result } = renderHook(() => useV86({ bootMedia: 'iso' }))
+
+    await act(async () => {
+      await result.current.init(document.createElement('div'))
+    })
+
+    expect(result.current.isBooted).toBe(false)
+    expect(result.current.error).toMatch(/image not available/)
+    expect(result.current.error).toMatch(/buildroot\.iso/)
+  })
+
+  it('explicit boot media skips persisted-state restore; auto restores', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const explicit = renderHook(() => useV86({ bootMedia: 'iso' }))
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    instance.loadPersistedState.mockResolvedValue(new ArrayBuffer(8))
+
+    await act(async () => {
+      await explicit.result.current.init(document.createElement('div'))
+    })
+    expect(instance.restoreState).not.toHaveBeenCalled()
+
+    const auto = renderHook(() => useV86())
+    await act(async () => {
+      await auto.result.current.init(document.createElement('div'))
+    })
+    expect(instance.restoreState).toHaveBeenCalledTimes(1)
+  })
+
+  it('reboot tears down the running emulator and boots again', async () => {
+    const { V86Controller } = await import('@/lib/v86-controller')
+    const { result } = renderHook(() => useV86())
+    const container = document.createElement('div')
+
+    await act(async () => {
+      await result.current.init(container)
+    })
+    const instance = vi.mocked(V86Controller).mock.results.at(-1)?.value as any
+    expect(result.current.isBooted).toBe(true)
+
+    await act(async () => {
+      await result.current.reboot()
+    })
+
+    expect(instance.destroy).toHaveBeenCalledTimes(1)
+    expect(result.current.isBooted).toBe(true)
+    const constructed = vi.mocked(V86Controller).mock.results.length
+    expect(constructed).toBeGreaterThanOrEqual(3) // mount state check + init + reboot init
+  })
 })

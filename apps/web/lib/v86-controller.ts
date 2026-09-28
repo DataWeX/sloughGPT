@@ -62,7 +62,7 @@ export class V86Controller {
       vgaBiosUrl: string
       imageUrl: string
       imageSize?: number
-      imageKind?: 'hda' | 'kernel'
+      imageKind?: 'hda' | 'kernel' | 'iso'
       memoryMb?: number
       wasmPath?: string
     },
@@ -73,11 +73,20 @@ export class V86Controller {
       ? { url: opts.imageUrl, async: true, size: opts.imageSize }
       : { url: opts.imageUrl }
 
+    // boot_order = 0x(THIRD)(SECOND)(FIRST), device codes 1=floppy 2=hd 3=cd.
+    // CD-first with hard-disk fallback: 0x123 (cd, hd, floppy).
+    const media =
+      opts.imageKind === 'kernel'
+        ? { bzimage: image }
+        : opts.imageKind === 'iso'
+          ? { cdrom: image, boot_order: 0x123 }
+          : { hda: image }
+
     this.emulator = new this.V86Class({
       screen_container: screenContainer,
       bios: { url: opts.biosUrl },
       vga_bios: { url: opts.vgaBiosUrl },
-      ...(opts.imageKind === 'kernel' ? { bzimage: image } : { hda: image }),
+      ...media,
       memory_size: (opts.memoryMb ?? 256) * 1024 * 1024,
       vga_memory_size: 8 * 1024 * 1024,
       autostart: true,
