@@ -300,4 +300,24 @@ describe('useV86', () => {
     const constructed = vi.mocked(V86Controller).mock.results.length
     expect(constructed).toBeGreaterThanOrEqual(3) // mount state check + init + reboot init
   })
+
+  it('probeImage rejects SPA-fallback HTML for missing assets', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: {
+          get: (k: string) => {
+            const key = k.toLowerCase()
+            if (key === 'content-type') return 'text/html; charset=utf-8'
+            if (key === 'content-length') return '2731'
+            return null
+          },
+        },
+      }),
+    )
+    const { probeImage } = await import('./useV86')
+    expect((await probeImage('/buildroot/buildroot.img')).available).toBe(false)
+  })
 })

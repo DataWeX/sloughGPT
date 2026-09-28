@@ -57,6 +57,10 @@ export async function probeImage(url: string): Promise<ProbeResult> {
       signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
     })
     if (!res.ok && res.status !== 206) return { available: false }
+    // SPA dev servers answer missing assets with 200 + index.html — never
+    // treat an HTML page as a bootable disk image.
+    const contentType = res.headers.get('content-type') ?? ''
+    if (contentType.includes('text/html')) return { available: false }
     const total = res.headers.get('content-range')?.split('/')[1]
     if (total && total !== '*') {
       const n = Number(total)
