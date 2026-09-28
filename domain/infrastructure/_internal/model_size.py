@@ -23,6 +23,10 @@ _SIZE_CACHE_TTL = 300  # 5 minutes
 _size_cache: dict[str, tuple[float, float | None]] = {}
 _size_cache_lock = threading.Lock()
 
+# Upper bound for a single hub metadata request when a caller supplies a
+# deadline (the hub default of 15s is far too slow for a request path).
+_HUB_REQUEST_TIMEOUT_S = 15.0
+
 try:
     from .hf_hub import (
         find_cached_model_dir,
@@ -59,12 +63,24 @@ def _sum_weight_files(cache_dir: Path) -> float | None:
     return None
 
 
-def _get_hub_file_size_gb(model_id: str) -> float | None:
-    """Get total model weight file size from HuggingFace Hub API (siblings listing)."""
+def _get_hub_file_size_gb(model_id: str, *, timeout: float | None = None) -> float | None:
+    """Get total model weight file size from HuggingFace Hub API (siblings listing).
+
+    Args:
+        model_id: HuggingFace model ID.
+        timeout: Optional per-request timeout in seconds. Callers bounding a
+            cold path pass the remaining budget so an unreachable hub cannot
+            stall them (``requests`` applies it to connect and read
+            separately, so wall time is at most ~2x this value).
+    """
     try:
         from .hf_hub import fetch_model_info
 
-        info = fetch_model_info(model_id)
+        info = (
+            fetch_model_info(model_id)
+            if timeout is None
+            else fetch_model_info(model_id, timeout=timeout)
+        )
         if not info or not info.get("siblings"):
             return None
         total = 0
@@ -81,7 +97,7 @@ def _get_hub_file_size_gb(model_id: str) -> float | None:
     return None
 
 
-def compute_model_size_gb(model_id: str) -> float | None:
+def compute_model_size_gb(model_id: str, *, hub_deadline: float | None = None) -> float | None:
     """Get actual model size in GB from real file sizes only.
 
     Priority:
@@ -90,6 +106,16 @@ def compute_model_size_gb(model_id: str) -> float | None:
     3. Returns ``None`` when size cannot be determined
 
     Results are cached for 5 minutes to avoid repeated API calls.
+
+    Args:
+        hub_deadline: Optional ``time.monotonic()`` deadline for starting NEW
+            hub requests. When given, no hub call starts after the deadline and
+            any call that does start gets only the remaining budget as its
+            timeout — this is what keeps the ``/models/hf`` cold path (up to 50
+            uncached models) bounded instead of stacking 15s timeouts.
+            Budget-skipped results are deliberately NOT cached: "we ran out of
+            time" is not "the size is unknown", and a later warm call should
+            still be able to fetch it.
     """
     now = time.monotonic()
     with _size_cache_lock:
@@ -108,7 +134,13 @@ def compute_model_size_gb(model_id: str) -> float | None:
             return cache_size
 
     # 2. HuggingFace Hub API — real file sizes from repo sibling listing
-    result = _get_hub_file_size_gb(model_id)
+    if hub_deadline is not None:
+        remaining = hub_deadline - time.monotonic()
+        if remaining <= 0:
+            return None  # budget exhausted — skip, do not poison the cache
+        result = _get_hub_file_size_gb(model_id, timeout=min(_HUB_REQUEST_TIMEOUT_S, remaining))
+    else:
+        result = _get_hub_file_size_gb(model_id)
     with _size_cache_lock:
         _size_cache[model_id] = (now, result)
     return result

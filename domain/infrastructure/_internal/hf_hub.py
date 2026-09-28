@@ -83,7 +83,7 @@ def _hf_endpoint() -> str:
     return os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
 
 
-def _hf_api_get(path: str, params: dict[str, Any] | None = None, timeout: int = 15) -> Any:
+def _hf_api_get(path: str, params: dict[str, Any] | None = None, timeout: int | float = 15) -> Any:
     """GET a HuggingFace Hub REST API endpoint and return parsed JSON.
 
     Args:
@@ -106,16 +106,22 @@ def _hf_api_get(path: str, params: dict[str, Any] | None = None, timeout: int = 
         return None
 
 
-def fetch_model_info(model_id: str) -> dict | None:
+def fetch_model_info(model_id: str, timeout: int | float | None = None) -> dict | None:
     """Fetch model repository metadata (file siblings + sizes) from the Hub.
 
     Args:
         model_id: HuggingFace model ID (e.g. ``gpt2``, ``Qwen/Qwen2.5-0.5B-Instruct``).
+        timeout: Optional per-request timeout in seconds (defaults to the hub
+            API default of 15s).
 
     Returns:
         Model metadata dict (with a ``siblings`` list), or ``None`` on failure.
     """
-    data = _hf_api_get(f"models/{model_id}", params={"blobs": "true"})
+    data = _hf_api_get(
+        f"models/{model_id}",
+        params={"blobs": "true"},
+        timeout=timeout if timeout is not None else 15,
+    )
     if not isinstance(data, dict):
         return None
     return data

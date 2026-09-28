@@ -184,6 +184,120 @@ describe('chatDB', () => {
     })
   })
 
+  // The DocStore `sessions` collection is NOT schema-enforced: the DocStore UI
+  // accepts arbitrary PUTs and bulk imports. One malformed doc used to reject
+  // loadSessions() outright, taking the whole session list down with it.
+  describe('corrupt/partial session docs', () => {
+    function injectRaw(id: string, doc: unknown): void {
+      if (!store.has('sessions')) store.set('sessions', new Map())
+      store.get('sessions')!.set(id, doc)
+    }
+
+    it('loadSessions keeps a doc that has no messages field (messages defaults to [])', async () => {
+      injectRaw('no-msgs', {
+        id: 'no-msgs',
+        name: 'Doc without messages',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-02T00:00:00Z',
+        synced: false,
+        starred: false,
+        pinned: false,
+      })
+      const all = await chatDB.loadSessions()
+      expect(all).toHaveLength(1)
+      expect(all[0].id).toBe('no-msgs')
+      expect(all[0].messages).toEqual([])
+    })
+
+    it('loadSessions skips null/primitive entries instead of rejecting the whole list', async () => {
+      await chatDB.saveSession(testSession)
+      injectRaw('null-doc', null)
+      injectRaw('string-doc', 'not-a-session')
+      const all = await chatDB.loadSessions()
+      expect(all.map((s) => s.id)).toEqual(['s1'])
+    })
+
+    it('filters non-object message entries and repairs invalid timestamps', async () => {
+      injectRaw('msg-issues', {
+        id: 'msg-issues',
+        name: 'Bad messages',
+        messages: [
+          null,
+          'junk',
+          { id: 'm1', role: 'user', content: 'hi', timestamp: 'not-a-date' },
+          { id: 'm2', role: 'assistant', content: 'yo' },
+        ],
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-02T00:00:00Z',
+        synced: false,
+        starred: false,
+        pinned: false,
+      })
+      const [loaded] = await chatDB.loadSessions()
+      expect(loaded.messages).toHaveLength(2)
+      expect(loaded.messages.map((m) => m.id)).toEqual(['m1', 'm2'])
+      expect(loaded.messages[0].timestamp).toBeInstanceOf(Date)
+      expect(loaded.messages[0].timestamp.getTime()).toBe(0)
+      expect(loaded.messages[1].timestamp).toBeInstanceOf(Date)
+      expect(loaded.messages[1].timestamp.getTime()).toBe(0)
+    })
+
+    it('loadSession returns undefined when the stored doc is not an object', async () => {
+      injectRaw('primitive', 42)
+      expect(await chatDB.loadSession('primitive')).toBeUndefined()
+    })
+
+    it('loadSession repairs a partial doc (missing messages → [])', async () => {
+      injectRaw('partial', {
+        id: 'partial',
+        name: 'Partial',
+        createdAt: '2024-01-01T00:00:00Z',
+        updatedAt: '2024-01-01T00:00:00Z',
+        synced: true,
+        starred: false,
+        pinned: false,
+      })
+      const loaded = await chatDB.loadSession('partial')
+      expect(loaded).toBeDefined()
+      expect(loaded!.messages).toEqual([])
+    })
+
+    it('a bulk import with a partial doc does not break loadSessions', async () => {
+      await apiPost('/docstore/sessions/bulk', {
+        docs: [
+          {
+            id: 'good',
+            name: 'Good',
+            messages: [],
+            createdAt: '2024-01-01',
+            updatedAt: '2024-01-01',
+            synced: false,
+            starred: false,
+            pinned: false,
+          },
+          { id: 'partial', name: 'Partial', updatedAt: 'not-a-date' },
+        ],
+      })
+      const all = await chatDB.loadSessions()
+      expect(all.map((s) => s.id).sort()).toEqual(['good', 'partial'])
+      expect(all.find((s) => s.id === 'partial')!.messages).toEqual([])
+    })
+
+    it('getUnsyncedSessions skips non-object docs', async () => {
+      await chatDB.saveSession({ ...testSession, id: 'ok' })
+      injectRaw('junk', 'garbage')
+      const unsynced = await chatDB.getUnsyncedSessions()
+      expect(unsynced.map((s) => s.id)).toEqual(['ok'])
+    })
+
+    it('saveSession tolerates a missing messages array (round-trips as [])', async () => {
+      await chatDB.saveSession({ ...testSession, messages: undefined as unknown as ChatMessage[] })
+      const all = await chatDB.loadSessions()
+      expect(all).toHaveLength(1)
+      expect(all[0].messages).toEqual([])
+    })
+  })
+
   describe('deleteSession', () => {
     it('removes a session by id', async () => {
       await chatDB.saveSession(testSession)
@@ -496,6 +610,43 @@ describe('chatDB', () => {
       expect(await chatDB.getKV('theme')).toBe('dark')
       await chatDB.deleteKV('theme')
       expect(await chatDB.getKV('theme')).toBeUndefined()
+    })
+
+    it('coalesces concurrent writes to one key (last-write-wins)', async () => {
+      const realPut = apiPut.getMockImplementation()!
+      let release: (() => void) | null = null
+      let gated = true
+      apiPut.mockImplementation((url, body) => {
+        if (gated) {
+          return new Promise((resolve) => {
+            release = () => resolve(realPut(url, body))
+          })
+        }
+        return realPut(url, body)
+      })
+      try {
+        const first = chatDB.setKV('burst', 'a')
+        const second = chatDB.setKV('burst', 'b')
+        const third = chatDB.setKV('burst', 'c')
+        await Promise.resolve()
+        expect(apiPut).toHaveBeenCalledTimes(1)
+        gated = false
+        release!()
+        await Promise.all([first, second, third])
+        // The queued value is flushed once — never three stacked PUTs.
+        expect(apiPut).toHaveBeenCalledTimes(2)
+        expect(await chatDB.getKV('burst')).toBe('c')
+      } finally {
+        gated = true
+        apiPut.mockImplementation(realPut)
+      }
+    })
+
+    it('a write after the burst settles issues its own PUT', async () => {
+      await chatDB.setKV('theme', 'dark')
+      await chatDB.setKV('theme', 'light')
+      expect(apiPut.mock.calls.filter(([u]) => String(u).includes('/kv/theme'))).toHaveLength(2)
+      expect(await chatDB.getKV('theme')).toBe('light')
     })
   })
 })

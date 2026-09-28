@@ -133,6 +133,14 @@ function hasDocId(id: string | undefined, collection: string, op: string): boole
 // at a time; subsequent callers receive the same promise.
 const _inflightKV = new Map<string, Promise<unknown>>()
 
+// ── In-flight write coalescing (last-write-wins) ──────────────────────
+// A slow server + a chatty caller (sidebar effects, settings flush) used to
+// stack one PUT per change into the same key.  When a write for a key is
+// already in flight, the newest value replaces the queued one and exactly
+// ONE follow-up PUT fires once the in-flight request settles — callers see
+// the combined promise.
+const _pendingKVWrite = new Map<string, { value: unknown; promise: Promise<void> | null }>()
+
 // ── Server circuit breaker ────────────────────────────────────────────
 // When the API server is unreachable every failed write re-throws, which
 // fires window.onerror, which calls chatDB.addError(), which fails again —
@@ -163,23 +171,43 @@ export function isDBDead(): boolean {
   return _defaultBreaker.isDead()
 }
 
+// The DocStore is a generic JSON store — the `sessions` collection is NOT
+// schema-enforced. Docs arrive partial from the DocStore UI page (arbitrary
+// PUT), bulk imports, and legacy writers. One doc without `messages` used to
+// reject loadSessions() entirely, taking the whole session list down with it.
+
+function isStoredSession(doc: unknown): doc is StoredChatSession {
+  return typeof doc === 'object' && doc !== null
+}
+
 function toStored(session: ChatSession): StoredChatSession {
+  const messages = Array.isArray(session.messages) ? session.messages : []
   return {
     ...session,
-    messages: session.messages.map((m) => ({
-      ...m,
-      timestamp: typeof m.timestamp === 'string' ? m.timestamp : m.timestamp.toISOString(),
-    })),
+    messages: messages.map((m) => {
+      let ts: string
+      if (typeof m.timestamp === 'string') ts = m.timestamp
+      else if (m.timestamp instanceof Date && !Number.isNaN(m.timestamp.getTime()))
+        ts = m.timestamp.toISOString()
+      else ts = new Date(0).toISOString()
+      return { ...m, timestamp: ts }
+    }),
   }
 }
 
 function fromStored(session: StoredChatSession): ChatSession {
+  const messages = Array.isArray(session.messages) ? session.messages : []
   return {
     ...session,
-    messages: session.messages.map((m) => ({
-      ...m,
-      timestamp: new Date(m.timestamp),
-    })),
+    messages: messages
+      .filter((m): m is StoredChatMessage => typeof m === 'object' && m !== null)
+      .map((m) => {
+        const parsed = m.timestamp ? new Date(m.timestamp) : new Date(0)
+        return {
+          ...m,
+          timestamp: Number.isNaN(parsed.getTime()) ? new Date(0) : parsed,
+        }
+      }),
   }
 }
 
@@ -196,16 +224,18 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
 
     async loadSessions(): Promise<ChatSession[]> {
       const sessions = await apiGet<StoredChatSession[]>(docUrl('sessions'))
+      if (!Array.isArray(sessions)) return []
       return sessions
+        .filter(isStoredSession)
         .slice()
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+        .sort((a, b) => String(b.updatedAt ?? '').localeCompare(String(a.updatedAt ?? '')))
         .map(fromStored)
     },
 
     async loadSession(id: string): Promise<ChatSession | undefined> {
       if (!hasDocId(id, 'sessions', 'loadSession')) return undefined
       const session = await apiGet<StoredChatSession | null>(docUrl('sessions', id))
-      return session ? fromStored(session) : undefined
+      return isStoredSession(session) ? fromStored(session) : undefined
     },
 
     async deleteSession(id: string): Promise<void> {
@@ -233,7 +263,8 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
 
     async getUnsyncedSessions(): Promise<ChatSession[]> {
       const sessions = await apiGet<StoredChatSession[]>(docUrl('sessions'))
-      return sessions.filter((s) => s.synced === false).map(fromStored)
+      if (!Array.isArray(sessions)) return []
+      return sessions.filter((s) => isStoredSession(s) && s.synced === false).map(fromStored)
     },
 
     async markSynced(id: string): Promise<void> {
@@ -398,7 +429,27 @@ export function createChatDB(breaker: DbCircuitBreaker = _defaultBreaker) {
 
     async setKV(key: string, value: unknown): Promise<void> {
       if (!hasDocId(key, 'kv', 'setKV')) return
-      await apiPut(docUrl('kv', key), { key, value })
+      const pending = _pendingKVWrite.get(key)
+      if (pending) {
+        // Last-write-wins: fold this write into the in-flight one.
+        pending.value = value
+        return pending.promise!
+      }
+      const entry: { value: unknown; promise: Promise<void> | null } = { value, promise: null }
+      entry.promise = (async () => {
+        try {
+          let sent = value
+          for (;;) {
+            await apiPut(docUrl('kv', key), { key, value: sent })
+            if (Object.is(sent, entry.value)) break
+            sent = entry.value // a newer value arrived mid-flight — send it
+          }
+        } finally {
+          _pendingKVWrite.delete(key)
+        }
+      })()
+      _pendingKVWrite.set(key, entry)
+      return entry.promise
     },
 
     async deleteKV(key: string): Promise<void> {

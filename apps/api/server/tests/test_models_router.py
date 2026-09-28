@@ -199,6 +199,34 @@ class TestHFModels:
         for m in data:
             assert "cached" in m
 
+    def test_hf_bounds_hub_metadata_fetches_with_a_deadline(self, mock_controller):
+        """Every size computation shares one monotonic deadline so the cold
+        path (up to 50 uncached models) cannot stack 15s hub timeouts."""
+        seen = {}
+
+        def spy(model_id, *, hub_deadline=None):
+            seen["hub_deadline"] = hub_deadline
+            return None
+
+        with patch("routers.models.compute_model_size_gb", side_effect=spy):
+            resp = client.get("/models/hf")
+        assert resp.status_code == 200
+        assert "hub_deadline" in seen
+        assert seen["hub_deadline"] is not None
+
+    def test_hf_returns_size_null_when_budget_spent(self, mock_controller):
+        """When the hub budget is exhausted the endpoint answers promptly with
+        size_gb=null instead of stalling on hub metadata fetches."""
+        with patch(
+            "routers.models.compute_model_size_gb",
+            side_effect=ValueError("budget spent"),
+        ):
+            resp = client.get("/models/hf")
+        assert resp.status_code == 200
+        data = _data(resp)
+        assert len(data) >= 4
+        assert all(m["size_gb"] is None for m in data)
+
 
 # ── GET /models/cache-usage ────────────────────────────────────────────────
 

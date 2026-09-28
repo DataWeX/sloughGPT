@@ -167,6 +167,52 @@ class TestComputeModelSize:
         assert ms.compute_model_size_gb("org/model") is None
         assert len(calls) == 1
 
+    def test_expired_hub_deadline_skips_hub_without_caching(self, monkeypatch, clear_caches):
+        import time
+
+        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: False)
+        calls = []
+
+        def spy(model_id, **kwargs):
+            calls.append(kwargs)
+            return 1.5
+
+        monkeypatch.setattr(ms, "_get_hub_file_size_gb", spy)
+        expired = time.monotonic() - 1
+        assert ms.compute_model_size_gb("org/model", hub_deadline=expired) is None
+        assert calls == []  # no hub call starts after the deadline
+        # The skip must not poison the cache — a later warm call still fetches.
+        assert ms.compute_model_size_gb("org/model") == 1.5
+        assert len(calls) == 1
+
+    def test_hub_deadline_passes_remaining_budget_as_timeout(
+        self, monkeypatch, clear_caches, fake_clock
+    ):
+        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: False)
+        seen = {}
+
+        def spy(model_id, timeout=None):
+            seen["timeout"] = timeout
+            return 1.0
+
+        monkeypatch.setattr(ms, "_get_hub_file_size_gb", spy)
+        ms.compute_model_size_gb("org/model", hub_deadline=fake_clock[0] + 5.0)
+        assert seen["timeout"] == 5.0
+
+    def test_hub_deadline_timeout_is_capped_at_request_timeout(
+        self, monkeypatch, clear_caches, fake_clock
+    ):
+        monkeypatch.setattr(ms, "is_download_complete", lambda model_id: False)
+        seen = {}
+
+        def spy(model_id, timeout=None):
+            seen["timeout"] = timeout
+            return 1.0
+
+        monkeypatch.setattr(ms, "_get_hub_file_size_gb", spy)
+        ms.compute_model_size_gb("org/model", hub_deadline=fake_clock[0] + 999.0)
+        assert seen["timeout"] == ms._HUB_REQUEST_TIMEOUT_S
+
 
 class TestIsModelCached:
     def test_shallow_check_delegates(self, monkeypatch, clear_caches):

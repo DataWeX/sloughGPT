@@ -3,6 +3,8 @@ Models Router - MVC View layer
 Uses ModelsController for business logic
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -35,6 +37,15 @@ from domain.infrastructure.model_size import compute_model_size_gb, format_size_
 
 # Module-level so tests can patch ``routers.models._hf_cache_dir``; resolved at call time.
 _hf_cache_dir = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
+
+# Wall-clock budget for HuggingFace hub metadata fetches made while building
+# the /models/hf list. Up to 50 uncached models each cost a hub round-trip; at
+# the hub's 15s default timeout that stacked into 45-75s cold responses (504s
+# on the server, 30s client timeouts in the web app). The budget is shared by
+# all workers of one request: calls that start get only the time left, calls
+# after it are skipped and return size_gb=None (unknown), which the UI already
+# renders as "—".
+_HUB_SIZE_BUDGET_S = 3.0
 
 
 class ExportRequest(BaseModel):
@@ -483,11 +494,17 @@ class ModelsRouter:
                 total = len(all_model_ids)
                 page_ids = all_model_ids[offset : offset + limit]
 
+                hub_deadline = time.monotonic() + _HUB_SIZE_BUDGET_S
+
                 size_results: dict[str, float | None] = {}
                 cached_results: dict[str, bool] = {}
 
                 def _compute_one(mid: str):
-                    return mid, compute_model_size_gb(mid), _is_cached(mid)
+                    return (
+                        mid,
+                        compute_model_size_gb(mid, hub_deadline=hub_deadline),
+                        _is_cached(mid),
+                    )
 
                 from domain.infrastructure.resource_manager import get_resource_manager
 
