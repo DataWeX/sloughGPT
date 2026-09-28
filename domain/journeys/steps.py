@@ -12,12 +12,14 @@ import sys
 import time
 from typing import Any, Callable
 
-_ROOT = os.path.dirname(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+_ROOT = os.path.abspath(__file__)
+while _ROOT != os.path.dirname(_ROOT) and not os.path.isdir(
+    os.path.join(_ROOT, "packages", "avion", "src")
+):
+    _ROOT = os.path.dirname(_ROOT)
 for _sub in ("avion", "arken"):
     _src = os.path.join(_ROOT, "packages", _sub, "src")
-    if _src not in sys.path:
+    if os.path.isdir(_src) and _src not in sys.path:
         sys.path.insert(0, _src)
 
 ASSISTANT_BUBBLE = '[aria-label="Message from Assistant"]'
