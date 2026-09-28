@@ -28,9 +28,9 @@ async function probeKind(kind: V86ImageKind): Promise<boolean> {
  * v86-based terminal panel that runs a real Linux VM in the browser.
  *
  * The status-bar boot media selector picks hda / kernel / iso (auto keeps the
- * default resolution order). Availability is probed with the same 1-byte range
- * GETs the resolver uses; unavailable kinds are disabled. Switching media on a
- * running VM tears it down and reboots with the new image.
+ * default resolution order). Availability is probed with header-only HEAD
+ * requests; unavailable kinds are disabled. Switching media on a running VM
+ * tears it down and reboots with the new image.
  *
  * @example
  * ```tsx

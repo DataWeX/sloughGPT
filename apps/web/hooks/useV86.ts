@@ -46,16 +46,25 @@ interface ProbeResult {
 }
 
 /**
- * Probe an image URL with a 1-byte range GET: confirms it exists and learns
- * its total size (for v86's async image loader) without downloading it.
- * Any failure (404, network, CORS, timeout) means "not available".
+ * Probe an image URL with a header-only HEAD request (falling back to a
+ * cancelled GET): confirms it exists and learns its total size for v86's
+ * async image loader without downloading the image.
+ *
+ * HEAD/GET-without-custom-headers are CORS-simple requests — a Range probe
+ * would trigger a preflight that CDNs without Access-Control-Allow-Headers
+ * reject, silently breaking every cross-origin probe.
+ * Any failure (404, 405, network, CORS, timeout) means "not available".
  */
 export async function probeImage(url: string): Promise<ProbeResult> {
   try {
-    const res = await fetch(url, {
-      headers: { Range: 'bytes=0-0' },
+    let res = await fetch(url, {
+      method: 'HEAD',
       signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
     })
+    if (res.status === 405 || res.status === 501) {
+      res = await fetch(url, { signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS) })
+      res.body?.cancel().catch(() => undefined)
+    }
     if (!res.ok && res.status !== 206) return { available: false }
     // SPA dev servers answer missing assets with 200 + index.html — never
     // treat an HTML page as a bootable disk image.
