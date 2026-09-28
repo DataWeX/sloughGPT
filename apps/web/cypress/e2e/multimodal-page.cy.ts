@@ -1,3 +1,10 @@
+/**
+ * Multimodal page — /multimodal is a legacy path that 307s to /models, which
+ * then client-redirects to /developer (app/(app)/models/page.tsx). The
+ * multimodal UI itself is unreachable via URL; its content is covered by
+ * page.test.tsx (16 unit tests).
+ */
+
 describe('Multimodal page', () => {
   beforeEach(() => {
     cy.on('uncaught:exception', () => false)
@@ -5,58 +12,14 @@ describe('Multimodal page', () => {
     cy.visit('/multimodal')
   })
 
-  it('renders the page header', () => {
-    cy.contains('h1', 'Multimodal').should('be.visible')
+  it('redirects the legacy /multimodal path', () => {
+    cy.url().should('include', '/models')
   })
 
-  it('shows capability and training cards', () => {
-    cy.contains('Capabilities').should('be.visible')
-    cy.contains('Training').scrollIntoView().should('be.visible')
-  })
-
-  it('shows image training and batch training cards', () => {
-    cy.contains('Image Training').scrollIntoView().should('be.visible')
-    cy.contains('Train with multiple images').scrollIntoView().should('be.visible')
-  })
-
-  it('shows dataset, DPO, generation, and audio cards', () => {
-    cy.contains('Image description dataset').scrollIntoView().should('be.visible')
-    cy.contains('DPO fine-tune').scrollIntoView().should('be.visible')
-    cy.contains('Image Generation').scrollIntoView().should('be.visible')
-    cy.contains('Audio').scrollIntoView().should('be.visible')
-  })
-
-  it('accepts an image generation prompt', () => {
-    cy.get('input[aria-label="Image generation prompt"]').scrollIntoView().type('A cat in a spacesuit')
-    cy.get('input[aria-label="Image generation prompt"]').should('have.value', 'A cat in a spacesuit')
-  })
-})
-
-describe('VQA flow', () => {
-  beforeEach(() => {
-    cy.on('uncaught:exception', () => false)
-    cy.mockAll()
-    cy.visit('/multimodal')
-  })
-
-  it('shows VQA section', () => {
-    cy.contains('Visual Question Answering').scrollIntoView().should('be.visible')
-  })
-
-  it('accepts a question input', () => {
-    cy.get('input[aria-label="Question"]').scrollIntoView().type('What is in this image?')
-    cy.get('input[aria-label="Question"]').should('have.value', 'What is in this image?')
-  })
-})
-
-describe('Object detection flow', () => {
-  beforeEach(() => {
-    cy.on('uncaught:exception', () => false)
-    cy.mockAll()
-    cy.visit('/multimodal')
-  })
-
-  it('shows object detection section', () => {
-    cy.contains('Object Detection').scrollIntoView().should('be.visible')
+  it('lands on the developer page after the client-side replace', () => {
+    cy.url({ timeout: 20000 }).should('include', '/developer')
+    // Header h1 sits inside an overflow container — clip breaks visibility,
+    // so assert existence (pattern used by the other page specs).
+    cy.contains('h1', 'Developer').should('exist')
   })
 })
