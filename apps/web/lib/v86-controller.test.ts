@@ -156,4 +156,61 @@ describe('V86Controller', () => {
     expect(configs[0].hda).toEqual({ url: '/buildroot/buildroot.img' })
     vi.unstubAllGlobals()
   })
+
+  it('disables the speaker adapter (audio resume crashes after destroy)', async () => {
+    const configs: any[] = []
+    class MockV86 {
+      constructor(cfg: any) {
+        configs.push(cfg)
+      }
+      add_listener(ev: string, cb: () => void) {
+        if (ev === 'emulator-started') cb()
+      }
+      is_running() {
+        return false
+      }
+      destroy() {}
+    }
+    vi.stubGlobal('window', { V86: MockV86 })
+
+    const c = new V86Controller()
+    await c.init({} as unknown as HTMLElement, {
+      biosUrl: '/bios/seabios.bin',
+      vgaBiosUrl: '/bios/vgabios.bin',
+      imageUrl: '/buildroot/buildroot.img',
+    })
+
+    expect(configs[0].disable_speaker).toBe(true)
+    vi.unstubAllGlobals()
+  })
+
+  it('defines window.global when a process shim exists without one', async () => {
+    const configs: any[] = []
+    class MockV86 {
+      constructor(cfg: any) {
+        configs.push(cfg)
+      }
+      add_listener(ev: string, cb: () => void) {
+        if (ev === 'emulator-started') cb()
+      }
+      is_running() {
+        return false
+      }
+      destroy() {}
+    }
+    const stub = { V86: MockV86, process: { env: {} } } as unknown as Window & {
+      global?: unknown
+    }
+    vi.stubGlobal('window', stub)
+
+    const c = new V86Controller()
+    await c.init({} as unknown as HTMLElement, {
+      biosUrl: '/bios/seabios.bin',
+      vgaBiosUrl: '/bios/vgabios.bin',
+      imageUrl: '/buildroot/buildroot.img',
+    })
+
+    expect((stub as { global?: unknown }).global).toBe(globalThis)
+    vi.unstubAllGlobals()
+  })
 })

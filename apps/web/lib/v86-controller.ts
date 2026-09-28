@@ -18,6 +18,28 @@ const V86_SCRIPT_URL = '/v86/libv86.js'
 
 let v86LoadPromise: Promise<unknown> | null = null
 
+/**
+ * The vendored libv86 runtime branches on `typeof process !== 'undefined'`
+ * to pick Node-style scheduling (`global.setImmediate`) over timers. Bundlers
+ * commonly define a `window.process = { env }` shim without defining `global`
+ * or `setImmediate`, which makes v86's yield path throw
+ * "global is not defined" (or "…setImmediate is not a function") on the
+ * emulator's hot loop and freeze the screen. Restore the invariant the runtime
+ * assumes: when `process` exists, so must `global` and `setImmediate`.
+ */
+function ensureV86SchedulingGlobals(): void {
+  const g = window as unknown as Record<string, unknown>
+  const realGlobal = globalThis as unknown as Record<string, unknown>
+  if (g.global === undefined && g.process !== undefined) {
+    g.global = realGlobal
+  }
+  if (typeof realGlobal.setImmediate !== 'function') {
+    realGlobal.setImmediate = ((cb: TimerHandler, ms?: number) =>
+      setTimeout(cb, ms ?? 0)) as never
+  }
+}
+
+
 async function loadV86Runtime(): Promise<unknown> {
   if (window.V86) return window.V86
   if (v86LoadPromise) return v86LoadPromise
@@ -67,6 +89,7 @@ export class V86Controller {
       wasmPath?: string
     },
   ): Promise<void> {
+    ensureV86SchedulingGlobals()
     this.V86Class = await loadV86Runtime()
 
     const image = opts.imageSize
@@ -91,6 +114,12 @@ export class V86Controller {
       vga_memory_size: 8 * 1024 * 1024,
       autostart: true,
       fastboot: true,
+      // No audio adapter: its "emulator-started" handler calls
+      // audio_context.resume(), and after a destroy (reboot teardown) the
+      // context is null — a late event from the old instance then throws and
+      // freezes the emulator mid-start. The VM's pc-speaker/FM audio isn't
+      // worth that lifecycle hazard.
+      disable_speaker: true,
       wasm_path: opts.wasmPath,
     })
 
