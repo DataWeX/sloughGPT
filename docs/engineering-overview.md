@@ -138,14 +138,17 @@ React Native 0.86. 32 screens, 32 services.
 
 ### 5. Gateway (`apps/gateway/`)
 
-Rust/Axum reverse proxy (`slough-gateway`, binds `:8080`).
+Rust/Axum reverse proxy (`slough-gateway`). Standalone it binds `:8080`;
+in the dev cascade it binds the inner port `:8081` behind the node socket
+relay (`scripts/edge-proxy.mjs`, `:8080` — a dumb byte pipe so the CDP
+harness can own the public port while Rust owns all policy).
 
-**Three hops, each with one job:**
+**Cascade, each layer with one job:**
 
 ```
-browser ─► edge gateway :8080 ─► FastAPI sidecar :8000 ─► domain/ + infrastructure/
-          filters, health,       routers, envelope,       logic — no HTTP
-          static, compression    error taxonomy
+browser ─► edge-proxy :8080 ─► slough-gateway :8081 ─► FastAPI :8000 ─► domain/ + infrastructure/
+           socket relay,        filters, health,        routers, envelope,
+           CORS preflight       compression             error taxonomy
 ```
 
 **Edge owns compression — one encoder, one hop, no double-encode.** The relay
@@ -160,6 +163,12 @@ ratios live in `scripts/benchmark_gateway_compression.py --class sse`.
 `Authorization`, `X-Correlation-ID`, `Retry-After`, and the standard envelope
 cross untouched. CORS is allow-any (bearer-token auth, no cookies), matching
 `http-client.ts`.
+
+**Health is a contract passthrough:** `/health` and `/health/detailed` relay
+FastAPI's bodies verbatim — the frontend reads `model_loaded`/`model_type`
+and `path_latencies`/`health_score` from them — with `gateway: "rust"`
+injected only when the body is a plain JSON object. The edge envelope
+(`status: degraded` + `sidecar`) is the unreachable-core fallback.
 
 **Role:** Fast entry point. Generic byte-relay to Python core. Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present.
 
@@ -258,11 +267,11 @@ docker-compose up -d
 # Local dev
 python -m apps.api.server.main --reload    # API :8000
 cd apps/web && npm run dev                  # Web :3001
-cd apps/gateway && cargo run                # Gateway :8080
+cd apps/gateway && cargo run                # Gateway :8080 (MAN_GATEWAY_PORT to move)
 
 # Or one shot (API + Web; opt-in edge):
 ./scripts/dev-stack.sh
-MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh    # + gateway :8080 → API
+MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh    # + gateway → API (MAN_GATEWAY_PORT=8081 if edge-proxy holds :8080)
 
 # CLI
 pip install -e .

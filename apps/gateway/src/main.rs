@@ -175,33 +175,7 @@ async fn main() {
         }
     });
 
-    let mut app = Router::new()
-        // Health & info (gateway-owned — the only endpoints understood here)
-        .route("/health", get(health_check))
-        .route("/health/detailed", get(detailed_health))
-        // Everything else: generic byte-relay to the sidecar.
-        // No per-endpoint handlers — the edge never parses bodies.
-        .fallback(proxy_http);
-
-    if std::path::Path::new(&config.static_dir).is_dir() {
-        info!("serving static files from {}", config.static_dir);
-        app = app.nest_service("/static", ServeDir::new(&config.static_dir));
-    } else {
-        info!(
-            "static dir {} absent — skipping /static (frontend serves itself)",
-            config.static_dir
-        );
-    }
-
-    let app = app
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        )
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+    let app = build_router(state);
 
     let listener = tokio::net::TcpListener::bind(config.listen_addr)
         .await
@@ -219,25 +193,108 @@ async fn main() {
     axum::serve(listener, app).await.expect("Server failed");
 }
 
+// ── Router ──────────────────────────────────────────────────────────────────
+// Shared by main() and the tests: routes + static + CORS/trace layers.
+
+fn build_router(state: AppState) -> Router {
+    let config = state.config.clone();
+    let mut app = Router::new()
+        // Health endpoints are contract passthroughs (see handlers below).
+        .route("/health", get(health_check))
+        .route("/health/detailed", get(detailed_health))
+        // Everything else: generic byte-relay to the sidecar.
+        // No per-endpoint handlers — the edge never parses bodies.
+        .fallback(proxy_http);
+
+    if std::path::Path::new(&config.static_dir).is_dir() {
+        info!("serving static files from {}", config.static_dir);
+        app = app.nest_service("/static", ServeDir::new(&config.static_dir));
+    } else {
+        info!(
+            "static dir {} absent — skipping /static (frontend serves itself)",
+            config.static_dir
+        );
+    }
+
+    app.layer(
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
+            .expose_headers(Any),
+    )
+    .layer(TraceLayer::new_for_http())
+    .with_state(state)
+}
+
 // ── Health Handlers ─────────────────────────────────────────────────────────
 
-async fn health_check(State(state): State<AppState>) -> Json<HealthResponse> {
+async fn health_check(State(state): State<AppState>) -> Response {
+    // Contract passthrough: the frontend reads FastAPI's whole health object
+    // (model_loaded, model_type, summary, …). Relay status + body verbatim,
+    // adding edge fields only when absent — the cascade must not reshape
+    // app contracts.
+    let url = format!("{}/health", state.config.python_core_url);
+    if let Ok(resp) = state.http.get(&url).send().await {
+        let status =
+            StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+        let ct = resp
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .cloned();
+        if let Ok(body) = resp.bytes().await {
+            if let Ok(mut value) = serde_json::from_slice::<serde_json::Value>(&body) {
+                if let Some(obj) = value.as_object_mut() {
+                    obj.entry("gateway").or_insert("rust".into());
+                }
+                let mut res = Json(value).into_response();
+                *res.status_mut() = status;
+                return res;
+            }
+            let mut res = Response::new(Body::from(body));
+            *res.status_mut() = status;
+            if let Some(ct) = ct {
+                res.headers_mut()
+                    .insert(axum::http::header::CONTENT_TYPE, ct);
+            }
+            return res;
+        }
+    }
+    // Core unreachable: edge-owned degraded envelope (200 — host scripts probe
+    // gateway liveness, not core health).
     let sidecar = state.core_status.read().await.clone();
     let uptime = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
-
     Json(HealthResponse {
-        status: if sidecar.healthy {
-            "ok".into()
-        } else {
-            "degraded".into()
-        },
+        status: "degraded".into(),
         gateway: "rust".into(),
         sidecar,
         uptime_seconds: uptime,
     })
+    .into_response()
 }
 
-async fn detailed_health(State(state): State<AppState>) -> Json<serde_json::Value> {
+async fn detailed_health(State(state): State<AppState>) -> Response {
+    // Byte passthrough: DetailedHealth consumers expect FastAPI's monitoring
+    // blob verbatim (request_count, path_latencies, health_score, …).
+    let url = format!("{}/health/detailed", state.config.python_core_url);
+    if let Ok(resp) = state.http.get(&url).send().await {
+        let status =
+            StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+        let ct = resp
+            .headers()
+            .get(axum::http::header::CONTENT_TYPE)
+            .cloned();
+        if let Ok(body) = resp.bytes().await {
+            let mut res = Response::new(Body::from(body));
+            *res.status_mut() = status;
+            if let Some(ct) = ct {
+                res.headers_mut()
+                    .insert(axum::http::header::CONTENT_TYPE, ct);
+            }
+            return res;
+        }
+    }
+    // Core unreachable: edge-owned envelope (existing shape).
     let sidecar = state.core_status.read().await.clone();
     let uptime = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
 
@@ -253,6 +310,7 @@ async fn detailed_health(State(state): State<AppState>) -> Json<serde_json::Valu
         },
         "sidecar": sidecar,
     }))
+    .into_response()
 }
 
 /// Unwrap the API health envelope. FastAPI answers either a bare object or
@@ -442,6 +500,8 @@ async fn relay_response(
 mod tests {
     use super::*;
 
+    use tower::ServiceExt;
+
     #[test]
     fn parses_bare_health_object() {
         let v = serde_json::json!({
@@ -476,5 +536,101 @@ mod tests {
         let (loaded, name) = parse_sidecar_health(&v);
         assert!(!loaded);
         assert_eq!(name, "unknown");
+    }
+
+    /// Test state with the core pointed at a closed port — handler tests
+    /// never race a live FastAPI.
+    fn edge_state() -> AppState {
+        let mut config = GatewayConfig::default();
+        config.python_core_url = "http://127.0.0.1:9".into();
+        AppState {
+            config,
+            http: Client::new(),
+            core_status: Arc::new(RwLock::new(CoreStatus::default())),
+        }
+    }
+
+    #[tokio::test]
+    async fn preflight_options_terminated_at_edge_with_cors() {
+        let app = build_router(edge_state());
+        let req = Request::builder()
+            .method("OPTIONS")
+            .uri("/api/sessions")
+            .header("origin", "http://localhost:3000")
+            .header("access-control-request-method", "POST")
+            .header("access-control-request-headers", "content-type")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert!(matches!(
+            resp.status(),
+            StatusCode::NO_CONTENT | StatusCode::OK
+        ));
+        let h = resp.headers();
+        assert_eq!(
+            h.get("access-control-allow-origin")
+                .and_then(|v| v.to_str().ok()),
+            Some("*")
+        );
+        assert!(h.get("access-control-allow-headers").is_some());
+    }
+
+    #[tokio::test]
+    async fn health_falls_back_to_edge_envelope_when_core_down() {
+        let app = build_router(edge_state());
+        let req = Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let h = resp.headers();
+        assert_eq!(
+            h.get("access-control-expose-headers")
+                .and_then(|v| v.to_str().ok()),
+            Some("*")
+        );
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["status"], "degraded");
+        assert_eq!(v["gateway"], "rust");
+    }
+
+    #[tokio::test]
+    async fn health_passes_core_contract_through_with_additive_gateway() {
+        let stub = axum::Router::new().route(
+            "/health",
+            axum::routing::get(|| async {
+                axum::Json(serde_json::json!({
+                    "status": "ok",
+                    "model_loaded": true,
+                    "model_type": "slonet",
+                    "summary": "ready",
+                }))
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, stub).await.unwrap();
+        });
+
+        let mut state = edge_state();
+        state.config.python_core_url = format!("http://{addr}");
+        let app = build_router(state);
+        let req = Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        // FastAPI contract intact at top level…
+        assert_eq!(v["model_loaded"], true);
+        assert_eq!(v["model_type"], "slonet");
+        assert_eq!(v["summary"], "ready");
+        // …plus the additive edge marker.
+        assert_eq!(v["gateway"], "rust");
     }
 }

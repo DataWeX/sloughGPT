@@ -14,6 +14,10 @@ PY="${PY:-$REPO/.venv/bin/python}"
 GW_BIN="${GW_BIN:-$REPO/apps/gateway/target/release/slough-gateway}"
 GW_PORT="${PORT:-8080}"
 SIDECAR_PORT="${SIDECAR_PORT:-18000}"
+# App-edge mode: skip the file sidecar, point the core wherever you want:
+#   CORE_URL=http://127.0.0.1:8000 NO_SIDECAR=1 PORT=8081 scripts/host_gateway.sh
+NO_SIDECAR="${NO_SIDECAR:-0}"
+CORE_URL="${CORE_URL:-http://127.0.0.1:$SIDECAR_PORT}"
 ROOT="${ROOT:-$REPO}"
 HOST="${HOST:-0.0.0.0}"
 LOG_DIR="${LOG_DIR:-/tmp/slough-gateway-host}"
@@ -28,8 +32,12 @@ if [ ! -x "$GW_BIN" ]; then
   (cd "$REPO/apps/gateway" && cargo build --release --locked)
 fi
 
-# Free ports if leftover
-for p in "$GW_PORT" "$SIDECAR_PORT"; do
+# Free ports if leftover (sidecar port only when we own it)
+PORTS_TO_FREE="$GW_PORT"
+if [ "$NO_SIDECAR" != "1" ]; then
+  PORTS_TO_FREE="$PORTS_TO_FREE $SIDECAR_PORT"
+fi
+for p in $PORTS_TO_FREE; do
   if command -v fuser >/dev/null 2>&1; then
     fuser -k "${p}/tcp" 2>/dev/null || true
   fi
@@ -42,28 +50,29 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-echo "sidecar root=$ROOT → 127.0.0.1:$SIDECAR_PORT"
-"$PY" "$REPO/scripts/gateway_file_sidecar.py" \
-  --root "$ROOT" --host 127.0.0.1 --port "$SIDECAR_PORT" \
-  >"$LOG_DIR/sidecar.log" 2>&1 &
-SIDECAR_PID=$!
+if [ "$NO_SIDECAR" != "1" ]; then
+  echo "sidecar root=$ROOT → 127.0.0.1:$SIDECAR_PORT"
+  "$PY" "$REPO/scripts/gateway_file_sidecar.py" \
+    --root "$ROOT" --host 127.0.0.1 --port "$SIDECAR_PORT" \
+    >"$LOG_DIR/sidecar.log" 2>&1 &
+  SIDECAR_PID=$!
 
-ok=0
-for _ in $(seq 1 40); do
-  # sidecar up? (any response including 404)
-  if curl -s -o /dev/null -m 1 "http://127.0.0.1:$SIDECAR_PORT/" 2>/dev/null; then
-    break
-  fi
-  if ! kill -0 "$SIDECAR_PID" 2>/dev/null; then
-    echo "sidecar died — see $LOG_DIR/sidecar.log" >&2
-    cat "$LOG_DIR/sidecar.log" >&2 || true
-    exit 1
-  fi
-  sleep 0.1
-done
+  for _ in $(seq 1 40); do
+    # sidecar up? (any response including 404)
+    if curl -s -o /dev/null -m 1 "http://127.0.0.1:$SIDECAR_PORT/" 2>/dev/null; then
+      break
+    fi
+    if ! kill -0 "$SIDECAR_PID" 2>/dev/null; then
+      echo "sidecar died — see $LOG_DIR/sidecar.log" >&2
+      cat "$LOG_DIR/sidecar.log" >&2 || true
+      exit 1
+    fi
+    sleep 0.1
+  done
+fi
 
-echo "gateway → $HOST:$GW_PORT (core=http://127.0.0.1:$SIDECAR_PORT)"
-MAN_CORE_URL="http://127.0.0.1:$SIDECAR_PORT" \
+echo "gateway → $HOST:$GW_PORT (core=$CORE_URL)"
+MAN_CORE_URL="$CORE_URL" \
 MAN_GATEWAY_PORT="$GW_PORT" \
 RUST_LOG="${RUST_LOG:-slough_gateway=info}" \
 "$GW_BIN" >"$LOG_DIR/gateway.log" 2>&1 &
