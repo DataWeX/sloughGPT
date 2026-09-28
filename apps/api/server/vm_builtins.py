@@ -495,7 +495,7 @@ def _shell() -> str:
 prompt: db 10, "sloughvm> ", 0
 msg_nl: db 10, 0
 msg_sp: db " ", 0
-msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
+msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
 msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
 msg_unknown: db "unknown command - type help", 10, 0
 msg_clear: db 27, "[2J", 27, "[H", 0
@@ -512,6 +512,7 @@ msg_cp_usage: db "usage: cp <src> <dst>", 10, 0
 msg_cp_no_src: db "cp: no such file", 10, 0
 msg_cp_fail: db "cp: cannot create file", 10, 0
 msg_grep_usage: db "usage: grep <pattern> <file>", 10, 0
+msg_echo_usage: db "usage: echo <text> > <file>", 10, 0
 msg_grep_no_file: db "grep: no such file", 10, 0
 msg_train_started: db "started job ", 0
 msg_train_fail: db "train: could not start job", 10, 0
@@ -908,9 +909,114 @@ do_echo:
 echo_skip:
     mov al, [esi]
     cmp al, ' '
-    jne echo_pr
+    jne echo_gt
     inc esi
     jmp echo_skip
+echo_gt:
+    mov ebx, esi            ; EBX = text start (leading spaces skipped)
+echo_gt_scan:
+    mov al, [esi]
+    test al, al
+    jz echo_plain
+    cmp al, '>'
+    je echo_gt_found
+    inc esi
+    jmp echo_gt_scan
+echo_gt_found:
+    ; back-trim spaces before '>' so "echo hi > f" stores "hi", not "hi "
+    mov edi, esi            ; ESI stays on '>' (filename comes after it)
+echo_gt_bt:
+    cmp edi, ebx
+    jbe echo_gt_btempty
+    dec edi
+    mov al, [edi]
+    cmp al, ' '
+    je echo_gt_bt
+    inc edi
+    jmp echo_gt_nul
+echo_gt_btempty:
+    mov edi, ebx            ; text is empty/all spaces
+echo_gt_nul:
+    xor eax, eax
+    mov [edi], al           ; terminate the text part
+    inc esi                 ; ESI = filename start (after '>')
+echo_gt_sp:
+    mov al, [esi]
+    cmp al, ' '
+    jne echo_gt_tok
+    inc esi
+    jmp echo_gt_sp
+echo_gt_tok:
+    test al, al
+    jz echo_gt_usage
+    mov edi, esi            ; EDI = filename start
+echo_gt_scan2:
+    mov al, [edi]
+    test al, al
+    jz echo_gt_prep
+    cmp al, ' '
+    je echo_gt_endtok
+    inc edi
+    jmp echo_gt_scan2
+echo_gt_endtok:
+    xor eax, eax
+    mov [edi], al           ; terminate filename at the first trailing space
+    inc edi
+echo_gt_rest:
+    mov al, [edi]
+    test al, al
+    jz echo_gt_prep
+    cmp al, ' '
+    jne echo_gt_usage       ; extra args after the filename -> usage
+    inc edi
+    jmp echo_gt_rest
+echo_gt_prep:
+    push esi                ; filename (NUL-terminated)
+    push ebx                ; text start
+    mov esi, ebx
+    xor edx, edx
+echo_gt_clen:
+    mov al, [esi]
+    test al, al
+    jz echo_gt_clen_done
+    inc edx
+    inc esi
+    jmp echo_gt_clen
+echo_gt_clen_done:
+    pop ecx                 ; ECX = text start (WRITE buffer)
+    pop esi                 ; ESI = filename
+    push ecx                ; text start must survive OPEN
+    mov eax, {_NR_OPEN}
+    mov ebx, esi
+    mov ecx, 2              ; create+truncate
+    int 0x80
+    cmp eax, 0
+    jl echo_gt_open_fail
+    mov ebx, eax            ; fd
+    pop ecx                 ; ECX = text start
+    test edx, edx
+    jz echo_gt_nl
+    mov eax, {_NR_WRITE}
+    int 0x80                ; EBX=fd, ECX=text, EDX=len
+echo_gt_nl:
+    mov eax, {_NR_WRITE}
+    mov ecx, msg_nl
+    mov edx, 1
+    int 0x80                ; trailing newline, sh-style
+    mov eax, {_NR_CLOSE}
+    int 0x80
+    jmp repl
+echo_gt_open_fail:
+    pop ecx                 ; discard text start
+    mov esi, msg_open_fail
+    call print_str
+    jmp repl
+echo_gt_usage:
+    mov esi, msg_echo_usage
+    call print_str
+    jmp repl
+echo_plain:
+    mov esi, ebx            ; no '>' — print from text start
 echo_pr:
     call print_str
     mov esi, msg_nl

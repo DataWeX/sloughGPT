@@ -113,7 +113,7 @@ class TestShellKernel:
         text = "".join(out)
         assert "sloughvm>" in text
         assert (
-            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 
@@ -322,6 +322,90 @@ class TestShellKernel:
         check("grep\n", "usage: grep <pattern> <file>")
         check("grepx\n", "unknown command")
 
+    def test_shell_echo_redirect(self):
+        """REPL echo 'text > file' writes the file; shift symbols survive input."""
+        from vm_builtins import get_builtin
+
+        from domain.shell._internal.vm import X86VirtualSystem
+        from domain.shell._internal.vm_permissions import Role
+
+        vs = X86VirtualSystem(memory_size=0x100000)
+        pid = vs.spawn("web_user", get_builtin("shell"))
+        assert pid is not None
+        vs._syscall._rbac.assign(pid, Role.USER)
+        vs.scheduler.start(vs.cpu)
+        vs.scheduler.current.restore_to_cpu(vs.cpu)
+
+        out: list[str] = []
+        original = vs._syscall._sys_write
+
+        def capture(fd, addr, count):
+            if fd in (1, 2):
+                out.append(
+                    bytes(vs.cpu._read8(addr + i) for i in range(count)).decode("ascii", "replace")
+                )
+                return count
+            return original(fd, addr, count)
+
+        vs._syscall._sys_write = capture
+
+        def feed(text: str) -> None:
+            for ch in text:
+                vs.cpu.push_key(ch)
+
+        def run_steps(n: int) -> bool:
+            for _ in range(n):
+                vs.cpu.transfer_key()
+                if not vs.cpu.step():
+                    return True
+            return False
+
+        def check(cmd: str, expect: str) -> None:
+            out.clear()
+            feed(cmd)
+            assert not run_steps(60000), f"unexpected halt running {cmd!r}"
+            text = "".join(out)
+            assert expect in text, f"{cmd!r} -> {text!r}"
+
+        # '>' and '%' have no unshifted set-1 scancode — they used to be
+        # dropped before ever reaching the REPL.
+        feed("echo hi > greet.txt\n")
+        assert not run_steps(60000)
+        assert vs._fs.exists("greet.txt"), "redirect target not created"
+        # FlatFS stores sector-padded; compare up to the first NUL.
+        content = vs._fs.read("greet.txt").split(b"\x00")[0]
+        assert content == b"hi\n", content
+
+        # No-space form exercises the same split path.
+        feed("echo yo > y.txt\n")
+        assert not run_steps(60000)
+        content = vs._fs.read("y.txt").split(b"\x00")[0]
+        assert content == b"yo\n", content
+
+        # Plain echo with a shift symbol prints verbatim (no redirect):
+        # appears once as typed echo-back, once as command output.
+        out.clear()
+        feed("echo 100% sure\n")
+        assert not run_steps(60000)
+        text = "".join(out)
+        assert text.count("100% sure") >= 2, text
+
+        # The redirected text is not printed to the console (sh semantics):
+        # only the typed line echoes back, then the next prompt.
+        out.clear()
+        feed("echo secret > hidden.txt\n")
+        assert not run_steps(60000)
+        text = "".join(out)
+        after_prompt = text.rsplit("sloughvm> ", 1)[-1]
+        assert "secret" not in after_prompt, text
+
+        # Redirect through cat round-trips.
+        check("cat greet.txt\n", "hi")
+
+        # Usage paths: missing target and extra args.
+        check("echo hi >\n", "usage: echo <text> > <file>")
+        check("echo hi > f.txt extra\n", "usage: echo <text> > <file>")
+
     def test_shell_train_commands(self, monkeypatch):
         """REPL train/train-status/train-result with a fake training bridge."""
         from vm_builtins import get_builtin
@@ -446,7 +530,7 @@ class TestVMConsoleHTTP:
 
             text = _wait_history(session_id, "commands:")
             assert (
-                "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
+                "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
                 in text
             )
 
@@ -556,7 +640,7 @@ class TestVMConsoleStream:
         await console_session_input(session_id, VMConsoleInputRequest(text="help\n"), auth_user={})
         text = await self._read_output(it, lambda t: "commands:" in t)
         assert (
-            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt"
+            "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text> [> <file>], write <file> <text>, train, train-status, train-result, about, clear, halt"
             in text
         )
 

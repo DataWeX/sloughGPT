@@ -51,7 +51,7 @@ own persistent-block-device filesystem that resets with the session.
 | `cp <src> <dst>`                        | Copy a file (truncates dst)       |
 | `grep <pattern> <file>`                 | Search a file for matching lines  |
 | `write <file> <text>`                   | Create/overwrite a file with text |
-| `echo <text>`                           | Print text                        |
+| `echo <text>`                           | Print text; `echo <text> > <file>` writes the file (create/truncate) instead |
 | `uname`                                 | Kernel name/version               |
 | `pid`                                   | Current process id                |
 | `clear`                                 | Clear the screen                  |
