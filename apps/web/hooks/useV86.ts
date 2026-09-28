@@ -59,10 +59,14 @@ export async function probeImage(url: string): Promise<ProbeResult> {
   try {
     let res = await fetch(url, {
       method: 'HEAD',
+      referrerPolicy: 'no-referrer',
       signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
     })
     if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, { signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS) })
+      res = await fetch(url, {
+        referrerPolicy: 'no-referrer',
+        signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
+      })
       res.body?.cancel().catch(() => undefined)
     }
     if (!res.ok && res.status !== 206) return { available: false }

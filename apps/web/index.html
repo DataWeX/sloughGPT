@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!--
+      No referrer anywhere: the boot-image CDN hotlink-blocks referred requests
+      (403), and v86 loads its ISO via XMLHttpRequest where per-request
+      referrerPolicy is not configurable. Document-wide policy covers probes,
+      image loads, and the emulator alike.
+    -->
+    <meta name="referrer" content="no-referrer" />
     <title>Man - AI Platform</title>
     <meta name="description" content="Enterprise-grade AI framework with production-ready ML infrastructure" />
     <link rel="icon" href="/favicon.svg" />
