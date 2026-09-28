@@ -58,10 +58,13 @@ own persistent-block-device filesystem that resets with the session.
 | `halt`                                  | End the session (stream closes)   |
 | `train`, `train-status`, `train-result` | Training bridge (ADMIN role only) |
 
-Line editing is client-side: Up/Down recall history, Backspace sends `0x0E`. The kernel
-has no `>` redirect (the keyboard path has no shift state) — use `write`/`cp` instead;
-`rm`/`mv` await `SYS_UNLINK` in the VM. Unknown input replies with the usage/unknown
-banner. Latency and throughput baselines come from
+Line editing is client-side: Up/Down recall history, Backspace sends `0x0E`. If the SSE
+connection drops, the error banner's **Reconnect** button re-subscribes the same
+session — the server re-sends the full scrollback as backlog (sequence-deduplicated),
+so the session filesystem and history survive; only **Restart** (a new session)
+resets them. The kernel has no `>` redirect (the keyboard path has no shift state) — use
+`write`/`cp` instead; `rm`/`mv` await `SYS_UNLINK` in the VM. Unknown input replies with
+the usage/unknown banner. Latency and throughput baselines come from
 `scripts/benchmark_vm_shell.py`.
 
 ## RBAC Model

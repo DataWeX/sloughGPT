@@ -508,6 +508,45 @@ class TestVMConsoleStream:
         await _SESSIONS[session_id].close()
         _SESSIONS.pop(session_id, None)
 
+    async def test_stream_reconnect_resends_full_backlog(self):
+        """A second subscriber gets complete scrollback, then live output (reconnect path)."""
+        _reset_sessions()
+        created = await create_console_session(VMConsoleCreateRequest(role="user"), auth_user={})
+        session_id = created["data"]["session_id"]
+        try:
+            for _ in range(100):
+                if "sloughvm>" in "".join(_SESSIONS[session_id].history):
+                    break
+                await asyncio.sleep(0.05)
+
+            # First subscriber takes the boot backlog and one live round-trip.
+            it1 = await self._open(session_id)
+            text1 = await self._read_output(it1, lambda t: "sloughvm>" in t)
+            assert "sloughvm>" in text1
+            await console_session_input(
+                session_id, VMConsoleInputRequest(text="echo recon\n"), auth_user={}
+            )
+            text1 = await self._read_output(it1, lambda t: "recon" in t)
+            assert "recon" in text1
+            # Client drops the connection.
+            await it1.aclose()
+
+            # Reconnect: new subscriber must see the whole scrollback again…
+            it2 = await self._open(session_id)
+            text2 = await self._read_output(it2, lambda t: "recon" in t)
+            assert "sloughvm>" in text2
+            assert "recon" in text2
+            # …and keep receiving live output after reconnect.
+            await console_session_input(
+                session_id, VMConsoleInputRequest(text="echo again\n"), auth_user={}
+            )
+            text2 = await self._read_output(it2, lambda t: "again" in t)
+            assert "again" in text2
+            await it2.aclose()
+        finally:
+            await _SESSIONS[session_id].close()
+            _SESSIONS.pop(session_id, None)
+
     async def test_stream_rejects_unknown_session(self):
         from domain.infrastructure._internal.errors import AppError
 

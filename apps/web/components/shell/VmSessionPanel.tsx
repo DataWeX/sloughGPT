@@ -37,7 +37,7 @@ const PHASE_DOT: Record<VmConsolePhase, string> = {
  * ```
  */
 export function VmSessionPanel({ className, role }: VmSessionPanelProps) {
-  const { phase, output, error, start, sendInput } = useVmConsole()
+  const { phase, output, error, start, sendInput, sessionId, reconnect } = useVmConsole()
   const [input, setInput] = useState('')
   const startedRef = useRef(false)
   const scrollRef = useRef<HTMLPreElement>(null)
@@ -121,10 +121,20 @@ export function VmSessionPanel({ className, role }: VmSessionPanelProps) {
 
       {error && (
         <div
-          className="border-t border-border px-3 py-2 text-xs text-destructive"
+          className="flex items-center gap-3 border-t border-border px-3 py-2 text-xs"
           data-testid="vm-session-error"
         >
-          {error}
+          <span className="flex-1 text-destructive">{error}</span>
+          {sessionId && (
+            <button
+              type="button"
+              onClick={() => reconnect()}
+              data-testid="vm-session-reconnect"
+              className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Reconnect
+            </button>
+          )}
         </div>
       )}
 

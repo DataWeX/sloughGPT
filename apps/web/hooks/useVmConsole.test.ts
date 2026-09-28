@@ -156,6 +156,51 @@ describe('useVmConsole', () => {
     expect(result.current.phase).toBe('closed')
   })
 
+  it('stream drop enters error phase; reconnect resubscribes and rebuilds from backlog', async () => {
+    const { result } = renderHook(() => useVmConsole())
+    await act(async () => {
+      await result.current.start()
+    })
+    act(() => {
+      emit({ stream: 'vm_console', phase: 'output', data: { text: 'sloughvm> ls\n' } })
+    })
+    expect(result.current.output).toBe('sloughvm> ls\n')
+
+    act(() => {
+      const es = MockEventSource.instances[0]
+      es.readyState = MockEventSource.CLOSED
+      es.onerror?.()
+    })
+    expect(result.current.phase).toBe('error')
+
+    act(() => {
+      result.current.reconnect()
+    })
+    expect(MockEventSource.instances).toHaveLength(2)
+    expect(MockEventSource.instances[1].url).toBe('http://localhost:8000/vm/session/sid-1/stream')
+    expect(MockEventSource.instances[0].closed).toBe(true)
+    expect(result.current.sessionId).toBe('sid-1')
+    expect(result.current.phase).toBe('connecting')
+    expect(result.current.error).toBeNull()
+    expect(result.current.output).toBe('')
+
+    act(() => {
+      emit({ stream: 'vm_console', phase: 'start', status: 'continue', data: {} }, 1)
+      emit({ stream: 'vm_console', phase: 'output', data: { text: 'sloughvm> ls\n' } }, 1)
+    })
+    expect(result.current.phase).toBe('live')
+    expect(result.current.output).toBe('sloughvm> ls\n')
+  })
+
+  it('reconnect without a session is a no-op', () => {
+    const { result } = renderHook(() => useVmConsole())
+    act(() => {
+      result.current.reconnect()
+    })
+    expect(MockEventSource.instances).toHaveLength(0)
+    expect(result.current.phase).toBe('idle')
+  })
+
   it('clear command (ESC[2J) resets the output buffer', async () => {
     const { result } = renderHook(() => useVmConsole())
     await act(async () => {

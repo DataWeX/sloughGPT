@@ -5,20 +5,23 @@ import { VmSessionPanel } from './VmSessionPanel'
 const mockStart = vi.fn().mockResolvedValue(undefined)
 const mockSendInput = vi.fn().mockResolvedValue(undefined)
 const mockDisconnect = vi.fn().mockResolvedValue(undefined)
+const mockReconnect = vi.fn()
 
 let mockPhase = 'live'
 let mockOutput = ''
 let mockError: string | null = null
+let mockSessionId: string | null = 'sid-1'
 
 vi.mock('@/hooks/useVmConsole', () => ({
   useVmConsole: () => ({
-    sessionId: 'sid-1',
+    sessionId: mockSessionId,
     phase: mockPhase,
     output: mockOutput,
     error: mockError,
     start: mockStart,
     sendInput: mockSendInput,
     disconnect: mockDisconnect,
+    reconnect: mockReconnect,
   }),
 }))
 
@@ -63,9 +66,30 @@ describe('VmSessionPanel', () => {
     mockError = 'server down'
     render(<VmSessionPanel />)
     expect(screen.getByTestId('vm-session-status').textContent).toBe('Error')
-    expect(screen.getByTestId('vm-session-error').textContent).toBe('server down')
+    expect(screen.getByTestId('vm-session-error').textContent).toContain('server down')
     mockPhase = 'live'
     mockError = null
+  })
+
+  it('error banner offers reconnect for an existing session', () => {
+    mockPhase = 'error'
+    mockError = 'stream dropped'
+    render(<VmSessionPanel />)
+    fireEvent.click(screen.getByTestId('vm-session-reconnect'))
+    expect(mockReconnect).toHaveBeenCalledTimes(1)
+    mockPhase = 'live'
+    mockError = null
+  })
+
+  it('no reconnect button without a session id', () => {
+    mockPhase = 'error'
+    mockError = 'start failed'
+    mockSessionId = null
+    render(<VmSessionPanel />)
+    expect(screen.queryByTestId('vm-session-reconnect')).toBeNull()
+    mockPhase = 'live'
+    mockError = null
+    mockSessionId = 'sid-1'
   })
 
   it('submits typed command with newline', () => {

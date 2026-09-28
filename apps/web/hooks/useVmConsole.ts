@@ -26,6 +26,8 @@ export interface UseVmConsoleResult {
   error: string | null
   start: (role?: string) => Promise<void>
   sendInput: (text: string) => Promise<void>
+  /** Re-subscribe the SSE stream for the existing session (keeps its filesystem). */
+  reconnect: () => void
   disconnect: () => Promise<void>
 }
 
@@ -142,6 +144,18 @@ export function useVmConsole(): UseVmConsoleResult {
     }
   }, [])
 
+  const reconnect = useCallback(() => {
+    const sid = sessionRef.current
+    if (!sid) return
+    esRef.current?.close()
+    setError(null)
+    // The server re-sends the full scrollback as backlog on the new
+    // subscription, so drop local output first to avoid duplicates.
+    setOutput('')
+    setPhase('connecting')
+    openStream(sid)
+  }, [openStream])
+
   const disconnect = useCallback(async () => {
     esRef.current?.close()
     esRef.current = null
@@ -164,5 +178,5 @@ export function useVmConsole(): UseVmConsoleResult {
     }
   }, [])
 
-  return { sessionId, phase, output, error, start, sendInput, disconnect }
+  return { sessionId, phase, output, error, start, sendInput, reconnect, disconnect }
 }
