@@ -44,6 +44,7 @@ try:
 except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
+from domain.training._internal.corpus_loader import is_structured, load_corpus_file
 from domain.training._internal.experience_adapter import (
     is_experience_source,
     load_experience_text,
@@ -220,7 +221,7 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
         feedback = None
         if isinstance(data_path, str) and data_path.startswith("experience:"):
             # experience:<corpus_path> optional single override
-            rest = data_path[len("experience:"):]
+            rest = data_path[len("experience:") :]
             if rest and rest not in ("chat", "owned"):
                 corpus = rest
         text, _pairs = load_experience_text(
@@ -296,8 +297,11 @@ def prepare_data(data_path, block_size=128, tokenizer=None):
                 raise FileNotFoundError(
                     f"Data file not found: '{data_path}' (tried '{path}' and '{alt}')"
                 )
-        with open(path, encoding="utf-8") as f:
-            text = f.read()
+        if is_structured(path):
+            text = "\n\n".join(load_corpus_file(path))
+        else:
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
 
     if tokenizer is not None:
         data = np.asarray(tokenizer.encode(text), dtype=np.int64)

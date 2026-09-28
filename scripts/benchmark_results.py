@@ -378,7 +378,9 @@ def do_compare(args) -> int:
             return min(vals) if vals else None
 
         nf, of = _best_final(new), _best_final(old)
-        print(f"  best_final_loss        {of:<10} → {nf:<10}")
+        of_s = f"{of:.4f}" if of is not None else "-"
+        nf_s = f"{nf:.4f}" if nf is not None else "-"
+        print(f"  best_final_loss        {of_s:<10} → {nf_s:<10}")
         if nf is not None and of is not None and nf > of * 1.5:
             print("  → [FAIL] training final_loss regressed vs prior run")
             return 1
