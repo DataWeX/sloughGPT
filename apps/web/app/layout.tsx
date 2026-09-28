@@ -33,6 +33,22 @@ export const metadata: Metadata = {
     'Man — your personal AI. Train it on your own data, then chat, write and learn together.',
   icons: { icon: '/favicon.svg' },
   manifest: '/manifest.json',
+  openGraph: {
+    title: 'Man - AI Platform',
+    description:
+      'Man — your personal AI. Train it on your own data, then chat, write and learn together.',
+    type: 'website',
+    siteName: 'Man - AI Platform',
+    locale: 'en_US',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Man - AI Platform' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Man - AI Platform',
+    description:
+      'Man — your personal AI. Train it on your own data, then chat, write and learn together.',
+    images: ['/og.png'],
+  },
 }
 
 /** Enables `env(safe-area-inset-*)` under notches / home indicators on mobile. */

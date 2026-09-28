@@ -62,6 +62,13 @@ describe('RootLayout', () => {
     expect(metadata.description).toContain('personal AI')
     expect(metadata.description).not.toContain('Enterprise-grade')
     expect(metadata.manifest).toBe('/manifest.json')
+    const og = metadata.openGraph as { title?: string; type?: string; images?: unknown }
+    expect(og.title).toBe('Man - AI Platform')
+    expect(og.type).toBe('website')
+    expect(og.images).toMatchObject([{ url: '/og.png', width: 1200, height: 630 }])
+    const tw = metadata.twitter as { card?: string; images?: unknown }
+    expect(tw.card).toBe('summary_large_image')
+    expect(tw.images).toEqual(['/og.png'])
   })
 
   it('exports a mobile-safe viewport', () => {
