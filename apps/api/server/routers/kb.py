@@ -317,7 +317,7 @@ class KBRouter:
         limit: int = Query(200, ge=1, le=5000),
         offset: int = Query(0, ge=0),
         auth_user: dict = Depends(require_auth_if_enabled),
-    ) -> dict:
+    ) -> list:
         try:
             memory = self._engine.get_memory()
             entries = memory.list_all(top_k=limit + offset + 1000)

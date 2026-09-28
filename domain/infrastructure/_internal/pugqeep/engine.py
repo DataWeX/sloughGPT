@@ -36,6 +36,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
 
+from ..cancel_manager import OpType, get_cancel_manager
 from .config import RestartPolicy
 
 logger = logging.getLogger("slo.pugqeep.engine")
@@ -174,7 +175,8 @@ class Process:
 
     @property
     def stream_results(self) -> list[Any]:
-        return self._stream_results
+        # Snapshot copy — an earlier r1 must not alias the live buffer.
+        return list(self._stream_results)
 
     @property
     def progress(self) -> float:
@@ -453,6 +455,7 @@ class GuardTree(Tree):
             "subprocess_enabled": self.subprocess_config is not None
             and self.subprocess_config.enabled,
             "subprocess_count": self.subprocess_count,
+            "active_subprocesses": sum(1 for s in self._subprocesses.values() if s.is_alive()),
         }
 
 
@@ -813,13 +816,14 @@ class ProcessGroup:
         self.engine = engine
         self._processes: list[Process] = []
         self._done_event = threading.Event()
+        self._created_at = time.time()
 
     def add(self, proc: Process) -> None:
         self._processes.append(proc)
 
     def spawn(self, fn, *args, **kwargs) -> Process:
         if self.engine is None:
-            raise RuntimeError("No engine attached to ProcessGroup")
+            raise RuntimeError("ProcessGroup not attached to an Engine")
         proc = self.engine.spawn(fn, *args, **kwargs)
         self._processes.append(proc)
         return proc
@@ -835,9 +839,10 @@ class ProcessGroup:
     @property
     def elapsed(self) -> float | None:
         starts = [p.started_at for p in self._processes if p.started_at]
-        ends = [p.completed_at or time.time() for p in self._processes]
         if not starts:
-            return 0.0
+            # Nothing has run yet — the group's own lifetime is the metric.
+            return time.time() - self._created_at
+        ends = [p.completed_at or time.time() for p in self._processes]
         return max(ends) - min(starts)
 
     def results(self) -> list[Any]:
@@ -1200,8 +1205,23 @@ class Engine:
         self._all_done_event.clear()
         self._metrics.record_spawn()
 
-        if register_cancel and self._monitor:
-            self._monitor.track(proc)
+        if register_cancel:
+            mgr = get_cancel_manager()
+            mgr.register(
+                OpType.OTHER,
+                f"engine[{self.name}] {name or fn.__name__}",
+                cancel_fn=proc.cancel,
+                meta={"engine": self.name},
+                op_id=proc.id,
+            )
+
+            def _finish_cancel_op(p: Process, _mgr=mgr) -> None:
+                _mgr.finish(p.id, error=p.error if p.status == ProcessStatus.FAILED else None)
+
+            proc.on_complete(_finish_cancel_op)
+            proc.on_fail(_finish_cancel_op)
+            if self._monitor:
+                self._monitor.track(proc)
 
         if self._spawn_queue is not None:
             self._spawn_queue.put(proc, priority=priority)
@@ -1450,7 +1470,8 @@ class Engine:
         if proc.is_done:
             return proc
         proc._done_event.wait(timeout=timeout)
-        return proc if proc.is_done else None
+        # Timeout returns the live process too — caller inspects status.
+        return proc
 
     def wait_for_any(self, proc_ids: list[str], timeout: float = None) -> Process | None:
         # Check if any already done
@@ -1597,6 +1618,7 @@ class Engine:
         return {
             "name": self.name,
             "running": self._running,
+            "trees": {n: t.to_dict() for n, t in self._trees.items()},
             "tree_count": len(self._trees),
             "process_count": len(self._processes),
             "pending": len(self._pending),
