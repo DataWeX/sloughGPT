@@ -21,3 +21,6 @@ async-stream = "0.3"
 bytes = "1"
 flate2 = "1"
 zstd = "0.13"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
