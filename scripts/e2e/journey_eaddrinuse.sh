@@ -45,8 +45,11 @@ run_case() {  # $1=case label, $2=busy port, $3=api port, $4=web port, $5=expect
   sleep 0.3
   if kill -0 "$BPID" 2>/dev/null; then ok "$LABEL: blocker holds :$BUSY"; else bad "$LABEL: blocker failed to bind :$BUSY"; return; fi
 
+  # Headless `setsid -w`: remediation/traceback greps use log.* (prints
+  # in non-tty), and the leftover checks only bite when pty teardown
+  # cannot SIGHUP the leaked children first; -w gives the exit code.
   NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
-    setsid script -qec "./sloughgpt --port $API_P dev --web-port $WEB_P" /dev/null \
+    setsid -w ./sloughgpt --port $API_P dev --web-port $WEB_P \
     > "$LOG" 2>&1 < /dev/null &
   local SPID=$!
 
@@ -62,8 +65,16 @@ run_case() {  # $1=case label, $2=busy port, $3=api port, $4=web port, $5=expect
     fi
     sleep 1
   done
-  if [ -n "$CLI_DEAD" ]; then ok "$LABEL: cli exited on its own (${CLI_DEAD}s)"
-  else bad "$LABEL: cli still alive 60s after start"; fi
+  local EC=0
+  if [ -n "$CLI_DEAD" ]; then
+    ok "$LABEL: cli exited on its own (${CLI_DEAD}s)"
+    wait "$SPID" 2>/dev/null
+    EC=$?
+    if [ "$EC" = "0" ]; then ok "$LABEL: clean exit after remediation (exit 0)"
+    else bad "$LABEL: exit $EC after remediation (expected clean 0)"; fi
+  else
+    bad "$LABEL: cli still alive 60s after start"
+  fi
 
   # ANSI-free view of the log for stable greps
   sed 's/\x1b\[[0-9;]*[A-Za-z]//g' "$LOG" > "$CLEAN"

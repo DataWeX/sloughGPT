@@ -64,10 +64,19 @@ launch() {
     > "$1" 2>&1 < /dev/null &
 }
 
+launch_headless() {
+  # Headless `setsid -w` for phases whose asserts are lifecycle-only
+  # (exit/orphan/port): pty teardown would SIGHUP leaked children before
+  # the orphan check, and -w propagates the exit code (0 = handler ran).
+  NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
+    setsid -w ./sloughgpt serve --mobile --port $API_P --host localhost \
+    > "$1" 2>&1 < /dev/null &
+}
+
 # ── Phase A: startup SIGINT (pre-ready) ──
 LOGA="$LOG_DIR/journey_m.phaseA.log"
 rm -f "$LOGA" "$FAKE_NPM_LOG"
-launch "$LOGA"
+launch_headless "$LOGA"
 SPA=$!
 APID=""
 UVID=""
@@ -93,10 +102,12 @@ else
   done
   if [ -n "$EXITED" ]; then
     ok "phaseA: startup SIGINT honoured (exit ${EXITED}s)"
-    if grep -qE "Stopped|Interrupted" <(sed $'s/\x1b\[[0-9;]*[A-Za-z]//g' "$LOGA"); then
-      ok "phaseA: shutdown acknowledged (Stopped/Interrupted)"
+    wait "$SPA" 2>/dev/null
+    EC=$?
+    if [ "$EC" = "0" ]; then
+      ok "phaseA: handler path ran (exit 0; bare 'Interrupted' = 130)"
     else
-      bad "phaseA: no shutdown acknowledgement"
+      bad "phaseA: exit $EC after startup SIGINT (130 = handler never ran)"
     fi
   else
     bad "phaseA: cli survived startup SIGINT"

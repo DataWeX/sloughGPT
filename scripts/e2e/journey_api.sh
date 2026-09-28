@@ -25,8 +25,11 @@ rm -f "$LOG" "$FAKE_NPM_LOG"
 # spawned uvicorn/web child or leaving the session running.
 LOG0="$LOG_DIR/journey_api.phase0.log"
 rm -f "$LOG0"
+# Headless `setsid -w`: the summary/remediation greps are log.* (print
+# headless), while pty teardown would SIGHUP leaked children before the
+# orphan check; -w propagates the exit code (0 = handler path ran).
 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
-  setsid script -qec "./sloughgpt --port $API_PORT dev --web-port $WEB_PORT" /dev/null \
+  setsid -w ./sloughgpt --port $API_PORT dev --web-port $WEB_PORT \
   > "$LOG0" 2>&1 < /dev/null &
 S0=$!
 C0=""
@@ -49,8 +52,15 @@ else
     if ! kill -0 "$C0" 2>/dev/null; then E0=$i; break; fi
     sleep 1
   done
-  if [ -n "$E0" ]; then ok "phase0: startup SIGINT honoured (exit ${E0}s)"
-  else bad "phase0: cli survived startup SIGINT"; kill -9 "$C0" 2>/dev/null; fi
+  if [ -n "$E0" ]; then
+    ok "phase0: startup SIGINT honoured (exit ${E0}s)"
+    wait "$S0" 2>/dev/null
+    EC0=$?
+    if [ "$EC0" = "0" ]; then ok "phase0: handler path ran (exit 0; bare 'Interrupted' = 130)"
+    else bad "phase0: exit $EC0 after startup SIGINT (130 = handler never ran)"; fi
+  else
+    bad "phase0: cli survived startup SIGINT"; kill -9 "$C0" 2>/dev/null
+  fi
   if grep -aq "Dev Server Stopped" <(sed $'s/\x1b\[[0-9;]*[A-Za-z]//g' "$LOG0"); then
     ok "phase0: shutdown summary printed (finally ran)"
   else
@@ -84,7 +94,7 @@ except Exception: print('CLOSED')
 done
 
 NVM_DIR=/nonexistent PATH="$BASE/fakebin:$PATH" \
-  setsid script -qec "./sloughgpt --port $API_PORT dev --web-port $WEB_PORT" /dev/null \
+  setsid -w ./sloughgpt --port $API_PORT dev --web-port $WEB_PORT \
   > "$LOG" 2>&1 < /dev/null &
 SPID=$!
 
@@ -116,8 +126,15 @@ for i in $(seq 1 20); do
   if [ -n "$CLI_PID" ] && ! kill -0 "$CLI_PID" 2>/dev/null; then DEAD=$i; break; fi
   sleep 1
 done
-if [ -n "$DEAD" ]; then ok "cli exited on its own after api death (${DEAD}s)"
-else bad "cli still alive 20s after api death"; fi
+if [ -n "$DEAD" ]; then
+  ok "cli exited on its own after api death (${DEAD}s)"
+  wait "$SPID" 2>/dev/null
+  EC=$?
+  if [ "$EC" = "0" ]; then ok "clean session end after api death (exit 0)"
+  else bad "exit $EC after api death (expected clean 0)"; fi
+else
+  bad "cli still alive 20s after api death"
+fi
 
 if grep -aq "API server exited" "$LOG"; then ok "log contains 'API server exited'"
 else bad "no 'API server exited' in log"; fi
