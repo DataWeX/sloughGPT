@@ -143,7 +143,7 @@ class TestGenerate:
     async def test_generate_returns_string(self, server):
         result = await server.generate("hello")
         assert isinstance(result, str)
-        assert result == "hello world"
+        assert result == "world"
 
     async def test_generate_passes_prompt(self, server):
         await server.generate("test prompt")
@@ -173,7 +173,7 @@ class TestGenerate:
     async def test_generate_queue_full_isolation(self, server):
         tasks = [server.generate("hello") for _ in range(2)]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        assert all(r == "hello world" for r in results)
+        assert all(r == "world" for r in results)
 
     async def test_generate_timeout(self, mock_model, mock_tokenizer):
         def _slow(*a, **kw):
@@ -760,7 +760,9 @@ class TestPoolMode:
         factory.return_value = model
         tokenizer = MagicMock()
         tokenizer.encode.return_value = [10, 20, 30]
-        tokenizer.decode.return_value = "pool result"
+        tokenizer.decode.side_effect = (
+            lambda ids: "hello" if list(ids) == [10, 20, 30] else "hello pool result"
+        )
         tokenizer.eos_token_id = 0
 
         s = SloNetServer(
@@ -883,6 +885,9 @@ class TestProcessGuardDelegation:
         self, mock_model, mock_tokenizer
     ):
         dead = _FakeGuard(alive=False)
+        mock_tokenizer.decode.side_effect = (
+            lambda ids: "hi" if list(ids) == [10, 20, 30] else "hi hello world"
+        )
         srv = SloNetServer(
             model=mock_model,
             tokenizer=mock_tokenizer,

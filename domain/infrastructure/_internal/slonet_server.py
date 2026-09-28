@@ -311,9 +311,9 @@ class SloNetServer:
                 repetition_penalty=repetition_penalty,
             )
             full = result.get("text", "")
-            # Worker returns full decode (prompt+gen) — strip prompt echo before truncating.
-            if prompt and prompt in full:
-                full = full.split(prompt)[-1]
+            # Worker may return full decode (prompt+gen) — strip a real prefix echo only.
+            if prompt and full.startswith(prompt):
+                full = full[len(prompt) :]
             text = _truncate_at_stop_markers(full).strip()
             logger.debug(
                 "generate_sync",
@@ -356,14 +356,14 @@ class SloNetServer:
                         text = ""
                 else:
                     text = self._tokenizer.decode(result[0].tolist())
-                    # Strip prompt echo if present
-                    if prompt and prompt in text:
-                        text = text.split(prompt)[-1].strip()
+                    # Strip prompt echo only when the decode actually starts with it.
+                    if prompt and text.startswith(prompt):
+                        text = text[len(prompt) :].strip()
                     else:
                         try:
                             pt = self._tokenizer.decode(tokens)
-                            if pt and pt in text:
-                                text = text.split(pt)[-1].strip()
+                            if pt and text.startswith(pt):
+                                text = text[len(pt) :].strip()
                         except Exception:
                             pass
                 text = _truncate_at_stop_markers(text).strip()
