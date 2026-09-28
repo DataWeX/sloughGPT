@@ -297,3 +297,122 @@ class TestMatchRepoFile:
         match = _match_repo_file("model-00001-of-00003.safetensors", files)
         assert match is not None
         assert "00001" in match.path
+
+
+# ── STALE-STATE DISK TRUTH ──────────────────────────────────────────────────
+
+
+class TestStaleStateDiskTruth:
+    """download_hf_model must re-download when state says complete but the
+    file is missing on disk (a wiped cache + stale ~/.downcraft/state.json
+    used to no-op at 0.0s and leave an empty husk)."""
+
+    def test_missing_file_with_complete_state_is_downloaded(self, tmp_path, monkeypatch):
+        from types import SimpleNamespace
+
+        from domain.infrastructure._internal import hf_hub
+
+        model_id = "acme/widget"
+        cache_dir = tmp_path / "models--acme--widget"
+        hf_file = HFFile(path="config.json", size=4, checksum="", download_url="http://x/f")
+        downloaded: list[str] = []
+
+        def fake_download_file(
+            url, dest, expected_size=None, checksum=None, on_chunk=None, on_complete=None
+        ):
+            downloaded.append(url)
+            dest = Path(dest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(b"abcd")
+            if on_complete:
+                on_complete(dest)
+
+        class FakeFileEntry:
+            complete = True
+
+        class FakeSession:
+            def __init__(self):
+                self.files = {"config.json": FakeFileEntry()}
+
+            def update_file_progress(self, *args, **kwargs):
+                pass
+
+        class FakeState:
+            def get(self, mid):
+                return SimpleNamespace(status="complete", dest_dir=str(cache_dir))
+
+            def create(self, mid, cd):
+                return FakeSession()
+
+            def update_file_progress(self, *args, **kwargs):
+                pass
+
+            def set_status(self, *args, **kwargs):
+                pass
+
+            def flush(self):
+                pass
+
+        monkeypatch.setattr(hf_hub, "list_model_files", lambda mid: [hf_file])
+        monkeypatch.setattr(hf_hub, "get_cache_dir", lambda mid, hf_home=None: cache_dir)
+        monkeypatch.setattr(hf_hub.dc_state, "get_state", lambda: FakeState())
+        monkeypatch.setattr(hf_hub, "download_file", fake_download_file)
+
+        result = hf_hub.download_hf_model(model_id)
+
+        assert downloaded == ["http://x/f"], "stale complete state must not skip a missing file"
+        assert (cache_dir / "snapshots" / "default" / "config.json").is_file()
+        assert result["status"] == "complete"
+
+    def test_complete_state_with_file_on_disk_is_not_redownloaded(self, tmp_path, monkeypatch):
+        from types import SimpleNamespace
+
+        from domain.infrastructure._internal import hf_hub
+
+        model_id = "acme/keep"
+        cache_dir = tmp_path / "models--acme--keep"
+        dest = cache_dir / "snapshots" / "default" / "config.json"
+        dest.parent.mkdir(parents=True)
+        dest.write_bytes(b"abcd")
+        hf_file = HFFile(path="config.json", size=4, checksum="", download_url="http://x/f")
+        downloaded: list[str] = []
+
+        class FakeFileEntry:
+            complete = True
+
+        class FakeSession:
+            def __init__(self):
+                self.files = {"config.json": FakeFileEntry()}
+
+            def update_file_progress(self, *args, **kwargs):
+                pass
+
+        class FakeState:
+            def get(self, mid):
+                return SimpleNamespace(status="complete", dest_dir=str(cache_dir))
+
+            def create(self, mid, cd):
+                return FakeSession()
+
+            def update_file_progress(self, *args, **kwargs):
+                pass
+
+            def set_status(self, *args, **kwargs):
+                pass
+
+            def flush(self):
+                pass
+
+        def boom(*args, **kwargs):
+            downloaded.append("unexpected")
+            raise AssertionError("must not download when file is on disk")
+
+        monkeypatch.setattr(hf_hub, "list_model_files", lambda mid: [hf_file])
+        monkeypatch.setattr(hf_hub, "get_cache_dir", lambda mid, hf_home=None: cache_dir)
+        monkeypatch.setattr(hf_hub.dc_state, "get_state", lambda: FakeState())
+        monkeypatch.setattr(hf_hub, "download_file", boom)
+
+        result = hf_hub.download_hf_model(model_id)
+
+        assert downloaded == []
+        assert result["status"] == "complete"
