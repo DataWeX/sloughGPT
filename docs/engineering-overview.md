@@ -140,7 +140,28 @@ React Native 0.86. 32 screens, 32 services.
 
 Rust/Axum reverse proxy (`slough-gateway`, binds `:8080`).
 
-**Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present.
+**Three hops, each with one job:**
+
+```
+browser ─► edge gateway :8080 ─► FastAPI sidecar :8000 ─► domain/ + infrastructure/
+          filters, health,       routers, envelope,       logic — no HTTP
+          static, compression    error taxonomy
+```
+
+**Edge owns compression — one encoder, one hop, no double-encode.** The relay
+asks the sidecar for `accept-encoding: identity` and re-encodes per _client_
+negotiation (zstd > gzip; streaming — the body is never buffered; identity for
+`Range`/206/`no-transform`/tiny known bodies/HEAD/non-negotiating clients).
+SSE token streams compress from byte 0: no `Content-Length`, so no size gate
+and no first-token hold. Benchmark A/B = omit vs send `Accept-Encoding`;
+ratios live in `scripts/benchmark_gateway_compression.py --class sse`.
+
+**Contract pass-through:** only the 8 RFC 9110 hop-by-hop headers are stripped —
+`Authorization`, `X-Correlation-ID`, `Retry-After`, and the standard envelope
+cross untouched. CORS is allow-any (bearer-token auth, no cookies), matching
+`http-client.ts`.
+
+**Role:** Fast entry point. Generic byte-relay to Python core. Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present.
 
 **Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + filters + compression + health + static files.
 
