@@ -17,6 +17,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from .policy import default_state_path
+
 UNIT_NAME = "chargectl"
 SYSTEM_UNIT_DIRS: tuple[Path, ...] = (
     Path("/etc/systemd/system"),
@@ -25,6 +27,7 @@ SYSTEM_UNIT_DIRS: tuple[Path, ...] = (
 )
 USER_UNIT_DIR = Path("~/.config/systemd/user")
 RUN_DIR = Path("/run/systemd/system")
+SYSTEM_STATE_PATH = Path("/var/lib/chargectl/state.json")
 TIMEOUT = 4.0
 
 Runner = Callable[[Sequence[str]], str | None]
@@ -183,3 +186,18 @@ def service_status(
         exec_start=exec_start,
         reason=reason,
     )
+
+
+def daemon_state_path() -> Path:
+    """Where the running daemon records state, from the app's point of view.
+
+    A user unit writes the default ``~/.config/chargectl/state.json``. The system
+    unit runs as root and writes ``/var/lib/chargectl/state.json``. The API has to
+    find either one, or "managed" silently never lights up after a system install.
+    """
+    default = default_state_path()
+    if default.is_file():
+        return default
+    if SYSTEM_STATE_PATH.is_file():
+        return SYSTEM_STATE_PATH
+    return default
