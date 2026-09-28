@@ -72,11 +72,14 @@ class StatusBlock:
 
 
 def _kill_port(port: int):
-    """Kill process running on port."""
+    """Kill process listening on port."""
     import shlex
 
+    # LISTEN-only: clients with established connections (including this
+    # CLI's own health-check sockets) must never be killed here — killing
+    # a client pid here once SIGKILLed the CLI mid-cleanup.
     result = subprocess.run(
-        shlex.split(f"lsof -ti:{port}"),
+        shlex.split(f"lsof -ti:{port} -sTCP:LISTEN"),
         capture_output=True,
         text=True,
     )
@@ -114,7 +117,7 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
 
     try:
         result = subprocess.run(
-            shlex.split(f"lsof -ti:{port}"),
+            shlex.split(f"lsof -ti:{port} -sTCP:LISTEN"),
             capture_output=True,
             text=True,
             timeout=3,
@@ -133,7 +136,7 @@ def _handle_eaddrinuse(port: int, service: str = "web"):
             log.key_value("pid", f"{pid} ({proc_name})")
         log.blank()
 
-    log.command(f"lsof -ti:{port} | xargs kill -9", "kill")
+    log.command(f"lsof -ti:{port} -sTCP:LISTEN | xargs kill -9", "kill")
     if service == "api":
         log.command(f"slo dev --port {port + 1}", "or use another port")
     else:

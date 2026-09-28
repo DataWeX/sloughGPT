@@ -1149,6 +1149,17 @@ class DevDashboard:
         signal.signal(signal.SIGINT, lambda s, f: setattr(self, "_shutdown", True))
         signal.signal(signal.SIGTERM, lambda s, f: setattr(self, "_shutdown", True))
 
+        # No tty (CI, redirected logs, E2E harness): the TUI cannot draw or
+        # read keys — drawing raises ENOTTY and tore the session down before
+        # stop_check could detect EADDRINUSE. Monitor instead of rendering.
+        if not (hasattr(sys.stdout, "isatty") and sys.stdout.isatty()):
+            print("  Dashboard disabled (no tty); monitoring services.")
+            while not self._shutdown:
+                if stop_check and stop_check():
+                    break
+                time.sleep(0.2)
+            return
+
         try:
             with LiveDisplay() as display:
                 while not self._shutdown:

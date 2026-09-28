@@ -153,6 +153,19 @@ except Exception: print('CLOSED')
 done
 [ "$C" = "CLOSED" ] && ok "web port freed" || bad "web port $WEB_PORT still open"
 
+C="OPEN"
+for i in $(seq 1 10); do
+  C=$("$VPY" -c "
+import socket
+s=socket.socket(); s.settimeout(0.5)
+try: s.connect(('127.0.0.1',$API_PORT)); print('OPEN')
+except Exception: print('CLOSED')
+" 2>/dev/null)
+  [ "$C" = "CLOSED" ] && break
+  sleep 1
+done
+[ "$C" = "CLOSED" ] && ok "api port freed" || bad "api port $API_PORT still open"
+
 # 6) reap stragglers
 kill -TERM "$SPID" 2>/dev/null
 sleep 1
@@ -160,6 +173,10 @@ for PAT in "cli.py --port $API_PORT dev --web-port $WEB_PORT" "uvicorn apps.api.
   LEFT=$(pgrep -f "$PAT" || true)
   if [ -n "$LEFT" ]; then kill -9 $LEFT 2>/dev/null; bad "leftover killed: $PAT"; fi
 done
+# The API's model worker is an mp grandchild: it can outlive uvicorn while
+# holding the API port, which would poison the next run.
+WLEFT=$(lsof -ti:$API_PORT -sTCP:LISTEN 2>/dev/null || true)
+if [ -n "$WLEFT" ]; then kill -9 $WLEFT 2>/dev/null; bad "leftover listener on api port $API_PORT"; fi
 # Traceback check: only CLI-internal frames are a bug (child crashes are normal)
 sed 's/\x1b\[[0-9;]*[A-Za-z]//g' "$LOG" | grep -A8 "Traceback" | grep -q "cli.py\|commands/dev.py" \
   && { bad "traceback in cli log"; grep -a -A5 "Traceback" "$LOG" | head -8; } || true
