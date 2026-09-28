@@ -230,5 +230,38 @@
         "dec_mibs": 481.5
       }
     ]
+  },
+  {
+    "mib": 8,
+    "class": "sse",
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 8388608,
+        "wire_bytes": 8388608,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 350047,
+        "ratio": 0.0417,
+        "savings_pct": 95.83,
+        "enc_mibs": 180.4,
+        "dec_mibs": 506.8
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 8388608,
+        "wire_bytes": 110711,
+        "ratio": 0.0132,
+        "savings_pct": 98.68,
+        "enc_mibs": 1139.0,
+        "dec_mibs": 1097.3
+      }
+    ]
   }
 ]
