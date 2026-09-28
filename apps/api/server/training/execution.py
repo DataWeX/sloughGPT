@@ -111,9 +111,17 @@ async def start_training(
     else:
         from domain.training._internal.dataset_manifest import ManifestError
 
+        dataset_arg = request.dataset
+        if request.source_text:
+            from .resolution import materialize_source_text
+
+            try:
+                dataset_arg = materialize_source_text(request.source_text, request.name)
+            except ValueError as e:
+                raise_error(str(e), "E_BAD_REQUEST", status_code=400)
         try:
             data_path_str, out_stem, manifest_meta, source_kind = resolve_training_inputs(
-                request.dataset,
+                dataset_arg,
                 request.manifest_uri,
                 request.dataset_ref,
             )
@@ -280,6 +288,8 @@ async def start_training(
         "train_loss": None,
         "eval_loss": None,
         "loss_history": [],
+        "checkpoint": None,
+        "checkpoint_dir": str(getattr(request, "checkpoint_dir", None) or "models/auto-training"),
         "user_id": auth_user.get("sub", "") if auth_user else "",
         "workspace_id": auth_user.get("workspace_id", "") if auth_user else "",
     }
@@ -395,6 +405,12 @@ async def start_training(
                     rec.setdefault("loss_history", []).append(
                         {"step": rec.get("global_step", 0), "value": fe, "type": "eval"}
                     )
+                cp = info.get("checkpoint_path")
+                if cp:
+                    rec["checkpoint"] = cp
+                cd = info.get("checkpoint_dir")
+                if cd:
+                    rec["checkpoint_dir"] = cd
                 get_training_runtime().sync(jid)
 
             trainer = SloughGPTTrainer(

@@ -31,10 +31,12 @@ class TrainDataSourceBody(BaseModel):
         has_d = self.dataset is not None and str(self.dataset).strip() != ""
         has_m = self.manifest_uri is not None and str(self.manifest_uri).strip() != ""
         has_r = self.dataset_ref is not None
-        if sum(bool(x) for x in (has_d, has_m, has_r)) != 1:
+        raw_text = getattr(self, "source_text", None)
+        has_t = raw_text is not None and str(raw_text).strip() != ""
+        if sum(bool(x) for x in (has_d, has_m, has_r, has_t)) != 1:
             raise ValueError(
                 "Specify exactly one of: `dataset` (folder under datasets/), "
-                "`manifest_uri`, or `dataset_ref`."
+                "`manifest_uri`, `dataset_ref`, or `source_text` (pasted text)."
             )
         return self
 
@@ -66,7 +68,7 @@ class _TrainHyperparameters(BaseModel):
     use_lora: bool = False
     lora_rank: int = Field(default=8, ge=1, le=256)
     lora_alpha: int = Field(default=16, ge=1, le=1024)
-    checkpoint_dir: str = Field(default="checkpoints", max_length=200)
+    checkpoint_dir: str = Field(default="models/auto-training", max_length=200)
     checkpoint_interval: int = Field(default=500, ge=1, le=1_000_000)
     save_best_only: bool = False
     max_checkpoints: int = Field(default=5, ge=1, le=100)

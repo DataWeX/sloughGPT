@@ -20,6 +20,33 @@ def _repo_root() -> Path:
     return find_repo_root(Path(__file__).resolve())
 
 
+def materialize_source_text(text: str, name: str) -> str:
+    """Turn pasted training text into a just-cache dataset; return its id.
+
+    The paste-text flow has no dataset on disk, so writing one through the
+    normal dataset controller keeps resolution, pre-flight size checks,
+    preview and recovery on the single existing path — instead of teaching
+    every downstream step a second source kind.
+    """
+    import re
+    import time
+
+    size_bytes = len(text.encode("utf-8"))
+    if size_bytes < 100:
+        raise ValueError(f"Pasted text is too small ({size_bytes} bytes). Need at least 100 bytes.")
+
+    from controllers.datasets import get_datasets_controller
+
+    slug = re.sub(r"[^A-Za-z0-9_-]+", "-", name or "").strip("-_")[:48].strip("-_") or "text"
+    dataset_id = f"paste-{slug}-{int(time.time())}"
+
+    ctrl = get_datasets_controller()
+    ctrl.create_dataset(dataset_id, description="Pasted text for training")
+    rows = [line for line in text.splitlines() if line.strip()] or [text]
+    ctrl.add_data(dataset_id, rows)
+    return dataset_id
+
+
 def resolve_legacy_corpus_path(stem: str) -> Path | None:
     """Find a training corpus file for a dataset id across legacy locations.
 

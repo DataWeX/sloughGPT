@@ -99,6 +99,14 @@ async def start_turbo_training_unified(req: TurboStartRequest):
                 status_code=400,
             )
 
+        if req.source_text and not req.dataset_id:
+            from .resolution import materialize_source_text
+
+            try:
+                req.dataset_id = materialize_source_text(req.source_text, "turbo-paste")
+            except ValueError as e:
+                raise_error(str(e), "E_BAD_REQUEST", status_code=400)
+
         if req.dataset_id:
             from pathlib import Path
 
