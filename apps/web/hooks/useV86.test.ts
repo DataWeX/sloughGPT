@@ -320,4 +320,34 @@ describe('useV86', () => {
     const { probeImage } = await import('./useV86')
     expect((await probeImage('/buildroot/buildroot.img')).available).toBe(false)
   })
+
+  it('probeImage retries once after a transient network failure', async () => {
+    // Real timers: the retry backoff (400ms) must actually elapse.
+    vi.useRealTimers()
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 206,
+        headers: {
+          get: (k: string) => (k.toLowerCase() === 'content-range' ? 'bytes 0-0/3311616' : null),
+        },
+      })
+    vi.stubGlobal('fetch', fetchMock)
+    const { probeImage } = await import('./useV86')
+    const result = await probeImage('https://i.copy.sh/mikeos.iso')
+    expect(result).toEqual({ available: true, size: 3311616 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('probeImage does not retry a definitive 404', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue({ ok: false, status: 404, headers: { get: () => null } })
+    vi.stubGlobal('fetch', fetchMock)
+    const { probeImage } = await import('./useV86')
+    expect((await probeImage('/buildroot/missing.iso')).available).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })

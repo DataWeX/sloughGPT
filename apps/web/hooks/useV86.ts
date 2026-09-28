@@ -26,7 +26,7 @@ const VGA_BIOS_URL = '/bios/vgabios.bin'
 const WASM_PATH = '/v86/v86.wasm'
 const MEMORY_MB = 256
 const AUTO_SAVE_INTERVAL_MS = 30_000
-const IMAGE_PROBE_TIMEOUT_MS = 5_000
+const IMAGE_PROBE_TIMEOUT_MS = 10_000
 
 export type V86ImageKind = 'hda' | 'kernel' | 'iso'
 
@@ -54,36 +54,55 @@ interface ProbeResult {
  * would trigger a preflight that CDNs without Access-Control-Allow-Headers
  * reject, silently breaking every cross-origin probe.
  * Any failure (404, 405, network, CORS, timeout) means "not available".
+ * Transient failures (timeout/network/429/5xx) are retried once — CDN edges
+ * occasionally stall a cold HEAD past the timeout, and a single flake would
+ * otherwise disable a boot medium or fail resolution.
  */
 export async function probeImage(url: string): Promise<ProbeResult> {
-  try {
-    let res = await fetch(url, {
-      method: 'HEAD',
-      referrerPolicy: 'no-referrer',
-      signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
-    })
-    if (res.status === 405 || res.status === 501) {
-      res = await fetch(url, {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 400))
+    let outcome: { result: ProbeResult; retryable: boolean }
+    try {
+      let res = await fetch(url, {
+        method: 'HEAD',
         referrerPolicy: 'no-referrer',
         signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
       })
-      res.body?.cancel().catch(() => undefined)
+      if (res.status === 405 || res.status === 501) {
+        res = await fetch(url, {
+          referrerPolicy: 'no-referrer',
+          signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
+        })
+        res.body?.cancel().catch(() => undefined)
+      }
+      if (!res.ok && res.status !== 206) {
+        outcome = {
+          result: { available: false },
+          retryable: res.status === 429 || res.status >= 500,
+        }
+      } else if ((res.headers.get('content-type') ?? '').includes('text/html')) {
+        // SPA dev servers answer missing assets with 200 + index.html — never
+        // treat an HTML page as a bootable disk image.
+        outcome = { result: { available: false }, retryable: false }
+      } else {
+        const total = res.headers.get('content-range')?.split('/')[1]
+        const fromRange = total && total !== '*' ? Number(total) : NaN
+        const len = Number(res.headers.get('content-length'))
+        const size =
+          Number.isFinite(fromRange) && fromRange > 0
+            ? fromRange
+            : Number.isFinite(len) && len > 0
+              ? len
+              : undefined
+        outcome = { result: { available: true, size }, retryable: false }
+      }
+    } catch {
+      outcome = { result: { available: false }, retryable: true }
     }
-    if (!res.ok && res.status !== 206) return { available: false }
-    // SPA dev servers answer missing assets with 200 + index.html — never
-    // treat an HTML page as a bootable disk image.
-    const contentType = res.headers.get('content-type') ?? ''
-    if (contentType.includes('text/html')) return { available: false }
-    const total = res.headers.get('content-range')?.split('/')[1]
-    if (total && total !== '*') {
-      const n = Number(total)
-      if (Number.isFinite(n) && n > 0) return { available: true, size: n }
-    }
-    const len = Number(res.headers.get('content-length'))
-    return { available: true, size: Number.isFinite(len) && len > 0 ? len : undefined }
-  } catch {
-    return { available: false }
+    if (outcome.retryable && attempt === 0) continue
+    return outcome.result
   }
+  return { available: false }
 }
 
 /**
