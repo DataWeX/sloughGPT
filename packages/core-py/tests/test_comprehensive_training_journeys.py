@@ -6,7 +6,7 @@ automation, verifying each phase with Playwright interactions and capturing
 DevTools telemetry (console logs, network requests, errors, performance).
 
 Usage:
-    .venv/bin/python -m pytest tests/test_comprehensive_training_journeys.py -x -v
+    .venv/bin/python -m pytest -m browser tests/test_comprehensive_training_journeys.py
 
 Requirements:
     .venv/bin/playwright install chromium
@@ -26,6 +26,8 @@ if TYPE_CHECKING:
     from playwright.sync_api import Page
 
 import pytest
+
+pytestmark = pytest.mark.browser
 
 BASE = "http://localhost:3000"
 API = "http://localhost:8000"

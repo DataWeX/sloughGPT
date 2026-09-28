@@ -37,7 +37,9 @@ WEB = os.environ.get("SLO_WEB_URL", "http://localhost:5175")
 API = os.environ.get("SLO_API_URL", "http://localhost:8000")
 BROWSER = os.environ.get("SLO_JOURNEY_BROWSER", "firefox")
 SHOTS = os.environ.get("SLO_JOURNEY_SHOTS", "/home/mana/.cache/slog-journeys/shots/ux")
-REPORT = os.environ.get("SLO_JOURNEY_REPORT", "/home/mana/.cache/slog-journeys/ux-flows-report.json")
+REPORT = os.environ.get(
+    "SLO_JOURNEY_REPORT", "/home/mana/.cache/slog-journeys/ux-flows-report.json"
+)
 
 ASSISTANT_BUBBLE = '[aria-label="Message from Assistant"]'
 
@@ -152,10 +154,18 @@ class Flow:
     label: str
     url: str
     build: Callable[[], list]
+    spec: str = ""
 
 
-def _chat_flow(flow_id: str, label: str, url: str, prompt: str, pill: str | None = None,
-               marker: str | None = None) -> Flow:
+def _chat_flow(
+    flow_id: str,
+    label: str,
+    url: str,
+    prompt: str,
+    pill: str | None = None,
+    marker: str | None = None,
+    spec: str = "",
+) -> Flow:
     def build():
         steps = [s_goto(url, verify="Chat")]
         if marker:
@@ -165,7 +175,7 @@ def _chat_flow(flow_id: str, label: str, url: str, prompt: str, pill: str | None
         steps.append(s_send(prompt))
         return steps
 
-    return Flow(flow_id, label, url, build)
+    return Flow(flow_id, label, url, build, spec)
 
 
 def _lease_file() -> str:
@@ -184,7 +194,9 @@ def flow_home() -> Flow:
     def build():
         return [s_goto("/"), s_wait("Teach me"), s_wait("Chat")]
 
-    return Flow("0-home", "Home screen + sidebar", "/", build)
+    return Flow(
+        "0-home", "Home screen + sidebar", "/", build, spec="## Navigation & Layout (Plain English)"
+    )
 
 
 def flow_read() -> Flow:
@@ -195,7 +207,7 @@ def flow_read() -> Flow:
             s_send("What's the move-out notice period?"),
         ]
 
-    return Flow("3-read", "Read My Files", "/chat?mode=read", build)
+    return Flow("3-read", "Read My Files", "/chat?mode=read", build, spec="### 3. Read My Files")
 
 
 def flow_talk() -> Flow:
@@ -208,7 +220,7 @@ def flow_talk() -> Flow:
             s_wait("Speech recognition not supported", timeout=15),
         ]
 
-    return Flow("7-talk", "Talk Out Loud", "/chat?mode=talk", build)
+    return Flow("7-talk", "Talk Out Loud", "/chat?mode=talk", build, spec="### 7. Talk Out Loud")
 
 
 def flow_training() -> Flow:
@@ -220,7 +232,9 @@ def flow_training() -> Flow:
             s_click("Next: Configure", optional=True),
         ]
 
-    return Flow("12-training", "Train My AI (3-click)", "/training", build)
+    return Flow(
+        "12-training", "Train My AI (3-click)", "/training", build, spec="### 12. Train My AI"
+    )
 
 
 FLOWS: list[Flow] = [
@@ -230,6 +244,7 @@ FLOWS: list[Flow] = [
         "Chat That Remembers Me",
         "/chat",
         "What was that recipe we talked about yesterday?",
+        spec="### 1. Chat That Remembers Me",
     ),
     _chat_flow(
         "2-write",
@@ -238,6 +253,7 @@ FLOWS: list[Flow] = [
         "Tell my landlord the sink is broken and ask when he can fix it",
         marker="Tone",
         pill="Friendly",
+        spec="### 2. Writing Assistant",
     ),
     flow_read(),
     _chat_flow(
@@ -247,6 +263,7 @@ FLOWS: list[Flow] = [
         "Gift ideas for my dad's 60th birthday, he loves fishing and cooking",
         marker="Topic",
         pill="Gift Ideas",
+        spec="### 4. Brainstorm With Me",
     ),
     _chat_flow(
         "5-rewrite",
@@ -255,6 +272,7 @@ FLOWS: list[Flow] = [
         "Rewrite: teh quick bown fox dont jump over teh lazy dogg",
         marker="Action",
         pill="Fix Grammar",
+        spec="### 5. Rewrite & Polish",
     ),
     _chat_flow(
         "6-create",
@@ -263,6 +281,7 @@ FLOWS: list[Flow] = [
         "Create an image: a cozy cabin in the mountains at sunset",
         marker="Style",
         pill="Realistic",
+        spec="### 6. Create Images",
     ),
     flow_talk(),
     _chat_flow(
@@ -272,6 +291,7 @@ FLOWS: list[Flow] = [
         "How much does this cost?",
         marker="To",
         pill="EN→ES",
+        spec="### 8. Translate",
     ),
     _chat_flow(
         "9-decide",
@@ -280,6 +300,7 @@ FLOWS: list[Flow] = [
         "Should I take the job in New York or stay in my current role?",
         marker="Output",
         pill="Pros & Cons",
+        spec="### 9. Help Me Decide",
     ),
     _chat_flow(
         "10-explain",
@@ -288,6 +309,7 @@ FLOWS: list[Flow] = [
         "How does the internet work?",
         marker="Level",
         pill="Simple",
+        spec="### 10. Explain Things Simply",
     ),
     _chat_flow(
         "11-wellness",
@@ -296,6 +318,7 @@ FLOWS: list[Flow] = [
         "I want a short sleep story about the ocean",
         marker="Type",
         pill="Sleep Story",
+        spec="### 11. Make Me Well (Wellness)",
     ),
     flow_training(),
 ]
@@ -354,9 +377,9 @@ async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
         page.on("pageerror", lambda e: console_errors.append(f"pageerror: {e}"[:300]))
         page.on(
             "response",
-            lambda r: network_errors.append(f"{r.status} {r.url[:160]}")
-            if r.status >= 400
-            else None,
+            lambda r: (
+                network_errors.append(f"{r.status} {r.url[:160]}") if r.status >= 400 else None
+            ),
         )
 
         for flow in flows:
@@ -416,7 +439,7 @@ def main() -> int:
 
     if args.list:
         for f in FLOWS:
-            print(f"{f.id:14s} {f.label}")
+            print(f"{f.id:14s} {f.label:32s} {f.spec}")
         return 0
 
     flows = FLOWS

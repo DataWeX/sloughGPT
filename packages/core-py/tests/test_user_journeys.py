@@ -1,10 +1,8 @@
 """
 User Journey Tests — Playwright browser automation.
 
-Runs all web UI flow tests headlessly. For CI and local verification.
-
-Usage:
-    .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
+Runs all web UI flow tests headlessly. Marked `browser` — deselected from
+default/CI runs; run with:  pytest -m browser tests/test_user_journeys.py
 
 Requirements:
     .venv/bin/playwright install chromium
@@ -17,6 +15,8 @@ from pathlib import Path
 
 import pytest
 from playwright.sync_api import Page, sync_playwright
+
+pytestmark = pytest.mark.browser
 
 BASE = "http://localhost:3000"
 API = "http://localhost:8000"

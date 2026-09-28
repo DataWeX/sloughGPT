@@ -27,7 +27,7 @@
 
 ### Clients (separate from core infra — see PRODUCT_ENGINEERING.md)
 
-- Web: 32 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Voyager journey library (201 tests, 7 backends). Mobile: not started. Clients reach core only through the API/protocol — never internals.
+- Web: 32 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Single journey library: `scripts/run_ux_flows.py` (13 spec-linked docs/UX_FLOWS.md journeys, avion/Firefox) + legacy SiteConfig unit suites; browser/live suites opt-in via `-m browser`. Mobile: not started. Clients reach core only through the API/protocol — never internals.
 
 ### Compression (pugqeep)
 

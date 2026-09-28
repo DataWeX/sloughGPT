@@ -1,6 +1,10 @@
 """
 Pre-built Journey Tests for Common Web Applications.
 
+DEPRECATED (2026-09-27, card 067): user-journey definitions live in the
+single registry scripts/run_ux_flows.py (spec-linked to docs/UX_FLOWS.md).
+This module stays only as the SiteConfig/Journey unit-test fixture layer.
+
 Provides reusable journey tests that work with any site configuration.
 
 Usage:

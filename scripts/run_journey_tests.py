@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 """
+DEPRECATED (2026-09-27, card 067): superseded by scripts/run_ux_flows.py —
+the single spec-linked journey registry (FLOWS ↔ docs/UX_FLOWS.md, avion/Firefox,
+13/13 green). Zero live callers; delete in the follow-up cleanup.
+
 Arken journey test runner for sloughGPT.
 
 Runs end-to-end journey checks against a live sloughGPT instance
