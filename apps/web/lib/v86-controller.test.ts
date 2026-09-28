@@ -213,4 +213,43 @@ describe('V86Controller', () => {
     expect((stub as { global?: unknown }).global).toBe(globalThis)
     vi.unstubAllGlobals()
   })
+
+  it('setImmediate polyfill forwards extra args (v86 tick counter handshake)', async () => {
+    const g = globalThis as unknown as Record<string, unknown>
+    const had = 'setImmediate' in g
+    const orig = g.setImmediate
+    delete g.setImmediate
+    const configs: any[] = []
+    class MockV86 {
+      constructor(cfg: any) {
+        configs.push(cfg)
+      }
+      add_listener(ev: string, cb: () => void) {
+        if (ev === 'emulator-started') cb()
+      }
+      is_running() {
+        return false
+      }
+      destroy() {}
+    }
+    vi.stubGlobal('window', { V86: MockV86 })
+    try {
+      const c = new V86Controller()
+      await c.init({} as unknown as HTMLElement, {
+        biosUrl: '/bios/seabios.bin',
+        vgaBiosUrl: '/bios/vgabios.bin',
+        imageUrl: '/buildroot/buildroot.img',
+      })
+
+      expect(typeof g.setImmediate).toBe('function')
+      const calls: unknown[][] = []
+      ;(g.setImmediate as (...a: unknown[]) => void)((...a: unknown[]) => calls.push(a), 7, 'tick')
+      await new Promise((r) => setTimeout(r, 20))
+      expect(calls).toEqual([[7, 'tick']])
+    } finally {
+      if (had) g.setImmediate = orig
+      else delete g.setImmediate
+      vi.unstubAllGlobals()
+    }
+  })
 })
