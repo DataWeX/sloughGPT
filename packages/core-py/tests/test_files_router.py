@@ -142,7 +142,7 @@ class TestDelete:
         fid = r.json()["id"]
         resp = client.delete(f"/files/{fid}")
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == "deleted"
+        assert resp.json()["data"]["deleted"] == fid
 
     def test_delete_nonexistent(self, tmp_path):
         fr = _make_router(tmp_path)
@@ -162,7 +162,7 @@ class TestIngest:
             "/files/upload", files={"file": ("ingest.txt", io.BytesIO(long_text), "text/plain")}
         )
         fid = r.json()["id"]
-        with patch("domain.learner.knowledge.get_knowledge_memory") as mock_km:
+        with patch("domain.knowledge.get_knowledge_memory") as mock_km:
             mock_km.return_value.add_fact.return_value = True
             resp = client.post(f"/files/{fid}/ingest")
         assert resp.status_code == 200
