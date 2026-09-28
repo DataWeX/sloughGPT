@@ -49,7 +49,7 @@ def find_checkpoint(name: str) -> Path | None:
 
 
 def load_soul(name: str) -> dict | None:
-    for d in (CHECKPOINTS_DIR, TURBO_DIR):
+    for d in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
         for ext in (".soul", ".slo"):
             fp = d / name if name.endswith((ext,)) else d / (name + ext)
             if not fp.exists():
@@ -258,13 +258,17 @@ async def delete_checkpoint(name: str) -> list[str]:
     deleted = []
 
     def _delete():
-        for base in (CHECKPOINTS_DIR, TURBO_DIR):
+        for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
             for ext in (".soul", ".slo"):
                 if name.endswith(ext):
                     candidates = [base / name]
                 else:
                     candidates = [base / (name + ext)]
                 for candidate in candidates:
+                    # models/ root holds more than final saves — only ever
+                    # delete what the scan lists from it.
+                    if base is TRAINED_DIR and not candidate.name.endswith("_trained.soul"):
+                        continue
                     resolved = candidate.resolve()
                     if resolved.exists() and str(resolved).startswith(str(base.resolve())):
                         resolved.unlink()
@@ -374,8 +378,10 @@ async def download_checkpoint_path(name: str) -> str | None:
         raise ValueError("Invalid checkpoint name")
 
     def _find():
-        for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR):
+        for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, TRAINED_DIR):
             fp = (d / name).resolve()
+            if d is TRAINED_DIR and not fp.name.endswith("_trained.soul"):
+                continue
             if (
                 fp.exists()
                 and fp.suffix in (".soul", ".slo")

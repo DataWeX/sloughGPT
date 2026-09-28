@@ -41,7 +41,20 @@ async def list_builds():
                 info["build_type"] = "auto-train"
                 builds.append(info)
 
-    # 2. LoRA .soul files
+    # 2. Final job saves (models/<stem>_trained.soul)
+    _trained_dir = _repo_root / "models"
+    for f in sorted(
+        _trained_dir.glob("*_trained.soul"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
+        if f.name in seen:
+            continue
+        seen.add(f.name)
+        info = load_soul(f.name)
+        if info:
+            info["build_type"] = "trained"
+            builds.append(info)
+
+    # 3. LoRA .soul files
     for npz in sorted(_lora_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
         if npz.name in seen:
             continue
@@ -51,7 +64,7 @@ async def list_builds():
             info["build_type"] = "lora"
             builds.append(info)
 
-    # 3. Completed HF fine-tune jobs
+    # 4. Completed HF fine-tune jobs
     for jid, job in training_jobs.items():
         if job.get("status") == "completed":
             model_path = (
