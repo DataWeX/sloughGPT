@@ -29,6 +29,7 @@ use tracing::info;
 
 mod compression;
 mod filters;
+mod supervisor;
 
 use filters::PathPolicy;
 
@@ -150,6 +151,13 @@ async fn main() {
         )
         .init();
 
+    // Self-supervision: parent loop respawns the worker on crash so the
+    // edge survives its own bugs without any init system (see supervisor.rs).
+    if let supervisor::Mode::Supervisor = supervisor::mode_from_env() {
+        supervisor::run().await;
+        return;
+    }
+
     let config = GatewayConfig::default();
     let _ = START_TIME.set(std::time::Instant::now());
 
@@ -190,7 +198,10 @@ async fn main() {
         info!("   → deny prefixes: {:?}", config.policy.deny_prefixes);
     }
 
-    axum::serve(listener, app).await.expect("Server failed");
+    axum::serve(listener, app)
+        .with_graceful_shutdown(supervisor::shutdown_signal())
+        .await
+        .expect("Server failed");
 }
 
 // ── Router ──────────────────────────────────────────────────────────────────

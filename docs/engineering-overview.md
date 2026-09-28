@@ -170,7 +170,7 @@ and `path_latencies`/`health_score` from them — with `gateway: "rust"`
 injected only when the body is a plain JSON object. The edge envelope
 (`status: degraded` + `sidecar`) is the unreachable-core fallback.
 
-**Role:** Fast entry point. Generic byte-relay to Python core. Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present.
+**Role:** Fast entry point. Generic byte-relay to Python core. Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present. **Self-supervising** (`MAN_GATEWAY_SUPERVISE=1`, default in `host_gateway.sh`): a parent loop in the same binary respawns the worker on crash (1s→30s backoff, resets after 60s healthy); SIGTERM chain-stops; a killed parent leaves the orphan worker serving — no systemd, no OS coupling.
 
 **Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + filters + compression + health + static files.
 

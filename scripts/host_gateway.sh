@@ -74,6 +74,7 @@ fi
 echo "gateway → $HOST:$GW_PORT (core=$CORE_URL)"
 MAN_CORE_URL="$CORE_URL" \
 MAN_GATEWAY_PORT="$GW_PORT" \
+MAN_GATEWAY_SUPERVISE="${MAN_GATEWAY_SUPERVISE:-1}" \
 RUST_LOG="${RUST_LOG:-slough_gateway=info}" \
 "$GW_BIN" >"$LOG_DIR/gateway.log" 2>&1 &
 GW_PID=$!
