@@ -334,7 +334,8 @@ def shell(ctx, command, tui, line):
     from utils.helpers import ensure_server
 
     actual_url, _server_proc = ensure_server(host=ctx.obj["host"], port=ctx.obj["port"])
-    from domain.shell import DaitRuntime, ShellREPL
+    from domain.shell import DaitRuntime
+    from domain.shell._internal.repl import ShellREPL
 
     os = DaitRuntime(api_url=actual_url)
     # Default to TUI when TTY, line mode when piped or --line
@@ -731,7 +732,7 @@ def simulate(
 
     # ── Self-test mode ──
     if do_self_test:
-        from domain.shell import self_test
+        from domain.shell._internal.vm import self_test
 
         _p(f"{_c('Running VM self-test...', _BOLD)}\n")
         results = self_test()
@@ -742,7 +743,7 @@ def simulate(
 
     # ── Run assembly mode ──
     if asm_source:
-        from domain.shell import VMRunner
+        from domain.shell._internal.vm import VMRunner
 
         _p(f"{_c('Running VM assembly...', _BOLD)}\n")
         runner = VMRunner()
@@ -823,7 +824,7 @@ def simulate(
             mock = MockModel()
             k.engine.load_model(model, mock)
         else:
-            from domain.shell import NPUDevice
+            from domain.shell._internal.kernel_npu import NPUDevice
 
             npu = NPUDevice(name="npu")
             npu.open()
@@ -877,7 +878,7 @@ def simulate(
         )
 
         # ── Create inference process ──
-        from domain.shell import NeuralProcessType
+        from domain.shell._internal.kernel_neural import NeuralProcessType
 
         proc = k.create_neural_process("sim-infer", NeuralProcessType.INFERENCE, model_name=model)
 
