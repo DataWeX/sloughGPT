@@ -23,9 +23,11 @@ let v86LoadPromise: Promise<unknown> | null = null
  * to pick Node-style scheduling (`global.setImmediate`) over timers. Bundlers
  * commonly define a `window.process = { env }` shim without defining `global`
  * or `setImmediate`, which makes v86's yield path throw
- * "global is not defined" (or "…setImmediate is not a function") on the
- * emulator's hot loop and freeze the screen. Restore the invariant the runtime
- * assumes: when `process` exists, so must `global` and `setImmediate`.
+ * "global is not defined" on the emulator's hot loop. Restore the invariant
+ * the runtime assumes: when `process` exists, so must `global` and
+ * `setImmediate`. Node's setImmediate forwards extra arguments to the
+ * callback (v86 relies on this to match its tick counter) — a plain
+ * `setTimeout(cb, ms)` would swallow them and freeze the CPU loop idle.
  */
 function ensureV86SchedulingGlobals(): void {
   const g = window as unknown as Record<string, unknown>
@@ -34,8 +36,8 @@ function ensureV86SchedulingGlobals(): void {
     g.global = realGlobal
   }
   if (typeof realGlobal.setImmediate !== 'function') {
-    realGlobal.setImmediate = ((cb: TimerHandler, ms?: number) =>
-      setTimeout(cb, ms ?? 0)) as never
+    realGlobal.setImmediate = ((cb: (...args: unknown[]) => void, ...args: unknown[]) =>
+      setTimeout(() => cb(...args), 0)) as never
   }
 }
 
