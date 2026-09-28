@@ -2,7 +2,7 @@
 
 Each journey goes to a page and performs the page's core action.
 Tests run against FakeBackend (no browser); the same Task objects
-drive live runs via scripts/run_journey_tests.py.
+drive live runs via scripts/run_ux_flows.py.
 """
 
 from __future__ import annotations
