@@ -22,7 +22,9 @@ from .compressor import PointCompressor
 from .config import TreeConfig
 from .library import PointLibrary
 from .strategies import ClusterStrategy, CompressStrategy, RawStrategy
-from .tree import Tree
+from .tree import Tree, decompress_tree, load_from_points
+
+__all__ = ["ModelTree", "decompress_tree", "load_from_points"]
 
 
 class ModelTree(Tree):

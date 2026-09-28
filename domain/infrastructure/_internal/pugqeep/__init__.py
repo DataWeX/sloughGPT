@@ -72,6 +72,8 @@ from .task_queue import Task, TaskPriority, TaskQueue, TaskStatus
 from .tree import Tree, load_model_to_points
 from .tree import decompress_tree as decompress_tree
 from .tree import load_from_points as load_from_points
+from .tree import load_library as load_library
+from .tree import save_library as save_library
 
 __all__ = [
     # Core types
@@ -127,6 +129,8 @@ __all__ = [
     "PointLibrarySync",
     # Helpers
     "load_model_to_points",
+    "save_library",
+    "load_library",
     # Producer-consumer
     "ProducerConsumerQueue",
     "ShutdownMode",
