@@ -1,13 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, cleanup } from '@testing-library/react'
 
-const { mockUseRouter, mockUseSearchParams, mockHealthLegacy } = vi.hoisted(() => ({
-  mockUseRouter: { push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() },
-  mockUseSearchParams: { get: vi.fn() },
-  mockHealthLegacy: null as any,
-}))
+const { mockUseRouter, mockUseSearchParams, mockHealthLegacy, mockLoadSession } = vi.hoisted(
+  () => ({
+    mockUseRouter: { push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() },
+    mockUseSearchParams: { get: vi.fn() },
+    mockHealthLegacy: null as any,
+    mockLoadSession: vi.fn(),
+  }),
+)
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => mockUseRouter,
   useSearchParams: () => mockUseSearchParams,
 }))
@@ -28,14 +31,25 @@ vi.mock('@/lib/chat-commands', () => ({
 
 vi.mock('@/features/chat/hooks/useChatUI', () => ({
   useChatUI: () => ({
-    showSettings: false, toggleSettings: vi.fn(), setShowSettings: vi.fn(),
-    searchQuery: '', setSearchQuery: vi.fn(), handleSearchChange: vi.fn(),
-    handleSearchClear: vi.fn(), matchIndex: 0, setMatchIndex: vi.fn(),
-    showConversationViewer: false, setShowConversationViewer: vi.fn(),
-    showConversationSearch: false, setShowConversationSearch: vi.fn(),
-    toolPanelOpen: true, setToolPanelOpen: vi.fn(),
-    voiceMode: false, setVoiceMode: vi.fn(),
-    sidebarOpen: false, setSidebarOpen: vi.fn(),
+    showSettings: false,
+    toggleSettings: vi.fn(),
+    setShowSettings: vi.fn(),
+    searchQuery: '',
+    setSearchQuery: vi.fn(),
+    handleSearchChange: vi.fn(),
+    handleSearchClear: vi.fn(),
+    matchIndex: 0,
+    setMatchIndex: vi.fn(),
+    showConversationViewer: false,
+    setShowConversationViewer: vi.fn(),
+    showConversationSearch: false,
+    setShowConversationSearch: vi.fn(),
+    toolPanelOpen: true,
+    setToolPanelOpen: vi.fn(),
+    voiceMode: false,
+    setVoiceMode: vi.fn(),
+    sidebarOpen: false,
+    setSidebarOpen: vi.fn(),
     searchInputRef: { current: null },
     chatScreenRef: { current: null },
   }),
@@ -43,32 +57,43 @@ vi.mock('@/features/chat/hooks/useChatUI', () => ({
 
 vi.mock('@/features/chat/hooks/useChatVision', () => ({
   useChatVision: () => ({
-    visionCaps: null, setVisionCaps: vi.fn(),
-    visionCaptionHistory: [], setVisionCaptionHistory: vi.fn(),
-    visionVocabSize: 0, setVisionVocabSize: vi.fn(),
+    visionCaps: null,
+    setVisionCaps: vi.fn(),
+    visionCaptionHistory: [],
+    setVisionCaptionHistory: vi.fn(),
+    visionVocabSize: 0,
+    setVisionVocabSize: vi.fn(),
   }),
 }))
 
 vi.mock('@/features/chat/hooks/useChatAgents', () => ({
   useChatAgents: () => ({
-    currentAgent: null, setCurrentAgent: vi.fn(),
-    agents: [], fetchInitialData: vi.fn(),
-    knowledgeCtx: { count: 0, context: '' }, setKnowledgeCtx: vi.fn(),
+    currentAgent: null,
+    setCurrentAgent: vi.fn(),
+    agents: [],
+    fetchInitialData: vi.fn(),
+    knowledgeCtx: { count: 0, context: '' },
+    setKnowledgeCtx: vi.fn(),
   }),
 }))
 
 vi.mock('@/features/chat/hooks/useChatLocalEngine', () => ({
   useChatLocalEngine: () => ({
-    useLocalEngine: false, engineRef: { current: null },
-    engineLoadingRef: { current: false }, initLocalEngine: vi.fn(),
+    useLocalEngine: false,
+    engineRef: { current: null },
+    engineLoadingRef: { current: false },
+    initLocalEngine: vi.fn(),
   }),
 }))
 
 vi.mock('@/features/chat/hooks/useChatModelSettings', () => ({
   useChatModelSettings: () => ({
-    model: 'gpt2', setModel: vi.fn().mockResolvedValue(undefined),
-    temperature: 0.8, setTemperature: vi.fn(),
-    maxTokens: 200, currentSoul: null,
+    model: 'gpt2',
+    setModel: vi.fn().mockResolvedValue(undefined),
+    temperature: 0.8,
+    setTemperature: vi.fn(),
+    maxTokens: 200,
+    currentSoul: null,
     fetchInitialData: vi.fn(),
   }),
 }))
@@ -98,38 +123,60 @@ vi.mock('@/lib/db', () => ({
 
 vi.mock('@/features/chat/hooks/useChatBookmarks', () => ({
   useChatBookmarks: () => ({
-    bookmarks: [], addBookmark: vi.fn(), removeBookmark: vi.fn(),
-    isBookmarked: vi.fn(() => false), clearAll: vi.fn(),
+    bookmarks: [],
+    addBookmark: vi.fn(),
+    removeBookmark: vi.fn(),
+    isBookmarked: vi.fn(() => false),
+    clearAll: vi.fn(),
   }),
 }))
 
 vi.mock('@/features/chat/hooks/useChatMessages', () => ({
   useChatMessages: (config: any) => ({
-    messages: [], setMessages: vi.fn(),
-    input: '', setInput: vi.fn(),
-    loading: false, setLoading: vi.fn(),
-    currentError: null, setCurrentError: vi.fn(),
-    loadingRef: { current: false }, newChatRef: { current: vi.fn() },
+    messages: [],
+    setMessages: vi.fn(),
+    input: '',
+    setInput: vi.fn(),
+    loading: false,
+    setLoading: vi.fn(),
+    currentError: null,
+    setCurrentError: vi.fn(),
+    loadingRef: { current: false },
+    newChatRef: { current: vi.fn() },
     handleRegenerateRef: { current: vi.fn() },
-    sendMessage: vi.fn(), sessionIdRef: { current: null },
-    loadSession: vi.fn(), renameSession: vi.fn(), duplicateSession: vi.fn(),
-    handleExportMarkdown: vi.fn(), handleAddImage: vi.fn(),
+    sendMessage: vi.fn(),
+    sessionIdRef: { current: null },
+    loadSession: mockLoadSession,
+    renameSession: vi.fn(),
+    duplicateSession: vi.fn(),
+    handleExportMarkdown: vi.fn(),
+    handleAddImage: vi.fn(),
     newChat: vi.fn(),
   }),
 }))
 
 vi.mock('@/features/chat/hooks/useChatMode', () => ({
   useChatMode: () => ({
-    chatMode: 'chat', setChatMode: vi.fn(),
-    writeTone: 'Friendly', setWriteTone: vi.fn(),
-    writeType: 'Email', setWriteType: vi.fn(),
-    rewriteStyle: 'Fix Grammar', setRewriteStyle: vi.fn(),
-    decideStructure: 'Pros & Cons', setDecideStructure: vi.fn(),
-    explainDifficulty: 'Beginner', setExplainDifficulty: vi.fn(),
-    translateLangPair: 'English→Spanish', setTranslateLangPair: vi.fn(),
-    brainstormTopic: 'Ideas', setBrainstormTopic: vi.fn(),
-    wellnessType: 'Meditation', setWellnessType: vi.fn(),
-    createStyle: 'Photorealistic', setCreateStyle: vi.fn(),
+    chatMode: 'chat',
+    setChatMode: vi.fn(),
+    writeTone: 'Friendly',
+    setWriteTone: vi.fn(),
+    writeType: 'Email',
+    setWriteType: vi.fn(),
+    rewriteStyle: 'Fix Grammar',
+    setRewriteStyle: vi.fn(),
+    decideStructure: 'Pros & Cons',
+    setDecideStructure: vi.fn(),
+    explainDifficulty: 'Beginner',
+    setExplainDifficulty: vi.fn(),
+    translateLangPair: 'English→Spanish',
+    setTranslateLangPair: vi.fn(),
+    brainstormTopic: 'Ideas',
+    setBrainstormTopic: vi.fn(),
+    wellnessType: 'Meditation',
+    setWellnessType: vi.fn(),
+    createStyle: 'Photorealistic',
+    setCreateStyle: vi.fn(),
   }),
 }))
 
@@ -149,7 +196,9 @@ vi.mock('@/features/chat/hooks/useChatContextValue', () => ({
 
 vi.mock('@/features/chat/contexts/ConvSidebarContext', () => ({
   useConvSidebar: () => ({
-    setOpen: vi.fn(), convCollapsed: false, toggleConv: vi.fn(),
+    setOpen: vi.fn(),
+    convCollapsed: false,
+    toggleConv: vi.fn(),
   }),
 }))
 
@@ -194,9 +243,7 @@ vi.mock('@/lib/dev-log', () => ({
 import { useChatPageController } from './useChatPageController'
 
 function renderController() {
-  return renderHook(() =>
-    useChatPageController(vi.fn(), vi.fn().mockResolvedValue(undefined))
-  )
+  return renderHook(() => useChatPageController(vi.fn(), vi.fn().mockResolvedValue(undefined)))
 }
 
 describe('useChatPageController', () => {
@@ -228,6 +275,44 @@ describe('useChatPageController', () => {
   it('returns initial chatMode as chat', () => {
     const { result } = renderController()
     expect(result.current.chatMode).toBe('chat')
+  })
+
+  it('loads the ?session= exactly once, even across re-renders', () => {
+    mockUseSearchParams.get.mockImplementation((key: string) =>
+      key === 'session' ? 'session-42' : null,
+    )
+    const { rerender } = renderController()
+    expect(mockLoadSession).toHaveBeenCalledTimes(1)
+    expect(mockLoadSession).toHaveBeenCalledWith('session-42')
+
+    rerender()
+    rerender()
+    rerender()
+
+    expect(mockLoadSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('loads a new session when the ?session= param changes', () => {
+    mockUseSearchParams.get.mockImplementation((key: string) =>
+      key === 'session' ? 'session-42' : null,
+    )
+    const { rerender } = renderController()
+    expect(mockLoadSession).toHaveBeenCalledTimes(1)
+
+    mockUseSearchParams.get.mockImplementation((key: string) =>
+      key === 'session' ? 'session-99' : null,
+    )
+    rerender()
+
+    expect(mockLoadSession).toHaveBeenCalledTimes(2)
+    expect(mockLoadSession).toHaveBeenLastCalledWith('session-99')
+  })
+
+  it('does not load a session when the param is absent', () => {
+    mockUseSearchParams.get.mockReturnValue(null)
+    const { rerender } = renderController()
+    rerender()
+    expect(mockLoadSession).not.toHaveBeenCalled()
   })
 
   it('returns initial suggestions as empty', () => {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback, useMemo, useState } from 'react'
+import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 
 import { useLiveStatus } from '@/hooks/useLiveStatus'
@@ -267,12 +267,23 @@ export function useChatPageController(
       .catch(() => /* model descriptions unavailable — UI still works */ {})
   }, [])
 
+  // `chat` is a fresh object literal every render (useChatMessages returns an
+  // unmemoized object), so it must never be an effect dependency: loadSession
+  // schedules renders (setSessionLoading/setMessages), which would re-run the
+  // effect and reload the session forever — the ?session= bootloop. Depend on
+  // the param string + the stable loadSession callback, and guard idempotently.
+  const sessionParamId = searchParams.get('session')
+  const loadSession = chat.loadSession
+  const loadedSessionRef = useRef<string | null>(null)
   useEffect(() => {
-    const sessionId = searchParams.get('session')
-    if (sessionId) {
-      chat.loadSession(sessionId)
+    if (!sessionParamId) {
+      loadedSessionRef.current = null
+      return
     }
-  }, [chat, searchParams])
+    if (loadedSessionRef.current === sessionParamId) return
+    loadedSessionRef.current = sessionParamId
+    void loadSession(sessionParamId)
+  }, [sessionParamId, loadSession])
 
   const [suggestions, setSuggestions] = useState<{ text: string; icon: string }[]>([])
 
