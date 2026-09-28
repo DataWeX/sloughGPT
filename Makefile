@@ -131,7 +131,7 @@ charge-svc-user:
 	@mkdir -p ~/.config/systemd/user
 	@sed -e "s|^ExecStart=.*|ExecStart=\"$(CURDIR)/.venv/bin/chargectl\" daemon|" \
 		-e "s|^Environment=CHARGECTL_POLICY=.*|Environment=CHARGECTL_POLICY=%h/.config/chargectl/policy.json|" \
-		-e "s|^Environment=CHARGECTL_STATE=.*|Environment=CHARGECTL_STATE=%h/.local/state/chargectl/state.json|" \
+		-e "s|^Environment=CHARGECTL_STATE=.*|Environment=CHARGECTL_STATE=%h/.config/chargectl/state.json|" \
 		-e "s|^After=multi-user.target|After=default.target|" \
 		-e "s|^WantedBy=.*|WantedBy=default.target|" \
 		-e "/^ReadWritePaths=/d" -e "/^ProtectSystem=/d" -e "/^ProtectHome=/d" \

@@ -144,3 +144,42 @@ def test_status_tolerates_runner_timeouts(tmp_path: Path):
     assert status.enabled is None
     assert status.active is None
     assert status.running is False
+
+
+# ── daemon_state_path ────────────────────────────────────────────────────────
+
+
+def test_state_path_prefers_the_app_default_when_it_exists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    default = tmp_path / ".config" / "chargectl" / "state.json"
+    default.parent.mkdir(parents=True)
+    default.write_text("{}")
+    system = tmp_path / "var" / "lib" / "chargectl" / "state.json"
+    monkeypatch.setattr(systemd, "default_state_path", lambda: default)
+    monkeypatch.setattr(systemd, "SYSTEM_STATE_PATH", system)
+
+    assert systemd.daemon_state_path() == default
+
+
+def test_state_path_falls_back_to_the_system_unit_state(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    default = tmp_path / "home" / "state.json"  # user unit never ran
+    system = tmp_path / "var" / "state.json"
+    system.parent.mkdir(parents=True)
+    system.write_text("{}")
+    monkeypatch.setattr(systemd, "default_state_path", lambda: default)
+    monkeypatch.setattr(systemd, "SYSTEM_STATE_PATH", system)
+
+    assert systemd.daemon_state_path() == system  # system install still visible
+
+
+def test_state_path_stays_on_the_default_when_nothing_is_installed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    default = tmp_path / "state.json"
+    monkeypatch.setattr(systemd, "default_state_path", lambda: default)
+    monkeypatch.setattr(systemd, "SYSTEM_STATE_PATH", tmp_path / "nope.json")
+
+    assert systemd.daemon_state_path() == default

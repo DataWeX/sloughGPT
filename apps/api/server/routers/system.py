@@ -186,8 +186,8 @@ class SystemRouter:
         def _read():
             from chargectl import (
                 BatteryReader,
+                daemon_state_path,
                 default_policy_path,
-                default_state_path,
                 default_sys_base,
                 explain,
                 load_policy,
@@ -200,6 +200,7 @@ class SystemRouter:
             status = BatteryReader(sys_base=base).read()
             capability = probe(base)
             policy, policy_error = load_policy()
+            state_path = daemon_state_path()
             return {
                 "status": status.as_dict(),
                 "control": capability.as_dict(),
@@ -210,7 +211,10 @@ class SystemRouter:
                     "error": policy_error,
                     "explain": explain(policy, capability),
                 },
-                "daemon": _daemon_summary(read_state(default_state_path()), policy),
+                "daemon": {
+                    **_daemon_summary(read_state(state_path), policy),
+                    "state_file": str(state_path),
+                },
             }
 
         try:

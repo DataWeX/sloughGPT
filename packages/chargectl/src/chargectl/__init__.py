@@ -43,7 +43,7 @@ from .status import (
     default_sys_base,
     read_status,
 )
-from .systemd import ServiceStatus, service_status, systemd_available
+from .systemd import ServiceStatus, daemon_state_path, service_status, systemd_available
 
 __version__ = "0.2.0"
 
@@ -59,6 +59,7 @@ __all__ = [
     "ServiceStatus",
     "SimulatedBattery",
     "clear_limit",
+    "daemon_state_path",
     "decide",
     "default_policy_path",
     "default_state_path",

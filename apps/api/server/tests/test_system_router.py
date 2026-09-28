@@ -226,6 +226,7 @@ class TestBatteryPolicy:
 
         assert data["daemon"]["present"] is False
         assert data["daemon"]["active"] is False
+        assert str(data["daemon"]["state_file"]).endswith("state.json")
 
     def test_get_battery_reports_an_unreadable_policy(self, monkeypatch, tmp_path):
         path = tmp_path / "policy.json"
