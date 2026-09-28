@@ -49,6 +49,7 @@ own persistent-block-device filesystem that resets with the session.
 | `ls`                                    | Directory listing                 |
 | `cat <file>`                            | Print a file                      |
 | `cp <src> <dst>`                        | Copy a file (truncates dst)       |
+| `grep <pattern> <file>`                 | Search a file for matching lines  |
 | `write <file> <text>`                   | Create/overwrite a file with text |
 | `echo <text>`                           | Print text                        |
 | `uname`                                 | Kernel name/version               |

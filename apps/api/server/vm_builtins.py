@@ -484,18 +484,18 @@ start:
 def _shell() -> str:
     return f"""; shell — interactive console REPL for the browser VM session.
 ; Line-buffered stdin read loop: prompts, echoes typing, handles
-; backspace, then dispatches one of: help, ls, cat <file>, uname,
-; pid, echo <text>, train, train-status, train-result, about,
-; clear, halt.  Spins on empty keyboard
-; buffer (SYS_READ returns 0) until the session pump feeds keys
-; via transfer_key().
+; backspace, then dispatches one of: help, ls, cat <file>, cp <src> <dst>,
+ ; grep <pattern> <file>, uname, pid, echo <text>, write <file> <text>,
+ ; train, train-status, train-result, about, clear, halt.  Spins on empty
+ ; keyboard buffer (SYS_READ returns 0) until the session pump feeds keys
+ ; via transfer_key().
 [BITS 32]
 [ORG 0x100000]
     jmp start
 prompt: db 10, "sloughvm> ", 0
 msg_nl: db 10, 0
 msg_sp: db " ", 0
-msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
+msg_help: db "commands: help, ls, cat <file>, cp <src> <dst>, grep <pattern> <file>, uname, pid, echo <text>, write <file> <text>, train, train-status, train-result, about, clear, halt", 10, 0
 msg_about: db "SloughGPT own-VM console (X86VirtualSystem)", 10, 0
 msg_unknown: db "unknown command - type help", 10, 0
 msg_clear: db 27, "[2J", 27, "[H", 0
@@ -511,6 +511,8 @@ msg_arrow: db " -> ", 0
 msg_cp_usage: db "usage: cp <src> <dst>", 10, 0
 msg_cp_no_src: db "cp: no such file", 10, 0
 msg_cp_fail: db "cp: cannot create file", 10, 0
+msg_grep_usage: db "usage: grep <pattern> <file>", 10, 0
+msg_grep_no_file: db "grep: no such file", 10, 0
 msg_train_started: db "started job ", 0
 msg_train_fail: db "train: could not start job", 10, 0
 msg_denied: db "permission denied (ADMIN role required)", 10, 0
@@ -530,6 +532,7 @@ cmd_uname: db "uname", 0
 cmd_pid: db "pid", 0
 cmd_cat: db "cat", 0
 cmd_cp: db "cp", 0
+cmd_grep: db "grep", 0
 cmd_write: db "write", 0
 cmd_train: db "train", 0
 cmd_train_status: db "train-status", 0
@@ -541,6 +544,7 @@ dirents: times 320 db 0
 catbuf: times 201 db 0
 unamebuf: times 325 db 0
 catfd: times 4 db 0
+grep_ptr: times 4 db 0
 lastjob: times 4 db 0
 resultbuf: times 201 db 0
 cfg: db '{{"dataset":"shakespeare","epochs":3}}', 0
@@ -658,6 +662,11 @@ line_done:
     call prefix_match
     test eax, eax
     jnz do_cp
+    mov esi, line
+    mov edi, cmd_grep
+    call prefix_match
+    test eax, eax
+    jnz do_grep
     mov esi, line
     mov edi, cmd_write
     call prefix_match
@@ -1102,6 +1111,138 @@ cp_src_missing:
     jmp repl
 cp_dst_fail:
     mov esi, msg_cp_fail
+    call print_str
+    jmp repl
+do_grep:
+    ; prefix "grep" matched — guard: must be followed by space or NUL
+    mov esi, line
+    add esi, 4
+    mov al, [esi]
+    test al, al
+    jz grep_usage
+    cmp al, ' '
+    jne do_unknown
+grep_skip:
+    inc esi
+    mov al, [esi]
+    cmp al, ' '
+    je grep_skip
+    test al, al
+    jz grep_usage
+    ; ESI = pattern start — stash ptr, scan to space, NUL-terminate
+    mov [grep_ptr], esi
+    mov edi, esi
+grep_pat_scan:
+    mov al, [edi]
+    test al, al
+    jz grep_no_dst
+    cmp al, ' '
+    je grep_pat_end
+    inc edi
+    jmp grep_pat_scan
+grep_pat_end:
+    xor eax, eax
+    mov [edi], al
+    inc edi
+grep_file_skip:
+    mov al, [edi]
+    cmp al, ' '
+    je grep_file_skip
+    test al, al
+    jz grep_no_dst
+    ; EDI = filename start — NUL-terminate at any trailing token
+    mov ebx, edi
+grep_file_scan:
+    mov al, [ebx]
+    test al, al
+    jz grep_go
+    cmp al, ' '
+    je grep_file_end
+    inc ebx
+    jmp grep_file_scan
+grep_file_end:
+    xor eax, eax
+    mov [ebx], al
+    jmp grep_go
+grep_no_dst:
+    jmp grep_usage
+grep_go:
+    ; pattern at [grep_ptr], EDI = filename
+    mov eax, {_NR_OPEN}
+    mov ebx, edi
+    xor ecx, ecx
+    int 0x80
+    cmp eax, 0
+    jl grep_missing
+    mov [catfd], al
+    mov ebx, eax
+    mov eax, {_NR_READ}
+    mov ecx, catbuf
+    mov edx, 200
+    int 0x80
+    cmp eax, 0
+    jl grep_missing
+    mov edi, catbuf
+    add edi, eax
+    xor eax, eax
+    mov [edi], al          ; NUL-terminate file content
+    mov eax, {_NR_CLOSE}
+    xor ebx, ebx
+    mov bl, [catfd]
+    int 0x80
+    mov ebx, catbuf        ; EBX = current line start
+grep_line:
+    mov al, [ebx]
+    test al, al
+    jz repl                ; EOF — silent (grep prints only matches)
+    mov edx, ebx           ; EDX walks to line end (10 or NUL)
+grep_find_end:
+    mov al, [edx]
+    test al, al
+    jz grep_try
+    cmp al, 10
+    je grep_try
+    inc edx
+    jmp grep_find_end
+grep_try:
+    mov esi, ebx           ; ESI = p, candidate start within line
+grep_try_pos:
+    mov edi, [grep_ptr]    ; reset pattern walker each candidate
+    cmp esi, edx
+    jae grep_next_line_pos ; no match on this line
+    mov ecx, esi           ; ECX = q, walker against file bytes
+grep_cmp:
+    mov al, [edi]
+    test al, al
+    jz grep_matched        ; pattern exhausted — match at p
+    cmp al, [ecx]
+    jne grep_advance
+    inc edi
+    inc ecx
+    jmp grep_cmp
+grep_advance:
+    inc esi
+    jmp grep_try_pos
+grep_matched:
+    mov al, [edx]
+    mov ah, al             ; keep line-end char across print_str
+    mov byte [edx], 0
+    mov esi, ebx
+    call print_str
+    mov [edx], ah          ; restore newline/NUL
+    mov esi, msg_nl
+    call print_str
+    cmp ah, 10
+    jne repl               ; last line had no newline — done after match
+grep_next_line_pos:
+    lea ebx, [edx+1]
+    jmp grep_line
+grep_usage:
+    mov esi, msg_grep_usage
+    call print_str
+    jmp repl
+grep_missing:
+    mov esi, msg_grep_no_file
     call print_str
     jmp repl
 strcmp:
