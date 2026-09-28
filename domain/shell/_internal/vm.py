@@ -6449,9 +6449,9 @@ class X86CPU:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             if reg_f == 0:  # INC r/m8
                 if rm_is_reg:
-                    v = self._get8l(rm_val)
+                    v = self._read_rm_reg(rm_val, 8)
                     r = (v + 1) & 0xFF
-                    self._set8l(rm_val, r)
+                    self._write_rm_reg(rm_val, 8, r)
                     self._update_flags_add(v, 1, r, 8)
                 else:
                     v = self._read8(rm_val)
@@ -6461,9 +6461,9 @@ class X86CPU:
                 return
             if reg_f == 1:  # DEC r/m8
                 if rm_is_reg:
-                    v = self._get8l(rm_val)
+                    v = self._read_rm_reg(rm_val, 8)
                     r = (v - 1) & 0xFF
-                    self._set8l(rm_val, r)
+                    self._write_rm_reg(rm_val, 8, r)
                     self._update_flags_sub(v, 1, r, 8)
                 else:
                     v = self._read8(rm_val)
@@ -6850,15 +6850,15 @@ class X86CPU:
         if opcode == 0x86:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             if rm_is_reg:
-                v_rm = self._get8l(rm_val)
-                v_r = self._get8l(reg_f)
-                self._set8l(rm_val, v_r)
-                self._set8l(reg_f, v_rm)
+                v_rm = self._read_rm_reg(rm_val, 8)
+                v_r = self._read_rm_reg(reg_f, 8)
+                self._write_rm_reg(rm_val, 8, v_r)
+                self._write_rm_reg(reg_f, 8, v_rm)
             else:
                 v_rm = self._mem[rm_val & 0xFFFFFFFF]
-                v_r = self._get8l(reg_f)
+                v_r = self._read_rm_reg(reg_f, 8)
                 self._mem[rm_val & 0xFFFFFFFF] = v_r
-                self._set8l(reg_f, v_rm)
+                self._write_rm_reg(reg_f, 8, v_rm)
             return
 
         # ── Group 1: ALU r/m32, imm32 (81) / ALU r/m32, imm8 (83) ──
@@ -6898,12 +6898,12 @@ class X86CPU:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             imm = self._fetch_byte()
             if rm_is_reg:
-                a = self._get8l(rm_val)
+                a = self._read_rm_reg(rm_val, 8)
             else:
                 a = self._read8(rm_val)
             r = self._alu(reg_f, a, imm, 8)
             if rm_is_reg:
-                self._set8l(rm_val, r & 0xFF)
+                self._write_rm_reg(rm_val, 8, r & 0xFF)
             else:
                 self._write_rm_mem(rm_val, 8, r & 0xFF)
             return
@@ -7056,10 +7056,10 @@ class X86CPU:
         if opcode == 0x84:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             if rm_is_reg:
-                b = self._get8l(rm_val)
+                b = self._read_rm_reg(rm_val, 8)
             else:
                 b = self._read8(rm_val)
-            a = self._get8l(reg_f)
+            a = self._read_rm_reg(reg_f, 8)
             self._update_flags_logic(a & b, 8)
             return
 
@@ -7335,24 +7335,24 @@ class X86CPU:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             imm = self._fetch_byte() & 0x1F
             if rm_is_reg:
-                a = self._get8l(rm_val)
+                a = self._read_rm_reg(rm_val, 8)
             else:
                 a = self._read8(rm_val)
             r = self._shift(reg_f, a, imm, 8)
             if rm_is_reg:
-                self._set8l(rm_val, r & 0xFF)
+                self._write_rm_reg(rm_val, 8, r & 0xFF)
             else:
                 self._write8(rm_val, r & 0xFF)
             return
         if opcode == 0xD0:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             if rm_is_reg:
-                a = self._get8l(rm_val)
+                a = self._read_rm_reg(rm_val, 8)
             else:
                 a = self._read8(rm_val)
             r = self._shift(reg_f, a, 1, 8)
             if rm_is_reg:
-                self._set8l(rm_val, r & 0xFF)
+                self._write_rm_reg(rm_val, 8, r & 0xFF)
             else:
                 self._write8(rm_val, r & 0xFF)
             return
@@ -7360,12 +7360,12 @@ class X86CPU:
             reg_f, rm_is_reg, rm_val = self._decode_modrm()
             count = self._get8l(1) & 0x1F  # CL
             if rm_is_reg:
-                a = self._get8l(rm_val)
+                a = self._read_rm_reg(rm_val, 8)
             else:
                 a = self._read8(rm_val)
             r = self._shift(reg_f, a, count, 8)
             if rm_is_reg:
-                self._set8l(rm_val, r & 0xFF)
+                self._write_rm_reg(rm_val, 8, r & 0xFF)
             else:
                 self._write8(rm_val, r & 0xFF)
             return
@@ -7391,24 +7391,24 @@ class X86CPU:
             if reg_f == 0:  # TEST r/m8, imm8
                 imm = self._fetch_byte()
                 if rm_is_reg:
-                    a = self._get8l(rm_val)
+                    a = self._read_rm_reg(rm_val, 8)
                 else:
                     a = self._read8(rm_val)
                 self._update_flags_logic(a & imm, 8)
                 return
             if reg_f == 2:  # NOT r/m8
                 if rm_is_reg:
-                    v = self._get8l(rm_val)
-                    self._set8l(rm_val, ~v & 0xFF)
+                    v = self._read_rm_reg(rm_val, 8)
+                    self._write_rm_reg(rm_val, 8, ~v & 0xFF)
                 else:
                     v = self._read8(rm_val)
                     self._write8(rm_val, ~v & 0xFF)
                 return
             if reg_f == 3:  # NEG r/m8
                 if rm_is_reg:
-                    v = self._get8l(rm_val)
+                    v = self._read_rm_reg(rm_val, 8)
                     r = (-v) & 0xFF
-                    self._set8l(rm_val, r)
+                    self._write_rm_reg(rm_val, 8, r)
                 else:
                     v = self._read8(rm_val)
                     r = (-v) & 0xFF
@@ -7418,7 +7418,7 @@ class X86CPU:
                 return
             if reg_f == 4:  # MUL r/m8
                 if rm_is_reg:
-                    a = self._get8l(rm_val)
+                    a = self._read_rm_reg(rm_val, 8)
                 else:
                     a = self._read8(rm_val)
                 b = self._get8l(0)
@@ -7429,7 +7429,7 @@ class X86CPU:
                 return
             if reg_f == 5:  # IMUL r/m8
                 if rm_is_reg:
-                    a = self._get8l(rm_val)
+                    a = self._read_rm_reg(rm_val, 8)
                 else:
                     a = self._read8(rm_val)
                 b = self._get8l(0)
@@ -7445,7 +7445,7 @@ class X86CPU:
                 return
             if reg_f == 6:  # DIV r/m8
                 if rm_is_reg:
-                    a = self._get8l(rm_val)
+                    a = self._read_rm_reg(rm_val, 8)
                 else:
                     a = self._read8(rm_val)
                 if a == 0:
@@ -7459,7 +7459,7 @@ class X86CPU:
                 return
             if reg_f == 7:  # IDIV r/m8
                 if rm_is_reg:
-                    a = self._get8l(rm_val)
+                    a = self._read_rm_reg(rm_val, 8)
                 else:
                     a = self._read8(rm_val)
                 if a == 0:
