@@ -45,21 +45,43 @@ def client(app):
 @pytest.fixture
 def model_not_ready():
     """Force model-not-ready state."""
+    from unittest.mock import patch
+
     import state as server_state
     from startup_progress import STARTUP_PHASE
 
+    from domain.infrastructure.server_state import get_server_state
+
+    core_state = get_server_state()
     saved_model = server_state.model
     saved_provider = server_state.provider
     saved_phase = STARTUP_PHASE["phase"]
+    saved_core_model = core_state.model.get()
 
     server_state.model = None
     server_state.provider = None
+    core_state.model.set(None)
     STARTUP_PHASE["phase"] = "ready"
+    gate_patch = patch("infrastructure.middleware._model_ready", return_value=False)
+    status_patch = patch(
+        "routers.inference._get_model_status",
+        return_value={
+            "ready": False,
+            "reason": "model not ready",
+            "code": "E_NO_MODEL",
+            "status": 503,
+        },
+    )
+    gate_patch.start()
+    status_patch.start()
     try:
         yield
     finally:
+        status_patch.stop()
+        gate_patch.stop()
         server_state.model = saved_model
         server_state.provider = saved_provider
+        core_state.model.set(saved_core_model)
         STARTUP_PHASE["phase"] = saved_phase
 
 
