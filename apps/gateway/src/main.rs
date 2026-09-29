@@ -29,7 +29,7 @@ use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tokio::sync::{RwLock, Semaphore};
+use tokio::sync::RwLock;
 use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
@@ -42,11 +42,13 @@ mod compression;
 mod filters;
 mod ratelimit;
 mod stats;
+mod streamctl;
 mod supervisor;
 
 use breaker::{BreakerConfig, CircuitBreaker};
 use filters::PathPolicy;
 use stats::{ClientSeen, EdgeStats};
+use streamctl::StreamControl;
 
 // ── Edge policy (transport only — no model knowledge) ──────────────────────
 
@@ -121,7 +123,8 @@ struct AppState {
     http: Client,
     core_status: Arc<RwLock<CoreStatus>>,
     limiter: Arc<RateLimiter>,
-    streams: Arc<Semaphore>,
+    /// Adaptive stream admission: AIMD ceiling ≤ `MAN_GATEWAY_MAX_STREAMS`.
+    streams: Arc<StreamControl>,
     stats: Arc<EdgeStats>,
     breaker: Arc<CircuitBreaker>,
     /// Append-only JSONL access log; `None` when disabled or unopenable.
@@ -151,17 +154,9 @@ fn open_access_log(path: &str) -> Option<Arc<Mutex<File>>> {
 
 impl AppState {
     fn new(config: GatewayConfig, http: Client) -> Self {
-        // Disabled → effectively-unlimited permits (Semaphore::new rejects
-        // usize::MAX); the middleware also skips acquisition when max_streams
-        // is 0, so this value is never actually drawn down.
-        let stream_cap = if config.rate.max_streams == 0 {
-            1 << 20
-        } else {
-            config.rate.max_streams
-        };
         Self {
             limiter: Arc::new(RateLimiter::new(config.rate)),
-            streams: Arc::new(Semaphore::new(stream_cap)),
+            streams: Arc::new(StreamControl::new(config.rate.max_streams)),
             stats: Arc::new(EdgeStats::new()),
             breaker: Arc::new(CircuitBreaker::new(config.breaker)),
             access: open_access_log(&config.access_log),
@@ -327,6 +322,12 @@ async fn main() {
         );
     } else {
         info!("   → circuit breaker disabled (MAN_GATEWAY_BREAKER_FAILURES=0)");
+    }
+    if config.rate.max_streams > 0 {
+        info!(
+            "   → streams: adaptive cap ≤ {} (AIMD, 2s windows; halves at ≥12.5% stream failures; MAN_GATEWAY_MAX_STREAMS)",
+            config.rate.max_streams
+        );
     }
     if config.access_log.is_empty() {
         info!("   → access log disabled (MAN_GATEWAY_ACCESS_LOG=0)");
@@ -559,13 +560,19 @@ async fn edge_admission(
         return reject_breaker(retry);
     }
 
-    // 5. Concurrency cap on streaming routes — gateway-native. The permit is
-    // held until the body finishes: an SSE stream occupies inference capacity
-    // for its whole life, not just until headers go out.
-    let permit = if is_streaming_path(&path) && cfg.max_streams > 0 {
-        match state.streams.clone().try_acquire_owned() {
-            Ok(permit) => Some(permit),
-            Err(_) => {
+    // 5. Adaptive concurrency cap on streaming routes — gateway-native.
+    // AIMD: tune against observed stream failures first, then CAS a slot
+    // against the in-flight gauge. The guard is held until the body
+    // finishes: an SSE stream occupies inference capacity for its whole
+    // life, not just until headers go out.
+    let guard = if is_streaming_path(&path) && cfg.max_streams > 0 {
+        state.streams.tune(now);
+        match stats::try_stream_slot(&state.stats, state.streams.limit()) {
+            Some(guard) => {
+                state.streams.record_start();
+                Some(guard)
+            }
+            None => {
                 state.stats.shed_429(&route);
                 state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("streams"), &ip);
@@ -573,17 +580,16 @@ async fn edge_admission(
             }
         }
     } else {
+        // In-flight gauge tracks streaming requests only: dropped when the
+        // body finishes, aborts, or the request errors downstream.
         None
     };
-    // In-flight gauge, streaming requests only: dropped when the body
-    // finishes, aborts, or the request errors anywhere downstream.
-    let guard = permit.as_ref().map(|_| stats::stream_open(&state.stats));
 
     let mut resp = next.run(req).await;
-    if let (Some(permit), Some(guard)) = (permit, guard) {
+    if let Some(guard) = guard {
         let (parts, body) = resp.into_parts();
         let held = body.into_data_stream().map(move |chunk| {
-            let _ = (&permit, &guard);
+            let _ = &guard;
             chunk
         });
         resp = Response::from_parts(parts, Body::from_stream(held));
@@ -628,6 +634,8 @@ async fn gateway_stats(State(state): State<AppState>) -> Response {
         "gateway": {
             "uptime_seconds": uptime,
             "in_flight_streams": state.stats.in_flight(),
+            "stream_limit": state.streams.limit(),
+            "stream_max": state.streams.max(),
             "breaker": {
                 "state": breaker_state,
                 "retry_after_secs": retry,
@@ -872,6 +880,7 @@ async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Respo
             Err(e) => {
                 state.stats.add_upstream_err(&route);
                 state.breaker.record_failure();
+                state.streams.record_failure();
                 return Err(e.into());
             }
         }
@@ -894,8 +903,13 @@ async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Respo
         }
     };
     // Upstream answered: 5xx counts as a breaker failure, anything else
-    // (incl. 4xx — client's problem, not the core's) is a success.
+    // (incl. 4xx — client's problem, not the core's) is a success. On
+    // streaming paths 5xx also feeds the adaptive window — the core is
+    // alive (headers arrived) but failing streams.
     state.breaker.observe(resp.status().as_u16());
+    if streaming && resp.status().as_u16() >= 500 {
+        state.streams.record_failure();
+    }
     let out = relay_response(resp, &parts.headers, &method, &state.stats, &route).await?;
     state
         .stats
@@ -1560,5 +1574,74 @@ mod tests {
         assert_eq!(b["requests"], 1);
         assert_eq!(b["5xx"], 1);
         assert_eq!(b["shed_429"], 1);
+    }
+
+    // ── Adaptive stream limits (AIMD) ──────────────────────────────────────
+
+    #[tokio::test]
+    async fn adaptive_stream_limit_halves_after_failures() {
+        let config = GatewayConfig {
+            python_core_url: "http://127.0.0.1:9".into(),
+            rate: RateConfig {
+                global_limit: 100_000,
+                window_secs: 60,
+                max_streams: 8,
+            },
+            // Breaker off: we want the streams *admitted and failed* to feed
+            // the AIMD window — the breaker would shed them after 5.
+            breaker: BreakerConfig {
+                failures: 0,
+                open_secs: 0,
+            },
+            access_log: String::new(),
+            ..Default::default()
+        };
+        let app = build_router(AppState::new(config, Client::new()));
+
+        let stats = |app: axum::Router| async move {
+            let resp = app
+                .oneshot(
+                    Request::builder()
+                        .uri("/gateway/stats")
+                        .body(Body::empty())
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+            serde_json::from_slice::<serde_json::Value>(&body).unwrap()
+        };
+
+        assert_eq!(stats(app.clone()).await["gateway"]["stream_limit"], 8);
+
+        // 8 admitted streams, all fail against the dead core — window:
+        // starts=8, failures=8 (100% ≥ 12.5%).
+        for _ in 0..8 {
+            let req = Request::builder()
+                .method("POST")
+                .uri("/chat/stream")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        }
+
+        // Past the 2s tune interval → the next admission evaluates the
+        // window and halves the effective cap: 8 → 4.
+        tokio::time::sleep(Duration::from_millis(2200)).await;
+        let req = Request::builder()
+            .method("POST")
+            .uri("/chat/stream")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+
+        let v = stats(app).await;
+        assert_eq!(
+            v["gateway"]["stream_limit"], 4,
+            "AIMD halved the cap after a 100% failure window: {v}"
+        );
+        assert_eq!(v["gateway"]["stream_max"], 8, "ceiling unchanged");
     }
 }
