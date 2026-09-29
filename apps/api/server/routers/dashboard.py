@@ -236,7 +236,7 @@ class DashboardRouter:
             services_total += 1
 
         try:
-            from domain.settings._internal.persistent import get_settings
+            from domain.settings import get_settings
 
             get_settings()
             services_total += 1

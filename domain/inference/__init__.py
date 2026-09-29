@@ -80,6 +80,7 @@ def __getattr__(name):
         "VectorEntry": "domain.inference._internal.vector_store",
         "PineconeVectorStore": "domain.inference._internal.vector_stores.pinecone_store",
         "configure_api_provider": "domain.inference._internal.api_provider",
+        "get_engine": "domain.inference._internal.native.engine",
     }
     if name in _lazy:
         import importlib
