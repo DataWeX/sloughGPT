@@ -7,6 +7,7 @@ Public API:
     WorkflowConfig, get_feedback_workflow
     get_per_user_lora, create_training_pipeline
     get_health_monitor, get_message_feedback, HFDPOTrainer
+    FeedbackTrainer
 """
 
 from domain.feedback._internal.database import (
@@ -29,7 +30,7 @@ from domain.feedback._internal.response_tracker import (
     ResponseTracker,
     get_response_tracker,
 )
-from domain.feedback._internal.training import create_training_pipeline
+from domain.feedback._internal.training import FeedbackTrainer, create_training_pipeline
 from domain.feedback._internal.workflow import WorkflowConfig, get_feedback_workflow
 
 __all__ = [
@@ -47,6 +48,7 @@ __all__ = [
     "get_feedback_workflow",
     "get_per_user_lora",
     "create_training_pipeline",
+    "FeedbackTrainer",
     "get_health_monitor",
     "get_message_feedback",
     "HFDPOTrainer",

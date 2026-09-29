@@ -1058,6 +1058,15 @@ class TrainingEngine:
             _turbo_state["paused"] = False
         _turbo_pause_event.clear()
 
+    def build_distillation_trainer(
+        self, teacher_wrapper: Any, student: Any, *, temperature: float, alpha: float, beta: float
+    ) -> Any:
+        """Construct a DistillationTrainer from request hyper-parameters."""
+        from domain.training._internal.distillation import DistillationConfig, DistillationTrainer
+
+        cfg = DistillationConfig(temperature=temperature, alpha=alpha, beta=beta)
+        return DistillationTrainer(teacher_wrapper, student, cfg)
+
 
 _engine: TrainingEngine | None = None
 
