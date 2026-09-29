@@ -166,10 +166,20 @@ MAN_GATEWAY_BREAKER_OPEN=5
 
 **Optional** · Rust edge · default `logs/gateway-access.jsonl`
 
-Append-only JSONL access log — one flushed line per request the edge sees (admitted, rate/breaker/stream-shed, and exempt health/stats probes alike): `ts_ms`, `ms` (request → response headers), `method`, `path`, `route`, `status`, `shed` (`rate` | `breaker` | `streams` | `null`), `client`. Parent directories are created; if the file can't be opened the gateway logs a warning and runs without it. This is the history `/gateway/stats` (in-memory) cannot keep. `0` or empty disables.
+Append-only JSONL access log — one flushed line per request the edge sees (admitted, rate/breaker/stream-shed, and exempt health/stats probes alike): `ts_ms`, `ms` (request → response headers), `method`, `path`, `route`, `status`, `shed` (`rate` | `breaker` | `streams` | `null`), `client`. Parent directories are created; if the file can't be opened the gateway logs a warning and runs without it. This is the history `/gateway/stats` (in-memory) cannot keep. `0` or empty disables. The file rotates at `MAN_GATEWAY_ACCESS_LOG_MAX_MB` so it can never fill the disk.
 
 ```bash
 MAN_GATEWAY_ACCESS_LOG=logs/gateway-access.jsonl  # 0 disables
+```
+
+### MAN_GATEWAY_ACCESS_LOG_MAX_MB
+
+**Optional** · Rust edge · default `64`
+
+Size cap for `MAN_GATEWAY_ACCESS_LOG`: once the active file reaches the cap, it is renamed to `<path>.1` (replacing any older generation) and a fresh file starts. `0` disables rotation — one file grows forever. Unparseable values fall back to the default.
+
+```bash
+MAN_GATEWAY_ACCESS_LOG_MAX_MB=64  # 0 = no rotation
 ```
 
 ### SLO_ENV

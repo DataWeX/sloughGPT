@@ -84,6 +84,8 @@ struct GatewayConfig {
     breaker: BreakerConfig,
     /// JSONL access log path; empty = off.
     access_log: String,
+    /// Rotate the access log once it reaches this many bytes; 0 = one file forever.
+    access_log_max_bytes: u64,
 }
 
 /// Unset → `logs/gateway-access.jsonl`; `0` or empty → off.
@@ -93,6 +95,24 @@ fn access_log_from_env() -> String {
         Ok(v) => v,
         Err(_) => "logs/gateway-access.jsonl".into(),
     }
+}
+
+/// Unset → 64 MiB; `0` → never rotate; unparseable → `default_bytes`.
+fn parse_max_mb(raw: &str, default_bytes: u64) -> u64 {
+    match raw.trim() {
+        "0" => 0,
+        s => s
+            .parse::<u64>()
+            .map(|mb| mb.saturating_mul(1024 * 1024))
+            .unwrap_or(default_bytes),
+    }
+}
+
+fn access_log_max_from_env() -> u64 {
+    const DEFAULT: u64 = 64 * 1024 * 1024;
+    std::env::var("MAN_GATEWAY_ACCESS_LOG_MAX_MB")
+        .map(|v| parse_max_mb(&v, DEFAULT))
+        .unwrap_or(DEFAULT)
 }
 
 impl Default for GatewayConfig {
@@ -111,6 +131,7 @@ impl Default for GatewayConfig {
             rate: RateConfig::from_env(),
             breaker: BreakerConfig::from_env(),
             access_log: access_log_from_env(),
+            access_log_max_bytes: access_log_max_from_env(),
         }
     }
 }
@@ -197,6 +218,24 @@ impl AppState {
             "client": client,
         });
         if let Ok(mut f) = file.lock() {
+            let max = self.config.access_log_max_bytes;
+            if max > 0 && f.metadata().map(|m| m.len() >= max).unwrap_or(false) {
+                let path = &self.config.access_log;
+                let old = format!("{path}.1");
+                if let Err(e) = std::fs::rename(path, &old) {
+                    tracing::warn!("access log rotate rename {path} -> {old}: {e}");
+                }
+                match OpenOptions::new().create(true).append(true).open(path) {
+                    Ok(fresh) => *f = fresh,
+                    Err(e) => tracing::warn!(
+                        "access log reopen {path} after rotate failed ({e}) — writes continue on the rotated file"
+                    ),
+                }
+                tracing::info!(
+                    "access log rotated: {path} -> {old} (cap {} KiB)",
+                    max / 1024
+                );
+            }
             let _ = writeln!(f, "{line}");
             let _ = f.flush();
         }
@@ -331,10 +370,16 @@ async fn main() {
     }
     if config.access_log.is_empty() {
         info!("   → access log disabled (MAN_GATEWAY_ACCESS_LOG=0)");
+    } else if config.access_log_max_bytes == 0 {
+        info!(
+            "   → access log: {} (no rotation; MAN_GATEWAY_ACCESS_LOG_MAX_MB=0, MAN_GATEWAY_ACCESS_LOG=0 disables)",
+            config.access_log
+        );
     } else {
         info!(
-            "   → access log: {} (MAN_GATEWAY_ACCESS_LOG; 0 disables)",
-            config.access_log
+            "   → access log: {} (rotates at {} MB; MAN_GATEWAY_ACCESS_LOG_MAX_MB, 0 = no rotation)",
+            config.access_log,
+            config.access_log_max_bytes / (1024 * 1024)
         );
     }
 
@@ -1070,6 +1115,63 @@ mod tests {
             ..Default::default()
         };
         AppState::new(config, Client::new())
+    }
+
+    #[test]
+    fn parse_max_mb_honours_zero_and_falls_back() {
+        assert_eq!(parse_max_mb("0", 123), 0, "explicit 0 = no rotation");
+        assert_eq!(parse_max_mb(" 1 ", 123), 1024 * 1024, "MiB -> bytes");
+        assert_eq!(parse_max_mb("", 123), 123, "unparseable -> default");
+        assert_eq!(parse_max_mb("12x", 123), 123);
+        assert_eq!(parse_max_mb("64", 0), 64 * 1024 * 1024);
+    }
+
+    /// A tiny cap cycles the active file to `<path>.1` and keeps it small —
+    /// the disk guard behind `MAN_GATEWAY_ACCESS_LOG_MAX_MB`.
+    #[test]
+    fn access_log_rotates_at_cap() {
+        let dir = std::env::temp_dir().join(format!("slough-gw-rot-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("access.jsonl");
+        let config = GatewayConfig {
+            python_core_url: "http://127.0.0.1:9".into(),
+            breaker: BreakerConfig {
+                failures: 0,
+                open_secs: 0,
+            },
+            access_log: path.display().to_string(),
+            access_log_max_bytes: 4 * 1024,
+            ..Default::default()
+        };
+        let state = AppState::new(config, Client::new());
+        let method = axum::http::Method::GET;
+        // ~150 B/line -> cycles every ~27 lines; 200 lines => several rotations.
+        for i in 0..200 {
+            state.access_log(
+                &method,
+                &format!("/api/rotate/{i}"),
+                "/api/rotate",
+                200,
+                Instant::now(),
+                None,
+                "test",
+            );
+        }
+        let active = std::fs::metadata(&path).unwrap().len();
+        assert!(
+            active < 8 * 1024,
+            "active file must stay near the 4 KiB cap, got {active} B"
+        );
+        let old = std::fs::metadata(format!("{}.1", path.display()))
+            .unwrap()
+            .len();
+        assert!(old > 0, "previous generation must exist");
+        assert!(
+            old <= 4 * 1024 + 512,
+            "rotated file was cut near the cap, got {old} B"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]
