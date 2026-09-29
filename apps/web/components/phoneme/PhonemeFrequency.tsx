@@ -21,7 +21,22 @@ function getPhonemeCategory(phoneme: string): string {
   const nasals = ['M', 'N', 'NG']
   const liquids = ['L', 'R']
   const glides = ['W', 'Y']
-  const vowels = ['IY', 'IH', 'EY', 'EH', 'AE', 'AA', 'AH', 'AO', 'OW', 'OY', 'UH', 'UW', 'ER', 'AX']
+  const vowels = [
+    'IY',
+    'IH',
+    'EY',
+    'EH',
+    'AE',
+    'AA',
+    'AH',
+    'AO',
+    'OW',
+    'OY',
+    'UH',
+    'UW',
+    'ER',
+    'AX',
+  ]
 
   if (stops.includes(phoneme)) return 'Stops'
   if (fricatives.includes(phoneme)) return 'Fricatives'
@@ -35,19 +50,27 @@ function getPhonemeCategory(phoneme: string): string {
 
 function getCategoryColor(category: string): string {
   switch (category) {
-    case 'Stops': return 'bg-info/15 text-blue-800'
-    case 'Fricatives': return 'bg-primary/15 text-purple-800'
-    case 'Affricates': return 'bg-pink-100 text-pink-800'
-    case 'Nasals': return 'bg-success/15 text-green-800'
-    case 'Liquids': return 'bg-orange-100 text-orange-800'
-    case 'Glides': return 'bg-cyan-100 text-cyan-800'
-    case 'Vowels': return 'bg-warning/15 text-yellow-800'
-    default: return 'bg-gray-100 text-gray-800'
+    case 'Stops':
+      return 'bg-info/15 text-info'
+    case 'Fricatives':
+      return 'bg-primary/15 text-primary'
+    case 'Affricates':
+      return 'bg-chart-5 text-chart-5'
+    case 'Nasals':
+      return 'bg-success/15 text-success'
+    case 'Liquids':
+      return 'bg-accent text-accent'
+    case 'Glides':
+      return 'bg-info text-info'
+    case 'Vowels':
+      return 'bg-warning/15 text-warning'
+    default:
+      return 'bg-gray-100 text-gray-800'
   }
 }
 
 export default function PhonemeFrequency() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
 
   const frequencies = useMemo(() => {
     if (history.length === 0) return { phonemes: [], categories: [], totalPhonemes: 0 }
@@ -55,8 +78,8 @@ export default function PhonemeFrequency() {
     const phonemeCounts: Record<string, number> = {}
     let totalPhonemes = 0
 
-    history.forEach(entry => {
-      entry.targetPhonemes.forEach(phoneme => {
+    history.forEach((entry) => {
+      entry.targetPhonemes.forEach((phoneme) => {
         phonemeCounts[phoneme] = (phonemeCounts[phoneme] || 0) + 1
         totalPhonemes++
       })
@@ -73,7 +96,7 @@ export default function PhonemeFrequency() {
       .sort((a, b) => b.count - a.count)
 
     const categoryCounts: Record<string, number> = {}
-    phonemes.forEach(p => {
+    phonemes.forEach((p) => {
       categoryCounts[p.category] = (categoryCounts[p.category] || 0) + p.count
     })
 
@@ -116,7 +139,7 @@ export default function PhonemeFrequency() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-          {frequencies.categories.slice(0, 4).map(cat => (
+          {frequencies.categories.slice(0, 4).map((cat) => (
             <div key={cat.name} className="p-2 rounded-lg bg-muted/30">
               <p className="text-lg font-bold">{cat.count}</p>
               <p className="text-xs text-muted-foreground">{cat.name}</p>
@@ -136,7 +159,9 @@ export default function PhonemeFrequency() {
               {topPhonemes.map((p, i) => (
                 <div key={p.phoneme} className="flex items-center gap-3 p-2 rounded bg-muted/20">
                   <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
-                  <Badge variant="outline" className="w-12 justify-center">{p.phoneme}</Badge>
+                  <Badge variant="outline" className="w-12 justify-center">
+                    {p.phoneme}
+                  </Badge>
                   <span className="text-xs text-muted-foreground w-8">{p.ipa}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                     <div
@@ -147,9 +172,7 @@ export default function PhonemeFrequency() {
                   <span className="text-xs text-muted-foreground w-16 text-right">
                     {p.count} ({p.percentage.toFixed(1)}%)
                   </span>
-                  <Badge className={`text-xs ${getCategoryColor(p.category)}`}>
-                    {p.category}
-                  </Badge>
+                  <Badge className={`text-xs ${getCategoryColor(p.category)}`}>{p.category}</Badge>
                 </div>
               ))}
             </div>
@@ -167,7 +190,9 @@ export default function PhonemeFrequency() {
             <div className="p-2 space-y-2">
               {bottomPhonemes.map((p, i) => (
                 <div key={p.phoneme} className="flex items-center gap-3 p-2 rounded bg-muted/20">
-                  <Badge variant="outline" className="w-12 justify-center">{p.phoneme}</Badge>
+                  <Badge variant="outline" className="w-12 justify-center">
+                    {p.phoneme}
+                  </Badge>
                   <span className="text-xs text-muted-foreground w-8">{p.ipa}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                     <div
@@ -178,9 +203,7 @@ export default function PhonemeFrequency() {
                   <span className="text-xs text-muted-foreground w-16 text-right">
                     {p.count} ({p.percentage.toFixed(1)}%)
                   </span>
-                  <Badge className={`text-xs ${getCategoryColor(p.category)}`}>
-                    {p.category}
-                  </Badge>
+                  <Badge className={`text-xs ${getCategoryColor(p.category)}`}>{p.category}</Badge>
                 </div>
               ))}
             </div>
@@ -191,12 +214,14 @@ export default function PhonemeFrequency() {
           <CollapsibleTrigger className="w-full">
             <div className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/30 transition-colors cursor-pointer text-sm">
               <span className="font-medium">Category Breakdown</span>
-              <span className="text-xs text-muted-foreground">{frequencies.categories.length} categories</span>
+              <span className="text-xs text-muted-foreground">
+                {frequencies.categories.length} categories
+              </span>
             </div>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="p-2 space-y-2">
-              {frequencies.categories.map(cat => (
+              {frequencies.categories.map((cat) => (
                 <div key={cat.name} className="flex items-center gap-3">
                   <span className="text-sm w-24">{cat.name}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">

@@ -4,7 +4,13 @@ import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { PUBLIC_API_URL } from '@/lib/config'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -158,8 +164,18 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
       path: '/consciousness/history/episodes',
       description: 'Get episode history',
       params: [
-        { name: 'limit', type: 'number', required: false, description: 'Max episodes to return (default 20)' },
-        { name: 'offset', type: 'number', required: false, description: 'Number of episodes to skip' },
+        {
+          name: 'limit',
+          type: 'number',
+          required: false,
+          description: 'Max episodes to return (default 20)',
+        },
+        {
+          name: 'offset',
+          type: 'number',
+          required: false,
+          description: 'Number of episodes to skip',
+        },
       ],
       responseExample: `{
   "episodes": [
@@ -187,7 +203,12 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
       path: '/consciousness/history/qualia',
       description: 'Get qualia history',
       params: [
-        { name: 'limit', type: 'number', required: false, description: 'Max entries to return (default 50)' },
+        {
+          name: 'limit',
+          type: 'number',
+          required: false,
+          description: 'Max entries to return (default 50)',
+        },
       ],
       responseExample: `{
   "history": [
@@ -234,7 +255,12 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
   "rating": 5
 }`,
       params: [
-        { name: 'episode_index', type: 'number', required: true, description: 'Index of the episode to rate' },
+        {
+          name: 'episode_index',
+          type: 'number',
+          required: true,
+          description: 'Index of the episode to rate',
+        },
         { name: 'rating', type: 'number', required: true, description: 'Rating from 1 to 5' },
       ],
       responseExample: `{
@@ -457,9 +483,7 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
       method: 'GET',
       path: '/consciousness/personas/:id',
       description: 'Get a persona',
-      params: [
-        { name: 'id', type: 'string', required: true, description: 'Persona ID' },
-      ],
+      params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }],
       responseExample: `{
   "id": "persona_abc123",
   "name": "Helpful Assistant",
@@ -478,9 +502,7 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
       method: 'POST',
       path: '/consciousness/personas/:id/activate',
       description: 'Activate a persona',
-      params: [
-        { name: 'id', type: 'string', required: true, description: 'Persona ID' },
-      ],
+      params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }],
       responseExample: `{
   "ok": true,
   "activated": "persona_abc123"
@@ -490,9 +512,7 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
       method: 'DELETE',
       path: '/consciousness/personas/:id',
       description: 'Delete a persona',
-      params: [
-        { name: 'id', type: 'string', required: true, description: 'Persona ID' },
-      ],
+      params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }],
       responseExample: `{
   "ok": true,
   "deleted": "persona_abc123"
@@ -505,7 +525,12 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
       path: '/consciousness/seed',
       description: 'Seed test data',
       params: [
-        { name: 'count', type: 'number', required: false, description: 'Number of episodes to seed (default 10)' },
+        {
+          name: 'count',
+          type: 'number',
+          required: false,
+          description: 'Number of episodes to seed (default 10)',
+        },
       ],
       responseExample: `{
   "ok": true,
@@ -520,7 +545,7 @@ const METHOD_COLORS: Record<HttpMethod, string> = {
   POST: 'bg-info/15 text-info border-info/30',
   PATCH: 'bg-warning/15 text-warning border-warning/30',
   DELETE: 'bg-destructive/15 text-destructive border-destructive/30',
-  PUT: 'bg-violet-500/15 text-violet-400 border-violet-500/30',
+  PUT: 'bg-primary/15 text-primary border-primary/30',
 }
 
 function copyToClipboard(text: string) {
@@ -528,10 +553,12 @@ function copyToClipboard(text: string) {
 }
 
 export default function ConsciousnessDocsPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
   const [activeCategory, setActiveCategory] = useState<Category>('core')
-  const [responses, setResponses] = useState<Record<string, { status: number; body: string; timeMs: number } | null>>({})
+  const [responses, setResponses] = useState<
+    Record<string, { status: number; body: string; timeMs: number } | null>
+  >({})
   const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
   const responseRefs = useRef<Record<string, HTMLDivElement | null>>({})
 
@@ -539,8 +566,8 @@ export default function ConsciousnessDocsPage() {
 
   const handleTryIt = useCallback(async (ep: Endpoint) => {
     const key = endpointKey(ep)
-    setLoadingMap(prev => ({ ...prev, [key]: true }))
-    setResponses(prev => ({ ...prev, [key]: null }))
+    setLoadingMap((prev) => ({ ...prev, [key]: true }))
+    setResponses((prev) => ({ ...prev, [key]: null }))
 
     const start = Date.now()
     try {
@@ -557,12 +584,20 @@ export default function ConsciousnessDocsPage() {
       let formatted = text
       try {
         formatted = JSON.stringify(JSON.parse(text), null, 2)
-      } catch { /* raw text */ }
-      setResponses(prev => ({ ...prev, [key]: { status: res.status, body: formatted, timeMs: elapsed } }))
+      } catch {
+        /* raw text */
+      }
+      setResponses((prev) => ({
+        ...prev,
+        [key]: { status: res.status, body: formatted, timeMs: elapsed },
+      }))
     } catch (e) {
-      setResponses(prev => ({ ...prev, [key]: { status: 0, body: extractErrorMessage(e), timeMs: Date.now() - start } }))
+      setResponses((prev) => ({
+        ...prev,
+        [key]: { status: 0, body: extractErrorMessage(e), timeMs: Date.now() - start },
+      }))
     } finally {
-      setLoadingMap(prev => ({ ...prev, [key]: false }))
+      setLoadingMap((prev) => ({ ...prev, [key]: false }))
       setTimeout(() => {
         responseRefs.current[key]?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
       }, 50)
@@ -573,7 +608,7 @@ export default function ConsciousnessDocsPage() {
     <PageContainer title={t('consciousness_docs.page_title')}>
       <div className="flex gap-6 p-6 min-h-[calc(100vh-4rem)]">
         <nav className="w-48 shrink-0 space-y-1 sticky top-6 self-start">
-          {CATEGORIES.map(cat => (
+          {CATEGORIES.map((cat) => (
             <button
               key={cat.id}
               type="button"
@@ -590,9 +625,11 @@ export default function ConsciousnessDocsPage() {
         </nav>
 
         <div className="flex-1 space-y-4">
-          <h2 className="text-lg font-semibold">{t(CATEGORIES.find(c => c.id === activeCategory)!.labelKey)}</h2>
+          <h2 className="text-lg font-semibold">
+            {t(CATEGORIES.find((c) => c.id === activeCategory)!.labelKey)}
+          </h2>
 
-          {ENDPOINTS[activeCategory].map(ep => {
+          {ENDPOINTS[activeCategory].map((ep) => {
             const key = endpointKey(ep)
             const result = responses[key]
             const isLoading = loadingMap[key]
@@ -601,7 +638,10 @@ export default function ConsciousnessDocsPage() {
               <Card key={key}>
                 <CardHeader>
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={`font-mono text-xs border ${METHOD_COLORS[ep.method]}`}>
+                    <Badge
+                      variant="outline"
+                      className={`font-mono text-xs border ${METHOD_COLORS[ep.method]}`}
+                    >
                       {ep.method}
                     </Badge>
                     <code className="text-sm font-mono">{ep.path}</code>
@@ -611,30 +651,46 @@ export default function ConsciousnessDocsPage() {
                 <CardContent className="space-y-3">
                   {ep.params && ep.params.length > 0 && (
                     <div>
-                      <h4 className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_docs.params')}</h4>
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">
+                        {t('consciousness_docs.params')}
+                      </h4>
                       <div className="rounded-md border border-border/40 overflow-hidden">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="bg-muted/30">
-                              <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_docs.param_name')}</th>
-                              <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_docs.param_type')}</th>
-                              <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_docs.param_required')}</th>
-                              <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_docs.param_desc')}</th>
+                              <th className="px-3 py-1.5 text-left font-medium">
+                                {t('consciousness_docs.param_name')}
+                              </th>
+                              <th className="px-3 py-1.5 text-left font-medium">
+                                {t('consciousness_docs.param_type')}
+                              </th>
+                              <th className="px-3 py-1.5 text-left font-medium">
+                                {t('consciousness_docs.param_required')}
+                              </th>
+                              <th className="px-3 py-1.5 text-left font-medium">
+                                {t('consciousness_docs.param_desc')}
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
-                            {ep.params.map(p => (
+                            {ep.params.map((p) => (
                               <tr key={p.name} className="border-t border-border/30">
                                 <td className="px-3 py-1.5 font-mono">{p.name}</td>
                                 <td className="px-3 py-1.5 text-muted-foreground">{p.type}</td>
                                 <td className="px-3 py-1.5">
                                   {p.required ? (
-                                    <span className="text-warning">{t('consciousness_docs.yes')}</span>
+                                    <span className="text-warning">
+                                      {t('consciousness_docs.yes')}
+                                    </span>
                                   ) : (
-                                    <span className="text-muted-foreground">{t('consciousness_docs.no')}</span>
+                                    <span className="text-muted-foreground">
+                                      {t('consciousness_docs.no')}
+                                    </span>
                                   )}
                                 </td>
-                                <td className="px-3 py-1.5 text-muted-foreground">{p.description}</td>
+                                <td className="px-3 py-1.5 text-muted-foreground">
+                                  {p.description}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -646,7 +702,9 @@ export default function ConsciousnessDocsPage() {
                   {ep.requestBody && (
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <h4 className="text-xs font-medium text-muted-foreground">{t('consciousness_docs.request_body')}</h4>
+                        <h4 className="text-xs font-medium text-muted-foreground">
+                          {t('consciousness_docs.request_body')}
+                        </h4>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -667,7 +725,9 @@ export default function ConsciousnessDocsPage() {
 
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <h4 className="text-xs font-medium text-muted-foreground">{t('consciousness_docs.response_example')}</h4>
+                      <h4 className="text-xs font-medium text-muted-foreground">
+                        {t('consciousness_docs.response_example')}
+                      </h4>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -686,11 +746,7 @@ export default function ConsciousnessDocsPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => handleTryIt(ep)}
-                      disabled={isLoading}
-                    >
+                    <Button size="sm" onClick={() => handleTryIt(ep)} disabled={isLoading}>
                       {isLoading ? t('consciousness_docs.trying') : t('consciousness_docs.try_it')}
                     </Button>
                     <Button
@@ -707,12 +763,21 @@ export default function ConsciousnessDocsPage() {
                   </div>
 
                   {result && (
-                    <div ref={el => { responseRefs.current[key] = el }}>
+                    <div
+                      ref={(el) => {
+                        responseRefs.current[key] = el
+                      }}
+                    >
                       <div className="flex items-center gap-3 text-xs mb-1">
-                        <span className={`font-mono font-medium ${
-                          result.status >= 200 && result.status < 300 ? 'text-success' :
-                          result.status >= 400 ? 'text-destructive' : 'text-muted-foreground'
-                        }`}>
+                        <span
+                          className={`font-mono font-medium ${
+                            result.status >= 200 && result.status < 300
+                              ? 'text-success'
+                              : result.status >= 400
+                                ? 'text-destructive'
+                                : 'text-muted-foreground'
+                          }`}
+                        >
                           {result.status || 'ERR'}
                         </span>
                         <span className="text-muted-foreground">{result.timeMs}ms</span>

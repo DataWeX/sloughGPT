@@ -1,10 +1,14 @@
 'use client'
 
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn } from '@sloughgpt/strui'
 import { IconBrain } from '@/components/icons/NavIcons'
-import { useConsciousnessStatus, getQualiaMood, getConsciousnessLevelLabel } from '@/hooks/useConsciousnessStatus'
+import {
+  useConsciousnessStatus,
+  getQualiaMood,
+  getConsciousnessLevelLabel,
+} from '@/hooks/useConsciousnessStatus'
 import { useLocale } from '@/hooks/useLocale'
 
 export function ConsciousnessSidebarWidget() {
@@ -39,7 +43,7 @@ export function ConsciousnessSidebarWidget() {
   return (
     <div className="relative" ref={panelRef}>
       <button
-        onClick={() => setExpanded(prev => !prev)}
+        onClick={() => setExpanded((prev) => !prev)}
         className="group relative flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[11px] transition-colors duration-200 ease-smooth text-foreground/78 hover:bg-primary/10 hover:text-primary dark:text-muted-foreground"
         aria-expanded={expanded}
         aria-label={t('consciousness_sidebar.aria_label')}
@@ -48,17 +52,39 @@ export function ConsciousnessSidebarWidget() {
         <span className="flex-1 truncate">{t('consciousness_sidebar.level_badge', { level })}</span>
         {mood && <span className="truncate text-muted-foreground/60">{mood}</span>}
         <span className="relative flex h-2 w-2 shrink-0">
-          <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-75', enabled ? 'bg-green-400' : 'bg-gray-400')} />
-          <span className={cn('relative inline-flex h-2 w-2 rounded-full', enabled ? 'bg-success' : 'bg-muted')} />
+          <span
+            className={cn(
+              'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
+              enabled ? 'bg-success' : 'bg-gray-400',
+            )}
+          />
+          <span
+            className={cn(
+              'relative inline-flex h-2 w-2 rounded-full',
+              enabled ? 'bg-success' : 'bg-muted',
+            )}
+          />
         </span>
       </button>
 
       {expanded && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border/40 bg-popover p-3 shadow-xl">
           <div className="mb-2 space-y-1.5">
-            <MiniQualiaBar label={t('consciousness_sidebar.qualia_valence')} value={valence} color="bg-success" />
-            <MiniQualiaBar label={t('consciousness_sidebar.qualia_arousal')} value={arousal} color="bg-warning" />
-            <MiniQualiaBar label={t('consciousness_sidebar.qualia_novelty')} value={novelty} color="bg-violet-500" />
+            <MiniQualiaBar
+              label={t('consciousness_sidebar.qualia_valence')}
+              value={valence}
+              color="bg-success"
+            />
+            <MiniQualiaBar
+              label={t('consciousness_sidebar.qualia_arousal')}
+              value={arousal}
+              color="bg-warning"
+            />
+            <MiniQualiaBar
+              label={t('consciousness_sidebar.qualia_novelty')}
+              value={novelty}
+              color="bg-primary"
+            />
           </div>
 
           <div className="mb-2 flex items-center justify-between text-[10px] text-muted-foreground/70">
@@ -69,31 +95,52 @@ export function ConsciousnessSidebarWidget() {
           <div className="border-t border-border/30 pt-2">
             <QuickLink
               label={t('consciousness_sidebar.link_dashboard')}
-              onClick={() => { router.push('/consciousness/dashboard'); setExpanded(false) }}
+              onClick={() => {
+                router.push('/consciousness/dashboard')
+                setExpanded(false)
+              }}
             />
             <QuickLink
               label={t('consciousness_sidebar.link_monitor')}
-              onClick={() => { router.push('/consciousness/monitor'); setExpanded(false) }}
+              onClick={() => {
+                router.push('/consciousness/monitor')
+                setExpanded(false)
+              }}
             />
             <QuickLink
               label={t('consciousness_sidebar.link_insights')}
-              onClick={() => { router.push('/consciousness/insights'); setExpanded(false) }}
+              onClick={() => {
+                router.push('/consciousness/insights')
+                setExpanded(false)
+              }}
             />
             <QuickLink
               label={t('consciousness_sidebar.link_personality')}
-              onClick={() => { router.push('/consciousness/personality'); setExpanded(false) }}
+              onClick={() => {
+                router.push('/consciousness/personality')
+                setExpanded(false)
+              }}
             />
             <QuickLink
               label={t('consciousness_sidebar.link_training')}
-              onClick={() => { router.push('/consciousness/training'); setExpanded(false) }}
+              onClick={() => {
+                router.push('/consciousness/training')
+                setExpanded(false)
+              }}
             />
             <QuickLink
               label={t('consciousness_sidebar.link_settings')}
-              onClick={() => { router.push('/consciousness/settings'); setExpanded(false) }}
+              onClick={() => {
+                router.push('/consciousness/settings')
+                setExpanded(false)
+              }}
             />
             <QuickLink
               label={t('consciousness_sidebar.link_chat')}
-              onClick={() => { router.push('/chat'); setExpanded(false) }}
+              onClick={() => {
+                router.push('/chat')
+                setExpanded(false)
+              }}
             />
           </div>
         </div>
@@ -110,7 +157,9 @@ function MiniQualiaBar({ label, value, color }: { label: string; value: number; 
       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
         <div className={cn('h-full rounded-full', color)} style={{ width: `${pct}%` }} />
       </div>
-      <span className="w-6 text-right text-[10px] tabular-nums text-muted-foreground/60">{pct}</span>
+      <span className="w-6 text-right text-[10px] tabular-nums text-muted-foreground/60">
+        {pct}
+      </span>
     </div>
   )
 }

@@ -20,15 +20,16 @@ export function ConsciousnessMessageBadge({ messageId }: Props) {
 
   if (!event) return null
 
-  const mood = getQualiaMood(event.qualia as any || {})
+  const mood = getQualiaMood((event.qualia as any) || {})
   const growth = (event as any).growth ?? event.growth_delta ?? 0
 
   return (
     <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
-      {mood && <span className="text-violet-400">{mood}</span>}
+      {mood && <span className="text-primary">{mood}</span>}
       {growth !== 0 && (
         <span className={cn('font-mono', growth > 0 ? 'text-success' : 'text-destructive')}>
-          {growth > 0 ? '+' : ''}{growth.toFixed(3)}
+          {growth > 0 ? '+' : ''}
+          {growth.toFixed(3)}
         </span>
       )}
       <span className="text-muted-foreground/50">L{event.level ?? 0}</span>

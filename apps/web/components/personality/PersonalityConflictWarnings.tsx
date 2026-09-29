@@ -15,7 +15,7 @@ export function PersonalityConflictWarnings({ conflicts }: PersonalityConflictWa
   if (conflicts.length === 0) return null
 
   return (
-    <Card className="border-yellow-500/50">
+    <Card className="border-warning/50">
       <CardHeader>
         <CardTitle className="text-warning dark:text-warning">Personality Conflicts</CardTitle>
         <CardDescription>These settings may work against each other</CardDescription>
@@ -23,7 +23,10 @@ export function PersonalityConflictWarnings({ conflicts }: PersonalityConflictWa
       <CardContent className="space-y-2">
         {conflicts.map((c, i) => (
           <div key={i} className="flex items-start gap-2 text-sm p-2 rounded-md bg-warning/5">
-            <Badge variant={c.severity === 'medium' ? 'destructive' : 'outline'} className="text-[10px] mt-0.5">
+            <Badge
+              variant={c.severity === 'medium' ? 'destructive' : 'outline'}
+              className="text-[10px] mt-0.5"
+            >
               {c.severity}
             </Badge>
             <div>

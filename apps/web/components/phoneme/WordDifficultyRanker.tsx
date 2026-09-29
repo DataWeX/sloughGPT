@@ -27,22 +27,26 @@ function getDifficulty(avg: number): 'easy' | 'medium' | 'hard' {
 
 function getDifficultyColor(d: string): string {
   switch (d) {
-    case 'easy': return 'bg-success/15 text-green-800'
-    case 'medium': return 'bg-warning/15 text-yellow-800'
-    case 'hard': return 'bg-destructive/15 text-red-800'
-    default: return ''
+    case 'easy':
+      return 'bg-success/15 text-success'
+    case 'medium':
+      return 'bg-warning/15 text-warning'
+    case 'hard':
+      return 'bg-destructive/15 text-destructive'
+    default:
+      return ''
   }
 }
 
 export default function WordDifficultyRanker() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
   const [filter, setFilter] = useState<'all' | 'easy' | 'medium' | 'hard'>('all')
   const [sortBy, setSortBy] = useState<'difficulty' | 'attempts' | 'score'>('difficulty')
 
   const wordStats = useMemo(() => {
     const wordMap: Record<string, WordStats> = {}
 
-    history.forEach(entry => {
+    history.forEach((entry) => {
       const key = `${entry.target}-${entry.language}`
       if (!wordMap[key]) {
         wordMap[key] = {
@@ -64,7 +68,7 @@ export default function WordDifficultyRanker() {
       if (entry.timestamp > w.lastAttempt) w.lastAttempt = entry.timestamp
     })
 
-    return Object.values(wordMap).map(w => ({
+    return Object.values(wordMap).map((w) => ({
       ...w,
       difficulty: getDifficulty(w.avgScore),
     }))
@@ -72,7 +76,7 @@ export default function WordDifficultyRanker() {
 
   const ranked = useMemo(() => {
     let result = [...wordStats]
-    if (filter !== 'all') result = result.filter(w => w.difficulty === filter)
+    if (filter !== 'all') result = result.filter((w) => w.difficulty === filter)
     result.sort((a, b) => {
       if (sortBy === 'difficulty') {
         const order = { hard: 0, medium: 1, easy: 2 }
@@ -99,9 +103,9 @@ export default function WordDifficultyRanker() {
     )
   }
 
-  const hardCount = wordStats.filter(w => w.difficulty === 'hard').length
-  const medCount = wordStats.filter(w => w.difficulty === 'medium').length
-  const easyCount = wordStats.filter(w => w.difficulty === 'easy').length
+  const hardCount = wordStats.filter((w) => w.difficulty === 'hard').length
+  const medCount = wordStats.filter((w) => w.difficulty === 'medium').length
+  const easyCount = wordStats.filter((w) => w.difficulty === 'easy').length
 
   return (
     <Card>
@@ -115,20 +119,22 @@ export default function WordDifficultyRanker() {
         <div className="flex gap-2 flex-wrap">
           <div className="flex items-center gap-1">
             <span className="text-xs text-muted-foreground">Filter:</span>
-            {(['all', 'hard', 'medium', 'easy'] as const).map(d => (
+            {(['all', 'hard', 'medium', 'easy'] as const).map((d) => (
               <Badge
                 key={d}
                 variant={filter === d ? 'default' : 'outline'}
                 className="cursor-pointer text-xs"
                 onClick={() => setFilter(d)}
               >
-                {d === 'all' ? `All (${wordStats.length})` : `${d} (${d === 'hard' ? hardCount : d === 'medium' ? medCount : easyCount})`}
+                {d === 'all'
+                  ? `All (${wordStats.length})`
+                  : `${d} (${d === 'hard' ? hardCount : d === 'medium' ? medCount : easyCount})`}
               </Badge>
             ))}
           </div>
           <div className="flex items-center gap-1">
             <span className="text-xs text-muted-foreground">Sort:</span>
-            {(['difficulty', 'attempts', 'score'] as const).map(s => (
+            {(['difficulty', 'attempts', 'score'] as const).map((s) => (
               <Badge
                 key={s}
                 variant={sortBy === s ? 'default' : 'outline'}
@@ -151,18 +157,26 @@ export default function WordDifficultyRanker() {
           <CollapsibleContent>
             <div className="p-2 space-y-2">
               {ranked.map((w, i) => (
-                <div key={`${w.word}-${w.language}`} className="flex items-center gap-3 p-2 rounded bg-muted/20">
+                <div
+                  key={`${w.word}-${w.language}`}
+                  className="flex items-center gap-3 p-2 rounded bg-muted/20"
+                >
                   <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
                   <span className="font-medium text-sm min-w-[80px]">{w.word}</span>
-                  <Badge variant="outline" className="text-xs">{w.language}</Badge>
+                  <Badge variant="outline" className="text-xs">
+                    {w.language}
+                  </Badge>
                   <Badge className={`text-xs ${getDifficultyColor(w.difficulty)}`}>
                     {w.difficulty}
                   </Badge>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
                     <div
                       className={`h-full rounded-full ${
-                        w.difficulty === 'easy' ? 'bg-success' :
-                        w.difficulty === 'medium' ? 'bg-warning' : 'bg-destructive'
+                        w.difficulty === 'easy'
+                          ? 'bg-success'
+                          : w.difficulty === 'medium'
+                            ? 'bg-warning'
+                            : 'bg-destructive'
                       }`}
                       style={{ width: `${w.avgScore * 100}%` }}
                     />

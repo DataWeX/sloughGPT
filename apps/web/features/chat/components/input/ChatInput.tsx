@@ -4,27 +4,86 @@ import { useRef, useCallback, useEffect, useState, memo } from 'react'
 import { ImagePreview, type ImageAttachment } from './ImageUpload'
 import { ChatInputRow } from './ChatInputRow'
 import { StreamingIndicator } from '@/features/chat/components/StreamingIndicator'
-import { useConsciousnessStatus, getConsciousnessLevelLabel, getQualiaMood } from '@/hooks/useConsciousnessStatus'
+import {
+  useConsciousnessStatus,
+  getConsciousnessLevelLabel,
+  getQualiaMood,
+} from '@/hooks/useConsciousnessStatus'
 import { useLocale } from '@/hooks/useLocale'
 import { consciousnessController } from '@/lib/consciousness-controller'
-import { IconChat, IconEdit, IconBrain, IconVision, IconSearch, IconBolt, IconDocument, IconMic, IconSparkle, cn } from '@sloughgpt/strui'
+import {
+  IconChat,
+  IconEdit,
+  IconBrain,
+  IconVision,
+  IconSearch,
+  IconBolt,
+  IconDocument,
+  IconMic,
+  IconSparkle,
+  cn,
+} from '@sloughgpt/strui'
 import { Waves } from 'lucide-react'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import type { ChatCommand } from '@/lib/chat-commands'
 import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
 const MODE_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-  chat: { label: 'Chat', icon: <IconChat className="h-3 w-3" />, color: 'bg-primary/10 text-primary border-primary/20' },
-  write: { label: 'Write', icon: <IconEdit className="h-3 w-3" />, color: 'bg-violet-500/10 text-violet-500 border-violet-500/20' },
-  rewrite: { label: 'Rewrite', icon: <IconSparkle className="h-3 w-3" />, color: 'bg-warning/10 text-amber-500 border-warning/20' },
-  translate: { label: 'Translate', icon: <IconVision className="h-3 w-3" />, color: 'bg-info/10 text-info border-blue-500/20' },
-  brainstorm: { label: 'Brainstorm', icon: <IconBolt className="h-3 w-3" />, color: 'bg-success/10 text-emerald-500 border-success/20' },
-  decide: { label: 'Decide', icon: <IconBrain className="h-3 w-3" />, color: 'bg-destructive/10 text-rose-500 border-destructive/20' },
-  explain: { label: 'Explain', icon: <IconSearch className="h-3 w-3" />, color: 'bg-info/10 text-cyan-500 border-info/20' },
-  wellness: { label: 'Wellness', icon: <Waves className="h-3 w-3" />, color: 'bg-info/10 text-teal-500 border-teal-500/20' },
-  create: { label: 'Create', icon: <IconVision className="h-3 w-3" />, color: 'bg-primary/10 text-pink-500 border-primary/20' },
-  read: { label: 'Read', icon: <IconDocument className="h-3 w-3" />, color: 'bg-orange-500/10 text-orange-500 border-orange-500/20' },
-  talk: { label: 'Talk', icon: <IconMic className="h-3 w-3" />, color: 'bg-primary/10 text-indigo-500 border-primary/20' },
+  chat: {
+    label: 'Chat',
+    icon: <IconChat className="h-3 w-3" />,
+    color: 'bg-primary/10 text-primary border-primary/20',
+  },
+  write: {
+    label: 'Write',
+    icon: <IconEdit className="h-3 w-3" />,
+    color: 'bg-primary/10 text-primary border-primary/20',
+  },
+  rewrite: {
+    label: 'Rewrite',
+    icon: <IconSparkle className="h-3 w-3" />,
+    color: 'bg-warning/10 text-warning border-warning/20',
+  },
+  translate: {
+    label: 'Translate',
+    icon: <IconVision className="h-3 w-3" />,
+    color: 'bg-info/10 text-info border-info/20',
+  },
+  brainstorm: {
+    label: 'Brainstorm',
+    icon: <IconBolt className="h-3 w-3" />,
+    color: 'bg-success/10 text-success border-success/20',
+  },
+  decide: {
+    label: 'Decide',
+    icon: <IconBrain className="h-3 w-3" />,
+    color: 'bg-destructive/10 text-destructive border-destructive/20',
+  },
+  explain: {
+    label: 'Explain',
+    icon: <IconSearch className="h-3 w-3" />,
+    color: 'bg-info/10 text-info border-info/20',
+  },
+  wellness: {
+    label: 'Wellness',
+    icon: <Waves className="h-3 w-3" />,
+    color: 'bg-info/10 text-info border-info/20',
+  },
+  create: {
+    label: 'Create',
+    icon: <IconVision className="h-3 w-3" />,
+    color: 'bg-primary/10 text-chart-5 border-primary/20',
+  },
+  read: {
+    label: 'Read',
+    icon: <IconDocument className="h-3 w-3" />,
+    color: 'bg-accent/10 text-accent border-accent/20',
+  },
+  talk: {
+    label: 'Talk',
+    icon: <IconMic className="h-3 w-3" />,
+    color: 'bg-primary/10 text-primary border-primary/20',
+  },
 }
 
 const HISTORY_KEY = 'chat-input-history'
@@ -35,7 +94,9 @@ function loadHistory(): string[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY)
     return raw ? JSON.parse(raw) : []
-  } catch { return [] }
+  } catch {
+    return []
+  }
 }
 
 function saveHistory(history: string[]) {
@@ -98,7 +159,9 @@ export const ChatInput = memo(function ChatInput({
   const fetchPersonas = useCallback(async () => {
     try {
       const result = await consciousnessController.listPersonas()
-      setPersonas((result.personas ?? []).map(p => ({ id: p.id, name: p.name, values: p.personality })))
+      setPersonas(
+        (result.personas ?? []).map((p) => ({ id: p.id, name: p.name, values: p.personality })),
+      )
     } catch {
       // Personas endpoint may not exist
     }
@@ -123,14 +186,17 @@ export const ChatInput = memo(function ChatInput({
     }
   }, [onSend, value, history])
 
-  const handleVoiceTranscript = useCallback((text: string) => {
-    onChange(value ? `${value} ${text}` : text)
-    pendingSendRef.current = true
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto'
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`
-    }
-  }, [value, onChange])
+  const handleVoiceTranscript = useCallback(
+    (text: string) => {
+      onChange(value ? `${value} ${text}` : text)
+      pendingSendRef.current = true
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto'
+        textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`
+      }
+    },
+    [value, onChange],
+  )
 
   useEffect(() => {
     if (pendingSendRef.current && value.trim().length > 0) {
@@ -142,40 +208,49 @@ export const ChatInput = memo(function ChatInput({
     }
   }, [value, onSend])
 
-  const handleAddImage = useCallback((dataUrl: string) => {
-    if (onAddImage) {
-      onAddImage(dataUrl)
-    }
-  }, [onAddImage])
+  const handleAddImage = useCallback(
+    (dataUrl: string) => {
+      if (onAddImage) {
+        onAddImage(dataUrl)
+      }
+    },
+    [onAddImage],
+  )
 
-  const handleRemoveImage = useCallback((id: string) => {
-    if (onRemoveImage) {
-      onRemoveImage(id)
-    }
-  }, [onRemoveImage])
+  const handleRemoveImage = useCallback(
+    (id: string) => {
+      if (onRemoveImage) {
+        onRemoveImage(id)
+      }
+    },
+    [onRemoveImage],
+  )
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'ArrowUp' && !e.shiftKey && value === '' && history.length > 0) {
-      e.preventDefault()
-      const newIndex = historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1)
-      if (historyIndex === -1) setDraft(value)
-      setHistoryIndex(newIndex)
-      onChange(history[newIndex])
-    } else if (e.key === 'ArrowDown' && !e.shiftKey && historyIndex !== -1) {
-      e.preventDefault()
-      if (historyIndex === history.length - 1) {
-        setHistoryIndex(-1)
-        onChange(draft)
-      } else {
-        const newIndex = historyIndex + 1
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (e.key === 'ArrowUp' && !e.shiftKey && value === '' && history.length > 0) {
+        e.preventDefault()
+        const newIndex = historyIndex === -1 ? history.length - 1 : Math.max(0, historyIndex - 1)
+        if (historyIndex === -1) setDraft(value)
         setHistoryIndex(newIndex)
         onChange(history[newIndex])
+      } else if (e.key === 'ArrowDown' && !e.shiftKey && historyIndex !== -1) {
+        e.preventDefault()
+        if (historyIndex === history.length - 1) {
+          setHistoryIndex(-1)
+          onChange(draft)
+        } else {
+          const newIndex = historyIndex + 1
+          setHistoryIndex(newIndex)
+          onChange(history[newIndex])
+        }
+      } else if (e.key === 'Escape' && historyIndex !== -1) {
+        setHistoryIndex(-1)
+        onChange(draft)
       }
-    } else if (e.key === 'Escape' && historyIndex !== -1) {
-      setHistoryIndex(-1)
-      onChange(draft)
-    }
-  }, [value, history, historyIndex, draft, onChange])
+    },
+    [value, history, historyIndex, draft, onChange],
+  )
 
   const handlePersonaChange = useCallback(async (personaId: string) => {
     if (!personaId) {
@@ -191,12 +266,14 @@ export const ChatInput = memo(function ChatInput({
   }, [])
 
   const isDisabled = loading || health === 'offline'
-  const hasModel = health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
-  const placeholder = health === 'offline'
-    ? 'Service offline...'
-    : hasModel
-      ? 'Type a message...'
-      : 'Loading model...'
+  const hasModel =
+    health !== null && health !== 'offline' && 'model_loaded' in health && health.model_loaded
+  const placeholder =
+    health === 'offline'
+      ? 'Service offline...'
+      : hasModel
+        ? 'Type a message...'
+        : 'Loading model...'
   const hasContent = value.trim().length > 0 || images.length > 0
 
   const modeConfig = MODE_CONFIG[chatMode] || MODE_CONFIG.chat
@@ -218,11 +295,7 @@ export const ChatInput = memo(function ChatInput({
         {images.length > 0 && (
           <div className="flex gap-2 flex-wrap pb-2" aria-label="Attached images">
             {images.map((img) => (
-              <ImagePreview
-                key={img.id}
-                image={img}
-                onRemove={handleRemoveImage}
-              />
+              <ImagePreview key={img.id} image={img} onRemove={handleRemoveImage} />
             ))}
           </div>
         )}
@@ -230,10 +303,12 @@ export const ChatInput = memo(function ChatInput({
         <div className="relative">
           {isNonChatMode && (
             <div className="flex items-center gap-1.5 pb-1.5">
-              <span className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors",
-                modeConfig.color
-              )}>
+              <span
+                className={cn(
+                  'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors',
+                  modeConfig.color,
+                )}
+              >
                 {modeConfig.icon}
                 {modeConfig.label}
               </span>
@@ -241,37 +316,42 @@ export const ChatInput = memo(function ChatInput({
             </div>
           )}
           <ChatInputRow
-          value={value}
-          onChange={onChange}
-          onSend={handleSend}
-          onStop={onStop}
-          onCancel={onCancel}
-          loading={loading}
-          disabled={isDisabled}
-          placeholder={placeholder}
-          textareaRef={textareaRef}
-          onImage={handleAddImage}
-          onTranscript={handleVoiceTranscript}
-          onAudioRecorded={onAudioRecorded}
-          onAudioTranscript={onAudioTranscript}
-          onGeneratedImage={onGeneratedImage}
-          onPDFAnalysis={onPDFAnalysis}
-          onPDFError={onPDFError}
-          hasContent={hasContent}
-          onExecuteCommand={onExecuteCommand}
-          onKeyDown={handleKeyDown}
-        />
+            value={value}
+            onChange={onChange}
+            onSend={handleSend}
+            onStop={onStop}
+            onCancel={onCancel}
+            loading={loading}
+            disabled={isDisabled}
+            placeholder={placeholder}
+            textareaRef={textareaRef}
+            onImage={handleAddImage}
+            onTranscript={handleVoiceTranscript}
+            onAudioRecorded={onAudioRecorded}
+            onAudioTranscript={onAudioTranscript}
+            onGeneratedImage={onGeneratedImage}
+            onPDFAnalysis={onPDFAnalysis}
+            onPDFError={onPDFError}
+            hasContent={hasContent}
+            onExecuteCommand={onExecuteCommand}
+            onKeyDown={handleKeyDown}
+          />
         </div>
 
         {!loading && !value && hasModel && (
-          <div className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/40 pt-1" aria-hidden="true">
+          <div
+            className="flex items-center justify-center gap-3 text-[10px] text-muted-foreground/40 pt-1"
+            aria-hidden="true"
+          >
             <span className="flex items-center gap-1">
               <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Enter</kbd>
               <span>send</span>
             </span>
             <span className="text-muted-foreground/20">·</span>
             <span className="flex items-center gap-1">
-              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">Shift+Enter</kbd>
+              <kbd className="rounded bg-muted/50 px-1 py-0.5 font-mono text-[9px]">
+                Shift+Enter
+              </kbd>
               <span>newline</span>
             </span>
             <span className="text-muted-foreground/20">·</span>
@@ -282,8 +362,11 @@ export const ChatInput = memo(function ChatInput({
             {consciousnessStatus && consciousnessStatus.enabled && (
               <>
                 <span className="text-muted-foreground/20">·</span>
-                <span className="flex items-center gap-1 text-violet-400/60" title={`Consciousness ${getConsciousnessLevelLabel(consciousnessStatus.level)}: ${getQualiaMood(consciousnessStatus.current_qualia)}`}>
-                  <span className="h-1 w-1 rounded-full bg-violet-400" />
+                <span
+                  className="flex items-center gap-1 text-primary/60"
+                  title={`Consciousness ${getConsciousnessLevelLabel(consciousnessStatus.level)}: ${getQualiaMood(consciousnessStatus.current_qualia)}`}
+                >
+                  <span className="h-1 w-1 rounded-full bg-primary" />
                   <span>{getConsciousnessLevelLabel(consciousnessStatus.level)}</span>
                 </span>
               </>
@@ -295,11 +378,13 @@ export const ChatInput = memo(function ChatInput({
                   value={activePersona ?? ''}
                   onChange={(e) => handlePersonaChange(e.target.value)}
                   title={t('chat.switchPersona')}
-                  className="rounded border border-violet-400/30 bg-violet-400/10 px-1.5 py-0.5 text-[10px] text-violet-400/70 outline-none cursor-pointer hover:bg-violet-400/20 transition-colors"
+                  className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary/70 outline-none cursor-pointer hover:bg-primary/20 transition-colors"
                 >
                   <option value="">{t('chat.defaultPersona')}</option>
                   {personas.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
                   ))}
                 </select>
               </>

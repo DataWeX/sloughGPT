@@ -25,12 +25,18 @@ export default function PronunciationRecording() {
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const analyserRef = useRef<AnalyserNode | null>(null)
   const animFrameRef = useRef<number | null>(null)
-  const addToHistory = usePhonemeStore(s => s.addToHistory)
-  const addToast = useToastStore(s => s.addToast)
+  const addToHistory = usePhonemeStore((s) => s.addToHistory)
+  const addToast = useToastStore((s) => s.addToast)
 
   const cleanup = useCallback(() => {
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null }
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current)
+      animFrameRef.current = null
+    }
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop()
     }
@@ -72,13 +78,16 @@ export default function PronunciationRecording() {
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         const url = URL.createObjectURL(blob)
-        setRecordings(prev => [...prev, {
-          blob,
-          url,
-          duration,
-          timestamp: new Date().toISOString(),
-        }])
-        stream.getTracks().forEach(t => t.stop())
+        setRecordings((prev) => [
+          ...prev,
+          {
+            blob,
+            url,
+            duration,
+            timestamp: new Date().toISOString(),
+          },
+        ])
+        stream.getTracks().forEach((t) => t.stop())
         audioCtx.close()
       }
 
@@ -88,7 +97,7 @@ export default function PronunciationRecording() {
       updateLevel()
 
       timerRef.current = setInterval(() => {
-        setDuration(d => d + 100)
+        setDuration((d) => d + 100)
       }, 100)
     } catch {
       addToast('Microphone access denied', 'error')
@@ -117,7 +126,7 @@ export default function PronunciationRecording() {
   }
 
   const deleteRecording = useCallback((index: number) => {
-    setRecordings(prev => {
+    setRecordings((prev) => {
       const r = prev[index]
       if (r) URL.revokeObjectURL(r.url)
       return prev.filter((_, i) => i !== index)
@@ -137,18 +146,20 @@ export default function PronunciationRecording() {
           <div className="relative w-32 h-32 flex items-center justify-center">
             <div
               className={`absolute inset-0 rounded-full transition-all duration-200 ${
-                recordState === 'recording'
-                  ? 'bg-destructive/20 scale-110'
-                  : 'bg-muted/30'
+                recordState === 'recording' ? 'bg-destructive/20 scale-110' : 'bg-muted/30'
               }`}
-              style={recordState === 'recording' ? {
-                transform: `scale(${1 + audioLevel * 0.5})`,
-              } : {}}
+              style={
+                recordState === 'recording'
+                  ? {
+                      transform: `scale(${1 + audioLevel * 0.5})`,
+                    }
+                  : {}
+              }
             />
             <div
               className={`w-20 h-20 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
                 recordState === 'recording'
-                  ? 'bg-destructive hover:bg-red-600'
+                  ? 'bg-destructive hover:bg-destructive'
                   : 'bg-primary hover:bg-primary/90'
               }`}
               onClick={recordState === 'recording' ? stopRecording : startRecording}
@@ -197,7 +208,9 @@ export default function PronunciationRecording() {
             {recordings.map((rec, i) => (
               <div key={i} className="flex items-center gap-3 p-2 rounded bg-muted/20">
                 <audio controls src={rec.url} className="h-8 flex-1" />
-                <span className="text-xs text-muted-foreground">{formatDuration(rec.duration)}</span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDuration(rec.duration)}
+                </span>
                 <Button variant="ghost" size="sm" onClick={() => deleteRecording(i)}>
                   ×
                 </Button>

@@ -27,18 +27,59 @@ interface ArchetypeDef {
 }
 
 const ARCHETYPES: ArchetypeDef[] = [
-  { label: 'The Nurturer', description: 'Warm, empathetic, and deeply caring. Your conversations feel like talking to a close friend.', required: ['warmth', 'empathy', 'empathy_depth'] },
-  { label: 'The Analyst', description: 'Logical, precise, and systematic. You break down complex problems with clarity.', required: ['abstract_reasoning', 'factual_precision'] },
-  { label: 'The Professional', description: 'Precise, formal, and thorough. Perfect for technical discussions and detailed analysis.', required: ['formality', 'factual_precision'] },
-  { label: 'The Artist', description: 'Creative, witty, and imaginative. Every conversation becomes a canvas.', required: ['creativity', 'humor'] },
-  { label: 'The Explorer', description: 'Naturally curious and endlessly creative. Always asking "what if?"', required: ['curiosity', 'creativity'] },
-  { label: 'The Leader', description: 'Direct, confident, and decisive. No beating around the bush.', required: ['confidence', 'directness'] },
-  { label: 'The Companion', description: 'Fun, warm, and easygoing. The kind of presence that puts people at ease.', required: ['humor', 'warmth'] },
-  { label: 'The Listener', description: 'Patient and understanding. You create space for others to be heard.', required: ['empathy', 'patience'] },
-  { label: 'The Optimist', description: 'Upbeat and encouraging. You see the bright side and lift others up.', required: ['optimism'] },
+  {
+    label: 'The Nurturer',
+    description:
+      'Warm, empathetic, and deeply caring. Your conversations feel like talking to a close friend.',
+    required: ['warmth', 'empathy', 'empathy_depth'],
+  },
+  {
+    label: 'The Analyst',
+    description: 'Logical, precise, and systematic. You break down complex problems with clarity.',
+    required: ['abstract_reasoning', 'factual_precision'],
+  },
+  {
+    label: 'The Professional',
+    description:
+      'Precise, formal, and thorough. Perfect for technical discussions and detailed analysis.',
+    required: ['formality', 'factual_precision'],
+  },
+  {
+    label: 'The Artist',
+    description: 'Creative, witty, and imaginative. Every conversation becomes a canvas.',
+    required: ['creativity', 'humor'],
+  },
+  {
+    label: 'The Explorer',
+    description: 'Naturally curious and endlessly creative. Always asking "what if?"',
+    required: ['curiosity', 'creativity'],
+  },
+  {
+    label: 'The Leader',
+    description: 'Direct, confident, and decisive. No beating around the bush.',
+    required: ['confidence', 'directness'],
+  },
+  {
+    label: 'The Companion',
+    description: 'Fun, warm, and easygoing. The kind of presence that puts people at ease.',
+    required: ['humor', 'warmth'],
+  },
+  {
+    label: 'The Listener',
+    description: 'Patient and understanding. You create space for others to be heard.',
+    required: ['empathy', 'patience'],
+  },
+  {
+    label: 'The Optimist',
+    description: 'Upbeat and encouraging. You see the bright side and lift others up.',
+    required: ['optimism'],
+  },
 ]
 
-export function deriveArchetype(traitWeights: Record<string, Record<string, number>>): { label: string; description: string } {
+export function deriveArchetype(traitWeights: Record<string, Record<string, number>>): {
+  label: string
+  description: string
+} {
   const p = traitWeights.personality ?? {}
   const c = traitWeights.cognition ?? {}
   const e = traitWeights.emotion ?? {}
@@ -57,8 +98,8 @@ export function deriveArchetype(traitWeights: Record<string, Record<string, numb
   // An archetype matches when ALL its required traits are >= THRESHOLD.
   let best: { label: string; description: string; score: number } | null = null
   for (const arch of ARCHETYPES) {
-    const values = arch.required.map(t => allTraits[t] ?? 0)
-    if (values.every(v => v >= THRESHOLD)) {
+    const values = arch.required.map((t) => allTraits[t] ?? 0)
+    if (values.every((v) => v >= THRESHOLD)) {
       const score = values.reduce((s, v) => s + v, 0)
       if (!best || score > best.score) {
         best = { label: arch.label, description: arch.description, score }
@@ -68,12 +109,18 @@ export function deriveArchetype(traitWeights: Record<string, Record<string, numb
 
   if (best) return best
 
-  return { label: 'The Balanced', description: 'A versatile, well-rounded personality that adapts to any conversation.' }
+  return {
+    label: 'The Balanced',
+    description: 'A versatile, well-rounded personality that adapts to any conversation.',
+  }
 }
 
 const staggerDelay = (index: number) => ({ animationDelay: `${(index + 1) * 80}ms` })
 
-export default function PersonalitySummary({ traitWeights, currentSoulName }: PersonalitySummaryProps) {
+export default function PersonalitySummary({
+  traitWeights,
+  currentSoulName,
+}: PersonalitySummaryProps) {
   const archetype = deriveArchetype(traitWeights)
 
   const groups = SOUL_GROUP_KEYS
@@ -100,12 +147,11 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
 
   return (
     <>
-
       {/* ── Archetype Badge ── */}
       {currentSoulName && (
         <div className="mb-4 pb-4 border-b border-border/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 border border-purple-500/30 flex items-center justify-center text-lg shrink-0">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary/20 to-chart-5/20 border border-primary/30 flex items-center justify-center text-lg shrink-0">
               {GROUP_ICONS.personality}
             </div>
             <div className="min-w-0 flex-1">
@@ -118,7 +164,9 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
               <p className="text-[11px] text-muted-foreground mt-0.5">{archetype.description}</p>
             </div>
             <div className="flex flex-col items-center shrink-0">
-              <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Overall</span>
+              <span className="text-[9px] text-muted-foreground uppercase tracking-wider">
+                Overall
+              </span>
               <span className={cn('text-base font-bold', ratingColor(overall))}>{overall}</span>
               <span className="text-[8px] text-muted-foreground/50">/100</span>
             </div>
@@ -132,12 +180,18 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
           const avg = groupAverages[group] ?? 0
           const color = GROUP_COLORS[group]
           return (
-            <div key={group} className="flex flex-col items-center p-3 rounded-lg bg-muted/30 border border-border/40 stat-card" style={staggerDelay(idx)}>
+            <div
+              key={group}
+              className="flex flex-col items-center p-3 rounded-lg bg-muted/30 border border-border/40 stat-card"
+              style={staggerDelay(idx)}
+            >
               <span className="text-lg mb-1">{GROUP_ICONS[group]}</span>
               <span className="text-[9px] text-muted-foreground uppercase tracking-wider mb-0.5">
                 {GROUP_LABELS[group]}
               </span>
-              <span className="text-lg font-bold" style={{ color }}>{avg}</span>
+              <span className="text-lg font-bold" style={{ color }}>
+                {avg}
+              </span>
               <div className="w-full h-1.5 rounded-full bg-muted-foreground/10 mt-1.5 overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all duration-500 trait-bar-inner"
@@ -151,7 +205,7 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
 
       {/* ── Individual Traits ── */}
       <div className="space-y-3">
-        {groups.map(group => {
+        {groups.map((group) => {
           const traits = traitWeights[group]
           if (!traits || typeof traits !== 'object') return null
           const entries = Object.entries(traits) as [string, number][]
@@ -164,7 +218,9 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
                 <span className="text-[9px] font-semibold text-muted-foreground uppercase tracking-wider">
                   {GROUP_LABELS[group]}
                 </span>
-                <span className="text-[9px] text-muted-foreground/40">· {entries.length} traits</span>
+                <span className="text-[9px] text-muted-foreground/40">
+                  · {entries.length} traits
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                 {entries.map(([name, value]) => {
@@ -181,7 +237,10 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
                             style={{ width: `${pct}%`, backgroundColor: groupColor, opacity: 0.7 }}
                           />
                         </div>
-                        <span className="text-[10px] font-mono font-medium tabular-nums w-6 text-right" style={{ color: groupColor }}>
+                        <span
+                          className="text-[10px] font-mono font-medium tabular-nums w-6 text-right"
+                          style={{ color: groupColor }}
+                        >
                           {pct}
                         </span>
                       </div>

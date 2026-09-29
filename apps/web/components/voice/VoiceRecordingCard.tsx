@@ -19,12 +19,18 @@ async function loadRecordings(): Promise<Recording[]> {
   try {
     const entry = await chatDB.getKV<Recording[]>(STORAGE_KEY)
     if (entry && Array.isArray(entry)) return entry
-  } catch { /* corrupted */ }
+  } catch {
+    /* corrupted */
+  }
   return []
 }
 
 async function saveRecordings(recordings: Recording[]) {
-  try { await chatDB.setKV(STORAGE_KEY, recordings) } catch { /* quota exceeded */ }
+  try {
+    await chatDB.setKV(STORAGE_KEY, recordings)
+  } catch {
+    /* quota exceeded */
+  }
 }
 
 export function VoiceRecordingCard() {
@@ -95,7 +101,7 @@ export function VoiceRecordingCard() {
         const updated = [...recordings, entry]
         setRecordings(updated)
         saveRecordings(updated).catch(() => {})
-        stream.getTracks().forEach(t => t.stop())
+        stream.getTracks().forEach((t) => t.stop())
         audioCtx.close()
         setLabel('')
       }
@@ -106,7 +112,7 @@ export function VoiceRecordingCard() {
       updateLevel()
 
       timerRef.current = setInterval(() => {
-        setDuration(d => d + 100)
+        setDuration((d) => d + 100)
       }, 100)
     } catch {
       console.error('Microphone access denied')
@@ -117,19 +123,28 @@ export function VoiceRecordingCard() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop()
     }
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null }
-    if (animFrameRef.current) { cancelAnimationFrame(animFrameRef.current); animFrameRef.current = null }
+    if (timerRef.current) {
+      clearInterval(timerRef.current)
+      timerRef.current = null
+    }
+    if (animFrameRef.current) {
+      cancelAnimationFrame(animFrameRef.current)
+      animFrameRef.current = null
+    }
     setRecordState('idle')
     setAudioLevel(0)
   }, [])
 
-  const deleteRecording = useCallback((id: string) => {
-    const rec = recordings.find(r => r.id === id)
-    if (rec) URL.revokeObjectURL(rec.url)
-    const updated = recordings.filter(r => r.id !== id)
-    setRecordings(updated)
-    saveRecordings(updated).catch(() => {})
-  }, [recordings])
+  const deleteRecording = useCallback(
+    (id: string) => {
+      const rec = recordings.find((r) => r.id === id)
+      if (rec) URL.revokeObjectURL(rec.url)
+      const updated = recordings.filter((r) => r.id !== id)
+      setRecordings(updated)
+      saveRecordings(updated).catch(() => {})
+    },
+    [recordings],
+  )
 
   const playRecording = useCallback((rec: Recording) => {
     const audio = new Audio(rec.url)
@@ -152,7 +167,7 @@ export function VoiceRecordingCard() {
           <div
             className={`w-16 h-16 rounded-full flex items-center justify-center cursor-pointer transition-all ${
               recordState === 'recording'
-                ? 'bg-destructive hover:bg-red-600 scale-110'
+                ? 'bg-destructive hover:bg-destructive scale-110'
                 : 'bg-primary hover:bg-primary/90'
             }`}
             onClick={recordState === 'recording' ? stopRecording : startRecording}
@@ -166,7 +181,9 @@ export function VoiceRecordingCard() {
 
           {recordState === 'recording' && (
             <div className="text-center space-y-2">
-              <p className="text-sm text-destructive font-medium">Recording... {formatDuration(duration)}</p>
+              <p className="text-sm text-destructive font-medium">
+                Recording... {formatDuration(duration)}
+              </p>
               <div className="flex gap-0.5 justify-center h-6">
                 {Array.from({ length: 24 }).map((_, i) => (
                   <div
@@ -184,8 +201,11 @@ export function VoiceRecordingCard() {
 
         {recordings.length > 0 && (
           <div className="space-y-1.5">
-            {recordings.map(rec => (
-              <div key={rec.id} className="flex items-center gap-2 p-2 rounded border border-border/60 text-sm group hover:bg-muted/50 transition-colors">
+            {recordings.map((rec) => (
+              <div
+                key={rec.id}
+                className="flex items-center gap-2 p-2 rounded border border-border/60 text-sm group hover:bg-muted/50 transition-colors"
+              >
                 <button
                   className="text-primary hover:text-primary/80 text-xs font-medium"
                   onClick={() => playRecording(rec)}
@@ -194,7 +214,9 @@ export function VoiceRecordingCard() {
                 </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium truncate">{rec.label}</p>
-                  <p className="text-[10px] text-muted-foreground">{formatDuration(rec.duration)}</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {formatDuration(rec.duration)}
+                  </p>
                 </div>
                 <Button
                   size="sm"

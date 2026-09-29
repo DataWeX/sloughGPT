@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { Button } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
 import { useToastStore } from '@/lib/toast-store'
@@ -11,7 +11,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 export function ConsciousnessQuickActions() {
   const router = useRouter()
   const { t } = useLocale()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState<string | null>(null)
   const [result, setResult] = useState<{ action: string; data: any } | null>(null)
@@ -19,7 +19,7 @@ export function ConsciousnessQuickActions() {
   const buttonRef = useRef<HTMLButtonElement>(null)
 
   const handleToggle = useCallback(() => {
-    setOpen(prev => !prev)
+    setOpen((prev) => !prev)
     setResult(null)
   }, [])
 
@@ -50,18 +50,21 @@ export function ConsciousnessQuickActions() {
     return () => document.removeEventListener('mousedown', handler)
   }, [open])
 
-  const runAction = useCallback(async (action: string, fn: () => Promise<any>) => {
-    setLoading(action)
-    try {
-      const data = await fn()
-      setResult({ action, data })
-      addToast(t(`consciousness_quick_actions.toast_${action}`), 'success')
-    } catch (e) {
-      addToast(extractErrorMessage(e), 'error')
-    } finally {
-      setLoading(null)
-    }
-  }, [addToast, t])
+  const runAction = useCallback(
+    async (action: string, fn: () => Promise<any>) => {
+      setLoading(action)
+      try {
+        const data = await fn()
+        setResult({ action, data })
+        addToast(t(`consciousness_quick_actions.toast_${action}`), 'success')
+      } catch (e) {
+        addToast(extractErrorMessage(e), 'error')
+      } finally {
+        setLoading(null)
+      }
+    },
+    [addToast, t],
+  )
 
   const handleReflect = useCallback(() => {
     runAction('reflect', () => apiPost('/consciousness/reflect'))
@@ -84,10 +87,15 @@ export function ConsciousnessQuickActions() {
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-[9999] h-12 w-12 rounded-full bg-violet-600 text-white shadow-lg transition-all hover:bg-violet-700 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
+        className="fixed bottom-6 right-6 z-[9999] h-12 w-12 rounded-full bg-primary text-white shadow-lg transition-all hover:bg-primary hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
         aria-label={t('consciousness_quick_actions.toggle')}
       >
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          className="w-6 h-6"
+        >
           <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 2a8 8 0 110 16 8 8 0 010-16zm-1 3v2h2V7h-2zm0 4v6h2v-6h-2z" />
         </svg>
       </button>
@@ -99,7 +107,9 @@ export function ConsciousnessQuickActions() {
           style={{ animation: 'consciousness-quick-fadein 0.15s ease-out' }}
         >
           <div className="px-4 py-3 border-b border-zinc-700 flex items-center justify-between">
-            <span className="text-sm font-semibold text-zinc-100">{t('consciousness_quick_actions.title')}</span>
+            <span className="text-sm font-semibold text-zinc-100">
+              {t('consciousness_quick_actions.title')}
+            </span>
             <span className="text-[10px] text-zinc-500">Ctrl+Shift+Q</span>
           </div>
 
@@ -128,13 +138,19 @@ export function ConsciousnessQuickActions() {
             <div className="border-t border-zinc-700 my-1" />
 
             <button
-              onClick={() => { router.push('/consciousness/dashboard'); setOpen(false) }}
+              onClick={() => {
+                router.push('/consciousness/dashboard')
+                setOpen(false)
+              }}
               className="w-full px-3 py-2 text-left text-sm text-zinc-300 rounded-lg hover:bg-zinc-800 transition-colors"
             >
               {t('consciousness_quick_actions.open_dashboard')}
             </button>
             <button
-              onClick={() => { router.push('/chat'); setOpen(false) }}
+              onClick={() => {
+                router.push('/chat')
+                setOpen(false)
+              }}
               className="w-full px-3 py-2 text-left text-sm text-zinc-300 rounded-lg hover:bg-zinc-800 transition-colors"
             >
               {t('consciousness_quick_actions.open_chat')}
@@ -164,7 +180,15 @@ export function ConsciousnessQuickActions() {
   )
 }
 
-function QuickAction({ label, loading, onClick }: { label: string; loading: boolean; onClick: () => void }) {
+function QuickAction({
+  label,
+  loading,
+  onClick,
+}: {
+  label: string
+  loading: boolean
+  onClick: () => void
+}) {
   return (
     <button
       onClick={onClick}
@@ -172,7 +196,7 @@ function QuickAction({ label, loading, onClick }: { label: string; loading: bool
       className="w-full px-3 py-2 text-left text-sm text-zinc-300 rounded-lg hover:bg-zinc-800 disabled:opacity-50 transition-colors flex items-center gap-2"
     >
       {loading ? (
-        <span className="h-3 w-3 border-2 border-violet-400 border-t-transparent rounded-full animate-spin" />
+        <span className="h-3 w-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
       ) : null}
       <span>{label}</span>
     </button>

@@ -15,7 +15,22 @@ interface PhonemeAccuracy {
 }
 
 function getPhonemeCategory(phoneme: string): string {
-  const vowels = ['IY', 'IH', 'EY', 'EH', 'AE', 'AA', 'AH', 'AO', 'OW', 'OY', 'UH', 'UW', 'ER', 'AX']
+  const vowels = [
+    'IY',
+    'IH',
+    'EY',
+    'EH',
+    'AE',
+    'AA',
+    'AH',
+    'AO',
+    'OW',
+    'OY',
+    'UH',
+    'UW',
+    'ER',
+    'AX',
+  ]
   const stops = ['P', 'B', 'T', 'D', 'K', 'G']
   const fricatives = ['F', 'V', 'TH', 'DH', 'S', 'Z', 'SH', 'ZH', 'HH']
   const nasals = ['M', 'N', 'NG']
@@ -36,15 +51,15 @@ function getPhonemeCategory(phoneme: string): string {
 function getAccuracyColor(accuracy: number): string {
   if (accuracy >= 0.9) return 'bg-success'
   if (accuracy >= 0.7) return 'bg-warning'
-  if (accuracy >= 0.5) return 'bg-orange-500'
-  if (accuracy >= 0.3) return 'bg-red-400'
-  return 'bg-red-600'
+  if (accuracy >= 0.5) return 'bg-accent'
+  if (accuracy >= 0.3) return 'bg-destructive'
+  return 'bg-destructive'
 }
 
 function getAccuracyTextColor(accuracy: number): string {
   if (accuracy >= 0.9) return 'text-success'
-  if (accuracy >= 0.7) return 'text-yellow-700'
-  if (accuracy >= 0.5) return 'text-orange-700'
+  if (accuracy >= 0.7) return 'text-warning'
+  if (accuracy >= 0.5) return 'text-accent'
   if (accuracy >= 0.3) return 'text-destructive'
   return 'text-destructive'
 }
@@ -52,14 +67,14 @@ function getAccuracyTextColor(accuracy: number): string {
 const CATEGORIES = ['Vowels', 'Stops', 'Fricatives', 'Affricates', 'Nasals', 'Liquids', 'Glides']
 
 export default function PronunciationHeatmap() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
 
   const phonemeData = useMemo(() => {
     if (history.length === 0) return []
 
     const phonemeStats: Record<string, { total: number; correct: number }> = {}
 
-    history.forEach(entry => {
+    history.forEach((entry) => {
       entry.targetPhonemes.forEach((phoneme) => {
         if (!phonemeStats[phoneme]) phonemeStats[phoneme] = { total: 0, correct: 0 }
         phonemeStats[phoneme].total++
@@ -80,8 +95,8 @@ export default function PronunciationHeatmap() {
   }, [history])
 
   const categoryData = useMemo(() => {
-    return CATEGORIES.map(cat => {
-      const catPhonemes = phonemeData.filter(p => p.category === cat)
+    return CATEGORIES.map((cat) => {
+      const catPhonemes = phonemeData.filter((p) => p.category === cat)
       if (catPhonemes.length === 0) return null
       const avgAccuracy = catPhonemes.reduce((sum, p) => sum + p.accuracy, 0) / catPhonemes.length
       return {
@@ -108,7 +123,10 @@ export default function PronunciationHeatmap() {
   }
 
   const worstPhonemes = phonemeData.slice(0, 5)
-  const bestPhonemes = phonemeData.filter(p => p.total >= 2).slice(-5).reverse()
+  const bestPhonemes = phonemeData
+    .filter((p) => p.total >= 2)
+    .slice(-5)
+    .reverse()
 
   return (
     <Card>
@@ -120,8 +138,8 @@ export default function PronunciationHeatmap() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid grid-cols-7 gap-1">
-          {CATEGORIES.map(cat => {
-            const catItem = categoryData.find(c => c?.category === cat)
+          {CATEGORIES.map((cat) => {
+            const catItem = categoryData.find((c) => c?.category === cat)
             return (
               <div key={cat} className="text-center">
                 <p className="text-[10px] text-muted-foreground mb-1 truncate">{cat}</p>
@@ -141,9 +159,9 @@ export default function PronunciationHeatmap() {
         <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
           <span>Low</span>
           <div className="flex gap-1">
-            <div className="w-4 h-3 rounded bg-red-600" />
-            <div className="w-4 h-3 rounded bg-red-400" />
-            <div className="w-4 h-3 rounded bg-orange-500" />
+            <div className="w-4 h-3 rounded bg-destructive" />
+            <div className="w-4 h-3 rounded bg-destructive" />
+            <div className="w-4 h-3 rounded bg-accent" />
             <div className="w-4 h-3 rounded bg-warning" />
             <div className="w-4 h-3 rounded bg-success" />
           </div>
@@ -154,12 +172,20 @@ export default function PronunciationHeatmap() {
           <div>
             <p className="text-sm font-medium mb-2">Needs Practice</p>
             <div className="space-y-1">
-              {worstPhonemes.map(p => (
-                <div key={p.phoneme} className="flex items-center gap-2 p-1.5 rounded bg-destructive/5">
-                  <Badge variant="outline" className="w-12 justify-center font-mono text-xs">{p.phoneme}</Badge>
+              {worstPhonemes.map((p) => (
+                <div
+                  key={p.phoneme}
+                  className="flex items-center gap-2 p-1.5 rounded bg-destructive/5"
+                >
+                  <Badge variant="outline" className="w-12 justify-center font-mono text-xs">
+                    {p.phoneme}
+                  </Badge>
                   <span className="text-xs text-muted-foreground w-6">{p.ipa}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div className={`h-full rounded-full ${getAccuracyColor(p.accuracy)}`} style={{ width: `${p.accuracy * 100}%` }} />
+                    <div
+                      className={`h-full rounded-full ${getAccuracyColor(p.accuracy)}`}
+                      style={{ width: `${p.accuracy * 100}%` }}
+                    />
                   </div>
                   <span className={`text-xs w-16 text-right ${getAccuracyTextColor(p.accuracy)}`}>
                     {(p.accuracy * 100).toFixed(0)}%
@@ -174,12 +200,17 @@ export default function PronunciationHeatmap() {
           <div>
             <p className="text-sm font-medium mb-2">Mastered</p>
             <div className="space-y-1">
-              {bestPhonemes.map(p => (
+              {bestPhonemes.map((p) => (
                 <div key={p.phoneme} className="flex items-center gap-2 p-1.5 rounded bg-success/5">
-                  <Badge variant="outline" className="w-12 justify-center font-mono text-xs">{p.phoneme}</Badge>
+                  <Badge variant="outline" className="w-12 justify-center font-mono text-xs">
+                    {p.phoneme}
+                  </Badge>
                   <span className="text-xs text-muted-foreground w-6">{p.ipa}</span>
                   <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                    <div className={`h-full rounded-full ${getAccuracyColor(p.accuracy)}`} style={{ width: `${p.accuracy * 100}%` }} />
+                    <div
+                      className={`h-full rounded-full ${getAccuracyColor(p.accuracy)}`}
+                      style={{ width: `${p.accuracy * 100}%` }}
+                    />
                   </div>
                   <span className={`text-xs w-16 text-right ${getAccuracyTextColor(p.accuracy)}`}>
                     {(p.accuracy * 100).toFixed(0)}%

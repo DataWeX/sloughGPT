@@ -25,19 +25,19 @@ function getLevelLabel(level: number): string {
 }
 
 function getLevelColor(level: number): string {
-  if (level >= 7) return 'text-green-600'
-  if (level >= 4) return 'text-blue-600'
-  if (level >= 2) return 'text-yellow-600'
+  if (level >= 7) return 'text-success'
+  if (level >= 4) return 'text-info'
+  if (level >= 2) return 'text-warning'
   return 'text-muted-foreground'
 }
 
 export default function ProficiencyTracker() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
 
   const proficiencies = useMemo(() => {
     const langData: Record<string, { scores: number[]; count: number; streak: number }> = {}
 
-    history.forEach(entry => {
+    history.forEach((entry) => {
       const lang = entry.language
       if (!langData[lang]) langData[lang] = { scores: [], count: 0, streak: 0 }
       langData[lang].scores.push(entry.score)
@@ -53,7 +53,7 @@ export default function ProficiencyTracker() {
 
         return {
           language: lang,
-          label: PHONEME_LANGUAGES.find(l => l.value === lang)?.label || lang,
+          label: PHONEME_LANGUAGES.find((l) => l.value === lang)?.label || lang,
           level,
           xp,
           nextLevelXp,
@@ -89,7 +89,7 @@ export default function ProficiencyTracker() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {proficiencies.map(p => (
+        {proficiencies.map((p) => (
           <div key={p.language} className="p-3 rounded-lg bg-muted/20 space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">

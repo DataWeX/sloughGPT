@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams, useRouter } from '@/vite/next-compat/navigation'
 import { Card, CardHeader, CardTitle, CardContent, Badge, Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
@@ -11,16 +11,24 @@ import { knowledgeController, type KnowledgeItem } from '@/lib/knowledge-control
 import { useToastStore } from '@/lib/toast-store'
 import { formatDate } from '@/lib/conversations-utils'
 import {
-  ArrowLeft, Brain, Tag, Clock, Star, ExternalLink, Edit,
-  Trash2, BarChart3, Lightbulb
+  ArrowLeft,
+  Brain,
+  Tag,
+  Clock,
+  Star,
+  ExternalLink,
+  Edit,
+  Trash2,
+  BarChart3,
+  Lightbulb,
 } from 'lucide-react'
 
 const TOPIC_COLORS: Record<string, string> = {
   personal: 'bg-info/15 text-info dark:bg-info/15 text-info',
   preferences: 'bg-accent/15 text-accent',
   technical: 'bg-success/15 text-success dark:bg-success/15 text-success',
-  planning: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-  interests: 'bg-primary/15 text-pink-700 dark:bg-primary/10 dark:text-primary',
+  planning: 'bg-accent text-accent dark:bg-accent/30 dark:text-accent',
+  interests: 'bg-primary/15 text-chart-5 dark:bg-primary/10 dark:text-primary',
   food: 'bg-warning/15 text-warning dark:bg-warning/15 text-warning',
   general: 'bg-muted/50 text-muted-foreground dark:bg-muted/10 dark:text-muted-foreground',
 }
@@ -29,7 +37,7 @@ export default function KnowledgeDetailPage() {
   const params = useParams()
   const router = useRouter()
   const itemId = params.id as string
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
 
   const [item, setItem] = useState<KnowledgeItem | null>(null)
   const [loading, setLoading] = useState(true)
@@ -47,7 +55,7 @@ export default function KnowledgeDetailPage() {
         setItem(data)
       } catch {
         const items = await knowledgeController.list()
-        const found = items.find(i => i.id === itemId)
+        const found = items.find((i) => i.id === itemId)
         if (found) {
           setItem(found)
         } else {
@@ -61,7 +69,9 @@ export default function KnowledgeDetailPage() {
     }
   }, [itemId, addToast])
 
-  useEffect(() => { fetchItem() }, [fetchItem])
+  useEffect(() => {
+    fetchItem()
+  }, [fetchItem])
 
   const handleSave = async () => {
     if (!item) return
@@ -123,19 +133,34 @@ export default function KnowledgeDetailPage() {
                 <div className="flex items-center gap-1">
                   {editing ? (
                     <>
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setEditing(false)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[10px]"
+                        onClick={() => setEditing(false)}
+                      >
                         Cancel
                       </Button>
-                      <Button size="sm" className="h-6 text-[10px]" onClick={handleSave} disabled={saving}>
+                      <Button
+                        size="sm"
+                        className="h-6 text-[10px]"
+                        onClick={handleSave}
+                        disabled={saving}
+                      >
                         {saving ? '...' : 'Save'}
                       </Button>
                     </>
                   ) : (
-                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => {
-                      setEditing(true)
-                      setEditContent(item.content)
-                      setEditTopic(item.topic)
-                    }}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[10px]"
+                      onClick={() => {
+                        setEditing(true)
+                        setEditContent(item.content)
+                        setEditTopic(item.topic)
+                      }}
+                    >
                       <Edit className="h-3 w-3 mr-1" /> Edit
                     </Button>
                   )}
@@ -147,12 +172,12 @@ export default function KnowledgeDetailPage() {
                 <div className="space-y-3">
                   <textarea
                     value={editContent}
-                    onChange={e => setEditContent(e.target.value)}
+                    onChange={(e) => setEditContent(e.target.value)}
                     className="w-full h-32 p-3 text-sm rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
                   <input
                     value={editTopic}
-                    onChange={e => setEditTopic(e.target.value)}
+                    onChange={(e) => setEditTopic(e.target.value)}
                     placeholder="Topic"
                     className="w-full h-8 px-3 text-sm rounded-md border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary/30"
                   />
@@ -205,7 +230,9 @@ export default function KnowledgeDetailPage() {
                 <div className="flex items-center gap-2 text-muted-foreground text-xs mb-1">
                   <Clock className="h-3 w-3" /> Created
                 </div>
-                <span className="text-sm">{formatDate(new Date(item.timestamp).toISOString())}</span>
+                <span className="text-sm">
+                  {formatDate(new Date(item.timestamp).toISOString())}
+                </span>
               </CardContent>
             </Card>
           </div>
@@ -223,7 +250,12 @@ export default function KnowledgeDetailPage() {
               {item.url && (
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">URL</span>
-                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline flex items-center gap-1">
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-primary hover:underline flex items-center gap-1"
+                  >
                     {item.url.slice(0, 50)}... <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
@@ -234,10 +266,20 @@ export default function KnowledgeDetailPage() {
               </div>
 
               <div className="pt-3 border-t flex gap-2">
-                <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => router.push(`/chat?context=${item.id}`)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px]"
+                  onClick={() => router.push(`/chat?context=${item.id}`)}
+                >
                   <Lightbulb className="h-3 w-3 mr-1" /> Use in Chat
                 </Button>
-                <Button variant="outline" size="sm" className="h-7 text-[11px] text-destructive border-destructive/30" onClick={handleDelete}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-[11px] text-destructive border-destructive/30"
+                  onClick={handleDelete}
+                >
                   <Trash2 className="h-3 w-3 mr-1" /> Delete
                 </Button>
               </div>

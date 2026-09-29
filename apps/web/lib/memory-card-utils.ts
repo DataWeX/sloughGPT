@@ -23,16 +23,20 @@ export function parseMemoryImport(text: string, filename: string): MemoryImportE
       return []
     }
   } else if (ext === 'csv') {
-    const lines = text.split('\n').filter(l => l.trim())
+    const lines = text.split('\n').filter((l) => l.trim())
     if (lines.length === 0) return []
     const header = lines[0].toLowerCase()
-    const hasHeader = header.includes('content') || header.includes('text') || header.includes('fact')
+    const hasHeader =
+      header.includes('content') || header.includes('text') || header.includes('fact')
     const start = hasHeader ? 1 : 0
     for (let i = start; i < lines.length; i++) {
       const parts = lines[i].split(',')
       if (parts.length >= 1 && parts[0].trim()) {
         const content = parts[0].trim().replace(/^"(.*)"$/, '$1')
-        const topic = parts.length >= 2 && parts[1].trim() ? parts[1].trim().replace(/^"(.*)"$/, '$1') : 'manual'
+        const topic =
+          parts.length >= 2 && parts[1].trim()
+            ? parts[1].trim().replace(/^"(.*)"$/, '$1')
+            : 'manual'
         entries.push({ content, topic })
       }
     }
@@ -52,9 +56,9 @@ export function archiveTypeLabel(taskType: string): string {
 
 export function archiveBadgeClass(taskType: string): string {
   const classes: Record<string, string> = {
-    'memory.store': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    'memory.remember': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-    'memory.consolidate': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    'memory.store': 'bg-info text-info dark:bg-info/30 dark:text-info',
+    'memory.remember': 'bg-success text-success dark:bg-success/30 dark:text-success',
+    'memory.consolidate': 'bg-warning text-warning dark:bg-warning/30 dark:text-warning',
   }
   return classes[taskType] || 'bg-muted text-muted-foreground'
 }

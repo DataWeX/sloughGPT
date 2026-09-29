@@ -14,20 +14,20 @@ function getDayOfWeek(date: Date): number {
 
 function getColorClass(count: number): string {
   if (count === 0) return 'bg-muted/30'
-  if (count <= 3) return 'bg-green-200'
+  if (count <= 3) return 'bg-success'
   if (count <= 6) return 'bg-success'
   if (count <= 10) return 'bg-success'
-  return 'bg-green-700'
+  return 'bg-success'
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 export default function PracticeCalendar() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
 
   const { calendarData, totalDays, totalWords, currentStreak, longestStreak } = useMemo(() => {
     const dayCounts: Record<string, number> = {}
-    history.forEach(entry => {
+    history.forEach((entry) => {
       if (entry.timestamp) {
         const day = new Date(entry.timestamp).toISOString().split('T')[0]
         dayCounts[day] = (dayCounts[day] || 0) + 1
@@ -153,10 +153,10 @@ export default function PracticeCalendar() {
           <span>Less</span>
           <div className="flex gap-0.5">
             <div className="w-3 h-3 rounded-sm bg-muted/30" />
-            <div className="w-3 h-3 rounded-sm bg-green-200" />
             <div className="w-3 h-3 rounded-sm bg-success" />
             <div className="w-3 h-3 rounded-sm bg-success" />
-            <div className="w-3 h-3 rounded-sm bg-green-700" />
+            <div className="w-3 h-3 rounded-sm bg-success" />
+            <div className="w-3 h-3 rounded-sm bg-success" />
           </div>
           <span>More</span>
         </div>

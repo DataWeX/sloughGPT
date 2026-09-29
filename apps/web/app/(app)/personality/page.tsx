@@ -487,7 +487,7 @@ export default function PersonalityPage() {
 
         {/* Conflict Warnings */}
         {conflicts.length > 0 && (
-          <Card className="border-yellow-500/50">
+          <Card className="border-warning/50">
             <CardHeader>
               <CardTitle className="text-warning dark:text-warning">
                 Personality Conflicts
@@ -646,7 +646,7 @@ export default function PersonalityPage() {
 
         {/* Import Comparison */}
         {showComparison && originalProfile && profile && (
-          <Card className="border-blue-500/50">
+          <Card className="border-info/50">
             <CardHeader>
               <CardTitle className="text-info dark:text-info">Imported Profile — Review</CardTitle>
               <CardDescription>Compare imported values with your current profile</CardDescription>
