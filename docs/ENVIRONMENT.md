@@ -141,6 +141,26 @@ Maximum concurrent SSE streams (`*/stream`, `*/regenerate`); the permit is held 
 MAN_GATEWAY_MAX_STREAMS=32
 ```
 
+### MAN_GATEWAY_BREAKER_FAILURES
+
+**Optional** · Rust edge · default `5`
+
+Consecutive edge-observed upstream failures (HTTP ≥500, connect refused, edge timeout) before the circuit breaker opens. While open, requests are shed instantly with `503 {"detail":"Upstream unavailable."}` + `Retry-After` — the edge does not spend an edge timeout on a core it has already watched fail. Health-poll results never feed the breaker. `0` disables the breaker.
+
+```bash
+MAN_GATEWAY_BREAKER_FAILURES=5
+```
+
+### MAN_GATEWAY_BREAKER_OPEN
+
+**Optional** · Rust edge · default `5`
+
+Seconds the breaker stays open after tripping, before exactly one half-open probe is admitted. A probe failure re-opens the window; a probe success closes the breaker. `0` disables the breaker (same as `MAN_GATEWAY_BREAKER_FAILURES=0`).
+
+```bash
+MAN_GATEWAY_BREAKER_OPEN=5
+```
+
 ### SLO_ENV
 
 **Optional**
