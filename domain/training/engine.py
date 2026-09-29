@@ -165,20 +165,15 @@ class TrainingEngine:
 
     # ── Checkpoint operations ──
 
-    def list_checkpoints(self) -> TrainingResult:
-        """List all saved checkpoints.
+    async def list_checkpoints(self) -> list[dict]:
+        """List all saved checkpoints (delegates to the checkpoint service scan).
 
         Returns:
-            TrainingResult with list of checkpoint info.
+            List of checkpoint info dicts (async — service scans in a thread).
         """
-        try:
-            from domain.training import find_checkpoint
+        from domain.training._internal.service import list_checkpoints
 
-            checkpoints = find_checkpoint("*") if callable(find_checkpoint) else []
-            return TrainingResult(success=True, data=checkpoints)
-        except Exception as e:
-            logger.error("List checkpoints failed: %s", e)
-            return TrainingResult(success=False, error=str(e))
+        return await list_checkpoints()
 
     def load_checkpoint(self, name: str) -> TrainingResult:
         """Load a checkpoint by name.
@@ -740,6 +735,144 @@ class TrainingEngine:
         from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
 
         return TrainingResult(success=True, data=TrainingOutcomeTracker().get_stats())
+
+    # ── Checkpoint service / advisor / monitor (router delegation) ──
+    #
+    # Raw-passthrough delegates for training/router.py endpoints: the
+    # underlying service raises on failure and the router/global handler
+    # classifies — exceptions bubble by design (no TrainingResult envelope).
+
+    async def get_log(self) -> list[str]:
+        """Training log lines."""
+        from domain.training._internal.service import get_log
+
+        return await get_log()
+
+    async def delete_checkpoint(self, name: str) -> list[str]:
+        """Delete a checkpoint by name."""
+        from domain.training._internal.service import delete_checkpoint
+
+        return await delete_checkpoint(name)
+
+    def is_valid_checkpoint_name(self, name: str) -> bool:
+        """True if the checkpoint name matches the canonical validator."""
+        from domain.training._internal.state import VALID_CKPT_NAME
+
+        return bool(VALID_CKPT_NAME.match(name))
+
+    async def checkpoint_load(self, name: str) -> Any:
+        """Load and register a checkpoint for serving."""
+        from domain.training._internal.service import load_checkpoint
+
+        return await load_checkpoint(name)
+
+    async def checkpoint_download_path(self, name: str) -> Any:
+        """Filesystem path for downloading a checkpoint (None if missing)."""
+        from domain.training._internal.service import download_checkpoint_path
+
+        return await download_checkpoint_path(name)
+
+    async def checkpoint_info(self, name: str) -> Any:
+        """Describe a single checkpoint."""
+        from domain.training._internal.service import checkpoint_info
+
+        return await checkpoint_info(name)
+
+    async def checkpoint_compare(
+        self, a: str, b: str, prompt: str, max_new_tokens: int
+    ) -> Any:
+        """Run the same prompt against two checkpoints."""
+        from domain.training._internal.service import compare_checkpoints
+
+        return await compare_checkpoints(a, b, prompt, max_new_tokens)
+
+    async def checkpoint_all_data(self) -> Any:
+        """Full metrics payload for every checkpoint (export)."""
+        from domain.training._internal.service import get_all_checkpoint_data
+
+        return await get_all_checkpoint_data()
+
+    def training_state(self) -> Any:
+        """Current training state (config, phase, progress)."""
+        from domain.training._internal.state import get_state
+
+        return get_state()
+
+    def cache_root(self) -> Any:
+        """Dataset cache root directory (path-like)."""
+        from domain.training._internal.cache_tags import get_cache_root
+
+        return get_cache_root()
+
+    def find_corpus_file(self, path: Any) -> Any:
+        """Locate the primary corpus file inside a dataset directory."""
+        from domain.training._internal.cache_tags import find_corpus_file
+
+        return find_corpus_file(path)
+
+    def training_tips(self, dataset_size: int = 0) -> list[str]:
+        """Plain-language training tips for a dataset size."""
+        from domain.training._internal.training_advisor import get_training_tips
+
+        return get_training_tips(dataset_size=dataset_size)
+
+    def recommend_training_config(
+        self,
+        *,
+        dataset_size: int = 0,
+        method: str = "distill",
+        avg_quality: float | None = None,
+    ) -> Any:
+        """Recommended training configuration for a dataset."""
+        from domain.training._internal.training_advisor import recommend_training_config
+
+        return recommend_training_config(
+            dataset_size=dataset_size,
+            method=method,
+            avg_quality=avg_quality,
+        )
+
+    def list_outcomes(self) -> list[Any]:
+        """Raw training-outcome records (unfiltered, unsorted)."""
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+
+        return TrainingOutcomeTracker().load_outcomes()
+
+    # ── Training monitor ──
+
+    def monitor_status(self) -> dict[str, Any]:
+        """Monitor status (health flags for loss/resource issues)."""
+        from domain.training._internal.monitor import get_training_monitor
+
+        return get_training_monitor().get_status()
+
+    def monitor_alerts(self, severity: str | None = None, limit: int = 50) -> dict:
+        """Alerts filtered by severity string (info/warning/error/critical)."""
+        from domain.training._internal.monitor import AlertSeverity, get_training_monitor
+
+        severity_filter = AlertSeverity(severity) if severity else None
+        alerts = get_training_monitor().get_alerts(severity=severity_filter, limit=limit)
+        return {"alerts": [a.to_dict() for a in alerts], "total": len(alerts)}
+
+    def monitor_metrics(self, limit: int = 100) -> dict:
+        """Recent metric snapshots."""
+        from domain.training._internal.monitor import get_training_monitor
+
+        metrics = get_training_monitor().get_metrics_history(limit=limit)
+        return {"metrics": [m.to_dict() for m in metrics], "total": len(metrics)}
+
+    def monitor_reset(self) -> dict[str, str]:
+        """Clear monitor alerts/metrics."""
+        from domain.training._internal.monitor import get_training_monitor
+
+        get_training_monitor().reset()
+        return {"message": "Monitor reset"}
+
+    def monitor_resources(self) -> dict[str, Any]:
+        """CPU/memory/GPU usage snapshot with threshold alerts."""
+        from domain.training._internal.monitor import get_training_monitor
+
+        return get_training_monitor().check_resources()
 
 
 _engine: TrainingEngine | None = None

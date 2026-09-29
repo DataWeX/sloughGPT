@@ -553,7 +553,8 @@ async def get_recovery_stats():
 
 
 # ── Unified /training/* → core service + infrastructure wrapping ──────────────
-# Business logic: domain.training._internal.service (pure, no HTTP)
+# Business logic: domain.training TrainingEngine (facade — no _internal imports
+# except the recovery run below: CheckpointManager + SloughGPTTrainer, deferred)
 # HTTP wrapping: success_response, error classification, audit logging (this file)
 
 
@@ -561,9 +562,9 @@ async def get_recovery_stats():
 async def training_log():
     from schemas.common import success_response
 
-    from domain.training._internal.service import get_log
+    from domain.training import get_training_engine
 
-    lines = await get_log()
+    lines = await get_training_engine().get_log()
     return success_response(data={"lines": lines, "total": len(lines)})
 
 
@@ -582,9 +583,9 @@ async def training_stop():
 async def training_list_checkpoints():
     from schemas.common import success_response
 
-    from domain.training._internal.service import list_checkpoints
+    from domain.training import get_training_engine
 
-    checkpoints = await list_checkpoints()
+    checkpoints = await get_training_engine().list_checkpoints()
     return success_response(data=checkpoints)
 
 
@@ -592,12 +593,12 @@ async def training_list_checkpoints():
 async def training_delete_checkpoint(name: str):
     from schemas.common import safe_audit_log, success_response
 
-    from domain.training._internal.service import delete_checkpoint
-    from domain.training._internal.state import VALID_CKPT_NAME
+    from domain.training import get_training_engine
 
-    if not VALID_CKPT_NAME.match(name):
+    engine = get_training_engine()
+    if not engine.is_valid_checkpoint_name(name):
         raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
-    deleted = await delete_checkpoint(name)
+    deleted = await engine.delete_checkpoint(name)
     if deleted:
         safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
     return success_response(data={"deleted": deleted, "name": name})
@@ -607,10 +608,10 @@ async def training_delete_checkpoint(name: str):
 async def training_load_checkpoint(name: str):
     from schemas.common import classify_and_raise, success_response
 
-    from domain.training._internal.service import load_checkpoint
+    from domain.training import get_training_engine
 
     try:
-        result = await load_checkpoint(name)
+        result = await get_training_engine().checkpoint_load(name)
         return success_response(data=result, message="loaded")
     except Exception as e:
         classify_and_raise(e, source="training.load_checkpoint")
@@ -621,9 +622,9 @@ async def training_download_checkpoint(name: str):
     from fastapi.responses import FileResponse
     from schemas.common import raise_error
 
-    from domain.training._internal.service import download_checkpoint_path
+    from domain.training import get_training_engine
 
-    fp = await download_checkpoint_path(name)
+    fp = await get_training_engine().checkpoint_download_path(name)
     if fp:
         return FileResponse(fp, media_type="application/octet-stream", filename=name)
     raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
@@ -633,10 +634,10 @@ async def training_download_checkpoint(name: str):
 async def training_checkpoint_info(name: str):
     from schemas.common import classify_and_raise, success_response
 
-    from domain.training._internal.service import checkpoint_info
+    from domain.training import get_training_engine
 
     try:
-        info = await checkpoint_info(name)
+        info = await get_training_engine().checkpoint_info(name)
         return success_response(data=info)
     except Exception as e:
         classify_and_raise(e, source="training.checkpoint_info")
@@ -655,10 +656,12 @@ async def training_compare_checkpoints(req: CompareCheckpointsRequest):
     served model — compare must never change what chat is talking to."""
     from schemas.common import classify_and_raise, success_response
 
-    from domain.training._internal.service import compare_checkpoints
+    from domain.training import get_training_engine
 
     try:
-        result = await compare_checkpoints(req.a, req.b, req.prompt, req.max_new_tokens)
+        result = await get_training_engine().checkpoint_compare(
+            req.a, req.b, req.prompt, req.max_new_tokens
+        )
         return success_response(data=result)
     except Exception as e:
         classify_and_raise(e, source="training.compare_checkpoints")
@@ -670,9 +673,9 @@ async def training_metrics_export():
 
     from fastapi.responses import Response
 
-    from domain.training._internal.service import get_all_checkpoint_data
+    from domain.training import get_training_engine
 
-    checkpoints = await get_all_checkpoint_data()
+    checkpoints = await get_training_engine().checkpoint_all_data()
     export = {
         "exported_at": time.time(),
         "total_checkpoints": len(checkpoints),
@@ -706,9 +709,9 @@ async def training_stream(request: Request):
 
     # Get training state for config
     try:
-        from domain.training._internal.service import get_state
+        from domain.training import get_training_engine
 
-        config = get_state().config or {}
+        config = get_training_engine().training_state().config or {}
         if not config:
             from schemas.common import success_response
 
@@ -751,9 +754,9 @@ async def training_from_sessions_stream(request: Request):
     from .sse_stream import build_training_sse_response
 
     try:
-        from domain.training._internal.service import get_state
+        from domain.training import get_training_engine
 
-        config = get_state().config or {}
+        config = get_training_engine().training_state().config or {}
         if not config or config.get("method") != "from-sessions":
             from schemas.common import success_response
 
@@ -805,14 +808,15 @@ def _count_dataset_examples(raw: str, repo_root: Path) -> int:
     repo datasets/ and data/ dirs made every imported dataset report
     "0 examples" and get generic advice.
     """
-    from domain.training._internal.cache_tags import find_corpus_file, get_cache_root
+    from domain.training import get_training_engine
 
     from .resolution import resolve_training_inputs
 
+    engine = get_training_engine()
     allowed_roots = [
         (repo_root / "datasets").resolve(),
         (repo_root / "data").resolve(),
-        Path(get_cache_root()).resolve(),
+        Path(engine.cache_root()).resolve(),
     ]
 
     def _lines(fp: Path) -> int:
@@ -831,7 +835,7 @@ def _count_dataset_examples(raw: str, repo_root: Path) -> int:
         if resolved.is_file():
             return _lines(resolved)
         if resolved.is_dir():
-            corpus = find_corpus_file(resolved)
+            corpus = engine.find_corpus_file(resolved)
             if corpus is not None:
                 return _lines(Path(corpus))
             total = 0
@@ -861,10 +865,9 @@ async def get_training_recommendation(
     try:
         from pathlib import Path as _P
 
-        from domain.training._internal.training_advisor import (
-            get_training_tips,
-            recommend_training_config,
-        )
+        from domain.training import get_training_engine
+
+        engine = get_training_engine()
 
         dataset_size = 0
         avg_quality = None
@@ -896,14 +899,14 @@ async def get_training_recommendation(
                 dataset_size = _count_dataset_examples(dataset_path, repo_root)
 
         # Get recommendation
-        recommendation = recommend_training_config(
+        recommendation = engine.recommend_training_config(
             dataset_size=dataset_size,
             method=method,
             avg_quality=avg_quality,
         )
 
         # Get tips
-        tips = get_training_tips(dataset_size=dataset_size)
+        tips = engine.training_tips(dataset_size=dataset_size)
 
         return success_response(
             data={
@@ -957,10 +960,9 @@ async def get_training_trends(
     from schemas.common import success_response
 
     try:
-        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+        from domain.training import get_training_engine
 
-        tracker = TrainingOutcomeTracker()
-        outcomes = tracker.load_outcomes()
+        outcomes = get_training_engine().list_outcomes()
 
         # Filter
         if model:
@@ -1097,10 +1099,9 @@ async def training_monitor_status():
     """
     from schemas.common import success_response
 
-    from domain.training._internal.monitor import get_training_monitor
+    from domain.training import get_training_engine
 
-    monitor = get_training_monitor()
-    return success_response(data=monitor.get_status())
+    return success_response(data=get_training_engine().monitor_status())
 
 
 @router.get("/monitor/alerts")
@@ -1113,17 +1114,9 @@ async def training_monitor_alerts(severity: str | None = None, limit: int = 50):
     """
     from schemas.common import success_response
 
-    from domain.training._internal.monitor import AlertSeverity, get_training_monitor
+    from domain.training import get_training_engine
 
-    monitor = get_training_monitor()
-    severity_filter = AlertSeverity(severity) if severity else None
-    alerts = monitor.get_alerts(severity=severity_filter, limit=limit)
-    return success_response(
-        data={
-            "alerts": [a.to_dict() for a in alerts],
-            "total": len(alerts),
-        }
-    )
+    return success_response(data=get_training_engine().monitor_alerts(severity, limit))
 
 
 @router.get("/monitor/metrics")
@@ -1135,16 +1128,9 @@ async def training_monitor_metrics(limit: int = 100):
     """
     from schemas.common import success_response
 
-    from domain.training._internal.monitor import get_training_monitor
+    from domain.training import get_training_engine
 
-    monitor = get_training_monitor()
-    metrics = monitor.get_metrics_history(limit=limit)
-    return success_response(
-        data={
-            "metrics": [m.to_dict() for m in metrics],
-            "total": len(metrics),
-        }
-    )
+    return success_response(data=get_training_engine().monitor_metrics(limit))
 
 
 @router.post("/monitor/reset")
@@ -1152,10 +1138,9 @@ async def training_monitor_reset():
     """Reset training monitor state."""
     from schemas.common import success_response
 
-    from domain.training._internal.monitor import get_training_monitor
+    from domain.training import get_training_engine
 
-    monitor = get_training_monitor()
-    monitor.reset()
+    get_training_engine().monitor_reset()
     return success_response(data={"message": "Monitor reset"})
 
 
@@ -1167,8 +1152,6 @@ async def training_monitor_resources():
     """
     from schemas.common import success_response
 
-    from domain.training._internal.monitor import get_training_monitor
+    from domain.training import get_training_engine
 
-    monitor = get_training_monitor()
-    resources = monitor.check_resources()
-    return success_response(data=resources)
+    return success_response(data=get_training_engine().monitor_resources())
