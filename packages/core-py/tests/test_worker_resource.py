@@ -583,6 +583,23 @@ class TestResourceManagerExtra:
         rm = ResourceManager()
         rm.apply_compute_limits()
 
+    def test_apply_compute_limits_pins_openblas(self, monkeypatch):
+        calls = []
+        monkeypatch.setattr(
+            "domain.infrastructure._internal.resource_manager._pin_openblas_threads",
+            lambda n: calls.append(n) or True,
+        )
+        rm = ResourceManager()
+        rm.apply_compute_limits()
+        assert calls == [rm.openblas_num_threads or 1]
+
+    def test_pin_openblas_threads_finds_bundled_lib(self):
+        from domain.infrastructure._internal.resource_manager import (
+            _pin_openblas_threads,
+        )
+
+        assert _pin_openblas_threads(1) is True
+
 
 # ---------------------------------------------------------------------------
 # Additional Singleton tests

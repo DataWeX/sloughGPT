@@ -78,9 +78,15 @@ def _soul_json_sanitize(obj: Any) -> Any:
         return {k: _soul_json_sanitize(v) for k, v in obj.items()}
     if isinstance(obj, list):
         return [_soul_json_sanitize(v) for v in obj]
-    if isinstance(obj, float) and (math.isnan(obj) or math.isinf(obj)):
-        return None
+    if isinstance(obj, float):
+        return obj if math.isfinite(obj) else None
     return obj
+
+
+def _soul_profile_hash(soul_dict: dict) -> str:
+    """Deterministic16-hex digest of an already-sanitized profile dict."""
+    data = json.dumps(soul_dict, sort_keys=True, default=str, allow_nan=False)
+    return hashlib.sha256(data.encode()).hexdigest()[:16]
 
 
 @dataclass
@@ -250,13 +256,7 @@ class SloProfile:
         return d
 
     def compute_hash(self) -> str:
-        data = json.dumps(
-            _soul_json_sanitize(self.to_dict()),
-            sort_keys=True,
-            default=str,
-            allow_nan=False,
-        )
-        return hashlib.sha256(data.encode()).hexdigest()[:16]
+        return _soul_profile_hash(_soul_json_sanitize(self.to_dict()))
 
     def to_sou_string(self) -> str:
         lines = [
@@ -604,12 +604,12 @@ def save_soul(
     if not soul_profile.lineage and hasattr(model, "lineage"):
         soul_profile.lineage = model.lineage
 
-    soul_profile.integrity_hash = soul_profile.compute_hash()
-    config_json = json.dumps(
-        _soul_json_sanitize(soul_profile.to_dict()),
-        default=str,
-        allow_nan=False,
-    )
+    # Single to_dict + sanitize pass feeds the hash, the embedded config and
+    # the sidecar — each previously re-walked the full training_state.
+    soul_dict = _soul_json_sanitize(soul_profile.to_dict())
+    soul_profile.integrity_hash = _soul_profile_hash(soul_dict)
+    soul_dict["integrity_hash"] = soul_profile.integrity_hash
+    config_json = json.dumps(soul_dict, default=str, allow_nan=False)
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
 
@@ -627,7 +627,7 @@ def save_soul(
     try:
         with os.fdopen(meta_fd, "w", encoding="utf-8") as f:
             json.dump(
-                _soul_json_sanitize(soul_profile.to_dict()),
+                soul_dict,
                 f,
                 indent=2,
                 default=str,

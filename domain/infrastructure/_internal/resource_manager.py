@@ -48,6 +48,63 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+_OPENBLAS_SET_SYMBOLS = (
+    "scipy_openblas_set_num_threads64_",
+    "scipy_openblas_set_num_threads",
+    "openblas_set_num_threads64_",
+    "openblas_set_num_threads",
+    "goto_set_num_threads",
+)
+
+
+def _pin_openblas_threads(threads: int) -> bool:
+    """Pin an already-loaded OpenBLAS to ``threads`` via its C API.
+
+    Returns True when a set-thread symbol was found and called. This is the
+    only reliable post-import mechanism: NumPy 2.x has no
+    ``np.set_num_threads``, and OpenBLAS reads ``OPENBLAS_NUM_THREADS`` /
+    ``OMP_NUM_THREADS`` once at library load. Discovery covers the OpenBLAS
+    bundled with numpy wheels (``numpy.libs``) and, on Linux, any openblas
+    mapped in ``/proc/self/maps`` (pathnames may contain spaces — split with
+    maxsplit). Platforms without OpenBLAS (e.g. Accelerate) return False.
+    """
+    if threads < 1:
+        return False
+    try:
+        import ctypes
+        import glob
+        import sys
+        from pathlib import Path
+
+        import numpy as np
+    except ImportError:  # pragma: no cover
+        return False
+    candidates: list[str] = []
+    np_libs = Path(np.__file__).resolve().parent.parent / "numpy.libs"
+    if np_libs.is_dir():
+        candidates.extend(glob.glob(str(np_libs / "*openblas*.so")))
+        candidates.extend(glob.glob(str(np_libs / "*openblas*.dylib")))
+    if sys.platform == "linux":
+        try:
+            for line in Path("/proc/self/maps").read_text().splitlines():
+                parts = line.split(None, 5)
+                if len(parts) == 6 and "openblas" in parts[5]:
+                    candidates.append(parts[5])
+        except OSError:  # pragma: no cover
+            pass
+    for path in dict.fromkeys(candidates):
+        try:
+            lib = ctypes.CDLL(path)
+        except OSError:
+            continue
+        for sym in _OPENBLAS_SET_SYMBOLS:
+            fn = getattr(lib, sym, None)
+            if fn is not None:
+                fn(ctypes.c_int(threads))
+                return True
+    return False
+
+
 # ---------------------------------------------------------------------------
 # Resource allocation profile
 # ---------------------------------------------------------------------------
@@ -345,7 +402,7 @@ class ResourceManager:
         """Set numpy-level compute thread limits in the current process.
 
         This is the replacement for ``torch.set_num_threads()`` — we use
-        the same mechanisms but for numpy / our own stack.
+        the same mechanisms for numpy / our own stack.
         """
         try:
             import numpy as np
@@ -353,6 +410,13 @@ class ResourceManager:
             np.set_num_threads(self.compute_threads)
         except (ImportError, AttributeError) as exc:
             logger.debug("Failed to set numpy thread count: %s", exc)
+        # NumPy 2.x has no ``np.set_num_threads`` (AttributeError above) and
+        # OpenBLAS reads env vars only at library load — both call paths are
+        # dead by the time training imports numpy. Pin the already-loaded
+        # OpenBLAS through its C API instead (default allocation: 1 thread;
+        # sync-thrashing tiny matmuls across cores costs more than parallelism).
+        if _pin_openblas_threads(self.openblas_num_threads or 1):
+            logger.debug("OpenBLAS pinned to %d thread(s)", self.openblas_num_threads or 1)
         # Apply to numexpr directly if available
         try:
             import numexpr
