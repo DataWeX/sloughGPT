@@ -945,6 +945,15 @@ class TrainingEngine:
         executor_mod.get_training_executor().submit(fn, *args)
 
 
+    def clear_accelerator_cache(self) -> None:
+        """Empty the cached GPU accelerator's allocator cache (best effort)."""
+        from domain.training._internal.slonet import _get_accelerator
+
+        acc = _get_accelerator()
+        if acc is not None and hasattr(acc, "empty_cache"):
+            acc.empty_cache()
+
+
     # ── App-package endpoint module delegation (builds/legacy/runtime/…) ──
 
     def load_soul(self, name: str) -> Any:

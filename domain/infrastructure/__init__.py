@@ -43,6 +43,22 @@ from domain.infrastructure._internal.model_registry import get_model_registry
 from domain.infrastructure._internal.output_buffer import get_server_buffer
 from domain.infrastructure._internal.server_state import get_server_state
 
+# Lazy exports — heavy or optional modules (import on first attribute access).
+_LAZY_INFRA = {
+    "SLNCCompiler": ("domain.infrastructure._internal.slnc.compiler", "SLNCCompiler"),
+    "try_register": ("domain.infrastructure._internal.artifact_registry", "try_register"),
+}
+
+
+def __getattr__(name):
+    if name in _LAZY_INFRA:
+        import importlib
+
+        module_path, attr = _LAZY_INFRA[name]
+        return getattr(importlib.import_module(module_path), attr)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
 __all__ = [
     "AppConfig",
     "get_config",
@@ -68,4 +84,6 @@ __all__ = [
     "get_pool",
     "get_model_registry",
     "get_server_state",
+    "SLNCCompiler",
+    "try_register",
 ]

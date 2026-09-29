@@ -7,7 +7,7 @@ Public API:
     WorkflowConfig, get_feedback_workflow
     get_per_user_lora, create_training_pipeline
     get_health_monitor, get_message_feedback, HFDPOTrainer
-    FeedbackTrainer
+    FeedbackTrainer, get_online_lora_updater
 """
 
 from domain.feedback._internal.database import (
@@ -25,6 +25,7 @@ from domain.feedback._internal.meta_weights import (
     get_meta_weight_manager,
 )
 from domain.feedback._internal.model_health import get_health_monitor
+from domain.feedback._internal.online_train import get_online_lora_updater
 from domain.feedback._internal.per_user_lora import get_per_user_lora
 from domain.feedback._internal.response_tracker import (
     ResponseTracker,
@@ -51,5 +52,6 @@ __all__ = [
     "FeedbackTrainer",
     "get_health_monitor",
     "get_message_feedback",
+    "get_online_lora_updater",
     "HFDPOTrainer",
 ]
