@@ -516,6 +516,10 @@ class PersistentTrainingJobs:
             del self._fallback[key]
 
     def __contains__(self, key: object) -> bool:
+        # Live first: ephemeral jobs (recovery runs registered via set_live)
+        # have no store row, and a GET on their id must not 404.
+        if key in self._live:
+            return True
         store = self._store()
         if store:
             return store.get(str(key)) is not None
@@ -561,6 +565,19 @@ class PersistentTrainingJobs:
         self._live.pop(key, None)
         self._fallback.pop(key, None)
 
+    def set_live(self, key: str, value: dict[str, Any]) -> None:
+        """Register a process-local job WITHOUT creating a store row.
+
+        Recovery runs are ephemeral: the durable record is the original job's
+        row (terminal writes target it), so a store row for the recovery id
+        would be born ``running`` and never finalized — surfacing as a phantom
+        "running" job while the process lives and as a phantom recoverable row
+        after the next restart, when ``restore`` marks it interrupted.
+        """
+        if not value.get("created_at"):
+            value["created_at"] = utc_now_iso()
+        self._live[key] = value
+
     def values(self):
         # Live objects win: in-place progress/status mutations between
         # persists must be visible to polling readers in the same process.
@@ -581,8 +598,11 @@ class PersistentTrainingJobs:
     def keys(self):
         store = self._store()
         if store:
-            return [j["id"] for j in store.list()]
-        return self._fallback.keys()
+            ids = [j["id"] for j in store.list()]
+            # Include live-only entries (set_live recovery runs have no row).
+            ids += [k for k in self._live if k not in set(ids)]
+            return ids
+        return list(dict.fromkeys([*self._fallback.keys(), *self._live.keys()]))
 
     def update(self, other=None, **kwargs):
         if other:

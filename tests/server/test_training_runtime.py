@@ -51,6 +51,26 @@ class TestRegisterAndSync:
         assert row["name"] == "distill"
         assert row["status"] in ("pending", "running")
 
+    def test_register_backfills_config_into_preexisting_row(self, runtime, store):
+        # start_training persists the job dict (training_jobs[id] = job) BEFORE
+        # register runs, so the row pre-exists with no config column. Recovery
+        # rebuilds hyperparameters from job["config"] — an empty one falls back
+        # to trainer defaults (block_size x batch_size), which can exceed the
+        # dataset ("Training data too small: 399 samples but 4096 needed").
+        store.create("j1", "distill", {}, "test")
+        assert not (store.get("j1") or {}).get("config")
+
+        runtime.register("j1", _job("j1"), threading.Event(), {"block_size": 32, "batch_size": 2})
+
+        assert store.get("j1")["config"] == {"block_size": 32, "batch_size": 2}
+
+    def test_register_keeps_an_existing_config(self, runtime, store):
+        store.create("j1", "distill", {"block_size": 64}, "test")
+
+        runtime.register("j1", _job("j1"), threading.Event(), {"block_size": 128})
+
+        assert store.get("j1")["config"] == {"block_size": 64}
+
     def test_sync_flushes_progress(self, runtime, store):
         runtime.register("j1", _job("j1"), threading.Event())
         job = runtime.get("j1")

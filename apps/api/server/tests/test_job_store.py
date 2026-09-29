@@ -191,6 +191,29 @@ def test_discard_live_drops_memory_only_keeps_store_row(tmp_path):
     assert store.get("keep")["status"] == "completed"
 
 
+def test_set_live_registers_without_creating_a_store_row(tmp_path):
+    # Recovery runs are ephemeral: persisting a recovery_* row births it as
+    # `running` and nothing ever finalizes it (terminal writes target the
+    # original row) — a phantom running job now, a phantom recoverable row
+    # after the next restart when restore() marks it interrupted.
+    from training.job_store import PersistentTrainingJobs
+
+    store = _mk_store(tmp_path)
+    jobs = PersistentTrainingJobs()
+    persisted = []
+    jobs._persist = lambda key, value: persisted.append(key)
+
+    jobs.set_live("recovery_x", {"id": "recovery_x", "status": "running"})
+
+    assert persisted == []  # never reached the durable path
+    assert store.get("recovery_x") is None
+    assert "recovery_x" in jobs  # live-first __contains__: GET must not 404
+    assert jobs["recovery_x"]["status"] == "running"
+    assert jobs["recovery_x"]["created_at"]  # list-purge age check needs it
+    assert "recovery_x" in jobs.keys()
+    assert any(j["id"] == "recovery_x" for j in jobs.values())
+
+
 # ── store_row_to_job (API shape aliases for durable-only rows) ───────────────
 
 

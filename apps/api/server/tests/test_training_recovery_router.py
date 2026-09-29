@@ -117,7 +117,13 @@ def deps():
     trainer_inst.train.return_value = {"success": True, "global_step": 7}
 
     with (
-        patch.object(router_mod, "get_training_executor", return_value=executor),
+        # Patch at the delegation target: recover_job now submits through
+        # get_training_engine().executor_submit, which lazily resolves this
+        # module attribute (router_mod no longer imports the symbol itself).
+        patch(
+            "domain.training._internal.executor.get_training_executor",
+            return_value=executor,
+        ),
         patch.object(router_mod, "get_training_controller", return_value=_FakeController()),
         patch.object(router_mod, "notify_training_event", new=MagicMock()),
         # Patch the defining submodule, not the lazy package attribute: a
@@ -488,6 +494,63 @@ def test_recover_failure_marks_original_job_failed(tmp_path, deps):
         for method, args, kwargs in store.calls
     )
     assert router_mod.training_jobs["recovery_job-1"]["status"] == "failed"
+
+
+def test_recover_completion_flips_the_original_live_record(tmp_path, deps):
+    # GET /training/jobs/{id} reads the in-memory dict FIRST (live wins over
+    # store): after a completed recovery the original live entry still said
+    # "interrupted 99", so the API/UI contradicted the completed store row.
+    from domain.training._internal.train_pipeline import CheckpointManager
+
+    ckpt = str(tmp_path / "ck" / "model_100.soul")
+    job = _base_job(str(tmp_path), checkpoint_path=ckpt)
+    router_mod.training_jobs.set_live("job-1", dict(job, progress=99))
+    try:
+        resp = _recover(
+            tmp_path,
+            job,
+            patches=[
+                patch.object(CheckpointManager, "is_resumable", return_value=True),
+                patch.object(
+                    CheckpointManager, "load_from_path", return_value={"model_state_dict": {}}
+                ),
+            ],
+        )
+        assert resp.status_code == 200
+
+        orig = router_mod.training_jobs["job-1"]
+        assert orig["status"] == "completed"
+        assert orig["progress"] == 100
+        assert orig["checkpoint"] == ckpt
+        assert orig.get("completed_at")
+    finally:
+        router_mod.training_jobs.discard_live("job-1")
+
+
+def test_recover_failure_marks_the_original_live_record_failed(tmp_path, deps):
+    # Same live-wins contract on the failure path: the original's live entry
+    # must not stay "interrupted/recovering" while the store row says failed.
+    executor, trainer_inst = deps
+    from domain.training._internal.train_pipeline import CheckpointManager
+
+    job = _base_job(str(tmp_path), checkpoint_path="")
+    trainer_inst.train.side_effect = RuntimeError("boom")
+    router_mod.training_jobs.set_live("job-1", dict(job, progress=40))
+    try:
+        resp = _recover(
+            tmp_path,
+            job,
+            patches=[
+                patch.object(CheckpointManager, "load_latest_with_path", return_value=(None, None)),
+            ],
+        )
+        assert resp.status_code == 200
+
+        orig = router_mod.training_jobs["job-1"]
+        assert orig["status"] == "failed"
+        assert "boom" in orig.get("error", "")
+    finally:
+        router_mod.training_jobs.discard_live("job-1")
 
 
 def test_recover_cancel_restores_interrupted(tmp_path, deps):

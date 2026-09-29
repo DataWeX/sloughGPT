@@ -19,8 +19,7 @@ from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
-from domain.shared import find_repo_root
-from domain.training._internal.executor import get_training_executor
+from domain.shared import find_repo_root, utc_now_iso
 
 from .control import router as control_router
 from .controller import get_training_controller
@@ -305,46 +304,15 @@ async def recover_job(job_id: str):
     # (skipping partial/corrupt checkpoints — a crash mid-write can leave the
     # newest file unreadable). The loaded bundle is handed to train() so no
     # second load happens in the worker thread.
-    from domain.training._internal.train_pipeline import CheckpointManager
+    from domain.training import get_training_engine
 
-    manager = CheckpointManager(checkpoint_dir)
-    resume_bundle = None
-    if checkpoint_path:
-        if not CheckpointManager.is_resumable(checkpoint_path):
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-        try:
-            resume_bundle = CheckpointManager.load_from_path(checkpoint_path)
-        except Exception as exc:
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-        if resume_bundle is None:
-            raise_error(
-                f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
-                "unsupported (use a .soul or .npz file)",
-                "E_VAL_REQUEST",
-                status_code=422,
-            )
-    else:
-        # A job that recorded NO checkpoint path gets a scan of ITS OWN
-        # checkpoints only. ``checkpoint_dir`` is shared between jobs, so
-        # "newest file that loads" is allowed to be another job's weights —
-        # resuming from them silently trains a different model. With no
-        # identifiable stem we start fresh instead of adopting a stranger's.
-        checkpoint_path, resume_bundle = None, None
-        for stem in _job_checkpoint_stems(job):
-            path, bundle = manager.load_latest_with_path(stem_prefix=stem)
-            if bundle is not None:
-                checkpoint_path, resume_bundle = path, bundle
-                break
-        checkpoint_path = checkpoint_path or ""
+    try:
+        checkpoint_path, resume_bundle = get_training_engine().resolve_resume_checkpoint(
+            checkpoint_dir, checkpoint_path, _job_checkpoint_stems(job)
+        )
+    except ValueError as exc:
+        raise_error(str(exc), "E_VAL_REQUEST", status_code=422)
+    checkpoint_path = checkpoint_path or ""
 
     # Create recovery job in training_jobs. config is spread first so the
     # explicit control fields (id, status, checkpoint_*) always win over any
@@ -365,7 +333,11 @@ async def recover_job(job_id: str):
         "checkpoint_dir": checkpoint_dir,
         "original_job_id": job_id,
     }
-    training_jobs[recovery_job_id] = recovery_job
+    # set_live, not training_jobs[id] = job: recovery runs are ephemeral.
+    # Persisting a recovery_* row would birth it as `running` and never
+    # finalize it (terminal writes target the ORIGINAL row) — a phantom
+    # running job now, a phantom recoverable row after the next restart.
+    training_jobs.set_live(recovery_job_id, recovery_job)
 
     # Update job store — fresh heartbeat so an actively-recovered row is never
     # mistaken for crashed or still-recoverable while the run is alive.
@@ -398,10 +370,34 @@ async def recover_job(job_id: str):
     except Exception as exc:
         logger.warning("CancelManager registration failed for recovery training %s: %s", jid, exc)
 
+    def _sync_original_live(
+        status: str, error: str | None = None, checkpoint: str | None = None
+    ) -> None:
+        """Mirror the durable terminal write onto the ORIGINAL job's live record.
+
+        ``GET /training/jobs/{id}`` reads the in-memory dict first (live wins
+        over store), so after a successful recovery the API/UI kept showing the
+        original's stale ``interrupted 99`` even though the store row said
+        ``completed``. Mutates in place — the poller holds this same reference.
+        """
+        orig = training_jobs.get(job_id)
+        if orig is None:
+            return
+        orig["status"] = status
+        if error:
+            orig["error"] = error
+        elif status == "completed":
+            orig.pop("error", None)
+        if status == "completed":
+            orig["progress"] = 100
+            orig["completed_at"] = utc_now_iso()
+            if checkpoint:
+                orig["checkpoint_path"] = checkpoint
+                orig["checkpoint"] = checkpoint
+        orig["updated_at"] = utc_now_iso()
+
     def run_recovery(job_id_: str = jid):
         try:
-            from domain.training._internal.train_pipeline import SloughGPTTrainer
-
             # Reuse the SAME trainer configuration builder as /training/start so
             # the recovered run continues with the original job's hyperparameters
             # (LoRA, dropout, scheduler, device, ...) instead of a fixed subset.
@@ -446,13 +442,9 @@ async def recover_job(job_id: str):
                     job_id, rec["progress"], epoch=rec["current_epoch"], step=rec["global_step"]
                 )
 
-            trainer = SloughGPTTrainer(**trainer_config)
-
-            # Resume from checkpoint if available (bundle pre-loaded once in the
-            # request handler — no disk load happens in this thread)
-            trainer.train(
+            trainer = get_training_engine().run_recovery_training(
+                trainer_config,
                 on_progress=on_progress,
-                resume=True,
                 resume_checkpoint=resume_bundle,
                 cancel_event=cancel_event,
                 pause_event=pause_event,
@@ -465,6 +457,7 @@ async def recover_job(job_id: str):
                 _finish_job(jid, "cancelled")
                 training_jobs[jid]["progress"] = 0
                 store.update(job_id, status="interrupted")
+                _sync_original_live("interrupted")
                 controller.complete()
                 return
 
@@ -476,6 +469,7 @@ async def recover_job(job_id: str):
             training_jobs[jid]["checkpoint_path"] = recovery_checkpoint
             training_jobs[jid]["checkpoint"] = recovery_checkpoint
             store.mark_completed(job_id, recovery_checkpoint or "")
+            _sync_original_live("completed", checkpoint=recovery_checkpoint or "")
             controller.complete()
 
             # Trigger webhook
@@ -501,15 +495,16 @@ async def recover_job(job_id: str):
             # users saw in the global banner.
             _finish_job(jid, "failed", str(e))
             store.mark_failed(job_id, str(e))
+            _sync_original_live("failed", error=str(e))
             controller.fail()
         except Exception as e:
             logger.error("Recovery failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(jid, "failed", str(e))
             store.mark_failed(job_id, str(e))
+            _sync_original_live("failed", error=str(e))
             controller.fail()
 
-    executor = get_training_executor()
-    executor.submit(run_recovery, jid)
+    get_training_engine().executor_submit(run_recovery, jid)
 
     return {
         "status": "recovered",
@@ -553,8 +548,8 @@ async def get_recovery_stats():
 
 
 # ── Unified /training/* → core service + infrastructure wrapping ──────────────
-# Business logic: domain.training TrainingEngine (facade — no _internal imports
-# except the recovery run below: CheckpointManager + SloughGPTTrainer, deferred)
+# Business logic: domain.training TrainingEngine (facade — no _internal imports;
+# recovery run delegates resolve/run/submit to the engine too)
 # HTTP wrapping: success_response, error classification, audit logging (this file)
 
 

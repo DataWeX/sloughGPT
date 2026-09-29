@@ -117,13 +117,19 @@ async def list_training_jobs(
         jobs = list(training_jobs.values())
 
     # Bound process-local live dict only; keep JobStore history for resume UI.
+    # Fallback chain must reach created_at: recovery-synced originals (and any
+    # live record never started) lack updated_at/started_at — timestamp 0 made
+    # them look an hour+ stale and purged them the moment they went terminal,
+    # dropping the fresh live state that wins over the store in values().
     for jid in list(training_jobs.keys()):
         j = training_jobs.get(jid)
         if not j:
             continue
         if (
             j.get("status") in ("completed", "failed", "stopped")
-            and now - _to_timestamp(j.get("updated_at") or j.get("started_at")) > 3600
+            and now
+            - _to_timestamp(j.get("updated_at") or j.get("started_at") or j.get("created_at"))
+            > 3600
         ):
             try:
                 training_jobs.discard_live(jid)
