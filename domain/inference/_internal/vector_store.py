@@ -6,7 +6,6 @@ External providers (Pinecone, ChromaDB) live in the ``vector_stores/`` package.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 from abc import ABC, abstractmethod
@@ -15,6 +14,14 @@ from enum import StrEnum
 from typing import Any
 
 import numpy as np
+
+from domain.inference._internal.text_embedder import embed_text
+
+# Back-compat aliases — canonical n-gram embedder re-exported under the
+# historical private names (slo_embedder quality gate, domain.inference
+# lazy exports, infer router all import them from here).
+from domain.inference._internal.text_embedder import ngram_embed as _ngram_embed  # noqa: F401
+from domain.inference._internal.text_embedder import ngram_embed as _word_ngram_embed  # noqa: F401
 
 logger = logging.getLogger("slo.inference.vector_store")
 
@@ -472,76 +479,6 @@ async def create_vector_store(provider: str = "in_memory", **kwargs: Any) -> Vec
     )
 
 
-_embed_model: Any | None = None
-_EMBED_DIM: int = 384
-_EMBED_LOAD_FAILED: bool = False
-_EMBED_MODEL_NAME: str = "all-MiniLM-L6-v2"
-_EMBED_MIN_MEMORY_MB: int = 500
-
-
-def _load_embed_model() -> Any:
-    """Lazy-load a sentence-transformers model for semantic embeddings.
-
-    Auto-downloads all-MiniLM-L6-v2 (~80 MB) on first use. Checks available
-    memory before loading to avoid OOM when a larger model is already in RAM.
-    Falls back to fast n-gram TF-IDF embedder on any failure.
-
-    Returns:
-        SentenceTransformer model or None (falls back to n-gram embedder).
-    """
-    global _embed_model, _EMBED_LOAD_FAILED
-    if _EMBED_LOAD_FAILED:
-        return None
-    if _embed_model is not None:
-        return _embed_model
-
-    # Check available memory before loading
-    try:
-        import psutil
-
-        avail_mb = psutil.virtual_memory().available / (1024 * 1024)
-        if avail_mb < _EMBED_MIN_MEMORY_MB:
-            logger.warning(
-                "Embed model skipped: only %.0f MB available (need %d MB)",
-                avail_mb,
-                _EMBED_MIN_MEMORY_MB,
-                extra={"tag": "INF"},
-            )
-            _EMBED_LOAD_FAILED = True
-            return None
-    except ImportError:
-        pass  # psutil not installed — proceed without memory check
-
-    # Try importing sentence-transformers (requires torch)
-    try:
-        from sentence_transformers import SentenceTransformer
-    except ImportError:
-        logger.info(
-            "sentence-transformers not installed; using n-gram embedder. "
-            "Install with: pip install sentence-transformers",
-            extra={"tag": "INF"},
-        )
-        _EMBED_LOAD_FAILED = True
-        return None
-
-    # Load model on CPU (auto-downloads on first run)
-    try:
-        logger.info(
-            "Loading embedding model %s (device=cpu)...", _EMBED_MODEL_NAME, extra={"tag": "INF"}
-        )
-        _embed_model = SentenceTransformer(_EMBED_MODEL_NAME, device="cpu")
-        logger.info(
-            "Embedding model loaded (%d-dimensional, device=cpu)", _EMBED_DIM, extra={"tag": "INF"}
-        )
-        return _embed_model
-    except Exception as exc:
-        logger.warning(
-            "Failed to load embedding model: %s — using n-gram fallback", exc, extra={"tag": "INF"}
-        )
-        _EMBED_LOAD_FAILED = True
-        return None
-
-
 _STOPWORDS: frozenset = frozenset(
     {
         "the",
@@ -655,132 +592,14 @@ _STOPWORDS: frozenset = frozenset(
 )
 
 
-def _tokenize(text: str) -> list[str]:
-    """Lowercase, strip punctuation, split on whitespace."""
-    import re
-
-    return re.findall(r"[a-z0-9']+", text.lower())
-
-
-def _word_ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
-    """Word-level n-gram TF-IDF embedding using numpy only.
-
-    Outperforms character n-grams for semantic retrieval by operating
-    on word tokens. Extracts word unigrams, bigrams, and trigrams.
-    Frequent stopwords receive a 0.5 IDF penalty so they contribute
-    less to similarity. Log-frequency TF weighting. L2-normalized.
-    """
-    vec = np.zeros(dimension, dtype=np.float64)
-    tokens = _tokenize(text)
-
-    if not tokens:
-        vec[0] = 1.0
-        return vec
-
-    ngrams: list[str] = []
-    for n in (1, 2, 3):
-        for i in range(max(0, len(tokens) - n + 1)):
-            ngrams.append(" ".join(tokens[i : i + n]))
-
-    for ng in ngrams:
-        h = int(hashlib.md5(ng.encode()).hexdigest()[:8], 16)
-        idx = h % dimension
-        vec[idx] += 1.0
-
-    vec = np.log1p(vec)
-    norm = np.linalg.norm(vec)
-    if norm > 0:
-        vec /= norm
-    return vec
-
-
-def _ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
-    """Alias — delegates to the word-level embedder."""
-    return _word_ngram_embed(text, dimension)
-
-
-_slo_embedder = None
-_slo_embedder_rejected = False
-
-
 def simple_embed(text: str, dimension: int = 384) -> list[float]:
-    """Embed text into a vector using the best available embedder.
+    """Embed text into a vector using the canonical project embedder.
 
-    Priority:
-    1. sentence-transformers (all-MiniLM-L6-v2) if installed
-    2. SloTextEmbedder (trained on your own corpus) if checkpoint exists
-    3. Word n-gram TF-IDF fallback (zero downloads)
-
-    Args:
-        text: input text to embed
-        dimension: output vector dimension (384 for all embedders)
-
-    Returns:
-        list of floats (L2-normalized)
+    Thin shim over ``domain.inference._internal.text_embedder``:
+    SloNet checkpoint (quality-gated) → word n-gram TF-IDF, L2-normalized,
+    local-only (no sentence-transformers/torch, no network).
     """
-    # 1. Try sentence-transformers
-    model = _load_embed_model()
-    if model is not None:
-        try:
-            vec = model.encode(text, normalize_embeddings=True, show_progress_bar=False)
-            if len(vec) != dimension:
-                if len(vec) < dimension:
-                    vec = np.pad(vec, (0, dimension - len(vec)))
-                else:
-                    vec = vec[:dimension]
-                norm = np.linalg.norm(vec)
-                if norm > 0:
-                    vec = vec / norm
-            return vec.tolist()
-        except Exception:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                "sentence-transformers encode failed, trying SloNet embedder"
-            )
-
-    # 2. Try SloNet-trained embedder (no downloads, trained on your corpus)
-    global _slo_embedder, _slo_embedder_rejected
-    if _slo_embedder is None and not _slo_embedder_rejected:
-        try:
-            from domain.inference._internal.slo_embedder import SloTextEmbedder
-
-            candidate = SloTextEmbedder.load()
-            if candidate is not None and not candidate.acceptable():
-                logger.info(
-                    "SloNet embedder rejected by quality gate (%s), using n-gram fallback",
-                    candidate.quality,
-                )
-                _slo_embedder_rejected = True
-            elif candidate is not None:
-                _slo_embedder = candidate
-        except Exception as e:
-            logger.warning(
-                "vector_store: SloNet embedder load failed, using n-gram fallback",
-                extra={
-                    "error": str(e),
-                },
-            )
-    if _slo_embedder is not None:
-        try:
-            vec = _slo_embedder.embed(text)
-            if len(vec) != dimension:
-                if len(vec) < dimension:
-                    vec = np.pad(vec, (0, dimension - len(vec)))
-                else:
-                    vec = vec[:dimension]
-                norm = np.linalg.norm(vec)
-                if norm > 0:
-                    vec = vec / norm
-            return vec.tolist() if isinstance(vec, np.ndarray) else vec
-        except Exception:
-            logger.warning(
-                "vector_store: SloNet embedder encode failed, using n-gram fallback", exc_info=True
-            )
-
-    # 3. Last resort: word n-gram TF-IDF (zero downloads, zero training)
-    vec = _ngram_embed(text, dimension)
-    return vec.tolist()
+    return embed_text(text, dimension)
 
 
 __all__ = [

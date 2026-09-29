@@ -26,8 +26,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 
-import numpy as np
-
+from domain.inference._internal.text_embedder import embed_text
 from domain.infrastructure._internal.config import get_config
 
 logger = logging.getLogger("slo.embeddings")
@@ -63,7 +62,11 @@ class BaseEmbedder(ABC):
 
 
 class InMemoryEmbedder(BaseEmbedder):
-    """Fast hash-based embeddings for development/testing."""
+    """Local embedder — delegates to the canonical project embedder.
+
+    Vectors are identical to ``simple_embed``/``embed_text`` (one algorithm,
+    one vector space). Keeps the historical ``in_memory`` model label.
+    """
 
     def __init__(self, dimension: int = 384):
         self.dimension = dimension
@@ -72,21 +75,7 @@ class InMemoryEmbedder(BaseEmbedder):
         if isinstance(texts, str):
             texts = [texts]
 
-        vectors = []
-        for text in texts:
-            vec = np.zeros(self.dimension)
-            words = text.lower().split()
-
-            for i, word in enumerate(words[: self.dimension]):
-                word_hash = int(hashlib.md5(word.encode()).hexdigest()[:8], 16)
-                vec[i % self.dimension] += np.sin(word_hash * (i + 1) * 0.1)
-
-            norm = np.linalg.norm(vec)
-            if norm > 0:
-                vec /= norm
-            vectors.append(vec.tolist())
-
-        return vectors
+        return [embed_text(t, dimension=self.dimension) for t in texts]
 
     def get_dimension(self) -> int:
         return self.dimension

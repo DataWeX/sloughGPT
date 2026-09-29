@@ -58,67 +58,20 @@ class MetaWeightManager:
         # Decay factor for historical weights (higher = more weight on recent)
         self.decay_factor = 0.9
 
-        # Embedding model (lazy loaded)
-        self._embed_model = None
-        self._embedder = None
-
-    def _get_embedder(self):
-        """Lazy load embedding model (sentence-transformers)."""
-        if self._embed_model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-
-                self._embed_model = SentenceTransformer("all-MiniLM-L6-v2")
-                self.embedding_dim = 384
-                logger.info(
-                    "MetaWeightManager: Using sentence-transformers embeddings (dim=%d)",
-                    self.embedding_dim,
-                    extra={"tag": "INFRA"},
-                )
-            except ImportError:
-                logger.warning(
-                    "MetaWeightManager: sentence-transformers not available, using simple embeddings",
-                    extra={"tag": "INFRA"},
-                )
-                self._embed_model = "simple"
-        return self._embed_model
-
     def _embed(self, text: str) -> np.ndarray:
-        """
-        Generate embedding for text.
-        Uses sentence-transformers if available, falls back to simple hash.
-        """
-        embedder = self._get_embedder()
+        """Canonical embedding as float32 (delegates to the project embedder).
 
-        if embedder == "simple" or embedder is None:
-            return self._simple_embed(text)
+        Same algorithm/dimension/normalization as ``vector_store.simple_embed``
+        so similarity comparisons share one vector space. Local-only: no
+        sentence-transformers, no network.
+        """
+        from domain.inference._internal.text_embedder import embed_text
 
-        try:
-            # SentenceTransformer returns (1, dim) array
-            embedding = embedder.encode(text, convert_to_numpy=True, show_progress_bar=False)
-            if len(embedding.shape) > 1:
-                embedding = embedding[0]
-            return embedding.astype(np.float32)
-        except Exception as e:
-            logger.warning("Embedding error: %s, falling back to simple", e, extra={"tag": "INFRA"})
-            return self._simple_embed(text)
+        return np.asarray(embed_text(text, dimension=self.embedding_dim), dtype=np.float32)
 
     def _simple_embed(self, text: str) -> np.ndarray:
-        """
-        Simple embedding using word hash (fallback when no sentence-transformers).
-        """
-        words = text.lower().split()
-        vector = np.zeros(self.embedding_dim)
-
-        for i, word in enumerate(words[: self.embedding_dim]):
-            vector[i] = hash(word) % 100 / 100.0
-
-        # Normalize
-        norm = np.linalg.norm(vector)
-        if norm > 0:
-            vector = vector / norm
-
-        return vector
+        """Back-compat alias for :meth:`_embed` — same canonical vectors."""
+        return self._embed(text)
 
     def _aggregate_patterns(self, patterns: list[SimilarPattern]) -> dict[str, float]:
         """Aggregate patterns to get adjustment values.

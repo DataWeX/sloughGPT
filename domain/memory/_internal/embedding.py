@@ -6,7 +6,6 @@ No external dependencies beyond numpy.
 
 from __future__ import annotations
 
-import hashlib
 import re
 
 import numpy as np
@@ -24,32 +23,12 @@ def tokenize(text: str) -> list[str]:
 
 
 def ngram_embed(text: str, dimension: int = 384) -> np.ndarray:
-    """Word-level n-gram TF-IDF embedding using numpy only.
+    """Canonical n-gram embedding — delegates to the project embedder.
 
-    Outperforms character n-grams for semantic retrieval by operating
-    on word tokens. Extracts word unigrams, bigrams, and trigrams.
-    Frequent stopwords receive a 0.5 IDF penalty so they contribute
-    less to similarity. Log-frequency TF weighting. L2-normalized.
+    Single algorithm/dimension/normalization shared with
+    ``vector_store.simple_embed`` so consolidation vectors are comparable
+    with vectors stored anywhere else.
     """
-    vec = np.zeros(dimension, dtype=np.float64)
-    tokens = tokenize(text)
+    from domain.inference._internal.text_embedder import ngram_embed as canonical
 
-    if not tokens:
-        vec[0] = 1.0
-        return vec
-
-    ngrams: list[str] = []
-    for n in (1, 2, 3):
-        for i in range(max(0, len(tokens) - n + 1)):
-            ngrams.append(" ".join(tokens[i : i + n]))
-
-    for ng in ngrams:
-        h = int(hashlib.md5(ng.encode()).hexdigest()[:8], 16)
-        idx = h % dimension
-        vec[idx] += 1.0
-
-    vec = np.log1p(vec)
-    norm = np.linalg.norm(vec)
-    if norm > 0:
-        vec /= norm
-    return vec
+    return canonical(text, dimension)
