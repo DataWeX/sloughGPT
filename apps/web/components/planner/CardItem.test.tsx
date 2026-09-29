@@ -6,10 +6,20 @@ import type { Card } from './types'
 afterEach(() => cleanup())
 
 const makeCard = (overrides: Partial<Card> = {}): Card => ({
-  id: 'c1', title: 'Test Card', description: 'A description', column: 'todo',
-  priority: 'medium', tags: ['frontend', 'urgent'], due_date: '2026-09-10',
-  assignee: 'alice', sprint: 's1', gh: '', notes: [],
-  created_at: '2026-09-01', updated_at: '2026-09-01', root_hash: '',
+  id: 'c1',
+  title: 'Test Card',
+  description: 'A description',
+  column: 'todo',
+  priority: 'medium',
+  tags: ['frontend', 'urgent'],
+  due_date: '2026-09-10',
+  assignee: 'alice',
+  sprint: 's1',
+  gh: '',
+  notes: [],
+  created_at: '2026-09-01',
+  updated_at: '2026-09-01',
+  root_hash: '',
   ...overrides,
 })
 
@@ -67,11 +77,35 @@ describe('CardItem', () => {
     expect(screen.getAllByRole('button')[0]).toHaveAttribute('draggable', 'true')
   })
   it('shows hash tree dot when root_hash present', () => {
-    const { container } = render(<CardItem card={makeCard({ root_hash: 'abc123' })} {...defaultProps} />)
-    expect(container.querySelectorAll('[title="Hash tree active"]').length).toBeGreaterThanOrEqual(1)
+    const { container } = render(
+      <CardItem card={makeCard({ root_hash: 'abc123' })} {...defaultProps} />,
+    )
+    expect(container.querySelectorAll('[title="Hash tree active"]').length).toBeGreaterThanOrEqual(
+      1,
+    )
   })
   it('hides hash tree dot when no root_hash', () => {
     const { container } = render(<CardItem card={makeCard({ root_hash: '' })} {...defaultProps} />)
     expect(container.querySelectorAll('[title="Hash tree active"]').length).toBe(0)
+  })
+  it('shows acceptance indicators when set', () => {
+    render(
+      <CardItem
+        card={makeCard({
+          index_updated: true,
+          shared_copy_reused: false,
+          coordination: 'card 081',
+        })}
+        {...defaultProps}
+      />,
+    )
+    expect(screen.getByTitle('Index updated')).toBeDefined()
+    expect(screen.getByTitle('Shared copy reused')).toBeDefined()
+    expect(screen.getByText('via card 081')).toBeDefined()
+  })
+  it('hides acceptance row when nothing set', () => {
+    render(<CardItem card={makeCard()} {...defaultProps} />)
+    expect(screen.queryByTitle('Index updated')).toBeNull()
+    expect(screen.queryByTitle('Shared copy reused')).toBeNull()
   })
 })

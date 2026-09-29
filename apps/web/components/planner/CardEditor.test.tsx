@@ -95,4 +95,27 @@ describe('CardEditor', () => {
     fireEvent.click(screen.getAllByText('Save')[0])
     expect(onUpdate).toHaveBeenCalledWith('c1', expect.objectContaining({ title: 'Updated Card' }))
   })
+  it('populates acceptance fields from card', () => {
+    const { container } = render(
+      <CardEditor
+        card={makeCard({ index_updated: true, shared_copy_reused: true, coordination: 'card 081' })}
+        {...defaultProps}
+      />,
+    )
+    expect((container.querySelector('#card-index-updated') as HTMLInputElement).checked).toBe(true)
+    expect((container.querySelector('#card-shared-copy') as HTMLInputElement).checked).toBe(true)
+    expect(screen.getByDisplayValue('card 081')).toBeDefined()
+  })
+  it('saves acceptance fields on Save', () => {
+    const onUpdate = vi.fn()
+    const { container } = render(
+      <CardEditor card={makeCard()} {...defaultProps} onUpdate={onUpdate} />,
+    )
+    fireEvent.click(container.querySelector('#card-index-updated')!)
+    fireEvent.click(screen.getAllByText('Save')[0])
+    expect(onUpdate).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({ index_updated: true, shared_copy_reused: false, coordination: '' }),
+    )
+  })
 })

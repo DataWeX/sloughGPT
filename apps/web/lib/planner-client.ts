@@ -2,7 +2,7 @@
  * Browser-side fetch wrappers for the /api/planner/ routes.
  *
  * Reads/writes .kanban/board.jsonl and .dev-notes/store/notes.journal.jsonl
- * via Next.js API routes.
+ * via the /api/planner/ route handlers (Vite middleware).
  */
 
 import { apiGet, apiPost, apiPut, apiDelete } from './http-client'
@@ -28,6 +28,9 @@ export async function createCard(payload: {
   assignee?: string
   sprint?: string
   gh?: string
+  index_updated?: boolean
+  shared_copy_reused?: boolean
+  coordination?: string
 }): Promise<{ card: Card }> {
   return apiPost<{ card: Card }>('/api/planner/board/cards', payload)
 }
@@ -46,6 +49,9 @@ export async function updateCard(
       | 'column'
       | 'sprint'
       | 'gh'
+      | 'index_updated'
+      | 'shared_copy_reused'
+      | 'coordination'
     >
   >,
 ): Promise<{ card: Card }> {

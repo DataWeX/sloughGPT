@@ -11,6 +11,9 @@ export interface Card {
   assignee: string
   sprint: string
   gh: string
+  index_updated?: boolean
+  shared_copy_reused?: boolean
+  coordination?: string
   notes: CardNote[]
   created_at: string
   updated_at: string

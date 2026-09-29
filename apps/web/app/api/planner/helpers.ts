@@ -63,6 +63,9 @@ export interface BoardCard {
   assignee: string
   sprint: string
   gh: string
+  index_updated?: boolean
+  shared_copy_reused?: boolean
+  coordination?: string
   notes: { id: string; text: string; author: string; created_at: string }[]
   created_at: string
   updated_at: string
@@ -206,7 +209,7 @@ export function writeNotes(notes: Note[], workspaceId?: string): void {
 
 export function moveCard(cardId: string, column: string, workspaceId?: string): boolean {
   const board = readBoard(workspaceId)
-  const card = board.cards.find(c => c.id === cardId)
+  const card = board.cards.find((c) => c.id === cardId)
   if (!card) return false
   card.column = column
   card.updated_at = new Date().toISOString()
@@ -214,17 +217,23 @@ export function moveCard(cardId: string, column: string, workspaceId?: string): 
   return true
 }
 
-export function createCard(data: {
-  title: string
-  description?: string
-  priority?: string
-  tags?: string[]
-  due_date?: string
-  assignee?: string
-  sprint?: string
-  gh?: string
-  column?: string
-}, workspaceId?: string): BoardCard {
+export function createCard(
+  data: {
+    title: string
+    description?: string
+    priority?: string
+    tags?: string[]
+    due_date?: string
+    assignee?: string
+    sprint?: string
+    gh?: string
+    column?: string
+    index_updated?: boolean
+    shared_copy_reused?: boolean
+    coordination?: string
+  },
+  workspaceId?: string,
+): BoardCard {
   const board = readBoard(workspaceId)
   const now = new Date().toISOString()
   const card: BoardCard = {
@@ -238,6 +247,9 @@ export function createCard(data: {
     assignee: data.assignee || '',
     sprint: data.sprint || '',
     gh: data.gh || '',
+    index_updated: data.index_updated,
+    shared_copy_reused: data.shared_copy_reused,
+    coordination: data.coordination || '',
     notes: [],
     created_at: now,
     updated_at: now,
@@ -250,11 +262,27 @@ export function createCard(data: {
 
 export function updateCard(
   id: string,
-  data: Partial<Pick<BoardCard, 'title' | 'description' | 'priority' | 'tags' | 'due_date' | 'assignee' | 'column' | 'sprint' | 'gh'>>,
+  data: Partial<
+    Pick<
+      BoardCard,
+      | 'title'
+      | 'description'
+      | 'priority'
+      | 'tags'
+      | 'due_date'
+      | 'assignee'
+      | 'column'
+      | 'sprint'
+      | 'gh'
+      | 'index_updated'
+      | 'shared_copy_reused'
+      | 'coordination'
+    >
+  >,
   workspaceId?: string,
 ): BoardCard | null {
   const board = readBoard(workspaceId)
-  const card = board.cards.find(c => c.id === id)
+  const card = board.cards.find((c) => c.id === id)
   if (!card) return null
   Object.assign(card, data, { updated_at: new Date().toISOString() })
   writeBoard(board, workspaceId)
@@ -263,7 +291,7 @@ export function updateCard(
 
 export function deleteCard(id: string, workspaceId?: string): boolean {
   const board = readBoard(workspaceId)
-  const idx = board.cards.findIndex(c => c.id === id)
+  const idx = board.cards.findIndex((c) => c.id === id)
   if (idx === -1) return false
   board.cards.splice(idx, 1)
   writeBoard(board, workspaceId)
@@ -272,18 +300,24 @@ export function deleteCard(id: string, workspaceId?: string): boolean {
 
 // ── Note Operations ────────────────────────────────────────────────────
 
-export function createNote(data: {
-  title: string
-  body?: string
-  status?: string
-  tags?: string[]
-  sprint?: string
-  gh?: string
-}, workspaceId?: string): Note {
+export function createNote(
+  data: {
+    title: string
+    body?: string
+    status?: string
+    tags?: string[]
+    sprint?: string
+    gh?: string
+  },
+  workspaceId?: string,
+): Note {
   const notes = readNotes(workspaceId)
   const now = new Date().toISOString()
   const note: Note = {
-    id: `${now.replace(/-/g, '').replace(/:/g, '').replace(/T/g, '').slice(0, 15)}_${data.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+    id: `${now.replace(/-/g, '').replace(/:/g, '').replace(/T/g, '').slice(0, 15)}_${data.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')}`,
     title: data.title,
     body: data.body || '',
     status: data.status || 'open',
@@ -304,7 +338,7 @@ export function updateNote(
   workspaceId?: string,
 ): Note | null {
   const notes = readNotes(workspaceId)
-  const note = notes.find(n => n.id === id)
+  const note = notes.find((n) => n.id === id)
   if (!note) return null
   Object.assign(note, data, { updated_at: new Date().toISOString() })
   writeNotes(notes, workspaceId)
@@ -313,7 +347,7 @@ export function updateNote(
 
 export function deleteNote(id: string, workspaceId?: string): boolean {
   const notes = readNotes(workspaceId)
-  const idx = notes.findIndex(n => n.id === id)
+  const idx = notes.findIndex((n) => n.id === id)
   if (idx === -1) return false
   notes.splice(idx, 1)
   writeNotes(notes, workspaceId)
@@ -326,7 +360,7 @@ export function getAllTags(workspaceId?: string): { name: string; count: number 
   const board = readBoard(workspaceId)
   const tagMap = new Map<string, number>()
   for (const card of board.cards) {
-    for (const tag of (card.tags || [])) {
+    for (const tag of card.tags || []) {
       tagMap.set(tag, (tagMap.get(tag) || 0) + 1)
     }
   }
@@ -406,7 +440,9 @@ export function readHashTrees(): Map<string, HashTreeData> {
       if (tree.root?.card_id) {
         trees.set(tree.root.card_id, tree)
       }
-    } catch { /* skip malformed lines */ }
+    } catch {
+      /* skip malformed lines */
+    }
   }
   return trees
 }
@@ -414,7 +450,7 @@ export function readHashTrees(): Map<string, HashTreeData> {
 export function writeHashTrees(trees: Map<string, HashTreeData>): void {
   const dir = hashtreesDir()
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true })
-  const lines = Array.from(trees.values()).map(t => JSON.stringify(t))
+  const lines = Array.from(trees.values()).map((t) => JSON.stringify(t))
   writeFileSync(hashtreesFile(), lines.join('\n') + '\n', 'utf-8')
 }
 
@@ -422,7 +458,12 @@ export function getHashTree(cardId: string): HashTreeData | null {
   return readHashTrees().get(cardId) || null
 }
 
-export function createHashTree(cardId: string, cardContent: string, tray: string, position: number): HashTreeData {
+export function createHashTree(
+  cardId: string,
+  cardContent: string,
+  tray: string,
+  position: number,
+): HashTreeData {
   const now = new Date().toISOString()
   const rootHash = sha256(`${cardContent}:${tray}:${position}:${now}`)
   const slotId = sha256(`${cardId}:${tray}:${position}`)
@@ -443,7 +484,7 @@ export function createHashTree(cardId: string, cardContent: string, tray: string
 
 export function addNoteToTree(tree: HashTreeData, noteId: string, noteContent: string): void {
   const now = new Date().toISOString()
-  const existing = tree.notes.find(n => n.note_id === noteId)
+  const existing = tree.notes.find((n) => n.note_id === noteId)
   if (existing) {
     const oldHash = existing.hash_value
     existing.hash_value = sha256(`${tree.root.root}:${noteContent}`)
@@ -480,7 +521,7 @@ export function addNoteToTree(tree: HashTreeData, noteId: string, noteContent: s
 
 export function removeNoteFromTree(tree: HashTreeData, noteId: string): boolean {
   const now = new Date().toISOString()
-  const idx = tree.notes.findIndex(n => n.note_id === noteId)
+  const idx = tree.notes.findIndex((n) => n.note_id === noteId)
   if (idx === -1) return false
   const [removed] = tree.notes.splice(idx, 1)
   tree.history.push({
@@ -495,18 +536,28 @@ export function removeNoteFromTree(tree: HashTreeData, noteId: string): boolean 
 }
 
 const COMMIT_COLORS = [
-  '#e74c3c', '#e67e22', '#f1c40f', '#2ecc71', '#1abc9c',
-  '#3498db', '#9b59b6', '#e91e63', '#00bcd4', '#8bc34a',
+  '#e74c3c',
+  '#e67e22',
+  '#f1c40f',
+  '#2ecc71',
+  '#1abc9c',
+  '#3498db',
+  '#9b59b6',
+  '#e91e63',
+  '#00bcd4',
+  '#8bc34a',
 ]
 
 export function rehashTree(tree: HashTreeData): void {
   const now = new Date().toISOString()
-  const parentHash = tree.history.length > 0
-    ? tree.history[tree.history.length - 1].new_hash
-    : tree.root.root
+  const parentHash =
+    tree.history.length > 0 ? tree.history[tree.history.length - 1].new_hash : tree.root.root
 
   // New hash = parent + all note hashes
-  const noteHashes = tree.notes.map(n => n.hash_value).sort().join(':')
+  const noteHashes = tree.notes
+    .map((n) => n.hash_value)
+    .sort()
+    .join(':')
   const newHash = sha256(`${parentHash}:${noteHashes}:${now}`)
 
   // Append to history — the chain

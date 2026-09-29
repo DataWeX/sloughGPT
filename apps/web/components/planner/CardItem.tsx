@@ -36,9 +36,7 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
       )}
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-foreground leading-snug flex-1">
-          {card.title}
-        </p>
+        <p className="text-sm font-medium text-foreground leading-snug flex-1">{card.title}</p>
         {card.root_hash && (
           <span
             className="mt-0.5 h-2 w-2 rounded-full bg-primary shrink-0"
@@ -48,9 +46,7 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
         )}
       </div>
       {card.description && (
-        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
-          {card.description}
-        </p>
+        <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{card.description}</p>
       )}
       <div className="mt-2 flex items-center gap-1.5 flex-wrap">
         <span
@@ -70,11 +66,39 @@ export function CardItem({ card, onDragStart, onDragEnd, onClick }: CardItemProp
           </span>
         ))}
         {card.tags.length > 3 && (
-          <span className="text-[10px] text-muted-foreground">
-            +{card.tags.length - 3}
-          </span>
+          <span className="text-[10px] text-muted-foreground">+{card.tags.length - 3}</span>
         )}
       </div>
+      {(card.index_updated !== undefined ||
+        card.shared_copy_reused !== undefined ||
+        !!card.coordination) && (
+        <div
+          className="mt-1.5 flex items-center gap-2 text-[10px] flex-wrap"
+          aria-label="Acceptance"
+        >
+          {card.index_updated !== undefined && (
+            <span
+              className={card.index_updated ? 'text-success' : 'text-muted-foreground'}
+              title="Index updated"
+            >
+              idx {card.index_updated ? '✓' : '–'}
+            </span>
+          )}
+          {card.shared_copy_reused !== undefined && (
+            <span
+              className={card.shared_copy_reused ? 'text-success' : 'text-muted-foreground'}
+              title="Shared copy reused"
+            >
+              shared {card.shared_copy_reused ? '✓' : '–'}
+            </span>
+          )}
+          {card.coordination && (
+            <span className="text-accent" title="Coordination">
+              via {card.coordination}
+            </span>
+          )}
+        </div>
+      )}
       {(card.assignee || card.due_date) && (
         <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
           {card.assignee && <span>{card.assignee}</span>}

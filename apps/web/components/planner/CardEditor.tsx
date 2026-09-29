@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Button, IconX } from '@sloughgpt/strui'
+import { Button, Checkbox, IconX } from '@sloughgpt/strui'
 import type { Card } from './types'
 import { COLUMN_LABELS } from './types'
 
@@ -22,6 +22,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
   const [dueDate, setDueDate] = useState('')
   const [sprint, setSprint] = useState('')
   const [gh, setGh] = useState('')
+  const [indexUpdated, setIndexUpdated] = useState(false)
+  const [sharedCopyReused, setSharedCopyReused] = useState(false)
+  const [coordination, setCoordination] = useState('')
 
   useEffect(() => {
     if (card) {
@@ -34,6 +37,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
       setDueDate(card.due_date)
       setSprint(card.sprint)
       setGh(card.gh)
+      setIndexUpdated(card.index_updated ?? false)
+      setSharedCopyReused(card.shared_copy_reused ?? false)
+      setCoordination(card.coordination ?? '')
     }
   }, [card])
 
@@ -53,6 +59,9 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
       due_date: dueDate.trim(),
       sprint: sprint.trim(),
       gh: gh.trim(),
+      index_updated: indexUpdated,
+      shared_copy_reused: sharedCopyReused,
+      coordination: coordination.trim(),
     })
   }
 
@@ -195,6 +204,38 @@ export function CardEditor({ card, onClose, onUpdate, onDelete }: CardEditorProp
               />
             </div>
           </div>
+          <fieldset className="border border-border rounded-lg p-3">
+            <legend className="text-sm font-medium px-1">Acceptance</legend>
+            <div className="space-y-2">
+              <Checkbox
+                id="card-index-updated"
+                checked={indexUpdated}
+                onCheckedChange={setIndexUpdated}
+                label="Index updated"
+                description="apps/README.md · packages/README.md · docs/INDEX.md"
+              />
+              <Checkbox
+                id="card-shared-copy"
+                checked={sharedCopyReused}
+                onCheckedChange={setSharedCopyReused}
+                label="Shared copy reused"
+                description="No new node_modules / .venv / lockfile"
+              />
+              <div>
+                <label htmlFor="card-coordination" className="text-sm font-medium">
+                  Coordination
+                </label>
+                <input
+                  id="card-coordination"
+                  type="text"
+                  value={coordination}
+                  onChange={(e) => setCoordination(e.target.value)}
+                  placeholder="Kanban card / owning session"
+                  className="w-full mt-1 rounded-lg border border-border bg-background px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+          </fieldset>
           <div className="flex justify-between pt-4">
             <Button variant="destructive" size="sm" onClick={() => onDelete(card.id)}>
               Delete
