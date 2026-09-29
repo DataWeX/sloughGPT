@@ -4,7 +4,7 @@
 
 ### SOP — Work Workflow (follow in order for every task)
 
-1. **Create a todo on kanban** — log the task before starting work.
+1. **Create a todo on kanban** — log the task before starting work. The card carries the shared-workspace acceptance: **index updated** (new app/package/doc registered in `apps/README.md` / `packages/README.md` / `docs/INDEX.md`), **shared copy reused** (no new `node_modules`/`.venv`/lockfile — reuse the root toolchain; install prompts in opencode ask first), and **coordination named** (link the kanban card if another session already owns that area). `tests/test_shared_indexes.py` enforces the first two.
 2. **Branch before implementing** — `git checkout -b feat/<name>` for major implementations (new methods, training loops, inference engines, quantization, model architecture changes). Small fixes, config tweaks, and doc edits can go straight to main.
 3. **Do the production workflow** — follow the established dev flow (lint, typecheck, test).
 4. **Expert review before implementing** — when the user proposes an approach (design, mechanism, invariant, or architecture idea), do not just implement it. Always respond in the expert-review format:

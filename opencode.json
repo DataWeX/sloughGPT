@@ -3,10 +3,36 @@
   "skills": {
     "paths": [".opencode/skills"]
   },
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "*npm install*": "ask",
+      "*npm i *": "ask",
+      "*yarn install*": "ask",
+      "*yarn add*": "ask",
+      "*pnpm install*": "ask",
+      "*pnpm add*": "ask",
+      "*pip install*": "ask",
+      "*pip3 install*": "ask",
+      "*python -m pip install*": "ask",
+      "*python3 -m pip install*": "ask",
+      "*rm -rf node_modules*": "ask",
+      "*rm -r node_modules*": "ask",
+      "*rm -rf .venv*": "ask",
+      "*git clean*": "ask"
+    }
+  },
   "mcp": {
     "chrome-devtools": {
       "type": "local",
-      "command": ["npx", "-y", "chrome-devtools-mcp", "--browserUrl", "http://localhost:9222", "--headless"],
+      "command": [
+        "npx",
+        "-y",
+        "chrome-devtools-mcp",
+        "--browserUrl",
+        "http://localhost:9222",
+        "--headless"
+      ],
       "enabled": true
     }
   },
