@@ -2,9 +2,12 @@
 
 Runnable services and application entrypoints.
 
-- `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`.soul`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
-- `web/` — Next.js frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (*UI vs core engine*).
+- `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`.soul`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (_Checkpoint vocabulary_).
+- `web/` — Vite frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (_UI vs core engine_).
 - `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`sloughgpt train`** export naming (**`--save-stem`**) and **`sloughgpt generate`** local `.soul` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias) and the line-mode REPL when run without `--tui`.
+- `gateway/` — Rust edge gateway (`gateway/src/main.rs`, release binary): owns the public socket (:8080) — health-contract passthrough, CORS, compression, rate limits — then proxies to the API. Built once, shared by every session (`cargo build --release`); self-supervising (`MAN_GATEWAY_SUPERVISE=1`). See **`docs/engineering-overview.md` §5**.
+- `mobile/` — mobile app. Its `node_modules` (~7.5G) is regenerable build state — do NOT rebuild it while work can use the shared root install (shared-not-rebuilt rule in **AGENTS.md**).
+- `data/` — user data stores (chat sessions, conversations, experiments, feedback, training exports, voice messages, API keys). **Never delete** — see **AGENTS.md** _File Safety_.
 
 ### Quick start (repo root)
 
