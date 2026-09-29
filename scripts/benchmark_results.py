@@ -8,6 +8,7 @@ against prior runs and reports regressions.
 Usage:
     python scripts/benchmark_results.py record --kind stability --json-file out.json
     python scripts/benchmark_results.py record --kind latency --json-file out.json
+    python scripts/benchmark_results.py record --kind admission --json-file out.json
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
 """
@@ -51,6 +52,16 @@ REGRESSION_THRESHOLDS = {
         "time_to_ready_s": (20.0, "rel"),
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
+    },
+    "admission": {
+        # gateway edge admission (benchmark_gateway_admission.py): shed-path
+        # latencies and exempt throughput on loopback (µs; noisy box → loose)
+        "pass.rps": (30.0, "rel"),
+        "pass.p50_us": (50.0, "rel"),
+        "stats.p50_us": (50.0, "rel"),
+        "rate.p50_us": (50.0, "rel"),
+        "breaker.p50_us": (50.0, "rel"),
+        "streams.p50_us": (50.0, "rel"),
     },
 }
 
@@ -171,7 +182,7 @@ def load_result(path: Path) -> dict:
 
 
 # higher-is-better metric names (a drop means regression)
-HIGHER_IS_BETTER = {"overall", "response_rate"}
+HIGHER_IS_BETTER = {"overall", "response_rate", "pass.rps"}
 
 
 def _threshold(kind: str, metric: str) -> tuple:
@@ -200,12 +211,23 @@ def _regression_deltas(kind: str, new: dict, old: dict) -> dict:
 
 
 def _dig(d: dict, dotted: str):
-    """Fetch nested value by dotted path (e.g. score.overall)."""
+    """Fetch nested value by dotted path (e.g. score.overall, pass.rps)."""
     if dotted in d:
         return d[dotted]
     for container in ("score", "metrics"):
-        if isinstance(d.get(container), dict) and dotted in d[container]:
-            return d[container][dotted]
+        sub = d.get(container)
+        if not isinstance(sub, dict):
+            continue
+        if dotted in sub:
+            return sub[dotted]
+        cur = sub
+        for part in dotted.split("."):
+            if not isinstance(cur, dict) or part not in cur:
+                cur = None
+                break
+            cur = cur[part]
+        if cur is not None:
+            return cur
     cur = d
     for part in dotted.split("."):
         if not isinstance(cur, dict):
@@ -338,6 +360,16 @@ def do_history(args) -> int:
                     print(
                         f"  {stamp}  {conf:<10} gate={'✓' if gate else '✗'} final={final}  {p.name}"
                     )
+            elif kind == "admission":
+                m = r.get("metrics", {})
+                shed = " ".join(
+                    f"{k}={m.get(k, {}).get('p50_us', '?')}µs"
+                    for k in ("rate", "breaker", "streams")
+                )
+                print(
+                    f"  {stamp}  pass {m.get('pass', {}).get('p50_us', '?')}µs "
+                    f"{m.get('pass', {}).get('rps', '?')} rps | {shed}  {p.name}"
+                )
             else:
                 m = r.get("metrics", {})
                 print(
@@ -419,7 +451,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "admission"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -430,7 +462,7 @@ def main() -> int:
 
     p_h = sub.add_parser("history", help="list stored runs")
     p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
+        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup", "admission"]
     )
     p_h.set_defaults(fn=do_history)
 
@@ -438,7 +470,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "admission"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
