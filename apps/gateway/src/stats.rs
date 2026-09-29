@@ -6,9 +6,10 @@
 //! Python woke. The gateway reads its own measurements — independent of the
 //! backend measuring a process too saturated to measure itself.
 //!
-//! Bounded by construction: routes keyed by first path segment, capped at
-//! 32 slots + `(other)` overflow, fixed-size latency histogram, one mutex
-//! held for counter arithmetic only (never across `.await`).
+//! Bounded by construction: routes keyed by first path segment, clients
+//! keyed by peer IP, each capped at 32 slots + `(other)` overflow, fixed-size
+//! latency histogram, one mutex held for counter arithmetic only (never
+//! across `.await`).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -16,6 +17,8 @@ use std::time::Duration;
 
 /// Distinct route slots before aggregation into `(other)`.
 const MAX_ROUTES: usize = 32;
+/// Distinct client slots before aggregation into `(other)`.
+const MAX_CLIENTS: usize = 32;
 /// Overflow bucket name.
 const OTHER: &str = "(other)";
 /// Log2-µs buckets: 0 = ≤1µs … 25 = 16–33.5s (covers BUFFERED_TIMEOUT=30s).
@@ -87,6 +90,32 @@ impl RouteStat {
 
 struct Inner {
     routes: Vec<(String, RouteStat)>,
+    clients: Vec<(String, ClientStat)>,
+}
+
+/// One client-observed outcome (peer IP). Sheds counted separately from
+/// responses, mirroring the per-route cut.
+#[derive(Clone, Copy)]
+pub enum ClientSeen {
+    Response(u16),
+    Shed429,
+    Shed503,
+}
+
+#[derive(Default, Clone)]
+pub struct ClientStat {
+    pub requests: u64,
+    pub ok_2xx: u64,
+    pub err_4xx: u64,
+    pub err_5xx: u64,
+    pub shed_429: u64,
+    pub shed_503: u64,
+}
+
+impl ClientStat {
+    fn activity(&self) -> u64 {
+        self.requests + self.shed_429 + self.shed_503
+    }
 }
 
 pub struct EdgeStats {
@@ -97,29 +126,52 @@ pub struct EdgeStats {
 impl EdgeStats {
     pub fn new() -> Self {
         Self {
-            inner: Mutex::new(Inner { routes: Vec::new() }),
+            inner: Mutex::new(Inner {
+                routes: Vec::new(),
+                clients: Vec::new(),
+            }),
             in_flight: AtomicUsize::new(0),
         }
     }
 
-    fn slot<'a>(inner: &'a mut Inner, key: &str) -> &'a mut RouteStat {
-        if let Some(i) = inner.routes.iter().position(|(k, _)| k == key) {
-            return &mut inner.routes[i].1;
+    fn slot<'a, T: Default>(list: &'a mut Vec<(String, T)>, cap: usize, key: &str) -> &'a mut T {
+        if let Some(i) = list.iter().position(|(k, _)| k == key) {
+            return &mut list[i].1;
         }
-        if inner.routes.len() < MAX_ROUTES {
-            inner.routes.push((key.to_string(), RouteStat::default()));
-            return &mut inner.routes.last_mut().expect("just pushed").1;
+        if list.len() < cap {
+            list.push((key.to_string(), T::default()));
+            return &mut list.last_mut().expect("just pushed").1;
         }
-        if let Some(i) = inner.routes.iter().position(|(k, _)| k == OTHER) {
-            return &mut inner.routes[i].1;
+        if let Some(i) = list.iter().position(|(k, _)| k == OTHER) {
+            return &mut list[i].1;
         }
-        inner.routes.push((OTHER.to_string(), RouteStat::default()));
-        &mut inner.routes.last_mut().expect("just pushed").1
+        list.push((OTHER.to_string(), T::default()));
+        &mut list.last_mut().expect("just pushed").1
     }
 
     fn with_route(&self, route: &str, f: impl FnOnce(&mut RouteStat)) {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        f(Self::slot(&mut inner, route));
+        f(Self::slot(&mut inner.routes, MAX_ROUTES, route));
+    }
+
+    /// One client-observed outcome from the admission middleware.
+    /// Edge-internal traffic (health polls, own stats endpoint) is excluded
+    /// upstream — those are overhead, not consumers.
+    pub fn client_seen(&self, client: &str, seen: ClientSeen) {
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let c = Self::slot(&mut inner.clients, MAX_CLIENTS, client);
+        match seen {
+            ClientSeen::Response(status) => {
+                c.requests += 1;
+                match status {
+                    0..=399 => c.ok_2xx += 1,
+                    400..=499 => c.err_4xx += 1,
+                    _ => c.err_5xx += 1,
+                }
+            }
+            ClientSeen::Shed429 => c.shed_429 += 1,
+            ClientSeen::Shed503 => c.shed_503 += 1,
+        }
     }
 
     /// Successful upstream exchange: status class + header latency.
@@ -209,7 +261,30 @@ impl EdgeStats {
                 "compression_saved": saved,
             }));
         }
-        serde_json::json!({ "totals": totals, "routes": rows })
+        // Per-client cut: same traffic, attributed to who caused it.
+        // Sorted by total activity (responses + sheds) so the loudest
+        // clients surface first; capped by construction.
+        let mut clients: Vec<(u64, serde_json::Value)> = inner
+            .clients
+            .iter()
+            .map(|(key, c)| {
+                (
+                    c.activity(),
+                    serde_json::json!({
+                        "client": key,
+                        "requests": c.requests,
+                        "2xx": c.ok_2xx,
+                        "4xx": c.err_4xx,
+                        "5xx": c.err_5xx,
+                        "shed_429": c.shed_429,
+                        "shed_503": c.shed_503,
+                    }),
+                )
+            })
+            .collect();
+        clients.sort_by_key(|(activity, _)| std::cmp::Reverse(*activity));
+        let clients: Vec<serde_json::Value> = clients.into_iter().map(|(_, v)| v).collect();
+        serde_json::json!({ "totals": totals, "routes": rows, "clients": clients })
     }
 }
 
@@ -320,5 +395,42 @@ mod tests {
         assert_eq!(s.in_flight(), 1);
         drop(g2);
         assert_eq!(s.in_flight(), 0);
+    }
+
+    #[test]
+    fn client_seen_classifies_outcomes() {
+        let s = EdgeStats::new();
+        s.client_seen("10.0.0.1", ClientSeen::Response(200));
+        s.client_seen("10.0.0.1", ClientSeen::Response(404));
+        s.client_seen("10.0.0.1", ClientSeen::Response(502));
+        s.client_seen("10.0.0.1", ClientSeen::Shed429);
+        s.client_seen("10.0.0.1", ClientSeen::Shed503);
+        s.client_seen("10.0.0.2", ClientSeen::Response(200));
+        let snap = s.snapshot();
+        let clients = snap["clients"].as_array().unwrap();
+        // Sorted by activity: .1 (5) before .2 (1).
+        assert_eq!(clients.len(), 2);
+        assert_eq!(clients[0]["client"], "10.0.0.1");
+        assert_eq!(clients[0]["requests"], 3);
+        assert_eq!(clients[0]["2xx"], 1);
+        assert_eq!(clients[0]["4xx"], 1);
+        assert_eq!(clients[0]["5xx"], 1);
+        assert_eq!(clients[0]["shed_429"], 1);
+        assert_eq!(clients[0]["shed_503"], 1);
+        assert_eq!(clients[1]["client"], "10.0.0.2");
+        assert_eq!(clients[1]["requests"], 1);
+    }
+
+    #[test]
+    fn client_cardinality_capped_with_other_overflow() {
+        let s = EdgeStats::new();
+        for i in 0..40 {
+            s.client_seen(&format!("10.0.0.{i}"), ClientSeen::Response(200));
+        }
+        let snap = s.snapshot();
+        let clients = snap["clients"].as_array().unwrap();
+        assert_eq!(clients.len(), MAX_CLIENTS + 1, "cap + (other)");
+        let other = clients.iter().find(|c| c["client"] == "(other)").unwrap();
+        assert_eq!(other["requests"], 40 - MAX_CLIENTS as u64);
     }
 }

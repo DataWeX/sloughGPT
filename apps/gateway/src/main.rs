@@ -46,7 +46,7 @@ mod supervisor;
 
 use breaker::{BreakerConfig, CircuitBreaker};
 use filters::PathPolicy;
-use stats::EdgeStats;
+use stats::{ClientSeen, EdgeStats};
 
 // ── Edge policy (transport only — no model knowledge) ──────────────────────
 
@@ -490,6 +490,7 @@ async fn edge_admission(
                 .check_at(&key, limit, Duration::from_secs(route_window), now);
             if check.is_err() {
                 state.stats.shed_429(&route);
+                state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
                 return reject_rate(
                     format!("Rate limit exceeded for {prefix}. Try again later."),
@@ -514,6 +515,7 @@ async fn edge_admission(
             );
             if check.is_err() {
                 state.stats.shed_429(&route);
+                state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
                 return reject_rate(
                     "Workspace rate limit exceeded. Try again later.".into(),
@@ -537,6 +539,7 @@ async fn edge_admission(
             Ok(remaining) => rate_headers = Some((remaining, global_limit)),
             Err(()) => {
                 state.stats.shed_429(&route);
+                state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
                 return reject_rate(
                     "Too many requests. Try again later.".into(),
@@ -551,6 +554,7 @@ async fn edge_admission(
     // timeout on a core the edge has already watched fail K times.
     if let Err(retry) = state.breaker.allow(now) {
         state.stats.shed_503(&route);
+        state.stats.client_seen(&ip, ClientSeen::Shed503);
         state.access_log(&method, &path, &route, 503, started, Some("breaker"), &ip);
         return reject_breaker(retry);
     }
@@ -563,6 +567,7 @@ async fn edge_admission(
             Ok(permit) => Some(permit),
             Err(_) => {
                 state.stats.shed_429(&route);
+                state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("streams"), &ip);
                 return reject_streams();
             }
@@ -595,6 +600,9 @@ async fn edge_admission(
             limit.to_string().parse().expect("numeric header"),
         );
     }
+    state
+        .stats
+        .client_seen(&ip, ClientSeen::Response(resp.status().as_u16()));
     state.access_log(
         &method,
         &path,
@@ -629,6 +637,7 @@ async fn gateway_stats(State(state): State<AppState>) -> Response {
         },
         "totals": snap["totals"],
         "routes": snap["routes"],
+        "clients": snap["clients"],
     });
     Json(body).into_response()
 }
@@ -1474,5 +1483,82 @@ mod tests {
         assert_eq!(lines[2]["method"], "GET");
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    // ── Per-client stats ───────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn per_client_stats_attribute_responses_and_sheds() {
+        let config = GatewayConfig {
+            python_core_url: "http://127.0.0.1:9".into(),
+            rate: RateConfig {
+                global_limit: 1,
+                window_secs: 60,
+                max_streams: 0,
+            },
+            breaker: BreakerConfig {
+                failures: 0,
+                open_secs: 0,
+            },
+            access_log: String::new(),
+            ..Default::default()
+        };
+        let app = build_router(AppState::new(config, Client::new()));
+
+        fn from_client(ip: [u8; 4], uri: &str) -> Request {
+            let mut req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+            req.extensions_mut()
+                .insert(ConnectInfo(SocketAddr::from((ip, 40000u16))));
+            req
+        }
+
+        // Client A: admitted → dead core → 502 (counts as 5xx).
+        let resp = app
+            .clone()
+            .oneshot(from_client([10, 0, 0, 1], "/api/x"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        // Client B: one admitted → 502, second request rate-shed (limit 1).
+        let resp = app
+            .clone()
+            .oneshot(from_client([10, 0, 0, 2], "/api/x"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        let resp = app
+            .clone()
+            .oneshot(from_client([10, 0, 0, 2], "/api/y"))
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+
+        // Exempt stats fetch (no ConnectInfo) must not appear as a client —
+        // edge-internal polls are overhead, not consumers.
+        let resp = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/gateway/stats")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let clients = v["clients"].as_array().unwrap();
+        assert_eq!(clients.len(), 2, "A + B only, got: {clients:?}");
+        assert!(clients.iter().all(|c| c["client"] != "unknown"));
+
+        let a = clients.iter().find(|c| c["client"] == "10.0.0.1").unwrap();
+        assert_eq!(a["requests"], 1);
+        assert_eq!(a["5xx"], 1);
+        assert_eq!(a["shed_429"], 0);
+
+        let b = clients.iter().find(|c| c["client"] == "10.0.0.2").unwrap();
+        assert_eq!(b["requests"], 1);
+        assert_eq!(b["5xx"], 1);
+        assert_eq!(b["shed_429"], 1);
     }
 }
