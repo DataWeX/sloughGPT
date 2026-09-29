@@ -28,6 +28,7 @@ class ActionType(Enum):
     SCREENSHOT = "screenshot"
     WAIT = "wait"
     NAVIGATE = "navigate"
+    TOOL_CALL = "tool_call"
     DONE = "done"
     FAIL = "fail"
 
@@ -203,6 +204,12 @@ ACTION_CARDS: dict[ActionType, ActionCard] = {
         {"url": "destination URL"},
         {"url": "http://localhost:3000/chat"},
     ),
+    ActionType.TOOL_CALL: ActionCard(
+        ActionType.TOOL_CALL,
+        "Call one outside tool from the provided registry.",
+        {"tool": "tool name", "args": "dict of arguments (optional)"},
+        {"tool": "file_search", "args": {"query": "notes"}},
+    ),
     ActionType.DONE: ActionCard(
         ActionType.DONE, "Task completed. Ends the run successfully.", {}, {}
     ),
@@ -221,6 +228,7 @@ _REQUIRED_PARAMS: dict[ActionType, list[str]] = {
     ActionType.KEYBOARD_PRESS: ["key"],
     ActionType.KEYBOARD_HOTKEY: ["keys"],
     ActionType.NAVIGATE: ["url"],
+    ActionType.TOOL_CALL: ["tool"],
 }
 
 
