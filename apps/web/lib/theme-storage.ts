@@ -1,4 +1,4 @@
-/** Keys synced with ``ThemeProvider`` and the inline theme bootstrap in ``app/layout.tsx``. */
+/** Keys synced with ``ThemeProvider`` and the inline theme bootstrap in ``index.html``. */
 
 export const THEME_STORAGE_KEY = 'man_theme'
 export const MODE_STORAGE_KEY = 'man_mode'
@@ -20,8 +20,10 @@ export const PALETTE_LABELS: Record<StoredPaletteId, string> = {
 }
 
 export const PALETTE_COLORS: Record<StoredPaletteId, string> = {
-  'noir-violet': '#6339aa',
-  'neural-precision': '#38bdf8',
+  // Mirrors the palette's authored --primary in globals.css
+  // (:root 124 82 196; html.palette-neural-precision 99 57 170).
+  'noir-violet': '#7c52c4',
+  'neural-precision': '#6339aa',
 }
 
 export function isStoredThemeId(value: string | null): value is StoredThemeId {
