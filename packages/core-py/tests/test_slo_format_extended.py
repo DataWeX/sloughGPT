@@ -143,6 +143,44 @@ class TestSaveSoul:
             assert "personality" in meta
             assert "generation" in meta
 
+    def test_save_soul_serializes_profile_exactly_once(self, monkeypatch):
+        import domain.inference._internal.slo_format as slo_format_mod
+
+        calls = {"n": 0}
+        original = slo_format_mod.SloProfile.to_dict
+
+        def counting_to_dict(self):
+            calls["n"] += 1
+            return original(self)
+
+        monkeypatch.setattr(slo_format_mod.SloProfile, "to_dict", counting_to_dict)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "once.soul")
+            save_soul(FakeModel(), path)
+        assert calls["n"] == 1
+
+    def test_nan_metadata_becomes_null_in_sidecar_and_config(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "nan.soul")
+            soul = SloProfile(
+                name="nan-bot",
+                metadata={"loss": float("nan"), "ppl": float("inf")},
+            )
+            save_soul(FakeModel(), path, soul_profile=soul)
+
+            with open(path + ".meta.json") as f:
+                meta = json.load(f)
+            assert meta["metadata"]["loss"] is None
+            assert meta["metadata"]["ppl"] is None
+
+            with open(path, "rb") as f:
+                f.read(4)
+                struct.unpack("<I", f.read(4))
+                config_len = struct.unpack("<I", f.read(4))[0]
+                config = json.loads(f.read(config_len))
+            assert config["metadata"]["loss"] is None
+            assert config["metadata"]["ppl"] is None
+
     def test_meta_json_matches_config(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "match.soul")

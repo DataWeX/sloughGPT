@@ -164,3 +164,20 @@ __all__ = [
     "executor",
     "peek_training_executor",
 ]
+
+
+# Pin BLAS threads on import of the training stack: OpenBLAS defaults to one
+# thread per core, which sync-thrashes the many tiny matmuls of SloNet
+# training on a shared box. Runs here because the pin only works via the
+# post-import ctypes path (see resource_manager._pin_openblas_threads).
+try:
+    from domain.infrastructure._internal.resource_manager import (
+        get_resource_manager,
+    )
+
+    _rm = get_resource_manager()
+    _rm.apply_blas_env()
+    _rm.apply_compute_limits()
+    del _rm
+except Exception:  # pragma: no cover - perf nicety must never block training
+    pass

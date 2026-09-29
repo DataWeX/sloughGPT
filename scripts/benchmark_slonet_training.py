@@ -5,6 +5,7 @@ Measures: loss convergence, steps/sec, peak memory, final perplexity.
 No PyTorch required — pure NumPy via SloNet.
 """
 
+import argparse
 import json
 import os
 import sys
@@ -16,10 +17,30 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "packages" / "core-py"))
 
+# Before numpy: OpenBLAS reads these once at library load; the repo default is
+# a single thread per op (SLO_OPENBLAS_NUM_THREADS=1).
+os.environ.setdefault("OPENBLAS_NUM_THREADS", os.environ.get("SLO_OPENBLAS_NUM_THREADS", "1"))
+os.environ.setdefault("OMP_NUM_THREADS", os.environ.get("SLO_OMP_NUM_THREADS", "1"))
+
 import numpy as np
 
 
 def main():
+    parser = argparse.ArgumentParser(description="SloNet training benchmark")
+    parser.add_argument(
+        "--only",
+        default="",
+        help="comma-separated config names to run (e.g. gate,tiny); default: all",
+    )
+    parser.add_argument(
+        "--results",
+        default="/tmp/slobench/results.json",
+        help="results JSON, merged per config after every run (chunk-safe)",
+    )
+    args = parser.parse_args()
+    only = {n.strip() for n in args.only.split(",") if n.strip()}
+    out = Path(args.results)
+
     from domain.training._internal.cache_tags import get_cache_root
     from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
 
@@ -89,9 +110,28 @@ def main():
         },
     ]
 
+    order = [c["name"] for c in configs]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    by_name: dict = {}
+    if out.exists():
+        try:
+            prior = json.loads(out.read_text())
+            by_name = {e["config"]: e for e in prior if isinstance(e, dict) and "config" in e}
+        except (json.JSONDecodeError, OSError):
+            by_name = {}
+
+    def _flush() -> None:
+        merged = [by_name[n] for n in order if n in by_name]
+        with open(out, "w") as f:
+            json.dump(merged, f, indent=2)
+
     results = []
     for cfg in configs:
-        name = cfg.pop("name")
+        name = cfg["name"]
+        if only and name not in only:
+            print(f"  (skip {name} — outside --only filter)")
+            continue
+        cfg.pop("name")
         print(f"\n{'=' * 60}")
         print(f"  Config: {name}  ({cfg['n_embed']}d / {cfg['n_layer']}L / {cfg['n_head']}H)")
         print(f"{'=' * 60}")
@@ -206,6 +246,8 @@ def main():
             ],
         }
         results.append(r)
+        by_name[r["config"]] = r
+        _flush()
 
         print(
             f"\n  Result: {r['params_readable']} params | {r['elapsed_s']}s | "
@@ -234,11 +276,8 @@ def main():
         )
     print(f"{'=' * 72}")
 
-    # Save results
-    out = Path("/tmp/slobench/results.json")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w") as f:
-        json.dump(results, f, indent=2)
+    # Save results (merged with any prior chunk runs)
+    _flush()
     print(f"\nResults saved to {out}")
 
 

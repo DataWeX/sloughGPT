@@ -47,6 +47,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
+# Before numpy: OpenBLAS reads these once at library load; the repo default
+# is a single thread per op (SLO_OPENBLAS_NUM_THREADS=1).
+os.environ.setdefault("OPENBLAS_NUM_THREADS", os.environ.get("SLO_OPENBLAS_NUM_THREADS", "1"))
+os.environ.setdefault("OMP_NUM_THREADS", os.environ.get("SLO_OMP_NUM_THREADS", "1"))
+
 import numpy as np
 
 from domain.shared import utc_now_iso
