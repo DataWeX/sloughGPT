@@ -275,11 +275,11 @@ export default function ConsciousnessMonitorPage() {
 
     return (
       <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-32">
-        <polygon points={areaCoords.join(' ')} fill="#6366f1" fillOpacity={0.1} />
+        <polygon points={areaCoords.join(' ')} fill="rgb(var(--chart-1))" fillOpacity={0.1} />
         <polyline
           points={coords.join(' ')}
           fill="none"
-          stroke="#6366f1"
+          stroke="rgb(var(--chart-1))"
           strokeWidth={1.5}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -292,7 +292,7 @@ export default function ConsciousnessMonitorPage() {
             Math.max(0, Math.min(1, (growthStream[points - 1] ?? 0) + 0.5)) * (h - 2 * pad)
           }
           r={3}
-          fill="#6366f1"
+          fill="rgb(var(--chart-1))"
         />
       </svg>
     )

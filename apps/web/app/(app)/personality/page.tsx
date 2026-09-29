@@ -739,28 +739,28 @@ export default function PersonalityPage() {
                       <Line
                         type="monotone"
                         dataKey="warmth"
-                        stroke="#ec4899"
+                        stroke="rgb(var(--chart-5))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="confidence"
-                        stroke="#6366f1"
+                        stroke="rgb(var(--chart-1))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="humor"
-                        stroke="#f59e0b"
+                        stroke="rgb(var(--chart-3))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="empathy"
-                        stroke="#22c55e"
+                        stroke="rgb(var(--chart-2))"
                         strokeWidth={1.5}
                         dot={false}
                       />
@@ -801,21 +801,21 @@ export default function PersonalityPage() {
                       <Line
                         type="monotone"
                         dataKey="openness"
-                        stroke="#8b5cf6"
+                        stroke="rgb(var(--chart-1))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="agreeableness"
-                        stroke="#22c55e"
+                        stroke="rgb(var(--chart-2))"
                         strokeWidth={1.5}
                         dot={false}
                       />
                       <Line
                         type="monotone"
                         dataKey="conscientiousness"
-                        stroke="#3b82f6"
+                        stroke="rgb(var(--chart-4))"
                         strokeWidth={1.5}
                         dot={false}
                       />

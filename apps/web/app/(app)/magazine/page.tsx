@@ -27,11 +27,26 @@ const lightColors = [
   { name: '--card', rgb: '255 255 255', label: 'Card', desc: 'Card/panel backgrounds' },
   { name: '--card-foreground', rgb: '25 22 36', label: 'Card FG', desc: 'Text on cards' },
   { name: '--primary', rgb: '124 82 196', label: 'Primary', desc: 'Buttons, links, active' },
-  { name: '--primary-foreground', rgb: '250 248 255', label: 'Primary FG', desc: 'Text on primary' },
+  {
+    name: '--primary-foreground',
+    rgb: '250 248 255',
+    label: 'Primary FG',
+    desc: 'Text on primary',
+  },
   { name: '--secondary', rgb: '237 232 248', label: 'Secondary', desc: 'Secondary backgrounds' },
-  { name: '--secondary-foreground', rgb: '42 37 55', label: 'Secondary FG', desc: 'Text on secondary' },
+  {
+    name: '--secondary-foreground',
+    rgb: '42 37 55',
+    label: 'Secondary FG',
+    desc: 'Text on secondary',
+  },
   { name: '--muted', rgb: '244 242 248', label: 'Muted', desc: 'Subtle backgrounds' },
-  { name: '--muted-foreground', rgb: '130 122 150', label: 'Muted FG', desc: 'Captions, secondary' },
+  {
+    name: '--muted-foreground',
+    rgb: '130 122 150',
+    label: 'Muted FG',
+    desc: 'Captions, secondary',
+  },
   { name: '--accent', rgb: '236 145 95', label: 'Accent', desc: 'Highlights, warnings' },
   { name: '--accent-foreground', rgb: '250 248 255', label: 'Accent FG', desc: 'Text on accent' },
   { name: '--border', rgb: '228 224 242', label: 'Border', desc: 'Borders, dividers' },
@@ -50,9 +65,19 @@ const darkColors = [
   { name: '--primary', rgb: '192 170 244', label: 'Primary', desc: 'Lilac primary' },
   { name: '--primary-foreground', rgb: '25 22 36', label: 'Primary FG', desc: 'Text on primary' },
   { name: '--secondary', rgb: '50 44 68', label: 'Secondary', desc: 'Secondary backgrounds' },
-  { name: '--secondary-foreground', rgb: '238 234 248', label: 'Secondary FG', desc: 'Text on secondary' },
+  {
+    name: '--secondary-foreground',
+    rgb: '238 234 248',
+    label: 'Secondary FG',
+    desc: 'Text on secondary',
+  },
   { name: '--muted', rgb: '38 34 52', label: 'Muted', desc: 'Subtle backgrounds' },
-  { name: '--muted-foreground', rgb: '150 140 172', label: 'Muted FG', desc: 'Captions, secondary' },
+  {
+    name: '--muted-foreground',
+    rgb: '150 140 172',
+    label: 'Muted FG',
+    desc: 'Captions, secondary',
+  },
   { name: '--accent', rgb: '240 176 130', label: 'Accent', desc: 'Warm peach accent' },
   { name: '--accent-foreground', rgb: '25 22 36', label: 'Accent FG', desc: 'Text on accent' },
   { name: '--border', rgb: '52 46 72', label: 'Border', desc: 'Borders, dividers' },
@@ -74,13 +99,55 @@ const accentThemes = [
 ] as const
 
 const typographyScale = [
-  { role: 'Page Title', class: 'text-2xl md:text-3xl font-semibold', sample: 'Noir Violet', font: 'font-[family-name:var(--font-rubik)]', weight: '600' },
-  { role: 'Section Title', class: 'text-[11px] font-medium', sample: 'Design System', font: 'font-[family-name:var(--font-rubik)]', weight: '500' },
-  { role: 'Body', class: 'text-sm', sample: 'Warm, sophisticated, technical.', font: 'font-[family-name:var(--font-rubik)]', weight: '400' },
-  { role: 'Caption', class: 'text-xs text-muted-foreground', sample: 'Last updated 2 minutes ago', font: 'font-[family-name:var(--font-rubik)]', weight: '400' },
-  { role: 'Label', class: 'text-xs font-medium uppercase tracking-wider', sample: 'STATUS', font: 'font-[family-name:var(--font-rubik)]', weight: '500' },
-  { role: 'Badge', class: 'text-[10px] font-medium', sample: 'Active', font: 'font-[family-name:var(--font-rubik)]', weight: '500' },
-  { role: 'Mono', class: 'font-mono text-xs', sample: 'rgb(124, 82, 196)', font: 'font-[family-name:var(--font-jetbrains-mono)]', weight: '400' },
+  {
+    role: 'Page Title',
+    class: 'text-2xl md:text-3xl font-semibold',
+    sample: 'Noir Violet',
+    font: 'font-[family-name:var(--font-rubik)]',
+    weight: '600',
+  },
+  {
+    role: 'Section Title',
+    class: 'text-[11px] font-medium',
+    sample: 'Design System',
+    font: 'font-[family-name:var(--font-rubik)]',
+    weight: '500',
+  },
+  {
+    role: 'Body',
+    class: 'text-sm',
+    sample: 'Warm, sophisticated, technical.',
+    font: 'font-[family-name:var(--font-rubik)]',
+    weight: '400',
+  },
+  {
+    role: 'Caption',
+    class: 'text-xs text-muted-foreground',
+    sample: 'Last updated 2 minutes ago',
+    font: 'font-[family-name:var(--font-rubik)]',
+    weight: '400',
+  },
+  {
+    role: 'Label',
+    class: 'text-xs font-medium uppercase tracking-wider',
+    sample: 'STATUS',
+    font: 'font-[family-name:var(--font-rubik)]',
+    weight: '500',
+  },
+  {
+    role: 'Badge',
+    class: 'text-[10px] font-medium',
+    sample: 'Active',
+    font: 'font-[family-name:var(--font-rubik)]',
+    weight: '500',
+  },
+  {
+    role: 'Mono',
+    class: 'font-mono text-xs',
+    sample: 'rgb(var(--primary))',
+    font: 'font-[family-name:var(--font-jetbrains-mono)]',
+    weight: '400',
+  },
 ] as const
 
 const spacingScale = [
@@ -123,7 +190,10 @@ function Swatch({
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div
-        className={cn(sizeClasses[size], 'border border-border/40 shadow-sm transition-transform hover:scale-110')}
+        className={cn(
+          sizeClasses[size],
+          'border border-border/40 shadow-sm transition-transform hover:scale-110',
+        )}
         style={{ backgroundColor: `rgb(${rgb})` }}
         role="img"
         aria-label={`${label}: rgb(${rgb})`}
@@ -199,14 +269,14 @@ export default function MagazinePage() {
             <div className="flex justify-center">
               <div
                 className="h-20 w-20 rounded-xl shadow-lg transition-transform hover:scale-105"
-                style={{ backgroundColor: 'rgb(124, 82, 196)' }}
+                style={{ backgroundColor: 'rgb(var(--primary))' }}
                 role="img"
                 aria-label="Primary violet color swatch"
               />
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-                <span style={{ color: 'rgb(124, 82, 196)' }}>Noir</span>{' '}
+                <span style={{ color: 'rgb(var(--primary))' }}>Noir</span>{' '}
                 <span style={{ color: 'rgb(var(--foreground))' }}>Violet</span>
               </h1>
               <p className="mt-2 text-sm" style={{ color: 'rgb(var(--muted-foreground))' }}>
@@ -219,14 +289,17 @@ export default function MagazinePage() {
               <Badge
                 variant="outline"
                 style={{
-                  borderColor: 'rgb(236, 145, 95)',
-                  color: 'rgb(236, 145, 95)',
+                  borderColor: 'rgb(var(--accent))',
+                  color: 'rgb(var(--accent))',
                 }}
               >
                 Accent: Terracotta
               </Badge>
             </div>
-            <p className="mx-auto max-w-md text-xs" style={{ color: 'rgb(var(--muted-foreground))' }}>
+            <p
+              className="mx-auto max-w-md text-xs"
+              style={{ color: 'rgb(var(--muted-foreground))' }}
+            >
               A calm confidence. Not sterile, not playful. A tool that respects its user.
             </p>
           </div>
@@ -274,18 +347,17 @@ export default function MagazinePage() {
           <CardContent className="pt-2.5 px-2.5 pb-2.5">
             <div className="space-y-4">
               {typographyScale.map((t) => (
-                <div key={t.role} className="flex flex-col gap-1 border-b border-border/40 pb-3 last:border-0 last:pb-0">
+                <div
+                  key={t.role}
+                  className="flex flex-col gap-1 border-b border-border/40 pb-3 last:border-0 last:pb-0"
+                >
                   <div className="flex items-baseline justify-between">
                     <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                       {t.role}
                     </span>
-                    <span className="font-mono text-[10px] text-muted-foreground">
-                      {t.class}
-                    </span>
+                    <span className="font-mono text-[10px] text-muted-foreground">{t.class}</span>
                   </div>
-                  <p className={cn(t.class, t.font)}>
-                    {t.sample}
-                  </p>
+                  <p className={cn(t.class, t.font)}>{t.sample}</p>
                 </div>
               ))}
             </div>
@@ -300,28 +372,38 @@ export default function MagazinePage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between border-b border-border/40 pb-2">
                 <div>
-                  <div className="text-sm font-medium" style={{ fontFamily: 'var(--font-rubik), system-ui, sans-serif' }}>
+                  <div
+                    className="text-sm font-medium"
+                    style={{ fontFamily: 'var(--font-rubik), system-ui, sans-serif' }}
+                  >
                     Rubik
                   </div>
-                  <div className="text-xs text-muted-foreground">Body text &mdash; system-ui fallback</div>
+                  <div className="text-xs text-muted-foreground">
+                    Body text &mdash; system-ui fallback
+                  </div>
                 </div>
                 <Badge variant="secondary">--font-rubik</Badge>
               </div>
               <div className="flex items-center justify-between border-b border-border/40 pb-2">
                 <div>
-                  <div className="text-sm font-medium" style={{ fontFamily: 'var(--font-lato), system-ui, sans-serif' }}>
+                  <div
+                    className="text-sm font-medium"
+                    style={{ fontFamily: 'var(--font-lato), system-ui, sans-serif' }}
+                  >
                     Lato
                   </div>
-                  <div className="text-xs text-muted-foreground">Numeric data &mdash; system-ui fallback</div>
+                  <div className="text-xs text-muted-foreground">
+                    Numeric data &mdash; system-ui fallback
+                  </div>
                 </div>
                 <Badge variant="secondary">--font-lato</Badge>
               </div>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="font-mono text-sm font-medium">
-                    JetBrains Mono
+                  <div className="font-mono text-sm font-medium">JetBrains Mono</div>
+                  <div className="text-xs text-muted-foreground">
+                    Code &mdash; ui-monospace fallback
                   </div>
-                  <div className="text-xs text-muted-foreground">Code &mdash; ui-monospace fallback</div>
                 </div>
                 <Badge variant="secondary">--font-jetbrains-mono</Badge>
               </div>
@@ -345,20 +427,35 @@ export default function MagazinePage() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Button size="sm">Primary</Button>
-                <Button size="sm" variant="secondary">Secondary</Button>
-                <Button size="sm" variant="destructive">Destructive</Button>
-                <Button size="sm" variant="outline">Outline</Button>
-                <Button size="sm" variant="ghost">Ghost</Button>
-                <Button size="sm" variant="link">Link</Button>
+                <Button size="sm" variant="secondary">
+                  Secondary
+                </Button>
+                <Button size="sm" variant="destructive">
+                  Destructive
+                </Button>
+                <Button size="sm" variant="outline">
+                  Outline
+                </Button>
+                <Button size="sm" variant="ghost">
+                  Ghost
+                </Button>
+                <Button size="sm" variant="link">
+                  Link
+                </Button>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button size="sm" disabled>Disabled</Button>
-                <Button size="sm" variant="outline" disabled>Disabled</Button>
+                <Button size="sm" disabled>
+                  Disabled
+                </Button>
+                <Button size="sm" variant="outline" disabled>
+                  Disabled
+                </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                All buttons use <code className="font-mono text-[10px] bg-muted px-1 rounded">h-9</code> default,{' '}
-                <code className="font-mono text-[10px] bg-muted px-1 rounded">h-11</code> for primary CTAs.
-                Touch target minimum: 24x24px.
+                All buttons use{' '}
+                <code className="font-mono text-[10px] bg-muted px-1 rounded">h-9</code> default,{' '}
+                <code className="font-mono text-[10px] bg-muted px-1 rounded">h-11</code> for
+                primary CTAs. Touch target minimum: 24x24px.
               </p>
             </div>
           </CardContent>
@@ -436,15 +533,21 @@ export default function MagazinePage() {
           <CardContent className="px-2.5 pb-2.5">
             <div className="grid gap-1.5 sm:grid-cols-3">
               <div className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 shadow-sm">
-                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shadow SM</div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Shadow SM
+                </div>
                 <div className="mt-1 text-sm">Subtle elevation for cards at rest.</div>
               </div>
               <div className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 shadow-md">
-                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shadow MD</div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Shadow MD
+                </div>
                 <div className="mt-1 text-sm">Hover states, dropdowns.</div>
               </div>
               <div className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 shadow-lg">
-                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Shadow LG</div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Shadow LG
+                </div>
                 <div className="mt-1 text-sm">Modals, popovers.</div>
               </div>
             </div>
@@ -466,7 +569,9 @@ export default function MagazinePage() {
             <div className="space-y-3">
               {spacingScale.map((s) => (
                 <div key={s.token} className="flex items-center gap-3">
-                  <span className="w-16 shrink-0 font-mono text-[10px] text-muted-foreground">{s.token}</span>
+                  <span className="w-16 shrink-0 font-mono text-[10px] text-muted-foreground">
+                    {s.token}
+                  </span>
                   <div className={cn('flex', s.class)}>
                     <div
                       className="h-6 rounded-sm"
@@ -547,15 +652,31 @@ export default function MagazinePage() {
           <CardContent className="px-2.5 pb-2.5">
             <div className="flex flex-wrap items-center gap-3">
               <Button size="sm">Default</Button>
-              <Button size="sm" className="bg-primary/90">Hover</Button>
-              <Button size="sm" className="ring-2 ring-ring ring-offset-2">Focus</Button>
-              <Button size="sm" className="active:scale-[0.98]">Active</Button>
-              <Button size="sm" disabled className="opacity-40 pointer-events-none">Disabled</Button>
+              <Button size="sm" className="bg-primary/90">
+                Hover
+              </Button>
+              <Button size="sm" className="ring-2 ring-ring ring-offset-2">
+                Focus
+              </Button>
+              <Button size="sm" className="active:scale-[0.98]">
+                Active
+              </Button>
+              <Button size="sm" disabled className="opacity-40 pointer-events-none">
+                Disabled
+              </Button>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              Focus: <code className="font-mono text-[10px] bg-muted px-1 rounded">ring-2 ring-ring ring-offset-2</code>.
-              Active: <code className="font-mono text-[10px] bg-muted px-1 rounded">scale-[0.98]</code> press feedback.
-              Disabled: <code className="font-mono text-[10px] bg-muted px-1 rounded">opacity-40 pointer-events-none</code>.
+              Focus:{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">
+                ring-2 ring-ring ring-offset-2
+              </code>
+              . Active:{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">scale-[0.98]</code>{' '}
+              press feedback. Disabled:{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">
+                opacity-40 pointer-events-none
+              </code>
+              .
             </p>
           </CardContent>
         </Card>
@@ -572,17 +693,23 @@ export default function MagazinePage() {
                   'rounded-md border p-4 text-left text-sm transition-all duration-200',
                   'hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5',
                   'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                  interactiveHover ? 'border-primary/50 shadow-md -translate-y-0.5' : 'border-border'
+                  interactiveHover
+                    ? 'border-primary/50 shadow-md -translate-y-0.5'
+                    : 'border-border',
                 )}
                 onMouseEnter={() => setInteractiveHover(true)}
                 onMouseLeave={() => setInteractiveHover(false)}
                 aria-label="Hoverable card demo"
               >
-                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Hover Me</div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Hover Me
+                </div>
                 <div className="mt-1">Hover card with elevation change.</div>
               </button>
               <div className="rounded-md border border-border p-4">
-                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Focus Ring</div>
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                  Focus Ring
+                </div>
                 <div className="mt-2">
                   <Input
                     placeholder="Tab here to see focus ring..."
@@ -687,10 +814,12 @@ export default function MagazinePage() {
         <Card className="magazine-card">
           <CardContent className="pt-2.5 px-2.5 pb-2.5">
             <p className="mb-4 text-xs text-muted-foreground">
-              Seven accent auras override <code className="font-mono text-[10px] bg-muted px-1 rounded">--primary</code>,{' '}
+              Seven accent auras override{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">--primary</code>,{' '}
               <code className="font-mono text-[10px] bg-muted px-1 rounded">--secondary</code>,{' '}
               <code className="font-mono text-[10px] bg-muted px-1 rounded">--muted</code>, and{' '}
-              <code className="font-mono text-[10px] bg-muted px-1 rounded">--border</code> via CSS class on{' '}
+              <code className="font-mono text-[10px] bg-muted px-1 rounded">--border</code> via CSS
+              class on{' '}
               <code className="font-mono text-[10px] bg-muted px-1 rounded">&lt;html&gt;</code>.
             </p>
             <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7">
@@ -719,9 +848,7 @@ export default function MagazinePage() {
                   />
                   <div className="min-w-0">
                     <div className="text-xs font-medium">{t.label}</div>
-                    <div className="font-mono text-[10px] text-muted-foreground">
-                      {t.desc}
-                    </div>
+                    <div className="font-mono text-[10px] text-muted-foreground">{t.desc}</div>
                   </div>
                   <Button
                     size="sm"

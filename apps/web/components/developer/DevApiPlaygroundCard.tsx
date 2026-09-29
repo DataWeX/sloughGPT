@@ -31,11 +31,11 @@ function saveHistory(entries: HistoryEntry[]) {
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
 
 const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-[#28c840]/10 text-[#28c840] border-[#28c840]/20',
-  POST: 'bg-[#febc2e]/10 text-[#febc2e] border-[#febc2e]/20',
-  PUT: 'bg-[#5ac8fa]/10 text-[#5ac8fa] border-[#5ac8fa]/20',
-  PATCH: 'bg-[#bf5af2]/10 text-[#bf5af2] border-[#bf5af2]/20',
-  DELETE: 'bg-[#ff5f57]/10 text-[#ff5f57] border-[#ff5f57]/20',
+  GET: 'bg-success/10 text-success border-success/20',
+  POST: 'bg-warning/10 text-warning border-warning/20',
+  PUT: 'bg-info/10 text-info border-info/20',
+  PATCH: 'bg-primary/10 text-primary border-primary/20',
+  DELETE: 'bg-destructive/10 text-destructive border-destructive/20',
 }
 
 export function DevApiPlaygroundCard() {
@@ -65,7 +65,12 @@ export function DevApiPlaygroundCard() {
       if (authHeader.trim()) {
         headers['Authorization'] = authHeader.trim()
       }
-      const res = await authFetch(`${baseUrl}${path}`, { method, headers, body: body && method !== 'GET' ? body : undefined, noAuth: true })
+      const res = await authFetch(`${baseUrl}${path}`, {
+        method,
+        headers,
+        body: body && method !== 'GET' ? body : undefined,
+        noAuth: true,
+      })
       const elapsed = Date.now() - start
       setResponseStatus(res.status)
       setResponseTime(elapsed)
@@ -110,30 +115,36 @@ export function DevApiPlaygroundCard() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-        <div className="flex items-center h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-          <span className="text-[11px] font-medium text-[#8e8e93]">API Playground</span>
+      <div className="rounded-xl border border-white/[0.06] bg-background overflow-hidden">
+        <div className="flex items-center h-11 px-4 bg-muted border-b border-white/[0.06]">
+          <span className="text-[11px] font-medium text-muted-foreground">API Playground</span>
         </div>
         <div className="px-4 py-3 space-y-3">
           <div className="flex gap-2">
             <select
               value={method}
-              onChange={e => setMethod(e.target.value)}
+              onChange={(e) => setMethod(e.target.value)}
               className={cn(
-                'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-[#111111] outline-none',
-                METHOD_COLORS[method] ?? 'border-white/[0.06] text-[#c7c7cc]',
+                'h-8 rounded-lg border px-2.5 text-[11px] font-mono font-medium bg-background outline-none',
+                METHOD_COLORS[method] ?? 'border-white/[0.06] text-foreground',
               )}
               aria-label="HTTP method"
             >
-              {METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+              {METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
             </select>
             <input
               value={path}
-              onChange={e => setPath(e.target.value)}
+              onChange={(e) => setPath(e.target.value)}
               placeholder="/endpoint"
-              className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[12px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
+              className="flex-1 h-8 rounded-lg border border-white/[0.06] bg-background px-3 text-[12px] font-mono text-foreground placeholder:text-muted-foreground outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request path"
-              onKeyDown={e => { if (e.key === 'Enter') handleSend() }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSend()
+              }}
             />
             <button
               type="button"
@@ -142,8 +153,8 @@ export function DevApiPlaygroundCard() {
               className={cn(
                 'h-8 px-4 rounded-lg text-[11px] font-medium transition-all duration-200',
                 loading || !path.trim()
-                  ? 'bg-[#0a7aff]/20 text-[#0a7aff]/40 cursor-not-allowed'
-                  : 'bg-[#0a7aff]/10 text-[#0a7aff] hover:bg-[#0a7aff]/20',
+                  ? 'bg-primary/20 text-primary/40 cursor-not-allowed'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20',
               )}
             >
               {loading ? 'Sending...' : 'Send'}
@@ -152,18 +163,18 @@ export function DevApiPlaygroundCard() {
 
           <input
             value={authHeader}
-            onChange={e => setAuthHeader(e.target.value)}
+            onChange={(e) => setAuthHeader(e.target.value)}
             placeholder="Authorization: Bearer <token>"
-            className="w-full h-8 rounded-lg border border-white/[0.06] bg-[#111111] px-3 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] outline-none focus:border-white/[0.12] transition-colors"
+            className="w-full h-8 rounded-lg border border-white/[0.06] bg-background px-3 text-[11px] font-mono text-foreground placeholder:text-muted-foreground outline-none focus:border-white/[0.12] transition-colors"
             aria-label="Authorization header"
           />
 
           {method !== 'GET' && (
             <textarea
               value={body}
-              onChange={e => setBody(e.target.value)}
+              onChange={(e) => setBody(e.target.value)}
               placeholder='{"key": "value"}'
-              className="w-full h-24 rounded-lg border border-white/[0.06] bg-[#111111] px-3 py-2 text-[11px] font-mono text-[#c7c7cc] placeholder:text-[#48484a] resize-none outline-none focus:border-white/[0.12] transition-colors"
+              className="w-full h-24 rounded-lg border border-white/[0.06] bg-background px-3 py-2 text-[11px] font-mono text-foreground placeholder:text-muted-foreground resize-none outline-none focus:border-white/[0.12] transition-colors"
               aria-label="Request body"
             />
           )}
@@ -171,18 +182,23 @@ export function DevApiPlaygroundCard() {
           {response !== null && (
             <div className="space-y-2">
               <div className="flex items-center gap-3 text-[11px]">
-                <span className={cn(
-                  'font-mono font-medium',
-                  responseStatus && responseStatus >= 200 && responseStatus < 300 ? 'text-[#28c840]' :
-                  responseStatus && responseStatus >= 400 ? 'text-[#ff5f57]' : 'text-[#636366]',
-                )}>
+                <span
+                  className={cn(
+                    'font-mono font-medium',
+                    responseStatus && responseStatus >= 200 && responseStatus < 300
+                      ? 'text-success'
+                      : responseStatus && responseStatus >= 400
+                        ? 'text-destructive'
+                        : 'text-muted-foreground',
+                  )}
+                >
                   {responseStatus}
                 </span>
                 {responseTime != null && (
-                  <span className="text-[#636366] font-mono">{responseTime}ms</span>
+                  <span className="text-muted-foreground font-mono">{responseTime}ms</span>
                 )}
               </div>
-              <pre className="rounded-xl border border-white/[0.04] bg-[#111111] p-3.5 text-[11px] font-mono text-[#c7c7cc] overflow-auto max-h-96 whitespace-pre-wrap leading-relaxed">
+              <pre className="rounded-xl border border-white/[0.04] bg-background p-3.5 text-[11px] font-mono text-foreground overflow-auto max-h-96 whitespace-pre-wrap leading-relaxed">
                 {response}
               </pre>
             </div>
@@ -191,13 +207,13 @@ export function DevApiPlaygroundCard() {
       </div>
 
       {history.length > 0 && (
-        <div className="rounded-xl border border-white/[0.06] bg-[#0a0a0a] overflow-hidden">
-          <div className="flex items-center justify-between h-11 px-4 bg-[#1c1c1e] border-b border-white/[0.06]">
-            <span className="text-[11px] font-medium text-[#8e8e93]">Request History</span>
+        <div className="rounded-xl border border-white/[0.06] bg-background overflow-hidden">
+          <div className="flex items-center justify-between h-11 px-4 bg-muted border-b border-white/[0.06]">
+            <span className="text-[11px] font-medium text-muted-foreground">Request History</span>
             <button
               type="button"
               onClick={clearHistory}
-              className="text-[10px] text-[#ff5f57]/60 hover:text-[#ff5f57] transition-colors"
+              className="text-[10px] text-destructive/60 hover:text-destructive transition-colors"
             >
               Clear
             </button>
@@ -213,16 +229,23 @@ export function DevApiPlaygroundCard() {
                   i > 0 && 'border-t border-white/[0.03]',
                 )}
               >
-                <span className={cn(
-                  'font-mono font-medium w-10 shrink-0',
-                  entry.status >= 200 && entry.status < 300 ? 'text-[#28c840]' :
-                  entry.status >= 400 ? 'text-[#ff5f57]' : 'text-[#636366]',
-                )}>
+                <span
+                  className={cn(
+                    'font-mono font-medium w-10 shrink-0',
+                    entry.status >= 200 && entry.status < 300
+                      ? 'text-success'
+                      : entry.status >= 400
+                        ? 'text-destructive'
+                        : 'text-muted-foreground',
+                  )}
+                >
                   {entry.status || 'ERR'}
                 </span>
-                <span className="font-mono text-[#48484a] w-12 shrink-0">{entry.method}</span>
-                <span className="font-mono text-[#c7c7cc] truncate flex-1">{entry.path}</span>
-                <span className="text-[#636366] shrink-0 font-mono">{entry.timeMs}ms</span>
+                <span className="font-mono text-muted-foreground w-12 shrink-0">
+                  {entry.method}
+                </span>
+                <span className="font-mono text-foreground truncate flex-1">{entry.path}</span>
+                <span className="text-muted-foreground shrink-0 font-mono">{entry.timeMs}ms</span>
               </button>
             ))}
           </div>

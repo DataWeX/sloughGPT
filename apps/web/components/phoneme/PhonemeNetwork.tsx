@@ -20,17 +20,32 @@ interface PhonemeEdge {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  Vowels: '#eab308',
-  Stops: '#3b82f6',
-  Fricatives: '#a855f7',
-  Affricates: '#ec4899',
-  Nasals: '#22c55e',
-  Liquids: '#f97316',
-  Glides: '#06b6d4',
+  Vowels: 'rgb(var(--chart-3))',
+  Stops: 'rgb(var(--chart-4))',
+  Fricatives: 'rgb(var(--chart-1))',
+  Affricates: 'rgb(var(--chart-5))',
+  Nasals: 'rgb(var(--chart-2))',
+  Liquids: 'rgb(var(--accent))',
+  Glides: 'rgb(var(--info))',
 }
 
 function getPhonemeCategory(phoneme: string): string {
-  const vowels = ['IY', 'IH', 'EY', 'EH', 'AE', 'AA', 'AH', 'AO', 'OW', 'OY', 'UH', 'UW', 'ER', 'AX']
+  const vowels = [
+    'IY',
+    'IH',
+    'EY',
+    'EH',
+    'AE',
+    'AA',
+    'AH',
+    'AO',
+    'OW',
+    'OY',
+    'UH',
+    'UW',
+    'ER',
+    'AX',
+  ]
   const stops = ['P', 'B', 'T', 'D', 'K', 'G']
   const fricatives = ['F', 'V', 'TH', 'DH', 'S', 'Z', 'SH', 'ZH', 'HH']
   const nasals = ['M', 'N', 'NG']
@@ -49,7 +64,7 @@ function getPhonemeCategory(phoneme: string): string {
 }
 
 export default function PhonemeNetwork() {
-  const history = usePhonemeStore(s => s.history)
+  const history = usePhonemeStore((s) => s.history)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
 
   const { nodes, edges } = useMemo(() => {
@@ -58,7 +73,7 @@ export default function PhonemeNetwork() {
     const phonemeStats: Record<string, { total: number; correct: number }> = {}
     const bigramCounts: Record<string, number> = {}
 
-    history.forEach(entry => {
+    history.forEach((entry) => {
       const phonemes = entry.targetPhonemes
       phonemes.forEach((p, i) => {
         if (!phonemeStats[p]) phonemeStats[p] = { total: 0, correct: 0 }
@@ -81,7 +96,7 @@ export default function PhonemeNetwork() {
         accuracy: stats.correct / stats.total,
         category: getPhonemeCategory(phoneme),
       }))
-      .filter(n => n.count >= 2)
+      .filter((n) => n.count >= 2)
       .sort((a, b) => b.count - a.count)
 
     const edges: PhonemeEdge[] = Object.entries(bigramCounts)
@@ -89,7 +104,7 @@ export default function PhonemeNetwork() {
         const [from, to] = key.split('-')
         return { from, to, count }
       })
-      .filter(e => e.count >= 2)
+      .filter((e) => e.count >= 2)
       .sort((a, b) => b.count - a.count)
       .slice(0, 20)
 
@@ -97,13 +112,14 @@ export default function PhonemeNetwork() {
   }, [history])
 
   const filteredNodes = selectedCategory
-    ? nodes.filter(n => n.category === selectedCategory)
+    ? nodes.filter((n) => n.category === selectedCategory)
     : nodes
 
   const filteredEdges = selectedCategory
-    ? edges.filter(e =>
-        filteredNodes.some(n => n.phoneme === e.from) &&
-        filteredNodes.some(n => n.phoneme === e.to)
+    ? edges.filter(
+        (e) =>
+          filteredNodes.some((n) => n.phoneme === e.from) &&
+          filteredNodes.some((n) => n.phoneme === e.to),
       )
     : edges
 
@@ -122,14 +138,16 @@ export default function PhonemeNetwork() {
     )
   }
 
-  const categories = [...new Set(nodes.map(n => n.category))]
+  const categories = [...new Set(nodes.map((n) => n.category))]
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
           <span>Phoneme Network</span>
-          <Badge variant="outline">{nodes.length} nodes, {edges.length} connections</Badge>
+          <Badge variant="outline">
+            {nodes.length} nodes, {edges.length} connections
+          </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -141,7 +159,7 @@ export default function PhonemeNetwork() {
           >
             All
           </Badge>
-          {categories.map(cat => (
+          {categories.map((cat) => (
             <Badge
               key={cat}
               variant={selectedCategory === cat ? 'default' : 'outline'}
@@ -155,7 +173,7 @@ export default function PhonemeNetwork() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {filteredNodes.slice(0, 12).map(node => (
+          {filteredNodes.slice(0, 12).map((node) => (
             <div
               key={node.phoneme}
               className="p-2 rounded-lg border text-center"
@@ -185,9 +203,13 @@ export default function PhonemeNetwork() {
             <div className="space-y-1">
               {filteredEdges.slice(0, 8).map((edge, i) => (
                 <div key={`${edge.from}-${edge.to}`} className="flex items-center gap-2 text-xs">
-                  <Badge variant="outline" className="font-mono w-10 justify-center">{edge.from}</Badge>
+                  <Badge variant="outline" className="font-mono w-10 justify-center">
+                    {edge.from}
+                  </Badge>
                   <span className="text-muted-foreground">→</span>
-                  <Badge variant="outline" className="font-mono w-10 justify-center">{edge.to}</Badge>
+                  <Badge variant="outline" className="font-mono w-10 justify-center">
+                    {edge.to}
+                  </Badge>
                   <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full bg-primary"

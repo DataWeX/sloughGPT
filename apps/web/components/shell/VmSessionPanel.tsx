@@ -113,7 +113,7 @@ export function VmSessionPanel({ className, role }: VmSessionPanelProps) {
       <pre
         ref={scrollRef}
         data-testid="vm-console-output"
-        className="flex-1 overflow-y-auto whitespace-pre-wrap break-words bg-black px-3 py-2 font-mono text-[12px] leading-[1.6] text-[#c7c7cc]"
+        className="flex-1 overflow-y-auto whitespace-pre-wrap break-words bg-black px-3 py-2 font-mono text-[12px] leading-[1.6] text-foreground"
         aria-live="polite"
       >
         {output || ''}
@@ -143,7 +143,7 @@ export function VmSessionPanel({ className, role }: VmSessionPanelProps) {
         onSubmit={onSubmit}
         className="flex items-center gap-2 border-t border-border px-3 py-2"
       >
-        <span className="font-mono text-[12px] text-[#28c840] select-none" aria-hidden="true">
+        <span className="font-mono text-[12px] text-success select-none" aria-hidden="true">
           $
         </span>
         <input
