@@ -105,7 +105,7 @@ class TestLifecycle:
 class TestTailOutput:
     """GET /system/output"""
 
-    @patch("domain.infrastructure.get_server_buffer")
+    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
     def test_returns_output_lines(self, mock_get_buf, client):
         buf = MagicMock()
         buf.tail_dicts.return_value = []
@@ -118,7 +118,7 @@ class TestTailOutput:
         assert "lines" in data
         assert "size" in data
 
-    @patch("domain.infrastructure.get_server_buffer")
+    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
     def test_lists_actual_lines(self, mock_get_buf, client):
         buf = MagicMock()
         buf.tail_dicts.return_value = [{"text": "hello", "level": "info", "ts": 1.0}]
@@ -251,7 +251,7 @@ class TestOutputStream:
 
         return FakeSub(lines)
 
-    @patch("domain.infrastructure.get_server_buffer")
+    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
     def test_stream_emits_history_then_exits(self, mock_get_buf, client):
         from unittest.mock import AsyncMock
 
@@ -272,7 +272,7 @@ class TestOutputStream:
                 body = resp.read().decode()
                 assert '{"text": "boot"}' in body
 
-    @patch("domain.infrastructure.get_server_buffer")
+    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
     def test_stream_pushes_live_lines(self, mock_get_buf, client):
         from unittest.mock import AsyncMock
 
@@ -290,7 +290,7 @@ class TestOutputStream:
                 body = resp.read().decode()
                 assert '{"text": "live"}' in body
 
-    @patch("domain.infrastructure.get_server_buffer")
+    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
     def test_stream_unsubscribes_on_close(self, mock_get_buf, client):
         from unittest.mock import AsyncMock
 
