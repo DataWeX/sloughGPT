@@ -4,7 +4,7 @@
 
 ### 1. Install
 ```bash
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone git@github.com:DataWeX/sloughGPT.git
 cd sloughGPT
 python3 -m pip install torch transformers fastapi uvicorn pydantic pytest
 # Editable install + dev tools (ruff, pytest, …) and the ``sloughgpt`` console script
@@ -24,7 +24,7 @@ python3 -m pip install -e ".[dev]"
 
 ### 2. Quick Training (CLI)
 ```bash
-./sloughgpt quick --steps 100 --prompt "Hello world"
+./sloughgpt train quick --steps 100 --prompt "Hello world"
 ```
 
 ### 3. Start API Server
@@ -35,7 +35,7 @@ python3 apps/api/server/main.py
 
 **Web UI** (another terminal): `cd apps/web && npm install && npm run dev` → http://localhost:3000
 
-**API + web together** (one terminal; Ctrl+C stops both): `./scripts/dev-stack.sh`, `make dev-stack`, or **`npm install` at repo root once then `npm run dev:stack`** (auto-restarts on crash; same processes as the shell script).
+**API + web together** (one terminal; Ctrl+C stops both): `./scripts/dev-stack.sh`, `make stack`, or **`npm install` at repo root once then `npm run dev:stack`** (auto-restarts on crash; same processes as the shell script).
 
 **Root `package.json` contract test** (optional): **`npm run test:repo-root`** (after `npm install` at repo root), **`make test-repo-root`**, or **`python3 -m pytest tests/test_repo_root_package_json.py -q`**.
 
@@ -55,20 +55,20 @@ curl -s -X POST http://localhost:8000/models/load \
 ### Training
 ```bash
 # Quick train + generate (auto-optimized)
-./sloughgpt quick --steps 100 --prompt "The future is"
+./sloughgpt train quick --steps 100 --prompt "The future is"
 
 # Custom model config
-./sloughgpt quick --epochs 3 --batch 64 --embed 256 --layers 6
+./sloughgpt train quick --epochs 3 --batch 64 --embed 256 --layers 6
 
 # CPU only (no optimizations)
-./sloughgpt quick --no-optimize
+./sloughgpt train quick --no-optimize
 
-# Full char-level trainer: merges config.yaml with CLI flags (intervals, device, dropout, LoRA, checkpoints, …)
-./sloughgpt train --dataset shakespeare --epochs 3 --checkpoint-dir ckpts
+# Trainers: start (API-backed job), native (in-process), eval (perplexity)
+./sloughgpt train start --dataset shakespeare --epochs 3
 # Module entrypoint (no config.yaml merge; --dropout / --lora-alpha on main): python3 -m domain.training._internal.train_pipeline --data datasets/shakespeare/input.txt --epochs 3
-# API job: ./sloughgpt train --api --dataset shakespeare --epochs 2
+# API job: ./sloughgpt train start --api --dataset shakespeare --epochs 2
 # Char-LM perplexity on held-out text (fair when checkpoint embeds stoi/itos/chars — e.g. sloughgpt train step_*.soul):
-#   ./sloughgpt eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt
+#   ./sloughgpt train eval --checkpoint models/sloughgpt.soul --data datasets/shakespeare/input.txt
 #   python3 -m domain.training._internal.lm_eval_char --checkpoint PATH --data PATH [--json]
 # Weights-only bundles without stoi: eval rebuilds vocab from --data (see eval warning). See docs/policies/CONTRIBUTING.md (Checkpoint vocabulary).
 # Details: apps/cli/README.md
@@ -90,20 +90,20 @@ curl -s -X POST http://localhost:8000/models/load \
 # HuggingFace model
 ./sloughgpt hf-serve gpt2
 
-# Download model
-./sloughgpt hf-download gpt2
+# Download model (interactive picker)
+./sloughgpt model download
 ```
 
 ### Benchmarking
 ```bash
 # Benchmark inference
-./sloughgpt benchmark -m gpt2 -d mps -t latency
+./sloughgpt model benchmark -m gpt2 -d mps -t latency
 
 # Full benchmark suite
-./sloughgpt benchmark -m gpt2 -d mps -t all
+./sloughgpt model benchmark -m gpt2 -d mps -t all
 
 # Check GPU optimizations
-./sloughgpt optimize
+./sloughgpt system optimize
 ```
 
 ### Model Export
@@ -111,12 +111,12 @@ curl -s -X POST http://localhost:8000/models/load \
 Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `itos` the same way as trainer `step_*.soul`; for perplexity parity with training, score the native bundle — **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
 
 ```bash
-# Export a checkpoint on disk (-f / --format; see sloughgpt export --help)
-./sloughgpt export models/sloughgpt.soul -f onnx --seq-len 128
-./sloughgpt export models/sloughgpt.soul -f safetensors
+# Export a checkpoint on disk (-f / --format; see sloughgpt model export --help)
+./sloughgpt model export models/sloughgpt.soul -f onnx --seq-len 128
+./sloughgpt model export models/sloughgpt.soul -f safetensors
 
 # GGUF-style exports support --quantize (Q4_K_M, Q5_K_M, Q8_0, F16, F32)
-./sloughgpt export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M
+./sloughgpt model export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M
 ```
 
 ### System
@@ -132,47 +132,44 @@ Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `
 ./sloughgpt docker logs
 
 # Environment check
-./sloughgpt config check
+./sloughgpt system config
 
 # Configuration validation
-./sloughgpt config validate
+./sloughgpt system config --validate
 
 # Generate secrets
-./sloughgpt config generate --type all
+./sloughgpt system config --generate --type all
 
 # Disk summary (models/, datasets/, checkpoints/, data/experiments/, …)
 ./sloughgpt stats
 
-# One path: line/char stats or validate
-./sloughgpt data stats datasets/shakespeare/input.txt
-./sloughgpt data validate datasets/shakespeare
+# One path: dataset stats or validate
+./sloughgpt dataset stats shakespeare
+./sloughgpt dataset validate
 
 # List datasets
-./sloughgpt datasets
+./sloughgpt dataset list
 
 # List model artifacts under models/ (.soul, .gguf, .safetensors) + HF hints
-./sloughgpt models
+./sloughgpt model list
 
 # Built-in personality presets
-./sloughgpt personalities
+./sloughgpt personality list
 
 # Inspect a checkpoint file (tensor layout)
-./sloughgpt info models/sloughgpt.soul
+./sloughgpt model info models/sloughgpt.soul
 ```
 
 ### API Management
 ```bash
-# Check API status
-./sloughgpt api-status
+# Check status
+./sloughgpt system status
 
-# Test API endpoints
-./sloughgpt api-test
-
-# Test authentication
-./sloughgpt api-auth
+# Test API endpoints or authentication
+./sloughgpt system api
 
 # Compare models
-./sloughgpt compare
+./sloughgpt model compare
 ```
 
 ---
@@ -221,31 +218,17 @@ curl http://localhost:8000/rate-limit/check
 
 ### Caching
 ```bash
-# Cache statistics
-curl http://localhost:8000/cache/stats
-
-# Clear cache
-curl -X DELETE http://localhost:8000/cache
+# Cache usage per model
+curl http://localhost:8000/models/cache-usage
 ```
 
 ### Metrics
 ```bash
 # JSON metrics
-curl http://localhost:8000/metrics
-
-# Prometheus format
-curl http://localhost:8000/metrics/prometheus
+curl http://localhost:8000/system/metrics
 
 # Security audit logs
 curl http://localhost:8000/security/audit
-```
-
-### Batch Processing
-```bash
-# Batch generation (up to 50 prompts)
-curl -X POST http://localhost:8000/inference/batch \
-  -H "Content-Type: application/json" \
-  -d '{"prompts": ["Hello", "Hi"], "max_new_tokens": 20}'
 ```
 
 ### Generate Text
@@ -264,7 +247,7 @@ curl -X POST http://localhost:8000/inference/generate/stream \
 
 ### Training
 
-Native trainer `step_*.soul` on the API host includes `stoi` / `itos` / `chars` for fair `sloughgpt eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
+Native trainer `step_*.soul` on the API host includes `stoi` / `itos` / `chars` for fair `sloughgpt train eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
 
 ```bash
 curl -X POST http://localhost:8000/train \
@@ -298,7 +281,7 @@ curl -X POST http://localhost:8000/benchmark/run \
 
 ### Verify GPU
 ```bash
-./sloughgpt optimize
+./sloughgpt system optimize
 ```
 
 ---
@@ -335,26 +318,18 @@ kubectl get pods -n sloughgpt
 
 # View logs
 kubectl logs -n sloughgpt -l app=sloughgpt-api
-
-# Helm chart (bundled in repo)
-helm install sloughgpt ./infra/k8s/helm/sloughgpt/ -n sloughgpt --create-namespace
 ```
 
 ---
 
 ## Optimization Presets
 
-```python
-from domain.training.optimized_trainer import Presets
+```bash
+# Model size presets (tiny / small / medium / large)
+./sloughgpt train quick --preset small --steps 100
 
-# Auto-detect best settings
-config = Presets.auto()
-
-# Specific hardware
-Presets.high_end_gpu()   # A100, H100, RTX 4090
-Presets.mid_range_gpu()  # RTX 3060, V100
-Presets.apple_silicon()  # M1/M2/M3
-Presets.cpu_only()       # CPU training
+# Hardware flags on all trainers
+./sloughgpt train native --device cpu --tokenizer char ...
 ```
 
 ### Speedup Estimates
@@ -375,8 +350,8 @@ Presets.cpu_only()       # CPU training
 # Add to ~/.zshrc or ~/.bashrc (Intel Mac + some GPU stacks)
 export DYLD_INSERT_LIBRARIES=""
 ```
-- **API server** (`apps/api/server/main.py`): disables MPS by default on macOS via `domain.torch_runtime.apply_api_process_torch_env`. To experiment with MPS inference: `MAN_API_ENABLE_MPS=1` (before `import torch`). Linux/CUDA is no longer forced to CPU.
-- **Training DataLoaders**: `domain.torch_runtime.effective_dataloader_num_workers` clamps workers to `0` on macOS (fork + MPS deadlocks). See `domain/torch_runtime.py` for env vars (`MAN_SKIP_TORCH_ENV`, etc.).
+- **API server**: MPS status is reported from health checks via `domain.infrastructure.mps_monitor`.
+- **Compute**: availability detection lives in `domain/training/_internal/gpu/accelerator.py`; compute runs through the numpy-based torch shim, so Macs train on CPU.
 
 ### Docker not running?
 ```bash
@@ -386,10 +361,10 @@ open -a Docker
 ### Out of memory?
 ```bash
 # Smaller batch size
-./sloughgpt quick --batch 8
+./sloughgpt train quick --batch 8
 
 # Or export a smaller artifact (example: GGUF with 4-bit)
-./sloughgpt export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M
+./sloughgpt model export models/sloughgpt.soul -f gguf_q4_k_m --quantize Q4_K_M
 ```
 
 ---
@@ -398,28 +373,22 @@ open -a Docker
 
 ```
 SloughGPT/
-├── domain/
-│   ├── inference/          # Inference engine
-│   │   ├── engine.py       # Production inference
-│   │   ├── quantization.py  # FP16/INT8/INT4
-│   │   ├── optimizations.py # KV cache, batching
-│   │   └── sou_format.py   # .sou model format
-│   ├── training/            # Training
-│   │   ├── train_pipeline.py
-│   │   ├── optimized_trainer.py  # Optimized training
-│   │   ├── models/nanogpt.py
-│   │   ├── huggingface/     # HuggingFace integration
-│   │   └── scripts/tools/lora.py  # LoRA fine-tuning (utility)
-│   └── ml_infrastructure/  # Infrastructure
-│       ├── benchmarking.py
-│       └── experiment_tracker.py
+├── domain/                 # Core Python (40+ packages)
+│   ├── training/
+│   │   ├── engine.py
+│   │   ├── tokenizer_engine.py
+│   │   └── _internal/
+│   │       └── train_pipeline.py   # Training loop (module entrypoint)
+│   └── inference/
+│       └── _internal/
+│           └── slo_format.py        # .slo/.sou model format
 ├── apps/api/server/main.py  # FastAPI server
 ├── cli.py                    # CLI commands
-├── infra/k8s/               # Kubernetes, Helm, Grafana assets
-├── tests/                   # Unit tests (100+ tests)
-├── datasets/                # Training data
-├── data/                    # Runtime state (experiments, feature store, tuning, vector DB)
+├── infra/k8s/               # Kubernetes + Grafana assets
 ├── infra/docker/docker-compose.yml  # Docker deployment
+├── tests/                   # Test suites (docs/TESTING.md)
+├── datasets/                # Training data (runtime — created by imports/downloads)
+├── data/                    # Runtime state (experiments, feature store, tuning, vector DB)
 └── sloughgpt_colab.ipynb   # Colab notebook
 ```
 
@@ -427,8 +396,8 @@ SloughGPT/
 
 ## Next Steps
 
-1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop or **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → *Google Colab*; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
-2. **Try different datasets**: Shakespeare, **`tiny`** (small on-disk slice), or a path to your own `.txt`
+1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop or **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**README.md** → *Google Colab*; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
+2. **Try different training corpora**: the default `datasets/shakespeare/input.txt` (downloaded/imported on first use) or a path to your own `.txt`
 3. **Explore model architecture**: Section 5 in the notebook
 4. **Deploy with Docker**: See Docker section above
 5. **Read the docs**: `README.md`, `docs/API.md`, `docs/DEVELOPER_GUIDE.md`
@@ -437,7 +406,7 @@ SloughGPT/
 
 ## Links
 
-- **GitHub**: https://github.com/iamtowbee/sloughGPT
+- **GitHub**: https://github.com/DataWeX/sloughGPT
 - **Contributing**: [CONTRIBUTING.md](CONTRIBUTING.md)
 - **Security**: [SECURITY.md](SECURITY.md)
 - **Agents**: [AGENTS.md](AGENTS.md)
