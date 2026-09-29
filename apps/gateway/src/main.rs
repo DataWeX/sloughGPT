@@ -23,9 +23,11 @@ use ratelimit::{RateConfig, RateLimiter, RATE_LIMIT_HEADER_LIMIT, RATE_LIMIT_HEA
 use reqwest::Client;
 use serde::Serialize;
 use std::{
+    fs::{File, OpenOptions},
+    io::Write,
     net::SocketAddr,
-    sync::Arc,
-    time::{Duration, Instant},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::{RwLock, Semaphore};
 use tower_http::{
@@ -78,6 +80,17 @@ struct GatewayConfig {
     policy: PathPolicy,
     rate: RateConfig,
     breaker: BreakerConfig,
+    /// JSONL access log path; empty = off.
+    access_log: String,
+}
+
+/// Unset → `logs/gateway-access.jsonl`; `0` or empty → off.
+fn access_log_from_env() -> String {
+    match std::env::var("MAN_GATEWAY_ACCESS_LOG") {
+        Ok(v) if v.is_empty() || v == "0" => String::new(),
+        Ok(v) => v,
+        Err(_) => "logs/gateway-access.jsonl".into(),
+    }
 }
 
 impl Default for GatewayConfig {
@@ -95,6 +108,7 @@ impl Default for GatewayConfig {
             policy: PathPolicy::from_env(),
             rate: RateConfig::from_env(),
             breaker: BreakerConfig::from_env(),
+            access_log: access_log_from_env(),
         }
     }
 }
@@ -110,6 +124,29 @@ struct AppState {
     streams: Arc<Semaphore>,
     stats: Arc<EdgeStats>,
     breaker: Arc<CircuitBreaker>,
+    /// Append-only JSONL access log; `None` when disabled or unopenable.
+    /// Arc'd so `AppState` stays `Clone` while all requests share one handle.
+    access: Option<Arc<Mutex<File>>>,
+}
+
+/// Create parent dirs, open append-only. Failure degrades to no logging —
+/// the gateway must never die on its own log file.
+fn open_access_log(path: &str) -> Option<Arc<Mutex<File>>> {
+    if path.is_empty() {
+        return None;
+    }
+    if let Some(parent) = std::path::Path::new(path).parent() {
+        if !parent.as_os_str().is_empty() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+    }
+    match OpenOptions::new().create(true).append(true).open(path) {
+        Ok(f) => Some(Arc::new(Mutex::new(f))),
+        Err(e) => {
+            tracing::warn!("access log {path} unavailable ({e}) — logging off");
+            None
+        }
+    }
 }
 
 impl AppState {
@@ -127,9 +164,46 @@ impl AppState {
             streams: Arc::new(Semaphore::new(stream_cap)),
             stats: Arc::new(EdgeStats::new()),
             breaker: Arc::new(CircuitBreaker::new(config.breaker)),
+            access: open_access_log(&config.access_log),
             config,
             http,
             core_status: Arc::new(RwLock::new(CoreStatus::default())),
+        }
+    }
+
+    /// One flushed JSONL line per request — the history `/gateway/stats`
+    /// (in-memory, reset on restart) structurally cannot keep.
+    // Flat args: a per-line struct would add ceremony without clarity.
+    #[allow(clippy::too_many_arguments)]
+    fn access_log(
+        &self,
+        method: &axum::http::Method,
+        path: &str,
+        route: &str,
+        status: u16,
+        started: Instant,
+        shed: Option<&str>,
+        client: &str,
+    ) {
+        let Some(file) = &self.access else { return };
+        let ts_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        let ms = started.elapsed().as_secs_f64() * 1000.0;
+        let line = serde_json::json!({
+            "ts_ms": ts_ms,
+            "ms": (ms * 10.0).round() / 10.0,
+            "method": method.as_str(),
+            "path": path,
+            "route": route,
+            "status": status,
+            "shed": shed,
+            "client": client,
+        });
+        if let Ok(mut f) = file.lock() {
+            let _ = writeln!(f, "{line}");
+            let _ = f.flush();
         }
     }
 }
@@ -254,6 +328,14 @@ async fn main() {
     } else {
         info!("   → circuit breaker disabled (MAN_GATEWAY_BREAKER_FAILURES=0)");
     }
+    if config.access_log.is_empty() {
+        info!("   → access log disabled (MAN_GATEWAY_ACCESS_LOG=0)");
+    } else {
+        info!(
+            "   → access log: {} (MAN_GATEWAY_ACCESS_LOG; 0 disables)",
+            config.access_log
+        );
+    }
 
     axum::serve(
         listener,
@@ -358,19 +440,9 @@ async fn edge_admission(
     req: Request,
     next: axum::middleware::Next,
 ) -> Response {
+    let started = Instant::now();
+    let method = req.method().clone();
     let path = req.uri().path().to_string();
-    // Health probes never consume budget (supervision must stay truthful);
-    // the edge's own stats endpoint must stay readable under load; CORS
-    // preflights are short-circuited by the outer CorsLayer; static assets
-    // are edge-served, never Python traffic.
-    if path.starts_with("/health")
-        || path.starts_with("/gateway/")
-        || path.starts_with("/static/")
-        || req.method() == axum::http::Method::OPTIONS
-    {
-        return next.run(req).await;
-    }
-
     let route = stats::route_key(&path);
     let peer = req
         .extensions()
@@ -380,6 +452,30 @@ async fn edge_admission(
         .map(|p| p.ip().to_string())
         .unwrap_or_else(|| "unknown".into());
     let is_local = peer.is_some_and(|p| p.ip().is_loopback());
+
+    // Health probes never consume budget (supervision must stay truthful);
+    // the edge's own stats endpoint must stay readable under load; CORS
+    // preflights are short-circuited by the outer CorsLayer; static assets
+    // are edge-served, never Python traffic. Still logged — the access log
+    // exists to show what actually consumes the edge.
+    if path.starts_with("/health")
+        || path.starts_with("/gateway/")
+        || path.starts_with("/static/")
+        || method == axum::http::Method::OPTIONS
+    {
+        let resp = next.run(req).await;
+        state.access_log(
+            &method,
+            &path,
+            &route,
+            resp.status().as_u16(),
+            started,
+            None,
+            &ip,
+        );
+        return resp;
+    }
+
     let cfg = state.config.rate;
     let now = std::time::Instant::now();
     let mut rate_headers: Option<(u32, u32)> = None;
@@ -394,6 +490,7 @@ async fn edge_admission(
                 .check_at(&key, limit, Duration::from_secs(route_window), now);
             if check.is_err() {
                 state.stats.shed_429(&route);
+                state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
                 return reject_rate(
                     format!("Rate limit exceeded for {prefix}. Try again later."),
                     limit,
@@ -417,6 +514,7 @@ async fn edge_admission(
             );
             if check.is_err() {
                 state.stats.shed_429(&route);
+                state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
                 return reject_rate(
                     "Workspace rate limit exceeded. Try again later.".into(),
                     ratelimit::WORKSPACE_LIMIT,
@@ -439,6 +537,7 @@ async fn edge_admission(
             Ok(remaining) => rate_headers = Some((remaining, global_limit)),
             Err(()) => {
                 state.stats.shed_429(&route);
+                state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
                 return reject_rate(
                     "Too many requests. Try again later.".into(),
                     global_limit,
@@ -452,6 +551,7 @@ async fn edge_admission(
     // timeout on a core the edge has already watched fail K times.
     if let Err(retry) = state.breaker.allow(now) {
         state.stats.shed_503(&route);
+        state.access_log(&method, &path, &route, 503, started, Some("breaker"), &ip);
         return reject_breaker(retry);
     }
 
@@ -463,6 +563,7 @@ async fn edge_admission(
             Ok(permit) => Some(permit),
             Err(_) => {
                 state.stats.shed_429(&route);
+                state.access_log(&method, &path, &route, 429, started, Some("streams"), &ip);
                 return reject_streams();
             }
         }
@@ -494,6 +595,15 @@ async fn edge_admission(
             limit.to_string().parse().expect("numeric header"),
         );
     }
+    state.access_log(
+        &method,
+        &path,
+        &route,
+        resp.status().as_u16(),
+        started,
+        None,
+        &ip,
+    );
     resp
 }
 
@@ -907,6 +1017,7 @@ mod tests {
                 failures: 0,
                 open_secs: 0,
             },
+            access_log: String::new(),
             ..Default::default()
         };
         AppState::new(config, Client::new())
@@ -1246,6 +1357,7 @@ mod tests {
                 failures: 2,
                 open_secs: 60,
             },
+            access_log: String::new(),
             ..Default::default()
         };
         let app = build_router(AppState::new(config, Client::new()));
@@ -1287,5 +1399,80 @@ mod tests {
         assert_eq!(v["gateway"]["breaker"]["state"], "open");
         assert_eq!(v["totals"]["shed_503"], 1);
         assert_eq!(v["totals"]["upstream_err"], 2);
+    }
+
+    // ── Access log ─────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn access_log_records_exempt_admitted_and_shed_lines() {
+        let path = std::env::temp_dir().join(format!("slo-gw-access-{}.jsonl", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let config = GatewayConfig {
+            python_core_url: "http://127.0.0.1:9".into(),
+            rate: RateConfig {
+                global_limit: 1,
+                window_secs: 60,
+                max_streams: 0,
+            },
+            breaker: BreakerConfig {
+                failures: 0,
+                open_secs: 0,
+            },
+            access_log: path.to_string_lossy().into_owned(),
+            ..Default::default()
+        };
+        let app = build_router(AppState::new(config, Client::new()));
+
+        // Exempt endpoint (readable under load) — logged with its real status.
+        let req = Request::builder()
+            .uri("/gateway/stats")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(req).await.unwrap().status(),
+            StatusCode::OK
+        );
+        // Admitted → dead core → 502.
+        let req = Request::builder()
+            .uri("/api/x")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(req).await.unwrap().status(),
+            StatusCode::BAD_GATEWAY
+        );
+        // Second request exceeds global_limit=1 → rate shed.
+        let req = Request::builder()
+            .uri("/api/y")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            app.clone().oneshot(req).await.unwrap().status(),
+            StatusCode::TOO_MANY_REQUESTS
+        );
+
+        let text = std::fs::read_to_string(&path).unwrap();
+        let lines: Vec<serde_json::Value> = text
+            .lines()
+            .map(|l| serde_json::from_str(l).expect("valid JSONL"))
+            .collect();
+        assert_eq!(lines.len(), 3, "one line per request: {text}");
+
+        assert_eq!(lines[0]["status"], 200);
+        assert!(lines[0]["shed"].is_null());
+        assert_eq!(lines[0]["path"], "/gateway/stats");
+        assert_eq!(lines[0]["route"], "/gateway");
+        assert!(lines[0]["ms"].is_number());
+        assert!(lines[0]["ts_ms"].is_number());
+
+        assert_eq!(lines[1]["status"], 502);
+        assert!(lines[1]["shed"].is_null());
+        assert_eq!(lines[1]["route"], "/api");
+
+        assert_eq!(lines[2]["status"], 429);
+        assert_eq!(lines[2]["shed"], "rate");
+        assert_eq!(lines[2]["method"], "GET");
+
+        let _ = std::fs::remove_file(&path);
     }
 }
