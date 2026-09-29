@@ -137,7 +137,7 @@ def raise_error(
 ) -> None:
     """Raise an AppError that the global exception handler converts to JSON.
 
-    Uses the unified ERROR_REGISTRY from domain.infrastructure._internal.errors to
+    Uses the unified ERROR_REGISTRY exported by the domain.infrastructure facade to
     resolve the correct AppError subclass and HTTP status for each code.
 
     Args:
