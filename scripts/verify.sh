@@ -21,7 +21,7 @@ echo "Checking required files..."
 files=(
     "package.json"
     "apps/api/server/main.py"
-    "packages/core-py/domains/ui/api_server.py"
+    "packages/core-py/domains/api/__init__.py"
     "apps/web/package.json"
     "apps/web/app/(app)/page.tsx"
     "apps/web/app/(app)/chat/page.tsx"
@@ -54,6 +54,24 @@ if [ "$all_found" = true ]; then
         echo ""
     else
         echo "(Optional: python3 -m pip install ruff to run the CI lint smoke check locally.)"
+        echo ""
+    fi
+
+    echo "Shared-workspace governance (indexes + one shared toolchain)..."
+    PYTEST="python3 -m pytest"
+    if [ -x ".venv/bin/python" ] && .venv/bin/python -c "import pytest" &>/dev/null; then
+        PYTEST=".venv/bin/python -m pytest"
+    elif ! python3 -c "import pytest" &>/dev/null; then
+        echo "(pytest not available — skipping tests/test_shared_indexes.py; pip install -e \".[dev]\" to enable.)"
+        echo ""
+        PYTEST=""
+    fi
+    if [ -n "$PYTEST" ]; then
+        $PYTEST tests/test_shared_indexes.py -q || {
+            echo "❌ Shared-workspace governance failed (tests/test_shared_indexes.py — new app/package not indexed, or a stray node_modules/.venv/lockfile)"
+            exit 1
+        }
+        echo "✓ Shared-workspace governance passed"
         echo ""
     fi
 
