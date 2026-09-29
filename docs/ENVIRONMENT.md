@@ -161,6 +161,16 @@ Seconds the breaker stays open after tripping, before exactly one half-open prob
 MAN_GATEWAY_BREAKER_OPEN=5
 ```
 
+### MAN_GATEWAY_ACCESS_LOG
+
+**Optional** · Rust edge · default `logs/gateway-access.jsonl`
+
+Append-only JSONL access log — one flushed line per request the edge sees (admitted, rate/breaker/stream-shed, and exempt health/stats probes alike): `ts_ms`, `ms` (request → response headers), `method`, `path`, `route`, `status`, `shed` (`rate` | `breaker` | `streams` | `null`), `client`. Parent directories are created; if the file can't be opened the gateway logs a warning and runs without it. This is the history `/gateway/stats` (in-memory) cannot keep. `0` or empty disables.
+
+```bash
+MAN_GATEWAY_ACCESS_LOG=logs/gateway-access.jsonl  # 0 disables
+```
+
 ### SLO_ENV
 
 **Optional**
