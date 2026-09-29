@@ -17,6 +17,15 @@ Registered pre-lifespan in `main.py` for startup/load balancer probes.
 | `GET`  | `/health/model`            | Model-specific health.                        |
 | `GET`  | `/health/summary`          | Aggregated health summary.                    |
 | `GET`  | `/health/stream`           | SSE health stream.                            |
+| `GET` | `/health/services` | Services Health |
+| `GET` | `/health/startup-compare` | Startup Compare |
+| `GET` | `/health/startup-config` | Startup Config |
+| `GET` | `/health/startup-diagnostics` | Startup Diagnostics |
+| `GET` | `/health/startup-health` | Startup Health |
+| `GET` | `/health/startup-history` | Startup History |
+| `GET` | `/health/startup-rollback` | Startup Rollback |
+| `GET` | `/health/startup-status` | Startup Status |
+| `GET` | `/health/startup-stream` | Startup Stream |
 
 ## Status Router (`/`)
 
@@ -27,6 +36,7 @@ Registered pre-lifespan in `main.py`.
 | `GET`  | `/status` | Server status.   |
 | `GET`  | `/ready`  | Readiness check. |
 | `GET`  | `/live`   | Liveness check.  |
+| `GET` | `/` | Root |
 
 ## System Router (`/system`)
 
@@ -44,6 +54,9 @@ Registered pre-lifespan in `main.py`.
 | `POST` | `/system/executor/purge`           | Purge completed executor jobs.                                  |
 | `POST` | `/system/executor/{job_id}/cancel` | Cancel a running executor job.                                  |
 | `GET`  | `/system/inference-pool`           | Inference thread-pool status.                                   |
+| `GET` | `/system/battery` | Get Battery |
+| `POST` | `/system/battery/limit` | Set Battery Limit |
+| `PUT` | `/system/battery/policy` | Set Battery Policy |
 
 ## Inference Router (`/inference`, `/chat`, `/context`, `/session`)
 
@@ -54,20 +67,29 @@ Registered pre-lifespan in `main.py`.
 | `POST`   | `/chat`                             | Chat (non-streaming).            |
 | `POST`   | `/chat/stream`                      | Chat (SSE streaming).            |
 | `GET`    | `/context/inspect`                  | Inspect context layers.          |
-| `POST`   | `/context/store-fact`               | Store a fact in context.         |
 | `GET`    | `/context/facts`                    | List context facts.              |
 | `POST`   | `/context/reset`                    | Reset context state.             |
-| `GET`    | `/session/list`                     | List all sessions.               |
-| `POST`   | `/session/create`                   | Create a new session.            |
-| `GET`    | `/session/{session_id}`             | Get session details.             |
-| `DELETE` | `/session/{session_id}`             | Delete a session.                |
-| `POST`   | `/session/{session_id}/regenerate`  | Regenerate the last response.    |
-| `GET`    | `/session/{session_id}/suggestions` | Chat suggestions for a session.  |
 | `GET`    | `/providers`                        | List model providers.            |
 | `GET`    | `/operations`                       | List active operations.          |
-| `POST`   | `/operations/{op_id}/cancel`        | Cancel an operation.             |
-| `POST`   | `/operations/cancel-all`            | Cancel all operations.           |
 | `POST`   | `/operations/purge`                 | Purge completed operations.      |
+| `DELETE` | `/chat/sessions/{session_id}` | Delete Session |
+| `GET` | `/chat/active` | Active Sessions |
+| `GET` | `/chat/addons` | Addons |
+| `GET` | `/chat/audio/{session_id}/{message_id}` | Get Voice Audio |
+| `GET` | `/chat/health` | Health |
+| `GET` | `/chat/sessions` | List Sessions |
+| `GET` | `/chat/sessions/current` | Get Current Session |
+| `GET` | `/chat/sessions/search` | Search Sessions |
+| `GET` | `/chat/sessions/{session_id}` | Get Session |
+| `GET` | `/chat/suggestions` | Chat Suggestions |
+| `GET` | `/chat/tools` | List Chat Tools |
+| `POST` | `/chat/control` | Chat Control |
+| `POST` | `/chat/sessions` | Create Session |
+| `POST` | `/chat/voice/{session_id}` | Send Voice Message |
+| `POST` | `/chat/{session_id}/cancel` | Cancel |
+| `POST` | `/chat/{session_id}/regenerate` | Regenerate |
+| `POST` | `/context/fact` | Store Fact |
+| `PUT` | `/chat/sessions/{session_id}` | Upsert Session |
 
 ## Infer Router (`/infer`)
 
@@ -91,27 +113,44 @@ Separate inference endpoint backed by the direct model server.
 | `POST` | `/models/load`                 | Load a model into memory.         |
 | `POST` | `/models/unload`               | Unload the current model.         |
 | `GET`  | `/models/current`              | Get the currently loaded model.   |
-| `GET`  | `/models/huggingface`          | List HuggingFace cached models.   |
 | `GET`  | `/models/logs`                 | Get model server logs.            |
 | `GET`  | `/models/export/formats`       | Get available export formats.     |
 | `POST` | `/models/download`             | Start downloading a model.        |
-| `GET`  | `/models/download/status`      | Get download status.              |
 | `GET`  | `/models/downloads`            | List all active downloads.        |
-| `POST` | `/models/download/cancel`      | Cancel a download.                |
-| `POST` | `/models/download/retry`       | Retry a failed download.          |
-| `GET`  | `/models/cache/usage`          | Get HuggingFace cache disk usage. |
-| `POST` | `/models/download/gguf`        | Download Qwen GGUF for mobile.    |
-| `POST` | `/models/visual-model/load`    | Load a vision model.              |
 | `POST` | `/models/quantize`             | Quantize a model.                 |
 | `POST` | `/models/dequantize`           | Dequantize a model.               |
 | `POST` | `/models/precision`            | Set model precision.              |
 | `GET`  | `/models/catalog`              | Get model catalog.                |
 | `GET`  | `/models/catalog/stats`        | Get catalog statistics.           |
-| `GET`  | `/models/conversion/{task_id}` | Get conversion task status.       |
 | `GET`  | `/models/process-guard`        | Get process guard status.         |
 | `POST` | `/models/process-guard`        | Configure process guard.          |
 | `GET`  | `/models/engine/status`        | Get engine status.                |
 | `POST` | `/models/engine/reload`        | Reload the model engine.          |
+| `DELETE` | `/models/external/servers/{name}` | Remove External Server |
+| `GET` | `/models/backends` | List Backends |
+| `GET` | `/models/backends/active` | Get Active Backend |
+| `GET` | `/models/cache-usage` | Cache Usage |
+| `GET` | `/models/conversion-status` | Get Conversion Status |
+| `GET` | `/models/debug/providers` | Debug Providers |
+| `GET` | `/models/download/qwen-gguf` | Download Qwen Gguf |
+| `GET` | `/models/download/{model_id}` | Get Download Status |
+| `GET` | `/models/external/models` | List External Models |
+| `GET` | `/models/external/servers` | List External Servers |
+| `GET` | `/models/file/{model_id}/{file_path}` | Serve Model File |
+| `GET` | `/models/hf` | List Hf Models |
+| `GET` | `/models/history` | Download History |
+| `GET` | `/models/memory-pressure` | Memory Pressure |
+| `POST` | `/models/backends/active` | Set Active Backend |
+| `POST` | `/models/download/{model_id}/cancel` | Cancel Download |
+| `POST` | `/models/download/{model_id}/pause` | Pause Download |
+| `POST` | `/models/download/{model_id}/resume` | Resume Download |
+| `POST` | `/models/download/{model_id}/retry` | Retry Download |
+| `POST` | `/models/download/{model_id}/verify` | Verify Download |
+| `POST` | `/models/export` | Export Model |
+| `POST` | `/models/external/download` | Download External Model |
+| `POST` | `/models/external/servers` | Register External Server |
+| `POST` | `/models/memory-cleanup` | Memory Cleanup |
+| `POST` | `/models/visual-load` | Visual Model Load |
 
 ## Souls Router (`/souls`)
 
@@ -143,7 +182,12 @@ Separate inference endpoint backed by the direct model server.
 
 | Method | Path           | Description            |
 | ------ | -------------- | ---------------------- |
-| `GET`  | `/auth/whoami` | Get current user info. |
+| `GET` | `/auth/me` | Get Me |
+| `POST` | `/auth/login` | Login |
+| `POST` | `/auth/refresh` | Refresh Token |
+| `POST` | `/auth/register` | Register |
+| `POST` | `/auth/token` | Create Token |
+| `POST` | `/auth/verify` | Verify Token |
 
 ## Session Router (`/session`)
 
@@ -152,7 +196,6 @@ Separate inference endpoint backed by the direct model server.
 | `POST` | `/session/{session_id}/context`    | Build context for a session. |
 | `GET`  | `/session/{session_id}/messages`   | List session messages.       |
 | `GET`  | `/session/{session_id}/inspector`  | Inspect session state.       |
-| `POST` | `/session/{session_id}/regenerate` | Regenerate last response.    |
 
 ## Feedback Router (`/feedback`)
 
@@ -216,15 +259,15 @@ Separate inference endpoint backed by the direct model server.
 | `GET`    | `/memory/search`        | Search facts by relevance (requires `q`).                           |
 | `POST`   | `/memory/store`         | Store a fact directly. Body: `{content, source?}`.                  |
 | `POST`   | `/memory/remember`      | Extract and store facts from a message. Body: `{message, source?}`. |
-| `POST`   | `/memory/update`        | Update a fact.                                                      |
-| `DELETE` | `/memory/delete`        | Delete a fact.                                                      |
-| `POST`   | `/memory/set-config`    | Update runtime memory settings.                                     |
-| `GET`    | `/memory/get-config`    | Get current memory settings.                                        |
 | `POST`   | `/memory/clear`         | Clear all stored facts.                                             |
 | `POST`   | `/memory/consolidate`   | Trigger memory consolidation.                                       |
-| `POST`   | `/memory/archive`       | Archive old facts.                                                  |
 | `GET`    | `/memory/archive/stats` | Archive statistics.                                                 |
 | `POST`   | `/memory/archive/prune` | Prune archived facts.                                               |
+| `DELETE` | `/memory/{item_id}` | Delete Item |
+| `GET` | `/memory/archive` | Archive |
+| `GET` | `/memory/config` | Get Config |
+| `PATCH` | `/memory/{item_id}` | Update Item |
+| `POST` | `/memory/config` | Set Config |
 
 Fail-closed when `SLO_MEMORY_ENABLED=false`.
 
@@ -257,6 +300,7 @@ Fail-closed when `SLO_MEMORY_ENABLED=false`.
 | `POST`   | `/datasets/import/isbn`                       | Import by ISBN.                    |
 | `POST`   | `/datasets/from-chat`                         | Create dataset from chat messages. |
 | `POST`   | `/datasets/convert-to-messages`               | Convert dataset to message format. |
+| `GET` | `/datasets/{dataset_id}/quality` | Quality Dataset |
 
 ## Training Router (`/training`)
 
@@ -357,6 +401,20 @@ Routes are split across focused sub-modules:
 | `GET`    | `/training/finetuned-models`             | List HF fine-tuned models. |
 | `POST`   | `/training/finetuned-models/{name}/load` | Load a fine-tuned model.   |
 | `DELETE` | `/training/finetuned-models/{name}`      | Delete a fine-tuned model. |
+| `DELETE` | `/training/webhooks/{webhook_id}` | Unregister Webhook |
+| `GET` | `/training/feed` | Training Feed |
+| `GET` | `/training/feeds` | Training Feeds |
+| `GET` | `/training/recommend` | Get Training Recommendation |
+| `GET` | `/training/trends` | Get Training Trends |
+| `GET` | `/training/webhooks` | List Webhooks |
+| `GET` | `/training/webhooks/dead-letters` | Get Webhook Dead Letters |
+| `GET` | `/training/webhooks/retry-queue` | Get Webhook Retry Queue |
+| `GET` | `/training/webhooks/stats` | Get Webhook Stats |
+| `GET` | `/training/webhooks/{webhook_id}` | Get Webhook |
+| `GET` | `/training/webhooks/{webhook_id}/deliveries` | Get Webhook Deliveries |
+| `POST` | `/training/from-sessions-start` | Start From Sessions Unified |
+| `POST` | `/training/webhooks` | Register Webhook |
+| `POST` | `/training/webhooks/test` | Test Webhook |
 
 > **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domain.training._internal.service` (core layer).
 
@@ -459,6 +517,14 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST`   | `/multimodal/checkpoints/{name}/load` | Load a checkpoint.           |
 | `DELETE` | `/multimodal/checkpoints/{name}`      | Delete a checkpoint.         |
 | `POST`   | `/multimodal/reset`                   | Reset the multimodal engine. |
+| `POST` | `/multimodal/ask` | Ask Question |
+| `POST` | `/multimodal/batch-encode-phonemes` | Batch Encode Phonemes |
+| `POST` | `/multimodal/batch-score-pronunciation` | Batch Score Pronunciation |
+| `POST` | `/multimodal/decode-phonemes` | Decode Phonemes |
+| `POST` | `/multimodal/detect` | Detect Objects |
+| `POST` | `/multimodal/detect-language` | Detect Language |
+| `POST` | `/multimodal/encode-phonemes` | Encode Phonemes |
+| `POST` | `/multimodal/score-pronunciation` | Score Pronunciation |
 
 ## Benchmark Router (`/benchmark`)
 
@@ -472,6 +538,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `GET`  | `/benchmark/responses`     | Logged responses.              |
 | `GET`  | `/benchmark/stats`         | Tracker statistics.            |
 | `POST` | `/benchmark/history/clear` | Clear benchmark history.       |
+| `GET` | `/benchmark/program` | Get Program |
+| `POST` | `/benchmark/score` | Score Results |
 
 ## Companion Router (`/companion`)
 
@@ -485,20 +553,8 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `GET`    | `/companion/prompt`      | Get companion system prompt.  |
 | `POST`   | `/companion/chat`        | Chat with companion.          |
 | `GET`    | `/companion/presets`     | List available presets.       |
-
-## Collections Router (`/collections`)
-
-| Method   | Path                                 | Description                   |
-| -------- | ------------------------------------ | ----------------------------- |
-| `GET`    | `/collections`                       | List all pipelines.           |
-| `POST`   | `/collections/create`                | Create a pipeline.            |
-| `POST`   | `/collections/run`                   | Run a pipeline.               |
-| `POST`   | `/collections/collect`               | Direct collect (no pipeline). |
-| `GET`    | `/collections/stats`                 | Pipeline statistics.          |
-| `GET`    | `/collections/{pipeline_id}`         | Get a pipeline.               |
-| `DELETE` | `/collections/{pipeline_id}`         | Delete a pipeline.            |
-| `POST`   | `/collections/{pipeline_id}/collect` | Collect for a pipeline.       |
-| `GET`    | `/collections/{pipeline_id}/records` | List pipeline records.        |
+| `DELETE` | `/companion/presets/{preset_id}` | Delete Preset |
+| `POST` | `/companion/presets` | Create Preset |
 
 ## Docstore Router (`/docstore`)
 
@@ -511,6 +567,10 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `DELETE` | `/docstore/{collection}/{doc_id}` | Delete a document.              |
 | `DELETE` | `/docstore/{collection}`          | Clear a collection.             |
 | `POST`   | `/docstore/{collection}/bulk`     | Bulk upsert documents.          |
+| `DELETE` | `/docstore/message-notes/{session_id}/{message_id}` | Delete Message Note |
+| `GET` | `/docstore/message-notes` | List Message Notes |
+| `GET` | `/docstore/message-notes/search` | Search Message Notes |
+| `POST` | `/docstore/message-notes` | Put Message Note |
 
 ## Errors Router (`/errors`)
 
@@ -525,6 +585,7 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `DELETE` | `/errors/clear`       | Clear error logs.       |
 | `GET`    | `/errors/unread`      | Get unread error count. |
 | `GET`    | `/errors/log`         | Get OpenCode error log. |
+| `GET` | `/errors/stream` | Error Stream |
 
 ## Experiments Router (`/experiments`)
 
@@ -539,6 +600,7 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST`   | `/experiments/{experiment_id}/complete`   | Mark experiment complete. |
 | `POST`   | `/experiments/{experiment_id}/log_metric` | Log a metric.             |
 | `POST`   | `/experiments/{experiment_id}/log_param`  | Log a parameter.          |
+| `GET` | `/experiments/compare` | Compare Experiments |
 
 ## Vector Router (`/vector`)
 
@@ -568,18 +630,20 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 
 | Method | Path                   | Description                   |
 | ------ | ---------------------- | ----------------------------- |
-| `GET`  | `/lora-eval/run`       | Run LoRA evaluation.          |
 | `GET`  | `/lora-eval/history`   | Evaluation history.           |
 | `POST` | `/lora-eval/aggregate` | Aggregate evaluation results. |
+| `POST` | `/lora-eval/run` | Run Eval |
 
 ## Registry Router (`/registry`)
 
 | Method | Path                   | Description                |
 | ------ | ---------------------- | -------------------------- |
-| `GET`  | `/registry`            | List registered models.    |
-| `GET`  | `/registry/{model_id}` | Get a registered model.    |
 | `GET`  | `/registry/best`       | Get best model for a task. |
 | `GET`  | `/registry/stats`      | Registry statistics.       |
+| `GET` | `/registry/artifacts` | List Artifacts |
+| `GET` | `/registry/models` | List Models |
+| `GET` | `/registry/models/{model_id}` | Get Model |
+| `GET` | `/registry/verify` | Verify Artifacts |
 
 ## Meta-Weights Router (`/meta-weights`)
 
@@ -621,6 +685,7 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | ------ | ----------------- | ---------------------- |
 | `GET`  | `/images/gallery` | List generated images. |
 | `GET`  | `/images/styles`  | List available styles. |
+| `POST` | `/images/generate` | Generate Image |
 
 ## Voice Router (`/voice`)
 
@@ -635,23 +700,22 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | ------ | ------------------ | -------------- |
 | `GET`  | `/files`           | List files.    |
 | `GET`  | `/files/{file_id}` | Get a file.    |
-| `POST` | `/files`           | Upload a file. |
+| `DELETE` | `/files/{file_id}` | Delete File |
+| `GET` | `/files/search` | Search Files |
+| `POST` | `/files/upload` | Upload File |
+| `POST` | `/files/{file_id}/ingest` | Ingest File |
 
 ## Security Router (`/security`)
 
 | Method | Path                   | Description     |
 | ------ | ---------------------- | --------------- |
-| `GET`  | `/security/audit-logs` | Get audit logs. |
 | `GET`  | `/security/keys`       | List API keys.  |
-
-## Rate Limit Router (`/ratelimit`)
-
-| Method | Path                | Description               |
-| ------ | ------------------- | ------------------------- |
-| `GET`  | `/ratelimit/status` | Rate limit status.        |
-| `GET`  | `/ratelimit/check`  | Check rate limit.         |
-| `GET`  | `/ratelimit/policy` | Get rate limit policy.    |
-| `POST` | `/ratelimit/config` | Update rate limit config. |
+| `DELETE` | `/security/keys/{key_id}` | Delete Key |
+| `GET` | `/security/audit` | Get Audit Logs |
+| `GET` | `/security/keys/{key_id}` | Get Key |
+| `POST` | `/security/keys` | Create Key |
+| `POST` | `/security/keys/validate` | Validate Key |
+| `POST` | `/security/keys/{key_id}/rotate` | Rotate Key |
 
 ## World Render Router (`/world`)
 
@@ -663,6 +727,293 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/world/tick`         | Run a simulation tick.           |
 | `GET`  | `/world/stats`        | World rendering statistics.      |
 
+## Consciousness Router (`/consciousness`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `DELETE` | `/consciousness/personas/{persona_id}` | Delete Persona |
+| `GET` | `/consciousness/backup/download` | Backup Download |
+| `GET` | `/consciousness/evaluate` | Evaluate |
+| `GET` | `/consciousness/health` | Health Check |
+| `GET` | `/consciousness/history/beliefs` | Get Beliefs History |
+| `GET` | `/consciousness/history/episodes` | Get Episode History |
+| `GET` | `/consciousness/history/qualia` | Get Qualia History |
+| `GET` | `/consciousness/personality` | Get Personality |
+| `GET` | `/consciousness/personality/conflicts` | Get Conflicts |
+| `GET` | `/consciousness/personality/history` | Get Personality History |
+| `GET` | `/consciousness/personality/presets` | Get Presets |
+| `GET` | `/consciousness/personas` | List Personas |
+| `GET` | `/consciousness/personas/{persona_id}` | Get Persona |
+| `GET` | `/consciousness/qualia` | Get Qualia |
+| `GET` | `/consciousness/self-model` | Get Self Model |
+| `GET` | `/consciousness/stats` | Get Stats |
+| `GET` | `/consciousness/status` | Get Status |
+| `GET` | `/consciousness/stream` | Stream Status |
+| `GET` | `/consciousness/train/status` | Train Status |
+| `PATCH` | `/consciousness/config` | Update Config |
+| `PATCH` | `/consciousness/personality` | Update Personality |
+| `POST` | `/consciousness/backup` | Backup |
+| `POST` | `/consciousness/backup/import` | Backup Import |
+| `POST` | `/consciousness/batch` | Batch Operations |
+| `POST` | `/consciousness/clear/beliefs` | Clear Beliefs |
+| `POST` | `/consciousness/clear/episodes` | Clear Episodes |
+| `POST` | `/consciousness/feedback` | Submit Feedback |
+| `POST` | `/consciousness/personality/presets/apply` | Apply Preset |
+| `POST` | `/consciousness/personality/reset` | Reset Personality |
+| `POST` | `/consciousness/personas/save` | Save Persona |
+| `POST` | `/consciousness/personas/{persona_id}/activate` | Activate Persona |
+| `POST` | `/consciousness/reflect` | Reflect |
+| `POST` | `/consciousness/restore` | Restore |
+| `POST` | `/consciousness/seed` | Seed Data |
+| `POST` | `/consciousness/train/start` | Train Start |
+## Mobile Router (`/mobile`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `DELETE` | `/mobile/knowledge/{item_id}` | Delete Knowledge |
+| `DELETE` | `/mobile/train/pair/{pair_id}` | Delete Pair |
+| `DELETE` | `/mobile/train/pairs/bulk` | Delete Pairs Bulk |
+| `DELETE` | `/mobile/train/synced` | Delete Synced Pairs |
+| `GET` | `/mobile/conversations` | List Conversations |
+| `GET` | `/mobile/conversations/{session_id}` | Get Conversation |
+| `GET` | `/mobile/dashboard` | Get Dashboard |
+| `GET` | `/mobile/health` | Get Health |
+| `GET` | `/mobile/knowledge` | List Knowledge |
+| `GET` | `/mobile/models` | Get Models |
+| `GET` | `/mobile/notifications/devices` | List Devices |
+| `GET` | `/mobile/notifications/history` | Notification History |
+| `GET` | `/mobile/sync/status` | Sync Status |
+| `GET` | `/mobile/train/auto-status` | Get Auto Train Status |
+| `GET` | `/mobile/train/export` | Export Training Pairs |
+| `GET` | `/mobile/train/pairs` | List Training Pairs |
+| `GET` | `/mobile/train/pending` | Get Pending Pairs |
+| `GET` | `/mobile/train/session/{session_id}` | Get Session Pairs |
+| `GET` | `/mobile/train/stats` | Get Training Stats |
+| `PATCH` | `/mobile/knowledge/{item_id}` | Update Knowledge |
+| `PATCH` | `/mobile/train/auto-config` | Update Auto Train Config |
+| `PATCH` | `/mobile/train/pair/{pair_id}` | Update Pair Quality |
+| `POST` | `/mobile/knowledge` | Create Knowledge |
+| `POST` | `/mobile/models/switch` | Switch Model |
+| `POST` | `/mobile/notifications/cleanup` | Cleanup Devices |
+| `POST` | `/mobile/notifications/register` | Register Device |
+| `POST` | `/mobile/notifications/send` | Send Notification |
+| `POST` | `/mobile/notifications/unregister` | Unregister Device |
+| `POST` | `/mobile/notify/training-complete` | Notify Training Complete |
+| `POST` | `/mobile/sync` | Sync Offline |
+| `POST` | `/mobile/train` | Mobile Train |
+| `POST` | `/mobile/train/compact` | Compact Training Store |
+| `POST` | `/mobile/train/from-sessions` | Train From Sessions |
+## Model Stack Router (`/model-stack`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `DELETE` | `/model-stack/{name}` | Remove Layer |
+| `GET` | `/model-stack` | Get Stack |
+| `POST` | `/model-stack/base` | Set Base |
+| `POST` | `/model-stack/clear` | Clear Layers |
+| `POST` | `/model-stack/push` | Push Layer |
+## Settings Router (`/settings`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `DELETE` | `/settings/training/runs/{run_id}` | Delete Training Run |
+| `DELETE` | `/settings/training/runs/{run_id}/tags/{tag}` | Remove Run Tag |
+| `GET` | `/settings` | Get Settings |
+| `GET` | `/settings/adaptive` | Get Adaptive |
+| `GET` | `/settings/adaptive/insights` | Get Adaptive Insights |
+| `GET` | `/settings/generation` | Get Generation |
+| `GET` | `/settings/providers/api` | Get Providers Api |
+| `GET` | `/settings/training` | Get Training |
+| `GET` | `/settings/training/analytics` | Get Training Analytics |
+| `GET` | `/settings/training/auto-train/status` | Auto Train Status |
+| `GET` | `/settings/training/batch-status` | Get Batch Training Status |
+| `GET` | `/settings/training/bookmarks` | Get Bookmarked Runs |
+| `GET` | `/settings/training/compare` | Compare Training Runs |
+| `GET` | `/settings/training/history/export` | Export Training History |
+| `GET` | `/settings/training/presets` | List Training Presets |
+| `GET` | `/settings/training/presets/{preset_name}` | Get Training Preset |
+| `GET` | `/settings/training/runs` | Filter Training Runs |
+| `GET` | `/settings/training/runs/{run_id}` | Get Training Run |
+| `GET` | `/settings/training/runs/{run_id}/export` | Export Training Run |
+| `GET` | `/settings/training/tags` | Get All Tags |
+| `GET` | `/settings/training/tags/{tag}` | Get Runs By Tag |
+| `GET` | `/settings/ui` | Get Ui |
+| `GET` | `/settings/voice` | Get Voice |
+| `PATCH` | `/settings/adaptive` | Update Adaptive |
+| `PATCH` | `/settings/generation` | Update Generation |
+| `PATCH` | `/settings/providers/api` | Update Providers Api |
+| `PATCH` | `/settings/training` | Update Training |
+| `PATCH` | `/settings/training/auto-train/config` | Auto Train Config |
+| `PATCH` | `/settings/ui` | Update Ui |
+| `PATCH` | `/settings/voice` | Update Voice |
+| `POST` | `/settings/model-card` | Generate Model Card |
+| `POST` | `/settings/reset` | Reset Settings |
+| `POST` | `/settings/training/history/clear` | Clear Training History |
+| `POST` | `/settings/training/presets/{preset_name}/apply` | Apply Training Preset |
+| `POST` | `/settings/training/runs/bulk/bookmark` | Bulk Bookmark |
+| `POST` | `/settings/training/runs/bulk/delete` | Bulk Delete Runs |
+| `POST` | `/settings/training/runs/bulk/tag` | Bulk Add Tag |
+| `POST` | `/settings/training/runs/{run_id}/bookmark` | Toggle Bookmark |
+| `POST` | `/settings/training/runs/{run_id}/duplicate` | Duplicate Training Run |
+| `POST` | `/settings/training/runs/{run_id}/tags` | Add Run Tag |
+| `PUT` | `/settings/training/runs/{run_id}/notes` | Set Run Notes |
+## Tenants Router (`/tenants`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `DELETE` | `/tenants/{tenant_id}` | Delete Tenant |
+| `GET` | `/tenants` | List Tenants |
+| `GET` | `/tenants/{tenant_id}` | Get Tenant |
+| `GET` | `/tenants/{tenant_id}/stats` | Get Tenant Stats |
+| `POST` | `/tenants` | Create Tenant |
+| `PUT` | `/tenants/{tenant_id}` | Update Tenant |
+## Users Router (`/users`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `DELETE` | `/users/{user_id}` | Delete User |
+| `GET` | `/users` | List Users |
+| `GET` | `/users/me/profile` | Get Profile |
+| `GET` | `/users/{user_id}` | Get User |
+| `POST` | `/users` | Create User |
+| `POST` | `/users/me/password` | Change Password |
+| `PUT` | `/users/me/profile` | Update Profile |
+| `PUT` | `/users/{user_id}` | Update User |
+## Workspaces Router (`/workspaces`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `DELETE` | `/workspaces/{workspace_id}` | Delete Workspace |
+| `DELETE` | `/workspaces/{workspace_id}/members/{user_id}` | Remove Member |
+| `DELETE` | `/workspaces/{workspace_id}/share/{share_id}` | Revoke Share |
+| `GET` | `/workspaces` | List Workspaces |
+| `GET` | `/workspaces/{workspace_id}` | Get Workspace |
+| `GET` | `/workspaces/{workspace_id}/activity` | Get Workspace Activity |
+| `GET` | `/workspaces/{workspace_id}/export` | Export Workspace Data |
+| `GET` | `/workspaces/{workspace_id}/health` | Workspace Health Check |
+| `GET` | `/workspaces/{workspace_id}/members` | List Members |
+| `GET` | `/workspaces/{workspace_id}/notifications` | Get Workspace Notifications |
+| `GET` | `/workspaces/{workspace_id}/permissions` | Get Workspace Permissions |
+| `GET` | `/workspaces/{workspace_id}/search` | Search Workspace |
+| `GET` | `/workspaces/{workspace_id}/settings` | Get Workspace Settings |
+| `GET` | `/workspaces/{workspace_id}/shared` | List Shared Data |
+| `GET` | `/workspaces/{workspace_id}/shared/api-keys` | Get Shared Api Keys |
+| `GET` | `/workspaces/{workspace_id}/shared/datasets` | Get Shared Datasets |
+| `GET` | `/workspaces/{workspace_id}/shared/knowledge` | Get Shared Knowledge |
+| `GET` | `/workspaces/{workspace_id}/stats` | Get Workspace Stats |
+| `GET` | `/workspaces/{workspace_id}/usage` | Get Workspace Usage |
+| `POST` | `/workspaces` | Create Workspace |
+| `POST` | `/workspaces/import` | Import Workspace Data |
+| `POST` | `/workspaces/{workspace_id}/cleanup` | Cleanup Workspace Data |
+| `POST` | `/workspaces/{workspace_id}/clone` | Clone Workspace |
+| `POST` | `/workspaces/{workspace_id}/invite` | Invite Member |
+| `POST` | `/workspaces/{workspace_id}/members` | Add Member |
+| `POST` | `/workspaces/{workspace_id}/members/bulk` | Bulk Import Members |
+| `POST` | `/workspaces/{workspace_id}/share` | Share Data |
+| `PUT` | `/workspaces/{workspace_id}` | Update Workspace |
+| `PUT` | `/workspaces/{workspace_id}/settings` | Update Workspace Settings |
+## Cloud Training Router (`/cloud-training`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/cloud-training/jobs` | List Jobs |
+| `GET` | `/cloud-training/{job_id}/status` | Job Status |
+| `POST` | `/cloud-training/submit` | Submit Job |
+| `POST` | `/cloud-training/{job_id}/cancel` | Cancel Job |
+## Dashboard Router (`/dashboard`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/dashboard/events` | Dashboard Events |
+| `GET` | `/dashboard/stream` | Dashboard Stream |
+| `GET` | `/dashboard/summary` | Dashboard Summary |
+## Info Router (`/info`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/info` | Get Info |
+| `GET` | `/info/soul` | Get Info Soul |
+## Monitor Router (`/monitor`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/monitor` | Training Monitor Status |
+| `GET` | `/monitor/alerts` | Training Monitor Alerts |
+| `GET` | `/monitor/metrics` | Training Monitor Metrics |
+| `GET` | `/monitor/resources` | Training Monitor Resources |
+| `POST` | `/monitor/reset` | Training Monitor Reset |
+## Openwebui Router (`/openwebui`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/openwebui/checkpoints` | List Checkpoints |
+| `GET` | `/openwebui/datasets` | List Datasets |
+| `GET` | `/openwebui/training/status` | Training Status |
+| `POST` | `/openwebui/checkpoint/reload` | Reload Checkpoint |
+| `POST` | `/openwebui/training/start` | Start Training |
+| `POST` | `/openwebui/training/stop` | Stop Training |
+## Phoneme Router (`/phoneme`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/phoneme/languages` | Languages |
+| `GET` | `/phoneme/status` | Status |
+| `POST` | `/phoneme/batch-encode` | Batch Encode |
+| `POST` | `/phoneme/decode` | Decode |
+| `POST` | `/phoneme/detect-language` | Detect Language |
+| `POST` | `/phoneme/encode` | Encode |
+| `POST` | `/phoneme/score` | Score |
+| `POST` | `/phoneme/synthesize` | Synthesize |
+| `POST` | `/phoneme/visualize` | Visualize |
+## Plugins Router (`/plugins`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/plugins` | List Plugins |
+| `POST` | `/plugins/reload` | Reload Plugins |
+| `POST` | `/plugins/{plugin_name}/disable` | Disable Plugin |
+| `POST` | `/plugins/{plugin_name}/enable` | Enable Plugin |
+## Profiles Router (`/profiles`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/profiles` | List Profiles |
+| `GET` | `/profiles/active` | Get Active Profile |
+| `GET` | `/profiles/recommend` | Recommend Profile |
+| `GET` | `/profiles/{profile_id}` | Get Profile |
+| `POST` | `/profiles/apply` | Apply Profile |
+## Rate Limit Router (`/rate-limit`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/rate-limit/check` | Check Rate Limit |
+| `GET` | `/rate-limit/status` | Get Rate Limit Status |
+## Tokens Router (`/tokens`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/tokens/balance` | Get Balance |
+| `GET` | `/tokens/usage/history` | Get Usage History |
+| `GET` | `/tokens/usage/summary` | Get Usage Summary |
+| `POST` | `/tokens/check` | Check Tokens |
+| `POST` | `/tokens/topup` | Topup Credits |
+| `POST` | `/tokens/upgrade` | Upgrade Tier |
+## Tools Router (`/tools`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `GET` | `/tools` | List Tools |
+| `POST` | `/tools/{tool_id}/generate` | Generate Tool |
+## Cancel All Router (`/cancel-all`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `POST` | `/cancel-all` | Cancel All Operations |
+## Cancel Router (`/cancel`)
+
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `POST` | `/cancel/{op_id}` | Cancel Operation |
 ## OpenAPI Specification
 
 FastAPI automatically provides the OpenAPI spec at `/openapi.json`:
