@@ -11,7 +11,7 @@ import os
 from dataclasses import dataclass
 from typing import Callable
 
-from domain.testing.ux_flows.steps import (
+from domain.journeys.steps import (
     s_click,
     s_exists,
     s_goto,

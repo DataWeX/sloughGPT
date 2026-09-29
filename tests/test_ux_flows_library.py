@@ -1,8 +1,8 @@
-"""Registry integrity + spec-linking for domain.testing.ux_flows.
+"""Registry integrity + spec-linking for domain.journeys.
 
 Runs without a live stack — validates the declarative registry against
 docs/UX_FLOWS.md so a renamed spec heading or dropped flow fails the suite.
-The live sweep is `python -m domain.testing.ux_flows` (marked slow, only when
+The live sweep is `python -m domain.journeys` (marked slow, only when
 SLO_UX_LIVE=1).
 """
 
@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from domain.testing.ux_flows import FLOWS, get_flow, list_flows
+from domain.journeys import FLOWS, get_flow, list_flows
 
 _REPO = Path(__file__).resolve().parent.parent
 _UX_FLOWS_MD = _REPO / "docs" / "UX_FLOWS.md"
@@ -59,7 +59,7 @@ def _api_ok() -> bool:
 
 @pytest.mark.slow
 def test_live_home_flow_smoke():
-    """Single-flow live smoke — the full sweep is `python -m domain.testing.ux_flows`."""
+    """Single-flow live smoke — the full sweep is `python -m domain.journeys`."""
     if os.environ.get("SLO_UX_LIVE") != "1":
         pytest.skip("set SLO_UX_LIVE=1 to run live journeys")
     if not _api_ok():
@@ -67,7 +67,7 @@ def test_live_home_flow_smoke():
 
     import asyncio
 
-    from domain.testing.ux_flows.runner import run
+    from domain.journeys.runner import run
 
     rc = asyncio.run(run([get_flow("0-home")], headed=False, strict_errors=False))
     assert rc == 0, "home journey failed"

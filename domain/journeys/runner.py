@@ -1,10 +1,10 @@
 """Runner for the UX_FLOWS journeys — boots avion against a live stack.
 
 Usage:
-    .venv/bin/python -m domain.testing.ux_flows                # all journeys
-    .venv/bin/python -m domain.testing.ux_flows --flow 2-write
-    .venv/bin/python -m domain.testing.ux_flows --list
-    .venv/bin/python -m domain.testing.ux_flows --strict-errors
+    .venv/bin/python -m domain.journeys                # all journeys
+    .venv/bin/python -m domain.journeys --flow 2-write
+    .venv/bin/python -m domain.journeys --list
+    .venv/bin/python -m domain.journeys --strict-errors
 
 Env:
     SLO_WEB_URL         default http://localhost:5175
@@ -24,7 +24,7 @@ import time
 import urllib.request
 from typing import Any
 
-from domain.testing.ux_flows.flows import FLOWS, Flow
+from domain.journeys.flows import FLOWS, Flow
 
 WEB = os.environ.get("SLO_WEB_URL", "http://localhost:5175")
 API = os.environ.get("SLO_API_URL", "http://localhost:8000")
