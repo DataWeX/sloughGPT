@@ -1,20 +1,22 @@
-"""Contract: QUICKSTART.md stays truthful against the live CLI and API.
+"""Contract: root entry docs stay truthful against the live CLI and API.
 
-Guards the 5-minute entry doc — the drift class found in the 2026-09-29
-seam-6 audit:
+Guards QUICKSTART.md, CONTRIBUTING.md, and INFRASTRUCTURE.md — the drift
+class found in the 2026-09-29 seam-6 audit:
 
 - dead top-level CLI forms (`./sloughgpt quick`, `export`, `api-status`, …
-  now subcommands under train/model/system/dataset groups),
+  now subcommands under train/model/system/dataset groups; bare
+  `sloughgpt eval` prose),
 - dead repo paths and clone URLs (iamtowbee → DataWeX; optimized_trainer,
-  torch_runtime, sou_format, ml_infrastructure, helm chart all gone),
+  torch_runtime, sou_format, ml_infrastructure, helm chart,
+  domain/ui/api_server.py, _local_soul_candidate_paths all gone),
 - curl examples for routes that no longer serve (/cache, /metrics,
   /inference/batch, /metrics/prometheus),
 - Makefile/npm targets that do not exist (`make dev-stack`, `make help`),
-- the file-structure tree (bare filenames in the tree were never covered by
-  the prefix sweep — pinned here).
+- the QUICKSTART file-structure tree (bare filenames in the tree were never
+  covered by the prefix sweep — pinned here).
 
-Any change to the real infrastructure that invalidates this doc must update
-it in the same change.
+Any change to the real infrastructure that invalidates these docs must update
+them in the same change.
 """
 
 from __future__ import annotations
@@ -25,7 +27,12 @@ import re
 from pathlib import Path
 
 _REPO = Path(__file__).resolve().parents[2]
-_DOC = _REPO / "QUICKSTART.md"
+_DOCS = (
+    _REPO / "QUICKSTART.md",
+    _REPO / "CONTRIBUTING.md",
+    _REPO / "INFRASTRUCTURE.md",
+)
+_QUICKSTART = _REPO / "QUICKSTART.md"
 _PATH_PREFIXES = (
     "tests/",
     "scripts/",
@@ -90,6 +97,9 @@ _STALE_CLAIMS = {
     "api-test": "top-level command removed",
     "api-auth": "top-level command removed",
     "`tiny`": "dataset no longer ships in data/",
+    "sloughgpt eval": "command is sloughgpt train eval now",
+    "_local_soul_candidate_paths": "renamed to local_soul_candidate_paths in utils/helpers.py",
+    "domain/ui/api_server.py": "legacy demo server removed",
 }
 
 # Pinned file-structure tree entries (the tree uses bare filenames, which the
@@ -113,53 +123,61 @@ _TREE_CLAIMS = (
 _CURL_SKIP = frozenset({"/docs"})
 
 
-def _text() -> str:
-    return _DOC.read_text(encoding="utf-8")
+def _text(path: Path = _QUICKSTART) -> str:
+    return path.read_text(encoding="utf-8")
 
 
 def test_referenced_paths_exist() -> None:
     missing: list[str] = []
-    for line in _text().splitlines():
-        low = line.lower()
-        if any(ctx in low for ctx in _NEGATIVE_CONTEXT):
-            continue
-        for token in re.findall(r"`([^`\n]+)`", line):
-            token = token.strip().rstrip(".,;:")
-            if any(s in token for s in _SKIP_SUBSTRINGS):
+    for doc in _DOCS:
+        for line in _text(doc).splitlines():
+            low = line.lower()
+            if any(ctx in low for ctx in _NEGATIVE_CONTEXT):
                 continue
-            if token.startswith("./"):
-                token = token[2:]
-            if not token.startswith(_PATH_PREFIXES):
-                continue
-            if not (_REPO / token).exists():
-                missing.append(token)
-    assert not missing, f"QUICKSTART.md references dead paths: {missing}"
+            for token in re.findall(r"`([^`\n]+)`", line):
+                token = token.strip().rstrip(".,;:")
+                if any(s in token for s in _SKIP_SUBSTRINGS):
+                    continue
+                if token.startswith("./"):
+                    token = token[2:]
+                if not token.startswith(_PATH_PREFIXES):
+                    continue
+                if not (_REPO / token).exists():
+                    missing.append(f"{doc.name}: {token}")
+    assert not missing, f"entry docs reference dead paths: {missing}"
 
 
 def test_markdown_links_resolve() -> None:
-    broken = [
-        t
-        for t in re.findall(r"\]\(([^)#]+)\)", _text())
-        if not t.startswith(("http://", "https://", "mailto:")) and not (_REPO / t).exists()
-    ]
-    assert not broken, f"QUICKSTART.md contains dead links: {broken}"
+    broken: list[str] = []
+    for doc in _DOCS:
+        for t in re.findall(r"\]\(([^)#]+)\)", _text(doc)):
+            if t.startswith(("http://", "https://", "mailto:")):
+                continue
+            if not (_REPO / t).exists():
+                broken.append(f"{doc.name}: {t}")
+    assert not broken, f"entry docs contain dead links: {broken}"
 
 
 def test_no_stale_claims_or_dead_commands() -> None:
-    text = _text()
-    hits = [f"{c!r}" for c, why in _STALE_CLAIMS.items() if c in text for _ in (why,)]
-    dead_cmds = sorted(
-        {
+    hits: list[str] = []
+    dead_cmds: set[str] = set()
+    for doc in _DOCS:
+        text = _text(doc)
+        hits.extend(
+            f"{doc.name}: {claim!r} ({why})"
+            for claim, why in _STALE_CLAIMS.items()
+            if claim in text
+        )
+        dead_cmds.update(
             m.group(1)
             for m in re.finditer(r"\./sloughgpt ([a-z][a-z-]*)", text)
             if m.group(1) in _DEAD_COMMANDS
-        }
-    )
+        )
     assert not dead_cmds, (
-        f"QUICKSTART.md calls removed top-level commands: {dead_cmds} — "
+        f"entry docs call removed top-level commands: {sorted(dead_cmds)} — "
         "they live under train/model/system/dataset groups now"
     )
-    assert not hits, f"stale claims reintroduced in QUICKSTART.md: {hits}"
+    assert not hits, f"stale claims reintroduced: {hits}"
 
 
 def _live_routes() -> set[tuple[str, str]]:
@@ -186,16 +204,17 @@ def test_curl_examples_serve() -> None:
 
 
 def test_shell_and_npm_targets_exist() -> None:
-    text = _text()
     problems: list[str] = []
     makefile = (_REPO / "Makefile").read_text(encoding="utf-8")
-    for name in sorted(set(re.findall(r"\bmake ([a-z0-9][a-z0-9-]*)", text))):
-        if not re.search(rf"^{re.escape(name)}:", makefile, re.MULTILINE):
-            problems.append(f"Makefile target missing: {name}")
     scripts = json.loads((_REPO / "package.json").read_text(encoding="utf-8")).get("scripts", {})
-    for name in sorted(set(re.findall(r"`([a-z]+:[a-z-]+)`", text))):
-        if name not in scripts:
-            problems.append(f"package.json script missing: {name}")
+    for doc in _DOCS:
+        text = _text(doc)
+        for name in sorted(set(re.findall(r"`make ([a-z0-9][a-z0-9-]*)`", text))):
+            if not re.search(rf"^{re.escape(name)}:", makefile, re.MULTILINE):
+                problems.append(f"{doc.name}: Makefile target missing: {name}")
+        for name in sorted(set(re.findall(r"`([a-z]+:[a-z-]+)`", text))):
+            if name not in scripts:
+                problems.append(f"{doc.name}: package.json script missing: {name}")
     assert not problems, problems
 
 
