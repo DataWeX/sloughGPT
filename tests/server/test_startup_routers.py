@@ -250,12 +250,8 @@ class TestPhaseTaskQueue:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         q = object()
         with (
-            patch(
-                "domain.infrastructure.task_queue.get_task_queue", return_value=q
-            ) as mock_q,
-            patch(
-                "domain.infrastructure.training_queue.register_training_handlers"
-            ) as mock_reg,
+            patch("domain.infrastructure.task_queue.get_task_queue", return_value=q) as mock_q,
+            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
             patch("domain.memory.register_memory_handlers") as mock_mem,
             patch("domain.memory._internal.maintenance.start_memory_maintenance") as mock_maint,
         ):
@@ -273,9 +269,7 @@ class TestPhaseTaskQueue:
                 "domain.infrastructure.task_queue.get_task_queue",
                 side_effect=RuntimeError("boom"),
             ),
-            patch(
-                "domain.infrastructure.training_queue.register_training_handlers"
-            ) as mock_reg,
+            patch("domain.infrastructure.training_queue.register_training_handlers") as mock_reg,
             patch("domain.memory.register_memory_handlers") as mock_mem,
             patch("domain.memory._internal.maintenance.start_memory_maintenance"),
         ):
@@ -294,9 +288,7 @@ class TestPhaseConfigReady:
         orch = StartupOrchestrator(FastAPI(), ServerConfig())
         with (
             patch("domain.infrastructure._internal.config.get_config") as mock_cfg,
-            patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager"
-            ) as mock_rm,
+            patch("domain.infrastructure.resource_manager.get_resource_manager") as mock_rm,
         ):
             rm = mock_rm.return_value
             rm.apply_blas_env.return_value = None
@@ -318,7 +310,7 @@ class TestPhaseConfigReady:
                 side_effect=RuntimeError("boom"),
             ),
             patch(
-                "domain.infrastructure._internal.resource_manager.get_resource_manager",
+                "domain.infrastructure.resource_manager.get_resource_manager",
                 side_effect=RuntimeError("boom2"),
             ),
         ):
@@ -512,8 +504,26 @@ class TestInitLifecycle:
 # ── run() orchestration ───────────────────────────────────────────────────────
 
 
+async def _run_and_settle(orch, until, timeout_s: float = 180.0):
+    """Run startup, then let the post-bind task reach ``until``.
+
+    ``run()`` executes Stage CRITICAL inline and schedules READY → phase_ready
+    → BACKGROUND as a task, so the lifespan can yield (and uvicorn bind) before
+    the model finishes loading. Poll until ``until()`` is truthy (typically
+    "``_phase_ready`` was awaited") so the test waits for READY without also
+    paying for the real BACKGROUND stage, which is fire-and-forget in tests.
+    """
+    await orch.run()
+    steps = int(timeout_s / 0.05)
+    for _ in range(steps):
+        await asyncio.sleep(0.05)
+        if until():
+            return
+    raise AssertionError(f"post-bind startup task did not reach {until!r} in {timeout_s}s")
+
+
 class TestRun:
-    """run() — staged startup (CRITICAL → READY, BACKGROUND scheduled)."""
+    """run() — CRITICAL inline; READY + BACKGROUND run post-bind."""
 
     def _mocked_loader(self):
         loader = MagicMock()
@@ -525,9 +535,7 @@ class TestRun:
         wh = MagicMock()
         wh.emit = AsyncMock()
         return (
-            patch(
-                "infrastructure.staged_loader.get_staged_loader", return_value=loader
-            ),
+            patch("infrastructure.staged_loader.get_staged_loader", return_value=loader),
             patch("infrastructure.startup_terminal.get_terminal_viz"),
             patch("infrastructure.startup_webhooks.get_webhook_manager", return_value=wh),
             patch("infrastructure.db_pool.get_db"),
@@ -547,11 +555,12 @@ class TestRun:
             p_db,
             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
         ):
-            asyncio.run(orch.run())
-        # CRITICAL + READY run inline; BACKGROUND is only scheduled.
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
+        # CRITICAL runs inline so the lifespan can yield; the post-bind task
+        # then runs READY and BACKGROUND.
         # (Count calls, not awaits: the loader mock records invocations;
         # awaiting is the loop's business.)
-        assert loader.run_stage.call_count == 2
+        assert loader.run_stage.call_count == 3
         mock_ready.assert_awaited_once()
         assert orch._profile_enum.value == "full"
 
@@ -571,7 +580,7 @@ class TestRun:
             p_db,
             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
         ):
-            asyncio.run(orch.run())
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
         lifecycle.start.assert_not_awaited()
         mock_ready.assert_awaited_once()
 
@@ -588,6 +597,28 @@ class TestPhase3Wandb:
             os.environ.pop("SLO_WANDB", None)
             asyncio.run(orch._phase3_wandb())
         assert orch._wandb_task is None
+
+    def test_ready_phase_cannot_be_demoted_by_background_rerun(self):
+        """Stage BACKGROUND re-runs phase3/phase4 after ``_post_bind``
+        reported ready; an unconditional STARTUP_PHASE update there would
+        regress 9/9 -> 6/9 and pin /health/ready's app_lifecycle at
+        "starting" forever.
+        """
+        from startup_progress import STARTUP_PHASE
+
+        orch = StartupOrchestrator(FastAPI(), ServerConfig())
+        saved = dict(STARTUP_PHASE)
+        STARTUP_PHASE.update(phase="ready", step=9, total=9, message="ok")
+        try:
+            with patch.dict(os.environ, {}, clear=False):
+                os.environ.pop("SLO_WANDB", None)
+                asyncio.run(orch._phase3_wandb())
+                asyncio.run(orch._phase4_multimodal())
+            assert STARTUP_PHASE["phase"] == "ready"
+            assert STARTUP_PHASE["step"] == 9
+        finally:
+            STARTUP_PHASE.clear()
+            STARTUP_PHASE.update(saved)
 
 
 # ── _autoload_model → native soul path ────────────────────────────────────────
@@ -850,18 +881,24 @@ class TestRunDirectFallback:
     """run() — profile_enum None + lifecycle None → direct phase calls."""
 
     def test_direct_fallback_runs_registry_and_routers(self):
-        orch = StartupOrchestrator(FastAPI(), ServerConfig())
+        # autoload "off" keeps Stage 2's model_ready wait from spinning 120s;
+        # heavy phases (model autoload w/ retry sleeps, wandb, multimodal) are
+        # stubbed — this test only verifies run() wires registry/routers/ready.
+        orch = StartupOrchestrator(FastAPI(), ServerConfig(autoload_model="off"))
         orch._lifecycle = None
         orch._profile_enum = None
         with (
             patch.object(StartupOrchestrator, "_init_lifecycle", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase2_model_load", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase3_wandb", new=AsyncMock()),
+            patch.object(StartupOrchestrator, "_phase4_multimodal", new=AsyncMock()),
             patch.object(
                 StartupOrchestrator, "_phase5_model_registry", new=AsyncMock()
             ) as mock_reg,
             patch.object(StartupOrchestrator, "_phase6_routers", new=AsyncMock()) as mock_routers,
             patch.object(StartupOrchestrator, "_phase_ready", new=AsyncMock()) as mock_ready,
         ):
-            asyncio.run(orch.run())
+            asyncio.run(_run_and_settle(orch, until=lambda: mock_ready.await_count))
         assert mock_reg.call_count == 1
         assert mock_routers.call_count == 1
         mock_ready.assert_awaited()

@@ -2,11 +2,13 @@
 Health Controller - Business logic for system health
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 import psutil
 
@@ -402,10 +404,10 @@ def _get_memory_pressure_stats() -> dict[str, Any]:
         return {}
 
 
-_cached_process: Optional["psutil.Process"] = None
+_cached_process: psutil.Process | None = None
 
 
-def _get_process() -> "psutil.Process":
+def _get_process() -> psutil.Process:
     """Return a cached psutil.Process instance for the current process."""
     global _cached_process
     if _cached_process is None:

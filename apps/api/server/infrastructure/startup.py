@@ -31,6 +31,20 @@ from config import ServerConfig
 
 logger = logging.getLogger("slo.startup")
 
+
+def _advance_startup_phase(**fields: object) -> None:
+    """Advance STARTUP_PHASE unless the app already reported ready.
+
+    The staged BACKGROUND stage re-enters ``_phase3_wandb`` and
+    ``_phase4_multimodal`` after the terminal ``running``/``ready`` update.
+    Unconditional phase writes there regress the phase (9/9 -> 6/9) and pin
+    ``/health/ready``'s ``app_lifecycle`` at "starting" forever.
+    """
+    if STARTUP_PHASE.get("phase") in ("running", "ready"):
+        return
+    STARTUP_PHASE.update(fields)
+
+
 # Timeout constants for startup/shutdown hooks (seconds)
 _TIMEOUT_TASK_QUEUE = 10.0
 _TIMEOUT_CONFIG = 5.0
@@ -50,18 +64,18 @@ _TIMEOUT_SHUTDOWN = 30.0
 _PREWARM_MODEL_LOAD_IMPORTS = [
     "state",
     "config",
-    "domains.infrastructure.safetensors_loader",
+    "domain.infrastructure._internal.safetensors_loader",
     "domain.inference._internal.slonet_provider",
-    "domains.infrastructure.process_guard",
-    "domains.infrastructure.server_state",
+    "domain.infrastructure._internal.process_guard",
+    "domain.infrastructure._internal.server_state",
     "controllers.models",
-    "domains.infrastructure.model_registry",
+    "domain.infrastructure._internal.model_registry",
     "domain.models._internal.provider",
     "domain.inference._internal.slo_manager",
-    "domains.slolib.gpu",
-    "domains.infrastructure.model_catalog",
-    "domains.infrastructure.task_queue",
-    "domains.infrastructure.training_queue",
+    "domain.slolib._internal.gpu",
+    "domain.infrastructure._internal.model_catalog",
+    "domain.infrastructure._internal.task_queue",
+    "domain.infrastructure._internal.training_queue",
     "domain.api._internal.sse_envelope",
     "pydantic.v1",
 ]
@@ -398,9 +412,11 @@ class StartupOrchestrator:
             await _restore_training_runtime()
 
         loader.on(Stage.READY, "model_ready", _wait_for_model, timeout=130.0)
-        loader.on(Stage.READY, "training_restore", _restore_training, timeout=15.0)
+        # JobStore.list() can block on a cold journal; 15s was too tight and
+        # left interrupted jobs unseeded after restart (timeout -> empty history).
+        loader.on(Stage.READY, "training_restore", _restore_training, timeout=60.0)
 
-        await loader.run_stage(Stage.READY)
+        # Stage READY is executed by ``_post_bind`` below — see the note there.
 
         # ── Stage 3: BACKGROUND ──────────────────────────────────
         # Non-critical services start after model is ready
@@ -454,17 +470,22 @@ class StartupOrchestrator:
         loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
         loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
 
-        # Schedule BACKGROUND stage to run after uvicorn binds the server socket.
-        # Firing it before yield starves the event loop, preventing
-        # loop.create_server() from completing (GIL starvation from heavy sync
-        # imports in background hooks).  A short delay lets the event loop
-        # finish the socket bind before BACKGROUND work begins.
-        loop = asyncio.get_running_loop()
-        loop.call_later(2.0, lambda: asyncio.ensure_future(loader.run_stage(Stage.BACKGROUND)))
+        # Stage 2 (READY) and Stage 3 (BACKGROUND) run *after* the socket binds.
+        # uvicorn refuses connections until the lifespan yields, and READY blocks
+        # on the model (120s poll / 130s hook timeout). Executing CRITICAL inline
+        # and yielding first lets GET /health answer as soon as routers are up;
+        # the model finishes loading behind a live server instead of holding the
+        # port closed. BACKGROUND is chained onto READY rather than fired on a
+        # timer — the socket is already bound, so its heavy sync imports can no
+        # longer starve ``loop.create_server()``.
+        async def _post_bind():
+            await loader.run_stage(Stage.READY)
+            STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
+            await self._phase_ready()
+            await loader.run_stage(Stage.BACKGROUND)
 
-        # Server is now READY (stage 2 complete)
-        STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
-        await self._phase_ready()
+        loop = asyncio.get_running_loop()
+        loop.call_soon(lambda: asyncio.ensure_future(_post_bind()))
 
     async def _phase2_model_load(self):
         """Start model load as a background task (non-blocking).
@@ -670,7 +691,7 @@ class StartupOrchestrator:
 
         Enable with SLO_WANDB=1 environment variable.
         """
-        STARTUP_PHASE.update(
+        _advance_startup_phase(
             phase="wandb_server", step=5, total=9, message="W&B: disabled by default"
         )
         enabled = os.environ.get("SLO_WANDB", "").lower() in ("1", "true", "yes")
@@ -718,7 +739,7 @@ class StartupOrchestrator:
         The multimodal engine (VisionCNN + models) is loaded on first use
         via the /multimodal/* endpoints, not at server startup.
         """
-        STARTUP_PHASE.update(
+        _advance_startup_phase(
             phase="multimodal", step=6, total=9, message="Multimodal: lazy-load enabled"
         )
         logger.info(
@@ -1621,7 +1642,17 @@ def _autoload_model(cfg: ServerConfig):
             )
             _time.sleep(delay)
 
-    # 2) All local load attempts failed — download from HuggingFace
+    # 2) Local load failed — HuggingFace bootstrap is opt-in (goal 12).
+    #    Set SLO_BOOTSTRAP_HF=1 to allow downloading HF weights as fallback.
+    bootstrap_hf = os.environ.get("SLO_BOOTSTRAP_HF", "0").strip() in ("1", "true", "yes")
+    if not bootstrap_hf:
+        logger.warning(
+            "No local model for %s and SLO_BOOTSTRAP_HF is off — skipping HF download",
+            model_id,
+            extra={"tag": "START"},
+        )
+        return None
+
     logger.info(
         "No local .slnc/safetensors for %s — downloading from HuggingFace",
         model_id,
@@ -1731,7 +1762,7 @@ def _start_inference_engine(cfg) -> Any | None:
     engine_cmd = [
         sys.executable,
         "-m",
-        "domains.infrastructure.inference_engine",
+        "domain.infrastructure._internal.inference_engine",
         "--model-id",
         model_type,
         "--slnc-path",
@@ -1877,7 +1908,7 @@ def _make_engine_restart_fn(cfg):
         engine_cmd = [
             sys.executable,
             "-m",
-            "domains.infrastructure.inference_engine",
+            "domain.infrastructure._internal.inference_engine",
             "--model-id",
             model_type,
             "--slnc-path",
