@@ -554,7 +554,12 @@ def download_hf_model(
             continue
 
         existing_file = st_state.files.get(rel_path)
-        if existing_file and existing_file.complete:
+        if (
+            existing_file
+            and existing_file.complete
+            and dest.is_file()
+            and (hf_file.size <= 0 or dest.stat().st_size == hf_file.size)
+        ):
             continue
 
         # Normalize HuggingFace's *.incomplete marker into downcraft's
