@@ -27,7 +27,7 @@
 
 ### Clients (separate from core infra — see PRODUCT_ENGINEERING.md)
 
-- Web: 32 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Voyager journey library (201 tests, 7 backends). Mobile: not started. Clients reach core only through the API/protocol — never internals.
+- Web: 109 pages on `@sloughgpt/strui`, per-domain controllers over one HTTP client, markdown chat with streaming/regeneration/feedback. CLI: Python REPL (40+ commands) + opt-in curses TUI. Journey automation: `packages/avion` (225 tests, 7 backends). Mobile: not started. Clients reach core only through the API/protocol — never internals.
 
 ### Compression (pugqeep)
 
@@ -46,14 +46,14 @@
 
 1. ~~**Stabilize SloNet training** — Fix remaining backward pass broadcast bugs (test_tokenizer.py failures).~~ **Done** — `_mul` backward uses `_broadcast_back`; `test_slonet_broadcast.py` + `TestSloEngineLearn` 17/17 pass. Remaining: profile and optimize hot loops.
 2. ~~**Wire process isolation in production** — Enable ProcessGuard for `_load_hf_model()` so subprocess crashes don't take down the API server.~~ **Done** — guard wiring exists on the manual (`controllers/models.py:_load_hf_model`, lazy + eager) and autoload (`startup.py:_try_lazy_guard_autoload`) paths; `ServerConfig.enable_process_guard` is now the single source of truth and defaults to enabled (`SLO_ENABLE_PROCESS_GUARD`, default `true`), fixing the dead-config mismatch where the field defaulted to `false` while the runtime toggle defaulted to `true`.
-3. ~~**Fix pre-existing test failures** — 14 flaky frontend tests (DOM timing, async renders, StrictMode double-mount).~~ **Done** — suite at 324 files / 3048 tests; only `ModelDetailPage.test.tsx` excluded (worker-harness hang).
+3. ~~**Fix pre-existing test failures** — 14 flaky frontend tests (DOM timing, async renders, StrictMode double-mount).~~ **Done** — suite green with one excluded file: `ModelDetailPage.test.tsx` (worker-harness hang). Run `npm test` in `apps/web` for live counts.
 
 ## Medium-term goals
 
 4. ~~**Incremental training from feedback** — Wire OnlineLoRAUpdater + PerUserLORAStore into a continuous background loop (currently only fires on explicit aggregation).~~ **Done** — `_run_background_training` now reads the tokenizer from the workflow's `set_model()` state (was reading a nonexistent `lora_updater._tokenizer`, so the loop always no-opped); the active server model is wired into the workflow at startup (`main.py:_start_feedback_workflow`) and on feedback (`FeedbackController._wire_model` falls back to `server_state.model` when no auto-train student is set).
 5. ~~**Multi-agent orchestration polish** — Async executor works, needs UI for agent creation/editing and dashboard for runs.~~ **Done** — full agent CRUD (create/edit/delete + validation), multi-agent orchestration card (goal/context, per-agent picks via `agent_ids`, live plan→execute→compose→complete SSE timeline), and runs dashboard on `apps/web/app/(app)/agents/page.tsx` (list/timeline views, status + agent filters, expandable detail with per-task dots/previews, result + logs). Backend: `apps/api/server/routers/agents.py` CRUD + `POST /orchestrate` (SSE, `asyncio.gather` level execution) + `GET /runs` + `GET /runs/{run_id}`; persistence via `domain/agents/_internal/run_history.py` (file-backed `data/agent_runs/`). Covered by 26 frontend + 179 backend/core tests.
 6. ~~**Dataset management UI** — Import/export/versioning/search frontend.~~ **Done** — list page (search/sort/preview/compare/export/delete/version badges), detail page (rename/stats/quality/insights/preview/snapshots/JSONL+CSV export/convert-to-chat-format), import modals (local/GitHub/HF/URL/ISBN/Kaggle/CSV), chat→dataset export. Backend convert + versioning covered by tests.
-7. ~~**Voyager journey testing library** — Build a modular, cross-platform library for user journey tests and computer-use automation.~~ **Done** — `packages/voyager/` with 201 tests, 7 backends (Playwright, Selenium, CDP, API-only, CLI, Appium, Desktop), AI model integration, learning system, and full computer-use primitives (Mouse, Keyboard, InteractionChain, visual detection, smart waits, time-travel debugging, network interception, performance markers).
+7. ~~**Voyager journey testing library** — Build a modular, cross-platform library for user journey tests and computer-use automation.~~ **Done** at the time — `packages/voyager/` delivered 7 backends (Playwright, Selenium, CDP, API-only, CLI, Appium, Desktop), AI model integration, learning system, and computer-use primitives (Mouse, Keyboard, InteractionChain, visual detection, smart waits, time-travel debugging, network interception, performance markers). **Superseded** — voyager is now a stub; the journey library lives in `packages/avion` (225 tests, 7 backends, formerly voyager/arken).
 
 ## New goals (September 2026)
 

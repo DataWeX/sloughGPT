@@ -84,7 +84,7 @@ only through the same stable interfaces:
 | 4   | **Models**    | Switches between trained models        | `models`, `inference`         | `/models`, `/infer`              | `/models`     |
 | 5   | **Souls**     | Gives AI a personality                 | `soul`, `ai_personality`      | `/souls`                         | `/souls`      |
 | 6   | **Knowledge** | AI learns from files/docs              | `knowledge`                   | `/knowledge`                     | `/knowledge`  |
-| 7   | **Tools**     | Writing, translate, rewrite, etc.      | `tools`                       | `/tools`                         | `/tools`      |
+| 7   | **Tools**     | Writing, translate, rewrite, etc.      | `tools`                       | `/tools`                         | — (removed → chat ModeBar `/chat?mode=`) |
 
 ## Power User Features (Alex might discover later)
 
@@ -107,7 +107,7 @@ only through the same stable interfaces:
 
 | #   | Feature              | Status           | Domain module          | Notes                                                              |
 | --- | -------------------- | ---------------- | ---------------------- | ------------------------------------------------------------------ |
-| 15  | **Consciousness**    | Wired           | `consciousness`        | Level-gated post-gen wiring (SloEngine hook + router `_run_post_gen_tasks`); narrative via reasoning_chain + `CONSCIOUSNESS` SSE; 27 sub-pages still need flow review |
+| 15  | **Consciousness**    | Wired           | `consciousness`        | Level-gated post-gen wiring (SloEngine hook + router `_run_post_gen_tasks`); narrative via reasoning_chain + `CONSCIOUSNESS` SSE; 25 sub-pages still need flow review |
 | 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works, but router bypasses domain        |
 | 17  | **Phoneme Learning** | Over-built       | `voice` (phoneme)      | 47 components, 12 tabs — needs flow restructure                    |
 | 18  | **Tokenizer**        | Over-built       | `training` (tokenizer) | 9 tabs, 12 sub-cards — needs consolidation                         |
@@ -149,41 +149,29 @@ Router: GET /collections, POST /collections/create, POST /collections/run
 Frontend: collections page (single page)
 ```
 
-### Bad examples (fix these)
+### Fixed examples (the pattern this rule came from)
 
-**Voice** — 3 routers, domain bypassed:
+These were the bypass webs the rule was written against — all fixed; `routers/`
+now imports public `domain.<pkg>` facades only (0 `_internal` imports across
+the 56 router files):
 
+**Voice** (was: routers reaching into `domain.*_internal*`):
 ```
-voice.py router → imports from domain.multimodal._internal.tts (WRONG)
-tokenizer.py router → imports from domain.training._internal.tokenizer_manager (WRONG)
-token_tree.py router → imports from domain.training._internal.token_tree_manager (WRONG)
-
-Should be:
-VoiceEngine → wraps TTS + phoneme + recognition from domain.voice
-TokenizerEngine → wraps tokenizer from domain.training
-Single router per engine, not per implementation module
+voice.py / phoneme.py delegate via `domain.voice` facades
+(get_voice_engine / get_phoneme_engine) — no internal imports.
 ```
 
-**Knowledge** — 1 monolith router, domain bypassed:
-
+**Knowledge** (was: `kb.py` importing `domain.learner._internal.knowledge` directly):
 ```
-kb.py (1399 lines) → imports from domain.learner._internal.knowledge (WRONG)
-7 features inline: CRUD, RAG, training, spaced repetition, files, categorization, adapter
-
-Should be:
-KnowledgeEngine → wraps KnowledgeMemory + KnowledgeIngestor + DataFilter from domain.knowledge
-Router delegates to engine methods
+kb.py routes through the KnowledgeEngine facade
+(domain.knowledge.engine.get_knowledge_engine).
 ```
 
-**Training** — 7 routers, no unifying engine:
-
+**Training** (was: routers importing `domain.training._internal.*`):
 ```
-training/router.py, self_train.py, lora_eval.py, cloud_training.py,
-tokenizer.py, token_tree.py → all import from domain.training._internal.* (WRONG)
-
-Should be:
-TrainingEngine → wraps DatasetManager + TrainingPipeline + ModelManager from domain.training
-Single /training router with sub-paths for each feature
+self_train.py, lora_eval.py, cloud_training.py import public domain.training
+facades; the training/ router package remains the allowlisted exception
+(enforced by tests/contract/test_scatter_gate.py — no loop bodies in routers).
 ```
 
 ---
@@ -202,7 +190,7 @@ Single /training router with sub-paths for each feature
 
 ## Route Map (what exists vs what should exist)
 
-### Current: 85+ frontend pages, 58 routers
+### Current: 109 frontend pages, 56 routers
 
 ### Target: ~20 frontend pages, ~15 routers
 
@@ -234,14 +222,14 @@ Single /training router with sub-paths for each feature
 
 | What                            | Why                                       | Action                                      |
 | ------------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `routers/metrics.py`            | No frontend consumer, infrastructure-only | Delete or move to internal                  |
-| `routers/collections.py`        | No frontend page or controller            | Delete (feature unused)                     |
-| `routers/feeds.py`              | RSS feeds, no web frontend consumer       | Move to internal or delete                  |
-| `routers/api_keys.py`           | Duplicate of `security.py` (same prefix)  | Merge into security.py, delete api_keys.py  |
-| `routers/session_store.py`      | Utility module, not a router              | Move to `controllers/` or `infrastructure/` |
-| Phoneme: 47 components          | Over-built for Alex's needs               | Keep components, restructure page into flow |
-| Tokenizer: 9 tabs, 12 sub-cards | Over-built                                | Consolidate into 2-3 sections               |
-| Consciousness: 27 sub-pages     | Engine wired; pages still over-built        | Keep pages, review flows against UX_FLOWS.md |
+| `routers/metrics.py`            | No frontend consumer, infrastructure-only | ✅ removed (build order 2) |
+| `routers/collections.py`        | No frontend page or controller            | ✅ removed (build order 2) |
+| `routers/feeds.py`              | RSS feeds, no web frontend consumer       | ✅ removed (build order 2) |
+| `routers/api_keys.py`           | Duplicate of `security.py` (same prefix)  | ⏳ still open — file present               |
+| `routers/session_store.py`      | Utility module, not a router              | ✅ removed (build order 2) |
+| Phoneme page: over-built        | Far more components than the flow needs   | Keep components, restructure page into flow |
+| Tokenizer page: over-built      | Too many tabs/sub-cards for one flow      | Consolidate into 2-3 sections               |
+| Consciousness: 25 sub-pages     | Engine wired; pages still over-built        | Keep pages, review flows against UX_FLOWS.md |
 
 ---
 
@@ -250,7 +238,7 @@ Single /training router with sub-paths for each feature
 1. **Write this doc** ✅ (you're reading it)
 2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed
 3. **Feature engines** ✅ — VoiceEngine, KnowledgeEngine, TrainingEngine (ToolsEngine pattern) + `get_*_engine` facade exports, routers wired
-4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across 22 router files; facade lazy exports added for heavy symbols; tests patch facade paths)
+4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across all 56 `routers/*.py` files (the `training/` router package is the scatter-gate allowlisted exception); facade lazy exports added for heavy symbols; tests patch facade paths)
 5. **UI flows** — restructure phoneme, knowledge, training pages to follow UX_FLOWS.md
 6. **Consciousness** ✅ — wire cognitive engine to inference pipeline (SloEngine post-gen hook + router single process, level-gated via `ConsciousnessConfig.level`; narrative surfaced through `reasoning_chain` and `CONSCIOUSNESS complete` SSE)
 7. **Test** — verify all user journeys pass

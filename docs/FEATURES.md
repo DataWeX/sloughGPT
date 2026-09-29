@@ -49,29 +49,26 @@
 | Dataset validation UI | Low | ✅ CLI Done |
 | Export dataset | Low | ✅ Done |
 
-## CLI Tools (cli.py)
+## CLI Tools
+
+The live command surface is `./sloughgpt --help` (~44 top-level commands) — this
+table tracks the dataset/data tools only (verified against `sloughgpt dataset --help`):
 
 | Tool | Command | Status |
 |------|---------|--------|
-| List datasets | `./sloughgpt datasets list` | ✅ Done |
-| Dataset stats | `./sloughgpt datasets stats <name>` | ✅ Done |
-| Search HuggingFace | `./sloughgpt datasets search <query>` | ✅ Done |
-| Search GitHub | `./sloughgpt datasets search <query> --source github` | ✅ Done |
-| Search Books | `python3 api.py datasets/search/books?query=<title>` | ✅ Done |
-| Export dataset | `./sloughgpt datasets export <name>` | ✅ Done |
-| Import GitHub | `./sloughgpt datasets github <url> [name]` | ✅ Done |
-| Import HuggingFace | `./sloughgpt datasets hf <dataset_id> [name]` | ✅ Done |
-| Import URL | `./sloughgpt datasets url <url> <name>` | ✅ Done |
-| Data stats | `./sloughgpt data stats <path>` | ✅ Done |
-| Data validate | `./sloughgpt data validate <path>` | ✅ Done |
-| Train model | `./sloughgpt train --dataset <name>` | ✅ Done |
-| Multi-dataset | `./sloughgpt train --datasets shakespeare,code` | ✅ Done |
-| Dataset ratios | `./sloughgpt train --datasets shakespeare,code --ratios 0.7,0.3` | ✅ Done |
-| Feedback export | `./sloughgpt feedback-export -o data.jsonl` | ✅ Done |
-| Auto-train | `./sloughgpt autotrain start stop status` | ✅ Done |
-| Model presets | `./sloughgpt train --preset small medium large` | ✅ Done |
-| Native SloNet training | `sloughgpt train native --dataset <file> --steps N` | ✅ Done |
-| Token-tree tokenizer | `sloughgpt train native --tokenizer token-tree --token-vocab-size N` | ✅ Done |
+| List datasets | `./sloughgpt dataset list` | ✅ Done |
+| Dataset stats | `./sloughgpt dataset stats <name>` | ✅ Done |
+| Search datasets | `./sloughgpt dataset search <query>` | ✅ Done |
+| Export dataset | `./sloughgpt dataset export <name>` | ✅ Done |
+| Import (GitHub/HF/URL) | `./sloughgpt dataset import ...` | ✅ Done |
+| Validate | `./sloughgpt dataset validate <path>` | ✅ Done |
+| Train model | `./sloughgpt train` (subcommands: quick, native, embed, distill, eval, from-sessions, auto, …) | ✅ Done |
+| Feedback export | `./sloughgpt feedback` | ✅ Done |
+| Auto-train | `./sloughgpt train auto` | ✅ Done |
+
+The old Click-era surface (plural dataset group, one-shot auto-train and
+feedback export verbs, `train` with dataset/ratio flags) was replaced by the
+argparse group CLI above.
 
 ## Native SloNet Training (torch-free)
 
@@ -137,16 +134,10 @@ when `--max-steps` caps the run).
 
 ## Quick Train Workflow
 
-```bash
-# Single dataset
-python3 apps/cli/cli.py train --dataset shakespeare --epochs 3
-
-# Multiple datasets with equal weighting
-python3 apps/cli/cli.py train --datasets shakespeare,code --epochs 3
-
-# Multiple datasets with custom ratios (70% shakespeare, 30% code)
-python3 apps/cli/cli.py train --datasets shakespeare,code --ratios 0.7,0.3 --epochs 3
-```
+The current train surface is a subcommand group — run `./sloughgpt train` to
+list it (`quick`, `native`, `embed`, `distill`, `eval`, `from-sessions`, `auto`,
+`monitor`, `rlhf`, `self`, `demo`, `cloud`) and `./sloughgpt train <cmd>` for
+flags. The old `train --dataset/--datasets/--ratios` flags predate this group.
 
 ## Embedder Quality Gate
 
@@ -187,7 +178,7 @@ three metrics after training.
 
 ## Consciousness System
 
-The consciousness system provides AI self-awareness monitoring and management with 26 pages:
+The consciousness system provides AI self-awareness monitoring and management with 25 pages:
 
 ### Core Pages
 
@@ -268,24 +259,15 @@ The consciousness system provides AI self-awareness monitoring and management wi
 | consciousness-bus | ✅ Done | Event bus |
 | consciousness-notifications | ✅ Done | Notification store |
 
-## Tools Pages
+## Tools Pages (removed)
 
-| Tool | Path | Status | Description |
-|------|------|--------|-------------|
-| Brainstorm | `/brainstorm` | ✅ Done | AI brainstorming assistant |
-| Decide | `/decide` | ✅ Done | Decision-making helper |
-| Explain | `/explain` | ✅ Done | Simple explanations |
-| Rewrite | `/rewrite` | ✅ Done | Text rewriting & polish |
-| Translate | `/translate` | ✅ Done | Text translation |
-| Wellness | `/wellness` | ✅ Done | Wellness & relaxation |
-| Writing | `/writing` | ✅ Done | Writing assistant |
+The standalone tool pages (Brainstorm, Decide, Explain, Rewrite, Translate,
+Wellness, Writing) and `/tools` were removed — tools now run from chat via the
+ModeBar (`/chat?mode=<mode>`), API-only through `tools.py`. See the Route Map in
+PRODUCT_ENGINEERING.md.
 
 ## Test Coverage
 
-| Area | Coverage | Tests |
-|------|----------|-------|
-| Consciousness (all) | 100% | 384 |
-| Navigation | 100% | 8 |
-| Hooks/Lib | 95%+ | 1793 |
-| Features/Chat | 95%+ | 1467 |
-| Tools Pages | 100% | 7 |
+Coverage is measured, not asserted here — see TESTING.md ("Measuring Coverage")
+for the commands (`npm test -- --coverage`, `pytest --cov=domain`). The old
+self-reported percentage table was removed as stale.
