@@ -21,7 +21,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from schemas.common import raise_error
 
 from config import ServerConfig
-from domain.infrastructure._internal.errors import AppError
+from domain.infrastructure import AppError
 from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.auth")

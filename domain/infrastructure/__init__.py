@@ -4,12 +4,14 @@ Public API:
     AppConfig, get_config, reload_config
     EventBus, get_event_bus
     LifecycleManager, LifecyclePhase
-    AppError, ErrorCode
+    AppError, ErrorCode, ERROR_REGISTRY, get_error_class,
+    all error subclasses (ValidationError, AuthError, NotFoundError, ...)
     get_pool, get_model_registry, get_server_state
     get_knowledge_repository, get_dataset_repository
     get_event_buffer, get_server_buffer
 """
 
+from domain.infrastructure._internal import errors as _errors_mod
 from domain.infrastructure._internal.config import (
     AppConfig,
     ConfigManager,
@@ -24,9 +26,26 @@ from domain.infrastructure._internal.entity_repositories import (
     get_knowledge_repository,
 )
 from domain.infrastructure._internal.errors import (
+    ERROR_REGISTRY,
     AppError,
+    AuthError,
+    ConfigError,
+    ConflictError,
     ErrorCode,
+    FatalError,
+    ModelError,
+    ModelOOMError,
+    ModelTimeoutError,
+    NotFoundError,
+    NotImplementedAppError,
+    RecoverableError,
+    ResourceExhaustedError,
+    TaskError,
+    TimeoutAppError,
+    ValidationError,
     classify_exception,
+    emit_error_event,
+    get_error_info,
 )
 from domain.infrastructure._internal.event_buffer import get_event_buffer
 from domain.infrastructure._internal.event_bus import (
@@ -42,6 +61,12 @@ from domain.infrastructure._internal.lifecycle import (
 from domain.infrastructure._internal.model_registry import get_model_registry
 from domain.infrastructure._internal.output_buffer import get_server_buffer
 from domain.infrastructure._internal.server_state import get_server_state
+
+
+def get_error_class(class_name: str) -> type[AppError]:
+    """Resolve an error class by registry class-name (falls back to AppError)."""
+    return getattr(_errors_mod, class_name, AppError)
+
 
 # Lazy exports — heavy or optional modules (import on first attribute access).
 _LAZY_INFRA = {
@@ -74,7 +99,25 @@ __all__ = [
     "get_lifecycle_manager",
     "AppError",
     "ErrorCode",
+    "ERROR_REGISTRY",
     "classify_exception",
+    "get_error_class",
+    "get_error_info",
+    "emit_error_event",
+    "RecoverableError",
+    "FatalError",
+    "ValidationError",
+    "ConfigError",
+    "ModelError",
+    "ModelOOMError",
+    "ModelTimeoutError",
+    "TaskError",
+    "ResourceExhaustedError",
+    "NotFoundError",
+    "AuthError",
+    "ConflictError",
+    "TimeoutAppError",
+    "NotImplementedAppError",
     "get_db",
     "get_lifecycle_manager",
     "get_knowledge_repository",

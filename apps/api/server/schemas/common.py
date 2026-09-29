@@ -149,10 +149,10 @@ def raise_error(
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domain.infrastructure._internal.errors import (
+    from domain.infrastructure import (
         ERROR_REGISTRY,
-        AppError,
         ErrorCode,
+        get_error_class,
     )
 
     # Look up in the unified registry
@@ -164,10 +164,7 @@ def raise_error(
         class_name = "AppError"
         default_status = status_code or 400
 
-    # Import the correct class dynamically
-    import domain.infrastructure._internal.errors as _err_mod
-
-    exc_cls = getattr(_err_mod, class_name, AppError)
+    exc_cls = get_error_class(class_name)
 
     http_status = status_code or default_status
 
@@ -246,8 +243,8 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     Raises:
         AppError (or subclass) — never returns.
     """
-    from domain.infrastructure._internal.errors import AppError as _AppError
-    from domain.infrastructure._internal.errors import classify_exception
+    from domain.infrastructure import AppError as _AppError
+    from domain.infrastructure import classify_exception
 
     try:
         err = classify_exception(e)
