@@ -1280,17 +1280,15 @@ class WorkspacesRouter:
 
             # Search datasets
             try:
-                from domain.dataset._internal.repository import DatasetRepository
+                from domain.infrastructure import get_dataset_repository
 
-                ds_repo = DatasetRepository()
-                datasets = ds_repo.list_by_workspace(workspace_id)
-                for ds in datasets:
+                for ds in get_dataset_repository().list():
                     results["datasets"].append(
                         {
                             "id": ds.id,
                             "type": "dataset",
-                            "title": ds.name,
-                            "detail": f"Size: {getattr(ds, 'size', 0)} bytes",
+                            "title": ds.name or ds.id,
+                            "detail": f"{ds.format} · {ds.record_count} records",
                         }
                     )
             except Exception as e:
@@ -1298,17 +1296,15 @@ class WorkspacesRouter:
 
             # Search knowledge
             try:
-                from domain.learner._internal.knowledge import KnowledgeRepository
+                from domain.infrastructure import get_knowledge_repository
 
-                k_repo = KnowledgeRepository()
-                facts = k_repo.list_by_workspace(workspace_id)
-                for fact in facts:
+                for fact in get_knowledge_repository().list_facts():
                     results["knowledge"].append(
                         {
                             "id": fact.id,
                             "type": "knowledge",
-                            "title": fact.subject if hasattr(fact, "subject") else str(fact.id),
-                            "detail": fact.predicate if hasattr(fact, "predicate") else "",
+                            "title": (fact.content or fact.id)[:80],
+                            "detail": fact.topic,
                         }
                     )
             except Exception as e:

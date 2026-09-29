@@ -16,6 +16,10 @@ from domain.infrastructure._internal.config import (
     set_config_manager,
 )
 from domain.infrastructure._internal.database import get_db
+from domain.infrastructure._internal.entity_repositories import (
+    get_dataset_repository,
+    get_knowledge_repository,
+)
 from domain.infrastructure._internal.errors import (
     AppError,
     ErrorCode,
@@ -49,4 +53,6 @@ __all__ = [
     "classify_exception",
     "get_db",
     "get_lifecycle_manager",
+    "get_knowledge_repository",
+    "get_dataset_repository",
 ]
