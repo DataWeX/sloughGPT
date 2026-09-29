@@ -22,7 +22,11 @@ use futures::StreamExt;
 use ratelimit::{RateConfig, RateLimiter, RATE_LIMIT_HEADER_LIMIT, RATE_LIMIT_HEADER_REMAINING};
 use reqwest::Client;
 use serde::Serialize;
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    net::SocketAddr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use tokio::sync::{RwLock, Semaphore};
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -31,12 +35,16 @@ use tower_http::{
 };
 use tracing::info;
 
+mod breaker;
 mod compression;
 mod filters;
 mod ratelimit;
+mod stats;
 mod supervisor;
 
+use breaker::{BreakerConfig, CircuitBreaker};
 use filters::PathPolicy;
+use stats::EdgeStats;
 
 // ── Edge policy (transport only — no model knowledge) ──────────────────────
 
@@ -69,6 +77,7 @@ struct GatewayConfig {
     listen_addr: SocketAddr,
     policy: PathPolicy,
     rate: RateConfig,
+    breaker: BreakerConfig,
 }
 
 impl Default for GatewayConfig {
@@ -85,6 +94,7 @@ impl Default for GatewayConfig {
             listen_addr: SocketAddr::from(([0, 0, 0, 0], port)),
             policy: PathPolicy::from_env(),
             rate: RateConfig::from_env(),
+            breaker: BreakerConfig::from_env(),
         }
     }
 }
@@ -98,6 +108,8 @@ struct AppState {
     core_status: Arc<RwLock<CoreStatus>>,
     limiter: Arc<RateLimiter>,
     streams: Arc<Semaphore>,
+    stats: Arc<EdgeStats>,
+    breaker: Arc<CircuitBreaker>,
 }
 
 impl AppState {
@@ -113,6 +125,8 @@ impl AppState {
         Self {
             limiter: Arc::new(RateLimiter::new(config.rate)),
             streams: Arc::new(Semaphore::new(stream_cap)),
+            stats: Arc::new(EdgeStats::new()),
+            breaker: Arc::new(CircuitBreaker::new(config.breaker)),
             config,
             http,
             core_status: Arc::new(RwLock::new(CoreStatus::default())),
@@ -232,6 +246,14 @@ async fn main() {
     } else {
         info!("   → rate limiting disabled (MAN_GATEWAY_RATE_LIMIT=0)");
     }
+    if config.breaker.enabled() {
+        info!(
+            "   → breaker: {} consecutive upstream failures → open {}s (MAN_GATEWAY_BREAKER_FAILURES/_OPEN; 0 disables)",
+            config.breaker.failures, config.breaker.open_secs
+        );
+    } else {
+        info!("   → circuit breaker disabled (MAN_GATEWAY_BREAKER_FAILURES=0)");
+    }
 
     axum::serve(
         listener,
@@ -251,6 +273,8 @@ fn build_router(state: AppState) -> Router {
         // Health endpoints are contract passthroughs (see handlers below).
         .route("/health", get(health_check))
         .route("/health/detailed", get(detailed_health))
+        // Edge-owned performance stats — never proxied, never shaped by Python.
+        .route("/gateway/stats", get(gateway_stats))
         // Everything else: generic byte-relay to the sidecar.
         // No per-endpoint handlers — the edge never parses bodies.
         .fallback(proxy_http);
@@ -314,6 +338,21 @@ fn reject_streams() -> Response {
         .expect("static 429 response")
 }
 
+/// 503 shed while the circuit breaker is open — fail fast instead of
+/// queueing behind a dead core's edge timeout.
+fn reject_breaker(retry_after: u64) -> Response {
+    let body = serde_json::json!({ "detail": "Upstream unavailable." });
+    Response::builder()
+        .status(StatusCode::SERVICE_UNAVAILABLE)
+        .header(
+            axum::http::header::RETRY_AFTER,
+            retry_after.max(1).to_string(),
+        )
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("static 503 response")
+}
+
 async fn edge_admission(
     State(state): State<AppState>,
     req: Request,
@@ -321,15 +360,18 @@ async fn edge_admission(
 ) -> Response {
     let path = req.uri().path().to_string();
     // Health probes never consume budget (supervision must stay truthful);
-    // CORS preflights are short-circuited by the outer CorsLayer; static
-    // assets are edge-served, never Python traffic.
+    // the edge's own stats endpoint must stay readable under load; CORS
+    // preflights are short-circuited by the outer CorsLayer; static assets
+    // are edge-served, never Python traffic.
     if path.starts_with("/health")
+        || path.starts_with("/gateway/")
         || path.starts_with("/static/")
         || req.method() == axum::http::Method::OPTIONS
     {
         return next.run(req).await;
     }
 
+    let route = stats::route_key(&path);
     let peer = req
         .extensions()
         .get::<ConnectInfo<SocketAddr>>()
@@ -351,6 +393,7 @@ async fn edge_admission(
                 .limiter
                 .check_at(&key, limit, Duration::from_secs(route_window), now);
             if check.is_err() {
+                state.stats.shed_429(&route);
                 return reject_rate(
                     format!("Rate limit exceeded for {prefix}. Try again later."),
                     limit,
@@ -373,6 +416,7 @@ async fn edge_admission(
                 now,
             );
             if check.is_err() {
+                state.stats.shed_429(&route);
                 return reject_rate(
                     "Workspace rate limit exceeded. Try again later.".into(),
                     ratelimit::WORKSPACE_LIMIT,
@@ -394,32 +438,46 @@ async fn edge_admission(
         ) {
             Ok(remaining) => rate_headers = Some((remaining, global_limit)),
             Err(()) => {
+                state.stats.shed_429(&route);
                 return reject_rate(
                     "Too many requests. Try again later.".into(),
                     global_limit,
                     cfg.window_secs,
-                )
+                );
             }
         }
     }
 
-    // 4. Concurrency cap on streaming routes — gateway-native. The permit is
+    // 4. Circuit breaker: while open, shed instantly — do not spend an edge
+    // timeout on a core the edge has already watched fail K times.
+    if let Err(retry) = state.breaker.allow(now) {
+        state.stats.shed_503(&route);
+        return reject_breaker(retry);
+    }
+
+    // 5. Concurrency cap on streaming routes — gateway-native. The permit is
     // held until the body finishes: an SSE stream occupies inference capacity
     // for its whole life, not just until headers go out.
     let permit = if is_streaming_path(&path) && cfg.max_streams > 0 {
         match state.streams.clone().try_acquire_owned() {
             Ok(permit) => Some(permit),
-            Err(_) => return reject_streams(),
+            Err(_) => {
+                state.stats.shed_429(&route);
+                return reject_streams();
+            }
         }
     } else {
         None
     };
+    // In-flight gauge, streaming requests only: dropped when the body
+    // finishes, aborts, or the request errors anywhere downstream.
+    let guard = permit.as_ref().map(|_| stats::stream_open(&state.stats));
 
     let mut resp = next.run(req).await;
-    if let Some(permit) = permit {
+    if let (Some(permit), Some(guard)) = (permit, guard) {
         let (parts, body) = resp.into_parts();
         let held = body.into_data_stream().map(move |chunk| {
-            let _ = &permit;
+            let _ = (&permit, &guard);
             chunk
         });
         resp = Response::from_parts(parts, Body::from_stream(held));
@@ -440,6 +498,30 @@ async fn edge_admission(
 }
 
 // ── Health Handlers ─────────────────────────────────────────────────────────
+
+/// Edge-owned performance stats — the view FastAPI structurally cannot have
+/// (it only sees traffic that reached Python; this sees everything, including
+/// what the edge shed). Additive endpoint; never proxied, never reshaped.
+async fn gateway_stats(State(state): State<AppState>) -> Response {
+    let uptime = START_TIME.get().map(|t| t.elapsed().as_secs()).unwrap_or(0);
+    let (breaker_state, retry) = state.breaker.status(Instant::now());
+    let snap = state.stats.snapshot();
+    let body = serde_json::json!({
+        "gateway": {
+            "uptime_seconds": uptime,
+            "in_flight_streams": state.stats.in_flight(),
+            "breaker": {
+                "state": breaker_state,
+                "retry_after_secs": retry,
+                "failures_to_trip": state.config.breaker.failures,
+                "open_secs": state.config.breaker.open_secs,
+            },
+        },
+        "totals": snap["totals"],
+        "routes": snap["routes"],
+    });
+    Json(body).into_response()
+}
 
 async fn health_check(State(state): State<AppState>) -> Response {
     // Contract passthrough: the frontend reads FastAPI's whole health object
@@ -524,6 +606,10 @@ async fn detailed_health(State(state): State<AppState>) -> Response {
                 "window_secs": state.config.rate.window_secs,
                 "max_streams": state.config.rate.max_streams,
             },
+            "breaker": {
+                "failures": state.config.breaker.failures,
+                "open_secs": state.config.breaker.open_secs,
+            },
         },
         "sidecar": sidecar,
     }))
@@ -591,8 +677,10 @@ async fn check_sidecar_health(state: &AppState) {
 // SSE, and anything else without understanding any of it.
 
 async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Response, GatewayError> {
+    let start = Instant::now();
     let method = req.method().clone();
     let path = req.uri().path().to_string();
+    let route = stats::route_key(&path);
 
     // Edge policy first: rejected paths never wake Python.
     if let Err(reason) = state.config.policy.check(&path) {
@@ -619,6 +707,7 @@ async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Respo
             status: StatusCode::PAYLOAD_TOO_LARGE,
             message: format!("Request body too large (limit {} bytes)", MAX_BODY_BYTES),
         })?;
+    state.stats.add_bytes_in(&route, body_bytes.len());
 
     let mut builder = match method {
         axum::http::Method::GET => state.http.get(&url),
@@ -656,24 +745,64 @@ async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Respo
 
     // Streaming paths (SSE) get no total edge timeout — Python owns
     // generation timeouts. Buffered paths get a bounded edge timeout → 504.
+    // Every transport failure feeds the breaker — edge-observed outcomes only.
     let streaming = is_streaming_path(&path);
     let resp = if streaming {
-        state.http.execute(request).await?
+        match state.http.execute(request).await {
+            Ok(resp) => resp,
+            Err(e) => {
+                state.stats.add_upstream_err(&route);
+                state.breaker.record_failure();
+                return Err(e.into());
+            }
+        }
     } else {
-        tokio::time::timeout(BUFFERED_TIMEOUT, state.http.execute(request))
-            .await
-            .map_err(|_| GatewayError {
-                status: StatusCode::GATEWAY_TIMEOUT,
-                message: "Edge timeout waiting for sidecar".into(),
-            })??
+        match tokio::time::timeout(BUFFERED_TIMEOUT, state.http.execute(request)).await {
+            Ok(Ok(resp)) => resp,
+            Ok(Err(e)) => {
+                state.stats.add_upstream_err(&route);
+                state.breaker.record_failure();
+                return Err(e.into());
+            }
+            Err(_) => {
+                state.stats.add_upstream_err(&route);
+                state.breaker.record_failure();
+                return Err(GatewayError {
+                    status: StatusCode::GATEWAY_TIMEOUT,
+                    message: "Edge timeout waiting for sidecar".into(),
+                });
+            }
+        }
     };
-    relay_response(resp, &parts.headers, &method).await
+    // Upstream answered: 5xx counts as a breaker failure, anything else
+    // (incl. 4xx — client's problem, not the core's) is a success.
+    state.breaker.observe(resp.status().as_u16());
+    let out = relay_response(resp, &parts.headers, &method, &state.stats, &route).await?;
+    state
+        .stats
+        .record_upstream(&route, out.status().as_u16(), start.elapsed());
+
+    // Observe wire bytes (post-compression) — compression.rs drops
+    // Content-Length on the compressed path; the identity path's header
+    // survives the wrap unchanged because the bytes are identical.
+    let (resp_parts, body) = out.into_parts();
+    let wstats = state.stats.clone();
+    let wroute = route.clone();
+    let counted = body.into_data_stream().map(move |chunk| {
+        if let Ok(b) = &chunk {
+            wstats.add_wire(&wroute, b.len());
+        }
+        chunk
+    });
+    Ok(Response::from_parts(resp_parts, Body::from_stream(counted)))
 }
 
 async fn relay_response(
     resp: reqwest::Response,
     req_headers: &HeaderMap,
     req_method: &axum::http::Method,
+    stats: &Arc<EdgeStats>,
+    route: &str,
 ) -> Result<Response, GatewayError> {
     let status =
         StatusCode::from_u16(resp.status().as_u16()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
@@ -689,10 +818,16 @@ async fn relay_response(
     }
 
     // Byte stream straight through: no buffering, no UTF-8 assumption,
-    // safe for JSON, SSE, and binary alike.
-    let stream = resp
-        .bytes_stream()
-        .map(|chunk| chunk.map_err(axum::Error::new));
+    // safe for JSON, SSE, and binary alike. Chunk sizes feed the identity
+    // byte counter (the no-compression baseline).
+    let istats = stats.clone();
+    let iroute = route.to_string();
+    let stream = resp.bytes_stream().map(move |chunk| {
+        if let Ok(b) = &chunk {
+            istats.add_identity(&iroute, b.len());
+        }
+        chunk.map_err(axum::Error::new)
+    });
     let mut out = Body::from_stream(stream).into_response();
     *out.status_mut() = status;
     out.headers_mut().extend(headers);
@@ -762,10 +897,16 @@ mod tests {
     }
 
     /// Same, with explicit rate-limit config for admission tests.
+    /// Breaker disabled by default so multi-request tests against the closed
+    /// port aren't tripped mid-sequence; breaker tests opt in explicitly.
     fn edge_state_rate(rate: RateConfig) -> AppState {
         let config = GatewayConfig {
             python_core_url: "http://127.0.0.1:9".into(),
             rate,
+            breaker: BreakerConfig {
+                failures: 0,
+                open_secs: 0,
+            },
             ..Default::default()
         };
         AppState::new(config, Client::new())
@@ -1055,5 +1196,96 @@ mod tests {
             let resp = app.clone().oneshot(req).await.unwrap();
             assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
         }
+    }
+
+    // ── Stats + circuit breaker (performance control plane) ────────────────
+
+    #[tokio::test]
+    async fn stats_endpoint_reports_shape_and_bypasses_limiter() {
+        // limit 1: burn the only token on a proxied request…
+        let app = build_router(edge_state_rate(RateConfig {
+            global_limit: 1,
+            window_secs: 60,
+            max_streams: 0,
+        }));
+        let req = Request::builder()
+            .uri("/api/x")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        // …then the window is exhausted, but stats must stay readable.
+        let req = Request::builder()
+            .uri("/gateway/stats")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(v["gateway"]["breaker"]["state"].is_string());
+        assert_eq!(v["gateway"]["in_flight_streams"], 0);
+        assert!(v["totals"]["requests"].is_number());
+        // The failed proxied request is visible as an upstream error.
+        let routes = v["routes"].as_array().unwrap();
+        let api = routes.iter().find(|r| r["route"] == "/api").unwrap();
+        assert_eq!(api["upstream_err"], 1);
+        assert_eq!(v["totals"]["upstream_err"], 1);
+    }
+
+    #[tokio::test]
+    async fn breaker_sheds_503_after_consecutive_failures() {
+        let config = GatewayConfig {
+            python_core_url: "http://127.0.0.1:9".into(),
+            rate: RateConfig {
+                global_limit: 10_000,
+                window_secs: 60,
+                max_streams: 0,
+            },
+            breaker: BreakerConfig {
+                failures: 2,
+                open_secs: 60,
+            },
+            ..Default::default()
+        };
+        let app = build_router(AppState::new(config, Client::new()));
+        // Two failures → breaker opens.
+        for _ in 0..2 {
+            let req = Request::builder()
+                .uri("/api/x")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        }
+        // Third → instant shed, no connect attempt to the dead core.
+        let req = Request::builder()
+            .uri("/api/x")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let h = resp.headers();
+        let retry: u64 = h
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert!((1..=60).contains(&retry));
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["detail"], "Upstream unavailable.");
+        // Stats see the shed and the open breaker.
+        let req = Request::builder()
+            .uri("/gateway/stats")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["gateway"]["breaker"]["state"], "open");
+        assert_eq!(v["totals"]["shed_503"], 1);
+        assert_eq!(v["totals"]["upstream_err"], 2);
     }
 }
