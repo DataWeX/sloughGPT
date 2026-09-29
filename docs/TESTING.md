@@ -169,7 +169,7 @@ python -m pytest tests/ -q
 # Server + contract suites import the FastAPI app — set PYTHONPATH first
 export PYTHONPATH=".:packages/core-py:apps/api/server"
 python -m pytest tests/server -q
-python -m pytest tests/contract/ -q                    # contract suite: 42 tests
+python -m pytest tests/contract/ -q                    # contract suite: 49 tests
 ```
 
 ### Test File Convention

@@ -53,14 +53,14 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 - **Python**: 3.9+ with type hints support
 - **Git**: For version control
 - **Docker**: For containerized development
-- **Node.js**: 20 (match repo root **`.nvmrc`** for the web app)
+- **Node.js**: 22 (match repo root **`.nvmrc`** for the web app)
 - **Make**: For build automation
 
 ### Environment Setup
 
 ```bash
 # Clone repository
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 
 # Create virtual environment
@@ -78,7 +78,7 @@ Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full 
 ```bash
 # One terminal (API :8000 + web :3000)
 ./scripts/dev-stack.sh
-# or: make dev-stack
+# or: make stack
 # or: npm install && npm run dev:stack   # repo root; same shell script
 
 # Contract tests for repo root package.json (after npm install at repo root)
@@ -197,7 +197,8 @@ def process_memory(
 
 ## 🧪 Testing
 
-Tests are flat in `tests/` (no subdirectories). Run with:
+Tests live in flat files under `tests/` plus `tests/server/` and
+`tests/contract/` (full map in **docs/TESTING.md**). Run with:
 
 ```bash
 # All tests
@@ -207,7 +208,7 @@ python3 -m pytest tests/ -q
 python3 -m pytest tests/ -m "not slow"
 
 # A single test file
-python3 -m pytest tests/test_knowledge_memory.py -v
+python3 -m pytest tests/test_repo_root_package_json.py -v
 
 # Frontend tests
 cd apps/web && npx vitest run
@@ -216,15 +217,14 @@ cd apps/web && npx vitest run
 cd apps/web && npx tsc --noEmit
 ```
 
+```toml
+# root pyproject.toml
 [tool.coverage.run]
-source = ["domains"]
-omit = [
-    "*/tests/*",
-    "*/test_*",
-    "*/__pycache__/*",
-    "*/site-packages/*",
-]
+source = ["packages/core-py", "domain"]
+omit = ["*/tests/*", "*/test_*"]
 ```
+
+(`fail_under = 50` lives in `[tool.coverage.report]` of the same file.)
 
 ### Running Tests
 
@@ -277,7 +277,7 @@ from domain.infrastructure.server_state import get_server_state
 
 state = get_server_state()
 state.record_inference(tokens=100, elapsed_ms=500, model="sloughgpt-7b")
-state.record_training(tokens=1000, elapsed_ms=30000)
+state.record_request()
 ```
 
 ### Debugging
@@ -333,7 +333,7 @@ class OptimizedProcessor:
 
 ### Connection Pooling
 
-The server uses `httpx.AsyncClient` for internal calls and `httpx.AsyncClient` for external API calls:
+The server uses `httpx.AsyncClient` for outbound HTTP calls (internal and external):
 
 ```python
 import httpx
@@ -342,8 +342,6 @@ import httpx
 async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as client:
     resp = await client.get("/health")
     data = resp.json()
-```
-    result = await db_manager.execute_query("SELECT * FROM table")
 ```
 
 ### Caching Strategy
@@ -498,20 +496,12 @@ curl http://localhost:8000/health
 
 ### Environment Configuration
 
-Use environment-specific configurations:
+Use environment-specific configuration:
 
-```python
-# config/development.py
-DEBUG = True
-DATABASE_URL = "postgresql://localhost/sloughgpt_dev"
-REDIS_URL = "redis://localhost:6379"
-LOG_LEVEL = "DEBUG"
-
-# config/production.py
-DEBUG = False
-DATABASE_URL = os.environ.get("DATABASE_URL")
-REDIS_URL = os.environ.get("REDIS_URL")
-LOG_LEVEL = "INFO"
+```bash
+# Dev overrides live in config/dev.yaml (see config/README.md)
+# Deployed secrets come from .env — start from .env.example,
+# or config/production.env.example for a production-shaped set
 ```
 
 ### Health Checks
@@ -526,7 +516,8 @@ curl http://localhost:8000/health/detailed
 
 ## 📚 Documentation
 
-Docs live flat in `docs/`. Auto-generated API docs at `http://localhost:8000/docs` (OpenAPI/Swagger).
+Docs live under `docs/` (flat files plus `docs/plans/`, `docs/policies/`,
+…; map in **docs/INDEX.md**). Auto-generated API docs at `http://localhost:8000/docs` (OpenAPI/Swagger).
 
 ### Writing Documentation
 
@@ -579,7 +570,7 @@ Docs live flat in `docs/`. Auto-generated API docs at `http://localhost:8000/doc
 
 ```bash
 # Clone and set up
-git clone https://github.com/iamtowbee/sloughGPT.git
+git clone https://github.com/DataWeX/sloughGPT.git
 cd sloughGPT
 python3 -m venv .venv
 source .venv/bin/activate

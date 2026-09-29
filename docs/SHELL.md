@@ -6,7 +6,7 @@ Dait is a full-featured interactive command shell that connects to
 your local AI backend. It provides 40+ built-in commands, pipeline chaining, background
 execution, output redirection, environment variables, aliases, file/directory completion,
 a pager, persistent state, script execution, inline Python evaluation, and LLM-powered
-natural language interpretation — all in a single Python module.
+natural language interpretation — all in the `domain/shell` package.
 
 ```
           ┌─────────────────┐    pipelines/redirection     ┌──────────────┐
@@ -21,7 +21,7 @@ natural language interpretation — all in a single Python module.
           ┌─────────────────┐                               ┌──────────────┐
           │  ShellCommands  │                               │  ShellState  │
           │  (commands.py)  │                               │  (state.py)  │
-          │  22 API methods │                               │  JSON-backed │
+          │  41 API methods │                               │  JSON-backed │
           └─────────────────┘                               └──────────────┘
 ```
 
@@ -659,11 +659,13 @@ set in the environment before launching the shell.
 
 ```
 domain/shell/
-├── __init__.py     # Package exports
-├── kernel.py       # DaitRuntime + Kernel (process/resource management)
-├── repl.py         # ShellREPL (40+ commands, pipelines, readline)
-├── commands.py     # ShellCommands (22 API wrappers)
-└── state.py        # ShellState (JSON-backed persistence)
+├── __init__.py         # Package exports (DaitRuntime, ShellCommands, …)
+└── _internal/
+    ├── kernel.py       # DaitRuntime + Kernel (process/resource management)
+    ├── repl.py         # ShellREPL (40+ commands, pipelines, readline)
+    ├── commands.py     # ShellCommands (41 API wrappers)
+    ├── state.py        # ShellState (JSON-backed persistence)
+    └── permissions.py  # ShellPermissions (risk gating)
 ```
 
 ### Execution Flow
@@ -694,51 +696,24 @@ which the next segment reads. The final segment prints to stdout.
 ## Testing
 
 ```bash
-# Unit tests (148 tests)
+# Unit tests
 cd packages/core-py
-python3 -m pytest tests/test_shell_repl.py -v
+python3 -m pytest tests/test_shell_repl.py -v            # 18 tests
 
-# Integration tests (30 tests, requires running API server)
-python3 -m pytest tests/test_shell_integration.py -v
+# Integration tests (requires running API server)
+python3 -m pytest tests/test_shell_integration.py -v     # 23 tests
 
 # Both
 python3 -m pytest tests/test_shell_repl.py tests/test_shell_integration.py -v
 ```
 
-### Test Coverage
+The shell suite has grown across many `test_shell_*.py` files; per-area
+breakdowns drift, so measure live counts instead:
 
-| Area | Tests |
-|------|-------|
-| Pipeline parsing | 8 |
-| Pipeline execution | 6 |
-| Pipe filters (grep/head/tail/wc) | 4 |
-| Alias (set/list/remove/expansion) | 7 |
-| State persistence (save/load/dedup/max) | 8 |
-| Background parsing | 3 |
-| Echo | 2 |
-| Source command | 5 |
-| Py command | 5 |
-| Command substitution | 4 |
-| Env persistence | 3 |
-| Help | 3 |
-| History with n | 3 |
-| Fc command | 6 |
-| Job control (bg/fg) | 5 |
-| NO_COLOR, inline env | 8 |
-| Sleep | 4 |
-| PS1 escapes | 7 |
-| RC file | 5 |
-| Gen completion, path completion | 7 |
-| Tee | 2 |
-| Sort (reverse/unique/numeric) | 6 |
-| Uniq (dedup) | 3 |
-| Less (pager) | 5 |
-| Dir stack (pushd/popd/dirs) | 6 |
-| Watch | 2 |
-| Export | 4 |
-| Command registration | 10 |
-| Integration API calls (ShellCommands) | 11 |
-| Integration via REPL (commands + pipelines) | 19 |
+```bash
+ls tests/test_shell_*.py | wc -l
+python3 -m pytest tests/test_shell_repl_more.py --collect-only -q | tail -1
+```
 
 ---
 
@@ -758,7 +733,7 @@ documented in `docs/routers.md`.
 | `switch` | `/souls/switch` | POST |
 | `whoami` | `/souls/current` | GET |
 | `datasets` | `/datasets` | GET |
-| `knowledge` | `/knowledge/list` + `/knowledge/stats` | GET |
+| `knowledge` | `/knowledge` + `/knowledge/stats` | GET |
 | `checkpoints` | `/training/checkpoints` | GET |
 | `load_checkpoint` | `/training/checkpoints/{name}/load` | POST |
 | `delete_checkpoint` | `/training/checkpoints/{name}` | DELETE |
@@ -768,7 +743,7 @@ documented in `docs/routers.md`.
 | `gen` | `/inference/generate` | POST |
 | `chat` | `/chat` | POST |
 | `procs` | `/training/jobs` | GET |
-| `kill` | `/training/jobs/{id}/stop` | POST |
+| `kill` | `/training/jobs/{job_id}/stop` | POST |
 | `metrics` | `/system/metrics` | GET |
 | `tokenizer` | `/tokenizer/stats` | GET |
 | `ai` | `/inference/generate` | POST |
@@ -888,7 +863,7 @@ so pipelines, redirection, background, and timing all work in one-shot mode.
 2. Register it in the `COMMANDS` dict
 3. Add a help entry in `_cmd_help`
 4. Optionally add tab completion in `_complete_args_for`
-5. Write tests in `tests/test_shell_repl.py`
+5. Write tests in `packages/core-py/tests/test_shell_repl.py`
 6. Add API method to `ShellCommands` if needed
 
 ### Adding a New API Endpoint
