@@ -322,14 +322,15 @@ def tui(ctx):
     ctx.invoke(shell, command=None, tui=True, line=False)
 
 
-@cli.command(help="Launch interactive shell REPL")
+@cli.command(help="Launch interactive shell REPL. One shot: sloughgpt shell 'uname'")
+@click.argument("cmd", required=False)
 @click.option("--command", "-c", help="Run a single command and exit")
 @click.option(
     "--tui/--no-tui", default=None, is_flag=True, help="Curses TUI mode (default when TTY)"
 )
 @click.option("--line", is_flag=True, help="Force line-mode REPL (no TUI)")
 @click.pass_context
-def shell(ctx, command, tui, line):
+def shell(ctx, cmd, command, tui, line):
     """Launch the SloughGPT interactive shell REPL."""
     from utils.helpers import ensure_server
 
@@ -347,6 +348,7 @@ def shell(ctx, command, tui, line):
     elif not sys.stdout.isatty():
         use_tui = False
     repl = ShellREPL(os, use_tui=True if use_tui else None)
+    command = command or cmd
     if command:
         commands, is_bg, should_time = repl._parse_pipeline(command)
         if is_bg:
