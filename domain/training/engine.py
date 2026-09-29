@@ -874,6 +874,76 @@ class TrainingEngine:
 
         return get_training_monitor().check_resources()
 
+    def resolve_resume_checkpoint(
+        self, checkpoint_dir: str, checkpoint_path: str, stem_prefixes: list[str]
+    ) -> tuple[str | None, Any]:
+        """Resolve (path, bundle) for a recovery run.
+
+        Recorded path: validated and loaded exactly once; missing, unsupported,
+        or unreadable raise ValueError with the user-facing message (router
+        maps it to 422). No recorded path: scan only the job's own stems for
+        the newest loadable checkpoint — a shared dir must never silently
+        adopt another job's weights.
+        """
+        from domain.training._internal.train_pipeline import CheckpointManager
+
+        manager = CheckpointManager(checkpoint_dir)
+        if checkpoint_path:
+            if not CheckpointManager.is_resumable(checkpoint_path):
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                )
+            try:
+                bundle = CheckpointManager.load_from_path(checkpoint_path)
+            except Exception as exc:
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint is unreadable ({exc})"
+                )
+            if bundle is None:
+                raise ValueError(
+                    f"Cannot resume from '{checkpoint_path}': checkpoint missing or "
+                    "unsupported (use a .soul or .npz file)"
+                )
+            return checkpoint_path, bundle
+        for stem in stem_prefixes:
+            path, bundle = manager.load_latest_with_path(stem_prefix=stem)
+            if bundle is not None:
+                return path, bundle
+        return None, None
+
+    def run_recovery_training(
+        self,
+        trainer_config: dict[str, Any],
+        *,
+        on_progress: Any,
+        resume_checkpoint: Any,
+        cancel_event: Any,
+        pause_event: Any,
+    ) -> Any:
+        """Build the trainer from the original job's config and run it resumed.
+
+        Returns the trainer so the caller can read the produced checkpoint
+        path; on_progress/cancel/pause stay caller-owned (job-record state).
+        """
+        from domain.training._internal.train_pipeline import SloughGPTTrainer
+
+        trainer = SloughGPTTrainer(**trainer_config)
+        trainer.train(
+            on_progress=on_progress,
+            resume=True,
+            resume_checkpoint=resume_checkpoint,
+            cancel_event=cancel_event,
+            pause_event=pause_event,
+        )
+        return trainer
+
+    def executor_submit(self, fn: Any, *args: Any) -> None:
+        """Submit a background run to the training executor."""
+        from domain.training._internal import executor as executor_mod
+
+        executor_mod.get_training_executor().submit(fn, *args)
+
 
 _engine: TrainingEngine | None = None
 
