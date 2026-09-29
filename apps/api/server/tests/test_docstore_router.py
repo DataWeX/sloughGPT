@@ -228,3 +228,74 @@ def test_unknown_collection_rejected(method, path):
     body = resp.json()
     assert body["code"] == "E_UNKNOWN_COLLECTION"
     assert "error" in body
+
+
+# ── message-notes (chat MessageNote contract, apps/web/lib/db.ts) ───────────
+
+
+def _note(**over):
+    base = {
+        "id": "n1",
+        "sessionId": "chat_abc",
+        "messageId": "m1",
+        "content": "remember this",
+        "createdAt": 1,
+        "updatedAt": 1,
+    }
+    base.update(over)
+    return base
+
+
+def test_message_notes_put_and_list_by_session():
+    post = client.post("/docstore/message-notes", json=_note())
+    assert post.status_code == 200
+    assert _data(post) == {"id": "n1", "created": True}
+
+    listed = client.get("/docstore/message-notes", params={"session_id": "chat_abc"})
+    assert listed.status_code == 200
+    notes = _data(listed)
+    assert len(notes) == 1
+    assert notes[0]["content"] == "remember this"
+    assert "_id" not in notes[0]
+
+
+def test_message_notes_list_filters_by_session():
+    client.post("/docstore/message-notes", json=_note())
+    client.post(
+        "/docstore/message-notes",
+        json=_note(id="n2", sessionId="other", messageId="m2"),
+    )
+    notes = _data(client.get("/docstore/message-notes", params={"session_id": "chat_abc"}))
+    assert [n["id"] for n in notes] == ["n1"]
+
+
+def test_message_notes_requires_session_and_message():
+    resp = client.post("/docstore/message-notes", json={"content": "x"})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "E_BAD_REQUEST"
+
+
+def test_message_notes_delete():
+    client.post("/docstore/message-notes", json=_note())
+    deleted = client.delete("/docstore/message-notes/chat_abc/m1")
+    assert deleted.status_code == 200
+    assert _data(deleted) == {"deleted": True}
+    notes = _data(client.get("/docstore/message-notes", params={"session_id": "chat_abc"}))
+    assert notes == []
+
+
+def test_message_notes_search_case_insensitive():
+    client.post("/docstore/message-notes", json=_note())
+    client.post(
+        "/docstore/message-notes",
+        json=_note(id="n2", messageId="m2", content="rent due friday"),
+    )
+    hits = _data(client.get("/docstore/message-notes/search", params={"q": "RENT"}))
+    assert [n["id"] for n in hits] == ["n2"]
+
+
+def test_message_notes_not_treated_as_unknown_collection():
+    # Regression: this exact path 404'd (E_UNKNOWN_COLLECTION) in journeys.
+    resp = client.get("/docstore/message-notes", params={"session_id": "none"})
+    assert resp.status_code == 200
+    assert _data(resp) == []
