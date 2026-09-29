@@ -436,9 +436,30 @@ fn reject_breaker(retry_after: u64) -> Response {
         .expect("static 503 response")
 }
 
+/// Discard a rejected request's body (bounded) before the reject response
+/// goes out. hyper keeps a connection alive only if the request body was
+/// fully consumed when the service drops it — otherwise it closes after the
+/// response. A client that sends headers and body as separate writes (every
+/// `http.client` request does) then gets its connection torn down on EVERY
+/// shed POST: connection churn exactly under overload. Bounded at
+/// `DRAIN_CAP` so a hostile multi-megabyte body can't be buffered here;
+/// over-cap drops the remainder (→ close, same as before this existed).
+async fn drain_body(req: &mut Request) {
+    const DRAIN_CAP: usize = 64 * 1024;
+    let body = std::mem::replace(req.body_mut(), Body::empty());
+    let mut stream = body.into_data_stream();
+    let mut read = 0usize;
+    while let Some(Ok(chunk)) = stream.next().await {
+        read += chunk.len();
+        if read > DRAIN_CAP {
+            break;
+        }
+    }
+}
+
 async fn edge_admission(
     State(state): State<AppState>,
-    req: Request,
+    mut req: Request,
     next: axum::middleware::Next,
 ) -> Response {
     let started = Instant::now();
@@ -493,6 +514,7 @@ async fn edge_admission(
                 state.stats.shed_429(&route);
                 state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
+                drain_body(&mut req).await;
                 return reject_rate(
                     format!("Rate limit exceeded for {prefix}. Try again later."),
                     limit,
@@ -518,6 +540,7 @@ async fn edge_admission(
                 state.stats.shed_429(&route);
                 state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
+                drain_body(&mut req).await;
                 return reject_rate(
                     "Workspace rate limit exceeded. Try again later.".into(),
                     ratelimit::WORKSPACE_LIMIT,
@@ -542,6 +565,7 @@ async fn edge_admission(
                 state.stats.shed_429(&route);
                 state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("rate"), &ip);
+                drain_body(&mut req).await;
                 return reject_rate(
                     "Too many requests. Try again later.".into(),
                     global_limit,
@@ -557,6 +581,7 @@ async fn edge_admission(
         state.stats.shed_503(&route);
         state.stats.client_seen(&ip, ClientSeen::Shed503);
         state.access_log(&method, &path, &route, 503, started, Some("breaker"), &ip);
+        drain_body(&mut req).await;
         return reject_breaker(retry);
     }
 
@@ -576,6 +601,7 @@ async fn edge_admission(
                 state.stats.shed_429(&route);
                 state.stats.client_seen(&ip, ClientSeen::Shed429);
                 state.access_log(&method, &path, &route, 429, started, Some("streams"), &ip);
+                drain_body(&mut req).await;
                 return reject_streams();
             }
         }
@@ -1330,6 +1356,91 @@ mod tests {
             let resp = app.clone().oneshot(req).await.unwrap();
             assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
         }
+    }
+
+    // ── Keep-alive on rejected split-body requests ─────────────────────────
+
+    /// A rejected POST whose body arrives in a separate TCP segment must not
+    /// kill the connection. hyper closes after the response if the service
+    /// drops an unread body, and every `http.client` request sends headers
+    /// and body as two writes — so pre-drain, EVERY shed POST under load
+    /// lost keep-alive (repro'd as `BrokenPipeError` at request ~N in the
+    /// admission benchmark). Two writes per request, then all 15 responses
+    /// must come back on the same socket.
+    #[tokio::test]
+    async fn split_body_reject_keeps_connection_alive() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let app = build_router(edge_state_rate(RateConfig {
+            global_limit: 1,
+            window_secs: 60,
+            max_streams: 0,
+        }));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap();
+        });
+
+        let mut sock = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let mut rejected = 0usize;
+        for i in 0..15 {
+            // Headers first, body ~2ms later: the split arrival that used to
+            // make hyper close the connection on the reject response.
+            sock.write_all(b"POST /api/x HTTP/1.1\r\nHost: t\r\nContent-Length: 2\r\n\r\n")
+                .await
+                .unwrap();
+            sock.flush().await.unwrap();
+            tokio::time::sleep(Duration::from_millis(2)).await;
+            sock.write_all(b"{}").await.unwrap();
+            sock.flush().await.unwrap();
+
+            let mut head = Vec::new();
+            let mut byte = [0u8; 1];
+            loop {
+                let n = sock.read(&mut byte).await.unwrap_or_else(|e| {
+                    panic!("req {i}: read error after {rejected} rejects: {e}")
+                });
+                assert!(
+                    n > 0,
+                    "req {i}: connection closed by server after {rejected} rejects"
+                );
+                head.push(byte[0]);
+                if head.ends_with(b"\r\n\r\n") {
+                    break;
+                }
+                assert!(head.len() < 8_192, "response headers too large");
+            }
+            let head = String::from_utf8_lossy(&head);
+            let status: u16 = head
+                .split_whitespace()
+                .nth(1)
+                .expect("status line")
+                .parse()
+                .expect("status code");
+            let clen = head
+                .lines()
+                .find_map(|l| {
+                    let l = l.to_ascii_lowercase();
+                    l.strip_prefix("content-length:")
+                        .map(|v| v.trim().parse::<usize>().unwrap())
+                })
+                .unwrap_or(0);
+            let mut body = vec![0u8; clen];
+            sock.read_exact(&mut body).await.unwrap();
+            if status == 429 {
+                rejected += 1;
+            }
+        }
+        assert!(
+            rejected >= 1,
+            "budget never exhausted — the test never exercised a reject"
+        );
     }
 
     // ── Stats + circuit breaker (performance control plane) ────────────────
