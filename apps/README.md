@@ -5,6 +5,8 @@ Runnable services and application entrypoints.
 - `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`.soul`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
 - `web/` — Next.js frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (*UI vs core engine*).
 - `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`sloughgpt train`** export naming (**`--save-stem`**) and **`sloughgpt generate`** local `.soul` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias) and the line-mode REPL when run without `--tui`.
+- `gateway/` — Rust/Axum edge (`gateway/target/release/slough-gateway`; design: **`docs/engineering-overview.md`** §5). Owns the public socket `:8080` directly — CORS, path filters, compression, rate limiting, circuit breaker, adaptive stream caps, JSONL access log — then byte-relays to the API. Self-supervising (`MAN_GATEWAY_SUPERVISE=1`, no systemd). Launch: **`scripts/host_gateway.sh`**; dev stack: **`scripts/dev-stack.sh`** (`MAN_DEV_GATEWAY=1`).
+- `mobile/` — React Native app (own lockfile tree). Its `node_modules` is huge and regenerable — never duplicate or rebuild it (shared-workspace rule, **AGENTS.md**). Talks to the API over HTTP like `web/`.
 
 ### Quick start (repo root)
 
