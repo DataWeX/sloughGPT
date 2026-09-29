@@ -989,6 +989,75 @@ class TrainingEngine:
 
         return bool(executor_mod.get_training_executor().cancel(job_id))
 
+    # ── SSE stream / turbo endpoint delegation ──
+
+    def cleanup_stream_state(self, task_id: str, config: dict, state_dict: Any, finish_cm: Any) -> None:
+        """Clear per-stream state after an SSE training stream ends."""
+        from domain.training._internal.service import cleanup_stream_state
+
+        cleanup_stream_state(task_id, config, state_dict, finish_cm)
+
+    def process_training_completion(
+        self, event: dict, task_id: str, config: dict, checkpoints_dir: Any, finish_cm: Any
+    ) -> Any:
+        """Handle a terminal SSE event (complete/error) — returns whatever the service returns."""
+        from domain.training._internal.service import process_training_completion
+
+        return process_training_completion(event, task_id, config, checkpoints_dir, finish_cm)
+
+    def get_pgq(self) -> Any:
+        """PGQ trainer handle (or None) for turbo cancellation."""
+        from domain.training._internal.state import get_pgq
+
+        return get_pgq()
+
+    def get_turbo_pause_event(self) -> Any:
+        """Turbo pause Event (gate the worker waits on)."""
+        from domain.training._internal.state import get_turbo_pause_event
+
+        return get_turbo_pause_event()
+
+    def turbo_status(self) -> Any:
+        """Turbo run status payload (raw passthrough)."""
+        from domain.training._internal.service import get_turbo_status
+
+        return get_turbo_status()
+
+    def start_from_sessions_training(self, config: dict[str, Any]) -> Any:
+        """Build and start a from-sessions run against the shared training state."""
+        from domain.training._internal.service import _state, start_from_sessions_training
+
+        return start_from_sessions_training(_state, config)
+
+    def resolve_in_cache(self, dataset_id: str) -> bool:
+        """True when the dataset id resolves inside the training cache."""
+        from domain.training._internal.cache_tags import resolve_in_cache
+
+        return bool(resolve_in_cache(dataset_id))
+
+    def start_turbo(self, config: dict[str, Any]) -> Any:
+        """Validate and start a turbo run (returns job info)."""
+        from domain.training._internal.service import start_turbo_training
+
+        return start_turbo_training(config)
+
+    def run_turbo_worker(self, config: dict[str, Any]) -> None:
+        """Run the turbo worker loop (blocks; executor-owned)."""
+        from domain.training._internal.service import run_turbo_worker
+
+        run_turbo_worker(config)
+
+    def mark_turbo_error(self, error: str) -> None:
+        """Backstop: flag turbo state as error and release the pause gate."""
+        from domain.training._internal.state import _turbo_pause_event
+        from domain.training._internal.turbo import _turbo_lock, _turbo_state
+
+        with _turbo_lock:
+            _turbo_state["status"] = "error"
+            _turbo_state["error"] = error or "Turbo training failed"
+            _turbo_state["paused"] = False
+        _turbo_pause_event.clear()
+
 
 _engine: TrainingEngine | None = None
 

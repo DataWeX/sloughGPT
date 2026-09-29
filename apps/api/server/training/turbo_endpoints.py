@@ -1,6 +1,6 @@
 """Unified turbo and from-sessions endpoints.
 
-Delegates to domain.training._internal.service for state and logic.
+Delegates to the domain.training TrainingEngine for state and logic.
 """
 
 from __future__ import annotations
@@ -21,16 +21,16 @@ router = APIRouter(tags=["training-turbo"])
 
 @router.get("/training/turbo/status")
 async def get_turbo_status():
-    from domain.training._internal.service import get_turbo_status
+    from domain.training import get_training_engine
 
-    return get_turbo_status()
+    return get_training_engine().turbo_status()
 
 
 @router.post("/training/from-sessions-start")
 async def start_from_sessions_unified(req: FromSessionsRequest):
     """Start from-sessions training."""
     try:
-        from domain.training._internal.service import _state, start_from_sessions_training
+        from domain.training import get_training_engine
 
         # Pre-flight validation
         if req.epochs < 1:
@@ -70,7 +70,7 @@ async def start_from_sessions_unified(req: FromSessionsRequest):
             "session_ids": req.session_ids,
             "experiment_id": req.experiment_id,
         }
-        built_config = start_from_sessions_training(_state, config)
+        built_config = get_training_engine().start_from_sessions_training(config)
         safe_audit_log(
             "training.start",
             resource=req.soul_name or "from-sessions",
@@ -89,7 +89,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
     """Start turbo training."""
     try:
         from domain.shared import find_repo_root
-        from domain.training._internal.service import run_turbo_worker, start_turbo_training
+        from domain.training import get_training_engine
 
         # Pre-flight validation
         if req.source_text and len(req.source_text.strip()) < 200:
@@ -110,8 +110,6 @@ async def start_turbo_training_unified(req: TurboStartRequest):
         if req.dataset_id:
             from pathlib import Path
 
-            from domain.training._internal.cache_tags import resolve_in_cache
-
             from .resolution import resolve_legacy_corpus_path
 
             repo_root = find_repo_root(Path(__file__).resolve())
@@ -126,7 +124,7 @@ async def start_turbo_training_unified(req: TurboStartRequest):
                 # data/datasets/{id} (corpus.jsonl, input.txt, train.txt,
                 # text.txt, *.txt, *.jsonl).
                 data_file = resolve_legacy_corpus_path(req.dataset_id)
-            if data_file is None and not resolve_in_cache(req.dataset_id):
+            if data_file is None and not get_training_engine().resolve_in_cache(req.dataset_id):
                 raise_error(
                     f"Dataset not found: {req.dataset_id}",
                     "E_BAD_REQUEST",
@@ -141,7 +139,8 @@ async def start_turbo_training_unified(req: TurboStartRequest):
                     )
 
         config = req.model_dump()
-        job_info = await asyncio.to_thread(start_turbo_training, config)
+        _engine = get_training_engine()
+        job_info = await asyncio.to_thread(_engine.start_turbo, config)
 
         # Register with CancelManager for cancellation support
         cancel_event = threading.Event()
@@ -162,14 +161,10 @@ async def start_turbo_training_unified(req: TurboStartRequest):
             )
 
         # Run via executor pool for proper tracking
-        from domain.training._internal.executor import get_training_executor
-
-        executor = get_training_executor()
-
         # NOTE: the executor calls fn(job_id, ...) — _run must accept it.
         def _run(_job_id: str) -> None:
             try:
-                run_turbo_worker(config)
+                _engine.run_turbo_worker(config)
             except Exception as exc:
                 logger.exception(
                     "Turbo training job %s failed", job_info["job_id"], extra={"tag": "TRAIN"}
@@ -178,18 +173,11 @@ async def start_turbo_training_unified(req: TurboStartRequest):
                 # raises before that, surface the cause instead of leaving the
                 # job stuck until the heartbeat watchdog fires.
                 try:
-                    from domain.training._internal.state import _turbo_pause_event
-                    from domain.training._internal.turbo import _turbo_lock, _turbo_state
-
-                    with _turbo_lock:
-                        _turbo_state["status"] = "error"
-                        _turbo_state["error"] = str(exc) or "Turbo training failed"
-                        _turbo_state["paused"] = False
-                    _turbo_pause_event.clear()
+                    _engine.mark_turbo_error(str(exc))
                 except Exception:
                     logger.debug("Failed to mark turbo job as error", exc_info=True)
 
-        executor.submit(_run, job_info["job_id"])
+        _engine.executor_submit(_run, job_info["job_id"])
 
         logger.info(
             "Turbo training started: job_id=%s data=%s",
