@@ -1,7 +1,7 @@
 /** Document metadata shared by Vite index.html drift-guard (and formerly Next layout). */
 
 export const metadata = {
-  title: 'Man - AI Platform',
+  title: 'Slo - AI Platform',
   description: 'Enterprise-grade AI framework with production-ready ML infrastructure',
   icons: { icon: '/favicon.svg' },
 } as const

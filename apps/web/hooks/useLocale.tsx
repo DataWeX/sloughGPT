@@ -13,7 +13,7 @@ interface Translations {
 
 const translations: Record<Locale, Translations> = {
   en: {
-    'app.name': 'Man',
+    'app.name': 'Slo',
     'app.console': 'Console',
     'common.starting': 'Starting...',
     'common.starting_sub': 'Model is loading, one moment',
@@ -1012,7 +1012,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   es: {
-    'app.name': 'Man',
+    'app.name': 'Slo',
     'app.console': 'Consola',
     'common.starting': 'Iniciando...',
     'common.starting_sub': 'El modelo está cargando, un momento',
@@ -2048,7 +2048,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   fr: {
-    'app.name': 'Man',
+    'app.name': 'Slo',
     'app.console': 'Console',
     'common.starting': 'Démarrage...',
     'common.starting_sub': 'Le modèle se charge, un instant',
@@ -3075,7 +3075,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   de: {
-    'app.name': 'Man',
+    'app.name': 'Slo',
     'app.console': 'Konsole',
     'common.starting': 'Starte...',
     'common.starting_sub': 'Modell wird geladen, einen Moment',
@@ -4102,7 +4102,7 @@ const translations: Record<Locale, Translations> = {
   },
 
   zh: {
-    'app.name': 'Man',
+    'app.name': 'Slo',
     'app.console': '控制台',
     'common.starting': '启动中...',
     'common.starting_sub': '模型正在加载，请稍候',
