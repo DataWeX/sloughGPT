@@ -3315,7 +3315,22 @@ class SloMultiHeadAttention(SloLayer):
         Concatenates W_q, W_k, W_v weights, does a single matmul, splits.
         Saves 2 matmuls per forward call when q is k is v (self-attention).
         Returns (Q_raw, K_raw, V_raw) as separate Tensors with autograd.
+
+        Quantized projections may have freed their float32 originals
+        (``free_quantized_originals`` replaces ``weight.data`` with a (1,)
+        placeholder), so the fused float32 matmul cannot read them — those
+        layers fall back to the per-layer quant-aware projections.
         """
+        if (
+            self.W_q._quant_info is not None
+            or self.W_k._quant_info is not None
+            or self.W_v._quant_info is not None
+        ):
+            return (
+                self.W_q.forward(x),
+                self.W_k.forward(x),
+                self.W_v.forward(x),
+            )
         q_dim = self.W_q.out_features
         k_dim = self.W_k.out_features
         v_dim = self.W_v.out_features

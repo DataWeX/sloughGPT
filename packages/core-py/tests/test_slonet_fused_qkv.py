@@ -1233,6 +1233,83 @@ class TestGenerateResult:
 
 
 # ---------------------------------------------------------------------------
+# FusedQKVQuantized (card 074 regression)
+# ---------------------------------------------------------------------------
+
+
+class TestFusedQKVQuantized:
+    """Quantized + freed float32 originals must not break fused QKV.
+
+    ``SloLinear.free_quantized_originals()`` replaces ``weight.data`` with a
+    ``(1,)`` placeholder once the quantized weight is authoritative. The
+    fused QKV fast path used to read ``W_q.weight`` directly, crashing
+    verification of quantized loads (card 074).
+    """
+
+    @staticmethod
+    def _quantize_qkv(attn: SloMultiHeadAttention) -> None:
+        from domain.infrastructure._internal.quantization import Quantine
+
+        engine = Quantine(bits=8, mode="symmetric")
+        for proj in (attn.W_q, attn.W_k, attn.W_v):
+            info = engine.quantize(proj.name, proj.weight.data)
+            assert info.is_quantized, f"expected {proj.name} to quantize"
+            proj.set_quantized_weight(info)
+            assert proj.free_quantized_originals() is True
+            assert proj.weight.data.shape == (1,)
+
+    def test_fused_qkv_quantized_freed_shapes(self):
+        attn = SloMultiHeadAttention(64, 4)
+        self._quantize_qkv(attn)
+        x = Tensor(np.random.randn(2, 8, 64))
+        Q, K, V = attn._fused_qkv_forward(x)
+        assert Q.data.shape == (2, 8, 64)
+        assert K.data.shape == (2, 8, 64)
+        assert V.data.shape == (2, 8, 64)
+
+    def test_fused_qkv_quantized_freed_matches_separate(self):
+        attn = SloMultiHeadAttention(64, 4)
+        self._quantize_qkv(attn)
+        x = Tensor(np.random.randn(2, 8, 64))
+        Q_f, K_f, V_f = attn._fused_qkv_forward(x)
+        Q_s = attn.W_q.forward(x)
+        K_s = attn.W_k.forward(x)
+        V_s = attn.W_v.forward(x)
+        np.testing.assert_allclose(Q_f.data, Q_s.data, rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(K_f.data, K_s.data, rtol=1e-5, atol=1e-5)
+        np.testing.assert_allclose(V_f.data, V_s.data, rtol=1e-5, atol=1e-5)
+
+    def test_fused_qkv_quantized_freed_backward(self):
+        attn = SloMultiHeadAttention(64, 4)
+        self._quantize_qkv(attn)
+        x = Tensor(np.random.randn(2, 8, 64), requires_grad=True)
+        Q, K, V = attn._fused_qkv_forward(x)
+        loss = Q.sum() + K.sum() + V.sum()
+        loss.backward()
+        assert x.grad is not None
+
+    def test_transformer_verify_forward_quantized_freed(self):
+        from domain.infrastructure._internal.quantization import Quantine, walk_slo_linears
+
+        model = SloTransformer(
+            vocab_size=128, n_embed=64, n_layer=2, n_head=4, block_size=16, dropout=0.0
+        )
+        engine = Quantine(bits=8, mode="symmetric")
+        quantized = 0
+        for name, module in walk_slo_linears(model).items():
+            info = engine.quantize(name, module.weight.data)
+            if info.is_quantized:
+                module.set_quantized_weight(info)
+                module.free_quantized_originals()
+                quantized += 1
+        assert quantized > 0
+        test_ids = np.array([[1, 2, 3]], dtype=np.int64)
+        logits, _ = model.forward(test_ids)
+        assert logits.data.shape == (1, 3, 128)
+        assert bool(np.isfinite(logits.data).all())
+
+
+# ---------------------------------------------------------------------------
 # Utility functions
 # ---------------------------------------------------------------------------
 
