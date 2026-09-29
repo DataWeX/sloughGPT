@@ -1,13 +1,17 @@
 # Testing Guide
 
-This document covers the testing infrastructure for sloughGPT across both the Python backend and Next.js frontend.
+This document covers the testing infrastructure for sloughGPT across the Next.js frontend and the Python backend. The root-level pytest suite layout is documented separately in `tests/README.md` — this guide references it instead of duplicating it.
 
 ## Test Overview
 
 | Stack | Framework | Location | Run Command |
 |-------|-----------|----------|-------------|
 | Frontend | Vitest + React Testing Library | `apps/web/` | `cd apps/web && npm test` |
-| Backend | pytest | `packages/core-py/tests/` | `cd packages/core-py && python -m pytest -n auto -x -q` |
+| Backend core | pytest + pytest-asyncio | `packages/core-py/tests/` | `cd packages/core-py && python -m pytest -q` |
+| Root suite | pytest | `tests/` | `python -m pytest tests/ -q` (repo root) |
+| Contract suite | pytest | `tests/contract/` | `python -m pytest tests/contract/ -q` (repo root) |
+
+> **Always use the project venv** (`.venv/`). Plain `python`/`pip` outside it violates project rules. Server/contract suites need `PYTHONPATH` (see Backend Testing).
 
 ## Frontend Testing
 
@@ -23,7 +27,7 @@ This document covers the testing infrastructure for sloughGPT across both the Py
 Tests live alongside source files as `*.test.tsx`:
 
 ```
-apps/web/app/(app)/brainstorm/
+apps/web/app/(app)/consciousness/help/
 ├── page.tsx
 └── page.test.tsx
 ```
@@ -39,12 +43,17 @@ npm test
 # Run specific test file
 npm test -- consciousness/page.test.tsx
 
+# lib/ only (matches CI: npm run test:lib in ci.yml)
+npm run test:lib
+
 # Run with coverage
 npm test -- --coverage
 
 # Run in watch mode
 npm test -- --watch
 ```
+
+Other scripts: `test:components`, `test:hooks` (subtree runs), `test:changed` (git-changed only), `lint` (`next lint`), `typecheck` (`tsc --noEmit`).
 
 ### Test Helper
 
@@ -132,74 +141,83 @@ describe('MyComponent', () => {
 
 ### Framework
 
-- **pytest** with parallel execution (`-n auto`)
-- **pytest-asyncio** for async tests
+- **pytest** with **pytest-asyncio** (`asyncio_mode = auto` in `pytest.ini`)
+- **pytest-cov** installed for coverage
+- **pytest-xdist** is installed **in CI only** (`.github/workflows/reusable-ci-core.yml` installs it); the local venv does not have it — do **not** pass `-n` to local pytest runs, they fail with `unrecognized arguments: -n`.
+
+### Configuration
+
+Two `pytest.ini` files apply:
+
+- **Root `pytest.ini`** — `testpaths = packages/core-py/tests tests apps/cli/tests`, `addopts = -v --tb=short -m "not slow" --import-mode=importlib`, markers `unit`, `integration`, `e2e`, `slow`.
+- **`packages/core-py/pytest.ini`** — `addopts = -q -m "not slow" --ignore=tests/test_neural_e2e.py`, markers `slow`, `integration`.
+
+The journey suites add the `browser` and `live` markers (queued with the `feat/journey-library` branch, card 067); browser tests are excluded from default runs by the `-m` filter.
 
 ### Running Tests
 
 ```bash
+# Core backend suite (from packages/core-py)
 cd packages/core-py
+python -m pytest -q                                    # applies -m "not slow"
+python -m pytest tests/test_training_infrastructure.py # one file
+python -m pytest --cov=domain tests/                   # coverage (pytest-cov)
 
-# Run all tests (parallel)
-python -m pytest -n auto -x -q
+# Root suite (from repo root)
+python -m pytest tests/ -q
 
-# Run specific test file
-python -m pytest tests/test_training_infrastructure.py
-
-# Run with coverage
-python -m pytest --cov=domain tests/
-
-# Verbose output
-python -m pytest -v tests/
+# Server + contract suites import the FastAPI app — set PYTHONPATH first
+export PYTHONPATH=".:packages/core-py:apps/api/server"
+python -m pytest tests/server -q
+python -m pytest tests/contract/ -q                    # contract suite: 23 tests
 ```
 
 ### Test File Convention
 
-Tests live in `packages/core-py/tests/`:
+Core tests live in `packages/core-py/tests/`:
 
 ```
 packages/core-py/tests/
 ├── test_training_infrastructure.py
 ├── test_training_export_presets.py
-├── test_inference.py
+├── test_agent_core.py
 └── ...
 ```
 
+Root-level suites (`tests/`, `tests/server/`, `tests/contract/`, journey/browser suites) are described in `tests/README.md`.
+
 ## Test Coverage
 
-### Current Status
+### Measuring Coverage
 
-| Component | Coverage | Tests |
-|-----------|----------|-------|
-| Consciousness pages | 100% | 26 page tests |
-| Consciousness components | 100% | 5 component tests |
-| Consciousness hooks | 100% | 6 hook tests |
-| Consciousness lib | 100% | 3 lib tests |
-| Navigation | 100% | 8 tests |
-| Hooks/Lib | 95%+ | 1793 tests |
-| Features/Chat | 95%+ | 1467 tests |
-| Tools pages | 100% | 7 page tests |
+No self-reported percentages are kept in this document — generate them:
 
-### Achieving High Coverage
+```bash
+# Frontend
+cd apps/web && npm test -- --coverage
 
-1. **Test all states:** Render, loading, error, empty, success
-2. **Test user interactions:** Clicks, form submissions, navigation
-3. **Mock external dependencies:** API calls, navigation, stores
-4. **Use shared helpers:** `createMockController()` for consistency
+# Backend core (venv active)
+python -m pytest --cov=domain packages/core-py/tests
+```
+
+CI enforces a floor on the core subset: `--cov-fail-under=30` in `.github/workflows/reusable-ci-core.yml`.
 
 ## CI/CD Integration
 
 Tests run automatically on:
-- Pull request creation
-- Push to main branch
-- Manual trigger via GitHub Actions
+
+- `.github/workflows/ci.yml` — frontend job: `npm ci` + `npm run test:lib` in `apps/web` (i.e. `vitest run lib/`).
+- `.github/workflows/ci_cd.yml` — `npx vitest run` for the web app (twice: unit + another stage), `sdk-test-py` runs `tests/test_sdk.py`, `standards-schemas` validates example manifests.
+- `.github/workflows/reusable-ci-core.yml` — shared lint + core pytest subset; installs `pytest pytest-cov pytest-asyncio pytest-xdist` before running.
 
 ### Pre-commit Hooks
 
-```bash
-# Run lint and typecheck before commit
-npm run lint && npm run typecheck
-```
+Real hooks are configured (not just manual commands):
+
+- `.pre-commit-config.yaml` — pre-commit framework: trailing-whitespace, end-of-file-fixer, check-yaml, check-added-large-files (500KB), check-merge-conflict, `no-commit-to-branch main`, TypeScript check (`tsc --noEmit` in `apps/web`), Python syntax check (`py_compile`).
+- `.husky/pre-commit` — runs `npx lint-staged`; the root `lint-staged` config runs `eslint --fix` + `prettier --write` on TS/TSX, `.venv/bin/ruff check --fix` + `ruff format` on Python files, `prettier --write` on JSON/MD.
+- `.husky/pre-push` — advisory warning against pushing straight to `main`.
+- Manual gate before committing: `npm run lint && npm run typecheck` (root scripts).
 
 ## Writing New Tests
 
@@ -214,6 +232,7 @@ npm run lint && npm run typecheck
 - [ ] External dependencies are mocked
 - [ ] LocaleProvider wraps test component
 - [ ] Tests are isolated (no shared state)
+- [ ] Backend contract changes extend `tests/contract/` (and this guide stays truthful — it is guarded by `tests/contract/test_testing_doc.py`)
 
 ### Example Template
 

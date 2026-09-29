@@ -88,6 +88,5 @@ def test_doc_covers_every_served_route(live: set[tuple[str, str]]) -> None:
     """Every served (method, path) must be documented."""
     missing = sorted(live - _doc_rows())
     assert not missing, (
-        f"docs/routers.md is missing {len(missing)} served route(s) — add "
-        f"them: {missing[:20]}"
+        f"docs/routers.md is missing {len(missing)} served route(s) — add them: {missing[:20]}"
     )

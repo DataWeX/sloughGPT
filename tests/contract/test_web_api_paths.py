@@ -57,7 +57,7 @@ def _norm(p: str) -> str:
 def _variants(lit: str) -> set[str]:
     s = lit[1:-1]
     s = re.sub(r"\$\{[^}]*$", "", s)  # dangling nested-template tail
-    out = { _norm(re.sub(r"\$\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", "{param}", s)) }
+    out = {_norm(re.sub(r"\$\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", "{param}", s))}
 
     def rm(m: re.Match[str]) -> str:
         var = re.match(r"[A-Za-z_$][A-Za-z0-9_$]*", m.group(0)[2:])
@@ -147,6 +147,5 @@ def test_no_new_unresolvable_frontend_calls(
 def test_known_missing_baseline_shrinks(missing_paths: set[tuple[str, str]]) -> None:
     fixed = sorted(KNOWN_MISSING - missing_paths)
     assert not fixed, (
-        f"{len(fixed)} baseline entr(y/ies) now resolve — remove them from "
-        f"KNOWN_MISSING: {fixed}"
+        f"{len(fixed)} baseline entr(y/ies) now resolve — remove them from KNOWN_MISSING: {fixed}"
     )
