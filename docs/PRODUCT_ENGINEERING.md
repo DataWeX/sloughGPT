@@ -151,6 +151,11 @@ Frontend: collections page (single page)
 
 ### Bad examples (fix these)
 
+> **Status 2026-09-29:** Voice/tokenizer/token_tree/kb bypasses are fixed (facade
+> or engine imports). Remaining real violations: `training/router.py` (23
+> `_internal` sites) and the engines' own internals — `self_train`/`lora_eval`
+> counts are inside concurrent WIP files.
+
 **Voice** — 3 routers, domain bypassed:
 
 ```
@@ -232,27 +237,27 @@ Single /training router with sub-paths for each feature
 
 ## Dead Code to Remove
 
-| What                            | Why                                       | Action                                      |
-| ------------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `routers/metrics.py`            | No frontend consumer, infrastructure-only | Delete or move to internal                  |
-| `routers/collections.py`        | No frontend page or controller            | Delete (feature unused)                     |
-| `routers/feeds.py`              | RSS feeds, no web frontend consumer       | Move to internal or delete                  |
-| `routers/api_keys.py`           | Duplicate of `security.py` (same prefix)  | Merge into security.py, delete api_keys.py  |
-| `routers/session_store.py`      | Utility module, not a router              | Move to `controllers/` or `infrastructure/` |
-| Phoneme: 47 components          | Over-built for Alex's needs               | Keep components, restructure page into flow |
-| Tokenizer: 9 tabs, 12 sub-cards | Over-built                                | Consolidate into 2-3 sections               |
-| Consciousness: 27 sub-pages     | Premature — engine not wired              | Keep pages, wire engine first               |
+| What                              | Why                                          | Action                                                 |
+| --------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
+| `routers/metrics.py`              | No frontend consumer, infrastructure-only    | ✅ removed                                             |
+| `routers/collections.py`          | ~~No frontend page~~ — alive: page + 9 endpoints, mounted | Keep                                             |
+| `routers/feeds.py`                | RSS feeds, no web frontend consumer          | ✅ removed                                             |
+| `routers/api_keys.py`             | Router unmounted; `ApiKeyManager` imported by auth/workspaces/security | Merge router bits into security.py once its WIP lands; keep class |
+| `routers/session_store.py`        | Utility module, not a router                 | ✅ removed                                             |
+| Phoneme: 47 components            | Over-built for Alex's needs                  | Keep components, restructure page into flow            |
+| Tokenizer: 9 tabs, 12 sub-cards   | Over-built                                   | Consolidate into 2-3 sections                          |
+| Consciousness: 27 sub-pages       | ~~Engine not wired~~ — wired 2026-09-29      | Keep pages                                             |
 
 ---
 
 ## Build Order (what to do next)
 
 1. **Write this doc** ✅ (you're reading it)
-2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed
-3. **Feature engines** — VoiceEngine, KnowledgeEngine, TrainingEngine (follow ToolsEngine pattern)
-4. **Wire routers** — point routers at engines, not internals
+2. **Quick cleanup** ✅ — dead routers removed (metrics, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed. `collections` kept — alive (mounted via `get_all_routers`, frontend page, 9 endpoints); `api_keys` kept as class library (router unmounted; `ApiKeyManager` used by auth/workspaces/security)
+3. **Feature engines** ✅ — VoiceEngine, KnowledgeEngine, TrainingEngine, ToolsEngine
+4. **Wire routers** ✅ — clean routers delegate to engines/facades; `_internal` remains only in `shell.py`/`vm.py` (concurrent refactor zone) and the engines' own internals
 5. **UI flows** — restructure phoneme, knowledge, training pages to follow UX_FLOWS.md
-6. **Consciousness** — wire cognitive engine to inference pipeline
+6. **Consciousness** ✅ — cognitive engine wired to inference: `reflect(apply=False)` prompt injection via `ConsciousnessProcessor` in the chat pipeline, post-process + qualia SSE hooks
 7. **Test** — verify all user journeys pass
 
 ---
