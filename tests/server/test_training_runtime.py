@@ -196,3 +196,19 @@ class TestGet:
 
     def test_get_missing_returns_none(self, runtime):
         assert runtime.get("nope") is None
+
+
+class TestSyncTerminalGuard:
+    def test_sync_cannot_resurrect_a_completed_store_row(self, runtime, store):
+        # The Sep 28 flip (journal 4857): the registered record still says
+        # 'running' while the store row is already completed — sync must not
+        # write the stale status back over the terminal row.
+        runtime.register("j1", _job("j1"), threading.Event())
+        store.mark_completed("j1", "models/j1.soul")
+
+        job = runtime.get("j1")
+        job["progress"] = 99
+        runtime.sync("j1")
+
+        assert store.get("j1")["status"] == "completed"
+        assert store.get("j1")["progress"] == 100

@@ -110,8 +110,8 @@ class TestModelAudit:
         resp = models_client.post("/models/load", json={"model_id": "gpt2", "device": "cpu"})
         assert resp.status_code == 200
 
-    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.infrastructure.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_quantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
         provider = MagicMock()
@@ -135,8 +135,8 @@ class TestModelAudit:
             "model_type": "slonet",
         }
 
-    @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.infrastructure.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_dequantize_model_logs_event(
         self, mock_logger, mock_provider, mock_walk, models_client
@@ -423,7 +423,7 @@ class TestTrainingRouterAudit:
         assert kwargs["extra"]["job_id"] == job_id
         assert kwargs["extra"]["model"] == "model"
 
-    @patch("apps.api.server.training.jobs_api.get_training_executor")
+    @patch("domain.training.get_training_engine")
     @patch("infrastructure.auth.get_audit_logger")
     def test_stop_training_job_logs_event(self, mock_logger, mock_engine, training_router_client):
         from apps.api.server.training.jobs import training_jobs
