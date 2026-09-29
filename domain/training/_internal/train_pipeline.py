@@ -806,8 +806,24 @@ class CheckpointManager:
 # =============================================================================
 
 
-# Steps between explicit cyclic-GC collections during training.
+# Steps between explicit cyclic-GC collections during training. A companion
+# resident-memory trigger lives in _gc_parked_step: graph garbage scales with
+# model size, so a fixed step interval alone OOMs big models long before the
+# first collection.
 _GC_COLLECT_EVERY_STEPS = 50
+# Resident-memory growth since the last collection that also forces one.
+_GC_COLLECT_EVERY_RSS_GROWTH = int(
+    os.environ.get("SLO_GC_RSS_GROWTH_BYTES", str(2 * 1024 * 1024 * 1024))
+)
+
+
+def _rss_bytes() -> int | None:
+    """Resident set size of this process, or None where /proc is unavailable."""
+    try:
+        with open("/proc/self/statm") as fh:
+            return int(fh.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    except (OSError, IndexError, ValueError):
+        return None
 
 
 def _gc_parked(fn):
@@ -843,22 +859,34 @@ def _gc_parked_step(fn):
     """Reclaim cyclic garbage periodically during a parked training run.
 
     No GC state changes here (the surrounding ``_gc_parked`` run owns
-    that); just an explicit collection every ``_GC_COLLECT_EVERY_STEPS``
-    steps so cyclic garbage stays bounded on long runs. Also safe
-    standalone: a bare ``gc.collect()`` never hurts.
+    that); an explicit collection runs every ``_GC_COLLECT_EVERY_STEPS``
+    steps **or** once resident memory has grown by
+    ``_GC_COLLECT_EVERY_RSS_GROWTH`` bytes since the last one. The byte
+    trigger matters because autograd-graph garbage scales with model size:
+    the medium benchmark config leaks ~0.8 GB/step, so the step interval
+    alone hit ~40 GB before its first collection and OOMed at step ~15.
+    Also safe standalone: a bare ``gc.collect()`` never hurts.
     """
     import gc
 
-    _counter = [0]
+    state = {"steps": 0, "rss": None}
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         try:
             return fn(*args, **kwargs)
         finally:
-            _counter[0] += 1
-            if _counter[0] % _GC_COLLECT_EVERY_STEPS == 0:
+            state["steps"] += 1
+            rss = _rss_bytes()
+            collect = state["steps"] % _GC_COLLECT_EVERY_STEPS == 0
+            if not collect and rss is not None:
+                if state["rss"] is None:
+                    state["rss"] = rss
+                elif rss - state["rss"] >= _GC_COLLECT_EVERY_RSS_GROWTH:
+                    collect = True
+            if collect:
                 gc.collect()
+                state["rss"] = _rss_bytes()
 
     return wrapper
 
