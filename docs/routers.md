@@ -1,5 +1,9 @@
 # API Routers Documentation
 
+> Building or changing a router? Follow the **Router Playbook** in
+> [PRODUCT_ENGINEERING.md](PRODUCT_ENGINEERING.md#router-playbook). This file
+> is the endpoint map only.
+
 All routes are served by the FastAPI application under the base URL (e.g. `http://localhost:8000`). Every public endpoint uses `classify_and_raise(e, source="router.method")` for structured error responses.
 
 ## Health Router (`/health`)
