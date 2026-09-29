@@ -136,7 +136,7 @@ MAN_GATEWAY_RATE_WINDOW=60
 
 **Optional** · Rust edge · default `32`
 
-Maximum concurrent SSE streams (`*/stream`, `*/regenerate`); the permit is held until each response body finishes. `0` disables the cap.
+Maximum concurrent SSE streams (`*/stream`, `*/regenerate`); the slot is held until each response body finishes. `0` disables the cap *and* its adaptation. This is the **ceiling** of an AIMD controller: the effective limit halves whenever ≥12.5% of streams in a 2-second window fail against the core (transport errors or ≥500 relays) and grows back +1 per healthy window, floor 1 — so a struggling core sheds early instead of queueing, while a healthy one returns to the full cap. Current values visible as `gateway.stream_limit` / `gateway.stream_max` in `/gateway/stats`.
 
 ```bash
 MAN_GATEWAY_MAX_STREAMS=32

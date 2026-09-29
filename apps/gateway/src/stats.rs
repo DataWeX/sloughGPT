@@ -215,10 +215,6 @@ impl EdgeStats {
         self.in_flight.load(Ordering::Relaxed)
     }
 
-    fn in_flight_inc(&self) {
-        self.in_flight.fetch_add(1, Ordering::Relaxed);
-    }
-
     fn in_flight_dec(&self) {
         self.in_flight.fetch_sub(1, Ordering::Relaxed);
     }
@@ -288,11 +284,24 @@ impl EdgeStats {
     }
 }
 
-/// Guard that keeps the in-flight gauge honest: dropped when the stream body
-/// finishes, aborts, or the request errors anywhere downstream.
-pub fn stream_open(stats: &Arc<EdgeStats>) -> StreamGuard {
-    stats.in_flight_inc();
-    StreamGuard(stats.clone())
+/// Atomically claim one stream slot if `active < limit`; the guard releases
+/// the slot (and the in-flight gauge) on drop. One CAS serves both admission
+/// and the gauge — they count the same population (streaming requests), so
+/// the cap and the gauge can never disagree. Called as a free function so
+/// the guard can own an `Arc` back-reference (`self: &Arc<Self>` isn't
+/// stable Rust).
+pub fn try_stream_slot(stats: &Arc<EdgeStats>, limit: usize) -> Option<StreamGuard> {
+    stats
+        .in_flight
+        .fetch_update(Ordering::AcqRel, Ordering::Acquire, |v| {
+            if v < limit {
+                Some(v + 1)
+            } else {
+                None
+            }
+        })
+        .ok()
+        .map(|_| StreamGuard(stats.clone()))
 }
 
 pub struct StreamGuard(Arc<EdgeStats>);
@@ -388,11 +397,13 @@ mod tests {
     fn stream_guard_tracks_in_flight() {
         let s = Arc::new(EdgeStats::new());
         assert_eq!(s.in_flight(), 0);
-        let g1 = stream_open(&s);
-        let g2 = stream_open(&s);
+        let g1 = try_stream_slot(&s, 2).expect("slot 1");
+        let g2 = try_stream_slot(&s, 2).expect("slot 2");
         assert_eq!(s.in_flight(), 2);
+        assert!(try_stream_slot(&s, 2).is_none(), "limit 2 → third denied");
         drop(g1);
         assert_eq!(s.in_flight(), 1);
+        assert!(try_stream_slot(&s, 2).is_some(), "slot freed");
         drop(g2);
         assert_eq!(s.in_flight(), 0);
     }
