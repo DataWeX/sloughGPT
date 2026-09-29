@@ -280,6 +280,28 @@ The consciousness system provides AI self-awareness monitoring and management wi
 | Wellness | `/wellness` | ✅ Done | Wellness & relaxation |
 | Writing | `/writing` | ✅ Done | Writing assistant |
 
+## Spec-linked journey library (`domain/journeys`)
+
+The journeys of `UX_FLOWS.md` as executable flows. Every `Flow` carries its
+exact heading from that document as `spec`, and the offline registry tests
+fail if a heading is renamed or a flow loses its anchor — the spec and the
+journey suite cannot drift apart.
+
+| Piece | Where | Notes |
+|-------|-------|-------|
+| Flow registry | `domain/journeys/flows.py` | 13 flows, each spec-anchored to a `UX_FLOWS.md` heading |
+| Step builders | `domain/journeys/steps.py` | avion builders, repo-root discovery independent of cwd |
+| Runner | `python -m domain.journeys` | `--list`, `--flow <id>`, `--strict-errors` |
+| Registry tests | `tests/test_ux_flows_library.py` | offline: ids + spec headings + step construction; live sweep behind `SLO_UX_LIVE=1` (slow) |
+
+```bash
+.venv/bin/python -m domain.journeys --list  # registry + spec links, no stack needed
+.venv/bin/python -m domain.journeys         # live sweep against a running stack
+```
+
+`scripts/run_ux_flows.py` is the legacy runner; this library is the
+spec-linked successor.
+
 ## Test Coverage
 
 | Area | Coverage | Tests |
