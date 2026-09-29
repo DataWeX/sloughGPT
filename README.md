@@ -84,7 +84,7 @@ sloughGPT/
 │   ├── sdk-py/                # Python SDK
 │   ├── sdk-ts/                # TypeScript SDK
 │   └── standards/             # Shared schemas
-├── datasets/                  # Training data
+├── datasets/                  # Training data (runtime — created by imports/downloads)
 ├── models/                    # Saved checkpoints
 ├── tests/                     # Test suite
 └── scripts/                   # Build, deploy, benchmarks
@@ -92,7 +92,7 @@ sloughGPT/
 
 ## Consciousness System
 
-SloughGPT includes a consciousness system with 26 pages for monitoring and managing AI self-awareness:
+SloughGPT includes a consciousness system with 25 pages for monitoring and managing AI self-awareness:
 
 | Feature | Description |
 |---------|-------------|
@@ -130,8 +130,8 @@ Core endpoints:
 ## Development
 
 ```bash
-# Python tests (parallel)
-cd packages/core-py && python -m pytest -n auto -x -q
+# Python tests (root suite — full recipes in docs/TESTING.md)
+python -m pytest tests/ -q
 
 # Frontend tests
 cd apps/web && npm run test
