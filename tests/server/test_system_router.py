@@ -105,7 +105,7 @@ class TestLifecycle:
 class TestTailOutput:
     """GET /system/output"""
 
-    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_returns_output_lines(self, mock_get_buf, client):
         buf = MagicMock()
         buf.tail_dicts.return_value = []
@@ -118,7 +118,7 @@ class TestTailOutput:
         assert "lines" in data
         assert "size" in data
 
-    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_lists_actual_lines(self, mock_get_buf, client):
         buf = MagicMock()
         buf.tail_dicts.return_value = [{"text": "hello", "level": "info", "ts": 1.0}]
@@ -146,16 +146,28 @@ class TestExecutor:
             executor_mod._instance = old
 
     def test_executor_job_not_found(self, client):
-        resp = client.get("/system/executor/nonexistent")
-        assert resp.status_code == 503
-        body = resp.json()
-        assert "error" in body
+        # Isolate from the global executor singleton: another test file (or an
+        # earlier test) may have created it, which would make this a 404.
+        old = executor_mod._instance
+        try:
+            executor_mod._instance = None
+            resp = client.get("/system/executor/nonexistent")
+            assert resp.status_code == 503
+            body = resp.json()
+            assert "error" in body
+        finally:
+            executor_mod._instance = old
 
     def test_executor_job_result_not_found(self, client):
-        resp = client.get("/system/executor/nonexistent/result")
-        assert resp.status_code == 503
-        body = resp.json()
-        assert "error" in body
+        old = executor_mod._instance
+        try:
+            executor_mod._instance = None
+            resp = client.get("/system/executor/nonexistent/result")
+            assert resp.status_code == 503
+            body = resp.json()
+            assert "error" in body
+        finally:
+            executor_mod._instance = old
 
     def test_purge_when_uninitialized(self, client):
         resp = client.post("/system/executor/purge")
@@ -251,7 +263,7 @@ class TestOutputStream:
 
         return FakeSub(lines)
 
-    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_stream_emits_history_then_exits(self, mock_get_buf, client):
         from unittest.mock import AsyncMock
 
@@ -272,7 +284,7 @@ class TestOutputStream:
                 body = resp.read().decode()
                 assert '{"text": "boot"}' in body
 
-    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_stream_pushes_live_lines(self, mock_get_buf, client):
         from unittest.mock import AsyncMock
 
@@ -290,7 +302,7 @@ class TestOutputStream:
                 body = resp.read().decode()
                 assert '{"text": "live"}' in body
 
-    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_stream_unsubscribes_on_close(self, mock_get_buf, client):
         from unittest.mock import AsyncMock
 
