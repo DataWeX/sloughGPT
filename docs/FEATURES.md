@@ -280,6 +280,22 @@ The consciousness system provides AI self-awareness monitoring and management wi
 | Wellness | `/wellness` | ✅ Done | Wellness & relaxation |
 | Writing | `/writing` | ✅ Done | Writing assistant |
 
+## Gateway Edge (Rust)
+
+Transport-only edge in `apps/gateway/` — design in **`engineering-overview.md`** §5, env vars in **`ENVIRONMENT.md`**.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| SSE/download compression | ✅ Done | zstd > gzip, streams compress from byte 0; `scripts/benchmark_gateway_compression.py` |
+| Path filters + deny/chat-only | ✅ Done | traversal/`..`/NUL → 403 before Python |
+| Health contract passthrough | ✅ Done | core bodies verbatim + additive `gateway:"rust"` |
+| Self-supervision | ✅ Done | worker respawn with backoff, no systemd |
+| Rate limiting (Python port) | ✅ Done | route windows, global ×10 local, 429 `{"detail"}` |
+| Stats + circuit breaker | ✅ Done | `/gateway/stats`; 503 shed while open |
+| Access log + per-client stats | ✅ Done | `MAN_GATEWAY_ACCESS_LOG` JSONL, peer-IP attribution |
+| Adaptive stream caps (AIMD) | ✅ Done | halves at ≥12.5% stream failures / 2s window |
+| Admission benchmark | ✅ Done | `scripts/benchmark_gateway_admission.py`; record with `benchmark_results.py --kind admission` |
+
 ## Test Coverage
 
 | Area | Coverage | Tests |

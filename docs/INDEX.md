@@ -18,6 +18,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **STRUCTURE.md** | Repo layout |
+| **engineering-overview.md** | Five components, data flow, gateway edge design |
 | **RAG_ARCHITECTURE.md** | RAG system design |
 | **RAG_PATTERNS.md** | RAG implementation patterns |
 | **TRAINING_REFACTOR_PLAN.md** | Consolidating training loops |
