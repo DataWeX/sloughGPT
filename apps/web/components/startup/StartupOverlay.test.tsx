@@ -72,9 +72,9 @@ describe('StartupOverlay', () => {
     useLiveStatusMock.mockReturnValue(status({ startupStage: 'critical' }))
     const { container } = render(<StartupOverlay />)
     const dots = Array.from(container.querySelectorAll('[role="img"]'))
-    expect(dots[0].className).toContain('bg-[#28c840]')
+    expect(dots[0].className).toContain('bg-success')
     expect(dots[1].className).toContain('sl-dot-pulse')
-    expect(dots[2].className).toContain('bg-[#2c2c2e]')
+    expect(dots[2].className).toContain('bg-border')
     expect(screen.getByRole('status').textContent).toBe('Stage 2 of 4: Starting core services')
   })
 

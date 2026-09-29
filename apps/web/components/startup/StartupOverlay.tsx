@@ -111,19 +111,19 @@ export function StartupOverlay() {
   return (
     <div
       className={cn(
-        'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a] transition-opacity duration-500',
+        'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background transition-opacity duration-500',
         fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100',
       )}
     >
       {/* Logo */}
       <div className="mb-8">
-        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#0a7aff] to-[#5856d6] flex items-center justify-center shadow-lg shadow-[#0a7aff]/20">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
           <span className="text-white font-bold text-lg">S</span>
         </div>
       </div>
 
       {/* Stage label */}
-      <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-6">
+      <h2 className="text-[14px] font-medium text-foreground mb-6">
         {stuck ? 'Still connecting' : STAGE_LABELS[startupStage] || 'Starting up'}
       </h2>
 
@@ -134,20 +134,23 @@ export function StartupOverlay() {
         aria-valuemin={0}
         aria-valuemax={100}
         {...(isIndeterminate ? {} : { 'aria-valuenow': progressPct })}
-        className="w-48 h-1 rounded-full bg-[#1c1c1e] overflow-hidden mb-3"
+        className="w-48 h-1 rounded-full bg-muted overflow-hidden mb-3"
       >
         {isIndeterminate ? (
-          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-gradient-to-r from-[#0a7aff] to-[#5856d6]" />
+          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-gradient-to-r from-primary to-primary/60" />
         ) : (
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#0a7aff] to-[#5856d6] transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-300 ease-out"
             style={{ width: `${progressPct}%` }}
           />
         )}
       </div>
 
       {/* Progress details */}
-      <div className="flex items-center gap-2 text-[11px] text-[#636366] mb-4" aria-live="polite">
+      <div
+        className="flex items-center gap-2 text-[11px] text-muted-foreground/70 mb-4"
+        aria-live="polite"
+      >
         {!isIndeterminate && startupModelProgress > 0 && (
           <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
         )}
@@ -160,7 +163,7 @@ export function StartupOverlay() {
       {/* Stuck-connecting recovery */}
       {stuck && (
         <div role="alert" className="flex flex-col items-center gap-2 mb-4">
-          <p className="text-[11px] text-[#febc2e]">
+          <p className="text-[11px] text-warning">
             No response from the server yet — check that the backend is running
           </p>
           <button
@@ -173,7 +176,7 @@ export function StartupOverlay() {
               })
               window.location.reload()
             }}
-            className="px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
+            className="px-4 py-1.5 rounded-full bg-primary text-white text-[12px] font-medium transition-all duration-200 hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
           >
             Retry
           </button>
@@ -185,8 +188,8 @@ export function StartupOverlay() {
         <div className="flex flex-col items-center gap-1.5 mb-4">
           {activeHooks.map((hook: HookStatus) => (
             <div key={hook.name} className="flex items-center gap-2 text-[10px]">
-              <span className="w-1 h-1 rounded-full bg-[#febc2e] animate-pulse" />
-              <span className="text-[#8e8e93]">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              <span className="w-1 h-1 rounded-full bg-warning animate-pulse" />
+              <span className="text-muted-foreground">{HOOK_LABELS[hook.name] ?? hook.name}</span>
             </div>
           ))}
         </div>
@@ -197,7 +200,7 @@ export function StartupOverlay() {
         <button
           type="button"
           onClick={() => setShowDetails(!showDetails)}
-          className="text-[9px] text-[#636366] hover:text-[#8e8e93] transition-colors mb-4"
+          className="text-[9px] text-muted-foreground/70 hover:text-muted-foreground transition-colors mb-4"
         >
           {showDetails ? 'Hide details' : 'Show timing'}
         </button>
@@ -207,8 +210,12 @@ export function StartupOverlay() {
         <div className="w-48 space-y-1 mb-4">
           {completedHooks.map((hook: HookStatus) => (
             <div key={hook.name} className="flex items-center justify-between text-[9px]">
-              <span className="text-[#8e8e93] truncate">{HOOK_LABELS[hook.name] ?? hook.name}</span>
-              <span className="text-[#636366] font-mono ml-2">{hook.duration_seconds}s</span>
+              <span className="text-muted-foreground truncate">
+                {HOOK_LABELS[hook.name] ?? hook.name}
+              </span>
+              <span className="text-muted-foreground/70 font-mono ml-2">
+                {hook.duration_seconds}s
+              </span>
             </div>
           ))}
         </div>
@@ -240,10 +247,10 @@ export function StartupOverlay() {
               aria-label={`Stage ${i + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[stage]} (${stateLabel})`}
               className={cn(
                 'w-1.5 h-1.5 rounded-full transition-all duration-300',
-                state === 'done' && 'bg-[#28c840]',
-                state === 'active' && 'bg-[#0a7aff] scale-125 sl-dot-pulse',
-                state === 'pending' && 'bg-[#2c2c2e]',
-                state === 'unknown' && 'bg-[#0a7aff]/60 sl-dot-wave',
+                state === 'done' && 'bg-success',
+                state === 'active' && 'bg-primary scale-125 sl-dot-pulse',
+                state === 'pending' && 'bg-border',
+                state === 'unknown' && 'bg-primary/60 sl-dot-wave',
               )}
               style={state === 'unknown' ? { animationDelay: `${i * 0.15}s` } : undefined}
             />
