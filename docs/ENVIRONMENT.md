@@ -106,10 +106,40 @@ MAN_GATEWAY_DENY=/shell,/datasets
 
 **Optional** · Rust edge
 
-When `1`/`true`/`yes`/`on`, only the conversation surface is allowed (`/chat`, `/inference`, `/models`, `/session`, `/memory`, `/companion`, `/souls`, `/feedback`, `/conversations`, `/docs`, `/redoc`, `/openapi.json`, `/metrics`, `/system`, `/health*`). Everything else → **403**. Exposure shape only — auth and rate limits stay in Python.
+When `1`/`true`/`yes`/`on`, only the conversation surface is allowed (`/chat`, `/inference`, `/models`, `/session`, `/memory`, `/companion`, `/souls`, `/feedback`, `/conversations`, `/docs`, `/redoc`, `/openapi.json`, `/metrics`, `/system`, `/health*`). Everything else → **403**. Exposure shape only — auth stays in Python; rate limiting is enforced at the gateway first (see below).
 
 ```bash
 MAN_GATEWAY_CHAT_ONLY=1
+```
+
+### MAN_GATEWAY_RATE_LIMIT
+
+**Optional** · Rust edge · default `300`
+
+Sliding-window requests per client per `MAN_GATEWAY_RATE_WINDOW` window. Localhost clients get 10× (matching Python). `0` disables all window checks (route and workspace limits included).
+
+```bash
+MAN_GATEWAY_RATE_LIMIT=300
+```
+
+### MAN_GATEWAY_RATE_WINDOW
+
+**Optional** · Rust edge · default `60`
+
+Window length in seconds for `MAN_GATEWAY_RATE_LIMIT` and workspace limits. Route-specific limits keep their own windows from the Python table.
+
+```bash
+MAN_GATEWAY_RATE_WINDOW=60
+```
+
+### MAN_GATEWAY_MAX_STREAMS
+
+**Optional** · Rust edge · default `32`
+
+Maximum concurrent SSE streams (`*/stream`, `*/regenerate`); the permit is held until each response body finishes. `0` disables the cap.
+
+```bash
+MAN_GATEWAY_MAX_STREAMS=32
 ```
 
 ### SLO_ENV

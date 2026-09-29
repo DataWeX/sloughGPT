@@ -3,23 +3,27 @@
 //! CCGT Gateway domain: expose + optimize, never understand. This process
 //! terminates TLS (rustls), caps request bodies, enforces edge timeouts,
 //! relays response bytes untouched (streaming-safe: no buffering, no JSON
-//! parsing, no SSE re-chunking), and serves static files. Auth, rate limits,
-//! CORS semantics, and error envelopes are owned by Python — see
-//! docs/PRODUCT_ENGINEERING.md ("Client / core separation").
+//! parsing, no SSE re-chunking), and serves static files. Auth and semantic
+//! error envelopes are owned by Python — see docs/PRODUCT_ENGINEERING.md
+//! ("Client / core separation"). Rate limiting is enforced HERE, first: the
+//! full window semantics of Python's RateLimitMiddleware (route table, global
+//! and workspace limits, local ×10) are ported in `ratelimit`, so floods die
+//! before Python wakes; the Python copy behind us degrades to a no-op.
 
 use axum::{
     body::{to_bytes, Body},
-    extract::{Request, State},
+    extract::{ConnectInfo, Request, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
 use futures::StreamExt;
+use ratelimit::{RateConfig, RateLimiter, RATE_LIMIT_HEADER_LIMIT, RATE_LIMIT_HEADER_REMAINING};
 use reqwest::Client;
 use serde::Serialize;
 use std::{net::SocketAddr, sync::Arc, time::Duration};
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, Semaphore};
 use tower_http::{
     cors::{Any, CorsLayer},
     services::ServeDir,
@@ -29,6 +33,7 @@ use tracing::info;
 
 mod compression;
 mod filters;
+mod ratelimit;
 mod supervisor;
 
 use filters::PathPolicy;
@@ -63,6 +68,7 @@ struct GatewayConfig {
     static_dir: String,
     listen_addr: SocketAddr,
     policy: PathPolicy,
+    rate: RateConfig,
 }
 
 impl Default for GatewayConfig {
@@ -78,6 +84,7 @@ impl Default for GatewayConfig {
                 .unwrap_or_else(|_| "apps/web/.next/static".into()),
             listen_addr: SocketAddr::from(([0, 0, 0, 0], port)),
             policy: PathPolicy::from_env(),
+            rate: RateConfig::from_env(),
         }
     }
 }
@@ -89,6 +96,28 @@ struct AppState {
     config: GatewayConfig,
     http: Client,
     core_status: Arc<RwLock<CoreStatus>>,
+    limiter: Arc<RateLimiter>,
+    streams: Arc<Semaphore>,
+}
+
+impl AppState {
+    fn new(config: GatewayConfig, http: Client) -> Self {
+        // Disabled → effectively-unlimited permits (Semaphore::new rejects
+        // usize::MAX); the middleware also skips acquisition when max_streams
+        // is 0, so this value is never actually drawn down.
+        let stream_cap = if config.rate.max_streams == 0 {
+            1 << 20
+        } else {
+            config.rate.max_streams
+        };
+        Self {
+            limiter: Arc::new(RateLimiter::new(config.rate)),
+            streams: Arc::new(Semaphore::new(stream_cap)),
+            config,
+            http,
+            core_status: Arc::new(RwLock::new(CoreStatus::default())),
+        }
+    }
 }
 
 #[derive(Clone, Default, Serialize)]
@@ -168,11 +197,7 @@ async fn main() {
         .build()
         .expect("Failed to create HTTP client");
 
-    let state = AppState {
-        config: config.clone(),
-        http,
-        core_status: Arc::new(RwLock::new(CoreStatus::default())),
-    };
+    let state = AppState::new(config.clone(), http);
 
     // Spawn sidecar health checker
     let health_state = state.clone();
@@ -197,11 +222,24 @@ async fn main() {
     if !config.policy.deny_prefixes.is_empty() {
         info!("   → deny prefixes: {:?}", config.policy.deny_prefixes);
     }
+    if config.rate.enabled() {
+        info!(
+            "   → rate limit: {}/{}s per client (10× local), max {} streams (MAN_GATEWAY_RATE_LIMIT/_RATE_WINDOW, MAN_GATEWAY_MAX_STREAMS; 0 disables)",
+            config.rate.global_limit,
+            config.rate.window_secs,
+            config.rate.max_streams,
+        );
+    } else {
+        info!("   → rate limiting disabled (MAN_GATEWAY_RATE_LIMIT=0)");
+    }
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(supervisor::shutdown_signal())
-        .await
-        .expect("Server failed");
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(supervisor::shutdown_signal())
+    .await
+    .expect("Server failed");
 }
 
 // ── Router ──────────────────────────────────────────────────────────────────
@@ -227,6 +265,13 @@ fn build_router(state: AppState) -> Router {
         );
     }
 
+    // Admission control innermost: CORS (added next) short-circuits preflights
+    // outside it, while every proxied request still passes through it.
+    app = app.layer(axum::middleware::from_fn_with_state(
+        state.clone(),
+        edge_admission,
+    ));
+
     app.layer(
         CorsLayer::new()
             .allow_origin(Any)
@@ -236,6 +281,162 @@ fn build_router(state: AppState) -> Router {
     )
     .layer(TraceLayer::new_for_http())
     .with_state(state)
+}
+
+// ── Edge rate limiting (port of Python's RateLimitMiddleware) ───────────────
+
+/// Streaming paths hold a concurrency permit until their body finishes.
+fn is_streaming_path(path: &str) -> bool {
+    path.ends_with("/stream") || path.ends_with("/regenerate")
+}
+
+/// 429 with the Python middleware's `{"detail"}` shape + rate headers.
+fn reject_rate(detail: String, limit: u32, retry_after: u64) -> Response {
+    let body = serde_json::json!({ "detail": detail });
+    Response::builder()
+        .status(StatusCode::TOO_MANY_REQUESTS)
+        .header(RATE_LIMIT_HEADER_REMAINING, "0")
+        .header(RATE_LIMIT_HEADER_LIMIT, limit.to_string())
+        .header(axum::http::header::RETRY_AFTER, retry_after.to_string())
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("static 429 response")
+}
+
+/// 429 for the gateway-native concurrency cap (no window applies).
+fn reject_streams() -> Response {
+    let body = serde_json::json!({ "detail": "Too many concurrent streams." });
+    Response::builder()
+        .status(StatusCode::TOO_MANY_REQUESTS)
+        .header(axum::http::header::RETRY_AFTER, "1")
+        .header(axum::http::header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string()))
+        .expect("static 429 response")
+}
+
+async fn edge_admission(
+    State(state): State<AppState>,
+    req: Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let path = req.uri().path().to_string();
+    // Health probes never consume budget (supervision must stay truthful);
+    // CORS preflights are short-circuited by the outer CorsLayer; static
+    // assets are edge-served, never Python traffic.
+    if path.starts_with("/health")
+        || path.starts_with("/static/")
+        || req.method() == axum::http::Method::OPTIONS
+    {
+        return next.run(req).await;
+    }
+
+    let peer = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0);
+    let ip = peer
+        .map(|p| p.ip().to_string())
+        .unwrap_or_else(|| "unknown".into());
+    let is_local = peer.is_some_and(|p| p.ip().is_loopback());
+    let cfg = state.config.rate;
+    let now = std::time::Instant::now();
+    let mut rate_headers: Option<(u32, u32)> = None;
+
+    if cfg.enabled() {
+        // 1. Route-specific limit first (stricter) — Python order preserved.
+        if let Some((prefix, base_limit, route_window)) = ratelimit::match_route(&path) {
+            let limit = base_limit.saturating_mul(if is_local { 10 } else { 1 });
+            let key = format!("r:{ip}:{prefix}");
+            let check = state
+                .limiter
+                .check_at(&key, limit, Duration::from_secs(route_window), now);
+            if check.is_err() {
+                return reject_rate(
+                    format!("Rate limit exceeded for {prefix}. Try again later."),
+                    limit,
+                    route_window,
+                );
+            }
+        }
+
+        // 2. Workspace limit from the Bearer JWT (best effort, never auth).
+        let auth = req
+            .headers()
+            .get("authorization")
+            .and_then(|v| v.to_str().ok());
+        if let Some(ws) = ratelimit::workspace_id(auth) {
+            let key = format!("w:{ws}");
+            let check = state.limiter.check_at(
+                &key,
+                ratelimit::WORKSPACE_LIMIT,
+                Duration::from_secs(cfg.window_secs),
+                now,
+            );
+            if check.is_err() {
+                return reject_rate(
+                    "Workspace rate limit exceeded. Try again later.".into(),
+                    ratelimit::WORKSPACE_LIMIT,
+                    cfg.window_secs,
+                );
+            }
+        }
+
+        // 3. Global per-client limit (localhost ×10, matching Python).
+        let global_limit = cfg
+            .global_limit
+            .saturating_mul(if is_local { 10 } else { 1 });
+        let key = format!("g:{ip}");
+        match state.limiter.check_at(
+            &key,
+            global_limit,
+            Duration::from_secs(cfg.window_secs),
+            now,
+        ) {
+            Ok(remaining) => rate_headers = Some((remaining, global_limit)),
+            Err(()) => {
+                return reject_rate(
+                    "Too many requests. Try again later.".into(),
+                    global_limit,
+                    cfg.window_secs,
+                )
+            }
+        }
+    }
+
+    // 4. Concurrency cap on streaming routes — gateway-native. The permit is
+    // held until the body finishes: an SSE stream occupies inference capacity
+    // for its whole life, not just until headers go out.
+    let permit = if is_streaming_path(&path) && cfg.max_streams > 0 {
+        match state.streams.clone().try_acquire_owned() {
+            Ok(permit) => Some(permit),
+            Err(_) => return reject_streams(),
+        }
+    } else {
+        None
+    };
+
+    let mut resp = next.run(req).await;
+    if let Some(permit) = permit {
+        let (parts, body) = resp.into_parts();
+        let held = body.into_data_stream().map(move |chunk| {
+            let _ = &permit;
+            chunk
+        });
+        resp = Response::from_parts(parts, Body::from_stream(held));
+    }
+    if let Some((remaining, limit)) = rate_headers {
+        // Overlay Python's values if the response came through it — the edge
+        // counted the request first, its numbers are the source of truth.
+        resp.headers_mut().insert(
+            RATE_LIMIT_HEADER_REMAINING,
+            remaining.to_string().parse().expect("numeric header"),
+        );
+        resp.headers_mut().insert(
+            RATE_LIMIT_HEADER_LIMIT,
+            limit.to_string().parse().expect("numeric header"),
+        );
+    }
+    resp
 }
 
 // ── Health Handlers ─────────────────────────────────────────────────────────
@@ -318,6 +519,11 @@ async fn detailed_health(State(state): State<AppState>) -> Response {
             "max_body_bytes": MAX_BODY_BYTES,
             "chat_only": state.config.policy.chat_only,
             "deny_prefixes": state.config.policy.deny_prefixes,
+            "rate_limit": {
+                "limit": state.config.rate.global_limit,
+                "window_secs": state.config.rate.window_secs,
+                "max_streams": state.config.rate.max_streams,
+            },
         },
         "sidecar": sidecar,
     }))
@@ -450,7 +656,7 @@ async fn proxy_http(State(state): State<AppState>, req: Request) -> Result<Respo
 
     // Streaming paths (SSE) get no total edge timeout — Python owns
     // generation timeouts. Buffered paths get a bounded edge timeout → 504.
-    let streaming = path.ends_with("/stream") || path.ends_with("/regenerate");
+    let streaming = is_streaming_path(&path);
     let resp = if streaming {
         state.http.execute(request).await?
     } else {
@@ -552,13 +758,17 @@ mod tests {
     /// Test state with the core pointed at a closed port — handler tests
     /// never race a live FastAPI.
     fn edge_state() -> AppState {
-        let mut config = GatewayConfig::default();
-        config.python_core_url = "http://127.0.0.1:9".into();
-        AppState {
-            config,
-            http: Client::new(),
-            core_status: Arc::new(RwLock::new(CoreStatus::default())),
-        }
+        edge_state_rate(RateConfig::default())
+    }
+
+    /// Same, with explicit rate-limit config for admission tests.
+    fn edge_state_rate(rate: RateConfig) -> AppState {
+        let config = GatewayConfig {
+            python_core_url: "http://127.0.0.1:9".into(),
+            rate,
+            ..Default::default()
+        };
+        AppState::new(config, Client::new())
     }
 
     #[tokio::test]
@@ -643,5 +853,207 @@ mod tests {
         assert_eq!(v["summary"], "ready");
         // …plus the additive edge marker.
         assert_eq!(v["gateway"], "rust");
+    }
+
+    // ── Admission control (Python port) ─────────────────────────────────────
+
+    #[tokio::test]
+    async fn global_window_rejects_over_limit_with_python_shape() {
+        let app = build_router(edge_state_rate(RateConfig {
+            global_limit: 2,
+            window_secs: 60,
+            max_streams: 0,
+        }));
+        // Two admitted requests reach the (down) core → 502, not 429.
+        for _ in 0..2 {
+            let req = Request::builder()
+                .uri("/api/nope")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        }
+        // Third exceeds the window → Python-shaped 429.
+        let req = Request::builder()
+            .uri("/api/nope")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        let h = resp.headers();
+        assert_eq!(
+            h.get(RATE_LIMIT_HEADER_REMAINING)
+                .and_then(|v| v.to_str().ok()),
+            Some("0")
+        );
+        assert_eq!(
+            h.get(RATE_LIMIT_HEADER_LIMIT).and_then(|v| v.to_str().ok()),
+            Some("2")
+        );
+        assert_eq!(
+            h.get("retry-after").and_then(|v| v.to_str().ok()),
+            Some("60")
+        );
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["detail"], "Too many requests. Try again later.");
+    }
+
+    #[tokio::test]
+    async fn route_limits_are_stricter_than_global() {
+        let app = build_router(edge_state_rate(RateConfig {
+            global_limit: 1000,
+            window_secs: 60,
+            max_streams: 0,
+        }));
+        for _ in 0..10 {
+            let req = Request::builder()
+                .uri("/chat/stream")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        }
+        // 11th hits the /chat/stream table limit (10/60), long before global.
+        let req = Request::builder()
+            .uri("/chat/stream")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        let h = resp.headers();
+        assert_eq!(
+            h.get(RATE_LIMIT_HEADER_LIMIT).and_then(|v| v.to_str().ok()),
+            Some("10")
+        );
+        assert_eq!(
+            h.get("retry-after").and_then(|v| v.to_str().ok()),
+            Some("60")
+        );
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            v["detail"],
+            "Rate limit exceeded for /chat/stream. Try again later."
+        );
+    }
+
+    #[tokio::test]
+    async fn health_and_options_bypass_the_limiter() {
+        let app = build_router(edge_state_rate(RateConfig {
+            global_limit: 1,
+            window_secs: 60,
+            max_streams: 0,
+        }));
+        // Burn the single token.
+        let req = Request::builder()
+            .uri("/api/x")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        // Health still answers — supervision must stay truthful under load.
+        let req = Request::builder()
+            .uri("/health")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        // CORS preflight never sees the limiter (CorsLayer is outer).
+        let req = Request::builder()
+            .method("OPTIONS")
+            .uri("/api/sessions")
+            .header("origin", "http://localhost:3000")
+            .header("access-control-request-method", "POST")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert!(matches!(
+            resp.status(),
+            StatusCode::NO_CONTENT | StatusCode::OK
+        ));
+    }
+
+    #[tokio::test]
+    async fn stream_concurrency_capped_until_body_finishes() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let hit = Arc::new(AtomicBool::new(false));
+        let stub = Router::new().route(
+            "/chat/stream",
+            get({
+                let hit = hit.clone();
+                move || {
+                    let hit = hit.clone();
+                    async move {
+                        hit.store(true, Ordering::SeqCst);
+                        // Never completes: the stream holds its permit.
+                        std::future::pending::<()>().await;
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(listener, stub).await.unwrap();
+        });
+
+        let mut state = edge_state_rate(RateConfig {
+            global_limit: 100_000,
+            window_secs: 60,
+            max_streams: 1,
+        });
+        state.config.python_core_url = format!("http://{addr}");
+        let app = build_router(state);
+
+        let first = app.clone();
+        tokio::spawn(async move {
+            let req = Request::builder()
+                .uri("/chat/stream")
+                .body(Body::empty())
+                .unwrap();
+            let _ = first.oneshot(req).await;
+        });
+        for _ in 0..10_000 {
+            if hit.load(Ordering::SeqCst) {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            hit.load(Ordering::SeqCst),
+            "first stream never reached stub"
+        );
+
+        // Second stream while the first still holds the only permit → 429.
+        let req = Request::builder()
+            .uri("/chat/stream")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+        let body = to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(v["detail"], "Too many concurrent streams.");
+    }
+
+    #[tokio::test]
+    async fn zero_limit_disables_window_checks_entirely() {
+        let app = build_router(edge_state_rate(RateConfig {
+            global_limit: 0,
+            window_secs: 60,
+            max_streams: 0,
+        }));
+        // 350 > default global (300) and > route table (10): if any window
+        // check were still live, this would429 long before the end.
+        for _ in 0..350 {
+            let req = Request::builder()
+                .uri("/chat/stream")
+                .body(Body::empty())
+                .unwrap();
+            let resp = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        }
     }
 }
