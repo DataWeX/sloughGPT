@@ -573,11 +573,12 @@ class ModelsRouter:
         if server_state.model is None:
             raise_error("No model loaded", code="E_NOT_FOUND")
         try:
-            from domain.training._internal.export import ExportConfig
-            from domain.training._internal.export import export_model as do_export
+            from domain.training.engine import get_training_engine
 
-            config = ExportConfig(
-                input_path="current",
+            _t0 = time.monotonic()
+            result = get_training_engine().export_model(
+                model=server_state.model,
+                tokenizer=server_state.tokenizer,
                 output_path=request.output_path,
                 format=request.format,
                 include_tokenizer=request.include_tokenizer,
@@ -586,8 +587,6 @@ class ModelsRouter:
                     "exported_at": str(time.time()),
                 },
             )
-            _t0 = time.monotonic()
-            results = do_export(config, server_state.model, server_state.tokenizer)
             _elapsed_ms = (time.monotonic() - _t0) * 1000
             safe_audit_log(
                 "model.export",
@@ -597,7 +596,7 @@ class ModelsRouter:
             return success_response(
                 data={
                     "format": request.format,
-                    "files": results,
+                    "files": result.data,
                     "elapsed_ms": round(_elapsed_ms, 1),
                 },
                 message="exported",
@@ -609,9 +608,9 @@ class ModelsRouter:
     @endpoint("models.get_export_formats")
     async def get_export_formats(self) -> dict:
         """Get list of supported export formats."""
-        from domain.training._internal.export import list_export_formats
+        from domain.training.engine import get_training_engine
 
-        return success_response(data=list_export_formats())
+        return success_response(data=get_training_engine().list_export_formats().data)
 
     @endpoint("models.start_download")
     async def start_download(

@@ -82,10 +82,9 @@ def _get_active_processes() -> dict:
 
     # Auto-train turbo
     try:
-        from domain.training._internal.service import get_turbo_lock, get_turbo_state
+        from domain.training.engine import get_training_engine
 
-        with get_turbo_lock():
-            turbo = dict(get_turbo_state())
+        turbo = dict(get_training_engine().turbo_state().data or {})
         turbo_status = turbo.get("status", "idle")
         if turbo_status not in ("idle", "stopped"):
             epoch = turbo.get("epoch", "")
@@ -227,10 +226,9 @@ class DashboardRouter:
         services_ok = 0
         services_total = 0
         try:
-            from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+            from domain.training.engine import get_training_engine
 
-            tracker = TrainingOutcomeTracker()
-            stats = tracker.get_stats()
+            stats = get_training_engine().outcome_stats().data or {}
             services_total += 1
             if stats.get("total_runs", 0) >= 0:
                 services_ok += 1

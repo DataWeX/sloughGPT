@@ -372,60 +372,29 @@ class SystemRouter:
     @endpoint("system.get_executor_status")
     async def get_executor_status(self) -> dict:
         """Get TrainingExecutor pool status and job list."""
-        from domain.training._internal import executor as executor_mod
+        from domain.training.engine import get_training_engine
 
-        _instance = executor_mod._instance
-
-        if _instance is None:
-            return success_response(
-                data={
-                    "initialized": False,
-                    "active_jobs": 0,
-                    "max_workers": 0,
-                    "total_tracked": 0,
-                    "jobs": [],
-                }
-            )
-        return success_response(
-            data={
-                "initialized": True,
-                "active_jobs": _instance.active_count(),
-                "max_workers": _instance.max_workers,
-                "total_tracked": _instance.job_count,
-                "jobs": _instance.list_jobs(),
-            }
-        )
+        return success_response(data=get_training_engine().executor_status().data)
 
     @endpoint("system.get_executor_job")
     async def get_executor_job(self, job_id: str) -> dict:
         """Get metadata for a single training job by ID."""
-        from domain.training._internal import executor as executor_mod
+        from domain.training.engine import get_training_engine
 
-        _instance = executor_mod._instance
-
-        if _instance is None:
-            raise_error("executor not initialized", "E_INFRA_STARTUP")
-        status = _instance.status(job_id)
-        if status is None:
-            raise_error(f"job {job_id} not found", "E_NOT_FOUND")
-        return success_response(data=status)
+        result = get_training_engine().executor_job(job_id)
+        if not result.success:
+            raise_error(result.error, result.metadata.get("code", "E_NOT_FOUND"))
+        return success_response(data=result.data)
 
     @endpoint("system.get_executor_job_result")
     async def get_executor_job_result(self, job_id: str) -> dict:
         """Get shape/dtype summary for a completed job's trained weights."""
-        from domain.training._internal import executor as executor_mod
+        from domain.training.engine import get_training_engine
 
-        _instance = executor_mod._instance
-
-        if _instance is None:
-            raise_error("executor not initialized", "E_INFRA_STARTUP")
-        summary = _instance.result_summary(job_id)
-        if summary is None:
-            info = _instance.status(job_id)
-            if info is None:
-                raise_error(f"job {job_id} not found", "E_NOT_FOUND")
-            raise_error("job not completed or has no weight result", "E_DOMAIN")
-        return success_response(data=summary)
+        result = get_training_engine().executor_job_result(job_id)
+        if not result.success:
+            raise_error(result.error, result.metadata.get("code", "E_DOMAIN"))
+        return success_response(data=result.data)
 
     @endpoint("system.purge_executor_jobs")
     async def purge_executor_jobs(
@@ -435,19 +404,16 @@ class SystemRouter:
     ) -> dict:
         """Remove completed/failed/cancelled jobs older than max_age_s."""
         try:
-            from domain.training._internal import executor as executor_mod
+            from domain.training.engine import get_training_engine
 
-            _instance = executor_mod._instance
-
-            if _instance is None:
-                return success_response(data={"purged": 0})
-            purged = _instance.purge_completed(max_age_s=max_age_s)
+            result = get_training_engine().purge_executor_jobs(max_age_s=max_age_s)
+            purged = result.data.get("purged", 0)
             safe_audit_log(
                 "executor.purge",
                 resource="executor",
                 detail=f"purged={purged} max_age_s={max_age_s}",
             )
-            return success_response(data={"purged": purged})
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="system.executor_purge")
 
@@ -457,17 +423,15 @@ class SystemRouter:
     ) -> dict:
         """Request cancellation for a training job."""
         try:
-            from domain.training._internal import executor as executor_mod
+            from domain.training.engine import get_training_engine
 
-            _instance = executor_mod._instance
-
-            if _instance is None:
-                return success_response(
-                    data={"cancelled": False, "reason": "executor not initialized"}
-                )
-            cancelled = _instance.cancel(job_id)
-            safe_audit_log("executor.cancel", resource=job_id, detail=f"cancelled={cancelled}")
-            return success_response(data={"cancelled": cancelled})
+            result = get_training_engine().cancel_executor_job(job_id)
+            safe_audit_log(
+                "executor.cancel",
+                resource=job_id,
+                detail=f"cancelled={result.data.get('cancelled', False)}",
+            )
+            return success_response(data=result.data)
         except Exception as e:
             classify_and_raise(e, source="system.executor_cancel")
 

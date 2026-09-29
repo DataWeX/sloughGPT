@@ -597,6 +597,150 @@ class TrainingEngine:
             logger.error("Cancel cloud job failed: %s", e)
             return TrainingResult(success=False, error=str(e))
 
+    # ── Executor (job pool) ─────────────────────────────────────────────
+    # Thin delegations: unexpected exceptions propagate so router-level
+    # classify_and_raise keeps mapping error types to HTTP codes.
+
+    @staticmethod
+    def _get_executor() -> Any:
+        """Return the initialized executor singleton, or None (never creates)."""
+        from domain.training._internal import executor as executor_mod
+
+        return executor_mod._instance
+
+    def executor_status(self) -> TrainingResult:
+        """Executor pool status; always succeeds (initialized=False when absent)."""
+        inst = self._get_executor()
+        if inst is None:
+            return TrainingResult(
+                success=True,
+                data={
+                    "initialized": False,
+                    "active_jobs": 0,
+                    "max_workers": 0,
+                    "total_tracked": 0,
+                    "jobs": [],
+                },
+            )
+        return TrainingResult(
+            success=True,
+            data={
+                "initialized": True,
+                "active_jobs": inst.active_count(),
+                "max_workers": inst.max_workers,
+                "total_tracked": inst.job_count,
+                "jobs": inst.list_jobs(),
+            },
+        )
+
+    def executor_job(self, job_id: str) -> TrainingResult:
+        """Metadata for a single training job by ID."""
+        inst = self._get_executor()
+        if inst is None:
+            return TrainingResult(
+                success=False,
+                error="executor not initialized",
+                metadata={"code": "E_INFRA_STARTUP"},
+            )
+        status = inst.status(job_id)
+        if status is None:
+            return TrainingResult(
+                success=False,
+                error=f"job {job_id} not found",
+                metadata={"code": "E_NOT_FOUND"},
+            )
+        return TrainingResult(success=True, data=status)
+
+    def executor_job_result(self, job_id: str) -> TrainingResult:
+        """Shape/dtype summary for a completed job's trained weights."""
+        inst = self._get_executor()
+        if inst is None:
+            return TrainingResult(
+                success=False,
+                error="executor not initialized",
+                metadata={"code": "E_INFRA_STARTUP"},
+            )
+        summary = inst.result_summary(job_id)
+        if summary is None:
+            if inst.status(job_id) is None:
+                return TrainingResult(
+                    success=False,
+                    error=f"job {job_id} not found",
+                    metadata={"code": "E_NOT_FOUND"},
+                )
+            return TrainingResult(
+                success=False,
+                error="job not completed or has no weight result",
+                metadata={"code": "E_DOMAIN"},
+            )
+        return TrainingResult(success=True, data=summary)
+
+    def purge_executor_jobs(self, max_age_s: float = 3600.0) -> TrainingResult:
+        """Remove completed/failed/cancelled jobs older than max_age_s."""
+        inst = self._get_executor()
+        if inst is None:
+            return TrainingResult(success=True, data={"purged": 0})
+        purged = inst.purge_completed(max_age_s=max_age_s)
+        return TrainingResult(success=True, data={"purged": purged})
+
+    def cancel_executor_job(self, job_id: str) -> TrainingResult:
+        """Request cancellation for a training job."""
+        inst = self._get_executor()
+        if inst is None:
+            return TrainingResult(
+                success=True,
+                data={"cancelled": False, "reason": "executor not initialized"},
+            )
+        cancelled = inst.cancel(job_id)
+        return TrainingResult(success=True, data={"cancelled": cancelled})
+
+    # ── Model export ────────────────────────────────────────────────────
+
+    def export_model(
+        self,
+        *,
+        model: Any,
+        tokenizer: Any,
+        output_path: str | None = None,
+        format: str = "gguf",
+        include_tokenizer: bool = True,
+        metadata: dict[str, Any] | None = None,
+    ) -> TrainingResult:
+        """Export a model to file. Exceptions propagate to the caller."""
+        from domain.training._internal.export import ExportConfig
+        from domain.training._internal.export import export_model as do_export
+
+        config = ExportConfig(
+            input_path="current",
+            output_path=output_path,
+            format=format,
+            include_tokenizer=include_tokenizer,
+            metadata=metadata or {},
+        )
+        files = do_export(config, model, tokenizer)
+        return TrainingResult(success=True, data=files)
+
+    def list_export_formats(self) -> TrainingResult:
+        """List supported export formats."""
+        from domain.training._internal.export import list_export_formats
+
+        return TrainingResult(success=True, data=list_export_formats())
+
+    # ── Auto-train turbo / outcomes ─────────────────────────────────────
+
+    def turbo_state(self) -> TrainingResult:
+        """Snapshot of the auto-train turbo state (lock held while copying)."""
+        from domain.training._internal.service import get_turbo_lock, get_turbo_state
+
+        with get_turbo_lock():
+            return TrainingResult(success=True, data=dict(get_turbo_state()))
+
+    def outcome_stats(self) -> TrainingResult:
+        """Aggregate training-outcome statistics."""
+        from domain.training._internal.outcome_tracker import TrainingOutcomeTracker
+
+        return TrainingResult(success=True, data=TrainingOutcomeTracker().get_stats())
+
 
 _engine: TrainingEngine | None = None
 
