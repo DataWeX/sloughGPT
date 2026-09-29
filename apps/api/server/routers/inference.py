@@ -42,7 +42,12 @@ from domain.infrastructure.server_state import get_server_state
 from domain.knowledge import KnowledgeFact, get_knowledge_memory
 from domain.learner import extract_and_store, get_learner
 from domain.memory import get_memory_service
-from domain.models import KnowledgeProcessor, apply_processors, get_provider
+from domain.models import (
+    ConsciousnessProcessor,
+    KnowledgeProcessor,
+    apply_processors,
+    get_provider,
+)
 from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.inference")
@@ -2339,6 +2344,35 @@ class InferenceRouter:
                     )
             except Exception as _ce_err:
                 logger.debug("Consciousness SSE emit skipped: %s", _ce_err)
+
+            try:
+                from domain.core import get_consciousness
+
+                _ce = get_consciousness()
+                if _ce.config.is_enabled():
+                    _refl = _ce.reflect(apply=False)
+                    _refl_text = getattr(_refl, "narrative", "") or ""
+                    if _refl_text:
+                        provider_messages = await apply_processors(
+                            provider_messages,
+                            [ConsciousnessProcessor(_refl_text)],
+                        )
+                        logger.debug(
+                            "CHAT_PIPELINE corr=%s step=CONSCIOUSNESS_PROC done chars=%d",
+                            corr_id,
+                            len(_refl_text),
+                            extra={
+                                "tag": "CHAT",
+                                "context": {
+                                    "corr": corr_id,
+                                    "step": "CONSCIOUSNESS_PROC",
+                                    "result": "DONE",
+                                    "chars": len(_refl_text),
+                                },
+                            },
+                        )
+            except Exception as _cp_err:
+                logger.debug("Consciousness prompt injection skipped: %s", _cp_err)
 
             try:
                 logger.debug(

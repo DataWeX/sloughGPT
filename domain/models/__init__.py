@@ -3,7 +3,7 @@
 Public API:
     ModelInterface, ModelLoader, SloughGPTModel
     rotate_half, apply_rotary_pos_emb
-    KnowledgeProcessor, apply_processors, get_provider, list_providers
+    KnowledgeProcessor, ConsciousnessProcessor, apply_processors, get_provider, list_providers
 """
 
 from domain.models._internal.models import (
@@ -14,6 +14,7 @@ from domain.models._internal.models import (
     rotate_half,
 )
 from domain.models._internal.provider import (
+    ConsciousnessProcessor,
     KnowledgeProcessor,
     apply_processors,
     get_provider,
@@ -27,6 +28,7 @@ __all__ = [
     "rotate_half",
     "apply_rotary_pos_emb",
     "KnowledgeProcessor",
+    "ConsciousnessProcessor",
     "apply_processors",
     "get_provider",
     "list_providers",

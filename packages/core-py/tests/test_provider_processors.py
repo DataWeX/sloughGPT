@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from domain.models._internal.provider import (
+    ConsciousnessProcessor,
     KnowledgeProcessor,
     ModelCapabilities,
     PersonalityProcessor,
@@ -132,6 +133,41 @@ class TestApplyProcessors:
 # ---------------------------------------------------------------------------
 # KnowledgeProcessor
 # ---------------------------------------------------------------------------
+
+
+class TestConsciousnessProcessor:
+    @pytest.mark.asyncio
+    async def test_empty_reflection_noop(self):
+        proc = ConsciousnessProcessor()
+        msgs = [{"role": "user", "content": "hi"}]
+        result = await proc.process(msgs)
+        assert result == msgs
+
+    @pytest.mark.asyncio
+    async def test_injects_reflection_as_system_message(self):
+        proc = ConsciousnessProcessor(reflection="I value honesty.")
+        msgs = [{"role": "user", "content": "hi"}]
+        result = await proc.process(msgs)
+        assert len(result) == 2
+        assert result[0]["role"] == "system"
+        assert "I value honesty." in result[0]["content"]
+        assert "never quote it directly" in result[0]["content"]
+        assert result[1] == msgs[0]
+
+    @pytest.mark.asyncio
+    async def test_set_reflection(self):
+        proc = ConsciousnessProcessor()
+        proc.set_reflection("updated")
+        msgs = [{"role": "user", "content": "hi"}]
+        result = await proc.process(msgs)
+        assert "updated" in result[0]["content"]
+
+    @pytest.mark.asyncio
+    async def test_apply_through_pipeline(self):
+        proc = ConsciousnessProcessor(reflection="self-aware")
+        msgs = [{"role": "user", "content": "hi"}]
+        result = await apply_processors(msgs, [proc])
+        assert any("self-aware" in m.get("content", "") for m in result)
 
 
 class TestKnowledgeProcessor:
