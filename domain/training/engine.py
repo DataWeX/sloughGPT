@@ -945,6 +945,51 @@ class TrainingEngine:
         executor_mod.get_training_executor().submit(fn, *args)
 
 
+    # ── App-package endpoint module delegation (builds/legacy/runtime/…) ──
+
+    def load_soul(self, name: str) -> Any:
+        """Checkpoint metadata for the builds listing (None if missing)."""
+        from domain.training._internal.service import load_soul
+
+        return load_soul(name)
+
+    def load_lora_soul(self, name: str) -> Any:
+        """LoRA adapter metadata (None if missing)."""
+        from domain.training._internal.service import load_lora_soul
+
+        return load_lora_soul(name)
+
+    def build_trainer(self, config: dict[str, Any]) -> Any:
+        """Construct a trainer from config; caller drives train()/save()."""
+        from domain.training._internal.train_pipeline import SloughGPTTrainer
+
+        return SloughGPTTrainer(**config)
+
+    def get_cancel_event(self) -> Any:
+        """Cancel Event for in-flight auto-train runs (or None)."""
+        from domain.training._internal.service import get_cancel_event
+
+        return get_cancel_event()
+
+    def get_turbo_cancel_event(self) -> Any:
+        """Cancel Event for in-flight turbo runs (or None)."""
+        from domain.training._internal.service import get_turbo_cancel_event
+
+        return get_turbo_cancel_event()
+
+    def set_runtime_protocol(self, runtime: Any) -> None:
+        """Register the app runtime as the training core protocol implementation."""
+        from domain.training._internal.runtime_protocol import set_training_runtime
+
+        set_training_runtime(runtime)
+
+    def executor_cancel(self, job_id: str) -> bool:
+        """Cancel an executor job (initializes the executor if needed)."""
+        from domain.training._internal import executor as executor_mod
+
+        return bool(executor_mod.get_training_executor().cancel(job_id))
+
+
 _engine: TrainingEngine | None = None
 
 

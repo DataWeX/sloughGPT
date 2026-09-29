@@ -13,8 +13,6 @@ from typing import Any
 from fastapi import APIRouter
 from schemas.common import raise_error
 
-from domain.training._internal.executor import get_training_executor
-
 from .helpers import _finish_job, _sloughgpt_trainer_kwds
 from .jobs import training_jobs
 from .resolution import resolve_training_inputs
@@ -32,8 +30,7 @@ async def train(request):
     ``checkpoint_dir`` with ``stoi`` / ``itos`` / ``chars`` for char-LM eval; see
     ``docs/policies/CONTRIBUTING.md`` (*Checkpoint vocabulary*).
     """
-    from domain.training._internal.dataset_manifest import ManifestError
-    from domain.training._internal.train_pipeline import SloughGPTTrainer
+    from domain.training import ManifestError, get_training_engine
 
     from .schemas import TrainRequest
 
@@ -53,9 +50,8 @@ async def train(request):
     def train_model(job_id: str) -> None:
         try:
             training_jobs[job_id]["status"] = "running"
-            trainer = SloughGPTTrainer(
-                data_path=data_path_str,
-                **_sloughgpt_trainer_kwds(req_snapshot),
+            trainer = get_training_engine().build_trainer(
+                {"data_path": data_path_str, **_sloughgpt_trainer_kwds(req_snapshot)}
             )
             if not cancel_event.is_set():
                 trainer.train(cancel_event=cancel_event)
@@ -70,7 +66,6 @@ async def train(request):
             logger.exception("Background /train failed: %s", e, extra={"tag": "TRAIN"})
             _finish_job(job_id, "failed", str(e))
 
-    executor = get_training_executor()
     job_id = f"train_{int(time.time())}"
     cancel_event = threading.Event()
     training_jobs[job_id] = {
@@ -96,7 +91,7 @@ async def train(request):
     except Exception as exc:
         logger.warning("CancelManager registration failed for %s: %s", job_id, exc)
 
-    executor.submit(train_model, job_id)
+    get_training_engine().executor_submit(train_model, job_id)
 
     out: dict[str, Any] = {
         "status": "started",
@@ -117,7 +112,7 @@ async def train(request):
 @router.post("/train/resolve")
 async def train_resolve(body) -> dict[str, Any]:
     """Resolve ``data_path`` and checkpoint stem (dry run; no training)."""
-    from domain.training._internal.dataset_manifest import ManifestError
+    from domain.training import ManifestError
 
     from .schemas import TrainResolveRequest
 

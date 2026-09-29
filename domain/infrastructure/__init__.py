@@ -5,6 +5,9 @@ Public API:
     EventBus, get_event_bus
     LifecycleManager, LifecyclePhase
     AppError, ErrorCode
+    get_pool, get_model_registry, get_server_state
+    get_knowledge_repository, get_dataset_repository
+    get_event_buffer, get_server_buffer
 """
 
 from domain.infrastructure._internal.config import (
@@ -30,12 +33,15 @@ from domain.infrastructure._internal.event_bus import (
     EventBus,
     get_event_bus,
 )
+from domain.infrastructure._internal.fire_and_forget import get_pool
 from domain.infrastructure._internal.lifecycle import (
     LifecycleManager,
     LifecyclePhase,
     get_lifecycle_manager,
 )
+from domain.infrastructure._internal.model_registry import get_model_registry
 from domain.infrastructure._internal.output_buffer import get_server_buffer
+from domain.infrastructure._internal.server_state import get_server_state
 
 __all__ = [
     "AppConfig",
@@ -59,4 +65,7 @@ __all__ = [
     "get_dataset_repository",
     "get_event_buffer",
     "get_server_buffer",
+    "get_pool",
+    "get_model_registry",
+    "get_server_state",
 ]

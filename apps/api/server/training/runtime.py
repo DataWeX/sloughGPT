@@ -192,15 +192,16 @@ class TrainingRuntime:
     def _signal_auto_train_cancel(self) -> None:
         """Set the service-layer cancel events for auto-train and turbo."""
         try:
-            from domain.training._internal.service import get_cancel_event, get_turbo_cancel_event
+            from domain.training import get_training_engine
 
-            ev = get_cancel_event()
+            _engine = get_training_engine()
+            ev = _engine.get_cancel_event()
             if ev is not None:
                 try:
                     ev.set()
                 except Exception as exc:
                     logger.debug("Failed to set cancel event: %s", exc, extra={"tag": "TRAIN"})
-            tev = get_turbo_cancel_event()
+            tev = _engine.get_turbo_cancel_event()
             if tev is not None:
                 try:
                     tev.set()
@@ -378,8 +379,8 @@ def get_training_runtime() -> TrainingRuntime:
 def _register_runtime_with_core() -> None:
     """Register this runtime as the implementation for the core protocol."""
     try:
-        from domain.training._internal.runtime_protocol import set_training_runtime
+        from domain.training import get_training_engine
 
-        set_training_runtime(_runtime or get_training_runtime())
+        get_training_engine().set_runtime_protocol(_runtime or get_training_runtime())
     except ImportError:
         logger.debug("Training runtime protocol not available")

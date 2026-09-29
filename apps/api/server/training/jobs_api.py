@@ -14,7 +14,6 @@ from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
 from domain.shared import parse_iso
-from domain.training._internal.executor import get_training_executor
 
 from .jobs import training_jobs
 from .recovery_policy import recovery_incompatibility
@@ -163,8 +162,9 @@ async def stop_training_job(job_id: str):
     cancel_event = job.get("_cancel_event")
     if cancel_event is not None:
         cancel_event.set()
-    executor = get_training_executor()
-    executor.cancel(job_id)
+    from domain.training import get_training_engine
+
+    get_training_engine().executor_cancel(job_id)
     try:
         from domain.infrastructure.cancel_manager import get_cancel_manager
 
