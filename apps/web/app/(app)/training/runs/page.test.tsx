@@ -37,12 +37,30 @@ vi.mock('@sloughgpt/strui', () => {
         onKeyDown={onKeyDown}
       />
     ),
+    Select: ({ value, children }: any) => (
+      <div data-testid="select" data-value={value}>
+        {children}
+      </div>
+    ),
+    SelectTrigger: ({ children, className, ...props }: any) => (
+      <div role="combobox" className={className} {...props}>
+        {children}
+      </div>
+    ),
+    SelectContent: ({ children }: any) => <div role="listbox">{children}</div>,
+    SelectItem: ({ children, value }: any) => (
+      <div role="option" data-value={value}>
+        {children}
+      </div>
+    ),
   }
 })
 
 vi.mock('@/components/PageContainer', () => ({
-  PageContainer: ({ children, title, toolbar }: any) => (
+  PageContainer: ({ children, title, toolbar, headerRight }: any) => (
     <div data-testid="page-container" data-title={title}>
+      <h1>{title}</h1>
+      {headerRight}
       {toolbar}
       {children}
     </div>

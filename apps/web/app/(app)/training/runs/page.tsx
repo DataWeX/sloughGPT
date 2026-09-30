@@ -14,6 +14,10 @@ import {
   StatCard,
   SectionHeader,
   StatusBadge,
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
 } from '@sloughgpt/strui'
 import { settingsController } from '@/lib/settings-controller'
 import { formatDateTime } from '@/lib/time-format'
@@ -325,15 +329,15 @@ export default function TrainingRunsPage() {
       title="Training Runs"
       headerRight={
         <div className="flex items-center gap-2">
-          <select
-            value={format}
-            onChange={(e) => setFormat(e.target.value as 'json' | 'csv')}
-            className="text-sm border rounded px-2 py-1"
-            aria-label="Export format"
-          >
-            <option value="json">JSON</option>
-            <option value="csv">CSV</option>
-          </select>
+          <Select value={format} onValueChange={(v) => setFormat(v as 'json' | 'csv')}>
+            <SelectTrigger className="w-24 h-8 text-xs" aria-label="Export format">
+              {format === 'csv' ? 'CSV' : 'JSON'}
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="json">JSON</SelectItem>
+              <SelectItem value="csv">CSV</SelectItem>
+            </SelectContent>
+          </Select>
           <Button size="sm" variant="outline" onClick={handleExport}>
             <Download className="h-4 w-4 mr-1" /> Export
           </Button>
