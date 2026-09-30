@@ -1229,6 +1229,23 @@ def randn(s, requires_grad=False):
     return Tensor(data, requires_grad=requires_grad, _copy=False)
 
 
+def rng_fingerprint() -> str:
+    """Short hash of the **global** MT19937 state — one line of influence audit.
+
+    Same fingerprint => the entire state (all 624 words, position, gauss
+    cache) is bit-identical, so any np.random.seed-based training stream
+    replays exactly; a moved fingerprint => some other code consumed the
+    process-global stream. Thread-local ``isolated_rng`` draws never move it.
+    """
+    import hashlib
+
+    kind, mt, pos, has_gauss, cached = np.random.get_state()
+    h = hashlib.sha1(kind.encode())
+    h.update(np.ascontiguousarray(mt).tobytes())
+    h.update(f"{pos}|{has_gauss}|{cached!r}".encode())
+    return h.hexdigest()[:12]
+
+
 def ones(s, requires_grad=False):
     return Tensor(np.ones(s, dtype=np.float32), requires_grad=requires_grad, _copy=False)
 

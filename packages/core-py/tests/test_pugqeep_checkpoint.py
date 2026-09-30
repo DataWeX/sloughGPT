@@ -71,6 +71,50 @@ class TestCompressCheckpointRngIsolation:
         assert before[2] != after[2] or not np.array_equal(before[1], after[1])
 
 
+class TestRngFingerprint:
+    """rng_fingerprint() = short hash of the global MT19937 state.
+
+    Makes foreign influence on the training stream visible in one string:
+    same fingerprint => the entire 624-word state (not just a printed loss)
+    is bit-identical; a moved fingerprint => something else consumed the
+    process-global stream.
+    """
+
+    def test_fingerprint_tracks_global_state_influence(self):
+        from domain.training._internal.slonet import isolated_rng, randn, rng_fingerprint
+
+        np.random.seed(4242)
+        fp0 = rng_fingerprint()
+        assert rng_fingerprint() == fp0, "fingerprint must be stable when untouched"
+
+        with isolated_rng(0):
+            randn((8, 8))
+        assert rng_fingerprint() == fp0, "isolated draws must not move the global fingerprint"
+
+        randn((8, 8))
+        assert rng_fingerprint() != fp0, "global draws must move the fingerprint"
+
+        np.random.seed(4242)
+        assert rng_fingerprint() == fp0, "same seed must replay to the same fingerprint"
+
+    def test_compress_checkpoint_leaves_fingerprint_unchanged(self):
+        from domain.training._internal.executor import compress_checkpoint
+        from domain.training._internal.export import export_to_sou
+        from domain.training._internal.slonet import SloTransformer, rng_fingerprint
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            net = SloTransformer(
+                vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=False
+            )
+            soul_path = str(Path(tmpdir) / "fp.soul")
+            export_to_sou(net, soul_path)
+
+            np.random.seed(555)
+            fp_before = rng_fingerprint()
+            assert compress_checkpoint(soul_path, n_clusters=4) is not None
+            assert rng_fingerprint() == fp_before
+
+
 class TestCompressCheckpoint:
     """Test compress_checkpoint() produces loadable .points.json + manifest."""
 
