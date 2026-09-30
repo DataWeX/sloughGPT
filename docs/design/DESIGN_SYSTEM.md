@@ -35,8 +35,10 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 > **Source of truth:** every value in this section is authored once in
 > `packages/strui/tokens/palette.json` and _generated_ into the `@tokens:*` regions of
 > `apps/web/app/globals.css` and `packages/strui/src/styles/globals.css`, into
-> `apps/web/lib/theme-tokens.generated.ts` (switcher swatches), and into
-> `apps/mobile/src/theme/palette.generated.ts`. To change a value: edit `palette.json`,
+> `apps/web/lib/theme-tokens.generated.ts` (switcher swatches),
+> `apps/mobile/src/theme/palette.generated.ts`, and
+> `apps/mobile/src/theme/tamagui-themes.generated.ts` (tamagui theme overrides).
+> To change a value: edit `palette.json`,
 > run `node packages/strui/scripts/gen-tokens.mjs` (audit with `--check`), and commit the
 > regenerated outputs — never hand-edit a generated file.
 > `packages/strui/src/tokens/tokens.test.ts` enforces sync, tier order

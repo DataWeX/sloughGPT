@@ -12,6 +12,8 @@
  *   2. packages/strui/src/styles/globals.css   — the @tokens:* marker regions (storybook)
  *   3. apps/web/lib/theme-tokens.generated.ts  — swatch hex for the theme switcher
  *   4. apps/mobile/src/theme/palette.generated.ts — hex projection for React Native
+ *   5. apps/mobile/src/theme/tamagui-themes.generated.ts — tamagui theme overrides
+ *      (light/dark resolve from the mobile projection; accent themes are hand-authored)
  *
  * Invariants this generator exists to hold:
  *   - tier order (base -> palette -> aura) is fixed by marker placement, never moved;
@@ -44,7 +46,10 @@ const fromRoot = (p) => path.join(ROOT, p)
 
 /** `'124 82 196'` -> `'#7c52c4'` / `'#7C52C4'`. */
 function hex(rgb, upper = false) {
-  const [r, g, b] = rgb.trim().split(/\s+/).map((n) => Number.parseInt(n, 10))
+  const [r, g, b] = rgb
+    .trim()
+    .split(/\s+/)
+    .map((n) => Number.parseInt(n, 10))
   const out = [r, g, b].map((n) => n.toString(16).padStart(2, '0')).join('')
   return `#${upper ? out.toUpperCase() : out}`
 }
@@ -95,7 +100,8 @@ function auraComment(aura) {
   const pad = width - prefix.length - 4 // 1 leading space + 3 for " */"
   if (pad < 1) throw new Error(`aura comment too long to format: ${prefix}`)
   const line = `${prefix} ${'─'.repeat(pad)} */`
-  if (line.length !== width) throw new Error(`aura comment width drift: ${line.length} !== ${width}`)
+  if (line.length !== width)
+    throw new Error(`aura comment width drift: ${line.length} !== ${width}`)
   return line
 }
 
@@ -202,6 +208,65 @@ ${rows.join('\n')}
 `
 }
 
+/** Resolve MOBILE_COLORS once (same rules as renderMobileTs). */
+function mobileColors() {
+  const colors = {}
+  for (const [key, ref] of Object.entries(palette.mobile.map)) {
+    const lightToken = typeof ref === 'string' ? ref : ref.light
+    const darkToken = typeof ref === 'string' ? ref : ref.dark
+    colors[key] = {
+      light: hex(base.light[lightToken], true),
+      dark: hex(base.dark[darkToken], true),
+    }
+  }
+  for (const [key, value] of Object.entries(palette.mobile.extras)) {
+    colors[key] = { light: value.light, dark: value.dark }
+  }
+  return colors
+}
+
+function renderTamaguiTs() {
+  const t = palette.tamagui
+  if (!t) throw new Error('palette.json missing the tamagui section')
+  const colors = mobileColors()
+
+  const modeBlock = (mode) =>
+    Object.entries(t.map)
+      .map(([field, ref]) => {
+        const key = typeof ref === 'string' ? ref : ref[mode]
+        const value = colors[key]?.[mode]
+        if (value === undefined) {
+          throw new Error(`tamagui ${mode}.${field}: unresolved mobile key "${key}"`)
+        }
+        return `    ${field}: '${value}',`
+      })
+      .join('\n')
+
+  const blocks = [
+    `  light: {\n${modeBlock('light')}\n  },`,
+    `  dark: {\n${modeBlock('dark')}\n  },`,
+    ...Object.entries(t.accents).map(([name, fields]) => {
+      const lines = Object.entries(fields)
+        .map(([field, value]) => `    ${field}: '${value}',`)
+        .join('\n')
+      return `  ${name}: {\n${lines}\n  },`
+    }),
+  ]
+
+  return `/**
+ * GENERATED FILE — do not edit. Source: packages/strui/tokens/palette.json
+ * Regenerate: node packages/strui/scripts/gen-tokens.mjs
+ *
+ * tamagui theme overrides. light/dark resolve from the mobile projection (single
+ * source with the web CSS); accent themes are hand-authored mobile-only hues.
+ * tamagui.config.ts spreads these over the @tamagui/config defaults.
+ */
+export const TAMAGUI_THEMES = {
+${blocks.join('\n')}
+} as const
+`
+}
+
 // ------------------------------------------------------------------------ main
 const check = process.argv.includes('--check')
 
@@ -210,6 +275,7 @@ const outputs = [
   renderStylesheet('strui'),
   [fromRoot(palette.swatch.generated), renderSwatchTs()],
   [fromRoot(palette.mobile.generated), renderMobileTs()],
+  [fromRoot(palette.tamagui.generated), renderTamaguiTs()],
 ]
 
 let drift = 0

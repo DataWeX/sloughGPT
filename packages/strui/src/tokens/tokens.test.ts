@@ -30,6 +30,8 @@ const STRUI_CSS = path.join(ROOT, 'packages/strui/src/styles/globals.css')
 const WEB_SWATCH = path.join(ROOT, 'apps/web/lib/theme-tokens.generated.ts')
 const MOBILE_PROJECTION = path.join(ROOT, 'apps/mobile/src/theme/palette.generated.ts')
 const MOBILE_COLORS = path.join(ROOT, 'apps/mobile/src/theme/colors.ts')
+const TAMAGUI_CONFIG = path.join(ROOT, 'apps/mobile/tamagui.config.ts')
+const TAMAGUI_PROJECTION = path.join(ROOT, 'apps/mobile/src/theme/tamagui-themes.generated.ts')
 
 interface Palette {
   palettes: Record<
@@ -47,6 +49,11 @@ interface Palette {
       shadowTokens: string[]
     }
   >
+  tamagui?: {
+    generated: string
+    map: Record<string, string | { light: string; dark: string }>
+    accents: Record<string, Record<string, string>>
+  }
 }
 
 const read = (p: string): string => readFileSync(p, 'utf8')
@@ -361,5 +368,58 @@ describe('mobile projection', () => {
       '#7c52c4': 2,
       '#ec915f': 2,
     })
+  })
+})
+
+describe('tamagui projection', () => {
+  it('is generated', () => {
+    expect(existsSync(TAMAGUI_PROJECTION), `missing ${TAMAGUI_PROJECTION}`).toBe(true)
+  })
+
+  it('tamagui.config.ts carries no hardcoded hex literals', () => {
+    const src = read(TAMAGUI_CONFIG)
+    const literals = src.match(/#[0-9a-fA-F]{6}\b/g) ?? []
+    expect(
+      literals,
+      `hardcoded hex in tamagui.config.ts: ${literals.slice(0, 10).join(', ')}`,
+    ).toEqual([])
+  })
+
+  it('projects light/dark from the mobile projection, and accent themes are total', async () => {
+    const p = loadPalette()
+    expect(p.tamagui, 'palette.json must define a tamagui section').toBeDefined()
+    const themes = (await import(TAMAGUI_PROJECTION)) as {
+      TAMAGUI_THEMES: Record<string, Record<string, string>>
+    }
+    const mobile = (await import(MOBILE_PROJECTION)) as {
+      MOBILE_COLORS: Record<string, { light: string; dark: string }>
+    }
+
+    const map = p.tamagui!.map
+    const accentNames = Object.keys(p.tamagui!.accents)
+    const expectedNames = ['light', 'dark', ...accentNames].sort()
+    expect(Object.keys(themes.TAMAGUI_THEMES).sort(), 'theme family').toEqual(expectedNames)
+
+    // light/dark: exactly the mapped fields, each resolved from MOBILE_COLORS (single source)
+    for (const mode of ['light', 'dark'] as const) {
+      const theme = themes.TAMAGUI_THEMES[mode]
+      expect(Object.keys(theme).sort(), `${mode} fields`).toEqual(Object.keys(map).sort())
+      for (const [field, ref] of Object.entries(map)) {
+        const key = typeof ref === 'string' ? ref : ref[mode]
+        const want = mobile.MOBILE_COLORS[key]?.[mode]
+        expect(want, `mobile ${key} ${mode}`).toBeDefined()
+        expect(theme[field], `tamagui ${mode}.${field} (from ${key})`).toBe(want)
+      }
+    }
+
+    // accents: exactly the hand-authored fields, byte-equal to palette.json
+    for (const [name, fields] of Object.entries(p.tamagui!.accents)) {
+      const theme = themes.TAMAGUI_THEMES[name]
+      expect(theme, `accent theme ${name}`).toBeDefined()
+      expect(Object.keys(theme).sort(), `${name} fields`).toEqual(Object.keys(fields).sort())
+      for (const [field, value] of Object.entries(fields)) {
+        expect(theme[field], `tamagui ${name}.${field}`).toBe(value)
+      }
+    }
   })
 })
