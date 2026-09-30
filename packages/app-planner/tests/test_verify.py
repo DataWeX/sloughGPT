@@ -190,3 +190,29 @@ def test_cli_exit_codes(tmp_path, git_repo, monkeypatch):
     _write_board(board_dir / "board.jsonl", [_card("uuid-1", "Card X", "todo")])
     rc_bad = main(["verify", str(notes / "n.md"), "--repo", str(repo)])
     assert rc_bad == 1
+
+
+def test_cli_resolves_title_in_user_fallback_notes_dir(tmp_path, git_repo, monkeypatch):
+    """Title resolution must also search NOTES_FALLBACK (~/.config/dev-notes),
+    where the real journal lives, not only the project's .dev-notes."""
+    from app_planner import config
+    from app_planner.cli import main
+
+    repo, sha = git_repo
+    project_notes = tmp_path / "project-notes"
+    fallback = tmp_path / "fallback-notes"
+    project_notes.mkdir()
+    fallback.mkdir()
+    board_dir = tmp_path / "boarddir"
+    board_dir.mkdir()
+    _write_note(fallback / "2026-09-29-card094-x.md", board="uuid-1", landed=sha)
+    _write_board(board_dir / "board.jsonl", [_card("uuid-1", "Card X", "done")])
+
+    monkeypatch.delenv("APP_PLANNER_NOTES_DIR", raising=False)
+    monkeypatch.setenv("APP_PLANNER_BOARD_DIR", str(board_dir))
+    monkeypatch.setattr(config, "NOTES_FALLBACK", fallback)
+    monkeypatch.setattr(config, "find_project_root", lambda: tmp_path)
+    (tmp_path / ".dev-notes").mkdir()
+
+    rc = main(["verify", "card094", "--repo", str(repo)])
+    assert rc == 0
