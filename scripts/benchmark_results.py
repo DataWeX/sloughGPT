@@ -9,6 +9,7 @@ Usage:
     python scripts/benchmark_results.py record --kind stability --json-file out.json
     python scripts/benchmark_results.py record --kind latency --json-file out.json
     python scripts/benchmark_results.py record --kind admission --json-file out.json
+    python scripts/benchmark_results.py record --kind compression --json-file out.json
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
 """
@@ -62,6 +63,12 @@ REGRESSION_THRESHOLDS = {
         "rate.p50_us": (50.0, "rel"),
         "breaker.p50_us": (50.0, "rel"),
         "streams.p50_us": (50.0, "rel"),
+    },
+    "compression": {
+        # gateway codec quality (benchmark_gateway_compression.py): savings on
+        # synthetic payloads — CPU-invariant, no speed metrics (box load noise)
+        "zstd.savings_pct": (10.0, "rel"),
+        "gzip.savings_pct": (10.0, "rel"),
     },
 }
 
@@ -182,7 +189,7 @@ def load_result(path: Path) -> dict:
 
 
 # higher-is-better metric names (a drop means regression)
-HIGHER_IS_BETTER = {"overall", "response_rate", "pass.rps"}
+HIGHER_IS_BETTER = {"overall", "response_rate", "pass.rps", "zstd.savings_pct", "gzip.savings_pct"}
 
 
 def _threshold(kind: str, metric: str) -> tuple:
@@ -293,6 +300,13 @@ def do_record(args) -> int:
                 file=sys.stderr,
             )
             return 1
+        elif kind == "compression":
+            print(
+                "[ERR] compression kind requires --json-file "
+                "(from benchmark_gateway_compression.py --metrics-out)",
+                file=sys.stderr,
+            )
+            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -369,6 +383,14 @@ def do_history(args) -> int:
                 print(
                     f"  {stamp}  pass {m.get('pass', {}).get('p50_us', '?')}µs "
                     f"{m.get('pass', {}).get('rps', '?')} rps | {shed}  {p.name}"
+                )
+            elif kind == "compression":
+                m = r.get("metrics", {})
+                zs = m.get("zstd", {})
+                gz = m.get("gzip", {})
+                print(
+                    f"  {stamp}  zstd {zs.get('savings_pct', '?')}% (r={zs.get('ratio', '?')}) "
+                    f"gzip {gz.get('savings_pct', '?')}% (r={gz.get('ratio', '?')})  {p.name}"
                 )
             else:
                 m = r.get("metrics", {})
@@ -451,7 +473,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup", "admission"],
+        choices=["stability", "latency", "execution", "training", "startup", "admission", "compression"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -462,7 +484,7 @@ def main() -> int:
 
     p_h = sub.add_parser("history", help="list stored runs")
     p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup", "admission"]
+        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup", "admission", "compression"]
     )
     p_h.set_defaults(fn=do_history)
 
@@ -470,7 +492,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup", "admission"],
+        choices=["stability", "latency", "execution", "training", "startup", "admission", "compression"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
