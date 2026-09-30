@@ -3,6 +3,7 @@
 Shared libraries consumed by apps.
 
 - `core-py/` — Python shared domain logic (`domains` package on the import path when the repo is installed); see **`core-py/README.md`**.
+- `avion/` — computer-use agent + journey library: perception-action `Agent`, 7 backends (Playwright/CDP/Selenium/API/CLI/Appium/Desktop), skill library, vision, event replay, and the **`avion`** CDP CLI (`python -m avion`). `arken/` and `voyager/` are back-compat shims that re-export it. Run **`python3 -m pytest packages/avion/tests`**; CLI smoke needs `pip install "avion[cdp]"`.
 - `sdk-py/` — Python SDK (`sloughgpt_sdk`); see **`sdk-py/sloughgpt_sdk/README.md`**.
 - `sdk-ts/typescript-sdk/` — TypeScript SDK (npm package); see **`sdk-ts/typescript-sdk/README.md`**.
 - `standards/` — contracts/schemas; see **`standards/README.md`**.
