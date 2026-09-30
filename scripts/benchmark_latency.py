@@ -7,6 +7,8 @@ Usage:
     python scripts/benchmark_latency.py --ci      # exit non-zero if regression >20%
 """
 
+from __future__ import annotations
+
 import json
 import sys
 import time
@@ -21,6 +23,50 @@ SAMPLE_PROMPTS = [
     "how does machine learning work",
     "write a poem about winter",
 ]
+MAX_TOKENS = 20
+TEMPERATURE = 0.01
+
+
+def _host_context() -> dict:
+    """Thermal/load context for a recorded baseline.
+
+    This laptop clamps all-core clocks ~40% once the package hits ~97C
+    (measured 2026-09-30: 2.3-2.5GHz vs 4.1GHz max turbo), so baselines
+    recorded hot vs cool are not comparable without this context.
+    """
+    ctx = {}
+    try:
+        for zone in sorted(Path("/sys/class/thermal").glob("thermal_zone*")):
+            if (zone / "type").read_text().strip() == "x86_pkg_temp":
+                ctx["pkg_temp_c"] = round(int((zone / "temp").read_text()) / 1000, 1)
+                break
+    except Exception:
+        pass
+    try:
+        ctx["load1"] = float(Path("/proc/loadavg").read_text().split()[0])
+    except Exception:
+        pass
+    return ctx
+
+
+def _wait_for_thermal(max_c: float = 88.0, timeout_s: float = 120.0) -> dict:
+    """Pause until the package has thermal headroom before measuring.
+
+    This laptop clamps all-core clocks ~40% at ~97C: consecutive hot runs
+    drifted 1915 -> 2253 -> 3018 ms (2026-09-30), which would bake the
+    throttle into the baseline and false-positive the 20% CI gate. Waits up
+    to ``timeout_s``; proceeds anyway (recording ok=False) rather than hang.
+    """
+    deadline = time.monotonic() + timeout_s
+    waited = 0.0
+    while True:
+        temp = _host_context().get("pkg_temp_c")
+        if temp is None or temp <= max_c:
+            return {"waited_s": round(waited, 1), "start_temp_c": temp, "ok": True}
+        if time.monotonic() >= deadline:
+            return {"waited_s": round(waited, 1), "start_temp_c": temp, "ok": False}
+        time.sleep(5)
+        waited += 5
 
 
 def measure_latency(url: str = "http://localhost:8000", runs: int = 5) -> dict:
@@ -34,8 +80,8 @@ def measure_latency(url: str = "http://localhost:8000", runs: int = 5) -> dict:
             payload = _json.dumps(
                 {
                     "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 20,
-                    "temperature": 0.01,
+                    "max_tokens": MAX_TOKENS,
+                    "temperature": TEMPERATURE,
                     "session_id": f"bench-{uuid.uuid4().hex[:8]}",
                 }
             ).encode()
@@ -55,6 +101,13 @@ def measure_latency(url: str = "http://localhost:8000", runs: int = 5) -> dict:
     if not latencies:
         return {"error": "no successful requests"}
 
+    model = None
+    try:
+        with urllib.request.urlopen(f"{url}/health", timeout=5) as resp:
+            model = _json.loads(resp.read()).get("data", {}).get("model_type")
+    except Exception:
+        pass
+
     return {
         "mean_ms": (sum(latencies) / len(latencies)) * 1000,
         "min_ms": min(latencies) * 1000,
@@ -63,6 +116,9 @@ def measure_latency(url: str = "http://localhost:8000", runs: int = 5) -> dict:
         "p95_ms": sorted(latencies)[int(len(latencies) * 0.95)] * 1000,
         "sample_count": len(latencies),
         "timestamp": time.time(),
+        "model": model,
+        "endpoint": "POST /chat",
+        "params": {"max_tokens": MAX_TOKENS, "temperature": TEMPERATURE},
     }
 
 
@@ -86,12 +142,21 @@ def main():
     ci_mode = "--ci" in args
     url = "http://localhost:8000"
 
+    thermal = _wait_for_thermal()
+    print(
+        f"[BENCH] thermal: start_temp={thermal.get('start_temp_c')}C "
+        f"waited={thermal['waited_s']}s ok={thermal['ok']}"
+    )
+
     print(f"[BENCH] Measuring latency against {url}...")
     result = measure_latency(url=url, runs=3)
 
     if "error" in result:
         print(f"[FAIL] {result['error']}")
         sys.exit(1)
+
+    result["host"] = _host_context()
+    result["thermal_wait"] = thermal
 
     print(f"  mean: {result['mean_ms']:.1f} ms  ({result['sample_count']} samples)")
     print(f"  min:  {result['min_ms']:.1f} ms")
@@ -124,3 +189,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
