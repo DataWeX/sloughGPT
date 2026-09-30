@@ -233,12 +233,18 @@ def _verify(args: argparse.Namespace) -> int:
 
     note_path = Path(args.note)
     if not note_path.exists():
-        # resolve by title substring across journal markdown notes
+        # resolve by title substring across journal markdown notes: the
+        # project notes dir first, then the user fallback (~/.config/dev-notes)
+        search_dirs = [config.default_notes_dir()]
+        if config.NOTES_FALLBACK not in search_dirs:
+            search_dirs.append(config.NOTES_FALLBACK)
         matches = [
             p
-            for p in sorted(config.default_notes_dir().glob("*.md"))
+            for d in search_dirs
+            for p in sorted(Path(d).glob("*.md"))
             if args.note.lower() in p.stem.lower()
         ]
+        matches = sorted(set(matches))
         if len(matches) == 1:
             note_path = matches[0]
         elif not matches:
