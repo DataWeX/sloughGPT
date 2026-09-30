@@ -31,10 +31,22 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from domain.shared import find_repo_root
 
 # ── Path bootstrapping (must happen before any domain imports) ────────
-_REPO_ROOT = find_repo_root(Path(__file__).resolve())
+# NOTE: `domain.shared.find_repo_root` is NOT importable yet — importing it
+# here is exactly the chicken-and-egg that made `make api` die with
+# `ModuleNotFoundError: No module named 'domain'`. Walk up inline instead
+# (same marker rule as domain.shared._internal.paths.find_repo_root).
+def _bootstrap_repo_root(start: Path) -> Path:
+    for parent in start.resolve().parents:
+        if (parent / "apps").is_dir() and (parent / "packages").is_dir():
+            return parent
+        if (parent / "pyproject.toml").exists() and (parent / "apps").is_dir():
+            return parent
+    return start.resolve().parents[min(4, len(start.resolve().parents) - 1)]
+
+
+_REPO_ROOT = _bootstrap_repo_root(Path(__file__))
 _SERVER_ROOT = Path(__file__).resolve().parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
@@ -135,9 +147,7 @@ async def lifespan(app_inst: FastAPI):
                 _rag = get_rag_service()
                 if _rag.stats().get("total_chunks", 0) == 0:
                     try:
-                        _rag.auto_ingest_directory(
-                            str(find_repo_root(Path(__file__).resolve())), max_files=150
-                        )
+                        _rag.auto_ingest_directory(str(_REPO_ROOT), max_files=150)
                     except Exception as e:
                         logger.debug("RAG auto-ingest failed: %s", e)
             except Exception as e:

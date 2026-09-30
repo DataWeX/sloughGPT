@@ -463,6 +463,23 @@ class TestContextCore:
         ctx = cc.get_episodic_context(query="python")
         assert "python" in ctx.lower()
 
+    def test_get_episodic_context_tie_scores_do_not_raise(self):
+        """Equal relevance scores must not compare dicts (broke /chat/stream).
+
+        scored holds (score, episode_dict) tuples; a plain sort() falls back to
+        comparing the dicts on a score tie -> TypeError: '<' not supported
+        between instances of 'dict' and 'dict' -> 500 + zero streamed tokens.
+        """
+        cc = ContextCore()
+        cc.working_capacity = 1  # force consolidation into episodic memory
+        cc.set_session_id("s1")
+        for _ in range(4):
+            cc.add_message("user", "hello world")  # identical -> identical scores
+        assert len(cc.episodic_memory["s1"]) >= 2
+        ctx = cc.get_episodic_context(query="hello world")
+        assert isinstance(ctx, str)
+        assert "user" in ctx
+
     def test_get_episodic_context_limit(self):
         cc = ContextCore()
         cc.set_session_id("s1")

@@ -272,7 +272,10 @@ Be concise, accurate, and helpful."""
                 content = str(ep.get("content", {}))
                 score = sum(1 for word in query_lower.split() if word in content.lower())
                 scored.append((score, ep))
-            scored.sort(reverse=True)
+            # Sort on the score ONLY. A bare sort() would fall back to comparing
+            # the episode dicts when scores tie -> TypeError ('<' not supported
+            # between instances of 'dict' and 'dict') -> 500 on /chat/stream.
+            scored.sort(key=lambda item: item[0], reverse=True)
             episodes = [ep for _, ep in scored[:limit]]
         else:
             episodes = episodes[-limit:]
