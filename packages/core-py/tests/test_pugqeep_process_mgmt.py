@@ -2222,3 +2222,90 @@ class TestSubprocessCwdAndCapture:
         engine.stop()
         # Health should include stdout/stderr
         assert p.status == ProcessStatus.COMPLETED
+
+
+# ── Signal must not be swallowed ──────────────────────────────────────────────
+
+
+class TestSignalNotSwallowed:
+    """Engine.__init__ installs a process-global SIGTERM/SIGINT handler.
+
+    The handler must delegate to whatever it replaced, otherwise the owning
+    process can never be told to exit: uvicorn --reload sends SIGTERM to the
+    child and blocks forever in Process.join(), so the reloader wedges after
+    the first detected change, and `kill <pid>` needs SIGKILL.
+    """
+
+    def test_sigterm_delegates_to_previous_handler(self):
+        engine = Engine("chain")
+        engine.restore_signal_handlers()  # undo the install done in __init__
+
+        seen: list[int] = []
+        original = signal.getsignal(signal.SIGTERM)
+
+        def previous(signum, frame):
+            seen.append(signum)
+
+        signal.signal(signal.SIGTERM, previous)
+        try:
+            engine.install_signal_handlers()
+            engine._handle_signal(signal.SIGTERM, None)
+            assert seen == [signal.SIGTERM], (
+                "engine swallowed SIGTERM without delegating to the handler it replaced"
+            )
+        finally:
+            engine.restore_signal_handlers()
+            signal.signal(signal.SIGTERM, original)
+            engine.stop()
+
+    def test_process_exits_on_sigterm(self, tmp_path):
+        """End-to-end: a process that merely constructed Engine must die on SIGTERM."""
+        import subprocess
+        import sys
+        import textwrap
+
+        err = tmp_path / "child.err"
+        script = textwrap.dedent(
+            """
+            import time
+            from domain.infrastructure._internal.pugqeep.engine import Engine
+            Engine("term-probe")
+            print("READY", flush=True)
+            time.sleep(120)
+            """
+        )
+        with err.open("w") as errf:
+            proc = subprocess.Popen(
+                [sys.executable, "-c", script],
+                stdout=subprocess.PIPE,
+                stderr=errf,
+                text=True,
+            )
+            try:
+                ready: list[str] = []
+                reader = threading.Thread(
+                    target=lambda: ready.append(proc.stdout.readline()), daemon=True
+                )
+                reader.start()
+                reader.join(timeout=90)
+                assert ready and "READY" in ready[0], (
+                    f"child never became ready: {err.read_text()[:800]}"
+                )
+
+                proc.terminate()  # SIGTERM — exactly what uvicorn terminate() sends
+                try:
+                    rc = proc.wait(timeout=15)
+                except Exception:
+                    raise AssertionError(
+                        "process did not exit on SIGTERM; the handler swallowed it"
+                    ) from None
+                # Must die FROM the signal (rc == -SIGTERM), not from some
+                # unrelated exception raised inside the handler.
+                assert rc == -signal.SIGTERM, (
+                    f"expected to die from SIGTERM (rc={-signal.SIGTERM}), got rc={rc}: "
+                    f"{err.read_text()[:800]}"
+                )
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()

@@ -722,30 +722,24 @@ if __name__ == "__main__":
     if args.reload:
         uvicorn_kw["reload"] = True
         uvicorn_kw["app"] = "main:app"
-        uvicorn_kw["reload_includes"] = [
-            "apps/api/server/**/*.py",
-            "packages/core-py/domains/**/*.py",
-        ]
-        uvicorn_kw["reload_excludes"] = [
-            ".*/**",
-            "node_modules/**",
-            "__pycache__/**",
-            "*.pyc",
-            ".git/**",
-            ".venv/**",
-            "venv/**",
-            "env/**",
-            "build/**",
-            "dist/**",
-            ".next/**",
-            "data/**",
-            "datasets/**",
-            "models/**",
-            "tests/**",
-            "logs/**",
-            "checkpoints/**",
-            "apps/web/**",
-            "apps/cli/**",
+        # Scope the watch by DIRECTORY, never by `dir/**` glob pattern.
+        #
+        # uvicorn's resolve_reload_patterns() globs every pattern against the
+        # cwd and then runs an O(n^2) `Path.parents` containment check over all
+        # directories it yields. A pattern like `node_modules/**` expands to
+        # 40,893 entries and `.venv/**` to 19,620, so Config() alone took >60s —
+        # the server never reached bind() and spun at 100% CPU. Plain directory
+        # paths short-circuit on is_dir(Path(pattern)) and cost ~1ms.
+        #
+        # reload_dirs is also the only scoping that actually applies here: with
+        # watchfiles absent uvicorn falls back to StatReload, which rglobs
+        # `*.py` over reload_dirs and explicitly ignores reload_includes /
+        # reload_excludes (see uvicorn/supervisors/statreload.py). It watches
+        # 1,067 files versus 29,507 for an unpruned repo-root walk.
+        uvicorn_kw["reload_dirs"] = [
+            str(_SERVER_ROOT),  # apps/api/server
+            str(_REPO_ROOT / "domain"),  # domain/** — was missing before
+            str(_CORE_PY_ROOT / "domains"),  # packages/core-py/domains
         ]
 
     try:

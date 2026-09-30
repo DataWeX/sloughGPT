@@ -1756,6 +1756,12 @@ class Engine:
     def install_signal_handlers(self) -> None:
         import signal
 
+        # Idempotent: a second install would overwrite _old_signal_handlers
+        # with our own handler, losing the real previous one. That handler is
+        # what _delegate_signal() hands the signal to, so losing it means the
+        # owner (uvicorn, systemd, a caller's handler) can never be reached.
+        if self._signal_handlers_installed:
+            return
         self._old_signal_handlers = {
             signal.SIGTERM: signal.getsignal(signal.SIGTERM),
             signal.SIGINT: signal.getsignal(signal.SIGINT),
@@ -1774,7 +1780,40 @@ class Engine:
 
     def _handle_signal(self, signum, frame) -> None:
         self._running = False
-        self.stop()
+        try:
+            self.stop()
+        finally:
+            self._delegate_signal(signum, frame)
+
+    def _delegate_signal(self, signum, frame) -> None:
+        """Hand the signal on instead of swallowing it.
+
+        Engine.__init__ installs this handler process-globally, so if it never
+        propagates the owning process can never be told to exit:
+        uvicorn --reload sends SIGTERM to the child and then blocks forever in
+        Process.join(), wedging the reloader after the first detected change,
+        and plain `kill <pid>` degrades into needing SIGKILL.
+
+        Delegation goes to the handler we replaced (uvicorn's handle_exit, a
+        caller's handler, Python's SIGINT KeyboardInterrupt default). With
+        nothing above us and a real signal delivery, we restore SIG_DFL and
+        re-raise so the process terminates from the signal itself.
+
+        `frame is None` means the handler was called directly rather than by
+        the interpreter (tests do this to simulate delivery) — terminating
+        this process would be wrong there.
+        """
+        import os
+        import signal
+
+        prev = self._old_signal_handlers.get(signum)
+        if callable(prev) and prev is not self._handle_signal:
+            prev(signum, frame)
+            return
+        if frame is None:
+            return
+        signal.signal(signum, signal.SIG_DFL)
+        os.kill(os.getpid(), signum)
 
     def _deps_met(self, proc: Process) -> bool:
         if not proc.depends_on:
