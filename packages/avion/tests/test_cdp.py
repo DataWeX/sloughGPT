@@ -47,7 +47,7 @@ def _find_chromium() -> str | None:
 def _free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
+        return int(s.getsockname()[1])
 
 
 HAS_WEBSOCKETS = importlib.util.find_spec("websockets") is not None
