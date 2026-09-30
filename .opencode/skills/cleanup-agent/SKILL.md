@@ -1,3 +1,8 @@
+---
+name: cleanup-agent
+description: Searches for code-quality issues when the todo list is empty or the user says "continue building". Finds f-string logging, bare excepts, a missing future import, print() in production code, TODO comments, and unused imports.
+---
+
 # Cleanup Agent
 
 Searches for code quality issues when todo list is empty or user says "continue building".

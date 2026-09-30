@@ -1,6 +1,6 @@
 ---
 name: component-state-completeness
-description: Verify every interactive component has all required states: hover, focus-visible, active/pressed, disabled, loading, success. Flags missing states and ARIA attributes.
+description: Verify every interactive component has all required states, namely hover, focus-visible, active/pressed, disabled, loading and success. Flags missing states and ARIA attributes.
 ---
 
 # Component State Completeness Skill
