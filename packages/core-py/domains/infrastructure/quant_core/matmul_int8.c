@@ -33,11 +33,18 @@
  * is compiled with AVX-512 flags when the toolchain allows, so the binary is
  * portable across CPU generations (AVX-512 path is runtime-gated by CPUID).
  *
- * Threading: for large GEMMs (B bytes ≥ _THREAD_MIN_BYTES) the j-block loop is
- * spread across threads. B is split into contiguous j-block slices, each thread
- * streams its own slice (disjoint C columns), so the result is bit-identical to
- * the single-threaded path. Thread count: MAN_GEMM_THREADS env var, else online
- * CPU count (max 64). pthread_create failure degrades to running inline.
+ * Threading: for GEMMs whose work reaches _THREAD_MIN_MACS the j-block loop is
+ * spread across threads. Work is measured as M×N×K MACs — not just B's bytes —
+ * so a prefill of hundreds of tokens over a small weight block is eligible even
+ * when that block alone is under the threshold (M never used to count, which
+ * left every layer GEMM single-threaded during prefill). At M=1 the test is
+ * identical to the old N×K-bytes test, so decode keeps the behavior it was
+ * measured with. B is split into contiguous j-block slices, each thread streams
+ * its own slice (disjoint C columns), so the result is bit-identical to the
+ * single-threaded path. Thread count: MAN_GEMM_THREADS env var if set; else M
+ * decides — decode (M<=1) serial, prefill (M>1) online CPUs capped at 8 (see
+ * _gemm_threads() for the measurements behind both halves). pthread_create
+ * failure degrades to running inline.
  *
  * Build (AVX-512 + VNNI when supported, else AVX2-only):
  *   gcc -O3 -mavx2 -mavx512f -mavx512bw -mavx512vnni -fno-tree-vectorize \
@@ -59,25 +66,51 @@
 #define _JB_MIN 32
 #define _JB_MAX 4096
 
-/** Minimum B bytes (N×K) before the j-block loop is spread across threads.
+/** Minimum work (M×N×K MACs) before the j-block loop is spread across threads.
  *  Below this the thread-spawn cost (~0.1-0.2ms on 8 threads) exceeds the
- *  bandwidth win (measured neutral at 4.2MB, 1.5x at 8.3MB). */
-#define _THREAD_MIN_BYTES 6291456L  /* 6MB */
+ *  bandwidth win (measured neutral at 4.2MB, 1.5x at 8.3MB).
+ *
+ *  M is part of the product on purpose: at M=1 this equals the old N×K byte
+ *  test exactly, so the decode measurements behind the constant still hold;
+ *  for M>1 it reflects the work actually done rather than B's footprint. */
+#define _THREAD_MIN_MACS 6291456L  /* 6e6 MACs == 6MB of N×K at M=1 */
 
-static int _gemm_threads(void) {
-    /* Serial by default. j-block threading only pays off when the weight
-     * matrix is streamed from DRAM by real cores; on this 4C/8T i5-9300H the
-     * isolated big-GEMM gains (up to 2.5x on lm_head) do NOT transfer to real
-     * decode: warm weights are already near DRAM bandwidth, hyperthreads share
-     * ports/LLC and add memory-controller contention, and spawning threads
-     * also stalls the numpy attention ops and heats the chip into throttle
-     * (measured 59ms vs 124-130ms bimodal at 4 threads vs stable 54-67ms
-     * serial). Set MAN_GEMM_THREADS=N (1..256) to enable per-call. */
+static int _gemm_threads(int M) {
+    /* An explicit MAN_GEMM_THREADS=N (1..256) always wins; 0 or garbage
+     * forces serial. Below is the default when it is unset. */
     const char *e = getenv("MAN_GEMM_THREADS");
-    if (e == NULL) return 1;
-    long t = strtol(e, NULL, 10);
-    if (t <= 0 || t > 256) return 1;
-    return (int)t;
+    if (e != NULL) {
+        long t = strtol(e, NULL, 10);
+        if (t <= 0 || t > 256) return 1;
+        return (int)t;
+    }
+
+    /* Default is M-aware, because the two regimes measured very differently.
+
+     *  DECODE (M<=1) stays serial. j-block threading only pays off when the
+     *  weight matrix is streamed from DRAM by real cores; on this 4C/8T
+     *  i5-9300H the isolated big-GEMM gains (up to 2.5x on lm_head) do NOT
+     *  transfer to real decode: warm weights are already near DRAM
+     *  bandwidth, hyperthreads share ports/LLC and add memory-controller
+     *  contention, and spawning threads also stalls the numpy attention ops
+     *  and heats the chip into throttle (measured 59ms vs 124-130ms bimodal
+     *  at 4 threads vs stable 54-67ms serial). M<=1 reproduces exactly the
+     *  condition those measurements covered, so decode is bit-for-bit as
+     *  before this function learned about M.
+
+     *  PREFILL (M>1) is threaded. B is reused across all M rows so it stays
+     *  cache-resident and the DRAM contention above does not apply, while the
+     *  work is M times larger so spawn cost (~0.1-0.2ms) is negligible.
+     *  scripts/benchmark_gemm_threading.py measures 1.4-3.1x on the layer
+     *  GEMMs at M=64..1024 with bit-identical output; chat TTFT drops
+     *  16.7s -> 12.2s (1.37x end to end — the remainder is numpy attention
+     *  that does not run through this kernel, not a limit here). */
+    if (M <= 1) return 1;
+
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n < 1) return 1;
+    if (n > 8) n = 8; /* past 8 the measured win is noise while spawn cost grows */
+    return (int)n;
 }
 
 /* ── AVX2 implementation ────────────────────────────────────────── */
@@ -467,7 +500,7 @@ static void *_gemm_worker(void *p) {
 static void _gemm_run_threads(const int8_t *A, const int8_t *B,
                               const int32_t *B_rowsum, int32_t *C,
                               int M, int N, int K, int nblk, int jblock) {
-    int nthreads = _gemm_threads();
+    int nthreads = _gemm_threads(M);
     if (nthreads > nblk) nthreads = nblk;
     if (nthreads < 1) nthreads = 1;
     if (nthreads <= 1) {
@@ -698,8 +731,8 @@ void matmul_int8_f32(const float *A, const int8_t *B, const float *B_scale,
     int32_t *B_rowsum = _make_rowsum(B, N, K);
 
 #if defined(__AVX2__)
-    long total_bytes = (long)N * K;
-    if (total_bytes >= _THREAD_MIN_BYTES) {
+    long total_work = (long)M * (long)N * (long)K; /* MACs — M must count */
+    if (total_work >= _THREAD_MIN_MACS) {
         int nblk = (int)(((long)N + jblock - 1) / jblock);
         _gemm_run_threads(Aq, B, B_rowsum, Acc, M, N, K, nblk, (int)jblock);
     } else {
@@ -746,8 +779,8 @@ void matmul_int8(const int8_t *A, const int8_t *B, int32_t *C,
     int32_t *B_rowsum = _make_rowsum(B, N, K);
 
 #if defined(__AVX2__)
-    long total_bytes = (long)N * K;
-    if (total_bytes >= _THREAD_MIN_BYTES) {
+    long total_work = (long)M * (long)N * (long)K; /* MACs — M must count */
+    if (total_work >= _THREAD_MIN_MACS) {
         int nblk = (int)(((long)N + jblock - 1) / jblock);
         _gemm_run_threads(A, B, B_rowsum, C, M, N, K, nblk, (int)jblock);
     } else {
