@@ -109,8 +109,8 @@ iterative prompting with environment feedback + self-verify.
 | Skill library                           | `ai/skills.py:SkillLibrary`                     | JSON skills: distill trajectory → dedup by hash, `find()` ranked by keyword **then** replay success rate, versioned schema (skip-loudly on newer files), atomic save |
 | Safety                                  | none                                              | No sandbox, allowlist, or confirm gate                             |
 
-Tests: **276 passing, 1 skipped** — run `python3 -m pytest packages/avion/tests`.
-The skip is the missing-dep probe, which only runs when `websockets` is
+Tests: `python3 -m pytest packages/avion/tests` — all green. The only
+skip is the missing-dep probe, which runs only when `websockets` is
 absent. The CDP suite drives a real Chromium over the DevTools protocol;
 everything else is mocked.
 
