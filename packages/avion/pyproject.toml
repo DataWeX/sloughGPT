@@ -5,13 +5,17 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "avion"
 version = "0.1.0"
-description = "Avion — web autoclicker/agent: find, click, type via Playwright (formerly arken/voyager)."
+description = "Avion — computer-use agent + journey library: perception-action agent, 7 backends (Playwright/CDP/Selenium/API/CLI/Appium/Desktop), skills, vision, event replay, and the `avion` CDP CLI (formerly arken/voyager)."
 requires-python = ">=3.11"
 dependencies = []
 
 [project.optional-dependencies]
 playwright = ["playwright>=1.40"]
+cdp = ["websockets>=12"]
 dev = ["pytest>=7", "pytest-asyncio>=0.21"]
+
+[project.scripts]
+avion = "avion.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
