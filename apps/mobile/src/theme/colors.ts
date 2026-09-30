@@ -1,74 +1,90 @@
-import {useTheme, useThemeName} from 'tamagui';
+import { useTheme, useThemeName } from 'tamagui'
+
+import { MOBILE_COLORS } from './palette.generated'
 
 /**
  * Noir Violet Design System — Mobile Color Access
  *
- * All values match the web CSS variables defined in globals.css.
+ * Every value comes from palette.generated.ts, which is generated from
+ * packages/strui/tokens/palette.json — the single source shared with the web CSS
+ * variables in globals.css. Never hand-edit values here or in the generated file;
+ * edit palette.json and run `node packages/strui/scripts/gen-tokens.mjs`.
+ *
  * Use this hook in components that need runtime color access.
  *
  * For static values, prefer Tamagui theme tokens ($background, $color, etc.).
  */
+
+type ColorKey = keyof typeof MOBILE_COLORS
+
+/** '#RRGGBB' -> 'rgba(R, G, B, opacity)' — alpha helpers derive from palette values. */
+function alpha(hexColor: string, opacity: number): string {
+  const n = Number.parseInt(hexColor.slice(1), 16)
+  const r = (n >> 16) & 255
+  const g = (n >> 8) & 255
+  const b = n & 255
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`
+}
+
 export function useColors() {
-  const theme = useTheme();
-  const themeName = useThemeName();
-  const isDark = themeName === 'dark';
+  const theme = useTheme()
+  const themeName = useThemeName()
+  const isDark = themeName === 'dark'
+
+  const v = (key: ColorKey): string => (isDark ? MOBILE_COLORS[key].dark : MOBILE_COLORS[key].light)
 
   return {
     // ── Core ──────────────────────────────────────────
-    primary: isDark ? '#C0AAF4' : '#7C52C4',
-    primaryLight: isDark ? '#C0AAF4' : '#7C52C4',
-    accent: isDark ? '#F0B082' : '#EC915F',
+    primary: v('primary'),
+    primaryLight: v('primaryLight'),
+    accent: v('accent'),
 
     // ── Backgrounds ───────────────────────────────────
-    background: isDark ? '#110F18' : '#F8F6FC',
-    backgroundHover: isDark ? '#1C1926' : '#F0EDFA',
-    backgroundPress: isDark ? '#262234' : '#E6E2F4',
-    card: isDark ? '#1C1926' : '#FFFFFF',
-    popover: isDark ? '#201D2C' : '#FFFFFF',
-    chatBg: isDark ? '#16141E' : '#F6F2ED',
+    background: v('background'),
+    backgroundHover: v('backgroundHover'),
+    backgroundPress: v('backgroundPress'),
+    card: v('card'),
+    popover: v('popover'),
+    chatBg: v('chatBg'),
 
     // ── Text ──────────────────────────────────────────
-    text: isDark ? '#EEEAF8' : '#191624',
-    textMuted: isDark ? '#968CAC' : '#827A96',
-    textSecondary: isDark ? '#EEEAF8' : '#2A2537',
-    textOnPrimary: isDark ? '#191624' : '#FAF8FF',
+    text: v('text'),
+    textMuted: v('textMuted'),
+    textSecondary: v('textSecondary'),
+    textOnPrimary: v('textOnPrimary'),
 
     // ── Borders ───────────────────────────────────────
-    border: isDark ? '#342E48' : '#E4E0F2',
-    borderHover: isDark ? '#C0AAF4' : '#7C52C4',
+    border: v('border'),
+    borderHover: v('borderHover'),
 
     // ── Secondary / Muted ─────────────────────────────
-    secondary: isDark ? '#322C44' : '#EDE8F8',
-    secondaryForeground: isDark ? '#EEEAF8' : '#2A2537',
-    muted: isDark ? '#262234' : '#F4F2F8',
-    mutedForeground: isDark ? '#968CAC' : '#827A96',
+    secondary: v('secondary'),
+    secondaryForeground: v('secondaryForeground'),
+    muted: v('muted'),
+    mutedForeground: v('mutedForeground'),
 
     // ── Semantic ──────────────────────────────────────
-    error: isDark ? '#EB646E' : '#DC505A',
-    errorDark: '#D44C56',
-    errorLight: isDark ? '#3B1A1A' : '#FDE8E8',
-    success: isDark ? '#48C08C' : '#34B07D',
-    successDark: '#2E9B7C',
-    successLight: isDark ? '#1A2E22' : '#E8F5EE',
-    warning: isDark ? '#F0C050' : '#ECA83C',
-    warningDark: '#E8A83C',
-    warningLight: isDark ? '#2E2410' : '#FFF8E7',
-    info: isDark ? '#78AFF0' : '#5A96DC',
-    infoDark: '#2563EB',
-    infoLight: isDark ? '#1A2240' : '#EFF6FF',
-    white: '#FFFFFF',
+    error: v('error'),
+    errorDark: v('errorDark'),
+    errorLight: v('errorLight'),
+    success: v('success'),
+    successDark: v('successDark'),
+    successLight: v('successLight'),
+    warning: v('warning'),
+    warningDark: v('warningDark'),
+    warningLight: v('warningLight'),
+    info: v('info'),
+    infoDark: v('infoDark'),
+    infoLight: v('infoLight'),
+    white: v('white'),
 
     // ── Alpha Utilities ───────────────────────────────
     overlay: (opacity: number) => `rgba(0, 0, 0, ${opacity})`,
-    primaryAlpha: (opacity: number) =>
-      isDark ? `rgba(192, 170, 244, ${opacity})` : `rgba(124, 82, 196, ${opacity})`,
-    errorAlpha: (opacity: number) =>
-      isDark ? `rgba(235, 100, 110, ${opacity})` : `rgba(220, 80, 90, ${opacity})`,
-    errorDarkAlpha: (opacity: number) => `rgba(212, 76, 86, ${opacity})`,
-    successAlpha: (opacity: number) =>
-      isDark ? `rgba(72, 192, 140, ${opacity})` : `rgba(52, 176, 125, ${opacity})`,
-    warningAlpha: (opacity: number) =>
-      isDark ? `rgba(240, 192, 80, ${opacity})` : `rgba(236, 168, 60, ${opacity})`,
-    whiteAlpha: (opacity: number) => `rgba(255, 255, 255, ${opacity})`,
-  };
+    primaryAlpha: (opacity: number) => alpha(v('primary'), opacity),
+    errorAlpha: (opacity: number) => alpha(v('error'), opacity),
+    errorDarkAlpha: (opacity: number) => alpha(v('errorDark'), opacity),
+    successAlpha: (opacity: number) => alpha(v('success'), opacity),
+    warningAlpha: (opacity: number) => alpha(v('warning'), opacity),
+    whiteAlpha: (opacity: number) => alpha(v('white'), opacity),
+  }
 }

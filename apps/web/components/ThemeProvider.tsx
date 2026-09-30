@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, useLayoutEffect, ReactNode } from 'react'
 import { syncHtmlTheme } from '@/lib/sync-html-theme'
 import { trackEvent } from '@/lib/dev-log'
+import { AURA_SWATCH } from '@/lib/theme-tokens.generated'
 import {
   isStoredThemeId,
   isStoredPaletteId,
@@ -104,13 +105,22 @@ export function useTheme() {
   return context
 }
 
-/** Accent presets — ids kept for localStorage; hues match ``globals.css`` theme-* */
+/**
+ * Accent presets — ids kept for localStorage; prose hand-authored here, but the swatch
+ * hues come from the generated palette (packages/strui/tokens/palette.json) so they can
+ * never drift from `globals.css` theme-*.
+ */
 export const THEMES: { id: StoredThemeId; name: string; color: string; aura: string }[] = [
-  { id: 'blue', name: 'Periwinkle', color: '#5a82dc', aura: 'Calm ocean, trustworthy' },
-  { id: 'purple', name: 'Lilac', color: '#9b6cd6', aura: 'Ethereal lilac, mystical' },
-  { id: 'pink', name: 'Rose', color: '#da82aa', aura: 'Soft rose, delicate' },
-  { id: 'red', name: 'Coral', color: '#e67882', aura: 'Warm coral, energetic' },
-  { id: 'orange', name: 'Peach', color: '#ec9b5a', aura: 'Peachy bread crust, warm bakery' },
-  { id: 'green', name: 'Mint', color: '#48b282', aura: 'Fresh mint, natural' },
-  { id: 'teal', name: 'Dew', color: '#48a6c8', aura: 'Cool dew, refreshing' },
+  { id: 'blue', name: 'Periwinkle', color: AURA_SWATCH.blue, aura: 'Calm ocean, trustworthy' },
+  { id: 'purple', name: 'Lilac', color: AURA_SWATCH.purple, aura: 'Ethereal lilac, mystical' },
+  { id: 'pink', name: 'Rose', color: AURA_SWATCH.pink, aura: 'Soft rose, delicate' },
+  { id: 'red', name: 'Coral', color: AURA_SWATCH.red, aura: 'Warm coral, energetic' },
+  {
+    id: 'orange',
+    name: 'Peach',
+    color: AURA_SWATCH.orange,
+    aura: 'Peachy bread crust, warm bakery',
+  },
+  { id: 'green', name: 'Mint', color: AURA_SWATCH.green, aura: 'Fresh mint, natural' },
+  { id: 'teal', name: 'Dew', color: AURA_SWATCH.teal, aura: 'Cool dew, refreshing' },
 ]

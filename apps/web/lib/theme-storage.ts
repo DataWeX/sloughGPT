@@ -1,3 +1,5 @@
+import { PALETTE_SWATCH } from './theme-tokens.generated'
+
 /** Keys synced with ``ThemeProvider`` and the inline theme bootstrap in ``index.html``. */
 
 export const THEME_STORAGE_KEY = 'man_theme'
@@ -19,12 +21,8 @@ export const PALETTE_LABELS: Record<StoredPaletteId, string> = {
   'neural-precision': 'Neural Precision',
 }
 
-export const PALETTE_COLORS: Record<StoredPaletteId, string> = {
-  // Mirrors the palette's authored --primary in globals.css
-  // (:root 124 82 196; html.palette-neural-precision 99 57 170).
-  'noir-violet': '#7c52c4',
-  'neural-precision': '#6339aa',
-}
+/** Swatch hues come from the generated palette (packages/strui/tokens/palette.json). */
+export const PALETTE_COLORS: Record<StoredPaletteId, string> = PALETTE_SWATCH
 
 export function isStoredThemeId(value: string | null): value is StoredThemeId {
   return value != null && (THEME_IDS as readonly string[]).includes(value)

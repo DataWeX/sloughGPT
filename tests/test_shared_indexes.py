@@ -89,9 +89,13 @@ def test_every_package_is_indexed() -> None:
 
 
 def test_docs_index_links_resolve() -> None:
-    """Every .md referenced in docs/INDEX.md must exist (docs/ or root)."""
+    """Every .md referenced in docs/INDEX.md must exist (docs/, docs/<subdir>/, or root).
+
+    Subpaths are allowed (e.g. ``design/DESIGN_SYSTEM.md``); a bare filename must
+    resolve directly under ``docs/`` or the repo root.
+    """
     index = (ROOT / "docs" / "INDEX.md").read_text(encoding="utf-8")
-    refs = set(re.findall(r"([A-Za-z0-9_][A-Za-z0-9_.-]*\.md)", index))
+    refs = set(re.findall(r"([A-Za-z0-9_][A-Za-z0-9_./-]*\.md)", index))
     missing = sorted(
         r for r in refs if not (ROOT / "docs" / r).exists() and not (ROOT / r).exists()
     )
