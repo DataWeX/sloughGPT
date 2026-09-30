@@ -81,7 +81,7 @@ class Arken:
         self._mouse = Mouse(self._backend)  # type: ignore[arg-type]
         self._keyboard = Keyboard(self._backend)  # type: ignore[arg-type]
         self._recorder.record(EventType.SESSION_STARTED, name="session_start")
-        self._logger.info(f"Arken session started (backend={self._backend.name})")
+        self._logger.info("Arken session started (backend=%s)", self._backend.name)
 
     async def stop(self) -> None:
         """Shut down the backend."""
