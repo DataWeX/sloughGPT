@@ -48,15 +48,37 @@ _DYLIBS = {name: os.path.join(_HERE, f"{name}{_EXT}") for name in _SRCS}
 # ── Build ──────────────────────────────────────────────────────────
 
 
+def _host_has_avx512() -> bool:
+    """True when this machine supports AVX-512 F + BW + VNNI.
+
+    The .so is built locally (never shipped cross-machine), so the flag
+    decision must match the running CPU, not just the toolchain: gcc happily
+    accepts ``-mavx512*`` on any x86 host and then lowers e.g. ``rintf()`` to
+    the EVEX ``vrndscaless`` instruction inside otherwise CPUID-gated files
+    (observed inside ``matmul_int8_f32``'s scalar tail) — which SIGILLs the
+    moment the library is rebuilt on an AVX2-only CPU even though every
+    explicit ``_mm512_*`` call site is guarded at runtime.
+    """
+    try:
+        with open("/proc/cpuinfo") as fh:
+            for line in fh:
+                if line.startswith("flags"):
+                    have = set(line.split(":", 1)[1].split())
+                    return {"avx512f", "avx512bw", "avx512vnni"} <= have
+    except OSError:
+        pass
+    return False
+
+
 def _build_one(name: str) -> bool:
     """Compile a single C extension with gcc/clang.
 
     Builds with AVX-512 BW + VNNI (int8 dot-product in one instruction) when
-    the toolchain supports it, falling back to AVX2-only, then to numpy. The
-    compiled library is CPU-portable: the AVX-512 path is gated at runtime by
-    a CPUID check in C, so older CPUs use the AVX2/scalar kernels automatically.
-    ``-fno-tree-vectorize`` keeps the compiler from emitting 512-bit code
-    outside the explicitly-gated intrinsics (which would SIGILL on older CPUs).
+    both the toolchain and the **running CPU** support it, falling back to
+    AVX2-only, then to numpy. The CPU check (not just a compile probe) is
+    required: on an AVX2-only host the avx512 flags still compile, but gcc
+    may emit EVEX instructions for scalar libm calls (rintf → vrndscaless)
+    outside the runtime-gated intrinsics, which SIGILL on first execution.
 
     Returns:
         True if the library was compiled successfully.
@@ -77,15 +99,16 @@ def _build_one(name: str) -> bool:
             )
 
         base = ["-mavx2"]
-        # AVX-512 BW + VNNI fused int8 dot-product (llama.cpp-style). Try it
-        # first; if the toolchain rejects the flags, retry plain AVX2.
+        # AVX-512 BW + VNNI fused int8 dot-product (llama.cpp-style). Only
+        # when the CPU supports it; if the toolchain rejects the flags, retry
+        # plain AVX2.
         avx512 = [
             "-mavx512f",
             "-mavx512bw",
             "-mavx512vnni",
             "-fno-tree-vectorize",
         ]
-        result = _compile(base + avx512)
+        result = _compile(base + avx512) if _host_has_avx512() else _compile(base)
         if result.returncode != 0:
             result = _compile(base)
 

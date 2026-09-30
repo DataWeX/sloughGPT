@@ -106,6 +106,99 @@ static inline __m256i _dot16(const __m128i a, const __m128i b) {
     return _mm256_madd_epi16(_mm256_cvtepi8_epi16(a), _mm256_cvtepi8_epi16(b));
 }
 
+/** AVX2 dot-kernel A/B switch: MAN_AVX2_DOT=1 → widen+cvtepi8_epi16 (the
+ *  default), =2 → the maddubsw kernel below (prepared A row + fused row sum,
+ *  dispatched in _block_j because it needs the prep buffers). Variant 2 is
+ *  bit-exact but measured SLOWER at every real decode shape on this host
+ *  (~10-19 GB/s → 7-13 GB/s: the maddubsw+maddwd chain overloads ports 0/1),
+ *  so it stays opt-in for future A/B on other microarchitectures. */
+static int _dot_variant(void) {
+    static int cached = -1;
+    if (cached < 0) {
+        const char *e = getenv("MAN_AVX2_DOT");
+        cached = (e != NULL && e[0] == '2') ? 2 : 1;
+    }
+    return cached;
+}
+
+/**
+ * Preprocess one A row for the vpmaddubsw kernel (variant 2).
+ *
+ * Split each byte: a = 2·(a>>1) + (a&1), then au = (a>>1)+64 ∈ [0,127] and
+ * al = a&1 ∈ {0,1}. vpmaddubsw(u8, s8) saturates pairs above 32767, and
+ * 2·127·128 = 32512 < 32767, so both operands stay exact with no clamping.
+ * The per-row correction −64·Σb is fused into the dot below (b is streamed
+ * anyway), so B is never read twice.
+ */
+static inline void _prep_a_p2(const int8_t *a, int8_t *au, int8_t *al, int K) {
+    const __m256i m1  = _mm256_set1_epi8(1);
+    const __m256i c64 = _mm256_set1_epi8(64);
+    int k = 0;
+    for (; k + 32 <= K; k += 32) {
+        __m256i v = _mm256_loadu_si256((const __m256i *)(a + k));
+        _mm256_storeu_si256((__m256i *)(al + k), _mm256_and_si256(v, m1));
+        __m256i w0 = _mm256_srai_epi16(_mm256_cvtepi8_epi16(_mm256_castsi256_si128(v)), 1);
+        __m256i w1 = _mm256_srai_epi16(_mm256_cvtepi8_epi16(_mm256_extracti128_si256(v, 1)), 1);
+        /* packs_epi16 on ymm interleaves lanes ([w0.lo, w1.lo, w0.hi, w1.hi]);
+         * permute qwords back to natural byte order. ah ∈ [-64,63] fits int8,
+         * so saturation never clamps. */
+        __m256i p = _mm256_packs_epi16(w0, w1);
+        p = _mm256_permute4x64_epi64(p, _MM_SHUFFLE(3, 1, 2, 0));
+        _mm256_storeu_si256((__m256i *)(au + k), _mm256_add_epi8(p, c64));
+    }
+    for (; k + 16 <= K; k += 16) {
+        __m128i x = _mm_loadu_si128((const __m128i *)(a + k));
+        _mm_storeu_si128((__m128i *)(al + k), _mm_and_si128(x, _mm_set1_epi8(1)));
+        __m128i w0 = _mm_srai_epi16(_mm_cvtepi8_epi16(x), 1);
+        __m128i w1 = _mm_srai_epi16(_mm_cvtepi8_epi16(_mm_srli_si128(x, 8)), 1);
+        _mm_storeu_si128((__m128i *)(au + k),
+                         _mm_add_epi8(_mm_packs_epi16(w0, w1), _mm_set1_epi8(64)));
+    }
+    for (; k < K; k++) {
+        int8_t r = (int8_t)((a[k] >> 1) + 64);
+        au[k] = r;
+        al[k] = (int8_t)(a[k] & 1);
+    }
+}
+
+/**
+ * Exact vpmaddubsw dot product over a preprocessed A row (variant 2).
+ *
+ * total = Σ (2·(au−64) + al)·b = 2·Σ(au·b) − 128·Σb + Σ(al·b), with every
+ * maddubsw pair-sum inside int16 (see _prep_a_p2) — bit-identical to the
+ * widen path. vb is loaded once per 32B chunk and reused by all three
+ * streams; Σb fuses into the same loop (no second pass over B).
+ */
+static inline int32_t _dot_row_avx2_p2(const int8_t *a, const int8_t *au,
+                                       const int8_t *al, const int8_t *b, int K) {
+    const __m256i twos = _mm256_set1_epi16(2);
+    const __m256i ones = _mm256_set1_epi16(1);
+    __m256i ah = _mm256_setzero_si256();  /* accumulates 2·Σ au·b  */
+    __m256i lp = _mm256_setzero_si256();  /* accumulates   Σ al·b  */
+    __m256i sb = _mm256_setzero_si256();  /* accumulates   Σ b     */
+    int k = 0;
+    for (; k + 32 <= K; k += 32) {
+        __m256i vb = _mm256_loadu_si256((const __m256i *)(b + k));
+        ah = _mm256_add_epi32(ah, _mm256_madd_epi16(_mm256_maddubs_epi16(
+            _mm256_loadu_si256((const __m256i *)(au + k)), vb), twos));
+        lp = _mm256_add_epi32(lp, _mm256_madd_epi16(_mm256_maddubs_epi16(
+            _mm256_loadu_si256((const __m256i *)(al + k)), vb), ones));
+        sb = _mm256_add_epi32(sb, _mm256_madd_epi16(
+            _mm256_cvtepi8_epi16(_mm256_castsi256_si128(vb)), ones));
+        sb = _mm256_add_epi32(sb, _mm256_madd_epi16(
+            _mm256_cvtepi8_epi16(_mm256_extracti128_si256(vb, 1)), ones));
+    }
+    /* a = 2·(au−64) + al → Σa·b = 2Σ(au·b) − 128·Σb + Σ(al·b); the `ah`
+     * accumulator already carries the factor 2 (madd by twos). */
+    int32_t total = _hsum8(ah) - 128 * _hsum8(sb) + _hsum8(lp);
+    /* Scalar remainder uses the original a — same arithmetic, no correction
+     * needed outside the vectorised chunks. */
+    for (; k < K; k++) {
+        total += (int32_t)a[k] * (int32_t)b[k];
+    }
+    return total;
+}
+
 /** Dot product of two length-K int8 rows → int32. */
 static inline int32_t _dot_row_avx2(const int8_t *a, const int8_t *b, int K) {
     __m256i s0 = _mm256_setzero_si256();
@@ -302,14 +395,37 @@ static inline int32_t _dot_row(const int8_t *a, const int8_t *b,
     return _dot_row_avx2(a, b, K);
 }
 
+/** True when the VNNI kernel would run for the next GEMM — mirrors the
+ *  _dot_row dispatch so the variant-2 fast path never shadows AVX-512. */
+static inline int _avx512_now(void) {
+#if defined(__AVX512BW__) && defined(__AVX512VNNI__)
+    if (_forced_kernel == 2) return 1;
+    if (_forced_kernel == 1) return 0;
+    return _use_avx512();
+#else
+    return 0;
+#endif
+}
+
 /** Compute one B j-block for all M rows of A using the best available kernel. */
 static inline void _block_j(const int8_t *A, const int8_t *B,
                             const int32_t *B_rowsum,
                             int32_t *C, int M, int N, int K,
                             int jb, int j_end) {
+    const int use_p2 = (_dot_variant() == 2) && !_avx512_now();
     for (int i = 0; i < M; i++) {
         const int8_t *a_row = A + (size_t)i * K;
         int32_t       *c_row = C + (size_t)i * N;
+        if (use_p2) {
+            /* Per-A-row prep buffers (au/al), hoisted out of the j loop.
+             * C99 VLA: 2·K ≤ ~10KB for the largest K this file handles. */
+            int8_t au[K], al[K];
+            _prep_a_p2(a_row, au, al, K);
+            for (int j = jb; j < j_end; j++) {
+                c_row[j] = _dot_row_avx2_p2(a_row, au, al, B + (size_t)j * K, K);
+            }
+            continue;
+        }
         for (int j = jb; j < j_end; j++) {
             int32_t bs = B_rowsum ? B_rowsum[j] : 0;
             c_row[j] = _dot_row(a_row, B + (size_t)j * K, bs, K);
