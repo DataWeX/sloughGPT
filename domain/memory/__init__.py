@@ -32,6 +32,14 @@ from domain.memory._internal.maintenance import (
     start_memory_maintenance,
     stop_memory_maintenance,
 )
+from domain.memory._internal.memory_card import (
+    CardInfo,
+    CardNotFound,
+    MemoryCardError,
+    list_cards,
+    load_card,
+    save_card,
+)
 from domain.memory._internal.provider import KnowledgeMemoryProvider, MemoryProvider
 from domain.memory._internal.service import MemoryService, get_memory_service
 from domain.memory._internal.task_memory import (
@@ -59,6 +67,12 @@ __all__ = [
     "get_knowledge_ingestor",
     "MemoryService",
     "get_memory_service",
+    "MemoryCardError",
+    "CardNotFound",
+    "CardInfo",
+    "save_card",
+    "load_card",
+    "list_cards",
     "plan_consolidation",
     "TASK_REMEMBER",
     "TASK_STORE",

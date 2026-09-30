@@ -213,24 +213,33 @@ Separate inference endpoint backed by the direct model server.
 
 ## Memory Router (`/memory`)
 
-| Method   | Path                    | Description                                                         |
-| -------- | ----------------------- | ------------------------------------------------------------------- |
-| `GET`    | `/memory/stats`         | Memory service stats (enabled, total facts, topic buckets).         |
-| `GET`    | `/memory/list`          | List stored facts (limit 1..1000, default 100).                     |
-| `GET`    | `/memory/search`        | Search facts by relevance (requires `q`).                           |
-| `POST`   | `/memory/store`         | Store a fact directly. Body: `{content, source?}`.                  |
-| `POST`   | `/memory/remember`      | Extract and store facts from a message. Body: `{message, source?}`. |
-| `POST`   | `/memory/update`        | Update a fact.                                                      |
-| `DELETE` | `/memory/delete`        | Delete a fact.                                                      |
-| `POST`   | `/memory/set-config`    | Update runtime memory settings.                                     |
-| `GET`    | `/memory/get-config`    | Get current memory settings.                                        |
-| `POST`   | `/memory/clear`         | Clear all stored facts.                                             |
-| `POST`   | `/memory/consolidate`   | Trigger memory consolidation.                                       |
-| `POST`   | `/memory/archive`       | Archive old facts.                                                  |
-| `GET`    | `/memory/archive/stats` | Archive statistics.                                                 |
-| `POST`   | `/memory/archive/prune` | Prune archived facts.                                               |
+| Method   | Path                    | Description                                                          |
+| -------- | ----------------------- | -------------------------------------------------------------------- |
+| `GET`    | `/memory/stats`         | Memory service stats (enabled, total facts, topic buckets).          |
+| `GET`    | `/memory/list`          | List stored facts (limit 1..1000, default 100).                      |
+| `GET`    | `/memory/search`        | Search facts by relevance (requires `q`).                            |
+| `POST`   | `/memory/store`         | Store a fact directly. Body: `{content, source?}`.                   |
+| `POST`   | `/memory/remember`      | Extract and store facts from a message. Body: `{message, source?}`.  |
+| `POST`   | `/memory/update`        | Update a fact.                                                       |
+| `DELETE` | `/memory/delete`        | Delete a fact.                                                       |
+| `POST`   | `/memory/set-config`    | Update runtime memory settings.                                      |
+| `GET`    | `/memory/get-config`    | Get current memory settings.                                         |
+| `POST`   | `/memory/clear`         | Clear all stored facts.                                              |
+| `POST`   | `/memory/consolidate`   | Trigger memory consolidation.                                        |
+| `POST`   | `/memory/archive`       | Archive old facts.                                                   |
+| `GET`    | `/memory/archive/stats` | Archive statistics.                                                  |
+| `POST`   | `/memory/archive/prune` | Prune archived facts.                                                |
+| `GET`    | `/memory/cards`         | List saved memory cards (newest first; `valid` = checksum verified). |
+| `POST`   | `/memory/cards/save`    | Save memory to a portable card. Body: `{name?, overwrite?}`.         |
+| `POST`   | `/memory/cards/load`    | Load a card. Body: `{name, mode?}` — `replace` (default, autosaves   |
+|          |                         | current memory first) or `merge` (idempotent, content-hash dedup).   |
+| `DELETE` | `/memory/cards/{name}`  | Delete a saved card.                                                 |
 
-Fail-closed when `SLO_MEMORY_ENABLED=false`.
+Fail-closed when `SLO_MEMORY_ENABLED=false`. Cards live in
+`data/memory_cards/` (override: `SLO_MEMORY_CARDS_DIR`); setting
+`SLO_MEMORY_ACTIVE_CARD=<name>` merge-loads that card automatically after a
+successful model load (`.card.json` files are checksummed — corrupt cards are
+rejected before any store mutation).
 
 ## Datasets Router (`/datasets`)
 

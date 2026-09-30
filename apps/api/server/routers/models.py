@@ -401,6 +401,15 @@ class ModelsRouter:
             except Exception as e:
                 logger.warning("Failed to record model load event: %s", e)
             logger.info("Model loaded: %s (%.0fms)", req.model_id, _elapsed_ms)
+            if result.get("status") == "loaded":
+                # Loadable memory card: the model wakes up remembering
+                # (fail-closed — a broken card must never break model load).
+                try:
+                    from domain.memory import get_memory_service
+
+                    get_memory_service().ensure_active_card()
+                except Exception as e:
+                    logger.warning("Active memory card load failed: %s", e)
             safe_audit_log(
                 "model.load",
                 resource=req.model_id,
