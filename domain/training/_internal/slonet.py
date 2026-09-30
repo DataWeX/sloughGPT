@@ -16,6 +16,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -1194,8 +1195,38 @@ def zeros(s, requires_grad=False):
     return Tensor(np.zeros(s, dtype=np.float32), requires_grad=requires_grad, _copy=False)
 
 
+# Thread-local private RandomState for isolated_rng(); when unset, randn()
+# keeps consuming the process-global np.random stream (legacy behavior).
+_thread_rng = threading.local()
+
+
+@contextmanager
+def isolated_rng(seed: int | None = None):
+    """Run the block on a private, thread-local legacy RandomState.
+
+    ``randn()`` inside the block draws from the private stream instead of the
+    process-global ``np.random``. Background workers (e.g. checkpoint
+    compression on ``_compress_in_background``'s daemon thread) load models
+    that construct layers with ``randn()``; without isolation those draws race
+    an in-process training run's global-stream seeding and make sequential
+    runs nondeterministic. Outside the block nothing changes: un-isolated
+    ``randn()`` still uses the global stream, so ``np.random.seed(...)``-based
+    training streams stay byte-identical. ``RandomState(seed)`` reproduces
+    ``np.random.seed(seed)``'s stream, so a fixed seed gives reproducible
+    private draws.
+    """
+    previous = getattr(_thread_rng, "rng", None)
+    _thread_rng.rng = np.random.RandomState(seed)
+    try:
+        yield
+    finally:
+        _thread_rng.rng = previous
+
+
 def randn(s, requires_grad=False):
-    return Tensor(np.random.randn(*s).astype(np.float32), requires_grad=requires_grad, _copy=False)
+    rng = getattr(_thread_rng, "rng", None)
+    data = (rng if rng is not None else np.random).randn(*s).astype(np.float32)
+    return Tensor(data, requires_grad=requires_grad, _copy=False)
 
 
 def ones(s, requires_grad=False):

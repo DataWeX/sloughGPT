@@ -8,6 +8,69 @@ import numpy as np
 import pytest
 
 
+class TestCompressCheckpointRngIsolation:
+    """compress_checkpoint must never touch the process-global np.random stream.
+
+    train_pipeline._compress_in_background runs compress_checkpoint on a daemon
+    thread while a subsequent in-process training run draws batches from the
+    same global stream (sequential benchmark configs, auto-trainer loops). The
+    load path constructs SloTransformer layers (randn) before load_state_dict
+    overwrites them — consuming the global stream from that thread races the
+    next run's seeding and makes batched results nondeterministic
+    (observed: benchmark --only gate,tiny gave tiny 3.16/3.19/3.26 across runs
+    vs exactly 3.2590 solo, both codebases).
+    """
+
+    def test_compress_checkpoint_leaves_global_rng_untouched(self):
+        from domain.training._internal.executor import compress_checkpoint
+        from domain.training._internal.export import export_to_sou
+        from domain.training._internal.slonet import SloTransformer
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            net = SloTransformer(
+                vocab_size=128, n_embed=32, n_layer=1, n_head=2, block_size=16, use_rope=False
+            )
+            soul_path = str(Path(tmpdir) / "rng.soul")
+            export_to_sou(net, soul_path)
+
+            np.random.seed(123456)
+            before = np.random.get_state()
+            stats = compress_checkpoint(soul_path, n_clusters=4)
+            after = np.random.get_state()
+
+            assert stats is not None
+            assert before[0] == after[0], "Generator type changed"
+            assert before[2] == after[2], "global rng position advanced during compression"
+            assert np.array_equal(before[1], after[1]), "global rng state words changed"
+
+    def test_isolated_rng_seeds_private_stream_and_restores(self):
+        from domain.training._internal.slonet import isolated_rng, randn
+
+        np.random.seed(777)
+        before = np.random.get_state()
+
+        with isolated_rng(0):
+            a = randn((3, 4)).data
+        with isolated_rng(0):
+            b = randn((3, 4)).data
+
+        after = np.random.get_state()
+        assert before[2] == after[2]
+        assert np.array_equal(before[1], after[1])
+        # private stream is reproducible for a fixed seed
+        assert np.array_equal(a, b)
+
+    def test_randn_outside_isolated_still_uses_global_stream(self):
+        from domain.training._internal.slonet import randn
+
+        # legacy stream compatibility: un-isolated randn consumes global state
+        np.random.seed(99)
+        before = np.random.get_state()
+        randn((2, 2))
+        after = np.random.get_state()
+        assert before[2] != after[2] or not np.array_equal(before[1], after[1])
+
+
 class TestCompressCheckpoint:
     """Test compress_checkpoint() produces loadable .points.json + manifest."""
 
