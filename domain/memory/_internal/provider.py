@@ -43,6 +43,9 @@ class MemoryProvider(Protocol):
     ) -> bool:
         """Edit an existing item's text (and optionally its topic/importance)."""
 
+    def store_facts(self, facts: list[dict[str, Any]]) -> tuple[int, int]:
+        """Bulk-restore portable fact dicts (card import). Returns (imported, skipped)."""
+
     def stats(self) -> dict[str, Any]:
         """Return provider-level statistics."""
 
@@ -256,3 +259,57 @@ class KnowledgeMemoryProvider:
         except Exception as e:
             logger.debug("Memory update %s failed: %s", item_id, e)
             return False
+
+    def store_facts(self, facts: list[dict[str, Any]]) -> tuple[int, int]:
+        """
+        Bulk-restore portable fact dicts (memory-card import).
+
+        Args:
+            facts: dicts with ``content`` (required) and optional
+                ``topic``/``source``/``url``/``timestamp``/``importance``/
+                ``workspace_id``.
+
+        Returns:
+            ``(imported, skipped)`` — ``skipped`` counts duplicates and
+            per-fact failures (fail-closed per fact, never raises).
+
+        Side effects:
+            - writes each fact into the knowledge store (embedding recomputed).
+        """
+        if not facts:
+            return 0, 0
+        store = self._get_store()
+        try:
+            from domain.learner._internal.knowledge import KnowledgeFact
+
+            built: list[Any] = []
+            for fact in facts:
+                content = str(fact.get("content") or "").strip()
+                if not content:
+                    continue
+                built.append(
+                    KnowledgeFact(
+                        content=content,
+                        topic=str(fact.get("topic") or "general"),
+                        source=str(fact.get("source") or ""),
+                        url=str(fact.get("url") or ""),
+                        timestamp=float(fact.get("timestamp") or 0.0),
+                        importance=float(fact.get("importance", 0.5) or 0.5),
+                        workspace_id=str(fact.get("workspace_id") or ""),
+                    )
+                )
+            if hasattr(store, "add_facts"):
+                # Batch path: dedups + persists the store ONCE (not O(n²)).
+                imported = int(store.add_facts(built))
+                return imported, len(facts) - imported
+            imported = 0
+            for item in built:
+                try:
+                    if store.add_fact(item):
+                        imported += 1
+                except Exception as e:
+                    logger.debug("Memory store_facts item failed: %s", e)
+            return imported, len(facts) - imported
+        except Exception as e:
+            logger.warning("Memory store_facts failed: %s", e)
+            return 0, len(facts)

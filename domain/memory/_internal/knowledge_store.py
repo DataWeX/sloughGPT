@@ -906,19 +906,22 @@ class KnowledgeMemory:
                     continue
                 self._visited.add(content_hash)
                 self._fact_counter += 1
+                metadata = {
+                    "topic": fact.topic,
+                    "source": fact.source,
+                    "url": fact.url,
+                    "timestamp": fact.timestamp,
+                    "importance": fact.importance,
+                    "content_hash": content_hash,
+                }
+                if fact.workspace_id:
+                    metadata["workspace_id"] = fact.workspace_id
                 to_upsert.append(
                     VectorEntry(
                         id=f"fact_{self._fact_counter}_{content_hash[:8]}",
                         vector=vectors[i],
                         text=fact.content,
-                        metadata={
-                            "topic": fact.topic,
-                            "source": fact.source,
-                            "url": fact.url,
-                            "timestamp": fact.timestamp,
-                            "importance": fact.importance,
-                            "content_hash": content_hash,
-                        },
+                        metadata=metadata,
                     )
                 )
         if not to_upsert:
