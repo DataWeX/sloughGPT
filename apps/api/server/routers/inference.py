@@ -33,7 +33,7 @@ from config import ServerConfig
 from config import gen_config as _gen_config
 from domain.agents import get_agent_system, get_tool_registry
 from domain.core import get_rag_service
-from domain.feedback import get_response_tracker
+from domain.feedback import MetaWeights, get_response_tracker
 from domain.infrastructure import AppError
 from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
 from domain.infrastructure.conversation_log import capture
@@ -436,9 +436,85 @@ def _extract_user_message(messages: list[Message]) -> str | None:
     return None
 
 
-_META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
+_META_WEIGHT_CACHE: dict[str, tuple[float, MetaWeights]] = {}
 _META_WEIGHT_CACHE_TTL = 5.0  # seconds
 _META_WEIGHT_CACHE_LOCK = threading.Lock()
+
+# Feedback is applied as a bounded DELTA on the caller's generation params:
+# the manager returns absolute weights built from its own defaults (0.7 /
+# 1.15 / 0.85 / 40), and its per-user boosts accumulate without decay, so
+# forwarding them verbatim discards the request's settings and — once the
+# boosts saturate — forces every chat onto clamped extremes (temp 1.5, top_k
+# 5, warning on every request). These caps keep feedback a bias, not a
+# replacement; `_META_WEIGHT_BASELINE` is the manager's no-signal state.
+_META_DELTA_LIMITS: dict[str, float] = {
+    "temperature": 0.3,
+    "top_p": 0.1,
+    "top_k": 10.0,
+    "repetition_penalty": 0.15,
+}
+_META_RESULT_RANGES: dict[str, tuple[float, float]] = {
+    "temperature": (0.1, 1.5),
+    "top_p": (0.1, 1.0),
+    "top_k": (5.0, 200.0),
+    "repetition_penalty": (0.8, 1.3),
+}
+_META_WEIGHT_BASELINE = MetaWeights()
+_META_WARNED_EXTREME: tuple[float, int] | None = None
+
+
+def _merge_meta_adjustment(
+    adj: MetaWeights,
+    temperature: float | None,
+    top_p: float | None,
+    top_k: int | None,
+    repetition_penalty: float | None,
+) -> dict:
+    """Apply ``adj`` as a clamped delta on the caller's generation params.
+
+    No feedback signal (adj == baseline) → the caller's parameters pass
+    through untouched.
+    """
+    merged: dict[str, Any] = {}
+    for field, value in (
+        ("temperature", temperature),
+        ("top_p", top_p),
+        ("top_k", top_k),
+        ("repetition_penalty", repetition_penalty),
+    ):
+        if value is None:
+            merged[field] = None
+            continue
+        lo, hi = _META_RESULT_RANGES[field]
+        delta = float(getattr(adj, field)) - float(getattr(_META_WEIGHT_BASELINE, field))
+        limit = _META_DELTA_LIMITS[field]
+        out = float(value) + max(-limit, min(limit, delta))
+        out = max(lo, min(hi, out))
+        merged[field] = int(round(out)) if field == "top_k" else out
+    return merged
+
+
+def _warn_meta_extreme_once(result: dict, user_id: str) -> None:
+    """Emit the extreme-values warning only when the merged state changes."""
+    global _META_WARNED_EXTREME
+    state = (round(float(result["temperature"] or 0.0), 2), int(result["top_k"] or 0))
+    if state == _META_WARNED_EXTREME:
+        return
+    _META_WARNED_EXTREME = state
+    logger.warning(
+        "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
+        state[0],
+        state[1],
+        user_id,
+        extra={
+            "tag": "INF",
+            "context": {
+                "temperature": state[0],
+                "top_k": state[1],
+                "user_id": user_id,
+            },
+        },
+    )
 
 
 def _apply_meta_weights(
@@ -451,9 +527,11 @@ def _apply_meta_weights(
 ) -> dict:
     """Apply feedback-driven meta-weight adjustments to generation parameters.
 
-    Looks up similar past messages in the feedback database and adjusts
-    temperature, top_p, top_k, and repetition_penalty accordingly.
-    Results are cached for 5 seconds to avoid repeated similarity searches.
+    Looks up similar past messages in the feedback database, then applies the
+    resulting adjustment as a bounded delta on the CALLER's parameters (see
+    ``_merge_meta_adjustment``): feedback biases the request, it never
+    replaces it. The lookup result is cached for 5 seconds; the merge itself
+    runs on every call so request-specific params stay exact.
 
     Returns a dict of adjusted parameters to pass to the provider.
     """
@@ -462,63 +540,50 @@ def _apply_meta_weights(
     cache_key = f"{user_id}:{hash(user_message)}"
     now = time.monotonic()
 
+    adj = None
     with _META_WEIGHT_CACHE_LOCK:
-        if cache_key in _META_WEIGHT_CACHE:
-            cached_time, cached_params = _META_WEIGHT_CACHE[cache_key]
+        cached = _META_WEIGHT_CACHE.get(cache_key)
+        if cached is not None:
+            cached_time, cached_adj = cached
             if now - cached_time < _META_WEIGHT_CACHE_TTL:
-                return cached_params
+                adj = cached_adj
 
-    try:
-        from domain.feedback import get_meta_weight_manager
+    if adj is None:
+        try:
+            from domain.feedback import get_meta_weight_manager
 
-        manager = get_meta_weight_manager()
-        adj = manager.get_adjustment(
-            user_message=user_message,
-            k=5,
-            user_id=user_id,
-        )
-        result = {
-            "temperature": adj.temperature,
-            "top_p": adj.top_p,
-            "top_k": adj.top_k,
-            "repetition_penalty": adj.repetition_penalty,
-        }
-        if adj.temperature > 1.2 or adj.top_k < 10:
-            logger.warning(
-                "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
-                adj.temperature,
-                adj.top_k,
-                user_id,
-                extra={
-                    "tag": "INF",
-                    "context": {
-                        "temperature": adj.temperature,
-                        "top_k": adj.top_k,
-                        "user_id": user_id,
-                    },
-                },
+            manager = get_meta_weight_manager()
+            adj = manager.get_adjustment(
+                user_message=user_message,
+                k=5,
+                user_id=user_id,
             )
-        with _META_WEIGHT_CACHE_LOCK:
-            _META_WEIGHT_CACHE[cache_key] = (now, result)
-            if len(_META_WEIGHT_CACHE) > 1000:
-                logger.info(
-                    "Meta-weight cache overflow, clearing %d entries", len(_META_WEIGHT_CACHE)
-                )
-                safe_audit_log(
-                    "inference.meta_weight_cache_clear",
-                    resource="meta_weight_cache",
-                    detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}",
-                )
-                _META_WEIGHT_CACHE.clear()
-        return result
-    except Exception as e:
-        logger.debug("Meta-weight adjustment failed: %s", e)
-        return {
-            "temperature": temperature,
-            "top_p": top_p,
-            "top_k": top_k,
-            "repetition_penalty": repetition_penalty,
-        }
+            with _META_WEIGHT_CACHE_LOCK:
+                _META_WEIGHT_CACHE[cache_key] = (now, adj)
+                if len(_META_WEIGHT_CACHE) > 1000:
+                    logger.info(
+                        "Meta-weight cache overflow, clearing %d entries",
+                        len(_META_WEIGHT_CACHE),
+                    )
+                    safe_audit_log(
+                        "inference.meta_weight_cache_clear",
+                        resource="meta_weight_cache",
+                        detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}",
+                    )
+                    _META_WEIGHT_CACHE.clear()
+        except Exception as e:
+            logger.debug("Meta-weight adjustment failed: %s", e)
+            return {
+                "temperature": temperature,
+                "top_p": top_p,
+                "top_k": top_k,
+                "repetition_penalty": repetition_penalty,
+            }
+
+    result = _merge_meta_adjustment(adj, temperature, top_p, top_k, repetition_penalty)
+    if (result["temperature"] or 0.0) > 1.2 or (result["top_k"] or 0) < 10:
+        _warn_meta_extreme_once(result, user_id)
+    return result
 
 
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
@@ -3506,6 +3571,46 @@ class InferenceRouter:
         except Exception as e:
             classify_and_raise(e, source="inference.chat_control")
 
+    def list_v1_models(self) -> dict:
+        """OpenAI-compatible model discovery (GET /v1/models).
+
+        OpenAI-style clients (gateway discovery, provider configs, monitors)
+        poll this path — production logs showed a request roughly every 30 s —
+        and the API always answered 404 because it only exposed its own
+        ``/models`` shapes. Returns loaded + available models in the OpenAI
+        list format.
+        """
+        data: list[dict[str, Any]] = []
+        seen: set[str] = set()
+
+        def _add(model_id: str, owner: str) -> None:
+            if model_id and model_id not in seen:
+                seen.add(model_id)
+                data.append(
+                    {"id": model_id, "object": "model", "created": 0, "owned_by": owner}
+                )
+
+        try:
+            from controllers.models import get_models_controller
+
+            ctrl = get_models_controller()
+            current = ctrl.get_current_model()
+            if current:
+                _add(str(current.get("model_id") or ""), "sloughgpt")
+            for entry in ctrl.list_hf_models():
+                _add(str(entry.get("model_id") or ""), "huggingface")
+        except Exception as e:
+            logger.debug("v1 model listing degraded: %s", e)
+
+        if not data:
+            try:
+                import state as _st
+
+                _add(str(getattr(_st, "model_type", None) or ""), "sloughgpt")
+            except Exception:
+                pass
+        return {"object": "list", "data": data}
+
     def _register_routes(self):
         r = self.router
         r.add_api_route(
@@ -3536,6 +3641,7 @@ class InferenceRouter:
         r.add_api_route("/chat/sessions/{session_id}", self.delete_session, methods=["DELETE"])
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
+        r.add_api_route("/v1/models", self.list_v1_models, methods=["GET"])
         r.add_api_route("/operations", self.list_operations, methods=["GET"])
         r.add_api_route("/cancel/{op_id}", self.cancel_operation, methods=["POST"])
         r.add_api_route("/cancel-all", self.cancel_all_operations, methods=["POST"])
