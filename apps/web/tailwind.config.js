@@ -1,9 +1,20 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   darkMode: 'class',
+  // Every top-level source dir of apps/web must be listed here. Tailwind only
+  // emits utilities it finds while scanning these globs, so an omitted dir
+  // silently drops its classes from the compiled CSS (no error, no warning).
+  // apps/web/lib/tailwind-content.test.ts enforces the invariant.
   content: [
     './app/**/*.{js,ts,jsx,tsx}',
     './components/**/*.{js,ts,jsx,tsx}',
+    './features/**/*.{js,ts,jsx,tsx}',
+    './contexts/**/*.{js,ts,jsx,tsx}',
+    './hooks/**/*.{js,ts,jsx,tsx}',
+    './lib/**/*.{js,ts,jsx,tsx}',
+    './scripts/**/*.{js,ts,jsx,tsx}',
+    './types/**/*.{js,ts,jsx,tsx}',
+    './vite/**/*.{js,ts,jsx,tsx}',
     '../../packages/strui/src/**/*.{js,ts,jsx,tsx}',
   ],
   theme: {

@@ -9,14 +9,16 @@ export function useChatUI() {
   const [showConversationSearch, setShowConversationSearch] = useState(false)
   const [showMobileSearch, setShowMobileSearch] = useState(false)
   const [matchIndex, setMatchIndex] = useState(0)
-  const [toolPanelOpen, setToolPanelOpen] = useState(true)
+  // The chat thread is the hero: Tools opens from the toolbar toggle or ⌘D,
+  // never on load. See frontend-design skill (card bb8212a8).
+  const [toolPanelOpen, setToolPanelOpen] = useState(false)
   const [voiceMode, setVoiceMode] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const chatScreenRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   const toggleSettings = useCallback(() => {
-    setShowSettings(prev => !prev)
+    setShowSettings((prev) => !prev)
   }, [])
 
   const handleSearchChange = useCallback((value: string) => {
@@ -29,15 +31,24 @@ export function useChatUI() {
   }, [])
 
   return {
-    showSettings, setShowSettings,
-    showConversationViewer, setShowConversationViewer,
-    searchQuery, setSearchQuery,
-    showConversationSearch, setShowConversationSearch,
-    showMobileSearch, setShowMobileSearch,
-    matchIndex, setMatchIndex,
-    toolPanelOpen, setToolPanelOpen,
-    voiceMode, setVoiceMode,
-    sidebarOpen, setSidebarOpen,
+    showSettings,
+    setShowSettings,
+    showConversationViewer,
+    setShowConversationViewer,
+    searchQuery,
+    setSearchQuery,
+    showConversationSearch,
+    setShowConversationSearch,
+    showMobileSearch,
+    setShowMobileSearch,
+    matchIndex,
+    setMatchIndex,
+    toolPanelOpen,
+    setToolPanelOpen,
+    voiceMode,
+    setVoiceMode,
+    sidebarOpen,
+    setSidebarOpen,
     chatScreenRef,
     searchInputRef,
     toggleSettings,
