@@ -191,5 +191,71 @@
         "dec_mibs": 1097.3
       }
     ]
+  },
+  {
+    "mib": 64,
+    "class": "download",
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 67108864,
+        "wire_bytes": 67108864,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 67108864,
+        "wire_bytes": 1530175,
+        "ratio": 0.0228,
+        "savings_pct": 97.72,
+        "enc_mibs": 160.9,
+        "dec_mibs": 528.4
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 67108864,
+        "wire_bytes": 573363,
+        "ratio": 0.0085,
+        "savings_pct": 99.15,
+        "enc_mibs": 1482.2,
+        "dec_mibs": 1222.8
+      }
+    ]
+  },
+  {
+    "mib": 64,
+    "class": "download",
+    "results": [
+      {
+        "codec": "identity",
+        "raw_bytes": 67108864,
+        "wire_bytes": 67108864,
+        "ratio": 1.0,
+        "savings_pct": 0.0,
+        "enc_mibs": null,
+        "dec_mibs": null
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 67108864,
+        "wire_bytes": 1530175,
+        "ratio": 0.0228,
+        "savings_pct": 97.72,
+        "enc_mibs": 147.4,
+        "dec_mibs": 489.8
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 67108864,
+        "wire_bytes": 573363,
+        "ratio": 0.0085,
+        "savings_pct": 99.15,
+        "enc_mibs": 1379.8,
+        "dec_mibs": 1257.1
+      }
+    ]
   }
 ]

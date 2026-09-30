@@ -286,7 +286,7 @@ Transport-only edge in `apps/gateway/` — design in **`engineering-overview.md`
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| SSE/download compression | ✅ Done | zstd > gzip, streams compress from byte 0; `scripts/benchmark_gateway_compression.py` |
+| SSE/download compression | ✅ Done | zstd > gzip, streams compress from byte 0; `scripts/benchmark_gateway_compression.py`, tracked via `benchmark_results.py record --kind compression` |
 | Path filters + deny/chat-only | ✅ Done | traversal/`..`/NUL → 403 before Python |
 | Health contract passthrough | ✅ Done | core bodies verbatim + additive `gateway:"rust"` |
 | Self-supervision | ✅ Done | worker respawn with backoff, no systemd |

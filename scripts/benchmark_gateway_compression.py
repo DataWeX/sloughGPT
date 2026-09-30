@@ -129,6 +129,12 @@ def main() -> None:
         default=Path("scripts/benchmark_gateway_compression.json"),
         help="result history path",
     )
+    ap.add_argument(
+        "--metrics-out",
+        type=Path,
+        default=None,
+        help="write nested metrics JSON for benchmark_results.py record --kind compression",
+    )
     args = ap.parse_args()
 
     if args.file is not None:
@@ -188,6 +194,26 @@ def main() -> None:
     history.append(entry)
     args.out.write_text(json.dumps(history, indent=2) + "\n")
     print(f"\nrecorded → {args.out}")
+
+    if args.metrics_out is not None:
+        metrics = {
+            "payload": {
+                "class": entry["class"],
+                "mib": entry["mib"],
+                "raw_bytes": len(data),
+            }
+        }
+        for r in results:
+            # normalise codec keys ("gzip-6"/"zstd-3") so thresholds stay stable
+            metrics[r["codec"].split("-")[0]] = {
+                "ratio": r["ratio"],
+                "savings_pct": r["savings_pct"],
+                "enc_mibs": r["enc_mibs"],
+                "dec_mibs": r["dec_mibs"],
+            }
+        args.metrics_out.parent.mkdir(parents=True, exist_ok=True)
+        args.metrics_out.write_text(json.dumps(metrics, indent=2) + "\n")
+        print(f"metrics → {args.metrics_out}")
 
 
 if __name__ == "__main__":
