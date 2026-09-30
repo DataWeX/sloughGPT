@@ -14,6 +14,8 @@ Usage:
     sloughgpt logs --stats                  # quick log summary
 """
 
+from __future__ import annotations
+
 import json
 import re
 import sys
@@ -42,6 +44,15 @@ _RED = "\033[31m"
 _BLUE = "\033[34m"
 _GREY = "\033[90m"
 _CLEAR = "\033[2J\033[H"
+
+# One palette for every level — plain log lines, stats, and dashboard share it.
+LEVEL_COLORS = {
+    "DEBUG": "\033[36m",
+    "INFO": "\033[32m",
+    "WARNING": "\033[33m",
+    "ERROR": "\033[31m",
+    "CRITICAL": "\033[35m",
+}
 
 
 def _c(text: str, code: str) -> str:
@@ -208,15 +219,8 @@ def _format_line(record: dict, use_color: bool = True) -> str:
     request_id = record.get("request_id", "")
 
     if use_color:
-        level_colors = {
-            "DEBUG": "\033[36m",
-            "INFO": "\033[32m",
-            "WARNING": "\033[33m",
-            "ERROR": "\033[31m",
-            "CRITICAL": "\033[35m",
-        }
         reset = "\033[0m"
-        level_str = f"{level_colors.get(level, '')}{level:8s}{reset}"
+        level_str = f"{LEVEL_COLORS.get(level, '')}{level:8s}{reset}"
         tag_str = f"\033[90m[{tag}]\033[0m" if tag else ""
         rid_str = f"\033[90mrid={request_id}\033[0m" if request_id else ""
         ts_str = f"\033[90m{ts}\033[0m"
@@ -329,6 +333,17 @@ def _progress_bar(progress: float, width: int = 20) -> str:
     return _c("\u2588" * filled, _GREEN) + _c("\u2591" * (width - filled), _GREY)
 
 
+# Punchy per-type label colors so every process reads at a glance.
+_PROC_TYPE_COLORS = {
+    "training": _GREEN,
+    "self-train": _CYAN,
+    "auto-train": _YELLOW,
+    "download": _BLUE,
+    "inference": "\033[35m",
+    "chat": _CYAN,
+}
+
+
 def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False) -> None:
     data = snapshot.get("data", {})
     health = data.get("health", {})
@@ -342,7 +357,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     cpu = health.get("cpu_percent", 0)
     mem = health.get("memory_percent", 0)
     mem_mb = health.get("memory_used_mb", 0)
-    health.get("requests_per_minute", 0)
+    rpm = health.get("requests_per_minute", 0)
     tps = health.get("tokens_per_sec", 0)
     reqs = health.get("request_count", 0)
     errs = health.get("error_count", 0)
@@ -361,9 +376,16 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
 
     loaded = health.get("model_loaded", False)
     status_str = _c("online", _GREEN) if loaded else _c("no model", _YELLOW)
-    _line(
+    server_line = (
         f"  {_c('SERVER', _BOLD)} {status_str}  {_c(model_str, _CYAN)}  up {_format_uptime(uptime)}"
     )
+    if health_score and health_score.get("score", 0) > 0:
+        score = health_score.get("score", 0)
+        score_color = _GREEN if score >= 80 else _YELLOW if score >= 50 else _RED
+        server_line += f"  {_c(f'{score}/100', score_color)}"
+        if health_score.get("status"):
+            server_line += f" {_c(str(health_score['status']), _DIM)}"
+    _line(server_line)
 
     # MODEL line — device, params, quantization
     if loaded:
@@ -387,7 +409,12 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
 
     spark_rpm = _sparkline(rpm_history) if rpm_history else ""
     spark_mem = _sparkline(mem_history) if mem_history else ""
-    sys_line = f"  {_c('SYS', _BOLD)}   cpu {cpu:.0f}%  mem {mem:.0f}% ({mem_mb}MB)  reqs {reqs}  err {errs}"
+    sys_line = (
+        f"  {_c('SYS', _BOLD)}   cpu {cpu:.0f}%  mem {mem:.0f}% ({mem_mb}MB)"
+        f"  reqs {reqs}  err {errs}"
+    )
+    if rpm:
+        sys_line += f"  rpm {rpm:.0f}"
     if spark_rpm:
         sys_line += f"  {_c(spark_rpm, _GREY)}"
     if spark_mem:
@@ -402,18 +429,9 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     if gen_parts:
         _line(f"  {_c('GEN', _BOLD)}   {'  '.join(gen_parts)}")
 
-    # Health score
-    if health_score:
-        score = health_score.get("score", 0)
-        status = health_score.get("status", "")
-        if score > 0:
-            score_color = _GREEN if score >= 80 else _YELLOW if score >= 50 else _RED
-            _line(f"  {_c('HEALTH', _BOLD)}  {_c(f'{score}/100', score_color)}  {_c(status, _DIM)}")
-
     if not compact:
         _line()
         _line(f"  {_c('PROCESSES', _BOLD)}")
-        _line(f"  {'─' * 60}")
 
         if not processes:
             _line(f"  {_c('  (none active)', _DIM)}")
@@ -425,7 +443,7 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
                 progress = proc.get("progress", 0)
 
                 icon = _status_icon(status)
-                name = _c(label.ljust(14), _BOLD)
+                name = _c(label.ljust(14), _PROC_TYPE_COLORS.get(proc.get("type", ""), _BOLD))
 
                 if progress > 0 and status == "running":
                     bar = _progress_bar(progress)
@@ -438,7 +456,6 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
 
         _line()
         _line(f"  {_c('EVENTS', _BOLD)}")
-        _line(f"  {'─' * 60}")
 
         if not events:
             _line(f"  {_c('  (no events yet)', _DIM)}")
@@ -456,7 +473,6 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         if errors:
             _line()
             _line(f"  {_c('RECENT ERRORS', _BOLD + _RED)}")
-            _line(f"  {'─' * 60}")
             for err in errors[:3]:
                 path = err.get("path", "")
                 msg = err.get("message", "")[:40]
@@ -618,14 +634,7 @@ def _show_stats(log_path: Path, output_json: bool, use_color: bool) -> None:
     for lvl in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
         count = level_counts[lvl]
         if count > 0:
-            color = {
-                "DEBUG": _GREY,
-                "INFO": _GREEN,
-                "WARNING": _YELLOW,
-                "ERROR": _RED,
-                "CRITICAL": _RED + _BOLD,
-            }.get(lvl, "")
-            _line(f"    {_c(lvl.ljust(12), color)} {count}")
+            _line(f"    {_c(lvl.ljust(12), LEVEL_COLORS.get(lvl, ''))} {count}")
 
     if tag_counts:
         _line()
@@ -668,11 +677,11 @@ def _read_logs(log_path: Path, tail: int, filters: dict, output_json: bool, use_
         else:
             click.echo(_format_line(record, use_color=use_color))
     if not matches:
-        click.echo("No matching log lines found.", err=True)
+        click.echo(_c("No matching log lines found.", _YELLOW), err=True, color=_TTY)
 
 
 def _tail_follow(log_path: Path, filters: dict, output_json: bool, use_color: bool):
-    click.echo(f"Following {log_path} (Ctrl+C to stop)...", err=True)
+    click.echo(_c(f"Following {log_path} (Ctrl+C to stop)...", _DIM), err=True, color=_TTY)
     with open(log_path, encoding="utf-8", errors="replace") as f:
         f.seek(0, 2)
         pending = None
@@ -699,7 +708,7 @@ def _tail_follow(log_path: Path, filters: dict, output_json: bool, use_color: bo
                     else:
                         click.echo(_format_line(record, use_color=use_color))
         except KeyboardInterrupt:
-            click.echo("\nStopped following.", err=True)
+            click.echo(_c("\nStopped following.", _DIM), err=True, color=_TTY)
 
 
 # ── CLI entry point ───────────────────────────────────────────────────
@@ -775,7 +784,7 @@ def logs(
         log_path = repo_root / "logs" / "sloughgpt.log"
 
     if not log_path.exists():
-        click.echo(f"Log file not found: {log_path}", err=True)
+        click.echo(_c(f"Log file not found: {log_path}", _RED), err=True, color=_TTY)
         sys.exit(1)
 
     if stats:
