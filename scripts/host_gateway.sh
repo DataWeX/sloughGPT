@@ -22,6 +22,7 @@ ROOT="${ROOT:-$REPO}"
 HOST="${HOST:-0.0.0.0}"
 LOG_DIR="${LOG_DIR:-/tmp/slough-gateway-host}"
 mkdir -p "$LOG_DIR"
+: >"$LOG_DIR/gateway.log" # fresh log for this hosting session (restarts append)
 
 if [ ! -x "$PY" ]; then
   PY="$(command -v python3)"
@@ -45,9 +46,12 @@ done
 sleep 0.2
 
 cleanup() {
+  stopping=1
   [ -n "${GW_PID:-}" ] && kill "$GW_PID" 2>/dev/null || true
   [ -n "${SIDECAR_PID:-}" ] && kill "$SIDECAR_PID" 2>/dev/null || true
+  [ -n "${TAIL_PID:-}" ] && kill "$TAIL_PID" 2>/dev/null || true
 }
+stopping=0
 trap cleanup EXIT INT TERM
 
 if [ "$NO_SIDECAR" != "1" ]; then
@@ -76,8 +80,9 @@ MAN_CORE_URL="$CORE_URL" \
 MAN_GATEWAY_PORT="$GW_PORT" \
 MAN_GATEWAY_SUPERVISE="${MAN_GATEWAY_SUPERVISE:-1}" \
 RUST_LOG="${RUST_LOG:-slough_gateway=info}" \
-"$GW_BIN" >"$LOG_DIR/gateway.log" 2>&1 &
+"$GW_BIN" >>"$LOG_DIR/gateway.log" 2>&1 &
 GW_PID=$!
+last_start=$(date +%s)
 
 ok=0
 for _ in $(seq 1 60); do
@@ -103,10 +108,48 @@ echo "example:    curl -H 'Accept-Encoding: zstd' -o out.bin -D - \\"
 echo "              http://127.0.0.1:$GW_PORT/checkpoints/step_25.pt"
 echo "logs:       $LOG_DIR/{gateway,sidecar}.log"
 echo ""
-echo "Ctrl+C to stop (or leave running with nohup / systemd)."
+echo "Ctrl+C stops everything; while this script runs the edge is supervised"
+echo "(restarts on exit, 1→30s backoff, reset after a 60s-healthy run)."
 echo ""
 
 # Keep foreground so trap cleans up; stream gateway log tail
 tail -n +1 -f "$LOG_DIR/gateway.log" &
 TAIL_PID=$!
-wait "$GW_PID"
+
+# External supervision: the binary supervises its own worker
+# (MAN_GATEWAY_SUPERVISE=1); this loop supervises the whole binary — a stray
+# TERM or crash relaunches the edge so the public socket never stays down.
+backoff=1
+while [ "$stopping" -eq 0 ]; do
+  rc=0
+  wait "$GW_PID" || rc=$?
+  if [ "$stopping" -eq 1 ]; then
+    break
+  fi
+  up=$(($(date +%s) - last_start))
+  if [ "$up" -ge 60 ]; then
+    backoff=1
+  fi
+  # marker goes to the log only — tail -f streams it to this terminal once
+  echo "[host_gateway] edge exited rc=$rc after ${up}s — restarting in ${backoff}s" \
+    >>"$LOG_DIR/gateway.log"
+  sleep "$backoff" &
+  wait $! || true # interruptible: Ctrl+C fires the trap immediately
+  if [ "$stopping" -eq 1 ]; then
+    break
+  fi
+  last_start=$(date +%s)
+  MAN_CORE_URL="$CORE_URL" \
+    MAN_GATEWAY_PORT="$GW_PORT" \
+    MAN_GATEWAY_SUPERVISE="${MAN_GATEWAY_SUPERVISE:-1}" \
+    RUST_LOG="${RUST_LOG:-slough_gateway=info}" \
+    "$GW_BIN" >>"$LOG_DIR/gateway.log" 2>&1 &
+  GW_PID=$!
+  if [ "$backoff" -lt 30 ]; then
+    backoff=$((backoff * 2))
+    if [ "$backoff" -gt 30 ]; then
+      backoff=30
+    fi
+  fi
+done
+echo "[host_gateway] stopped." >>"$LOG_DIR/gateway.log"
