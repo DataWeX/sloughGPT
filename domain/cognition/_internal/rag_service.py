@@ -193,6 +193,7 @@ class RAGService:
         metadata: dict[str, Any] | None = None,
         chunk_size: int = 512,
         overlap: int = 50,
+        rebuild_index: bool = True,
     ) -> list[str]:
         """Ingest a document into the RAG index, persist it, and extract KG facts.
 
@@ -201,6 +202,9 @@ class RAGService:
             metadata: Optional metadata dict (source, topic, etc.).
             chunk_size: Max tokens per chunk.
             overlap: Overlap between adjacent chunks.
+            rebuild_index: Set False for bulk loads, then call
+                ``self.rag.retriever.build_index()`` once at the end
+                (per-document rebuilds are O(n^2)).
 
         Returns:
             List of chunk IDs created.
@@ -214,6 +218,7 @@ class RAGService:
             metadata=metadata,
             chunk_size=chunk_size,
             overlap=overlap,
+            rebuild_index=rebuild_index,
         )
 
         doc_record = {
@@ -392,12 +397,16 @@ class RAGService:
                         "file_path": rel,
                         "file_type": scanner.get_file_type(path),
                     },
+                    rebuild_index=False,
                 )
                 ingested += 1
             except Exception as e:
                 logger.debug("auto-ingest file %s failed: %s", path, e)
 
         if ingested > 0:
+            # Single rebuild after the bulk pass — per-document rebuilds are
+            # O(n^2) (150 startup files used to trigger 150 full rebuilds).
+            self.rag.retriever.build_index()
             logger.debug("Auto-ingested %d files into RAG from %s", ingested, root_path)
         return ingested
 

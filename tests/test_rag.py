@@ -171,5 +171,97 @@ class TestProductionRAG:
         assert verification["confidence"] > 0
 
 
+class TestBM25ScoreLinear:
+    """score() must be O(postings), not O(postings^2).
+
+    The old implementation rescanned the full posting list once per
+    occurrence (rag.py:135), so a common term with P postings cost P^2
+    work — queries with words like "one"/"the" in a 16k-chunk index
+    never finished and were killed by the 15s RAG wait_for (chat TTFT
+    ballooned by 15s per request, and the leaked thread kept grinding
+    the GIL).
+    """
+
+    def test_score_is_linear_in_postings(self):
+        """6000 postings must score in well under a second (old: ~seconds)."""
+        import time
+
+        bm25 = BM25Indexer()
+        chunks = [TextChunk(str(i), f"hot doc{i}", {}) for i in range(6000)]
+        bm25.index(chunks)
+
+        t0 = time.monotonic()
+        results = bm25.score("hot")
+        elapsed = time.monotonic() - t0
+
+        assert len(results) == 6000
+        assert elapsed < 1.0, f"score() took {elapsed:.2f}s — O(P^2) regression"
+
+    def test_score_matches_standard_bm25(self):
+        """tf must be counted once per doc (standard BM25), not once per occurrence."""
+        import math
+
+        bm25 = BM25Indexer()
+        chunks = [
+            TextChunk("a", "alpha alpha beta", {}),
+            TextChunk("b", "alpha gamma", {}),
+            TextChunk("c", "delta epsilon", {}),
+        ]
+        bm25.index(chunks)
+
+        scores = dict(bm25.score("alpha"))
+
+        # Hand-computed standard BM25 (k1=1.5, b=0.75):
+        # df(alpha)=2, num_docs=3, lengths=[3,2,2] avg=7/3
+        idf = math.log((3 - 2 + 0.5) / (2 + 0.5) + 1)
+        avg_dl = 7 / 3
+
+        def expected(tf: float, dl: float) -> float:
+            return idf * (tf * 2.5) / (tf + 1.5 * (1 - 0.75 + 0.75 * dl / avg_dl))
+
+        assert scores[0] == pytest.approx(expected(2, 3), rel=1e-6)
+        assert scores[1] == pytest.approx(expected(1, 2), rel=1e-6)
+        assert 2 not in scores  # no "alpha" → not a candidate
+
+
+class TestAutoIngestBulk:
+    """auto_ingest_directory must bulk-load then rebuild ONCE (per-file
+    rebuilds are O(n^2): 150 startup files × full index rebuild each)."""
+
+    def test_auto_ingest_rebuilds_index_once(self, monkeypatch, tmp_path):
+        import domain.infrastructure._internal.auto_ingest as ai
+        from domain.cognition._internal.rag_service import RAGService
+
+        svc = RAGService()
+        monkeypatch.setattr(svc, "_save_document", lambda doc: None)
+        monkeypatch.setattr(svc, "_extract_kg_claims", lambda content, metadata: None)
+
+        class FakeScanner:
+            def __init__(self, root_path=None):
+                pass
+
+            def iter_files(self):
+                for i in range(5):
+                    yield (
+                        tmp_path / f"f{i}.py",
+                        f"def function_{i}():\n    return {i}\n" + "# " + "x" * 60,
+                    )
+
+            def get_file_type(self, path):
+                return "py"
+
+        monkeypatch.setattr(ai, "RepoScanner", FakeScanner)
+
+        builds: list[int] = []
+        monkeypatch.setattr(
+            svc.rag.retriever, "build_index", lambda: builds.append(1)
+        )
+
+        ingested = svc.auto_ingest_directory(str(tmp_path), max_files=10)
+
+        assert ingested == 5
+        assert len(builds) == 1, f"build_index called {len(builds)}x, want 1 (bulk)"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

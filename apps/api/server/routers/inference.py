@@ -1991,6 +1991,13 @@ class InferenceRouter:
             """generate."""
             corr_id = request.scope.get("correlation_id", "-")
             logger.debug("chat_stream.generate() ENTERED corr=%s", corr_id)
+            _t0 = time.monotonic()
+            _marks: dict[str, float] = {}
+
+            def _mark(_name: str) -> None:
+                # cumulative ms since pipeline start (INFO-level breakdown at
+                # first token; per-stage = diff of consecutive marks)
+                _marks[_name] = (time.monotonic() - _t0) * 1000
 
             # Check for Last-Event-ID header for reconnection
             last_event_id_raw = request.headers.get("last-event-id")
@@ -2085,6 +2092,8 @@ class InferenceRouter:
                 },
             )
 
+            _mark("session")
+
             ctx_core = self._get_context_core()
             context_info = {}
             frame = None
@@ -2107,6 +2116,8 @@ class InferenceRouter:
                         provider_messages.insert(
                             0, {"role": "system", "content": frame.system_prompt}
                         )
+
+            _mark("frame")
 
             # Production RAG: query for relevant context from ingested documents
             rag_context = ""
@@ -2141,6 +2152,8 @@ class InferenceRouter:
                     if corr_id:
                         yield sse_error("chat", "RAG_ERROR", str(e), code="RAG_ERROR")
 
+            _mark("rag")
+
             if req.agent_id:
                 try:
                     agent_sys = get_agent_system()
@@ -2170,6 +2183,8 @@ class InferenceRouter:
                         message=f"Agent instruction injection failed: {exc}",
                     )
 
+            _mark("agent")
+
             # Cognitive reasoning context injection from SloEngine
             try:
                 import state as _cs_state
@@ -2195,6 +2210,8 @@ class InferenceRouter:
                         )
             except Exception as _cog_err:
                 logger.debug("Cognitive context injection skipped: %s", _cog_err)
+
+            _mark("soul")
 
             tool_result_data = None
             try:
@@ -2278,6 +2295,8 @@ class InferenceRouter:
                 },
             )
 
+            _mark("tools")
+
             if context_info:
                 yield _sse_event(
                     "chat",
@@ -2341,6 +2360,8 @@ class InferenceRouter:
                     )
                     yield sse_error("chat", "KNOWLEDGE_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
+            _mark("enrich")
+
             all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
             if all_knowledge:
                 try:
@@ -2387,6 +2408,8 @@ class InferenceRouter:
                         },
                     )
                     yield sse_error("chat", "KNOWLEDGE_PROC_ERROR", str(e), code="KNOWLEDGE_ERROR")
+
+            _mark("kproc")
 
             try:
                 from domain.core import get_consciousness
@@ -2439,6 +2462,8 @@ class InferenceRouter:
             except Exception as _cp_err:
                 logger.debug("Consciousness prompt injection skipped: %s", _cp_err)
 
+            _mark("conscious")
+
             try:
                 logger.debug(
                     "CHAT_PIPELINE corr=%s step=PROVIDER_SETUP start",
@@ -2468,6 +2493,7 @@ class InferenceRouter:
                         user_message=user_msg or "",
                         user_id=req.user_id or "default",
                     )
+                    _mark("meta")
 
                     import state as _cs_state
 
@@ -2564,6 +2590,7 @@ class InferenceRouter:
                             },
                         },
                     )
+                    _mark("coalesce")
                     try:
                         # Enforce context window budget
                         _orig_count = len(provider_messages)
@@ -2584,13 +2611,17 @@ class InferenceRouter:
                         try:
                             _control_check_interval = 0.1  # Check for controls every 100ms
                             _last_control_check = time.time()
+                            _prompt_chars = sum(
+                                len(str(m.get("content") or "")) for m in provider_messages
+                            )
                             logger.info(
-                                "CHAT_PROVIDER_CALL corr=%s provider=%s session=%s msg_count=%d max_tokens=%d",
+                                "CHAT_PROVIDER_CALL corr=%s provider=%s session=%s msg_count=%d max_tokens=%d prompt_chars=%d",
                                 corr_id,
                                 "default",
                                 session_id,
                                 len(provider_messages),
                                 req.max_tokens,
+                                _prompt_chars,
                                 extra={
                                     "tag": "CHAT",
                                     "context": {
@@ -2599,10 +2630,12 @@ class InferenceRouter:
                                         "session_id": session_id,
                                         "msg_count": len(provider_messages),
                                         "max_tokens": req.max_tokens,
+                                        "prompt_chars": _prompt_chars,
                                         "gen_params": gen_params,
                                     },
                                 },
                             )
+                            _mark("provider")
                             async for token in provider.chat_stream(
                                 provider_messages,
                                 max_tokens=req.max_tokens,
@@ -2680,6 +2713,26 @@ class InferenceRouter:
                                                 "context": {
                                                     "corr": corr_id,
                                                     "elapsed_ms": round(_first_token_elapsed_ms, 1),
+                                                },
+                                            },
+                                        )
+                                        logger.info(
+                                            "CHAT_PIPELINE_TIMING corr=%s total=%.0fms %s",
+                                            corr_id,
+                                            (time.monotonic() - _t0) * 1000,
+                                            " ".join(
+                                                f"{k}={v:.0f}" for k, v in _marks.items()
+                                            ),
+                                            extra={
+                                                "tag": "CHAT",
+                                                "context": {
+                                                    "corr": corr_id,
+                                                    "total_ms": round(
+                                                        (time.monotonic() - _t0) * 1000
+                                                    ),
+                                                    "stages": {
+                                                        k: round(v) for k, v in _marks.items()
+                                                    },
                                                 },
                                             },
                                         )
