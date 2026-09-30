@@ -1,15 +1,29 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
-import { Select, SelectTrigger, SelectContent, SelectItem } from './select'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from './select'
 
 function stubLayout(rect: Partial<DOMRect>, height: number, width: number) {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-    top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}),
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    width: 0,
+    height: 0,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
     ...rect,
   } as DOMRect)
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, get: () => height })
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, get: () => width })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get: () => height,
+  })
+  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+    configurable: true,
+    get: () => width,
+  })
 }
 
 function renderSelect() {
@@ -100,5 +114,54 @@ describe('Select', () => {
 
     expect(screen.queryByRole('listbox')).toBeNull()
     expect(onValueChange).toHaveBeenCalledWith('b')
+  })
+
+  it('SelectValue never renders blank: raw-value fallback before first open', () => {
+    render(
+      <Select defaultValue="a">
+        <SelectTrigger data-testid="trigger">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Alpha</SelectItem>
+          <SelectItem value="b">Beta</SelectItem>
+        </SelectContent>
+      </Select>,
+    )
+    // Label not learned yet (content never mounted) — pre-fix this was ''.
+    expect(screen.getByTestId('trigger').textContent).toBe('a')
+  })
+
+  it('SelectValue learns the label of the selected item on first open', () => {
+    render(
+      <Select defaultValue="a">
+        <SelectTrigger data-testid="trigger">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Alpha</SelectItem>
+          <SelectItem value="b">Beta</SelectItem>
+        </SelectContent>
+      </Select>,
+    )
+    fireEvent.click(screen.getByTestId('trigger'))
+    expect(screen.getByTestId('trigger').textContent).toBe('Alpha')
+  })
+
+  it('SelectValue shows the clicked item label after selection', () => {
+    render(
+      <Select defaultValue="a">
+        <SelectTrigger data-testid="trigger">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="a">Alpha</SelectItem>
+          <SelectItem value="b">Beta</SelectItem>
+        </SelectContent>
+      </Select>,
+    )
+    fireEvent.click(screen.getByTestId('trigger'))
+    fireEvent.click(screen.getByText('Beta'))
+    expect(screen.getByTestId('trigger').textContent).toBe('Beta')
   })
 })
