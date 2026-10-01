@@ -11,7 +11,7 @@ This guide covers development practices, contribution guidelines, and technical 
 SloughGPT uses a domain-driven architecture where each domain represents a bounded context with its own:
 
 - **Models**: Business logic and entities
-- **Services**: Domain services and application logic  
+- **Services**: Domain services and application logic
 - **Interfaces**: Contracts between domains
 - **Infrastructure**: External dependencies and persistence
 
@@ -89,6 +89,7 @@ npm run test:repo-root
 ### Development Workflow
 
 1. **Create Feature Branch**
+
 ```bash
 git checkout -b feature/your-feature-name
 ```
@@ -100,11 +101,13 @@ git checkout -b feature/your-feature-name
    - Ensure type safety
 
 3. **Run Tests**
+
 ```bash
 pytest tests/ -q -k "your_keyword"
 ```
 
 4. **Commit Changes**
+
 ```bash
 git add .
 git commit -m "feat: add your feature description"
@@ -219,12 +222,13 @@ cd apps/web && npx tsc --noEmit
 [tool.coverage.run]
 source = ["domains"]
 omit = [
-    "*/tests/*",
-    "*/test_*",
-    "*/__pycache__/*",
-    "*/site-packages/*",
+"_/tests/_",
+"_/test__",
+"_/**pycache**/_",
+"_/site-packages/_",
 ]
-```
+
+````
 
 ### Running Tests
 
@@ -240,7 +244,7 @@ python3 -m pytest tests/ --cov=domain --cov-report=html
 
 # Run integration-focused tests
 python3 -m pytest tests/test_integration.py -v
-```
+````
 
 ## 📊 Monitoring & Debugging
 
@@ -283,6 +287,7 @@ state.record_training(tokens=1000, elapsed_ms=30000)
 ### Debugging
 
 #### Local Development
+
 ```python
 # Enable debug mode
 import os
@@ -343,8 +348,10 @@ async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as 
     resp = await client.get("/health")
     data = resp.json()
 ```
+
     result = await db_manager.execute_query("SELECT * FROM table")
-```
+
+````
 
 ### Caching Strategy
 
@@ -372,7 +379,7 @@ def cached_get(key: str):
             return result
         return wrapper
     return decorator
-```
+````
 
 ## 🔒 Security Best Practices
 

@@ -3,6 +3,7 @@
 ## Get Started in 5 Minutes
 
 ### 1. Install
+
 ```bash
 git clone https://github.com/iamtowbee/sloughGPT.git
 cd sloughGPT
@@ -23,11 +24,13 @@ python3 -m pip install -e ".[dev]"
 ```
 
 ### 2. Quick Training (CLI)
+
 ```bash
 ./sloughgpt quick --steps 100 --prompt "Hello world"
 ```
 
 ### 3. Start API Server
+
 ```bash
 python3 apps/api/server/main.py
 # Access at http://localhost:8000/docs
@@ -53,6 +56,7 @@ curl -s -X POST http://localhost:8000/models/load \
 ## CLI Commands
 
 ### Training
+
 ```bash
 # Quick train + generate (auto-optimized)
 ./sloughgpt quick --steps 100 --prompt "The future is"
@@ -75,6 +79,7 @@ curl -s -X POST http://localhost:8000/models/load \
 ```
 
 ### Inference
+
 ```bash
 # Generate text (local: uses models/sloughgpt.soul if present, else newest models/*.soul)
 ./sloughgpt generate "Hello world" --max-tokens 100
@@ -95,6 +100,7 @@ curl -s -X POST http://localhost:8000/models/load \
 ```
 
 ### Benchmarking
+
 ```bash
 # Benchmark inference
 ./sloughgpt benchmark -m gpt2 -d mps -t latency
@@ -108,7 +114,7 @@ curl -s -X POST http://localhost:8000/models/load \
 
 ### Model Export
 
-Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `itos` the same way as trainer `step_*.soul`; for perplexity parity with training, score the native bundle — **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
+Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `itos` the same way as trainer `step_*.soul`; for perplexity parity with training, score the native bundle — **docs/policies/CONTRIBUTING.md** (_Checkpoint vocabulary_).
 
 ```bash
 # Export a checkpoint on disk (-f / --format; see sloughgpt export --help)
@@ -120,6 +126,7 @@ Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `
 ```
 
 ### System
+
 ```bash
 # System info
 ./sloughgpt system
@@ -161,6 +168,7 @@ Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `
 ```
 
 ### API Management
+
 ```bash
 # Check API status
 ./sloughgpt api-status
@@ -180,6 +188,7 @@ Export targets (ONNX, GGUF, `.soul`, …) do not preserve native char `stoi` / `
 ## API Endpoints
 
 ### Health Check
+
 ```bash
 # Basic health
 curl http://localhost:8000/health
@@ -195,6 +204,7 @@ curl http://localhost:8000/health/detailed
 ```
 
 ### Authentication
+
 ```bash
 # Create JWT token
 curl -X POST http://localhost:8000/auth/token \
@@ -211,6 +221,7 @@ curl -X POST http://localhost:8000/auth/refresh \
 ```
 
 ### Rate Limiting
+
 ```bash
 # Check rate limit status
 curl http://localhost:8000/rate-limit/status
@@ -220,6 +231,7 @@ curl http://localhost:8000/rate-limit/check
 ```
 
 ### Caching
+
 ```bash
 # Cache statistics
 curl http://localhost:8000/cache/stats
@@ -229,6 +241,7 @@ curl -X DELETE http://localhost:8000/cache
 ```
 
 ### Metrics
+
 ```bash
 # JSON metrics
 curl http://localhost:8000/metrics
@@ -241,6 +254,7 @@ curl http://localhost:8000/security/audit
 ```
 
 ### Batch Processing
+
 ```bash
 # Batch generation (up to 50 prompts)
 curl -X POST http://localhost:8000/inference/batch \
@@ -249,6 +263,7 @@ curl -X POST http://localhost:8000/inference/batch \
 ```
 
 ### Generate Text
+
 ```bash
 curl -X POST http://localhost:8000/inference/generate \
   -H "Content-Type: application/json" \
@@ -256,6 +271,7 @@ curl -X POST http://localhost:8000/inference/generate \
 ```
 
 ### Streaming Generation
+
 ```bash
 curl -X POST http://localhost:8000/inference/generate/stream \
   -H "Content-Type: application/json" \
@@ -264,7 +280,7 @@ curl -X POST http://localhost:8000/inference/generate/stream \
 
 ### Training
 
-Native trainer `step_*.soul` on the API host includes `stoi` / `itos` / `chars` for fair `sloughgpt eval`; see **docs/policies/CONTRIBUTING.md** (*Checkpoint vocabulary*).
+Native trainer `step_*.soul` on the API host includes `stoi` / `itos` / `chars` for fair `sloughgpt eval`; see **docs/policies/CONTRIBUTING.md** (_Checkpoint vocabulary_).
 
 ```bash
 curl -X POST http://localhost:8000/train \
@@ -278,6 +294,7 @@ curl -s -X POST http://localhost:8000/training/start \
 ```
 
 ### Benchmarking
+
 ```bash
 curl -X POST http://localhost:8000/benchmark/run \
   -H "Content-Type: application/json" \
@@ -288,15 +305,16 @@ curl -X POST http://localhost:8000/benchmark/run \
 
 ## GPU Support
 
-| Hardware | Speed | Command |
-|----------|-------|---------|
-| NVIDIA GPU | Fast | `--device cuda` |
-| Apple Silicon (M1/M2/M3) | Good | `--device mps` |
-| AMD GPU (Linux + ROCm) | Good | `--device cuda` |
-| Intel Mac AMD GPU | ❌ | Use CPU |
-| CPU | Slow | `--device cpu` |
+| Hardware                 | Speed | Command         |
+| ------------------------ | ----- | --------------- |
+| NVIDIA GPU               | Fast  | `--device cuda` |
+| Apple Silicon (M1/M2/M3) | Good  | `--device mps`  |
+| AMD GPU (Linux + ROCm)   | Good  | `--device cuda` |
+| Intel Mac AMD GPU        | ❌    | Use CPU         |
+| CPU                      | Slow  | `--device cpu`  |
 
 ### Verify GPU
+
 ```bash
 ./sloughgpt optimize
 ```
@@ -359,31 +377,35 @@ Presets.cpu_only()       # CPU training
 
 ### Speedup Estimates
 
-| Optimization | Speedup | Memory |
-|-------------|---------|--------|
-| FP16 | 2-3x | -50% |
-| torch.compile | 1.5-2x | +10% |
-| Flash Attention | 2-4x | -20% |
-| **Combined** | **3-6x** | **-60%** |
+| Optimization    | Speedup  | Memory   |
+| --------------- | -------- | -------- |
+| FP16            | 2-3x     | -50%     |
+| torch.compile   | 1.5-2x   | +10%     |
+| Flash Attention | 2-4x     | -20%     |
+| **Combined**    | **3-6x** | **-60%** |
 
 ---
 
 ## Troubleshooting
 
 ### macOS PyTorch hangs?
+
 ```bash
 # Add to ~/.zshrc or ~/.bashrc (Intel Mac + some GPU stacks)
 export DYLD_INSERT_LIBRARIES=""
 ```
+
 - **API server** (`apps/api/server/main.py`): disables MPS by default on macOS via `domain.torch_runtime.apply_api_process_torch_env`. To experiment with MPS inference: `MAN_API_ENABLE_MPS=1` (before `import torch`). Linux/CUDA is no longer forced to CPU.
 - **Training DataLoaders**: `domain.torch_runtime.effective_dataloader_num_workers` clamps workers to `0` on macOS (fork + MPS deadlocks). See `domain/torch_runtime.py` for env vars (`MAN_SKIP_TORCH_ENV`, etc.).
 
 ### Docker not running?
+
 ```bash
 open -a Docker
 ```
 
 ### Out of memory?
+
 ```bash
 # Smaller batch size
 ./sloughgpt quick --batch 8
@@ -427,7 +449,7 @@ SloughGPT/
 
 ## Next Steps
 
-1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop or **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → *Google Colab*; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
+1. **Run the notebook**: `jupyter notebook sloughgpt_colab.ipynb` (in Colab: install → **§2** dataset → **§3–§6** → pick one of **§7** manual loop or **`SloughGPTTrainer`**; then e.g. `./sloughgpt chat --auto-model gpt2`). For a **fast local full execute**, use `./scripts/run_colab_notebook_smoke.sh` or **`make colab-smoke`** (**`make help`**, **README.md** → _Google Colab_; install **`jupyter`** / **`python3 -m nbconvert`** as documented there).
 2. **Try different datasets**: Shakespeare, **`tiny`** (small on-disk slice), or a path to your own `.txt`
 3. **Explore model architecture**: Section 5 in the notebook
 4. **Deploy with Docker**: See Docker section above

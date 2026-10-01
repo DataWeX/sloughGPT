@@ -37,7 +37,9 @@ WEB = os.environ.get("SLO_WEB_URL", "http://localhost:5175")
 API = os.environ.get("SLO_API_URL", "http://localhost:8000")
 BROWSER = os.environ.get("SLO_JOURNEY_BROWSER", "firefox")
 SHOTS = os.environ.get("SLO_JOURNEY_SHOTS", "/home/mana/.cache/slog-journeys/shots/ux")
-REPORT = os.environ.get("SLO_JOURNEY_REPORT", "/home/mana/.cache/slog-journeys/ux-flows-report.json")
+REPORT = os.environ.get(
+    "SLO_JOURNEY_REPORT", "/home/mana/.cache/slog-journeys/ux-flows-report.json"
+)
 
 ASSISTANT_BUBBLE = '[aria-label="Message from Assistant"]'
 
@@ -157,8 +159,14 @@ class Flow:
     build: Callable[[], list]
 
 
-def _chat_flow(flow_id: str, label: str, url: str, prompt: str, pill: str | None = None,
-               marker: str | None = None) -> Flow:
+def _chat_flow(
+    flow_id: str,
+    label: str,
+    url: str,
+    prompt: str,
+    pill: str | None = None,
+    marker: str | None = None,
+) -> Flow:
     def build():
         steps = [s_goto(url, verify="Chat")]
         if marker:
@@ -361,9 +369,9 @@ async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
         page.on("pageerror", lambda e: console_errors.append(f"pageerror: {e}"[:300]))
         page.on(
             "response",
-            lambda r: network_errors.append(f"{r.status} {r.url[:160]}")
-            if r.status >= 400
-            else None,
+            lambda r: (
+                network_errors.append(f"{r.status} {r.url[:160]}") if r.status >= 400 else None
+            ),
         )
 
         for flow in flows:

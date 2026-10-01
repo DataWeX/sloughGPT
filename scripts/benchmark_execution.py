@@ -39,9 +39,7 @@ def drain_pool(pool: FireAndForgetPool) -> None:
             break
 
 
-def peak_threads(
-    submit: Callable[[Callable[[], None]], bool | None], n: int
-) -> int:
+def peak_threads(submit: Callable[[Callable[[], None]], bool | None], n: int) -> int:
     gate = threading.Event()
     done = {"n": 0, "queued": 0}
     lock = threading.Lock()
@@ -75,7 +73,9 @@ def raw_spawn(fn: Callable[[], None]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="fire-and-forget dispatch benchmark")
-    parser.add_argument("--json", type=Path, default=None, help="write metrics JSON for benchmark_results.py record")
+    parser.add_argument(
+        "--json", type=Path, default=None, help="write metrics JSON for benchmark_results.py record"
+    )
     args = parser.parse_args()
 
     print("fire-and-forget dispatch benchmark (execution-consolidation stage 1)")
@@ -87,7 +87,9 @@ def main() -> None:
     peak_pool = peak_threads(lambda fn: submit(fn), N_BURST)
     t_pool = time.perf_counter() - t0
     active = threading.active_count()
-    print(f"pool   peak threads  : {peak_pool:3d}  (burst {N_BURST}, live {active}, {t_pool*1e3:.1f} ms)")
+    print(
+        f"pool   peak threads  : {peak_pool:3d}  (burst {N_BURST}, live {active}, {t_pool * 1e3:.1f} ms)"
+    )
 
     per_op = timeit.timeit(lambda: submit(lambda: None), number=N_DISPATCH) / N_DISPATCH * 1e6
     print(f"pool   per-dispatch  : {per_op:8.2f} µs  ({N_DISPATCH} submits, NO wait)")
@@ -96,7 +98,9 @@ def main() -> None:
     peak_raw = peak_threads(raw_spawn, N_BURST)
     t_raw = time.perf_counter() - t0
     active = threading.active_count()
-    print(f"raw    peak threads  : {peak_raw:3d}  (burst {N_BURST}, live {active}, {t_raw*1e3:.1f} ms)")
+    print(
+        f"raw    peak threads  : {peak_raw:3d}  (burst {N_BURST}, live {active}, {t_raw * 1e3:.1f} ms)"
+    )
 
     stats = get_pool().stats
     print("=" * 64)

@@ -31,7 +31,9 @@ for f in files:
     try:
         r = subprocess.run(
             [PYTHON, "-m", "pytest", str(f), "-p", "no:cacheprovider", "-q"],
-            capture_output=True, text=True, timeout=TIMEOUT_S,
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT_S,
         )
         if r.returncode == 5:
             status = "NONE"

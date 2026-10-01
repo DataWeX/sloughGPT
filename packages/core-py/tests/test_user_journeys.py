@@ -395,13 +395,17 @@ class TestDatasetsImport:
         time.sleep(0.5)
         # Try clicking Import, but don't fail if dialog blocks it
         try:
-            page.get_by_role("dialog").get_by_role("button", name="Import", exact=True).click(force=True, timeout=3000)
+            page.get_by_role("dialog").get_by_role("button", name="Import", exact=True).click(
+                force=True, timeout=3000
+            )
         except Exception:
             pass
         # handleImport flips the button to "Importing..." synchronously — poll for it
         reacted = False
         try:
-            page.get_by_role("dialog").get_by_text("Importing...", exact=False).first.wait_for(timeout=5000)
+            page.get_by_role("dialog").get_by_text("Importing...", exact=False).first.wait_for(
+                timeout=5000
+            )
             reacted = True
         except Exception:
             pass
