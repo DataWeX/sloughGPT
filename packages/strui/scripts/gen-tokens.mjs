@@ -279,7 +279,7 @@ function renderShowcaseTs() {
       .map(([token, rgb]) => `    '${token}': '${rgb}',`)
       .join('\n')
   const auraRows = Object.entries(palette.auras)
-    .map(([id, aura]) => `    '${id}': '${aura.primary}',`)
+    .map(([id, aura]) => `  ${id}: '${aura.primary}',`)
     .join('\n')
   return `/**
  * GENERATED FILE — do not edit. Source: packages/strui/tokens/palette.json
