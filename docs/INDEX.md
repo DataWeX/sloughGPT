@@ -69,13 +69,14 @@ by `packages/strui/src/tokens/tokens.test.ts`.
 
 ## Testing & UX
 
-| Doc                    | Purpose          |
-| ---------------------- | ---------------- |
-| **TESTING.md**         | Test guide       |
-| **USER_PERSONA.md**    | Who we build for |
-| **USER_JOURNEYS.md**   | User flows       |
-| **UX_FLOWS.md**        | UX patterns      |
-| **DEVELOPER_GUIDE.md** | Developer guide  |
+| Doc                          | Purpose                               |
+| ---------------------------- | ------------------------------------- |
+| **TESTING.md**               | Test guide                            |
+| **USER_PERSONA.md**          | Who we build for                      |
+| **USER_JOURNEYS.md**         | User flows                            |
+| **UX_FLOWS.md**              | UX patterns                           |
+| **DEVELOPER_GUIDE.md**       | Developer guide                       |
+| **DOC_VS_CODE_GAP_AUDIT.md** | API doc-vs-code audit + parity script |
 
 ## Meta
 
