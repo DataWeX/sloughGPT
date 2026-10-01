@@ -22,7 +22,7 @@ from typing import Any
 logger = logging.getLogger("slo.semantic_cache")
 
 
-@dataclass
+@dataclass(slots=True)
 class CacheEntry:
     """A cached query-response pair."""
 

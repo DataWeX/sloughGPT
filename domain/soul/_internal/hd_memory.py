@@ -17,7 +17,7 @@ from typing import Any
 logger = logging.getLogger("slo.hd_memory")
 
 
-@dataclass
+@dataclass(slots=True)
 class HDMemoryItem:
     """A memory item with hypervector representation."""
 
