@@ -23,28 +23,55 @@ NOTES_FALLBACK = Path.home() / ".config" / "dev-notes"
 BOARD_FALLBACK = Path.home() / ".config" / "kanban"
 BACKENDS = ("file", "mogdb")
 
+# Canonical status vocabulary for notes. `doing` is the canonical active
+# status; `wip` / `in_progress` are legacy read-side aliases kept so old
+# notes keep resolving (migration precedent: scripts/migrate_boards.py).
+# Unmappable values (None, "", unknown) resolve to None — sync must leave
+# such cards unchanged instead of silently reverting them to todo.
 STATUS_TO_COLUMN = {
     "done": "done",
+    "doing": "in_progress",
     "wip": "in_progress",
+    "in_progress": "in_progress",
     "review": "review",
     "todo": "todo",
     "open": "todo",
     "blocked": "todo",
-    "": "todo",
-    None: "todo",
 }
 
 COLUMN_TO_STATUS = {
     "todo": "open",
-    "in_progress": "wip",
+    "in_progress": "doing",
     "review": "review",
     "done": "done",
 }
 
-STATUSES = ["open", "wip", "done", "blocked", "review", "todo"]
+STATUSES = ["open", "doing", "done", "blocked", "review", "todo"]
+LEGACY_STATUSES = ("wip", "in_progress")
+
+
+def resolve_column(status: object) -> str | None:
+    """Map a note status to its board column, or None when unmappable.
+
+    None means the status carries no column information (null, empty, or
+    unknown values). Callers must leave existing card columns unchanged
+    in that case — never silently fall back to ``todo``.
+    """
+    if not isinstance(status, str):
+        return None
+    key = status.strip().lower()
+    if not key:
+        return None
+    return STATUS_TO_COLUMN.get(key)
+
+
+def is_known_status(status: object) -> bool:
+    """True when *status* resolves to a column (canonical or legacy alias)."""
+    return resolve_column(status) is not None
 
 STATUS_ICONS = {
     "open": "\u25cb",
+    "doing": "\u25d0",
     "wip": "\u25d0",
     "done": "\u25cf",
     "blocked": "\u2715",

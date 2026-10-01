@@ -165,20 +165,38 @@ def verify_note(note_path: Path, board_file: Path, repo: Path | None = None) -> 
                 Finding("board", True, f"note links card {card['id']} ('{card['title']}')")
             )
 
-        want_col = config.STATUS_TO_COLUMN.get(status, "todo")
         have_col = card.get("column", "")
-        if have_col == want_col:
-            findings.append(
-                Finding("status", True, f"note status '{status}' <-> column '{have_col}'")
-            )
-        else:
+        want_col = config.resolve_column(status)
+        if want_col is None:
             findings.append(
                 Finding(
                     "status",
                     False,
-                    f"note status '{status}' maps to column '{want_col}', but card is '{have_col}'",
+                    f"note status {status!r} is not a known status — sync leaves this card unchanged",
                 )
             )
+        else:
+            legacy_hint = ""
+            if (status or "").strip().lower() in config.LEGACY_STATUSES:
+                canonical = config.COLUMN_TO_STATUS.get(want_col, want_col)
+                legacy_hint = f" (legacy status; canonical is '{canonical}')"
+            if have_col == want_col:
+                findings.append(
+                    Finding(
+                        "status",
+                        True,
+                        f"note status '{status}' <-> column '{have_col}'{legacy_hint}",
+                    )
+                )
+            else:
+                findings.append(
+                    Finding(
+                        "status",
+                        False,
+                        f"note status '{status}' maps to column '{want_col}', "
+                        f"but card is '{have_col}'{legacy_hint}",
+                    )
+                )
 
     # 3: landed shas must exist; mainline shas must also be ancestors of HEAD
     groups = _landed_groups(landed)

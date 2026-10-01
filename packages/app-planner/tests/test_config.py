@@ -138,18 +138,23 @@ def test_every_status_has_a_column():
 def test_status_to_column_mapping():
     expected = {
         "done": "done",
+        "doing": "in_progress",
         "wip": "in_progress",
+        "in_progress": "in_progress",
         "review": "review",
         "todo": "todo",
         "open": "todo",
         "blocked": "todo",
-        "": "todo",
     }
     for status, col in expected.items():
         assert config.STATUS_TO_COLUMN[status] == col
+    # Unmappable values resolve to None — sync must leave the card alone.
+    assert config.resolve_column("") is None
+    assert config.resolve_column(None) is None
+    assert config.resolve_column("partial") is None
 
 
 def test_column_to_status_mapping():
-    expected = {"todo": "open", "in_progress": "wip", "review": "review", "done": "done"}
+    expected = {"todo": "open", "in_progress": "doing", "review": "review", "done": "done"}
     for col, status in expected.items():
         assert config.COLUMN_TO_STATUS[col] == status

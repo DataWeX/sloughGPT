@@ -216,3 +216,33 @@ def test_cli_resolves_title_in_user_fallback_notes_dir(tmp_path, git_repo, monke
 
     rc = main(["verify", "card094", "--repo", str(repo)])
     assert rc == 0
+
+
+# ── Hardening: unmappable vs legacy statuses (card 3ccc38b7) ─────────────
+
+
+def test_verify_unmappable_status_is_data_error(tmp_path):
+    p = _write_note(tmp_path / "n.md", status="partial")
+    b = _write_board(tmp_path / "board.jsonl", [_card("uuid-1", "Card X", "todo")])
+    findings = verify_note(p, b, Path("."))
+    bad = [f for f in findings if f.kind == "status" and not f.ok]
+    assert bad, f"unmappable status not flagged: {findings}"
+    assert "partial" in bad[0].detail
+    assert "not a known status" in bad[0].detail
+
+
+def test_verify_legacy_alias_passes_with_canonical_hint(tmp_path):
+    p = _write_note(tmp_path / "n.md", status="wip")
+    b = _write_board(tmp_path / "board.jsonl", [_card("uuid-1", "Card X", "in_progress")])
+    findings = verify_note(p, b, Path("."))
+    status = [f for f in findings if f.kind == "status"]
+    assert status and status[0].ok, findings
+    assert "doing" in status[0].detail
+
+
+def test_verify_canonical_doing_consistent(tmp_path):
+    p = _write_note(tmp_path / "n.md", status="doing")
+    b = _write_board(tmp_path / "board.jsonl", [_card("uuid-1", "Card X", "in_progress")])
+    findings = verify_note(p, b, Path("."))
+    status = [f for f in findings if f.kind == "status"]
+    assert status and status[0].ok, findings

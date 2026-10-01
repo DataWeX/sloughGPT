@@ -50,6 +50,7 @@ import app_planner.core as core_module
 
 from . import config
 from .kanban import Board, KanbanStore
+from .store import coerce_tags
 from .sync import sync_notes_to_board
 
 logger = logging.getLogger("app_planner.gui")
@@ -65,7 +66,7 @@ def _note_to_dict(note: Any) -> dict:
         "title": note.title,
         "created_at": note.created_at,
         "updated_at": note.updated_at,
-        "tags": list(note.tags),
+        "tags": coerce_tags(note.tags),
         "status": note.status,
         "sprint": note.sprint,
         "gh": note.gh,
@@ -302,7 +303,7 @@ class GuiHandler(BaseHTTPRequestHandler):
             return self._error(400, "title is required")
         tags = _coerce_tags(body.get("tags"))
         status = body.get("status") or "open"
-        if status not in STATUSES:
+        if not config.is_known_status(status):
             return self._error(400, f"invalid status: {status}")
         with self.stores.lock:
             note = self.stores.note_store.create(
@@ -328,7 +329,7 @@ class GuiHandler(BaseHTTPRequestHandler):
             kwargs["tags"] = _coerce_tags(body.get("tags"))
         if "status" in body:
             status = body.get("status")
-            if status not in STATUSES:
+            if not config.is_known_status(status):
                 return self._error(400, f"invalid status: {status}")
             kwargs["status"] = status
         if "sprint" in body:
@@ -659,6 +660,7 @@ main{padding:18px;max-width:1400px;margin:0 auto}
           <label>Status</label>
           <select id="f_status">
             <option value="open">open</option>
+            <option value="doing">doing</option>
             <option value="wip">wip</option>
             <option value="review">review</option>
             <option value="done">done</option>
@@ -701,8 +703,8 @@ main{padding:18px;max-width:1400px;margin:0 auto}
 
 <script>
 "use strict";
-const SICON = {open:"\u25cb", wip:"\u25d0", done:"\u25cf", blocked:"\u2715", review:"\u25c8"};
-const SCOL  = {open:"#968cac", wip:"#f0c050", done:"#48c08c", blocked:"#eb646e", review:"#c0aaf4"};
+const SICON = {open:"\u25cb", doing:"\u25d0", wip:"\u25d0", done:"\u25cf", blocked:"\u2715", review:"\u25c8"};
+const SCOL  = {open:"#968cac", doing:"#f0c050", wip:"#f0c050", done:"#48c08c", blocked:"#eb646e", review:"#c0aaf4"};
 const PICO  = {low:"", medium:"!", high:"!!", critical:"!!!"};
 let state = { tab:"board", notes:[], board:null, tags:[], stats:null, editing:null };
 

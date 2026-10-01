@@ -38,9 +38,13 @@ def _note_new(args: argparse.Namespace) -> int:
     store = _get_store(args)
     tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
     status = args.status or "open"
-    if status not in config.STATUSES:
-        print(f"Invalid status: {status}. Valid: {', '.join(config.STATUSES)}", file=sys.stderr)
+    if not config.is_known_status(status):
+        valid = ", ".join(config.STATUSES)
+        legacy = ", ".join(config.LEGACY_STATUSES)
+        print(f"Invalid status: {status}. Valid: {valid} (legacy: {legacy})", file=sys.stderr)
         return 2
+    if status.strip().lower() in config.LEGACY_STATUSES:
+        print(f"note: status '{status}' is legacy — canonical is 'doing'", file=sys.stderr)
     note = store.create_note(
         args.title,
         tags=tags,
@@ -88,6 +92,12 @@ def _note_update(args: argparse.Namespace) -> int:
     store = _get_store(args)
     updates: dict = {}
     if args.status:
+        if not config.is_known_status(args.status):
+            valid = ", ".join(config.STATUSES)
+            print(f"Invalid status: {args.status}. Valid: {valid}", file=sys.stderr)
+            return 2
+        if args.status.strip().lower() in config.LEGACY_STATUSES:
+            print(f"note: status '{args.status}' is legacy — canonical is 'doing'", file=sys.stderr)
         updates["status"] = args.status
     if args.tags:
         updates["tags"] = [t.strip() for t in args.tags.split(",") if t.strip()]
@@ -264,15 +274,26 @@ def _verify(args: argparse.Namespace) -> int:
 
 def _sync(args: argparse.Namespace) -> int:
     store = _get_store(args)
-    added, updated, total = store.sync()
+    added, updated, total = store.sync(repair=args.repair, dry_run=args.dry_run)
+    report = store.last_sync_report
+    suffix = ""
+    if report is not None and report.reverted:
+        suffix = f", reverted to todo: {len(report.reverted)}"
+    if args.dry_run:
+        suffix += " (dry-run: nothing written)"
     if not args.quiet:
         board = store.load_board()
         for card in board.cards:
             icon = "\u2713" if card.column == "done" else "\u25cb"
             print(f"  {icon} [{card.column:12s}] {card.title}")
-        print(f"\n{added} new card(s), {updated} moved, {total} total")
+        print(f"\n{added} new card(s), {updated} moved, {total} total{suffix}")
     else:
-        print(f"{added} new card(s), {updated} moved, {total} total")
+        print(f"{added} new card(s), {updated} moved, {total} total{suffix}")
+    if report is not None and report.reverted:
+        for cid in report.reverted:
+            print(f"  reverted -> todo: {cid}")
+    if args.dry_run:
+        print("dry-run: nothing written")
     return 0
 
 
@@ -364,6 +385,12 @@ def build_parser() -> argparse.ArgumentParser:
     # Sync
     sync_p = sub.add_parser("sync", help="Sync notes to board")
     sync_p.add_argument("--quiet", action="store_true")
+    sync_p.add_argument(
+        "--repair",
+        action="store_true",
+        help="pessimistically reset cards with unmappable note statuses to todo (DR mode)",
+    )
+    sync_p.add_argument("--dry-run", action="store_true", help="plan and report without writing")
 
     # Verify
     verify_p = sub.add_parser(

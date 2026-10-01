@@ -64,7 +64,7 @@ class Card:
             description=d.get("description", ""),
             column=d.get("column", "todo"),
             priority=d.get("priority", "medium"),
-            tags=d.get("tags", []),
+            tags=coerce_tags(d.get("tags")),
             assignee=d.get("assignee", ""),
             due_date=d.get("due_date", d.get("dueDate", "")),
             sprint=d.get("sprint", ""),
@@ -102,7 +102,7 @@ class Note:
             title=d.get("title", ""),
             body=d.get("body", ""),
             status=d.get("status", "open"),
-            tags=d.get("tags", []),
+            tags=coerce_tags(d.get("tags")),
             sprint=d.get("sprint", ""),
             gh=d.get("gh", ""),
             assignee=d.get("assignee", ""),
@@ -127,6 +127,33 @@ class Board:
     cards: list[Card] = field(default_factory=list)
 
 
+def coerce_tags(value: Any) -> list[str]:
+    """Normalize a tags field to a list of strings.
+
+    Journal records written before hardening carry comma-separated
+    strings; ``list("a,b")`` would explode them into single characters.
+    """
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [t.strip() for t in value.split(",") if t.strip()]
+    if isinstance(value, (list, tuple)):
+        return [str(t) for t in value]
+    return [str(value)]
+
+
+@dataclass(frozen=True)
+class SyncReport:
+    """Outcome of the most recent PlannerStore.sync() run (card 3ccc38b7)."""
+
+    added: int = 0
+    updated: int = 0
+    total: int = 0
+    reverted: tuple[str, ...] = ()
+    repaired: bool = False
+    dry_run: bool = False
+
+
 # ── Store ────────────────────────────────────────────────────────────────
 
 
@@ -144,6 +171,7 @@ class PlannerStore:
         self._notes_dir.mkdir(parents=True, exist_ok=True)
         self._board_file = self._board_dir / "board.jsonl"
         self._notes_file = self._notes_dir / "notes.journal.jsonl"
+        self.last_sync_report: SyncReport | None = None
 
     # ── Board ───────────────────────────────────────────────────────────
 
@@ -509,41 +537,77 @@ class PlannerStore:
 
     # ── Sync ────────────────────────────────────────────────────────────
 
-    def sync(self) -> tuple[int, int, int]:
-        """Reconcile notes ↔ board. Returns (added, updated, total)."""
+    def sync(
+        self,
+        *,
+        repair: bool = False,
+        dry_run: bool = False,
+    ) -> tuple[int, int, int]:
+        """Reconcile notes → board. Returns (added, updated, total).
+
+        Unmappable note statuses (null / empty / unknown) carry no column
+        information: no card is created for them and existing cards are
+        left unchanged — never a silent revert to todo. With
+        ``repair=True`` such cards are pessimistically reset to ``todo``
+        instead: the explicit disaster-recovery path. ``dry_run=True``
+        plans and reports without writing anything. The full outcome of
+        the latest run is exposed as ``self.last_sync_report``.
+        """
         notes = self.list_notes(limit=9999)
         board = self.load_board()
         existing = {c.title: c for c in board.cards}
         added = 0
         updated = 0
+        reverted: list[str] = []
 
         for note in notes:
-            col = config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
+            col = config.resolve_column(note.status)
             title = note.title or "(untitled)"
             card = existing.get(title)
 
+            if col is None:
+                # No column information: never create, never silently move.
+                if card is None:
+                    continue
+                if repair and card.column != "todo":
+                    if not dry_run:
+                        self.move_card(card.id, "todo")
+                    reverted.append(card.id)
+                continue
+
             if card is None:
-                self.add_card(
-                    title=title,
-                    column=col,
-                    tags=list(note.tags or []),
-                    description=note.body or "",
-                    assignee=note.assignee or "",
-                    sprint=note.sprint or "",
-                    gh=note.gh or "",
-                )
+                if not dry_run:
+                    self.add_card(
+                        title=title,
+                        column=col,
+                        tags=coerce_tags(note.tags),
+                        description=note.body or "",
+                        assignee=note.assignee or "",
+                        sprint=note.sprint or "",
+                        gh=note.gh or "",
+                    )
                 added += 1
                 continue
 
             if card.column != col:
-                self.move_card(card.id, col)
+                if not dry_run:
+                    self.move_card(card.id, col)
                 updated += 1
 
             if note.assignee and card.assignee != note.assignee:
-                self.update_card(card.id, assignee=note.assignee)
+                if not dry_run:
+                    self.update_card(card.id, assignee=note.assignee)
                 updated += 1
 
-        total = len(self.load_board().cards)
+        total = len(board.cards) + added if dry_run else len(self.load_board().cards)
+        self.last_sync_report = SyncReport(
+            added=added,
+            updated=updated,
+            total=total,
+            reverted=tuple(reverted),
+            repaired=repair,
+            dry_run=dry_run,
+        )
         return added, updated, total
 
 

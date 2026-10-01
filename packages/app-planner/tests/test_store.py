@@ -268,3 +268,20 @@ class TestCLI:
     def test_unknown_command(self, tmp_dir):
         code, _ = _run(tmp_dir, "nonexistent")
         assert code != 0
+
+
+# ── Hardening: tag coercion at the read boundary (card 3ccc38b7) ─────────
+
+
+def test_note_from_dict_coerces_string_tags():
+    from app_planner.store import Note
+
+    note = Note.from_dict({"tags": "a, b"})
+    assert note.tags == ["a", "b"]
+
+
+def test_card_from_dict_coerces_string_tags():
+    from app_planner.store import Card
+
+    card = Card.from_dict({"id": "x", "title": "t", "tags": "training,recovery,runtime"})
+    assert card.tags == ["training", "recovery", "runtime"]
