@@ -10,7 +10,7 @@ import logging
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import raise_error, safe_audit_log, success_response
@@ -1228,7 +1228,19 @@ class WorkspacesRouter:
             )
 
         # ─── Workspace search ─────────────────────────────────
-        async def search_workspace(workspace_id: str, auth_user: dict = auth_dep) -> dict:
+        async def search_workspace(
+            workspace_id: str,
+            q: str = Query(..., min_length=1, max_length=500, description="Search query"),
+            limit: int = Query(50, ge=1, le=200, description="Max results per category"),
+            auth_user: dict = auth_dep,
+        ) -> dict:
+            """Search workspace members, training jobs, datasets and knowledge.
+
+            Query semantics live here (server-side), not in the UI: the
+            endpoint returns only matches for ``q``, capped at ``limit``
+            per category, plus a ``partial`` list of categories that
+            failed to load so a truncated result set is never silent.
+            """
             user = self._get_user(auth_user)
             ws = self._ws_repo.get(workspace_id)
             if not ws:
@@ -1237,16 +1249,28 @@ class WorkspacesRouter:
             if not member and not user.is_admin:
                 raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
 
-            # Get query from query params
-            # We need to access query params differently since this is a inner function
-            # Use a simpler approach - search everything
-            results = {"members": [], "training_jobs": [], "datasets": [], "knowledge": []}
+            needle = q.casefold()
+
+            results: dict[str, list[dict]] = {
+                "members": [],
+                "training_jobs": [],
+                "datasets": [],
+                "knowledge": [],
+            }
+            partial: list[str] = []
+
+            def _matches(title: str, detail: str) -> bool:
+                return needle in (title or "").casefold() or needle in (detail or "").casefold()
+
+            def _collect(category: str, entries: list[dict]) -> None:
+                matched = [e for e in entries if _matches(e["title"], e["detail"])]
+                results[category] = matched[:limit]
 
             # Search members
-            members = self._ws_repo.list_members(workspace_id)
-            for m in members:
+            member_entries = []
+            for m in self._ws_repo.list_members(workspace_id):
                 u = self._user_repo.get(m.user_id)
-                results["members"].append(
+                member_entries.append(
                     {
                         "id": m.id,
                         "type": "member",
@@ -1254,15 +1278,17 @@ class WorkspacesRouter:
                         "detail": f"Role: {m.role.value}",
                     }
                 )
+            _collect("members", member_entries)
 
             # Search training jobs
+            job_entries = []
             try:
                 from training.job_store import get_job_store
 
                 repo = get_job_store()
                 jobs = repo.list_by_workspace(workspace_id)
                 for job in jobs:
-                    results["training_jobs"].append(
+                    job_entries.append(
                         {
                             "id": job.get("id"),
                             "type": "training",
@@ -1272,15 +1298,19 @@ class WorkspacesRouter:
                     )
             except Exception as e:
                 logger.debug("Training job search unavailable: %s", e)
+                partial.append("training_jobs")
+            _collect("training_jobs", job_entries)
 
-            # Search datasets
+            # Search datasets (dataset entities carry no workspace field —
+            # see card "un-dead workspace search" — so this stays global)
+            dataset_entries = []
             try:
                 from domain.infrastructure import DatasetRepository
 
                 ds_repo = DatasetRepository()
                 datasets = ds_repo.list_by_workspace(workspace_id)
                 for ds in datasets:
-                    results["datasets"].append(
+                    dataset_entries.append(
                         {
                             "id": ds.id,
                             "type": "dataset",
@@ -1290,15 +1320,18 @@ class WorkspacesRouter:
                     )
             except Exception as e:
                 logger.debug("Dataset search unavailable: %s", e)
+                partial.append("datasets")
+            _collect("datasets", dataset_entries)
 
             # Search knowledge
+            knowledge_entries = []
             try:
                 from domain.infrastructure import KnowledgeRepository
 
                 k_repo = KnowledgeRepository()
                 facts = k_repo.list_by_workspace(workspace_id)
                 for fact in facts:
-                    results["knowledge"].append(
+                    knowledge_entries.append(
                         {
                             "id": fact.id,
                             "type": "knowledge",
@@ -1308,9 +1341,13 @@ class WorkspacesRouter:
                     )
             except Exception as e:
                 logger.debug("Knowledge search unavailable: %s", e)
+                partial.append("knowledge")
+            _collect("knowledge", knowledge_entries)
 
             total = sum(len(v) for v in results.values())
-            return success_response(data={"results": results, "total": total})
+            return success_response(
+                data={"results": results, "total": total, "query": q, "partial": partial}
+            )
 
         # ─── Permissions matrix ───────────────────────────────
         async def get_workspace_permissions(workspace_id: str, auth_user: dict = auth_dep) -> dict:

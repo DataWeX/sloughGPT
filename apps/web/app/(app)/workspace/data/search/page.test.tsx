@@ -115,6 +115,8 @@ describe('WorkspaceSearchPage', () => {
         knowledge: [],
       },
       total: 3,
+      query: 'alice',
+      partial: [],
     },
   }
 
@@ -156,6 +158,34 @@ describe('WorkspaceSearchPage', () => {
 
     await screen.findByText(/result/i)
     expect(mockApiGet).toHaveBeenCalled()
+    expect(mockApiGet.mock.calls[0][0]).toContain('/workspaces/ws-1/search?q=alice')
+  })
+
+  it('renders server results as-is — no client-side filtering', async () => {
+    // Server already filtered; this item does NOT contain the typed query,
+    // and the UI must still render what the server returned.
+    mockApiGet.mockResolvedValue({
+      data: {
+        results: {
+          members: [{ id: 'u1', type: 'member', title: 'alice', detail: 'Role: admin' }],
+          training_jobs: [],
+          datasets: [],
+          knowledge: [],
+        },
+        total: 1,
+        query: 'alice',
+        partial: ['datasets'],
+      },
+    })
+    const user = userEvent.setup()
+    render(<WorkspaceSearchPage />)
+    await screen.findAllByText('Workspace Search')
+
+    await user.type(screen.getByPlaceholderText(/search/i), 'alice')
+
+    await screen.findByText(/1 result/i)
+    expect(screen.getByText('alice')).toBeTruthy()
+    expect(screen.getByText(/partial results/i)).toBeTruthy()
   })
 
   it('shows empty state when no results', async () => {

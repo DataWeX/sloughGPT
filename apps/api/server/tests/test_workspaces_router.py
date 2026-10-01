@@ -446,8 +446,8 @@ class TestNotifications:
 
 
 class TestSearchWorkspace:
-    def test_search_workspace(self, mock_ws_repo, mock_user_repo):
-        user = _make_user()
+    def test_search_workspace_filters_by_q(self, mock_ws_repo, mock_user_repo):
+        user = _make_user(username="alice")
         ws = _make_workspace()
         member = _make_member()
 
@@ -457,11 +457,78 @@ class TestSearchWorkspace:
         mock_ws_repo.list_members.return_value = [member]
 
         _app = _build_app(mock_ws_repo, mock_user_repo)
-        resp = TestClient(_app).get("/workspaces/ws1/search")
+        resp = TestClient(_app).get("/workspaces/ws1/search", params={"q": "ali"})
         assert resp.status_code == 200
         data = resp.json()["data"]
+        assert data["query"] == "ali"
         assert "results" in data
         assert "total" in data
+        # Server-side filtering: match on member username
+        assert len(data["results"]["members"]) == 1
+        assert data["results"]["members"][0]["title"] == "alice"
+        assert data["total"] >= 1
+
+    def test_search_workspace_no_match_returns_empty(self, mock_ws_repo, mock_user_repo):
+        user = _make_user(username="alice")
+        ws = _make_workspace()
+        member = _make_member()
+
+        mock_user_repo.get.return_value = user
+        mock_ws_repo.get.return_value = ws
+        mock_ws_repo.get_member.return_value = member
+        mock_ws_repo.list_members.return_value = [member]
+
+        _app = _build_app(mock_ws_repo, mock_user_repo)
+        resp = TestClient(_app).get("/workspaces/ws1/search", params={"q": "zzznonexistent"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["results"]["members"] == []
+        assert data["total"] == 0
+
+    def test_search_workspace_requires_q(self, mock_ws_repo, mock_user_repo):
+        user = _make_user()
+        ws = _make_workspace()
+        member = _make_member()
+
+        mock_user_repo.get.return_value = user
+        mock_ws_repo.get.return_value = ws
+        mock_ws_repo.get_member.return_value = member
+
+        _app = _build_app(mock_ws_repo, mock_user_repo)
+        resp = TestClient(_app).get("/workspaces/ws1/search")
+        assert resp.status_code == 422
+
+    def test_search_workspace_matches_on_detail(self, mock_ws_repo, mock_user_repo):
+        user = _make_user(username="alice")
+        ws = _make_workspace()
+        member = _make_member(role=Role.OWNER)
+
+        mock_user_repo.get.return_value = user
+        mock_ws_repo.get.return_value = ws
+        mock_ws_repo.get_member.return_value = member
+        mock_ws_repo.list_members.return_value = [member]
+
+        _app = _build_app(mock_ws_repo, mock_user_repo)
+        resp = TestClient(_app).get("/workspaces/ws1/search", params={"q": "owner"})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert len(data["results"]["members"]) == 1
+
+    def test_search_workspace_reports_partial_sources(self, mock_ws_repo, mock_user_repo):
+        user = _make_user(username="alice")
+        ws = _make_workspace()
+        member = _make_member()
+
+        mock_user_repo.get.return_value = user
+        mock_ws_repo.get.return_value = ws
+        mock_ws_repo.get_member.return_value = member
+        mock_ws_repo.list_members.return_value = [member]
+
+        _app = _build_app(mock_ws_repo, mock_user_repo)
+        resp = TestClient(_app).get("/workspaces/ws1/search", params={"q": "alice"})
+        assert resp.status_code == 200
+        # "partial" must always be present so a failed source is never silent
+        assert "partial" in resp.json()["data"]
 
 
 # ── Permissions ──────────────────────────────────────────────────────────────

@@ -28,30 +28,34 @@ interface SearchResponse {
       knowledge: SearchResult[]
     }
     total: number
+    query: string
+    partial: string[]
   }
 }
 
+// Keys MUST match the result-category keys the API returns
+// (members / training_jobs / datasets / knowledge), not item.type.
 const TYPE_CONFIG: Record<string, { color: string; label: string; icon: typeof Users; link: string }> = {
-  member: {
+  members: {
     color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
     label: 'Members',
     icon: Users,
     link: '/workspace/members',
   },
-  training: {
+  training_jobs: {
     color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
     label: 'Training Jobs',
     icon: Brain,
     link: '/training/queue',
   },
-  dataset: {
+  datasets: {
     color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
     label: 'Datasets',
     icon: Database,
     link: '/datasets',
   },
   knowledge: {
-    color: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    color: 'bg-accent text-accent dark:bg-accent/30 dark:text-accent',
     label: 'Knowledge',
     icon: BookOpen,
     link: '/knowledge',
@@ -65,35 +69,25 @@ export default function WorkspaceSearchPage() {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResponse['data']['results'] | null>(null)
   const [total, setTotal] = useState(0)
+  const [partial, setPartial] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
   const search = useCallback(async (q: string) => {
     if (!currentWorkspace?.id || !q.trim()) {
       setResults(null)
       setTotal(0)
+      setPartial([])
       return
     }
     setLoading(true)
     try {
-      const res = await apiGet<SearchResponse>(`/workspaces/${currentWorkspace.id}/search`)
+      const res = await apiGet<SearchResponse>(
+        `/workspaces/${currentWorkspace.id}/search?q=${encodeURIComponent(q.trim())}`
+      )
       if (res?.data) {
-        const allResults = res.data.results
-        const filtered: typeof allResults = { members: [], training_jobs: [], datasets: [], knowledge: [] }
-        const lowerQ = q.toLowerCase()
-
-        for (const [type, items] of Object.entries(allResults)) {
-          for (const item of items) {
-            if (
-              item.title.toLowerCase().includes(lowerQ) ||
-              item.detail.toLowerCase().includes(lowerQ)
-            ) {
-              filtered[type as keyof typeof filtered].push(item)
-            }
-          }
-        }
-
-        setResults(filtered)
-        setTotal(Object.values(filtered).reduce((a, b) => a + b.length, 0))
+        setResults(res.data.results)
+        setTotal(res.data.total)
+        setPartial(res.data.partial ?? [])
       }
     } catch {
       addToast('Search failed', 'error')
@@ -105,7 +99,7 @@ export default function WorkspaceSearchPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) search(query)
-      else { setResults(null); setTotal(0) }
+      else { setResults(null); setTotal(0); setPartial([]) }
     }, 300)
     return () => clearTimeout(timer)
   }, [query, search])
@@ -136,6 +130,12 @@ export default function WorkspaceSearchPage() {
       {!loading && results && (
         <>
           <p className="text-sm text-muted-foreground mb-4">{total} result(s) found</p>
+
+          {partial.length > 0 && (
+            <p className="text-xs text-warning mb-4" role="status">
+              Partial results — some sources are unavailable: {partial.join(', ')}
+            </p>
+          )}
 
           {Object.entries(results).map(([type, items]) => {
             const config = TYPE_CONFIG[type]
