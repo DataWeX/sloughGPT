@@ -43,7 +43,7 @@ except (ImportError, ModuleNotFoundError):
 logger = logging.getLogger("slo.core.soul")
 
 
-@dataclass
+@dataclass(slots=True)
 class GenerationContext:
     """Context carried through a single generation request."""
 
@@ -657,6 +657,7 @@ class SloEngine:
                     n_max = gen_params["max_tokens"]
                     lstm_layer = lstm_layers[0]
                     generated_ids = idx.flatten().tolist()
+                    prompt_len = idx.size  # O(1); hoisted — was idx.flatten() per token step
                     pad_id = getattr(self._tokenizer, "pad_id", 0)
 
                     for step_i in range(n_max):
@@ -666,7 +667,7 @@ class SloEngine:
                         logits_t, _ = lstm_layer.forward(in_t, h)
                         logit_data = logits_t.data[np.newaxis, :, :]
                         generated_arr = np.array(
-                            generated_ids[len(idx.flatten()) :], dtype=np.int64
+                            generated_ids[prompt_len:], dtype=np.int64
                         )
                         nid = _sample_from_logits(
                             logit_data,
