@@ -211,6 +211,32 @@ html {
 .sl-app-sidebar-desktop[data-collapsed="true"] {
   width: var(--sidebar-collapsed-width);
 }
+/* The collapsed rail is 48px, but its footer holds a mode toggle plus nine
+   colour and nine palette swatches — 218px of min-content, so `w-fit` resolved
+   to min-content and the footer overflowed the rail (clientWidth 47 vs
+   scrollWidth 218), leaving a clipped fragment of the theme controls. Compact
+   state follows the same rule the nav labels use: keep only the icon, and let
+   the swatches return when the rail expands. */
+.sl-sidebar-surface[data-collapsed="true"] [role="radiogroup"],
+.sl-sidebar-surface[data-collapsed="true"] [aria-label="Theme settings"] > span {
+  display: none;
+}
+.sl-sidebar-surface[data-collapsed="true"] > div:last-child {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+/* Same failure one level down: the nav's `w-fit` resolves to min-content —
+   icon (16) + px-2 (16) + p-2 (16) = 48px — which is a pixel more than the
+   rail's 47px content box, so it clipped instead of fitting. */
+.sl-sidebar-surface[data-collapsed="true"] > nav {
+  min-width: 0;
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+}
 @media (min-width: 1024px) {
   .sl-app-sidebar-desktop {
     display: flex;

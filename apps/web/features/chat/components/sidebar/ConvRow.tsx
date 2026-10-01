@@ -2,7 +2,21 @@
 
 import { memo, useEffect, useRef, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
-import { IconPin, IconStar, IconDot, IconDotOutline, IconDownload, IconDocument, IconCopy, IconFolder, IconX } from '@sloughgpt/strui'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  IconMore,
+  IconPin,
+  IconStar,
+  IconDownload,
+  IconDocument,
+  IconCopy,
+  IconFolder,
+  IconX,
+} from '@sloughgpt/strui'
 import type { Conversation } from '@/lib/session-controller'
 import { formatDate, truncateMessage } from '@/lib/conversations-utils'
 
@@ -67,6 +81,12 @@ export const ConvRow = memo(function ConvRow({
   const msgCount = c.messages?.length ?? c.message_count ?? 0
   const lastMsg = c.messages?.[c.messages.length - 1]?.content || ''
 
+  // Every action lives behind one overflow affordance so the row never spends
+  // its width on controls: content owns the leftover space, actions cost 24px.
+  const hasActions = Boolean(
+    onPin || onToggleUnread || onStar || onExport || onDuplicate || onArchive || onDelete,
+  )
+
   const highlightMatch = (text: string, query: string): React.ReactNode => {
     if (!query) return text
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -88,14 +108,6 @@ export const ConvRow = memo(function ConvRow({
       onClick={!editing ? () => onSelect(c.id) : undefined}
       role="button"
       tabIndex={0}
-      onFocus={(e) => {
-        const buttons = e.currentTarget.querySelectorAll<HTMLElement>('.sm\\:opacity-0')
-        buttons.forEach(btn => btn.classList.remove('sm:opacity-0'))
-      }}
-      onBlur={(e) => {
-        const buttons = e.currentTarget.querySelectorAll<HTMLElement>('.sm\\:opacity-0')
-        buttons.forEach(btn => btn.classList.add('sm:opacity-0'))
-      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter' && !editing) { e.preventDefault(); onSelect(c.id); return }
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -110,38 +122,10 @@ export const ConvRow = memo(function ConvRow({
       }}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={(e) => onPin?.(e, c.id, !c.pinned)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-            aria-label={c.pinned ? 'Unpin' : 'Pin'}
-          >
-            <IconPin className={cn("h-2.5 w-2.5", c.pinned ? "text-primary" : "text-muted-foreground/40")} />
-          </button>
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e, c.id, !c.unread) }}
-            className={cn(
-              "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
-              c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity duration-150 text-muted-foreground/40"
-            )}
-            aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
-          >
-            {c.unread ? (
-              <IconDot className="h-2.5 w-2.5" />
-            ) : (
-              <IconDotOutline className="h-2.5 w-2.5" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={(e) => onStar?.(e, c.id, !c.starred)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-            aria-label={c.starred ? 'Unstar' : 'Star'}
-          >
-            <IconStar className={cn("h-2.5 w-2.5", c.starred ? "text-warning" : "text-muted-foreground/40")} filled={c.starred} />
-          </button>
+        <div className="flex items-center gap-1.5 min-w-0">
+          {c.unread && !editing && (
+            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+          )}
           {editing ? (
             <input
               ref={inputRef}
@@ -184,61 +168,81 @@ export const ConvRow = memo(function ConvRow({
           </div>
         )}
       </div>
-      <div className="hidden sm:flex items-center gap-0.5 shrink-0 mt-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        {onExport && !editing && (
-          <>
+      {hasActions && !editing && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
             <button
               type="button"
-              onClick={(e) => onExport?.(e, c, 'json')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-              aria-label="Export as JSON"
-              title="Export as JSON"
+              aria-label={`Actions for ${c.name}`}
+              aria-haspopup="menu"
+              title="Conversation actions"
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <IconDownload className="h-2.5 w-2.5" />
+              <IconMore className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-            <button
-              type="button"
-              onClick={(e) => onExport?.(e, c, 'markdown')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-              aria-label="Export as Markdown"
-              title="Export as Markdown"
-            >
-              <IconDocument className="h-2.5 w-2.5" />
-            </button>
-          </>
-        )}
-        {onDuplicate && !editing && (
-          <button
-            type="button"
-            onClick={(e) => onDuplicate?.(e, c.id, c.name)}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-            aria-label={`Duplicate ${c.name}`}
-            title="Duplicate conversation"
-          >
-            <IconCopy className="h-2.5 w-2.5" />
-          </button>
-        )}
-        {onArchive && !editing && (
-          <button
-            type="button"
-            onClick={(e) => onArchive?.(e, c.id, false)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
-            aria-label="Archive"
-          >
-            <IconFolder className="h-2.5 w-2.5" />
-          </button>
-        )}
-        {onDelete && !editing && (
-          <button
-            type="button"
-            onClick={(e) => onDelete?.(e, c.id)}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
-            aria-label={`Delete ${c.name}`}
-          >
-            <IconX className="h-2.5 w-2.5" />
-          </button>
-        )}
-      </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-[176px]">
+            {onPin && (
+              <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onPin(e, c.id, !c.pinned) }}>
+                <IconPin className={cn('mr-2 h-3.5 w-3.5', c.pinned ? 'text-primary' : 'text-muted-foreground/40')} />
+                <span className="flex-1">{c.pinned ? 'Unpin' : 'Pin'}</span>
+              </DropdownMenuItem>
+            )}
+            {onToggleUnread && (
+              <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onToggleUnread(e, c.id, !c.unread) }}>
+                <span className="mr-2 flex h-3.5 w-3.5 items-center justify-center" aria-hidden="true">
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full',
+                      c.unread ? 'bg-primary' : 'border border-muted-foreground/40',
+                    )}
+                  />
+                </span>
+                <span className="flex-1">{c.unread ? 'Mark as read' : 'Mark as unread'}</span>
+              </DropdownMenuItem>
+            )}
+            {onStar && (
+              <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onStar(e, c.id, !c.starred) }}>
+                <IconStar className={cn('mr-2 h-3.5 w-3.5', c.starred ? 'text-warning' : 'text-muted-foreground/40')} filled={c.starred} />
+                <span className="flex-1">{c.starred ? 'Unstar' : 'Star'}</span>
+              </DropdownMenuItem>
+            )}
+            {(onExport || onDuplicate || onArchive || onDelete) && <DropdownMenuSeparator />}
+            {onExport && (
+              <>
+                <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onExport(e, c, 'json') }}>
+                  <IconDownload className="mr-2 h-3.5 w-3.5 text-muted-foreground/40" />
+                  <span className="flex-1">Export as JSON</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onExport(e, c, 'markdown') }}>
+                  <IconDocument className="mr-2 h-3.5 w-3.5 text-muted-foreground/40" />
+                  <span className="flex-1">Export as Markdown</span>
+                </DropdownMenuItem>
+              </>
+            )}
+            {onDuplicate && (
+              <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onDuplicate(e, c.id, c.name) }}>
+                <IconCopy className="mr-2 h-3.5 w-3.5 text-muted-foreground/40" />
+                <span className="flex-1">Duplicate conversation</span>
+              </DropdownMenuItem>
+            )}
+            {onArchive && (
+              <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onArchive(e, c.id, false) }}>
+                <IconFolder className="mr-2 h-3.5 w-3.5 text-muted-foreground/40" />
+                <span className="flex-1">Archive</span>
+              </DropdownMenuItem>
+            )}
+            {onDelete && (
+              <DropdownMenuItem destructive onSelect={(e) => { e.stopPropagation(); onDelete(e, c.id) }}>
+                <IconX className="mr-2 h-3.5 w-3.5" />
+                <span className="flex-1">Delete conversation</span>
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   )
 })

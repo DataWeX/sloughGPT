@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, memo, type JSX, type ReactNode } from 'react'
+import { useState, useRef, useCallback, useEffect, useLayoutEffect, memo, type JSX, type ReactNode } from 'react'
 import {
   IconChat,
   IconEdit,
@@ -215,7 +215,7 @@ function SubOptions({
 >) {
   if (mode === 'write') {
     return (
-      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
+      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30 overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-muted-foreground/40 font-medium">Tone</span>
           {TONES.map((t) => (
@@ -235,7 +235,7 @@ function SubOptions({
 
   if (mode === 'rewrite') {
     return (
-      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
+      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30 overflow-x-auto scrollbar-none">
         <div className="flex items-center gap-1">
           <span className="text-[10px] text-muted-foreground/40 font-medium">Action</span>
           {REWRITE_OPTIONS.map((o) => (
@@ -292,7 +292,7 @@ function SubOptions({
   if (!groups) return null
 
   return (
-    <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30">
+    <div className="flex items-center gap-3 px-3 py-1.5 border-b border-border/15 bg-muted/30 overflow-x-auto scrollbar-none">
       {groups.map((g, i) => (
         <div key={g.label} className="flex items-center gap-1">
           {i > 0 && <div className="w-px h-3 bg-border/15 mr-2" />}
@@ -333,33 +333,80 @@ export const ModeBar = memo(function ModeBar({
   onWellnessTypeChange,
   onCreateStyleChange,
 }: ModeBarProps): JSX.Element {
-  const current = MODES.find((m) => m.value === mode) ?? MODES[0]
+  const listRef = useRef<HTMLDivElement>(null)
+  const [edge, setEdge] = useState({ left: false, right: false })
+
+  // The strip always holds more chips than the chat column has room for, so it
+  // scrolls — but `scrollbar-none` hid the scrollbar and nothing else said so.
+  // Reflect the scroll range on both edges so the affordance is visible.
+  const updateEdges = useCallback(() => {
+    const el = listRef.current
+    if (!el) return
+    setEdge({
+      left: el.scrollLeft > 1,
+      right: el.scrollLeft + el.clientWidth < el.scrollWidth - 1,
+    })
+  }, [])
+
+  useLayoutEffect(updateEdges, [updateEdges, mode])
+
+  useEffect(() => {
+    const el = listRef.current
+    if (!el) return
+    updateEdges()
+    window.addEventListener('resize', updateEdges)
+    // Rail open/close resizes the chat column without a window resize.
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(updateEdges) : null
+    observer?.observe(el)
+    return () => {
+      window.removeEventListener('resize', updateEdges)
+      observer?.disconnect()
+    }
+  }, [updateEdges])
 
   return (
     <>
-      <div
-        className="flex items-center gap-1 px-3 py-1.5 border-b border-border/15 bg-muted/20 overflow-x-auto scrollbar-none"
-        role="tablist"
-        aria-label="Chat mode"
-      >
-        {MODES.map((m) => (
-          <button
-            key={m.value}
-            type="button"
-            role="tab"
-            aria-selected={m.value === mode}
-            onClick={() => onModeChange(m.value)}
-            className={cn(
-              'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-150 whitespace-nowrap shrink-0',
-              m.value === mode
-                ? cn('shadow-sm border', m.color)
-                : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30 border border-transparent',
-            )}
-          >
-            <span className="shrink-0">{m.icon}</span>
-            <span>{m.label}</span>
-          </button>
-        ))}
+      <div className="relative border-b border-border/15 bg-muted/20">
+        <div
+          ref={listRef}
+          onScroll={updateEdges}
+          className="flex items-center gap-1 px-3 py-1.5 overflow-x-auto scrollbar-none"
+          role="tablist"
+          aria-label="Chat mode"
+        >
+          {MODES.map((m) => (
+            <button
+              key={m.value}
+              type="button"
+              role="tab"
+              aria-selected={m.value === mode}
+              onClick={() => onModeChange(m.value)}
+              className={cn(
+                'flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all duration-150 whitespace-nowrap shrink-0',
+                m.value === mode
+                  ? cn('shadow-sm border', m.color)
+                  : 'text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/30 border border-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              )}
+            >
+              <span className="shrink-0">{m.icon}</span>
+              <span>{m.label}</span>
+            </button>
+          ))}
+        </div>
+        <div
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-muted/80 via-muted/30 to-transparent transition-opacity duration-150',
+            edge.left ? 'opacity-100' : 'opacity-0',
+          )}
+        />
+        <div
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-muted/80 via-muted/30 to-transparent transition-opacity duration-150',
+            edge.right ? 'opacity-100' : 'opacity-0',
+          )}
+        />
       </div>
 
       <SubOptions

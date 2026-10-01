@@ -19,6 +19,18 @@ vi.mock('@sloughgpt/strui', () => ({
   IconCopy: (props: any) => <span data-testid="icon-copy" {...props} />,
   IconFolder: (props: any) => <span data-testid="icon-folder" {...props} />,
   IconX: (props: any) => <span data-testid="icon-x" {...props} />,
+  IconMore: (props: any) => <span data-testid="icon-more" {...props} />,
+  // Structural stand-ins: the row only cares that one affordance renders and
+  // that the actions land in the menu, not how the menu positions itself.
+  DropdownMenu: ({ children }: any) => <>{children}</>,
+  DropdownMenuTrigger: ({ children }: any) => children,
+  DropdownMenuContent: ({ children }: any) => <div role="menu">{children}</div>,
+  DropdownMenuItem: ({ children, onSelect, disabled, destructive }: any) => (
+    <div role="menuitem" aria-disabled={disabled || undefined} data-destructive={destructive ? '' : undefined} onClick={onSelect}>
+      {children}
+    </div>
+  ),
+  DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
 }))
 
 const createConv = (id: string, overrides: Partial<Conversation> = {}): Conversation => ({
@@ -95,5 +107,72 @@ describe('ConvRow', () => {
     fireEvent.change(input, { target: { value: 'Changed' } })
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('keeps one overflow affordance instead of spending the row width on inline buttons', () => {
+    const { container } = render(
+      <ConvRow
+        conversation={createConv('1')}
+        isActive={false}
+        onSelect={onSelect}
+        onDelete={onDelete}
+        onStar={onStar}
+        onPin={onPin}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Actions for Test Conversation 1' })).toBeInTheDocument()
+
+    // The eight inline controls that used to claim 212px of a 244px row are gone.
+    const inline = container.querySelectorAll(
+      'button[aria-label="Pin"], button[aria-label="Unpin"], button[aria-label="Star"], button[aria-label="Unstar"], button[aria-label^="Duplicate"], button[aria-label="Archive"], button[aria-label^="Delete"]',
+    )
+    expect(inline.length).toBe(0)
+
+    // …and every one of them is reachable from the menu.
+    const items = screen.getAllByRole('menuitem').map((n) => n.textContent)
+    expect(items).toContain('Pin')
+    expect(items).toContain('Star')
+    expect(items).toContain('Delete conversation')
+  })
+
+  it('does not select the conversation when the actions menu is opened', () => {
+    render(
+      <ConvRow conversation={createConv('1')} isActive={false} onSelect={onSelect} onDelete={onDelete} onPin={onPin} />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Actions for Test Conversation 1' }))
+    expect(onSelect).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByText('Test Conversation 1'))
+    expect(onSelect).toHaveBeenCalledWith('1')
+  })
+
+  it('runs the chosen action with this conversation id', () => {
+    render(
+      <ConvRow
+        conversation={createConv('1')}
+        isActive={false}
+        onSelect={onSelect}
+        onDelete={onDelete}
+        onStar={onStar}
+        onPin={onPin}
+      />,
+    )
+    fireEvent.click(screen.getByRole('menuitem', { name: /Delete/ }))
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onDelete.mock.calls[0][1]).toBe('1')
+
+    fireEvent.click(screen.getByRole('menuitem', { name: /Star/ }))
+    expect(onStar).toHaveBeenCalledTimes(1)
+    expect(onStar.mock.calls[0][1]).toBe('1')
+    expect(onStar.mock.calls[0][2]).toBe(true)
+  })
+
+  it('hides the actions menu while the title is being renamed', () => {
+    render(
+      <ConvRow conversation={createConv('1')} isActive={false} onSelect={onSelect} onRename={onRename} onPin={onPin} />,
+    )
+    expect(screen.getByRole('button', { name: 'Actions for Test Conversation 1' })).toBeInTheDocument()
+    fireEvent.doubleClick(screen.getByText('Test Conversation 1'))
+    expect(screen.queryByRole('button', { name: 'Actions for Test Conversation 1' })).toBeNull()
   })
 })

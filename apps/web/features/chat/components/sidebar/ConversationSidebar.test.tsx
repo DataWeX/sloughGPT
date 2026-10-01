@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/link', () => ({
+vi.mock('@/vite/next-compat/link', () => ({
   default: ({ children, href, onClick }: { children: React.ReactNode; href: string; onClick?: () => void }) => (
     <a href={href} onClick={onClick}>{children}</a>
   ),
@@ -35,6 +35,22 @@ vi.mock('@sloughgpt/strui', () => {
     IconCopy: iconMock('copy'),
     IconDot: iconMock('dot'),
     IconDotOutline: iconMock('dot-outline'),
+    IconMore: iconMock('more'),
+    // ConvRow collapses its actions into one overflow menu.
+    DropdownMenu: ({ children }: any) => <>{children}</>,
+    DropdownMenuTrigger: ({ children }: any) => children,
+    DropdownMenuContent: ({ children }: any) => <div role="menu">{children}</div>,
+    DropdownMenuItem: ({ children, onSelect, disabled, destructive }: any) => (
+      <div
+        role="menuitem"
+        aria-disabled={disabled || undefined}
+        data-destructive={destructive ? '' : undefined}
+        onClick={onSelect}
+      >
+        {children}
+      </div>
+    ),
+    DropdownMenuSeparator: () => <hr data-testid="menu-separator" />,
     AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
@@ -83,13 +99,13 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
 }
 })
 
-const { chatDBMock } = vi.hoisted(() => {
+const { chatDBMock, kv } = vi.hoisted(() => {
   const kv: Record<string, string> = {}
   const chatDBMock = {
     getKV: vi.fn(async (key: string) => kv[key] ?? undefined),
     setKV: vi.fn(async (key: string, value: string) => { kv[key] = value }),
   }
-  return { chatDBMock }
+  return { chatDBMock, kv }
 })
 
 vi.mock('@/lib/db', () => ({ chatDB: chatDBMock }))
@@ -126,7 +142,12 @@ describe('ConversationSidebar', () => {
     onClose,
   }
 
-  beforeEach(() => { vi.clearAllMocks(); localStorage.clear() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    for (const k of Object.keys(kv)) delete kv[k]
+    chatDBMock.getKV.mockImplementation(async (key: string) => kv[key] ?? '')
+  })
   afterEach(cleanup)
 
   it('renders desktop sidebar', () => {
@@ -225,7 +246,7 @@ describe('ConversationSidebar', () => {
         onDeleteConversation={onDeleteConversation}
       />
     )
-    const deleteBtn = screen.getByLabelText('Delete Conversation 1')
+    const deleteBtn = screen.getByRole('menuitem', { name: /Delete conversation/i })
     fireEvent.click(deleteBtn)
     expect(screen.getByTestId('alert-dialog')).toBeDefined()
     const deleteAction = screen.getByText('Delete')
@@ -242,7 +263,7 @@ describe('ConversationSidebar', () => {
         onDeleteConversation={onDeleteConversation}
       />
     )
-    const deleteBtn = screen.getByLabelText('Delete Conversation 1')
+    const deleteBtn = screen.getByRole('menuitem', { name: /Delete conversation/i })
     fireEvent.click(deleteBtn)
     expect(screen.getByTestId('alert-dialog')).toBeDefined()
     const cancelBtn = screen.getByText('Cancel')
@@ -413,6 +434,20 @@ describe('ConversationSidebar', () => {
     fireEvent.click(screen.getByText('Name'))
     const updatedBtn = screen.getByLabelText('Sort conversations')
     expect(updatedBtn.className).toContain('text-primary')
+  })
+
+  it('does not re-PUT the sort key it just read on mount', async () => {
+    const conversations = [createConv('1', { name: 'Zebra', updated_at: '2026-01-01' })]
+    chatDBMock.getKV.mockImplementation(async (key: string) => (key === 'sloughgpt:sidebar-sort' ? 'name' : ''))
+    render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
+    await vi.waitFor(() => {
+      const sortBtn = screen.getByLabelText('Sort conversations')
+      expect(sortBtn.className).toContain('text-primary')
+    })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(chatDBMock.setKV).not.toHaveBeenCalled()
+    // Restore the default kv-backed reader for later tests.
+    chatDBMock.getKV.mockImplementation(async (key: string) => kv[key] ?? '')
   })
 
   it('persists sort preference across remounts', async () => {

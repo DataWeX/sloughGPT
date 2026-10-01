@@ -216,6 +216,50 @@ describe('DropdownMenu', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('re-measures after anchoring so the menu aligns to the trigger, not the viewport floor', () => {
+    // jsdom has no layout, so fake the one measurement that matters. The menu
+    // reports body width on its first read — it is not `position: fixed` yet,
+    // so it is still a full-width block — and its real shrink-to-fit width on
+    // every read after the anchor has been applied.
+    let reads = 0
+    const spy = vi
+      .spyOn(window.HTMLElement.prototype, 'offsetWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.getAttribute('role') !== 'menu') return 0
+        return reads++ === 0 ? 800 : 202
+      })
+
+    try {
+      renderMenu()
+      const trigger = screen.getByTestId('trigger')
+      // jsdom rects are all zero; put the trigger where the real one sits.
+      trigger.getBoundingClientRect = () =>
+        ({
+          bottom: 247,
+          height: 24,
+          left: 208,
+          right: 232,
+          top: 223,
+          width: 24,
+          x: 208,
+          y: 223,
+          toJSON: () => ({}),
+        }) as DOMRect
+
+      fireEvent.click(trigger)
+      const menu = screen.getByRole('menu')
+
+      // 232 - 800 clamps to the 8px viewport floor; the stale read is corrected
+      // by the post-commit re-measure, leaving `trigger.right - shrinkToFit`.
+      expect(menu.style.left).toBe(`${232 - 202}px`)
+      expect(menu.style.top).toBe('253px')
+      expect(menu.style.position).toBe('fixed')
+      expect(reads).toBeGreaterThan(1)
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
   it('respects controlled open=false', () => {
     const onOpenChange = vi.fn()
     render(

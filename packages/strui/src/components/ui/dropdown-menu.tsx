@@ -186,11 +186,107 @@ interface DropdownMenuContentProps extends HTMLAttributes<HTMLDivElement> {
   sideOffset?: number
 }
 
+type MenuAnchor = { position: 'fixed'; top: number; left: number }
+
 const DropdownMenuContent = forwardRef<HTMLDivElement, DropdownMenuContentProps>(
-  ({ className, align = 'end', sideOffset = 6, children, ...props }, ref) => {
+  ({ className, align = 'end', sideOffset = 6, children, style, ...props }, ref) => {
     const { open, onOpenChange, triggerRef, focusFirst, focusNext, focusPrev } = useDropdownMenuContext()
     const contentRef = useRef<HTMLDivElement>(null)
+    /** Bounds the re-measure loop when width and `left` chase each other. */
+    const corrections = useRef(0)
     const previousActiveElement = useRef<HTMLElement | null>(null)
+    const [anchor, setAnchor] = useState<MenuAnchor | null>(null)
+
+    /**
+     * Anchor the menu to its trigger instead of letting it land wherever the
+     * portal happens to sit in document flow. Flips above the trigger when
+     * there is no room below, and clamps inside the viewport.
+     */
+    const place = useCallback((): MenuAnchor | null => {
+      const trigger = triggerRef.current
+      const content = contentRef.current
+      if (!trigger || !content) return null
+      const t = trigger.getBoundingClientRect()
+      // offsetWidth/offsetHeight are layout sizes. The menu is still running
+      // `zoom-in-95`, so getBoundingClientRect reports the scaled box — using
+      // it for the width overshoots the alignment by the 5% deficit.
+      const width = content.offsetWidth
+      const height = content.offsetHeight
+      const margin = 8
+      let left =
+        align === 'start'
+          ? t.left
+          : align === 'center'
+            ? t.left + (t.width - width) / 2
+            : t.right - width
+      left = Math.min(Math.max(margin, left), Math.max(margin, window.innerWidth - width - margin))
+      let top = t.bottom + sideOffset
+      if (top + height > window.innerHeight - margin) {
+        const above = t.top - sideOffset - height
+        top = above >= margin ? above : Math.max(margin, window.innerHeight - height - margin)
+      }
+      return { position: 'fixed', top: Math.round(top), left: Math.round(left) }
+    }, [align, sideOffset, triggerRef])
+
+    /**
+     * Place once on open, then keep watching: the menu's own box changes after
+     * the first placement (it goes from "as wide as <body>" to shrink-to-fit),
+     * so a single measurement settles against a stale rectangle and clamps `left`
+     * to the viewport floor.
+     */
+    useLayoutEffect(() => {
+      if (!open) {
+        setAnchor(null)
+        corrections.current = 0
+        return
+      }
+      let active = true
+      const apply = () => {
+        if (!active) return
+        const next = place()
+        if (!next) return
+        setAnchor((prev) =>
+          prev && prev.top === next.top && prev.left === next.left ? prev : next,
+        )
+      }
+      apply()
+
+      window.addEventListener('resize', apply)
+      window.addEventListener('scroll', apply, true)
+      const observer =
+        typeof ResizeObserver !== 'undefined' && contentRef.current
+          ? new ResizeObserver(apply)
+          : null
+      observer?.observe(contentRef.current as Element)
+      return () => {
+        active = false
+        window.removeEventListener('resize', apply)
+        window.removeEventListener('scroll', apply, true)
+        observer?.disconnect()
+      }
+    }, [open, place])
+
+    /**
+     * Re-measure after every commit that changed the anchor.
+     *
+     * The first placement runs while the menu is still laid out at `<body>`
+     * width — it only becomes `position: fixed` once the anchor lands — so the
+     * width that placement reads is not the width the menu will have, and `left`
+     * clamps to the viewport floor instead of aligning to the trigger. Measuring
+     * again from here sees the box as React actually rendered it, because this
+     * effect runs after the style has been applied.
+     *
+     * Deliberately not rAF or a microtask: those run before the flush (or only
+     * during rendering steps that never happen while the page is hidden), so they
+     * re-measure the same stale rectangle. The equality check converges; the tick
+     * cap guarantees it stops even if width and left keep chasing each other.
+     */
+    useLayoutEffect(() => {
+      if (!open || !anchor) return
+      if (corrections.current++ > 4) return
+      const next = place()
+      if (next && (next.top !== anchor.top || next.left !== anchor.left)) setAnchor(next)
+    }, [open, anchor, place])
 
     useLayoutEffect(() => {
       if (open) {
@@ -250,11 +346,16 @@ const DropdownMenuContent = forwardRef<HTMLDivElement, DropdownMenuContentProps>
         }}
         role="menu"
         className={cn(
-          'z-50 min-w-[10rem] bg-popover border border-border rounded-lg shadow-xl p-1',
-          'animate-in fade-in-0 zoom-in-95 duration-150',
+          'z-50 min-w-[10rem] max-h-[70vh] overflow-y-auto overscroll-contain',
+          'bg-popover border border-border rounded-lg shadow-xl p-1',
+          // No `duration-*` here: it sets transition-duration with the default
+          // transition-property of `all`, which would animate the left/top this
+          // component writes during placement. `.animate-in` owns the timing.
+          'animate-in fade-in-0 zoom-in-95',
           className,
         )}
         {...props}
+        style={{ ...style, ...(anchor ?? {}) }}
       >
         {children}
       </div>,
