@@ -35,6 +35,7 @@ const TAMAGUI_CONFIG = path.join(ROOT, 'apps/mobile/tamagui.config.ts')
 const TAMAGUI_PROJECTION = path.join(ROOT, 'apps/mobile/src/theme/tamagui-themes.generated.ts')
 const MAGAZINE_PAGE = path.join(ROOT, 'apps/web/app/(app)/magazine/page.tsx')
 const SHOWCASE_PROJECTION = path.join(ROOT, 'apps/web/lib/palette-showcase.generated.ts')
+const DESIGN_DOC = path.join(ROOT, 'docs/design/DESIGN_SYSTEM.md')
 
 interface Palette {
   palettes: Record<
@@ -60,6 +61,10 @@ interface Palette {
   showcase?: {
     generated: string
     palette: string
+  }
+  doc?: {
+    file: string
+    tables: string[]
   }
 }
 
@@ -490,5 +495,88 @@ describe('magazine showcase projection', () => {
     expect([...lightDoc].sort(), 'light/dark document the same token set').toEqual(
       [...darkDoc].sort(),
     )
+  })
+})
+
+describe('design doc color tables', () => {
+  /** Locate a markdown table by its header cells; returns data rows (dash row skipped). */
+  const findTable = (headerCells: string[]): string[][] => {
+    const lines = read(DESIGN_DOC).split('\n')
+    const cellsOf = (l: string) => {
+      const m = l.match(/^\| (.+) \|$/)
+      if (!m || /^[\s\-:|]+$/.test(m[1])) return null
+      return m[1].split(' | ').map((c) => c.trim())
+    }
+    const i = lines.findIndex((l) => {
+      const c = cellsOf(l)
+      return (
+        c !== null &&
+        c.length >= headerCells.length &&
+        c[0] === headerCells[0] &&
+        c[1] === headerCells[1]
+      )
+    })
+    expect(i, `header [${headerCells.join(' | ')}] in DESIGN_SYSTEM.md`).toBeGreaterThan(-1)
+    const rows: string[][] = []
+    for (let k = i + 2; k < lines.length && lines[k].startsWith('|'); k++) {
+      const c = cellsOf(lines[k])
+      if (c) rows.push(c)
+    }
+    return rows
+  }
+  const tick = (s: string) => s.replace(/`/g, '')
+
+  it('doc declares a generated region for every value table', () => {
+    expect(loadPalette().doc, 'palette.json must define a doc section').toBeDefined()
+    const src = read(DESIGN_DOC)
+    for (const name of loadPalette().doc!.tables) {
+      expect(src, `${name} BEGIN marker`).toContain(`<!-- @tokens:${name} BEGIN -->`)
+      expect(src, `${name} END marker`).toContain(`<!-- @tokens:${name} END -->`)
+    }
+  })
+
+  it('table values match palette.json (independent of the generator)', () => {
+    const p = loadPalette()
+    const basePalette = p.palettes['noir-violet']
+
+    for (const [header, mode] of [
+      [['Token', 'RGB', 'Usage'], 'light'],
+      [['Token', 'RGB', 'Usage'], 'dark'],
+    ] as const) {
+      // both tables share a header; find them in document order
+      const all = read(DESIGN_DOC)
+      const starts: number[] = []
+      const lines = all.split('\n')
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith('| Token') && lines[i].includes('| RGB')) starts.push(i)
+      }
+      expect(starts.length, 'light + dark tables present').toBe(2)
+      const idx = starts[mode === 'light' ? 0 : 1]
+      const rows: string[][] = []
+      for (let k = idx + 2; k < lines.length && lines[k].startsWith('|'); k++) {
+        const m = lines[k].match(/^\| (.+) \|$/)
+        if (m && !/^[\s\-:|]+$/.test(m[1])) rows.push(m[1].split(' | ').map((c) => c.trim()))
+      }
+      expect(rows.length, `${mode} rows`).toBeGreaterThanOrEqual(18)
+      for (const [token, value] of rows) {
+        const want = basePalette[mode][tick(token)]
+        expect(want, `${mode} ${token} in palette`).toBeDefined()
+        expect(tick(value), `${mode} ${token} value`).toBe(want)
+      }
+    }
+
+    const charts = findTable(['Token', 'Light'])
+    expect(charts.length, 'chart rows').toBe(5)
+    for (const [token, light, dark] of charts) {
+      expect(tick(light), `chart ${token} light`).toBe(basePalette.light[tick(token)])
+      expect(tick(dark), `chart ${token} dark`).toBe(basePalette.dark[tick(token)])
+    }
+
+    const auras = findTable(['Theme', 'Aura'])
+    expect(auras.length, 'aura rows').toBe(Object.keys(p.auras).length)
+    for (const [theme, , primary] of auras) {
+      const id = tick(theme).replace(/^theme-/, '')
+      expect(tick(primary), `aura ${id} primary`).toBe(p.auras[id]?.primary)
+    }
   })
 })

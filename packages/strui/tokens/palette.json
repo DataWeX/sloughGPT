@@ -580,6 +580,10 @@
     "generated": "apps/web/lib/palette-showcase.generated.ts",
     "palette": "noir-violet"
   },
+  "doc": {
+    "file": "docs/design/DESIGN_SYSTEM.md",
+    "tables": ["light-tokens", "dark-tokens", "chart-tokens", "accent-auras"]
+  },
   "_comments": {
     "light": "  /* Light — warm cream paper with violet undertone */",
     "palettes": "/* Palettes — full-spectrum overrides applied via html class */",

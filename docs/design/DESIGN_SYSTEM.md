@@ -37,8 +37,10 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 > `apps/web/app/globals.css` and `packages/strui/src/styles/globals.css`, into
 > `apps/web/lib/theme-tokens.generated.ts` (switcher swatches),
 > `apps/mobile/src/theme/palette.generated.ts`,
-> `apps/mobile/src/theme/tamagui-themes.generated.ts` (tamagui theme overrides), and
-> `apps/web/lib/palette-showcase.generated.ts` (magazine showcase data).
+> `apps/mobile/src/theme/tamagui-themes.generated.ts` (tamagui theme overrides),
+> `apps/web/lib/palette-showcase.generated.ts` (magazine showcase data), and the
+> value tables in this document (the `<!-- @tokens:* -->` regions below — the
+> Usage/Mood prose columns stay hand-written).
 > To change a value: edit `palette.json`,
 > run `node packages/strui/scripts/gen-tokens.mjs` (audit with `--check`), and commit the
 > regenerated outputs — never hand-edit a generated file.
@@ -46,6 +48,8 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 > (base → palette → aura), aura scoping (`--primary`/`--ring` only), and totality.
 
 ### Light Mode
+
+<!-- @tokens:light-tokens BEGIN -->
 
 | Token                    | RGB           | Usage                                         |
 | ------------------------ | ------------- | --------------------------------------------- |
@@ -68,7 +72,11 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 | `--warning`              | `236 168 60`  | Warning states                                |
 | `--destructive`          | `220 80 90`   | Errors, destructive actions                   |
 
+<!-- @tokens:light-tokens END -->
+
 ### Dark Mode
+
+<!-- @tokens:dark-tokens BEGIN -->
 
 | Token                    | RGB           | Usage                                  |
 | ------------------------ | ------------- | -------------------------------------- |
@@ -91,7 +99,11 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 | `--warning`              | `240 192 80`  | Warning states                         |
 | `--destructive`          | `235 100 110` | Errors, destructive actions            |
 
+<!-- @tokens:dark-tokens END -->
+
 ### Chart Colors
+
+<!-- @tokens:chart-tokens BEGIN -->
 
 | Token       | Light        | Dark          |
 | ----------- | ------------ | ------------- |
@@ -101,11 +113,15 @@ All colors are RGB triples used as `rgb(var(--token))` in CSS and `bg-token`, `t
 | `--chart-4` | `90 150 220` | `100 165 240` |
 | `--chart-5` | `220 80 90`  | `235 100 110` |
 
+<!-- @tokens:chart-tokens END -->
+
 **Chart rule:** every chart series, legend swatch, progress bar, and per-item accent references a chart or semantic token — `stroke="var(--chart-1)"`, `backgroundColor: 'var(--chart-N)'`, `bg-success`/`bg-warning`/`bg-destructive`. Color constants at the top of a component (`const COLORS = { a: '#6366f1' }`) are forbidden; define them as `{ a: 'var(--chart-1)' }` so they follow theme and palette like everything else.
 
 ## Accent Auras
 
 Each accent theme is a full aura — not just a primary color swap. Themes override `--primary`, `--ring`, `--secondary`, `--secondary-foreground`, `--muted`, `--border`, and `--input` to shift the entire UI atmosphere.
+
+<!-- @tokens:accent-auras BEGIN -->
 
 | Theme          | Aura       | Primary       | Mood                            |
 | -------------- | ---------- | ------------- | ------------------------------- |
@@ -116,6 +132,8 @@ Each accent theme is a full aura — not just a primary color swap. Themes overr
 | `theme-orange` | Peach      | `236 155 90`  | Peachy bread crust, warm bakery |
 | `theme-green`  | Mint       | `72 178 130`  | Fresh mint, natural             |
 | `theme-teal`   | Dew        | `72 166 200`  | Cool dew, refreshing            |
+
+<!-- @tokens:accent-auras END -->
 
 Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool tints to match the aura. Dark mode variants deepen these shifts.
 

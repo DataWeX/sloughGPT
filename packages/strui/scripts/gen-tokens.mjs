@@ -140,14 +140,16 @@ const RENDERERS = {
 }
 
 // ------------------------------------------------------------------ css writing
-function applyRegion(css, name, content) {
-  const begin = `/* @tokens:${name} BEGIN */`
-  const end = `/* @tokens:${name} END */`
-  const i = css.indexOf(begin)
-  const j = css.indexOf(end)
+function applyRegion(text, name, content, opts = {}) {
+  const begin = opts.begin ?? `/* @tokens:${name} BEGIN */`
+  const end = opts.end ?? `/* @tokens:${name} END */`
+  const gapBefore = opts.gapBefore ?? '\n'
+  const gapAfter = opts.gapAfter ?? '\n'
+  const i = text.indexOf(begin)
+  const j = text.indexOf(end)
   if (i === -1 || j === -1) throw new Error(`missing @tokens:${name} markers`)
   if (j < i) throw new Error(`@tokens:${name} markers out of order`)
-  return css.slice(0, i + begin.length) + '\n' + content + '\n' + css.slice(j)
+  return text.slice(0, i + begin.length) + gapBefore + content + gapAfter + text.slice(j)
 }
 
 function renderStylesheet(targetId) {
@@ -157,6 +159,104 @@ function renderStylesheet(targetId) {
     css = applyRegion(css, region, RENDERERS[region](targetId))
   }
   return [file, css]
+}
+
+// --------------------------------------------------------------- md doc tables
+/**
+ * DESIGN_SYSTEM.md's value tables are marker-delimited regions. The generator owns
+ * the table structure and every value cell; Usage/Aura/Mood prose cells are parsed
+ * out of the current document and carried over verbatim (hand-written prose stays
+ * hand-written — see card 20260930_099).
+ */
+const DOC_TABLES = {
+  'light-tokens': { header: ['Token', 'RGB', 'Usage'], kind: 'mode', mode: 'light' },
+  'dark-tokens': { header: ['Token', 'RGB', 'Usage'], kind: 'mode', mode: 'dark' },
+  'chart-tokens': { header: ['Token', 'Light', 'Dark'], kind: 'chart' },
+  'accent-auras': { header: ['Theme', 'Aura', 'Primary', 'Mood'], kind: 'aura' },
+}
+
+const tick = (s) => s.replace(/`/g, '')
+
+function parseMdRows(region) {
+  return region
+    .split('\n')
+    .map((l) => l.match(/^\| (.+) \|$/))
+    .filter((m) => m && !/^[\s\-:|]+$/.test(m[1]))
+    .map((m) => m[1].split(' | ').map((c) => c.trim()))
+}
+
+/** Prettier-stable markdown table: every column padded to its widest cell. */
+function mdTable(header, rows) {
+  const widths = header.map((_, c) =>
+    Math.max(...[header, ...rows].map((r) => (r[c] ?? '').length)),
+  )
+  const line = (cells) => `| ${cells.map((c, i) => c.padEnd(widths[i])).join(' | ')} |`
+  return [line(header), line(widths.map((w) => '-'.repeat(w))), ...rows.map(line)].join('\n')
+}
+
+function renderDocTable(name, region) {
+  const cfg = DOC_TABLES[name]
+  if (!cfg) throw new Error(`unknown doc table "${name}"`)
+  const parsed = parseMdRows(region)
+  const data = parsed.slice(1) // row 0 is the header (owned by cfg.header)
+  if (data.length === 0) throw new Error(`doc table "${name}" has no data rows`)
+  const cell = (token) => `\`${token}\``
+
+  const rows = data.map((r) => {
+    if (r.length !== cfg.header.length) {
+      throw new Error(
+        `doc table "${name}" row has ${r.length} cells, expected ${cfg.header.length}`,
+      )
+    }
+    if (cfg.kind === 'mode') {
+      const token = tick(r[0])
+      const value = base[cfg.mode][token]
+      if (value === undefined)
+        throw new Error(`palette source missing ${token} for mode "${cfg.mode}"`)
+      return [cell(token), `\`${value}\``, r[2]]
+    }
+    if (cfg.kind === 'chart') {
+      const token = tick(r[0])
+      const light = base.light[token]
+      const dark = base.dark[token]
+      if (light === undefined || dark === undefined)
+        throw new Error(`palette source missing ${token}`)
+      return [cell(token), `\`${light}\``, `\`${dark}\``]
+    }
+    // aura: Theme | Aura label (prose) | Primary (value) | Mood (prose)
+    const id = tick(r[0]).replace(/^theme-/, '')
+    const aura = palette.auras[id]
+    if (!aura) throw new Error(`palette source missing aura "${id}"`)
+    return [`\`theme-${id}\``, r[1], `\`${aura.primary}\``, r[3]]
+  })
+
+  return mdTable(cfg.header, rows)
+}
+
+function renderDoc() {
+  const conf = palette.doc
+  if (!conf) throw new Error('palette.json missing the doc section')
+  const file = fromRoot(conf.file)
+  let md = readFileSync(file, 'utf8')
+  for (const name of conf.tables) {
+    md = applyRegion(md, name, renderDocTable(name, regionContent(md, name)), {
+      begin: `<!-- @tokens:${name} BEGIN -->`,
+      end: `<!-- @tokens:${name} END -->`,
+      gapBefore: '\n\n',
+      gapAfter: '\n\n',
+    })
+  }
+  return [file, md]
+}
+
+function regionContent(text, name) {
+  const begin = `<!-- @tokens:${name} BEGIN -->`
+  const end = `<!-- @tokens:${name} END -->`
+  const i = text.indexOf(begin)
+  const j = text.indexOf(end)
+  if (i === -1 || j === -1) throw new Error(`missing @tokens:${name} markers`)
+  if (j < i) throw new Error(`@tokens:${name} markers out of order`)
+  return text.slice(i + begin.length, j)
 }
 
 // ----------------------------------------------------------------- ts rendering
@@ -314,6 +414,7 @@ const outputs = [
   [fromRoot(palette.mobile.generated), renderMobileTs()],
   [fromRoot(palette.tamagui.generated), renderTamaguiTs()],
   [fromRoot(palette.showcase.generated), renderShowcaseTs()],
+  renderDoc(),
 ]
 
 let drift = 0
