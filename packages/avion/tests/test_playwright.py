@@ -1,20 +1,41 @@
 """Playwright live tests — tabs, network mock, find/click/type.
 
-Needs Chromium (playwright install). Slower than unit tests; exercises
+Needs a real Chromium: playwright's own download if present, else the
+system flatpak build. The suite never downloads browsers (house rule);
+when neither exists the module skips. Slower than unit tests; exercises
 the real browser path Arken drives in production.
 """
 
 import asyncio
+import os
+from pathlib import Path
 
 import pytest
-from arken import Arken, ElementLocator
-from arken.backends.playwright import PlaywrightBackend
-from arken.network import MockResponse, MockRule, NetworkMocker
-from arken.tabs import TabManager
+from avion import Arken, ElementLocator
+from avion.backends.playwright import PlaywrightBackend
+from avion.network import MockResponse, MockRule, NetworkMocker
+from avion.tabs import TabManager
+
+
+def _chromium_available() -> bool:
+    """Some launchable Chromium exists — the suite never downloads one.
+
+    Mirrors PlaywrightBackend's own resolution: playwright's download,
+    else $AVION_CHROMIUM, else the flatpak export shim.
+    """
+    cache = Path.home() / ".cache" / "ms-playwright"
+    if cache.is_dir() and any(cache.glob("chromium*")):
+        return True
+    if os.environ.get("AVION_CHROMIUM"):
+        return True
+    shim = Path.home() / ".local/share/flatpak/exports/bin/org.chromium.Chromium"
+    return shim.exists()
+
 
 pytestmark = pytest.mark.skipif(
-    __import__("importlib").util.find_spec("playwright") is None,
-    reason="playwright not installed",
+    __import__("importlib").util.find_spec("playwright") is None
+    or not _chromium_available(),
+    reason="playwright not installed and no alternative chromium",
 )
 
 PAGE_A = "data:text/html,<html><head><title>A</title></head><body><button>Go</button></body></html>"
@@ -40,13 +61,13 @@ class TestLiveBasics:
         run(main())
 
     def test_run_task_live(self):
-        from arken.core.task import Task, TaskStep
+        from avion.core.task import Task, TaskStep
 
         async def main():
             async with Arken(headless=True) as a:
 
                 async def open_a(ctx):
-                    assert await ctx["arken"].goto(PAGE_A)
+                    assert await ctx["avion"].goto(PAGE_A)
 
                 result = await a.run_task(Task("live", steps=[TaskStep("open", open_a)]))
                 assert result.status.value == "passed"

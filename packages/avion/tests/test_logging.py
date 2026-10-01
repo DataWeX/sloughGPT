@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 
-from arken.logging import StructuredLogger
+from avion.logging import StructuredLogger
 
 
 class TestEntries:

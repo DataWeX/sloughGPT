@@ -6,9 +6,11 @@ Implements the Backend protocol using Playwright's async API.
 from __future__ import annotations
 
 import asyncio
+import os
+from pathlib import Path
 from typing import Any
 
-from arken.core.element import (
+from avion.core.element import (
     Element,
     ElementLocator,
     SelectorStrategy,
@@ -28,9 +30,15 @@ class PlaywrightBackend:
         await backend.stop()
     """
 
-    def __init__(self, headless: bool = True, browser_type: str = "chromium"):
+    def __init__(
+        self,
+        headless: bool = True,
+        browser_type: str = "chromium",
+        executable_path: str | None = None,
+    ):
         self._headless = headless
         self._browser_type = browser_type
+        self._executable_path = executable_path
         self._playwright = None
         self._browser = None
         self._page = None
@@ -51,9 +59,32 @@ class PlaywrightBackend:
 
         self._playwright = await async_playwright().start()
         browser_cls = getattr(self._playwright, self._browser_type)
-        self._browser = await browser_cls.launch(headless=self._headless)
+        self._browser = await browser_cls.launch(
+            headless=self._headless,
+            executable_path=self._resolve_executable(browser_cls),
+        )
         self._page = await self._browser.new_page()
         self._register_page(self._page)
+
+    def _resolve_executable(self, browser_cls: Any) -> str | None:
+        """Explicit override > playwright's download > system Chromium.
+
+        We never trigger ``playwright install`` (house rule: no downloads).
+        On machines without the download, fall back to a system browser:
+        ``$AVION_CHROMIUM`` first, then the flatpak export shim. ``None``
+        means "let playwright use its own" — its original error surfaces
+        when nothing exists at all.
+        """
+        if self._executable_path:
+            return self._executable_path
+        bundled = getattr(browser_cls, "executable_path", None)
+        if isinstance(bundled, str) and Path(bundled).exists():
+            return None
+        env = os.environ.get("AVION_CHROMIUM")
+        if env and Path(env).exists():
+            return env
+        shim = Path.home() / ".local/share/flatpak/exports/bin/org.chromium.Chromium"
+        return str(shim) if shim.exists() else None
 
     async def stop(self) -> None:
         if self._page:
@@ -133,7 +164,7 @@ class PlaywrightBackend:
         import json as _json
 
         async def handler(route) -> None:
-            from arken.network.mocker import NetworkRequest
+            from avion.network.mocker import NetworkRequest
 
             req = route.request
             resp = await self._mocker.intercept(

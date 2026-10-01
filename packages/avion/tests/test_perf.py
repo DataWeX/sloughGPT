@@ -2,7 +2,7 @@
 
 import time
 
-from arken.perf import PerformanceMarker
+from avion.perf import PerformanceMarker
 
 
 class TestMarkers:

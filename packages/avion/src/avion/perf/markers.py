@@ -82,7 +82,7 @@ class PerformanceMarker:
 
         perf = PerformanceMarker()
         with perf.measure("goto"):
-            await arken.goto("/chat")
+            await avion.goto("/chat")
         perf.mark("click", 12.5)
         report = perf.report()
     """

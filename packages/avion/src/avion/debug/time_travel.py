@@ -112,7 +112,7 @@ class TimeTravel:
         text_excerpt: str = "",
         screenshot: bytes | None = None,
     ) -> PageSnapshot:
-        from arken.vision.detector import ImageAnalyzer
+        from avion.vision.detector import ImageAnalyzer
 
         self._seq += 1
         snap = PageSnapshot(

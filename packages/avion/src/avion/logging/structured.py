@@ -18,14 +18,14 @@ class StructuredLogger:
         log.set_context(run="1")
         log.navigation("/chat", True)
         log.element("clicked", "text='Start'")
-        log.save("arken_output/logs.json")
+        log.save("avion_output/logs.json")
     """
 
-    def __init__(self, name: str = "arken"):
+    def __init__(self, name: str = "avion"):
         self.name = name
         self._context: dict[str, str] = {}
         self._entries: list[dict[str, Any]] = []
-        self._py_logger = logging.getLogger(f"arken.{name}")
+        self._py_logger = logging.getLogger(f"avion.{name}")
 
     def set_context(self, **kwargs: str) -> None:
         """Attach key-values included in every later entry."""

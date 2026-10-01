@@ -1,4 +1,4 @@
-"""Make the arken package importable in tests without install."""
+"""Make the avion package importable in tests without install."""
 
 import os
 import sys

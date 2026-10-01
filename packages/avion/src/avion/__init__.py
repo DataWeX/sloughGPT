@@ -8,18 +8,18 @@ Usage::
         await a.fill(ElementLocator.css("input[name=q]"), "hello")
 """
 
-from arken.ai.agent import Agent, AgentConfig, AgentResult
-from arken.ai.models import Action, ActionType, validate_action
-from arken.core.element import (
+from avion.ai.agent import Agent, AgentConfig, AgentResult
+from avion.ai.models import Action, ActionType, validate_action
+from avion.core.element import (
     Backend,
     Element,
     ElementFinder,
     ElementLocator,
     ElementNotFoundError,
 )
-from arken.core.navigator import NavigationEntry, Navigator
-from arken.core.session import Arken, ArkenConfig
-from arken.interact.primitives import (
+from avion.core.navigator import NavigationEntry, Navigator
+from avion.core.session import Arken, ArkenConfig
+from avion.interact.primitives import (
     BoundingBox,
     Coordinate,
     InteractionChain,

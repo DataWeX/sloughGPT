@@ -10,8 +10,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from arken import Arken, ElementLocator
-from arken.core.task import Task, TaskStatus, TaskStep
+from avion import Arken, ElementLocator
+from avion.core.task import Task, TaskStatus, TaskStep
 from test_autoclicker import FakeBackend
 
 
@@ -21,7 +21,7 @@ def run(coro):
 
 def _goto(page: str):
     async def step(ctx: dict[str, Any]) -> None:
-        a: Arken = ctx["arken"]
+        a: Arken = ctx["avion"]
         ok = await a.goto(page)
         assert ok, f"goto {page} failed"
         assert page in a.current_url, f"unexpected url {a.current_url}"
@@ -32,7 +32,7 @@ def _goto(page: str):
 def chat_journey() -> Task:
     async def open_chat(ctx):
         await _goto("/chat")(ctx)
-        await ctx["arken"].click_text("Start")
+        await ctx["avion"].click_text("Start")
 
     return Task("chat", "open chat and start", [TaskStep("open", open_chat)])
 
@@ -48,7 +48,7 @@ def training_journey() -> Task:
 def datasets_journey() -> Task:
     async def search(ctx):
         await _goto("/datasets")(ctx)
-        await ctx["arken"].fill(ElementLocator.css("input"), "shakespeare")
+        await ctx["avion"].fill(ElementLocator.css("input"), "shakespeare")
 
     return Task("datasets", "open datasets and search", [TaskStep("search", search)])
 

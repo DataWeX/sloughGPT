@@ -12,8 +12,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from arken.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
-from arken.ai.models import (
+from avion.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
+from avion.ai.models import (
     Action,
     ActionType,
     EchoModel,
@@ -22,13 +22,13 @@ from arken.ai.models import (
     VisionModel,
     validate_action,
 )
-from arken.ai.verifier import Verifier
-from arken.interact.primitives import (
+from avion.ai.verifier import Verifier
+from avion.interact.primitives import (
     Coordinate,
     Keyboard,
     Mouse,
 )
-from arken.vision.detector import ImageAnalyzer, MatchMethod, VisualMatch
+from avion.vision.detector import ImageAnalyzer, MatchMethod, VisualMatch
 
 
 @dataclass
@@ -46,7 +46,7 @@ class AgentConfig:
     viewport_height: int = 720
     deadline_ms: float = 120_000
     no_progress_limit: int = 3  # identical actions in a row = stuck (0 disables)
-    output_dir: str = "arken_output/trajectories"
+    output_dir: str = "avion_output/trajectories"
 
 
 @dataclass
@@ -158,7 +158,7 @@ class Agent:
                      Defaults to a headless PlaywrightBackend.
         """
         if backend is None:
-            from arken.backends.playwright import PlaywrightBackend
+            from avion.backends.playwright import PlaywrightBackend
 
             backend = PlaywrightBackend(headless=self._headless)
         self._backend = backend

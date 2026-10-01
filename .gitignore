@@ -261,3 +261,6 @@ y
 .dev-notes/*.md
 # Hoplite platform metadata (per-thread sandbox artifacts)
 .hoplite/
+
+# avion agent trajectory dumps (test/runtime output)
+avion_output/

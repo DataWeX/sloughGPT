@@ -2,17 +2,17 @@
 
 import asyncio
 
-from arken.core.element import ElementLocator
-from arken.events import (
+from avion.core.element import ElementLocator
+from avion.events import (
     EventBus,
     EventRecorder,
     EventReplay,
     EventType,
     ReplayConfig,
 )
-from arken.events.bus import Subscription
-from arken.events.models import Event
-from arken.events.replay import parse_locator
+from avion.events.bus import Subscription
+from avion.events.models import Event
+from avion.events.replay import parse_locator
 from test_autoclicker import FakeBackend
 
 
@@ -90,9 +90,9 @@ class TestParseLocator:
 
 class TestReplay:
     def _session(self):
-        from arken import Arken
-        from arken.core.element import ElementFinder
-        from arken.core.navigator import Navigator
+        from avion import Arken
+        from avion.core.element import ElementFinder
+        from avion.core.navigator import Navigator
 
         a = Arken(base_url="http://x")
         a._backend = FakeBackend()

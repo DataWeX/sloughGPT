@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from arken import (
+from avion import (
     Arken,
     Coordinate,
     Element,
@@ -14,7 +14,7 @@ from arken import (
     Keyboard,
     Mouse,
 )
-from arken.core.task import Task, TaskStatus, TaskStep
+from avion.core.task import Task, TaskStatus, TaskStep
 
 
 class FakeBackend:
@@ -153,13 +153,13 @@ class TestLocators:
 
 class TestSession:
     def _session(self):
-        from arken.interact.primitives import Keyboard as Kb
-        from arken.interact.primitives import Mouse as Ms
+        from avion.interact.primitives import Keyboard as Kb
+        from avion.interact.primitives import Mouse as Ms
 
         a = Arken(base_url="http://x")
         a._backend = FakeBackend()
-        from arken.core.element import ElementFinder
-        from arken.core.navigator import Navigator
+        from avion.core.element import ElementFinder
+        from avion.core.navigator import Navigator
 
         a._navigator = Navigator(a._backend, "http://x")  # type: ignore[arg-type]
         a._finder = ElementFinder(a._backend)  # type: ignore[arg-type]
@@ -183,7 +183,7 @@ class TestSession:
         assert a._backend.filled == {ElementLocator.css("input").describe(): "hello"}
 
     def test_find_missing_raises(self):
-        from arken import ElementNotFoundError
+        from avion import ElementNotFoundError
 
         a = self._session()
         try:
@@ -202,7 +202,7 @@ class TestSession:
         assert a._backend.selected == {"css=input": "opt1"}
 
     def test_press_records_key(self):
-        from arken.events import EventType
+        from avion.events import EventType
 
         a = self._session()
         run(a.press("Enter"))
@@ -225,7 +225,7 @@ class TestRunTask:
         a = TestSession()._session()
 
         async def go(ctx):
-            await ctx["arken"].goto("/chat")
+            await ctx["avion"].goto("/chat")
 
         task = Task("open-chat", steps=[TaskStep("goto", go)])
         result = run(a.run_task(task))

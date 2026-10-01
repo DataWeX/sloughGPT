@@ -11,7 +11,7 @@ import itertools
 from dataclasses import dataclass, field
 from typing import Callable
 
-from arken.events.models import Event
+from avion.events.models import Event
 
 
 @dataclass

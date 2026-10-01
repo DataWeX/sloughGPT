@@ -62,9 +62,9 @@ class Task:
     Usage::
 
         task = Task("chat_opens", steps=[
-            TaskStep("goto", lambda ctx: ctx["arken"].goto("/chat")),
+            TaskStep("goto", lambda ctx: ctx["avion"].goto("/chat")),
         ])
-        result = await task.execute({"arken": session})
+        result = await task.execute({"avion": session})
     """
 
     name: str

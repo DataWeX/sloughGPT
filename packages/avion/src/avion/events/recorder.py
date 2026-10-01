@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
-from arken.events.models import Event, EventType
+from avion.events.models import Event, EventType
 
 
 class EventRecorder:
@@ -18,10 +18,10 @@ class EventRecorder:
         rec.record(EventType.NAVIGATE, name="/chat", success=True)
         rec.record(EventType.CLICK, name="text='Start'")
         failures = rec.failed()
-        rec.save("arken_output/events.json")
+        rec.save("avion_output/events.json")
     """
 
-    def __init__(self, session_name: str = "arken_session"):
+    def __init__(self, session_name: str = "avion_session"):
         self.session_name = session_name
         self._events: list[Event] = []
         self._listeners: list[Callable[[Event], None]] = []
