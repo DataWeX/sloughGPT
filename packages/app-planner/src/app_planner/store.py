@@ -19,6 +19,8 @@ Usage::
 
 from __future__ import annotations
 
+import hashlib
+import heapq
 import json
 import os
 import tempfile
@@ -52,12 +54,17 @@ class Card:
     notes: list[dict[str, Any]] = field(default_factory=list)
     created_at: str = ""
     updated_at: str = ""
+    # Hash chain (canonical ordering + tamper evidence; -1 = not yet chained)
+    chain_index: int = -1
+    chain_prev: str = ""
+    chain_hash: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> Card:
+        chain_index = d.get("chain_index", -1)
         return cls(
             id=d.get("id", ""),
             title=d.get("title", ""),
@@ -74,6 +81,9 @@ class Card:
             notes=d.get("notes", []),
             created_at=d.get("created_at", d.get("createdAt", "")),
             updated_at=d.get("updated_at", d.get("updatedAt", "")),
+            chain_index=chain_index if isinstance(chain_index, int) else -1,
+            chain_prev=d.get("chain_prev", "") or "",
+            chain_hash=d.get("chain_hash", "") or "",
         )
 
 
@@ -125,6 +135,23 @@ class Board:
         ]
     )
     cards: list[Card] = field(default_factory=list)
+
+
+# ── Hash chain ────────────────────────────────────────────────────────────
+
+CHAIN_GENESIS = "0" * 64
+_CHAIN_FIELDS = ("chain_index", "chain_prev", "chain_hash")
+
+
+def chain_hash_for(card: Card, prev_hash: str) -> str:
+    """Canonical chain hash: sha256(prev ‖ chain-fields-stripped payload).
+
+    The chain fields themselves are excluded so a card's hash depends only
+    on its content and its predecessor — recomputation is well-founded.
+    """
+    payload = {k: v for k, v in card.to_dict().items() if k not in _CHAIN_FIELDS}
+    blob = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256((prev_hash + "\x00" + blob).encode()).hexdigest()
 
 
 # ── Store ────────────────────────────────────────────────────────────────
@@ -507,6 +534,132 @@ class PlannerStore:
             if q in n.title.lower() or q in n.body.lower() or any(q in t.lower() for t in n.tags)
         ]
 
+    # ── Chain ───────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _chain_order(cards: list[Card]) -> tuple[list[Card], list[str]]:
+        """Topological order over ``blocked_by``, stable by (created_at, id).
+
+        Returns ``(ordered cards, cycle-involved card ids)``. Cards caught in
+        a dependency cycle (or downstream of one) cannot be topologically
+        placed, so they are appended in stable order — every card still gets
+        an index and the call never hangs.
+        """
+        known = {c.id for c in cards}
+        dependents: dict[str, list[int]] = {}
+        indegree = [0] * len(cards)
+        for idx, card in enumerate(cards):
+            seen: set[str] = set()
+            for dep in card.blocked_by:
+                if not isinstance(dep, str) or dep not in known or dep in seen:
+                    continue
+                seen.add(dep)
+                dependents.setdefault(dep, []).append(idx)
+                indegree[idx] += 1
+
+        def key(idx: int) -> tuple[str, str]:
+            card = cards[idx]
+            return (str(card.created_at or ""), str(card.id))
+
+        heap: list[tuple[tuple[str, str], int]] = [
+            (key(i), i) for i in range(len(cards)) if indegree[i] == 0
+        ]
+        heapq.heapify(heap)
+        emitted = [False] * len(cards)
+        order: list[int] = []
+        while heap:
+            _, idx = heapq.heappop(heap)
+            emitted[idx] = True
+            order.append(idx)
+            for nxt in dependents.get(cards[idx].id, ()):
+                indegree[nxt] -= 1
+                if indegree[nxt] == 0:
+                    heapq.heappush(heap, (key(nxt), nxt))
+        leftover = [i for i in range(len(cards)) if not emitted[i]]
+        if leftover:
+            leftover.sort(key=key)
+            order.extend(leftover)
+        cycles = sorted({cards[i].id for i in leftover})
+        return [cards[i] for i in order], cycles
+
+    def _reorder_cards(self, ordered: list[Card]) -> None:
+        """Rewrite managed card lines in *ordered* sequence.
+
+        Schema headers, unparsable lines, and any other non-card content are
+        preserved byte-for-byte in place; card lines are emitted as one block
+        at the position of the first card line. No write when unchanged.
+        """
+        if not self._board_file.exists():
+            return
+        old_text = self._board_file.read_text()
+        id_set = {c.id for c in ordered}
+        card_lines = [self._card_line(c) for c in ordered]
+        out: list[str] = []
+        emitted = False
+        for raw in old_text.splitlines():
+            stripped = raw.strip()
+            if not stripped:
+                continue
+            try:
+                obj = json.loads(stripped)
+            except json.JSONDecodeError:
+                out.append(raw)
+                continue
+            cid = obj.get("id") if isinstance(obj, dict) else None
+            if isinstance(cid, str) and cid in id_set:
+                if not emitted:
+                    out.extend(card_lines)
+                    emitted = True
+                continue
+            out.append(raw)
+        if not emitted:
+            out.extend(card_lines)
+        new_text = "\n".join(out) + "\n" if out else ""
+        if new_text != old_text:
+            self._atomic_write(new_text)
+
+    def compute_chains(self) -> list[str]:
+        """Assign the canonical hash chain to every card; reorder the file.
+
+        Chain order is topological over ``blocked_by`` (so a blocker always
+        gets a lower ``chain_index`` than the cards it blocks), stable by
+        ``(created_at, id)``. Idempotent: recomputing an unchanged board
+        yields identical hashes. Returns cycle-involved card ids.
+        """
+        board = self.load_board()
+        ordered, cycles = self._chain_order(board.cards)
+        prev = CHAIN_GENESIS
+        for index, card in enumerate(ordered):
+            card.chain_index = index
+            card.chain_prev = prev
+            card.chain_hash = chain_hash_for(card, prev)
+            prev = card.chain_hash
+        self._reorder_cards(ordered)
+        return cycles
+
+    def verify_chain(self) -> list[int]:
+        """Chain indices failing verification; empty list means intact.
+
+        Three invariants: file sequence == chain sequence, each stored link
+        matches its predecessor's stored hash, and every card is chained.
+        A mutated card is flagged at its own index — untouched successors
+        keep verifying against their stored (stale) predecessor hash.
+        """
+        cards = self.load_board().cards
+        broken: set[int] = set()
+        for position, card in enumerate(cards):
+            if card.chain_index != position:
+                broken.add(card.chain_index)
+        prev = CHAIN_GENESIS
+        for card in cards:
+            if card.chain_index < 0:
+                broken.add(-1)
+                continue
+            if card.chain_prev != prev or card.chain_hash != chain_hash_for(card, prev):
+                broken.add(card.chain_index)
+            prev = card.chain_hash
+        return sorted(broken)
+
     # ── Sync ────────────────────────────────────────────────────────────
 
     def sync(self) -> tuple[int, int, int]:
@@ -542,6 +695,10 @@ class PlannerStore:
             if note.assignee and card.assignee != note.assignee:
                 self.update_card(card.id, assignee=note.assignee)
                 updated += 1
+
+        # Reconcile, then seal the board: chain recomputation is idempotent
+        # and rewrites cards in canonical order (blockers before blocked).
+        self.compute_chains()
 
         total = len(self.load_board().cards)
         return added, updated, total
