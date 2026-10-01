@@ -92,7 +92,7 @@ SECTION_ALIASES = {
 #   2. module-style: router = APIRouter(prefix="/x"); @router.get("/y")
 #   3. app-level:    @app.get("/y") in main.py
 ROUTE_RE = re.compile(
-    r'@(?P<chain>(?:\w+\.)+\w+)\.(?P<method>get|post|put|delete|patch|head|options)'
+    r'@(?P<chain>\w+(?:\.\w+)*)\.(?P<method>get|post|put|delete|patch|head|options)'
     r'\(\s*(?P<q>["\'])(?P<path>[^"\']*)(?P=q)',
     re.MULTILINE,
 )
@@ -103,6 +103,32 @@ ADD_ROUTE_PATH_RE = re.compile(
     r"^.*?\(\s*(?:path\s*=\s*)?(?P<q>[\"'])(?P<path>[^\"']*)(?P=q)"
 )
 ADD_ROUTE_METHODS_RE = re.compile(r"methods\s*=\s*\[(?P<ms>[^\]]*)\]")
+# endpoint sits right after the path: positional (add_api_route("/x", self.h, ...))
+# or keyword (add_api_route(path="/x", endpoint=self.h, ...))
+ADD_ROUTE_ENDPOINT_RE = re.compile(
+    r"\s*,\s*(?:endpoint\s*\=\s*)?(?P<e>[A-Za-z_]\w*(?:\.\w+)*)"
+)
+FULL_ROW_RE = re.compile(
+    r"^\|\s*`(?P<m>GET|POST|PUT|DELETE|PATCH)`\s*\|\s*`(?P<p>[^`]+)`"
+    r"\s*\|\s*(?P<d>.*?)\s*\|\s*$"
+)
+
+
+def _norm(s: str) -> str:
+    """Normalize a section title or router stem for fuzzy matching."""
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def _endpoint_doc(text: str, endpoint: str) -> str:
+    """First line of the endpoint handler's docstring (best effort)."""
+    name = endpoint.rsplit(".", 1)[-1]
+    m = re.search(
+        rf"def\s+{re.escape(name)}\s*\([^)]*\)[^:\n]*:\s*\n\s*\"\"\"(?P<d>[^\"\n]+)",
+        text,
+    )
+    if not m:
+        return ""
+    return re.sub(r"\s+", " ", m.group("d")).strip()
 APICONFIG_RE = re.compile(
     r"(?P<var>\w+)\s*=\s*APIRouter\((?P<args>.*?)\)\s*(?:\n|$)",
     re.DOTALL,
@@ -122,6 +148,7 @@ class Route:
     method: str
     path: str  # full path incl. prefix
     dynamic: bool = False  # decorator path was not a literal — skipped in diffs
+    desc: str = ""  # handler docstring first line (used by --render-routers)
 
 
 @dataclass
@@ -153,6 +180,12 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
     for m in APICONFIG_RE.finditer(text):
         pm = PREFIX_RE.search(m.group("args"))
         prefixes[m.group("var")] = pm.group(1) if pm else ""
+    # receiver aliases (e.g. `r = self.router` in kb.py) inherit the prefix so
+    # add_api_route calls made through them join paths correctly
+    for am in re.finditer(r"(\w+)\s*=\s*([\w.]+)", text):
+        alias, rhs = am.group(1), am.group(2).rsplit(".", 1)[-1]
+        if rhs in prefixes and alias not in prefixes:
+            prefixes[alias] = prefixes[rhs]
 
     # style 1: class-based add_api_route — bounded per call so a call without
     # methods= can't absorb the next call's methods list.
@@ -167,21 +200,30 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
         mm = ADD_ROUTE_METHODS_RE.search(chunk)
         methods = (re.findall(r"[\"']([A-Za-z]+)[\"']", mm.group("ms")) if mm else []) or ["GET"]
         full = _join(prefixes.get(m.group("recv"), ""), pm.group("path"))
+        em = ADD_ROUTE_ENDPOINT_RE.match(chunk, pm.end())
+        desc = _endpoint_doc(text, em.group("e")) if em else ""
         for method in methods:
-            out.append(Route(router_stem, method.upper(), full))
+            out.append(Route(router_stem, method.upper(), full, desc=desc))
 
     # styles 2+3: decorators on router/app (incl. @self.router.get chains)
     for m in ROUTE_RE.finditer(text):
         key = m.group("chain").rsplit(".", 1)[-1]
         if key not in prefixes and key not in {"app", "router"} and not key.endswith("router"):
             continue  # decorator on an unrelated object
+        dm = re.search(r"def\s+(?P<n>\w+)\s*\(", text[m.end():])
+        desc = _endpoint_doc(text, dm.group("n")) if dm else ""
         out.append(
-            Route(router_stem, m.group("method").upper(), _join(prefixes.get(key, ""), m.group("path")))
+            Route(
+                router_stem,
+                m.group("method").upper(),
+                _join(prefixes.get(key, ""), m.group("path")),
+                desc=desc,
+            )
         )
 
     # dynamic decorator paths — counted, not diffed
     for m in re.finditer(
-        r"@(?:\w+\.)+(?P<method>get|post|put|delete|patch)\(\s*(?![\"'])", text
+        r"@\w+(?:\.\w+)*\.(?P<method>get|post|put|delete|patch)\(\s*(?![\"'])", text
     ):
         out.append(Route(router_stem, m.group("method").upper(), "<dynamic>", dynamic=True))
 
@@ -196,7 +238,11 @@ def collect_code(findings: Findings) -> None:
     if MAIN_PY.exists():
         _scan_file(MAIN_PY, "main", findings.routes)
     if TRAINING_ROUTER.exists():
-        _scan_file(TRAINING_ROUTER, "training/router", findings.routes)
+        # the training umbrella + every sub-router (legacy, lora, distill, ...)
+        # form one logical router; the doc has a single Training section.
+        for p in sorted(TRAINING_ROUTER.parent.glob("*.py")):
+            if p.name != "__init__.py":
+                _scan_file(p, "training/router", findings.routes)
 
 
 def collect_docs(findings: Findings) -> None:
@@ -226,10 +272,12 @@ def diff(findings: Findings) -> None:
         (m, p) for m, p in findings.doc_claims if (m, p) not in code_keys
     ]
 
-    # which routers have any doc section at all
+    # which routers have any doc section at all (explicit aliases first,
+    # then normalized title<->stem match so new sections need no alias edit)
     section_stems = set()
+    norm_stems = {_norm(s): s for s in findings.routers_on_disk}
     for title in findings.doc_sections:
-        stem = SECTION_ALIASES.get(title)
+        stem = SECTION_ALIASES.get(title) or norm_stems.get(_norm(title))
         if stem:
             section_stems.add(stem)
     findings.code_not_documented = [
@@ -257,10 +305,144 @@ def diff(findings: Findings) -> None:
         findings.undocumented[r.router] = findings.undocumented.get(r.router, 0) + 1
 
 
+def _render_routers_md(findings: Findings) -> str:
+    """Regenerate docs/routers.md endpoint tables from code truth.
+
+    Section prose and headings are preserved; row descriptions carry over
+    from the old table when the (METHOD, path) row survives, else fall back
+    to the handler docstring. Sections are kept in file order; routers that
+    had no section get a generated one before the OpenAPI tail.
+    """
+    old = ROUTERS_MD.read_text(encoding="utf-8", errors="replace")
+
+    # carryover: old row descriptions (wrapping continuation lines merged)
+    old_rows: dict[tuple[str, str], str] = {}
+    cur: tuple[str, str] | None = None
+    for line in old.splitlines():
+        mrow = FULL_ROW_RE.match(line)
+        if mrow:
+            cur = (mrow.group("m"), mrow.group("p").strip())
+            old_rows[cur] = mrow.group("d").strip().replace("\\|", "|")
+        elif line.lstrip().startswith("|"):
+            if cur and not re.match(r"^\|[\s\-:|]+$", line):
+                parts = [q.strip() for q in line.strip().strip("|").split("|")]
+                if len(parts) > 2 and parts[2]:
+                    old_rows[cur] = (old_rows[cur] + " " + parts[2]).strip()
+        else:
+            cur = None
+
+    by_stem: dict[str, list[Route]] = {}
+    for r in findings.routes:
+        if not r.dynamic:
+            by_stem.setdefault(r.router, []).append(r)
+    norm_stems = {_norm(s): s for s in findings.routers_on_disk}
+
+    def section_stem(title: str) -> str | None:
+        return SECTION_ALIASES.get(title) or norm_stems.get(_norm(title))
+
+    def clean_desc(s: str) -> str:
+        s = re.sub(r"\s+", " ", s).replace("|", "\\|").strip()
+        return s[:160] + "\u2026" if len(s) > 160 else s
+
+    def table(routes: list[Route]) -> str:
+        rows = ["| Method | Path | Description |", "| --- | --- | --- |"]
+        for r in sorted(routes, key=lambda x: (x.path, x.method)):
+            desc = old_rows.get((r.method, r.path)) or r.desc or ""
+            rows.append(f"| `{r.method}` | `{r.path}` | {clean_desc(desc)} |")
+        return "\n".join(rows) + "\n\n"
+
+    parts = re.split(r"(?m)^(?=## )", old)
+    out: list[str] = [parts[0]]
+    covered: set[str] = set()
+    openapi_at: int | None = None
+    for sec in parts[1:]:
+        tm = DOC_SECTION_RE.match(sec)
+        title = tm.group("title").strip() if tm else ""
+        stem = section_stem(title)
+        if stem and stem in by_stem:
+            covered.add(stem)
+            lines = sec.splitlines(keepends=True)
+            if not any(l.startswith("|") for l in lines):
+                out.append(sec)
+                continue
+            # segment into prose/row blocks: prose is preserved verbatim
+            # (incl. notes sitting between a section's tables), the first row
+            # block is replaced by the regenerated table, later row blocks
+            # (stale extra tables) are dropped.
+            blocks: list[tuple[bool, str]] = []
+            rows_flag: bool | None = None
+            buf: list[str] = []
+            for line in lines[1:]:
+                is_row = line.startswith("|")
+                if rows_flag is None or is_row == rows_flag:
+                    buf.append(line)
+                    rows_flag = is_row
+                else:
+                    blocks.append((rows_flag, "".join(buf)))
+                    buf = [line]
+                    rows_flag = is_row
+            if buf:
+                blocks.append((rows_flag, "".join(buf)))
+            body: list[str] = []
+            table_done = False
+            seen_row = False
+            for is_row, text in blocks:
+                if is_row:
+                    seen_row = True
+                    if not table_done:
+                        body.append(table(by_stem[stem]))
+                        table_done = True
+                else:
+                    body.append(text.lstrip("\n") if seen_row else text)
+            # normalize the section ending (trailing blank-line prose blocks
+            # after the table would otherwise grow on every re-render)
+            out.append((lines[0] + "".join(body)).rstrip("\n") + "\n\n")
+        else:
+            if (
+                sec.startswith("## OpenAPI")
+                and "main" in by_stem
+                and not any(DOC_ROW_RE.match(l) for l in sec.splitlines())
+            ):
+                nl = sec.find("\n\n")
+                at = nl + 2 if nl != -1 else len(sec)
+                sec = sec[:at] + table(by_stem["main"]) + sec[at:]
+            if sec.startswith("## OpenAPI"):
+                openapi_at = len(out)
+            out.append(sec)
+
+    prefix_by_stem: dict[str, str] = {}
+    for pf in sorted(ROUTERS_DIR.glob("*.py")):
+        if pf.name == "__init__.py":
+            continue
+        pm = PREFIX_RE.search(pf.read_text(encoding="utf-8", errors="replace"))
+        prefix_by_stem[pf.stem] = pm.group(1) if pm else ""
+
+    new_sections: list[str] = []
+    for stem in findings.code_not_documented:
+        if stem in covered or stem not in by_stem:
+            continue
+        title = stem.replace("_", " ").title()
+        prefix = prefix_by_stem.get(stem) or "/"
+        new_sections.append(
+            f"## {title} Router (`{prefix}`)\n\n"
+            f"Defined in `apps/api/server/routers/{stem}.py` — "
+            f"{len(by_stem[stem])} endpoints.\n\n" + table(by_stem[stem])
+        )
+    if new_sections:
+        at = openapi_at if openapi_at is not None else len(out)
+        out[at:at] = new_sections
+    return "".join(out)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--markdown", action="store_true", help="markdown report fragment")
+    ap.add_argument(
+        "--render-routers",
+        action="store_true",
+        help="rewrite docs/routers.md endpoint tables from code truth",
+    )
     args = ap.parse_args()
 
     if not ROUTERS_DIR.exists() or not ROUTERS_MD.exists():
@@ -272,6 +454,22 @@ def main() -> int:
     collect_docs(findings)
     collect_tests(findings)
     diff(findings)
+
+    if args.render_routers:
+        ROUTERS_MD.write_text(_render_routers_md(findings), encoding="utf-8")
+        # re-collect so the exit code reflects the rewritten doc
+        f2 = Findings()
+        collect_code(f2)
+        collect_docs(f2)
+        collect_tests(f2)
+        diff(f2)
+        gaps2 = bool(f2.doc_not_in_code or f2.code_not_documented or f2.untested)
+        print(
+            f"rendered {ROUTERS_MD.name}: {len(f2.doc_claims)} rows, "
+            f"{len(f2.doc_sections)} sections, dead={len(f2.doc_not_in_code)}, "
+            f"no-section={len(f2.code_not_documented)}, untested={len(f2.untested)}"
+        )
+        return 1 if gaps2 else 0
 
     literal = [r for r in findings.routes if not r.dynamic]
     actual_routes = len(literal)

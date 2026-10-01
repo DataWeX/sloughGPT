@@ -227,6 +227,7 @@ async def training_delete_checkpoint(name: str):
 they own the domain. Routers never do.
 
 **4. Error classification.**
+
 - Request problem (bad input, missing resource) → `raise_error(msg, "E_*", status_code=...)`
   at the edge; no exception machinery.
 - Unexpected exception → let it bubble to the endpoint, then
@@ -267,7 +268,7 @@ tests green.
 
 ## Route Map (what exists vs what should exist)
 
-### Current: 85+ frontend pages, 58 routers
+### Current: 109 frontend pages, 57 routers
 
 ### Target: ~20 frontend pages, ~15 routers
 
@@ -297,16 +298,16 @@ tests green.
 
 ## Dead Code to Remove
 
-| What                              | Why                                          | Action                                                 |
-| --------------------------------- | -------------------------------------------- | ------------------------------------------------------ |
-| `routers/metrics.py`              | No frontend consumer, infrastructure-only    | ✅ removed                                             |
-| `routers/collections.py`          | ~~No frontend page~~ — alive: page + 9 endpoints, mounted | Keep                                             |
-| `routers/feeds.py`                | RSS feeds, no web frontend consumer          | ✅ removed                                             |
-| `routers/api_keys.py`             | Router unmounted; `ApiKeyManager` imported by auth/workspaces/security | Merge router bits into security.py once its WIP lands; keep class |
-| `routers/session_store.py`        | Utility module, not a router                 | ✅ removed                                             |
-| Phoneme: 47 components            | Over-built for Alex's needs                  | Keep components, restructure page into flow            |
-| Tokenizer: 9 tabs, 12 sub-cards   | Over-built                                   | Consolidate into 2-3 sections                          |
-| Consciousness: 27 sub-pages       | ~~Engine not wired~~ — wired 2026-09-29      | Keep pages                                             |
+| What                            | Why                                                                    | Action                                                            |
+| ------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `routers/metrics.py`            | No frontend consumer, infrastructure-only                              | ✅ removed                                                        |
+| `routers/collections.py`        | ~~No frontend page~~ — alive: page + 9 endpoints, mounted              | Keep                                                              |
+| `routers/feeds.py`              | RSS feeds, no web frontend consumer                                    | ✅ removed                                                        |
+| `routers/api_keys.py`           | Router unmounted; `ApiKeyManager` imported by auth/workspaces/security | Merge router bits into security.py once its WIP lands; keep class |
+| `routers/session_store.py`      | Utility module, not a router                                           | ✅ removed                                                        |
+| Phoneme: 47 components          | Over-built for Alex's needs                                            | Keep components, restructure page into flow                       |
+| Tokenizer: 9 tabs, 12 sub-cards | Over-built                                                             | Consolidate into 2-3 sections                                     |
+| Consciousness: 27 sub-pages     | ~~Engine not wired~~ — wired 2026-09-29                                | Keep pages                                                        |
 
 ---
 
