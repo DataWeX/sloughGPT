@@ -1,14 +1,45 @@
 #!/bin/sh
-# Project interpreter resolver — conda env first, then the legacy .venv.
+# Project interpreter resolver.
 #
-#   scripts/python [args...]        run with the project interpreter
-#   scripts/python --resolve        print the interpreter path instead
+#   scripts/python [args...]   run with the project interpreter
+#   scripts/python --resolve   print the interpreter path instead
 #
-# Override with SLO_PYTHON=/path/to/python. Kept in ONE place so shell
-# scripts, npm scripts, and the CLI all agree on which Python we run.
+# Single authority: domain.shared.find_server_python (conda env `sloughgpt`
+# -> .venv -> the interpreter doing the query). This wrapper only supplies
+# what a shell needs — the SLO_PYTHON override, the repo root on PYTHONPATH
+# (`domain` lives there and is not installed as a package), and a last-resort
+# path scan for when Python itself is unavailable. Shell and Python can
+# therefore never disagree about which interpreter is canonical.
+#
+# Override with SLO_PYTHON=/path/to/python.
 set -u
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Needed twice over: to import the resolver below, and by whatever we exec.
+case ":${PYTHONPATH:-}:" in
+  *":$ROOT:"*) ;;
+  *) PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" ;;
+esac
+export PYTHONPATH
+
+# Only reached when no python could run the resolver at all.
+_fallback() {
+  for cand in \
+    "${HOME}/miniconda3/envs/sloughgpt/bin/python" \
+    "${HOME}/anaconda3/envs/sloughgpt/bin/python" \
+    "${HOME}/miniforge3/envs/sloughgpt/bin/python" \
+    "${HOME}/mambaforge/envs/sloughgpt/bin/python" \
+    "/opt/conda/envs/sloughgpt/bin/python" \
+    "$ROOT/.venv/bin/python3" \
+    "$ROOT/.venv/bin/python"
+  do
+    [ -x "$cand" ] || continue
+    printf '%s\n' "$cand"
+    return 0
+  done
+  command -v python3
+}
 
 resolve() {
   if [ -n "${SLO_PYTHON:-}" ]; then
@@ -16,44 +47,21 @@ resolve() {
     return 0
   fi
 
-  # Active conda env, but only the project env — never silently use `base`.
-  if [ "${CONDA_DEFAULT_ENV:-}" = "sloughgpt" ] && [ -x "${CONDA_PREFIX:-}/bin/python" ]; then
-    printf '%s\n' "$CONDA_PREFIX/bin/python"
-    return 0
-  fi
-
-  for cand in \
-    "${HOME}/miniconda3/envs/sloughgpt/bin/python" \
-    "${HOME}/anaconda3/envs/sloughgpt/bin/python" \
-    "${HOME}/mambaforge/envs/sloughgpt/bin/python" \
-    "/opt/conda/envs/sloughgpt/bin/python"
-  do
-    if [ -x "$cand" ]; then
-      printf '%s\n' "$cand"
+  # Ask the Python-side resolver — the same authority app code consults.
+  for py in python3 python; do
+    command -v "$py" >/dev/null 2>&1 || continue
+    resolved="$("$py" -c 'from domain.shared import find_server_python; print(find_server_python())' 2>/dev/null || true)"
+    if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+      printf '%s\n' "$resolved"
       return 0
     fi
   done
 
-  for cand in "$ROOT/.venv/bin/python3" "$ROOT/.venv/bin/python"; do
-    if [ -x "$cand" ]; then
-      printf '%s\n' "$cand"
-      return 0
-    fi
-  done
-
-  command -v python3
+  _fallback
 }
 
 if [ "${1:-}" = "--resolve" ]; then
   resolve
 else
-  # The repo root must be importable (``domain`` lives there and is not
-  # installed as a package) — matches the ``-m`` module-form invocation,
-  # where cwd is already on sys.path.
-  case ":${PYTHONPATH:-}:" in
-    *":$ROOT:"*) ;;
-    *) PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" ;;
-  esac
-  export PYTHONPATH
   exec "$(resolve)" "$@"
 fi
