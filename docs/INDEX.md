@@ -66,6 +66,7 @@ Single source of truth for navigation. Read this first.
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |
 | **DEVELOPER_GUIDE.md** | Developer guide |
+| **DOC_VS_CODE_GAP_AUDIT.md** | API doc-vs-code audit + parity script |
 
 ## Meta
 
