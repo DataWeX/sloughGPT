@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from domain.core._internal.soul import GenerationContext
     from domain.inference import SloProfile
     from domain.soul._internal.hd_memory import HDMemoryStore
 
@@ -149,6 +150,41 @@ class PromptBuilder:
             parts.append(soul_system)
 
         return "\n".join(parts)
+
+    def build_generation_params(
+        self, context: GenerationContext, soul: SloProfile
+    ) -> dict[str, Any]:
+        """Derive generation parameters from soul profile + context."""
+        gen = soul.generation
+
+        params = {
+            "temperature": context.temperature
+            if "temperature" not in context.soul_overrides
+            else context.soul_overrides.get("temperature", gen.temperature),
+            "top_k": context.top_k
+            if "top_k" not in context.soul_overrides
+            else context.soul_overrides.get("top_k", gen.top_k),
+            "top_p": context.top_p
+            if "top_p" not in context.soul_overrides
+            else context.soul_overrides.get("top_p", gen.top_p),
+            "max_tokens": context.max_tokens
+            if "max_tokens" not in context.soul_overrides
+            else context.soul_overrides.get("max_tokens", gen.max_tokens),
+            "repetition_penalty": getattr(context, "repetition_penalty", 1.0),
+            "frequency_penalty": getattr(context, "frequency_penalty", 0.0),
+            "presence_penalty": getattr(context, "presence_penalty", 0.0),
+        }
+
+        if context.reasoning_depth == "deep":
+            params["temperature"] = max(0.1, params["temperature"] - 0.3)
+        elif context.reasoning_depth == "creative":
+            params["temperature"] = min(1.5, params["temperature"] + 0.3)
+
+        warmth = soul.personality.warmth
+        if warmth > 0.7:
+            params["temperature"] = min(1.2, params["temperature"] + 0.1)
+
+        return params
 
     def build_full_prompt(
         self,

@@ -352,37 +352,8 @@ class SloEngine:
         )
 
     def _get_generation_params(self, context: GenerationContext) -> dict[str, Any]:
-        """Derive generation parameters from soul profile + context."""
-        gen = self._soul.generation
-
-        params = {
-            "temperature": context.temperature
-            if "temperature" not in context.soul_overrides
-            else context.soul_overrides.get("temperature", gen.temperature),
-            "top_k": context.top_k
-            if "top_k" not in context.soul_overrides
-            else context.soul_overrides.get("top_k", gen.top_k),
-            "top_p": context.top_p
-            if "top_p" not in context.soul_overrides
-            else context.soul_overrides.get("top_p", gen.top_p),
-            "max_tokens": context.max_tokens
-            if "max_tokens" not in context.soul_overrides
-            else context.soul_overrides.get("max_tokens", gen.max_tokens),
-            "repetition_penalty": getattr(context, "repetition_penalty", 1.0),
-            "frequency_penalty": getattr(context, "frequency_penalty", 0.0),
-            "presence_penalty": getattr(context, "presence_penalty", 0.0),
-        }
-
-        if context.reasoning_depth == "deep":
-            params["temperature"] = max(0.1, params["temperature"] - 0.3)
-        elif context.reasoning_depth == "creative":
-            params["temperature"] = min(1.5, params["temperature"] + 0.3)
-
-        warmth = self._soul.personality.warmth
-        if warmth > 0.7:
-            params["temperature"] = min(1.2, params["temperature"] + 0.1)
-
-        return params
+        """Delegate to PromptBuilder (pure function of context + soul)."""
+        return self._prompt_builder.build_generation_params(context, self._soul)
 
     def _apply_hebbian_learning(self, prompt_tokens: list[str], response_tokens: list[str]) -> None:
         """
