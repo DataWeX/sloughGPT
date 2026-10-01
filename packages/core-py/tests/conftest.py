@@ -28,6 +28,19 @@ def _ensure_event_loop():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _stop_pretrain_threads():
+    """Stop any background multimodal pretrain thread after each test.
+
+    Leaked pretrain threads run active BLAS compute and deadlock later
+    os.fork() calls (SubprocessProcess start) — the core-py full-suite hang.
+    """
+    yield
+    manager_mod = sys.modules.get("domain.multimodal._internal.manager")
+    if manager_mod is not None:
+        manager_mod.MultimodalManager.stop_pretrain(timeout=5)
+
+
 def build_test_app(*routers):
     """Build a FastAPI app with exception handlers registered.
 
