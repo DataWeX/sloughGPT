@@ -27,6 +27,12 @@ if TYPE_CHECKING:
 
 import numpy as np
 
+from domain.core._internal.prompt_builder import (
+    REASONING_TYPE_MAP as _REASONING_TYPE_MAP,
+)
+from domain.core._internal.prompt_builder import (
+    PromptBuilder,
+)
 from domain.inference import (
     SloProfile,
     load_soul,
@@ -96,15 +102,7 @@ class SloEngine:
            Output
     """
 
-    REASONING_TYPE_MAP = {
-        "balanced": "deductive",
-        "deductive": "deductive",
-        "inductive": "inductive",
-        "analytical": "deductive",
-        "creative": "creative",
-        "abductive": "abductive",
-        "analogical": "analogical",
-    }
+    REASONING_TYPE_MAP = _REASONING_TYPE_MAP
 
     def __init__(
         self,
@@ -123,6 +121,7 @@ class SloEngine:
         self._itos = itos or {}
         self._tokenizer = tokenizer
         self._max_history_messages = max(4, int(max_history_messages))
+        self._prompt_builder = PromptBuilder()
 
         self._session_history: list[dict[str, str]] = []
         self._cognitive_state: dict[str, Any] = {
@@ -318,165 +317,39 @@ class SloEngine:
         return self
 
     def _build_reasoning_chain_text(self, prompt: str) -> str:
-        """
-        Build a structured TEXT reasoning chain that the LLM can understand.
-        This is the key: reasoning goes INTO the prompt as text, not binary.
-
-        Format:
-        [SOUL_REASONING]
-        reasoning_type: <from soul's reasoning_approach>
-        cognitive_boost: <from soul's cognition scores>
-        emotional_context: <from sentiment analysis>
-        session_turns: <number of turns in session>
-        [/SOUL_REASONING]
-        """
-        reasoning_approach = self._soul.behavior.reasoning_approach
-        reasoning_type = self.REASONING_TYPE_MAP.get(reasoning_approach, "balanced")
-
-        sentiment = self._cognitive_state.get("last_sentiment", 0.0)
-        emotion = self._cognitive_state.get("last_emotion", "neutral")
-        turns = self._cognitive_state.get("session_turns", 0)
-
-        cognitive = self._soul.cognition
-        pattern_rec = getattr(cognitive, "pattern_recognition", 0.5)
-        abstract = getattr(cognitive, "abstract_reasoning", 0.5)
-        metacog = getattr(cognitive, "metacognitive_awareness", 0.5)
-
-        warmth = self._soul.personality.warmth
-        creativity = self._soul.personality.creativity
-        curiosity = self._soul.personality.curiosity
-
-        lines = [
-            "[SOUL_REASONING]",
-            f"reasoning_type: {reasoning_type}",
-            f"reasoning_approach: {reasoning_approach}",
-            f"emotional_context: {emotion} (sentiment={sentiment:.2f})",
-            f"session_turns: {turns}",
-            f"cognitive: pattern_recognition={pattern_rec:.2f}, abstract_reasoning={abstract:.2f}, metacognition={metacog:.2f}",
-            f"personality: warmth={warmth:.2f}, creativity={creativity:.2f}, curiosity={curiosity:.2f}",
-        ]
-
-        if self._reasoning_engine:
-            lines.append(f"reasoning_engine: active ({len(self._session_history)} context items)")
-
-        # HD Memory context injection
-        if self._hd_memory:
-            try:
-                stats = self._hd_memory.get_stats()
-                lines.append(f"hd_memory: {stats['total_items']} items stored")
-            except Exception as e:
-                logger.debug("hd_memory stats unavailable: %s", e)
-
-        lines.append("[/SOUL_REASONING]")
-        lines.append("")
-
-        return "\n".join(lines)
+        """Delegate to PromptBuilder — state passed per call (SloEngine rebinds
+        _session_history; a held reference would go stale)."""
+        return self._prompt_builder.build_reasoning_chain_text(
+            prompt,
+            soul=self._soul,
+            cognitive_state=self._cognitive_state,
+            reasoning_engine=self._reasoning_engine,
+            session_history=self._session_history,
+            hd_memory=self._hd_memory,
+        )
 
     def _build_system_prompt(self) -> str:
-        """Build the system prompt from soul profile."""
-        parts = []
+        """Delegate to PromptBuilder (pure function of the soul profile)."""
+        return self._prompt_builder.build_system_prompt(self._soul)
 
-        soul_name = self._soul.name
-        parts.append(f"You are {soul_name}.")
-
-        personality = self._soul.personality
-        traits = []
-        if personality.warmth > 0.7:
-            traits.append("warm and empathetic")
-        elif personality.warmth < 0.3:
-            traits.append("precise and analytical")
-
-        if personality.curiosity > 0.7:
-            traits.append("curious and exploratory")
-        if personality.confidence > 0.7:
-            traits.append("confident and direct")
-        elif personality.confidence < 0.3:
-            traits.append("thoughtful and measured")
-
-        if personality.creativity > 0.7:
-            traits.append("creative and innovative")
-        if personality.humor > 0.7:
-            traits.append("witty and playful")
-
-        if traits:
-            parts.append(f"You are {' and '.join(traits)}.")
-
-        soul_system = self._soul.system_prompt or ""
-        if soul_system and soul_system not in "\n".join(parts):
-            parts.append(soul_system)
-
-        return "\n".join(parts)
-
-    def _build_full_prompt(self, prompt: str, include_reasoning: bool = True) -> str:
-        """Build the full prompt including reasoning chain as TEXT."""
-        parts = []
-
-        system = self._build_system_prompt()
-        if system:
-            parts.append(system)
-            parts.append("")
-
-        if include_reasoning and (
-            self._cognitive_state.get("session_turns", 0) > 0 or self._reasoning_engine
-        ):
-            reasoning_text = self._build_reasoning_chain_text(prompt)
-            parts.append(reasoning_text)
-
-        session_context = ""
-        if self._session_history:
-            role_labels = {"user": "User", "assistant": "Assistant", "system": "System"}
-            recent = self._session_history[-self._max_history_messages :]
-            for msg in recent:
-                role = msg.get("role", "user")
-                label = role_labels.get(role, role.replace("_", " ").title())
-                content = (msg.get("content", "") or "")[:2000]
-                if not content.strip():
-                    continue
-                session_context += f"{label}: {content}\n"
-
-        if session_context:
-            parts.append("[CONVERSATION_HISTORY]")
-            parts.append(session_context.rstrip())
-            parts.append("[/CONVERSATION_HISTORY]")
-            parts.append("")
-
-        # HD Memory: Inject relevant semantic context
-        hd_context = ""
-        if self._hd_memory:
-            try:
-                hd_context = self._hd_memory.get_context(prompt, max_chars=400)
-                if hd_context:
-                    parts.append("[SEMANTIC_MEMORY]")
-                    parts.append(hd_context)
-                    parts.append("[/SEMANTIC_MEMORY]")
-                    parts.append("")
-            except Exception as e:
-                logger.debug("HD context retrieval failed: %s", e)
-
-        # Knowledge: Auto-inject relevant facts from learner KnowledgeMemory
-        try:
-            from domain.learner._internal.knowledge import get_knowledge_memory
-
-            km = get_knowledge_memory()
-            kb_results = km.search(prompt, top_k=5)
-            if kb_results:
-                knowledge_text = "\n".join(f"- {fact['content'][:200]}" for fact in kb_results)
-                parts.append("[KNOWN_FACTS]")
-                parts.append(knowledge_text)
-                parts.append("[/KNOWN_FACTS]")
-                parts.append("")
-        except Exception as e:
-            logger.debug(
-                "soul: knowledge memory retrieval failed",
-                extra={
-                    "error": str(e),
-                },
-            )
-
-        parts.append(f"User: {prompt}")
-        parts.append("Assistant:")
-
-        return "\n".join(parts)
+    def _build_full_prompt(
+        self,
+        prompt: str,
+        include_reasoning: bool = True,
+        hd_context: str | None = None,
+    ) -> str:
+        """Delegate to PromptBuilder; pass hd_context to reuse generate()'s scan."""
+        return self._prompt_builder.build_full_prompt(
+            prompt,
+            include_reasoning=include_reasoning,
+            soul=self._soul,
+            cognitive_state=self._cognitive_state,
+            reasoning_engine=self._reasoning_engine,
+            session_history=self._session_history,
+            max_history_messages=self._max_history_messages,
+            hd_memory=self._hd_memory,
+            hd_context=hd_context,
+        )
 
     def _get_generation_params(self, context: GenerationContext) -> dict[str, Any]:
         """Derive generation parameters from soul profile + context."""
@@ -600,7 +473,9 @@ class SloEngine:
 
         # Prior turns live in _session_history only; current user text is added below
         # so we do not duplicate it inside [CONVERSATION_HISTORY].
-        full_prompt = self._build_full_prompt(prompt, include_reasoning=include_reasoning)
+        full_prompt = self._build_full_prompt(
+            prompt, include_reasoning=include_reasoning, hd_context=hd_context
+        )
 
         context = GenerationContext(
             prompt=prompt,
