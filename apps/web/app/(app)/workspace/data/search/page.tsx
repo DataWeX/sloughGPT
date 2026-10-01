@@ -2,15 +2,16 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from '@/vite/next-compat/navigation'
-import { Card, CardHeader, CardTitle, CardContent, Input, Skeleton } from '@sloughgpt/strui'
-import { IconSearch } from '@/components/icons/NavIcons'
+import { Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
 import { dataTabs } from '@/components/workspace/workspace-tabs'
+import { SearchInputCard } from '@/components/workspace-search/SearchInputCard'
+import { SearchResultsCard } from '@/components/workspace-search/SearchResultsCard'
+import { SearchEmptyState } from '@/components/workspace-search/SearchEmptyState'
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
-import { Users, Brain, Database, BookOpen, ExternalLink } from 'lucide-react'
 
 interface SearchResult {
   id: string
@@ -35,29 +36,25 @@ interface SearchResponse {
 
 // Keys MUST match the result-category keys the API returns
 // (members / training_jobs / datasets / knowledge), not item.type.
-const TYPE_CONFIG: Record<string, { color: string; label: string; icon: typeof Users; link: string }> = {
+const CATEGORY_CONFIG: Record<string, { label: string; color: string; link: string }> = {
   members: {
-    color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
     label: 'Members',
-    icon: Users,
+    color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
     link: '/workspace/members',
   },
   training_jobs: {
-    color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
     label: 'Training Jobs',
-    icon: Brain,
+    color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
     link: '/training/queue',
   },
   datasets: {
-    color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
     label: 'Datasets',
-    icon: Database,
+    color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
     link: '/datasets',
   },
   knowledge: {
-    color: 'bg-accent text-accent dark:bg-accent/30 dark:text-accent',
     label: 'Knowledge',
-    icon: BookOpen,
+    color: 'bg-accent text-accent dark:bg-accent/30 dark:text-accent',
     link: '/knowledge',
   },
 }
@@ -104,86 +101,43 @@ export default function WorkspaceSearchPage() {
     return () => clearTimeout(timer)
   }, [query, search])
 
+  const groups = results
+    ? Object.entries(results)
+        .filter(([type]) => CATEGORY_CONFIG[type])
+        .map(([type, items]) => ({
+          type,
+          label: CATEGORY_CONFIG[type].label,
+          color: CATEGORY_CONFIG[type].color,
+          link: CATEGORY_CONFIG[type].link,
+          items,
+        }))
+    : []
+
   return (
-    <PageContainer title="Workspace Search"
+    <PageContainer
+      title="Workspace Search"
       toolbar={<WorkspaceSectionTabs tabs={dataTabs} ariaLabel="Workspace data" />}
     >
-      <Card className="mb-6">
-        <CardContent className="py-3">
-          <div className="relative">
-            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search members, training jobs, datasets, knowledge..."
-              className="pl-9"
-              autoFocus
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <SearchInputCard query={query} onQueryChange={setQuery} />
 
-      {loading && (
-        <Skeleton className="h-32 w-full" />
-      )}
+      {loading && <Skeleton className="h-32 w-full" />}
+
+      {!loading && !results && <SearchEmptyState />}
 
       {!loading && results && (
         <>
-          <p className="text-sm text-muted-foreground mb-4">{total} result(s) found</p>
-
           {partial.length > 0 && (
-            <p className="text-xs text-warning mb-4" role="status">
+            <p className="text-xs text-warning mb-2" role="status">
               Partial results — some sources are unavailable: {partial.join(', ')}
             </p>
           )}
-
-          {Object.entries(results).map(([type, items]) => {
-            const config = TYPE_CONFIG[type]
-            if (!config || items.length === 0) return null
-            const Icon = config.icon
-
-            return (
-              <Card key={type} className="mb-4">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-xs flex items-center gap-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${config.color}`}>
-                      <Icon className="h-3 w-3 inline mr-1" />
-                      {config.label}
-                    </span>
-                    <span className="text-muted-foreground">({items.length})</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-1">
-                  {items.map(item => (
-                    <button
-                      key={item.id}
-                      onClick={() => router.push(config.link)}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40 transition-colors text-left group"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium group-hover:text-primary transition-colors">{item.title}</div>
-                        {item.detail && <div className="text-muted-foreground truncate">{item.detail}</div>}
-                      </div>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                    </button>
-                  ))}
-                </CardContent>
-              </Card>
-            )
-          })}
-
-          {total === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">
-              No results for &ldquo;{query}&rdquo;
-            </p>
-          )}
+          <SearchResultsCard
+            groups={groups}
+            total={total}
+            query={query}
+            onNavigate={link => router.push(link)}
+          />
         </>
-      )}
-
-      {!loading && !results && (
-        <p className="text-sm text-muted-foreground text-center py-8">
-          Type to search across all workspace data
-        </p>
       )}
     </PageContainer>
   )

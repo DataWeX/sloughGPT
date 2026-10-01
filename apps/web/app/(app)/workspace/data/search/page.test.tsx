@@ -90,6 +90,7 @@ vi.mock('@sloughgpt/strui', () => {
 })
 
 vi.mock('lucide-react', () => ({
+  Search: () => <span data-testid="icon-search" />,
   Users: () => <span data-testid="icon-users" />,
   Brain: () => <span data-testid="icon-brain" />,
   Database: () => <span data-testid="icon-database" />,
