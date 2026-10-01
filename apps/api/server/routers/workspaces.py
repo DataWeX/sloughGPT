@@ -126,6 +126,15 @@ class WorkspacesRouter:
 
         # ─── List workspaces ───────────────────────────────────
         async def list_workspaces(auth_user: dict = auth_dep) -> dict:
+            if auth_user is None:
+                # Auth disabled (documented anonymous mode): no identity
+                # to filter memberships by — open deployment, list all
+                # so the UI still has a current workspace.
+                workspaces = [
+                    self._to_response(ws, len(self._ws_repo.list_members(ws.id))).model_dump()
+                    for ws in self._ws_repo.list_all()
+                ]
+                return success_response(data=workspaces, meta={"total": len(workspaces)})
             user = self._get_user(auth_user)
             # List workspaces the user is a member of
             memberships = self._ws_repo.list_user_workspaces(user.id)
@@ -1241,13 +1250,16 @@ class WorkspacesRouter:
             per category, plus a ``partial`` list of categories that
             failed to load so a truncated result set is never silent.
             """
-            user = self._get_user(auth_user)
+            user = self._get_user(auth_user) if auth_user is not None else None
             ws = self._ws_repo.get(workspace_id)
             if not ws:
                 raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
-            member = self._ws_repo.get_member(workspace_id, user.id)
-            if not member and not user.is_admin:
-                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+            if user is not None:
+                # Identity present => membership gate. Anonymous (auth
+                # disabled) => open deployment, existence check only.
+                member = self._ws_repo.get_member(workspace_id, user.id)
+                if not member and not user.is_admin:
+                    raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
 
             needle = q.casefold()
 
@@ -1283,16 +1295,19 @@ class WorkspacesRouter:
             # Search training jobs
             job_entries = []
             try:
-                from training.job_store import get_job_store
+                from training.job_store import JobStore
 
-                repo = get_job_store()
-                jobs = repo.list_by_workspace(workspace_id)
-                for job in jobs:
+                repo = JobStore()
+                for job in repo.list_by_workspace(workspace_id):
+                    # JobStore rows are plain dicts (store_row_to_job).
+                    jid = str(job.get("id") or job.get("_id") or "")
+                    if not jid:
+                        continue
                     job_entries.append(
                         {
-                            "id": job.get("id"),
+                            "id": jid,
                             "type": "training",
-                            "title": job.get("name") or job.get("id"),
+                            "title": str(job.get("name") or jid),
                             "detail": f"Status: {job.get('status', 'unknown')}",
                         }
                     )

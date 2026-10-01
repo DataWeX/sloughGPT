@@ -24,13 +24,12 @@ interface SystemSearchHit {
   locator: string
 }
 
+// apiGet unwraps the {status,data} envelope — the type is the payload.
 interface SystemSearchResponse {
-  data: {
-    hits: SystemSearchHit[]
-    partial: string[]
-    skipped: string[]
-    query: string
-  }
+  hits: SystemSearchHit[]
+  partial: string[]
+  skipped: string[]
+  query: string
 }
 
 interface CommandAction {
@@ -87,9 +86,9 @@ export function CommandPalette() {
       if (currentWorkspaceId) params.set('workspace_id', currentWorkspaceId)
       apiGet<SystemSearchResponse>(`/search?${params.toString()}`)
         .then(res => {
-          if (res?.data) {
-            setDataHits(res.data.hits)
-            setDataPartial(res.data.partial ?? [])
+          if (res?.hits) {
+            setDataHits(res.hits)
+            setDataPartial(res.partial ?? [])
           }
         })
         .catch(() => /* data search unavailable — local results remain */ {})

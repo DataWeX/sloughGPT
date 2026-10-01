@@ -67,6 +67,24 @@ def test_requires_q(monkeypatch):
     assert client.get("/search").status_code == 422
 
 
+def test_anonymous_when_auth_disabled_serves(monkeypatch):
+    # SLO_AUTH_REQUIRED unset => dependency returns None (its documented
+    # anonymous mode). Search must serve identity-less callers, not 401 —
+    # this exact path 401'd in the live journey walk.
+    app = _build_app(monkeypatch, member=False)
+    app.dependency_overrides[require_auth_if_enabled] = lambda: None
+    resp = TestClient(app).get("/search", params={"q": "alice"})
+    assert resp.status_code == 200
+    assert resp.json()["data"]["hits"]
+
+
+def test_anonymous_with_workspace_skips_membership_gate(monkeypatch):
+    app = _build_app(monkeypatch, member=False)
+    app.dependency_overrides[require_auth_if_enabled] = lambda: None
+    resp = TestClient(app).get("/search", params={"q": "alice", "workspace_id": "ws1"})
+    assert resp.status_code == 200  # open deployment: existence only
+
+
 def test_returns_normalized_hits_envelope(monkeypatch):
     client = TestClient(_build_app(monkeypatch))
     resp = client.get("/search", params={"q": "alice"})

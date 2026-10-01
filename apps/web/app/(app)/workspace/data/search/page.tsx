@@ -23,13 +23,12 @@ interface SearchHit {
   locator: string
 }
 
+// apiGet unwraps the {status,data} envelope — the type is the payload.
 interface SearchResponse {
-  data: {
-    hits: SearchHit[]
-    partial: string[]
-    skipped: string[]
-    query: string
-  }
+  hits: SearchHit[]
+  partial: string[]
+  skipped: string[]
+  query: string
 }
 
 export default function WorkspaceSearchPage() {
@@ -53,9 +52,9 @@ export default function WorkspaceSearchPage() {
     try {
       const params = new URLSearchParams({ q: q.trim(), workspace_id: currentWorkspace.id })
       const res = await apiGet<SearchResponse>(`/search?${params.toString()}`)
-      if (res?.data) {
-        setHits(res.data.hits)
-        setPartial(res.data.partial ?? [])
+      if (res?.hits) {
+        setHits(res.hits)
+        setPartial(res.partial ?? [])
       }
     } catch {
       addToast('Search failed', 'error')

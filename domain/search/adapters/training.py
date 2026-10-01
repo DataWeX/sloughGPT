@@ -18,9 +18,10 @@ class TrainingJobsAdapter:
 
     def _resolve(self):
         if self._repo is None:
-            from domain.training.repository import TrainingRepository
+            # The durable job history (same store GET /training/jobs reads).
+            from training.job_store import JobStore
 
-            self._repo = TrainingRepository()
+            self._repo = JobStore()
         return self._repo
 
     async def search(self, q: str, limit: int, ctx: SearchContext) -> list[SearchHit]:
@@ -28,17 +29,21 @@ class TrainingJobsAdapter:
             return []
         repo = self._resolve()
         hits: list[SearchHit] = []
+        # JobStore returns plain dicts (store_row_to_job), not objects.
         # Raises on store failure — the aggregator reports us as partial
         # rather than letting an empty list masquerade as "no matches".
         for job in repo.list_by_workspace(ctx.workspace_id):
-            title = getattr(job, "name", None) or job.id
-            detail = f"Status: {getattr(job, 'status', 'unknown')}"
+            jid = str(job.get("id") or job.get("_id") or "")
+            if not jid:
+                continue
+            title = str(job.get("name") or jid)
+            detail = f"Status: {job.get('status', 'unknown')}"
             score = substring_score(q, title, detail)
             if score is None:
                 continue
             hits.append(
                 SearchHit(
-                    id=job.id,
+                    id=jid,
                     store=self.store,
                     title=title,
                     detail=detail,

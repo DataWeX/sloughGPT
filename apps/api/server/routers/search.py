@@ -27,15 +27,6 @@ logger = logging.getLogger(__name__)
 _service = SearchService()
 
 
-def _get_user(auth_user: dict | None, user_repo: UserRepository) -> User:
-    if not auth_user:
-        raise_error("Authentication required", "E_AUTH_MISSING", status_code=401)
-    user = user_repo.get(auth_user.get("sub", ""))
-    if not user:
-        raise_error("User not found", "E_NOT_FOUND", status_code=404)
-    return user
-
-
 async def search_system(
     q: str = Query(..., min_length=1, max_length=500, description="Search query"),
     limit: int = Query(DEFAULT_LIMIT_PER_STORE, ge=1, le=100, description="Max hits per store"),
@@ -51,8 +42,15 @@ async def search_system(
     that failed or timed out; ``skipped`` lists stores not queried
     (e.g. workspace-scoped stores without a workspace in context).
     """
-    user_repo = UserRepository()
-    user = _get_user(auth_user, user_repo)
+    # Auth disabled => require_auth_if_enabled returns None (its
+    # documented anonymous mode): an identity-less caller is valid and
+    # search runs unscoped. Auth enabled => the dependency guarantees a
+    # payload and the identity must resolve.
+    user: User | None = None
+    if auth_user is not None:
+        user = UserRepository().get(auth_user.get("sub", ""))
+        if not user:
+            raise_error("User not found", "E_NOT_FOUND", status_code=404)
     if not q.strip():
         # min_length catches "" but not whitespace-only input; blank is
         # a validation error, not a 500 from the core.
@@ -62,14 +60,17 @@ async def search_system(
         ws = WorkspaceRepository()
         if not ws.get(workspace_id):
             raise_error("Workspace not found", "E_NOT_FOUND", status_code=404)
-        member = ws.get_member(workspace_id, user.id)
-        if not member and not user.is_admin:
-            raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
+        if user is not None:
+            # Identity present => membership gate before any store runs.
+            # Anonymous (auth off) => open deployment, existence only.
+            member = ws.get_member(workspace_id, user.id)
+            if not member and not user.is_admin:
+                raise_error("Access denied", "E_AUTH_MISSING", status_code=403)
 
     ctx = SearchContext(
         workspace_id=workspace_id or "",
-        user_id=user.id,
-        is_admin=user.is_admin,
+        user_id=user.id if user else "",
+        is_admin=user.is_admin if user else False,
     )
     result = await _service.search(
         q,

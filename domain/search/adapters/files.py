@@ -32,9 +32,10 @@ class FilesAdapter:
     def _docs(self):
         if self._docs_factory is not None:
             return self._docs_factory()
+        # Same database name the legacy /files endpoints use.
         from infrastructure.db_pool import get_db
 
-        return get_db().collection("files").find()
+        return get_db("uploads_mogdb").collection("files").find()
 
     async def search(self, q: str, limit: int, ctx: SearchContext) -> list[SearchHit]:
         hits: list[SearchHit] = []

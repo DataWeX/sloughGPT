@@ -39,7 +39,8 @@ def _member_adapter(tmp_path=None) -> MembersAdapter:
 
 
 def _training_adapter(tmp_path=None) -> TrainingJobsAdapter:
-    job = SimpleNamespace(id="t1", name="Fine-tune LLaMA", status="completed")
+    # JobStore returns plain dicts — mirror the real row shape.
+    job = {"id": "t1", "name": "Fine-tune LLaMA", "status": "completed"}
     return TrainingJobsAdapter(
         repo=SimpleNamespace(list_by_workspace=lambda ws_id: [job]),
     )

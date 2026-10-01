@@ -98,6 +98,21 @@ def _build_app(ws_repo=None, user_repo=None, auth_user_dict=_AUTH_USER):
 
 
 class TestListWorkspaces:
+    def test_list_anonymous_when_auth_disabled(self, mock_ws_repo):
+        # SLO_AUTH_REQUIRED unset => require_auth_if_enabled returns None
+        # (documented anonymous mode): an open deployment must list all
+        # workspaces, not 401 — the frontend needs a current workspace.
+        ws = _make_workspace()
+        mock_ws_repo.list_all.return_value = [ws]
+        mock_ws_repo.list_members.return_value = []
+
+        _app = _build_app(mock_ws_repo, None, auth_user_dict=None)
+        resp = TestClient(_app).get("/workspaces")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert len(data) == 1
+        mock_ws_repo.list_all.assert_called_once()
+
     def test_list_empty(self, mock_ws_repo, mock_user_repo):
         user = _make_user()
         mock_user_repo.get.return_value = user
@@ -446,6 +461,19 @@ class TestNotifications:
 
 
 class TestSearchWorkspace:
+    def test_search_anonymous_when_auth_disabled(self, mock_ws_repo, mock_user_repo):
+        # Anonymous (auth off): workspace must exist, but no membership
+        # gate applies — an open deployment still searches.
+        ws = _make_workspace()
+        mock_ws_repo.get.return_value = ws
+        mock_ws_repo.list_members.return_value = []
+
+        _app = _build_app(mock_ws_repo, mock_user_repo, auth_user_dict=None)
+        resp = TestClient(_app).get("/workspaces/ws1/search", params={"q": "zzz"})
+        assert resp.status_code == 200
+        assert resp.json()["data"]["query"] == "zzz"
+        mock_ws_repo.get_member.assert_not_called()
+
     def test_search_workspace_filters_by_q(self, mock_ws_repo, mock_user_repo):
         user = _make_user(username="alice")
         ws = _make_workspace()

@@ -44,7 +44,7 @@ describe('CommandPalette', () => {
     vi.clearAllMocks()
     mockSessionList.mockResolvedValue([])
     mockModelList.mockResolvedValue([])
-    mockApiGet.mockResolvedValue({ data: { hits: [], partial: [], skipped: [], query: '' } })
+    mockApiGet.mockResolvedValue({ hits: [], partial: [], skipped: [], query: '' })
   })
   afterEach(cleanup)
 
@@ -111,21 +111,19 @@ describe('CommandPalette', () => {
 
   it('queries system search with q and renders Data results', async () => {
     mockApiGet.mockResolvedValue({
-      data: {
-        hits: [
-          {
-            id: 'k1',
-            store: 'knowledge',
-            title: 'Paris is the capital of France',
-            detail: 'geography',
-            score: 1.0,
-            locator: 'route:/knowledge',
-          },
-        ],
-        partial: [],
-        skipped: [],
-        query: 'paris',
-      },
+      hits: [
+        {
+          id: 'k1',
+          store: 'knowledge',
+          title: 'Paris is the capital of France',
+          detail: 'geography',
+          score: 1.0,
+          locator: 'route:/knowledge',
+        },
+      ],
+      partial: [],
+      skipped: [],
+      query: 'paris',
     })
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
@@ -145,9 +143,7 @@ describe('CommandPalette', () => {
   })
 
   it('shows partial notice when a store fails', async () => {
-    mockApiGet.mockResolvedValue({
-      data: { hits: [], partial: ['knowledge'], skipped: [], query: 'paris' },
-    })
+    mockApiGet.mockResolvedValue({ hits: [], partial: ['knowledge'], skipped: [], query: 'paris' })
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
     const input = screen.getByPlaceholderText('Search pages, models, actions...')
@@ -160,21 +156,19 @@ describe('CommandPalette', () => {
 
   it('opens file-backed hits in the search results page', async () => {
     mockApiGet.mockResolvedValue({
-      data: {
-        hits: [
-          {
-            id: 'f1',
-            store: 'docs',
-            title: 'guide.md',
-            detail: 'Run the dev stack first.',
-            score: 1.0,
-            locator: 'file:guide.md:2',
-          },
-        ],
-        partial: [],
-        skipped: [],
-        query: 'setup',
-      },
+      hits: [
+        {
+          id: 'f1',
+          store: 'docs',
+          title: 'guide.md',
+          detail: 'Run the dev stack first.',
+          score: 1.0,
+          locator: 'file:guide.md:2',
+        },
+      ],
+      partial: [],
+      skipped: [],
+      query: 'setup',
     })
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })

@@ -103,16 +103,14 @@ import WorkspaceSearchPage from './page'
 
 describe('WorkspaceSearchPage', () => {
   const mockSearchResults = {
-    data: {
-      hits: [
-        { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
-        { id: 't1', store: 'training_jobs', title: 'Fine-tune LLaMA', detail: 'Status: completed', score: 1.0, locator: 'route:/training/queue' },
-        { id: 'd1', store: 'datasets', title: 'training-data', detail: '1000 rows', score: 0.6, locator: 'route:/datasets' },
-      ],
-      partial: [],
-      skipped: [],
-      query: 'a',
-    },
+    hits: [
+      { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+      { id: 't1', store: 'training_jobs', title: 'Fine-tune LLaMA', detail: 'Status: completed', score: 1.0, locator: 'route:/training/queue' },
+      { id: 'd1', store: 'datasets', title: 'training-data', detail: '1000 rows', score: 0.6, locator: 'route:/datasets' },
+    ],
+    partial: [],
+    skipped: [],
+    query: 'a',
   }
 
   beforeEach(() => {
@@ -160,14 +158,12 @@ describe('WorkspaceSearchPage', () => {
     // Server already filtered; this item does NOT contain the typed query,
     // and the UI must still render what the server returned.
     mockApiGet.mockResolvedValue({
-      data: {
-        hits: [
-          { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
-        ],
-        partial: ['datasets'],
-        skipped: [],
-        query: 'alice',
-      },
+      hits: [
+        { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+      ],
+      partial: ['datasets'],
+      skipped: [],
+      query: 'alice',
     })
     const user = userEvent.setup()
     render(<WorkspaceSearchPage />)
@@ -181,9 +177,7 @@ describe('WorkspaceSearchPage', () => {
   })
 
   it('shows empty state when no results', async () => {
-    mockApiGet.mockResolvedValue({
-      data: { hits: [], partial: [], skipped: [], query: 'zzznonexistent' },
-    })
+    mockApiGet.mockResolvedValue({ hits: [], partial: [], skipped: [], query: 'zzznonexistent' })
     const user = userEvent.setup()
     render(<WorkspaceSearchPage />)
     await screen.findAllByText('Workspace Search')
@@ -198,14 +192,12 @@ describe('WorkspaceSearchPage', () => {
     mockSearchParams.set('q', 'alice')
     try {
       mockApiGet.mockResolvedValue({
-        data: {
-          hits: [
-            { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
-          ],
-          partial: [],
-          skipped: [],
-          query: 'alice',
-        },
+        hits: [
+          { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+        ],
+        partial: [],
+        skipped: [],
+        query: 'alice',
       })
       render(<WorkspaceSearchPage />)
       await screen.findByText(/1 result/i)

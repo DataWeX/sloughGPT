@@ -28,8 +28,12 @@ class MemoryAdapter:
     async def search(self, q: str, limit: int, ctx: SearchContext) -> list[SearchHit]:
         # retrieve() returns [] when memory is disabled or the query is
         # blank — that is "no matches", not failure. Store errors raise
-        # and become partial upstream.
-        items = self._service.retrieve(q, limit=limit)
+        # and become partial upstream. No service (defensive) = same as
+        # disabled: nothing searchable, not a store failure.
+        service = self._resolve()
+        if service is None:
+            return []
+        items = service.retrieve(q, limit=limit)
         hits: list[SearchHit] = []
         for idx, item in enumerate(items[:limit]):
             content = str(item.get("content") or "")
