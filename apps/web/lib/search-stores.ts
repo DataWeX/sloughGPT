@@ -36,4 +36,22 @@ export const SEARCH_STORES: Record<string, SearchStoreMeta> = {
     link: '/knowledge',
     icon: '📖',
   },
+  docs: {
+    label: 'Docs',
+    color: 'bg-warning/15 text-warning dark:bg-warning/10 dark:text-warning',
+    link: '', // file-backed: no viewer — rendered as a non-navigable group
+    icon: '📄',
+  },
+  dev_notes: {
+    label: 'Dev Notes',
+    color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
+    link: '',
+    icon: '📝',
+  },
+  kanban_cards: {
+    label: 'Kanban',
+    color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
+    link: '',
+    icon: '🗂️',
+  },
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from '@/vite/next-compat/navigation'
+import { useRouter, useSearchParams } from '@/vite/next-compat/navigation'
 import { Skeleton } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
@@ -34,9 +34,11 @@ interface SearchResponse {
 
 export default function WorkspaceSearchPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { currentWorkspace } = useAuthStore()
   const addToast = useToastStore(s => s.addToast)
-  const [query, setQuery] = useState('')
+  // Deep link: /workspace/data/search?q=... seeds the query (palette jumps).
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '')
   const [hits, setHits] = useState<SearchHit[] | null>(null)
   const [partial, setPartial] = useState<string[]>([])
   const [loading, setLoading] = useState(false)

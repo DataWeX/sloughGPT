@@ -104,7 +104,16 @@ async def test_registered_adapters_satisfy_the_protocol():
 
     registry = get_registry()
     names = set(registry.store_names())
-    assert names == {"members", "training_jobs", "datasets", "knowledge"}
+    # DB-backed stores + the repository corpus (docs, dev notes, kanban).
+    assert names == {
+        "members",
+        "training_jobs",
+        "datasets",
+        "knowledge",
+        "docs",
+        "dev_notes",
+        "kanban_cards",
+    }
     for adapter in registry.adapters():
         assert isinstance(adapter, Searchable), f"{adapter} violates Searchable"
         assert adapter.capability in ("live", "indexed")

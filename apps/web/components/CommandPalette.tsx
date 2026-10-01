@@ -143,24 +143,26 @@ export function CommandPalette() {
     return [...nav, ...modelActs, ...soulActs, ...acts, ...conv]
   }, [router, recentSessions, models, souls, settings, updateSettings])
 
-  const dataActions = useMemo<CommandAction[]>(
-    () =>
-      dataHits
-        .filter(h => h.locator.startsWith('route:'))
-        .slice(0, 8)
-        .map(h => {
-          const meta = SEARCH_STORES[h.store]
-          return {
-            id: `data-${h.store}-${h.id}`,
-            label: h.title,
-            description: `${meta?.label ?? h.store}${h.detail ? ` · ${h.detail}` : ''}`,
-            icon: meta?.icon ?? '🗂️',
-            category: 'data' as const,
-            run: () => router.push(h.locator.slice('route:'.length)),
-          }
-        }),
-    [dataHits, router]
-  )
+  const dataActions = useMemo<CommandAction[]>(() => {
+    const toAction = (h: SystemSearchHit): CommandAction => {
+      const meta = SEARCH_STORES[h.store]
+      const isFile = h.locator.startsWith('file:')
+      return {
+        id: `data-${h.store}-${h.id}`,
+        label: h.title,
+        description: `${meta?.label ?? h.store}${h.detail ? ` · ${h.detail}` : ''}`,
+        icon: meta?.icon ?? '🗂️',
+        category: 'data' as const,
+        // route: hits jump straight there; file-backed hits (no viewer yet)
+        // open in the search results page seeded with their title.
+        run: () =>
+          isFile
+            ? router.push(`/workspace/data/search?q=${encodeURIComponent(h.title)}`)
+            : router.push(h.locator.slice('route:'.length)),
+      }
+    }
+    return dataHits.slice(0, 10).map(toAction)
+  }, [dataHits, router])
 
   const filtered = useMemo(() => {
     const local = query.trim()

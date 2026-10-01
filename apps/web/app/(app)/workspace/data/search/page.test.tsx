@@ -3,10 +3,11 @@ import { render, screen, cleanup } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const mockApiGet = vi.fn()
+const mockSearchParams = new URLSearchParams()
 
 vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
   usePathname: () => '/workspace/data/search',
 }))
 
@@ -191,5 +192,26 @@ describe('WorkspaceSearchPage', () => {
     await user.type(searchInput, 'zzznonexistent')
 
     await screen.findByText(/no results/i)
+  })
+
+  it('seeds the query from ?q= (deep link from the palette)', async () => {
+    mockSearchParams.set('q', 'alice')
+    try {
+      mockApiGet.mockResolvedValue({
+        data: {
+          hits: [
+            { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+          ],
+          partial: [],
+          skipped: [],
+          query: 'alice',
+        },
+      })
+      render(<WorkspaceSearchPage />)
+      await screen.findByText(/1 result/i)
+      expect(mockApiGet.mock.calls[0][0]).toContain('/search?q=alice&workspace_id=ws-1')
+    } finally {
+      mockSearchParams.delete('q')
+    }
   })
 })

@@ -157,4 +157,34 @@ describe('CommandPalette', () => {
       expect(screen.getByText(/Partial results/)).toBeDefined()
     })
   })
+
+  it('opens file-backed hits in the search results page', async () => {
+    mockApiGet.mockResolvedValue({
+      data: {
+        hits: [
+          {
+            id: 'f1',
+            store: 'docs',
+            title: 'guide.md',
+            detail: 'Run the dev stack first.',
+            score: 1.0,
+            locator: 'file:guide.md:2',
+          },
+        ],
+        partial: [],
+        skipped: [],
+        query: 'setup',
+      },
+    })
+    render(<CommandPalette />)
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    const input = screen.getByPlaceholderText('Search pages, models, actions...')
+    fireEvent.change(input, { target: { value: 'setup' } })
+
+    await waitFor(() => {
+      expect(screen.getByText('guide.md')).toBeDefined()
+    })
+    fireEvent.click(screen.getByText('guide.md'))
+    expect(mockPush).toHaveBeenCalledWith('/workspace/data/search?q=guide.md')
+  })
 })
