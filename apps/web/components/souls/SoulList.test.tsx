@@ -102,6 +102,17 @@ describe('SoulList', () => {
     expect(activeBadges.length).toBeGreaterThanOrEqual(1)
   })
 
+  it('renders polygon points in SVG point-list format, never path syntax', () => {
+    const { container } = render(<SoulList souls={souls} currentSoul="alpha" searchQuery="" onSearchChange={vi.fn()} switching={null} onSwitch={vi.fn()} onSelectSoul={vi.fn()} />)
+    const polygons = container.querySelectorAll('polygon')
+    expect(polygons.length).toBeGreaterThan(0)
+    for (const polygon of polygons) {
+      const points = polygon.getAttribute('points') ?? ''
+      expect(points).toMatch(/\d/)
+      expect(points).not.toMatch(/[MLZ]/)
+    }
+  })
+
   it('calls onSwitch when Switch button clicked', () => {
     const onSwitch = vi.fn()
     render(<SoulList souls={souls} currentSoul="alpha" searchQuery="" onSearchChange={vi.fn()} switching={null} onSwitch={onSwitch} onSelectSoul={vi.fn()} />)

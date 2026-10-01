@@ -479,6 +479,18 @@ class TestQuantizationReport:
         assert report["mode"] == "symmetric"
         assert len(report["per_tensor"]) == 1
 
+    def test_quantized_excludes_per_tensor_when_not_requested(self):
+        engine = MagicMock()
+        engine.summary.return_value = {"bits": 8, "mode": "symmetric"}
+        engine.error_report.return_value = [{"tensor": "w", "mse": 0.01}]
+        p = _make_provider(_quant_engine=engine)
+        report = p.quantization_report(include_per_tensor=False)
+        assert report["quantized"] is True
+        assert report["bits"] == 8
+        assert "summary" in report
+        assert "per_tensor" not in report
+        engine.error_report.assert_not_called()
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Session management (KV cache)

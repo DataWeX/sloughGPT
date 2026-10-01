@@ -466,6 +466,20 @@ describe('SoulsPage', () => {
     })
   })
 
+  it('renders trait radar polygons in SVG point-list format, never path syntax', async () => {
+    const { container } = render(<SoulsPage />)
+    await waitFor(() => {
+      expect(screen.getByText('Souls')).toBeTruthy()
+    })
+    const polygons = container.querySelectorAll('polygon')
+    expect(polygons.length).toBeGreaterThan(0)
+    for (const polygon of polygons) {
+      const points = polygon.getAttribute('points') ?? ''
+      expect(points).toMatch(/\d/)
+      expect(points).not.toMatch(/[MLZ]/)
+    }
+  })
+
   it('refreshes data', async () => {
     render(<SoulsPage />)
     await waitFor(() => {

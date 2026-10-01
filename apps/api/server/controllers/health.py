@@ -300,7 +300,15 @@ def _get_quantization_info() -> dict[str, Any]:
         if provider is None:
             provider = get_provider("hf-default")
         if provider is not None and hasattr(provider, "quantization_report"):
-            return provider.quantization_report()
+            # Health contract: never ship per_tensor. It serializes to
+            # ~10 MB (per-channel scales, lm_head ~3.4 MB alone) and every
+            # health surface (/health, /health/detailed, /health/stream
+            # SSE every 3s) would repeat it per poll per client. The UI
+            # reads only summary/bits/mode; per-layer detail stays on the
+            # on-demand quantization endpoints.
+            report = provider.quantization_report(include_per_tensor=False)
+            report.pop("per_tensor", None)
+            return report
         return {}
     except Exception:
         logger.debug("Quantization info unavailable", exc_info=True)
