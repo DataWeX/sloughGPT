@@ -1,7 +1,10 @@
 """
-Chat Router - Inference, streaming, and generation.
+Chat Router - the prompting surface: respond, stream, regenerate, cancel.
 
-Handles all model interaction: respond, stream, regenerate, cancel.
+Owns POST /chat and POST /chat/stream (single registration owner — the parity
+gate fails on any duplicate path+method). Those two delegate to the inference
+kernel (`routers.inference._instance`) so model-readiness gates, enrichment
+phases, reconnect replay and the SSE framing stay identical for every caller.
 Session state lives in session.py.
 """
 
@@ -16,28 +19,15 @@ from fastapi.responses import StreamingResponse
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.sse_fallback import sse_error, sse_token
 from infrastructure.sse_fallback import sse_event as _sse_event
-from pydantic import BaseModel
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
+from routers.inference import ChatRequest, ChatResponse
+from routers.inference import _instance as _chat_kernel
 
 logger = logging.getLogger(__name__)
 
 cfg = ServerConfig.from_env()
-
-
-class ChatMessage(BaseModel):
-    role: str
-    content: str
-
-
-class ChatRequest(BaseModel):
-    messages: list[ChatMessage]
-    model: str = "gpt2"
-    system_prompt: str = ""
-    temperature: float = 0.8
-    max_tokens: int = 256
-    session_id: str = "default"
 
 
 class ChatRouter:
@@ -65,31 +55,15 @@ class ChatRouter:
         self,
         request: ChatRequest,
         auth_user: dict = Depends(require_auth_if_enabled),
-    ) -> dict:
-        """Non-streaming chat response."""
-        try:
-            from domain.chat import get_chat_manager
+    ) -> ChatResponse:
+        """Non-streaming chat response.
 
-            manager = get_chat_manager()
-            resp = await manager.respond(
-                messages=[m.model_dump() for m in request.messages],
-                model=request.model,
-                system_prompt=request.system_prompt,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
-                session_id=request.session_id,
-            )
-            return success_response(
-                data={
-                    "text": resp.text,
-                    "session_id": resp.session_id,
-                    "tokens_generated": resp.tokens_generated,
-                    "duration_ms": resp.duration_ms,
-                    "usage_tokens": resp.usage_tokens,
-                }
-            )
-        except Exception as e:
-            classify_and_raise(e, source="chat.respond")
+        Prompting surface lives here; generation runs in the shared inference
+        kernel (`_instance.chat` — the same entry the mobile BFF calls via
+        ``handle_chat``), so readiness/circuit-breaker gates and the response
+        shape are identical for every caller.
+        """
+        return await _chat_kernel.chat(request, auth_user)
 
     @endpoint("chat.stream")
     async def stream(
@@ -98,48 +72,8 @@ class ChatRouter:
         http_request: Request,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
-        """Streaming chat response (SSE)."""
-        try:
-            from domain.chat import get_chat_manager
-
-            manager = get_chat_manager()
-
-            async def generate() -> AsyncIterator[str]:
-                _start = time.time()
-                _token_count = 0
-                _first_token_ms = None
-                try:
-                    async for token in manager.stream(
-                        messages=[m.model_dump() for m in request.messages],
-                        max_tokens=request.max_tokens,
-                        temperature=request.temperature,
-                        session_id=request.session_id,
-                    ):
-                        if await http_request.is_disconnected():
-                            return
-                        if token:
-                            if _first_token_ms is None:
-                                _first_token_ms = (time.time() - _start) * 1000
-                            _token_count += 1
-                            yield self._sse_token("chat", token)
-                        else:
-                            yield ": heartbeat\n\n"
-                    yield self._sse_token(
-                        "chat", "", done=True, meta={"usage_tokens": manager.last_usage()}
-                    )
-                    _elapsed_ms = round((time.time() - _start) * 1000)
-                    safe_audit_log(
-                        "chat.stream",
-                        resource=request.session_id,
-                        detail=f"tokens={_token_count} elapsed={_elapsed_ms}ms",
-                    )
-                except Exception as e:
-                    logger.error("Stream error: %s", e, exc_info=True)
-                    yield self._sse_error("chat", "STREAM", str(e))
-
-            return StreamingResponse(generate(), media_type="text/event-stream")
-        except Exception as e:
-            classify_and_raise(e, source="chat.stream")
+        """Streaming chat response (SSE) — delegates to the inference kernel."""
+        return await _chat_kernel.chat_stream(request, http_request, auth_user)
 
     @endpoint("chat.regenerate")
     async def regenerate(

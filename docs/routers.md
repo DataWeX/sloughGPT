@@ -68,7 +68,6 @@ Registered pre-lifespan in `main.py`.
 | `GET`    | `/`                                     |                                                     |
 | `POST`   | `/cancel-all`                           |                                                     |
 | `POST`   | `/cancel/{op_id}`                       |                                                     |
-| `POST`   | `/chat`                                 | Chat (non-streaming).                               |
 | `GET`    | `/chat/audio/{session_id}/{message_id}` |                                                     |
 | `POST`   | `/chat/control`                         |                                                     |
 | `GET`    | `/chat/sessions`                        |                                                     |
@@ -78,7 +77,6 @@ Registered pre-lifespan in `main.py`.
 | `DELETE` | `/chat/sessions/{session_id}`           |                                                     |
 | `GET`    | `/chat/sessions/{session_id}`           |                                                     |
 | `PUT`    | `/chat/sessions/{session_id}`           |                                                     |
-| `POST`   | `/chat/stream`                          | Chat (SSE streaming).                               |
 | `GET`    | `/chat/suggestions`                     |                                                     |
 | `GET`    | `/chat/tools`                           |                                                     |
 | `POST`   | `/chat/voice/{session_id}`              |                                                     |

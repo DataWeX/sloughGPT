@@ -163,6 +163,7 @@ class Findings:
     doc_not_in_code: list[tuple[str, str]] = field(default_factory=list)
     undocumented: dict[str, int] = field(default_factory=dict)  # router -> #routes w/o doc row
     dynamic_routes: list[str] = field(default_factory=list)
+    collisions: list[str] = field(default_factory=list)  # "METHOD path -> [routers]"
 
 
 def _join(prefix: str, path: str) -> str:
@@ -266,6 +267,29 @@ def collect_tests(findings: Findings) -> None:
             findings.untested.append(stem)
 
 
+def _mounted_routers() -> set[str] | None:
+    """Router stems whose routes are actually served at runtime.
+
+    Parses the ``_router_names`` mount table from routers/__init__.py plus the
+    routers registered directly in main.py pre-lifespan. Unmounted-by-design
+    files (e.g. api_keys) still scan into findings, but duplicate paths there
+    never reach the app, so they must not fail the collision gate.
+
+    ``None`` = mount table unreadable; callers then treat every stem as
+    mounted so the gate errs toward flagging.
+    """
+    try:
+        text = (ROUTERS_DIR / "__init__.py").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    m = re.search(r"_router_names\s*=\s*\[(.*?)\]", text, re.DOTALL)
+    if not m:
+        return None
+    names = set(re.findall(r"[\"']([^\"']+)[\"']", m.group(1)))
+    names |= {"main", "health", "status"}  # registered directly in main.py
+    return names
+
+
 def diff(findings: Findings) -> None:
     code_keys = {(r.method, r.path) for r in findings.routes if not r.dynamic}
     findings.doc_not_in_code = [
@@ -291,6 +315,26 @@ def diff(findings: Findings) -> None:
     findings.dynamic_routes = sorted(
         {f"{r.router} {r.method}" for r in findings.routes if r.dynamic}
     )
+
+    # one owner per (METHOD, path): first-match wins at runtime while OpenAPI
+    # is last-wins, so a duplicate silently forks spec from behaviour (the
+    # /chat InferenceRouter-vs-ChatRouter split this gate now blocks). Only
+    # mounted routers participate — unmounted duplicates are never served.
+    owners: dict[tuple[str, str], set[str]] = {}
+    for r in findings.routes:
+        if r.dynamic:
+            continue
+        owners.setdefault((r.method, r.path), set()).add(r.router)
+    mounted = _mounted_routers()
+    findings.collisions = []
+    for (m, p), stems in sorted(owners.items()):
+        served = (
+            stems
+            if mounted is None
+            else {s for s in stems if s in mounted or s.split("/")[0] in mounted}
+        )
+        if len(served) > 1:
+            findings.collisions.append(f"{m} {p} -> {sorted(served)}")
 
     # reverse direction: routes in code with no row anywhere in routers.md
     doc_keys = {(m, p) for m, p in findings.doc_claims}
@@ -463,18 +507,26 @@ def main() -> int:
         collect_docs(f2)
         collect_tests(f2)
         diff(f2)
-        gaps2 = bool(f2.doc_not_in_code or f2.code_not_documented or f2.untested)
+        gaps2 = bool(
+            f2.doc_not_in_code or f2.code_not_documented or f2.untested or f2.collisions
+        )
         print(
             f"rendered {ROUTERS_MD.name}: {len(f2.doc_claims)} rows, "
             f"{len(f2.doc_sections)} sections, dead={len(f2.doc_not_in_code)}, "
-            f"no-section={len(f2.code_not_documented)}, untested={len(f2.untested)}"
+            f"no-section={len(f2.code_not_documented)}, untested={len(f2.untested)}, "
+            f"collisions={len(f2.collisions)}"
         )
         return 1 if gaps2 else 0
 
     literal = [r for r in findings.routes if not r.dynamic]
     actual_routes = len(literal)
     actual_routers = len(findings.routers_on_disk)
-    gaps = bool(findings.doc_not_in_code or findings.code_not_documented or findings.untested)
+    gaps = bool(
+        findings.doc_not_in_code
+        or findings.code_not_documented
+        or findings.untested
+        or findings.collisions
+    )
 
     if args.json:
         print(
@@ -495,6 +547,7 @@ def main() -> int:
                     "undocumented_routes": findings.undocumented,
                     "untested_routers": findings.untested,
                     "dynamic": findings.dynamic_routes,
+                    "route_collisions": findings.collisions,
                 },
                 indent=2,
             )
@@ -526,6 +579,11 @@ def main() -> int:
     for name, n in sorted(findings.undocumented.items(), key=lambda kv: -kv[1])[:8]:
         print(f"   {name}: {n}")
     print(f"routers w/o tests:       {len(findings.untested)} {findings.untested}")
+    print(f"route collisions:        {len(findings.collisions)}")
+    for c in findings.collisions[:10]:
+        print(f"   {c}")
+    if len(findings.collisions) > 10:
+        print(f"   ... +{len(findings.collisions) - 10} more")
     if findings.dynamic_routes:
         print(f"dynamic (skipped):       {findings.dynamic_routes}")
     return 1 if gaps else 0
@@ -551,6 +609,8 @@ def _render_markdown(f: Findings, actual_routes: int, actual_routers: int) -> st
         f"`{', '.join(f.untested)}`.",
         f"- **{sum(f.undocumented.values())}** code routes have no endpoint row in "
         f"`docs/routers.md` (across {len(f.undocumented)} routers).",
+        f"- **{len(f.collisions)}** route collisions (same method+path in 2+ routers)"
+        + (f": {'; '.join(f.collisions[:5])}." if f.collisions else " — one owner each."),
         "",
     ]
     return "\n".join(lines)

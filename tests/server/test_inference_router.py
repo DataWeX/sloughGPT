@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
+from apps.api.server.routers.chat import router as _chat_router
 from apps.api.server.routers.inference import _instance as _inference_router
 
 
@@ -16,7 +17,10 @@ from apps.api.server.routers.inference import _instance as _inference_router
 def app():
     _app = FastAPI()
     register_all_handlers(_app)
+    # production mount order (get_all_routers): inference before chat —
+    # /chat + /chat/stream are claimed by ChatRouter only (kernel delegation).
     _app.include_router(_inference_router.router)
+    _app.include_router(_chat_router)
     return _app
 
 

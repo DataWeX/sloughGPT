@@ -5,23 +5,24 @@ Covers all 7 routes: POST /chat, /chat/stream, /chat/{session_id}/regenerate,
 /chat/{session_id}/cancel, GET /chat/active, /chat/health, /chat/addons —
 happy path + 404/405/422 + auth edge.
 
-NOTE: POST /chat and POST /chat/stream are ALSO claimed by InferenceRouter
-(prefix "") which is registered before ChatRouter in get_all_routers(), so on
-the shared app the inference handler wins (first route match). These tests
-mount ONLY the ChatRouter on an isolated app (house pattern:
-test_tokens_router.py) so its handlers are exercised directly.
+POST /chat + POST /chat/stream are owned by THIS router (InferenceRouter's
+duplicate registrations were removed; scripts/check_docs_api_parity.py fails
+on any duplicate path+method). Both delegate to the inference kernel
+(`routers.inference._instance`), which tests/server/test_inference_router.py
+exercises end-to-end — here the kernel seam is faked so these stay a fast
+HTTP-contract check (validation, SSE framing, auth).
 
-The chat manager is faked: these tests exercise the HTTP contract (envelope,
-SSE framing, validation, auth), not model inference.
+The chat manager is faked for the session routes (regenerate, cancel, read
+models).
 """
-
-from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_app_error_handler
 from routers.chat import router as chat_router
+from routers.inference import ChatResponse
 
 app = FastAPI()
 register_app_error_handler(app)
@@ -36,16 +37,7 @@ def _data(resp):
 
 
 class _FakeManager:
-    """Stands in for domain.chat.get_chat_manager()."""
-
-    async def respond(self, **kwargs):
-        return SimpleNamespace(
-            text="hello from fake",
-            session_id=kwargs.get("session_id", "default"),
-            tokens_generated=2,
-            duration_ms=5,
-            usage_tokens=7,
-        )
+    """Stands in for domain.chat.get_chat_manager() — session routes only."""
 
     async def stream(self, **kwargs):
         yield "Hello"
@@ -63,13 +55,32 @@ class _FakeManager:
     def addons(self):
         return {"processors": []}
 
-    def last_usage(self):
-        return {"total": 5}
+
+class _FakeKernel:
+    """Stands in for routers.inference._instance (the chat kernel)."""
+
+    async def chat(self, req, auth_user=None):
+        return ChatResponse(
+            message="hello from fake",
+            session_id=req.session_id or "default",
+            done=True,
+        )
+
+    async def chat_stream(self, req, http_request, auth_user=None):
+        frames = (
+            'data: {"stream":"chat","phase":"STREAMING","status":"working",'
+            '"data":{"token":"Hello"}}\n\n'
+            'data: {"stream":"chat","phase":"STREAMING","status":"working",'
+            '"data":{"token":" world"}}\n\n'
+            'data: {"stream":"chat","phase":"STREAMING","status":"complete","data":{}}\n\n'
+        )
+        return StreamingResponse(iter([frames]), media_type="text/event-stream")
 
 
 @pytest.fixture(autouse=True)
 def _fake_chat_manager(monkeypatch):
     monkeypatch.setattr("domain.chat.get_chat_manager", lambda: _FakeManager())
+    monkeypatch.setattr("routers.chat._chat_kernel", _FakeKernel())
 
 
 def _msg_body():
@@ -77,20 +88,20 @@ def _msg_body():
 
 
 class TestChatRespond:
-    """POST /chat — non-streaming response."""
+    """POST /chat — non-streaming response (delegates to the inference kernel)."""
 
     def test_respond_happy_path(self):
         resp = client.post("/chat", json=_msg_body())
         assert resp.status_code == 200
-        data = _data(resp)
-        assert data["text"] == "hello from fake"
-        assert data["session_id"] == "default"
-        assert data["tokens_generated"] == 2
+        body = resp.json()
+        assert body["message"] == "hello from fake"
+        assert body["session_id"] == "default"
+        assert body["done"] is True
 
     def test_respond_forwards_session_id(self):
         resp = client.post("/chat", json={**_msg_body(), "session_id": "s42"})
         assert resp.status_code == 200
-        assert _data(resp)["session_id"] == "s42"
+        assert resp.json()["session_id"] == "s42"
 
     def test_respond_missing_messages_is_422(self):
         resp = client.post("/chat", json={})
