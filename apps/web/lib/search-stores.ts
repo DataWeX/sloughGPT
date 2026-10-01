@@ -54,6 +54,12 @@ export const SEARCH_STORES: Record<string, SearchStoreMeta> = {
     link: '/memory',
     icon: '💭',
   },
+  sessions: {
+    label: 'Chat Sessions',
+    color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
+    link: '/chat',
+    icon: '💬',
+  },
   docs: {
     label: 'Docs',
     color: 'bg-warning/15 text-warning dark:bg-warning/10 dark:text-warning',

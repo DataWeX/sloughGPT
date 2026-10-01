@@ -59,6 +59,7 @@ def _register_default_stores(registry: SearchRegistry) -> None:
     from domain.search.adapters.knowledge import KnowledgeAdapter
     from domain.search.adapters.members import MembersAdapter
     from domain.search.adapters.memory import MemoryAdapter
+    from domain.search.adapters.sessions import SessionsAdapter
     from domain.search.adapters.training import TrainingJobsAdapter
 
     adapters = [
@@ -69,6 +70,7 @@ def _register_default_stores(registry: SearchRegistry) -> None:
         KBAdapter(),
         MemoryAdapter(),
         FilesAdapter(),
+        SessionsAdapter(),
         *default_file_adapters(),
     ]
     for adapter in adapters:

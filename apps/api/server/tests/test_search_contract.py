@@ -8,6 +8,7 @@ system-wide search by passing this file.
 
 from __future__ import annotations
 
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -18,7 +19,9 @@ from domain.search.adapters.kb import KBAdapter
 from domain.search.adapters.knowledge import KnowledgeAdapter
 from domain.search.adapters.members import MembersAdapter
 from domain.search.adapters.memory import MemoryAdapter
+from domain.search.adapters.sessions import SessionsAdapter
 from domain.search.adapters.training import TrainingJobsAdapter
+from domain.search.session_index import SessionSearchIndex
 from domain.search.types import SearchContext
 
 # ── Seed data ────────────────────────────────────────────────────────────────
@@ -113,6 +116,24 @@ def _memory_adapter(tmp_path=None) -> MemoryAdapter:
     return MemoryAdapter(service=_FakeMemoryService())
 
 
+def _sessions_adapter(tmp_path) -> SessionsAdapter:
+    d = tmp_path / "chat_sessions"
+    d.mkdir()
+    (d / "s1.json").write_text(
+        json.dumps(
+            {
+                "id": "s1",
+                "name": "Deployment playbook",
+                "created_at": "2026-01-01T00:00:00Z",
+                "updated_at": "2026-01-02T00:00:00Z",
+                "messages": [{"role": "user", "content": "walk me through the rollout"}],
+            }
+        )
+    )
+    index = SessionSearchIndex(max_age_seconds=0.0, data_dirs=[d])
+    return SessionsAdapter(index=index)
+
+
 CASES = [
     pytest.param(_member_adapter, "alice", id="members"),
     pytest.param(_training_adapter, "fine-tune", id="training_jobs"),
@@ -121,6 +142,7 @@ CASES = [
     pytest.param(_files_adapter, "quarterly", id="files"),
     pytest.param(_kb_adapter, "capital", id="kb"),
     pytest.param(_memory_adapter, "release", id="memory"),
+    pytest.param(_sessions_adapter, "deployment", id="sessions"),
 ]
 
 CTX = SearchContext(workspace_id="ws1", user_id="user1", is_admin=False)
@@ -171,7 +193,7 @@ async def test_registered_adapters_satisfy_the_protocol():
 
     registry = get_registry()
     names = set(registry.store_names())
-    # DB/API stores + the repository corpus (docs, dev notes, kanban).
+    # DB/API stores + sessions + the repository corpus (docs, dev notes, kanban).
     assert names == {
         "members",
         "training_jobs",
@@ -180,6 +202,7 @@ async def test_registered_adapters_satisfy_the_protocol():
         "kb",
         "memory",
         "files",
+        "sessions",
         "docs",
         "dev_notes",
         "kanban_cards",
