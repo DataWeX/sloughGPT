@@ -1,0 +1,31 @@
+# SloughGPT edge gateway (:8080 → API :8000).
+#
+# Same env contract as dev-stack.sh's start_gateway (MAN_DEV_GATEWAY=1):
+#   MAN_GATEWAY_PORT=8080, MAN_CORE_URL=http://127.0.0.1:8000, /health.
+# Binary: apps/gateway/target/release/slough-gateway (cargo build --release
+# --locked -p slough-gateway if missing — the install script checks).
+# Wants= (soft) matches dev-stack: the gateway tolerates the API being
+# down at start and just proxies once it returns.
+#
+# Install: scripts/systemd/install.sh
+# Logs:    journalctl --user -u slough-gateway -f
+
+[Unit]
+Description=SloughGPT edge gateway (:8080)
+After=network-online.target slough-api.service
+Wants=slough-api.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mana/Documents/Default Project/sloughGPT
+ExecStart="/home/mana/Documents/Default Project/sloughGPT/apps/gateway/target/release/slough-gateway"
+Environment=MAN_GATEWAY_PORT=8080
+Environment=MAN_CORE_URL=http://127.0.0.1:8000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+TimeoutStopSec=10
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=default.target

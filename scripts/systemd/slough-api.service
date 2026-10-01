@@ -1,0 +1,34 @@
+# SloughGPT API — the shared :8000 server.
+#
+# Replaces the dev-stack.sh / agent-shell child, which dies whenever the
+# launching session's cgroup is torn down (observed 2026-09-30: opencode
+# restarts killed the shared server three times in one afternoon).
+#
+# Install: scripts/systemd/install.sh (see that script for flags).
+# Logs:    journalctl --user -u slough-api -f
+#
+# ExecStart runs the conda python (project directive: conda, not .venv);
+# verified bare from the repo root with no PYTHONPATH on 2026-09-30
+# (health 200). WorkingDirectory may contain spaces — systemd takes the
+# value literally, and all ExecStart args below are relative to it.
+
+[Unit]
+Description=SloughGPT API server (:8000)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mana/Documents/Default Project/sloughGPT
+ExecStart=/home/mana/miniconda3/envs/sloughgpt/bin/python -u apps/api/server/main.py --port 8000
+Restart=on-failure
+RestartSec=5
+# The API exports training feedback into data/ and serves models from
+# models/ — both under the WorkingDirectory. No sandbox hardening here
+# on purpose (dev stack writes inside the checkout).
+NoNewPrivileges=true
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=default.target

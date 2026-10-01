@@ -1,0 +1,26 @@
+# SloughGPT web dev server (vite, :5173).
+#
+# Same shape as dev-stack.sh's start_web (cd apps/web && npm run dev) but
+# invoked with the absolute nvm node path — systemd has no nvm shell
+# init, so PATH cannot be assumed. Running `node .bin/vite` matches the
+# process npm itself ends up spawning (observed: node .../node_modules/.bin/vite).
+#
+# Install: scripts/systemd/install.sh
+# Logs:    journalctl --user -u slough-web -f
+
+[Unit]
+Description=SloughGPT web dev server (vite :5173)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/mana/Documents/Default Project/sloughGPT/apps/web
+ExecStart=/home/mana/.nvm/versions/node/v20.20.2/bin/node "/home/mana/Documents/Default Project/sloughGPT/apps/web/node_modules/.bin/vite"
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+TimeoutStopSec=10
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=default.target

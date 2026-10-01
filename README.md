@@ -27,6 +27,11 @@ cd apps/web && npm install && npm run dev
 
 # Or both in one command
 ./scripts/dev-stack.sh
+
+# Or as systemd --user units — survive session/opencode restarts
+./scripts/systemd/install.sh            # install + enable + start
+./scripts/systemd/install.sh --takeover # also free ports from shell children
+journalctl --user -u slough-api -f      # logs
 ```
 
 ## CLI

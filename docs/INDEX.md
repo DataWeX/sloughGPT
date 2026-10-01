@@ -55,6 +55,7 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 | **ENVIRONMENT.md**          | Environment setup |
 | **DEPLOYMENT.md**           | Deployment guide  |
 | **DEPLOYMENT_CHECKLIST.md** | Pre-deploy checks |
+| **scripts/systemd/**        | systemd --user stack units (api/web/gateway) + install.sh |
 
 ## Integration
 

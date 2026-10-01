@@ -81,6 +81,11 @@ Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full 
 # or: make dev-stack
 # or: npm install && npm run dev:stack   # repo root; same shell script
 
+# Or as systemd --user units — outlive the launching session
+# (dev-stack children die with the agent shell's cgroup)
+./scripts/systemd/install.sh             # install + enable + start
+journalctl --user -u slough-api -f
+
 # Contract tests for repo root package.json (after npm install at repo root)
 npm run test:repo-root
 # or: make test-repo-root
