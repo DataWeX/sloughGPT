@@ -14,6 +14,8 @@
  *   4. apps/mobile/src/theme/palette.generated.ts — hex projection for React Native
  *   5. apps/mobile/src/theme/tamagui-themes.generated.ts — tamagui theme overrides
  *      (light/dark resolve from the mobile projection; accent themes are hand-authored)
+ *   6. apps/web/lib/palette-showcase.generated.ts — RGB-triple reference for the
+ *      magazine showcase page (editorial labels stay hand-written in page.tsx)
  *
  * Invariants this generator exists to hold:
  *   - tier order (base -> palette -> aura) is fixed by marker placement, never moved;
@@ -267,6 +269,41 @@ ${blocks.join('\n')}
 `
 }
 
+function renderShowcaseTs() {
+  const s = palette.showcase
+  if (!s) throw new Error('palette.json missing the showcase section')
+  const def = palette.palettes[s.palette]
+  if (!def) throw new Error(`showcase palette "${s.palette}" not found`)
+  const rows = (mode) =>
+    Object.entries(def[mode])
+      .map(([token, rgb]) => `    '${token}': '${rgb}',`)
+      .join('\n')
+  const auraRows = Object.entries(palette.auras)
+    .map(([id, aura]) => `    '${id}': '${aura.primary}',`)
+    .join('\n')
+  return `/**
+ * GENERATED FILE — do not edit. Source: packages/strui/tokens/palette.json
+ * Regenerate: node packages/strui/scripts/gen-tokens.mjs
+ *
+ * RGB-triple reference of the '${s.palette}' palette for the magazine showcase
+ * page. Editorial labels/descriptions stay hand-written in page.tsx; every value
+ * resolves from here so the showcase can never drift from the runtime theme.
+ */
+export const SHOWCASE_TOKENS = {
+  light: {
+${rows('light')}
+  },
+  dark: {
+${rows('dark')}
+  },
+} as const
+
+export const SHOWCASE_AURAS = {
+${auraRows}
+} as const
+`
+}
+
 // ------------------------------------------------------------------------ main
 const check = process.argv.includes('--check')
 
@@ -276,6 +313,7 @@ const outputs = [
   [fromRoot(palette.swatch.generated), renderSwatchTs()],
   [fromRoot(palette.mobile.generated), renderMobileTs()],
   [fromRoot(palette.tamagui.generated), renderTamaguiTs()],
+  [fromRoot(palette.showcase.generated), renderShowcaseTs()],
 ]
 
 let drift = 0

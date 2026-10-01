@@ -576,6 +576,10 @@
   "swatch": {
     "generated": "apps/web/lib/theme-tokens.generated.ts"
   },
+  "showcase": {
+    "generated": "apps/web/lib/palette-showcase.generated.ts",
+    "palette": "noir-violet"
+  },
   "_comments": {
     "light": "  /* Light — warm cream paper with violet undertone */",
     "palettes": "/* Palettes — full-spectrum overrides applied via html class */",

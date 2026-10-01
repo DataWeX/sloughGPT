@@ -9,7 +9,8 @@ import { describe, expect, it } from 'vitest'
  *
  * `packages/strui/tokens/palette.json` is the single source of every color value in the
  * design system. Everything else — the two `globals.css` token regions, the web swatch
- * maps, the mobile color projection — is generated from it by
+ * map, the mobile color projection, the tamagui theme overrides, and the magazine
+ * showcase data — is generated from it by
  * `packages/strui/scripts/gen-tokens.mjs` and verified here.
  *
  * Three invariants are guarded:
@@ -32,6 +33,8 @@ const MOBILE_PROJECTION = path.join(ROOT, 'apps/mobile/src/theme/palette.generat
 const MOBILE_COLORS = path.join(ROOT, 'apps/mobile/src/theme/colors.ts')
 const TAMAGUI_CONFIG = path.join(ROOT, 'apps/mobile/tamagui.config.ts')
 const TAMAGUI_PROJECTION = path.join(ROOT, 'apps/mobile/src/theme/tamagui-themes.generated.ts')
+const MAGAZINE_PAGE = path.join(ROOT, 'apps/web/app/(app)/magazine/page.tsx')
+const SHOWCASE_PROJECTION = path.join(ROOT, 'apps/web/lib/palette-showcase.generated.ts')
 
 interface Palette {
   palettes: Record<
@@ -53,6 +56,10 @@ interface Palette {
     generated: string
     map: Record<string, string | { light: string; dark: string }>
     accents: Record<string, Record<string, string>>
+  }
+  showcase?: {
+    generated: string
+    palette: string
   }
 }
 
@@ -421,5 +428,67 @@ describe('tamagui projection', () => {
         expect(theme[field], `tamagui ${name}.${field}`).toBe(value)
       }
     }
+  })
+})
+
+describe('magazine showcase projection', () => {
+  it('is generated', () => {
+    expect(loadPalette().showcase, 'palette.json must define a showcase section').toBeDefined()
+    expect(existsSync(SHOWCASE_PROJECTION), `missing ${SHOWCASE_PROJECTION}`).toBe(true)
+  })
+
+  it('magazine page pins no color values', () => {
+    const src = read(MAGAZINE_PAGE)
+    const hexes = src.match(/#[0-9a-fA-F]{6}\b/g) ?? []
+    expect(hexes, `hex literals in magazine page: ${hexes.slice(0, 10).join(', ')}`).toEqual([])
+    const triples = src.match(/rgb: '\d[^']*'/g) ?? []
+    expect(triples, `RGB triples in magazine page: ${triples.slice(0, 10).join(', ')}`).toEqual([])
+    const calls = src.match(/rgb\(\d[^)]*\)/g) ?? []
+    expect(calls, `rgb() literals in magazine page: ${calls.slice(0, 10).join(', ')}`).toEqual([])
+  })
+
+  it('every documented token/aura resolves from the projection', async () => {
+    const p = loadPalette()
+    const showcase = (await import(SHOWCASE_PROJECTION)) as {
+      SHOWCASE_TOKENS: Record<string, Record<string, string>>
+      SHOWCASE_AURAS: Record<string, string>
+    }
+    const src = read(MAGAZINE_PAGE)
+
+    const lightRefs = [...src.matchAll(/SHOWCASE_TOKENS\.light\['([^']+)'\]/g)].map((m) => m[1])
+    const darkRefs = [...src.matchAll(/SHOWCASE_TOKENS\.dark\['([^']+)'\]/g)].map((m) => m[1])
+    const auraRefs = [...src.matchAll(/SHOWCASE_AURAS\.(\w+)/g)].map((m) => m[1])
+
+    // every reference anywhere in the page must resolve (no undefined swatches)
+    expect(
+      lightRefs.length,
+      'page must reference light values from the projection',
+    ).toBeGreaterThan(0)
+    for (const token of lightRefs) {
+      expect(showcase.SHOWCASE_TOKENS.light[token], `light ${token}`).toBeDefined()
+    }
+    for (const token of darkRefs) {
+      expect(showcase.SHOWCASE_TOKENS.dark[token], `dark ${token}`).toBeDefined()
+    }
+
+    // the page documents every aura, sourced from the projection
+    expect([...auraRefs].sort(), 'aura refs').toEqual(Object.keys(p.auras).sort())
+    for (const aura of auraRefs) {
+      expect(showcase.SHOWCASE_AURAS[aura], `aura ${aura}`).toBe(p.auras[aura].primary)
+    }
+
+    // the Light/Dark Mode documentation arrays stay parallel (same token set)
+    const block = (name: string) => {
+      const i = src.indexOf(`const ${name} = [`)
+      expect(i, `const ${name} missing`).toBeGreaterThan(-1)
+      return src.slice(i, src.indexOf('\n]', i))
+    }
+    const names = (b: string) => [...b.matchAll(/name: '([^']+)'/g)].map((m) => m[1])
+    const lightDoc = names(block('lightColors'))
+    const darkDoc = names(block('darkColors'))
+    expect(lightDoc.length, 'documented tokens').toBeGreaterThanOrEqual(15)
+    expect([...lightDoc].sort(), 'light/dark document the same token set').toEqual(
+      [...darkDoc].sort(),
+    )
   })
 })

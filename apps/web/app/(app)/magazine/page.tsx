@@ -16,86 +16,227 @@ import {
   cn,
 } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
+import { SHOWCASE_AURAS, SHOWCASE_TOKENS } from '@/lib/palette-showcase.generated'
 
 /* ──────────────────────────────────────────────────────────────────
  * Color token definitions — light & dark mode RGB triples
  * ────────────────────────────────────────────────────────────────── */
 
 const lightColors = [
-  { name: '--background', rgb: '248 246 252', label: 'Background', desc: 'Page background' },
-  { name: '--foreground', rgb: '25 22 36', label: 'Foreground', desc: 'Primary text' },
-  { name: '--card', rgb: '255 255 255', label: 'Card', desc: 'Card/panel backgrounds' },
-  { name: '--card-foreground', rgb: '25 22 36', label: 'Card FG', desc: 'Text on cards' },
-  { name: '--primary', rgb: '124 82 196', label: 'Primary', desc: 'Buttons, links, active' },
+  {
+    name: '--background',
+    rgb: SHOWCASE_TOKENS.light['--background'],
+    label: 'Background',
+    desc: 'Page background',
+  },
+  {
+    name: '--foreground',
+    rgb: SHOWCASE_TOKENS.light['--foreground'],
+    label: 'Foreground',
+    desc: 'Primary text',
+  },
+  {
+    name: '--card',
+    rgb: SHOWCASE_TOKENS.light['--card'],
+    label: 'Card',
+    desc: 'Card/panel backgrounds',
+  },
+  {
+    name: '--card-foreground',
+    rgb: SHOWCASE_TOKENS.light['--card-foreground'],
+    label: 'Card FG',
+    desc: 'Text on cards',
+  },
+  {
+    name: '--primary',
+    rgb: SHOWCASE_TOKENS.light['--primary'],
+    label: 'Primary',
+    desc: 'Buttons, links, active',
+  },
   {
     name: '--primary-foreground',
-    rgb: '250 248 255',
+    rgb: SHOWCASE_TOKENS.light['--primary-foreground'],
     label: 'Primary FG',
     desc: 'Text on primary',
   },
-  { name: '--secondary', rgb: '237 232 248', label: 'Secondary', desc: 'Secondary backgrounds' },
+  {
+    name: '--secondary',
+    rgb: SHOWCASE_TOKENS.light['--secondary'],
+    label: 'Secondary',
+    desc: 'Secondary backgrounds',
+  },
   {
     name: '--secondary-foreground',
-    rgb: '42 37 55',
+    rgb: SHOWCASE_TOKENS.light['--secondary-foreground'],
     label: 'Secondary FG',
     desc: 'Text on secondary',
   },
-  { name: '--muted', rgb: '244 242 248', label: 'Muted', desc: 'Subtle backgrounds' },
+  {
+    name: '--muted',
+    rgb: SHOWCASE_TOKENS.light['--muted'],
+    label: 'Muted',
+    desc: 'Subtle backgrounds',
+  },
   {
     name: '--muted-foreground',
-    rgb: '130 122 150',
+    rgb: SHOWCASE_TOKENS.light['--muted-foreground'],
     label: 'Muted FG',
     desc: 'Captions, secondary',
   },
-  { name: '--accent', rgb: '236 145 95', label: 'Accent', desc: 'Highlights, warnings' },
-  { name: '--accent-foreground', rgb: '250 248 255', label: 'Accent FG', desc: 'Text on accent' },
-  { name: '--border', rgb: '228 224 242', label: 'Border', desc: 'Borders, dividers' },
-  { name: '--input', rgb: '228 224 242', label: 'Input', desc: 'Input borders' },
-  { name: '--ring', rgb: '124 82 196', label: 'Ring', desc: 'Focus rings' },
-  { name: '--success', rgb: '52 176 125', label: 'Success', desc: 'Success states' },
-  { name: '--warning', rgb: '236 168 60', label: 'Warning', desc: 'Warning states' },
-  { name: '--destructive', rgb: '220 80 90', label: 'Destructive', desc: 'Errors, destructive' },
+  {
+    name: '--accent',
+    rgb: SHOWCASE_TOKENS.light['--accent'],
+    label: 'Accent',
+    desc: 'Highlights, warnings',
+  },
+  {
+    name: '--accent-foreground',
+    rgb: SHOWCASE_TOKENS.light['--accent-foreground'],
+    label: 'Accent FG',
+    desc: 'Text on accent',
+  },
+  {
+    name: '--border',
+    rgb: SHOWCASE_TOKENS.light['--border'],
+    label: 'Border',
+    desc: 'Borders, dividers',
+  },
+  { name: '--input', rgb: SHOWCASE_TOKENS.light['--input'], label: 'Input', desc: 'Input borders' },
+  { name: '--ring', rgb: SHOWCASE_TOKENS.light['--ring'], label: 'Ring', desc: 'Focus rings' },
+  {
+    name: '--success',
+    rgb: SHOWCASE_TOKENS.light['--success'],
+    label: 'Success',
+    desc: 'Success states',
+  },
+  {
+    name: '--warning',
+    rgb: SHOWCASE_TOKENS.light['--warning'],
+    label: 'Warning',
+    desc: 'Warning states',
+  },
+  {
+    name: '--destructive',
+    rgb: SHOWCASE_TOKENS.light['--destructive'],
+    label: 'Destructive',
+    desc: 'Errors, destructive',
+  },
 ] as const
 
 const darkColors = [
-  { name: '--background', rgb: '17 15 24', label: 'Background', desc: 'Deep charcoal-violet' },
-  { name: '--foreground', rgb: '238 234 248', label: 'Foreground', desc: 'Primary text' },
-  { name: '--card', rgb: '28 25 38', label: 'Card', desc: 'Card/panel backgrounds' },
-  { name: '--card-foreground', rgb: '238 234 248', label: 'Card FG', desc: 'Text on cards' },
-  { name: '--primary', rgb: '192 170 244', label: 'Primary', desc: 'Lilac primary' },
-  { name: '--primary-foreground', rgb: '25 22 36', label: 'Primary FG', desc: 'Text on primary' },
-  { name: '--secondary', rgb: '50 44 68', label: 'Secondary', desc: 'Secondary backgrounds' },
+  {
+    name: '--background',
+    rgb: SHOWCASE_TOKENS.dark['--background'],
+    label: 'Background',
+    desc: 'Deep charcoal-violet',
+  },
+  {
+    name: '--foreground',
+    rgb: SHOWCASE_TOKENS.dark['--foreground'],
+    label: 'Foreground',
+    desc: 'Primary text',
+  },
+  {
+    name: '--card',
+    rgb: SHOWCASE_TOKENS.dark['--card'],
+    label: 'Card',
+    desc: 'Card/panel backgrounds',
+  },
+  {
+    name: '--card-foreground',
+    rgb: SHOWCASE_TOKENS.dark['--card-foreground'],
+    label: 'Card FG',
+    desc: 'Text on cards',
+  },
+  {
+    name: '--primary',
+    rgb: SHOWCASE_TOKENS.dark['--primary'],
+    label: 'Primary',
+    desc: 'Lilac primary',
+  },
+  {
+    name: '--primary-foreground',
+    rgb: SHOWCASE_TOKENS.dark['--primary-foreground'],
+    label: 'Primary FG',
+    desc: 'Text on primary',
+  },
+  {
+    name: '--secondary',
+    rgb: SHOWCASE_TOKENS.dark['--secondary'],
+    label: 'Secondary',
+    desc: 'Secondary backgrounds',
+  },
   {
     name: '--secondary-foreground',
-    rgb: '238 234 248',
+    rgb: SHOWCASE_TOKENS.dark['--secondary-foreground'],
     label: 'Secondary FG',
     desc: 'Text on secondary',
   },
-  { name: '--muted', rgb: '38 34 52', label: 'Muted', desc: 'Subtle backgrounds' },
+  {
+    name: '--muted',
+    rgb: SHOWCASE_TOKENS.dark['--muted'],
+    label: 'Muted',
+    desc: 'Subtle backgrounds',
+  },
   {
     name: '--muted-foreground',
-    rgb: '150 140 172',
+    rgb: SHOWCASE_TOKENS.dark['--muted-foreground'],
     label: 'Muted FG',
     desc: 'Captions, secondary',
   },
-  { name: '--accent', rgb: '240 176 130', label: 'Accent', desc: 'Warm peach accent' },
-  { name: '--accent-foreground', rgb: '25 22 36', label: 'Accent FG', desc: 'Text on accent' },
-  { name: '--border', rgb: '52 46 72', label: 'Border', desc: 'Borders, dividers' },
-  { name: '--input', rgb: '52 46 72', label: 'Input', desc: 'Input borders' },
-  { name: '--ring', rgb: '192 170 244', label: 'Ring', desc: 'Focus rings' },
-  { name: '--success', rgb: '72 192 140', label: 'Success', desc: 'Success states' },
-  { name: '--warning', rgb: '240 192 80', label: 'Warning', desc: 'Warning states' },
-  { name: '--destructive', rgb: '235 100 110', label: 'Destructive', desc: 'Errors, destructive' },
+  {
+    name: '--accent',
+    rgb: SHOWCASE_TOKENS.dark['--accent'],
+    label: 'Accent',
+    desc: 'Warm peach accent',
+  },
+  {
+    name: '--accent-foreground',
+    rgb: SHOWCASE_TOKENS.dark['--accent-foreground'],
+    label: 'Accent FG',
+    desc: 'Text on accent',
+  },
+  {
+    name: '--border',
+    rgb: SHOWCASE_TOKENS.dark['--border'],
+    label: 'Border',
+    desc: 'Borders, dividers',
+  },
+  { name: '--input', rgb: SHOWCASE_TOKENS.dark['--input'], label: 'Input', desc: 'Input borders' },
+  { name: '--ring', rgb: SHOWCASE_TOKENS.dark['--ring'], label: 'Ring', desc: 'Focus rings' },
+  {
+    name: '--success',
+    rgb: SHOWCASE_TOKENS.dark['--success'],
+    label: 'Success',
+    desc: 'Success states',
+  },
+  {
+    name: '--warning',
+    rgb: SHOWCASE_TOKENS.dark['--warning'],
+    label: 'Warning',
+    desc: 'Warning states',
+  },
+  {
+    name: '--destructive',
+    rgb: SHOWCASE_TOKENS.dark['--destructive'],
+    label: 'Destructive',
+    desc: 'Errors, destructive',
+  },
 ] as const
 
 const accentThemes = [
-  { name: 'blue', label: 'Blue', rgb: '90 130 220', desc: 'Calm ocean, trustworthy' },
-  { name: 'purple', label: 'Purple', rgb: '155 108 214', desc: 'Ethereal lilac, mystical' },
-  { name: 'pink', label: 'Pink', rgb: '218 130 170', desc: 'Soft rose, delicate' },
-  { name: 'red', label: 'Red', rgb: '230 120 130', desc: 'Warm coral, energetic' },
-  { name: 'orange', label: 'Orange', rgb: '236 155 90', desc: 'Peachy bread crust, warm bakery' },
-  { name: 'green', label: 'Green', rgb: '72 178 130', desc: 'Fresh mint, natural' },
-  { name: 'teal', label: 'Teal', rgb: '72 166 200', desc: 'Cool dew, refreshing' },
+  { name: 'blue', label: 'Blue', rgb: SHOWCASE_AURAS.blue, desc: 'Calm ocean, trustworthy' },
+  { name: 'purple', label: 'Purple', rgb: SHOWCASE_AURAS.purple, desc: 'Ethereal lilac, mystical' },
+  { name: 'pink', label: 'Pink', rgb: SHOWCASE_AURAS.pink, desc: 'Soft rose, delicate' },
+  { name: 'red', label: 'Red', rgb: SHOWCASE_AURAS.red, desc: 'Warm coral, energetic' },
+  {
+    name: 'orange',
+    label: 'Orange',
+    rgb: SHOWCASE_AURAS.orange,
+    desc: 'Peachy bread crust, warm bakery',
+  },
+  { name: 'green', label: 'Green', rgb: SHOWCASE_AURAS.green, desc: 'Fresh mint, natural' },
+  { name: 'teal', label: 'Teal', rgb: SHOWCASE_AURAS.teal, desc: 'Cool dew, refreshing' },
 ] as const
 
 const typographyScale = [
@@ -732,27 +873,33 @@ export default function MagazinePage() {
         <div
           className="magazine-card rounded-lg border p-6"
           style={{
-            backgroundColor: 'rgb(17, 15, 24)',
-            borderColor: 'rgb(52, 46, 72)',
+            backgroundColor: `rgb(${SHOWCASE_TOKENS.dark['--background']})`,
+            borderColor: `rgb(${SHOWCASE_TOKENS.dark['--border']})`,
           }}
         >
           <div className="space-y-4">
             <div className="flex items-baseline justify-between">
-              <h3 className="text-base font-medium" style={{ color: 'rgb(238, 234, 248)' }}>
+              <h3
+                className="text-base font-medium"
+                style={{ color: `rgb(${SHOWCASE_TOKENS.dark['--foreground']})` }}
+              >
                 Dark Mode Palette
               </h3>
-              <span className="font-mono text-[10px]" style={{ color: 'rgb(150, 140, 172)' }}>
+              <span
+                className="font-mono text-[10px]"
+                style={{ color: `rgb(${SHOWCASE_TOKENS.dark['--muted-foreground']})` }}
+              >
                 html.dark
               </span>
             </div>
             <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-6">
               {[
-                { label: 'Background', rgb: '17 15 24' },
-                { label: 'Card', rgb: '28 25 38' },
-                { label: 'Primary', rgb: '192 170 244' },
-                { label: 'Accent', rgb: '240 176 130' },
-                { label: 'Success', rgb: '72 192 140' },
-                { label: 'Border', rgb: '52 46 72' },
+                { label: 'Background', rgb: SHOWCASE_TOKENS.dark['--background'] },
+                { label: 'Card', rgb: SHOWCASE_TOKENS.dark['--card'] },
+                { label: 'Primary', rgb: SHOWCASE_TOKENS.dark['--primary'] },
+                { label: 'Accent', rgb: SHOWCASE_TOKENS.dark['--accent'] },
+                { label: 'Success', rgb: SHOWCASE_TOKENS.dark['--success'] },
+                { label: 'Border', rgb: SHOWCASE_TOKENS.dark['--border'] },
               ].map((c) => (
                 <Swatch key={c.label} rgb={c.rgb} label={c.label} size="sm" />
               ))}
@@ -763,8 +910,8 @@ export default function MagazinePage() {
                 type="button"
                 className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{
-                  backgroundColor: 'rgb(192, 170, 244)',
-                  color: 'rgb(25, 22, 36)',
+                  backgroundColor: `rgb(${SHOWCASE_TOKENS.dark['--primary']})`,
+                  color: `rgb(${SHOWCASE_TOKENS.dark['--primary-foreground']})`,
                 }}
               >
                 Primary Button
@@ -773,8 +920,8 @@ export default function MagazinePage() {
                 type="button"
                 className="rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
                 style={{
-                  borderColor: 'rgb(52, 46, 72)',
-                  color: 'rgb(238, 234, 248)',
+                  borderColor: `rgb(${SHOWCASE_TOKENS.dark['--border']})`,
+                  color: `rgb(${SHOWCASE_TOKENS.dark['--foreground']})`,
                 }}
               >
                 Outline Button
@@ -782,8 +929,8 @@ export default function MagazinePage() {
               <span
                 className="rounded-md px-2 py-0.5 text-[10px] font-medium"
                 style={{
-                  backgroundColor: 'rgb(72, 192, 140)',
-                  color: 'rgb(25, 22, 36)',
+                  backgroundColor: `rgb(${SHOWCASE_TOKENS.dark['--success']})`,
+                  color: `rgb(${SHOWCASE_TOKENS.dark['--primary-foreground']})`,
                 }}
               >
                 Success Badge
@@ -791,14 +938,17 @@ export default function MagazinePage() {
               <span
                 className="rounded-md px-2 py-0.5 text-[10px] font-medium"
                 style={{
-                  backgroundColor: 'rgb(240, 176, 130)',
-                  color: 'rgb(25, 22, 36)',
+                  backgroundColor: `rgb(${SHOWCASE_TOKENS.dark['--accent']})`,
+                  color: `rgb(${SHOWCASE_TOKENS.dark['--primary-foreground']})`,
                 }}
               >
                 Accent Badge
               </span>
             </div>
-            <p className="text-xs" style={{ color: 'rgb(150, 140, 172)' }}>
+            <p
+              className="text-xs"
+              style={{ color: `rgb(${SHOWCASE_TOKENS.dark['--muted-foreground']})` }}
+            >
               Body text in muted foreground. Warm, deep charcoal-violet with vibrant lilac accents.
             </p>
           </div>

@@ -44,8 +44,8 @@ Single source of truth for navigation. Read this first.
 Color values have one source of truth: `packages/strui/tokens/palette.json`.
 Edit it and run `node packages/strui/scripts/gen-tokens.mjs` (verify: `--check`);
 both `globals.css` token regions, the web swatch map, the mobile color
-projection, and the tamagui theme overrides are generated from it and guarded
-by `packages/strui/src/tokens/tokens.test.ts`.
+projection, the tamagui theme overrides, and the magazine showcase data are
+generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 
 ## Setup & Deploy
 
