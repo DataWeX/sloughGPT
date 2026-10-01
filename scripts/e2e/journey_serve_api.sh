@@ -12,7 +12,7 @@ BASE="$(cd "$(dirname "$0")" && pwd)"
 WT="${JOURNEY_WT:-$(cd "$BASE/../.." && pwd)}"
 LOG_DIR="$WT/logs/e2e"; mkdir -p "$LOG_DIR"
 LOG=$LOG_DIR/journey_serve_api.log
-VPY="$WT/.venv/bin/python"
+VPY="$("$BASE/../../scripts/python" --resolve 2>/dev/null || echo python3)"
 API_P=8197
 FAIL=0
 ok()  { echo "PASS: $*"; }

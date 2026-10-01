@@ -63,12 +63,16 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 git clone https://github.com/iamtowbee/sloughGPT.git
 cd sloughGPT
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+# Project Python env: conda env `sloughgpt` is the default
+# (a `.venv` still works — see `scripts/python` for the resolution order)
+conda env list | grep -q sloughgpt || conda create -n sloughgpt python=3.12 -y
+conda activate sloughgpt
 
 # Install development dependencies
 python3 -m pip install -e ".[dev]"
+
+# Or skip activation entirely — every script uses the same resolver:
+./scripts/python -m pytest tests/ -q
 ```
 
 ### API + web (local)
@@ -588,8 +592,8 @@ Docs live flat in `docs/`. Auto-generated API docs at `http://localhost:8000/doc
 # Clone and set up
 git clone https://github.com/iamtowbee/sloughGPT.git
 cd sloughGPT
-python3 -m venv .venv
-source .venv/bin/activate
+conda env list | grep -q sloughgpt || conda create -n sloughgpt python=3.12 -y
+conda activate sloughgpt        # or skip activation: ./scripts/python ...
 python3 -m pip install -e ".[dev]"
 
 # Set up environment
@@ -601,7 +605,7 @@ cp .env.example .env
 
 ```bash
 # Full suite
-python3 -m pytest tests/ -q
+./scripts/python -m pytest tests/ -q
 
 # Skip slow tests
 python3 -m pytest tests/ -m "not slow"

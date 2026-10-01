@@ -5,7 +5,7 @@ Measures:
   - peak live threads while bursting N blocking fire-and-forget tasks
     through the bounded pool (vs the old raw ``threading.Thread`` spawn)
 
-Run from the repo root: ``.venv/bin/python scripts/benchmark_execution.py``
+Run from the repo root: ``scripts/python scripts/benchmark_execution.py``
 """
 
 from __future__ import annotations

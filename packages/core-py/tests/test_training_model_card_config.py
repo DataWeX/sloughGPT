@@ -4,7 +4,7 @@ Training Model Card, Auto-Config, and Dataset Manifest Tests.
 Tests model card generation, auto-configuration, and dataset manifest handling.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_model_card_config.py -x -v
+    scripts/python -m pytest tests/test_training_model_card_config.py -x -v
 """
 
 import tempfile

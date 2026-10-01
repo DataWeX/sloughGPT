@@ -12,7 +12,7 @@ import time
 
 TESTS_DIR = pathlib.Path("packages/core-py/tests")
 RESULTS = pathlib.Path("test_results.txt")
-PYTHON = ".venv/bin/python"
+PYTHON = "scripts/python"  # conda env first, then .venv — see scripts/python
 TIMEOUT_S = 900
 
 files = sorted(TESTS_DIR.glob("test_*.py"))

@@ -11,7 +11,7 @@ python3 -m pip install torch transformers fastapi uvicorn pydantic pytest
 # Editable install + dev tools (ruff, pytest, …) and the ``sloughgpt`` console script
 python3 -m pip install -e ".[dev]"
 ./verify.sh
-# With a .venv, prefix commands so they use that interpreter: ./run.sh python3 -m pytest tests/ -q
+# Interpreter resolution (scripts/python): conda env `sloughgpt` → .venv → python3 — prefix commands: ./run.sh python3 -m pytest tests/ -q
 # Minimal editable install only: python3 -m pip install -e .  (add dev extras or python3 -m pip install ruff to use ./verify.sh lint)
 # JS workspaces (Turborepo): npm install at repo root — installs all packages, then:
 #   npx turbo run lint typecheck test   # run checks across all JS packages

@@ -6,10 +6,10 @@ Engine: avion (packages/avion, formerly voyager/arken) on Firefox — chromium
 never commits navigations on this hardware.
 
 Usage:
-    .venv/bin/python scripts/run_ux_flows.py                # all journeys
-    .venv/bin/python scripts/run_ux_flows.py --flow 2-write
-    .venv/bin/python scripts/run_ux_flows.py --list
-    .venv/bin/python scripts/run_ux_flows.py --strict-errors
+    scripts/python scripts/run_ux_flows.py                # all journeys
+    scripts/python scripts/run_ux_flows.py --flow 2-write
+    scripts/python scripts/run_ux_flows.py --list
+    scripts/python scripts/run_ux_flows.py --strict-errors
 
 Env:
     SLO_WEB_URL         default http://localhost:5175

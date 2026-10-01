@@ -3,11 +3,13 @@ import sys
 
 repo_root = os.path.abspath(os.path.join(__file__, ".."))
 
-# Add core-py and server paths for module resolution.
+# Add core-py and server paths for module resolution. Insert rather than
+# append: an env-installed copy of a repo package (e.g. conda's `downcraft`)
+# must never shadow the source tree we are actually testing.
 for _p in ("packages/core-py", "apps/api/server", "packages/downcraft"):
     _full = os.path.join(repo_root, _p)
     if os.path.isdir(_full) and _full not in sys.path:
-        sys.path.append(_full)
+        sys.path.insert(0, _full)
 
 # Ensure the repository root is on sys.path FIRST so absolute imports and the
 # top-level `tests` package resolve to the repo root, never to a

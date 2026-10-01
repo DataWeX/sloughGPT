@@ -10,7 +10,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PY="${PY:-$REPO/.venv/bin/python}"
+PY="${PY:-$REPO/scripts/python}"
 GW_BIN="${GW_BIN:-$REPO/apps/gateway/target/release/slough-gateway}"
 GW_PORT="${PORT:-8080}"
 SIDECAR_PORT="${SIDECAR_PORT:-18000}"

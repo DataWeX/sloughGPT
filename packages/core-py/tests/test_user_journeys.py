@@ -4,7 +4,7 @@ User Journey Tests — Playwright browser automation.
 Runs all web UI flow tests headlessly. For CI and local verification.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
+    scripts/python -m pytest tests/test_user_journeys.py -x -v
 
 Requirements:
     .venv/bin/playwright install chromium
@@ -44,6 +44,29 @@ def _wait_for_api(timeout: int = 60) -> bool:
             return True
         time.sleep(1)
     return False
+
+
+def _web_is_ready() -> bool:
+    """Check if the web app answers without an HTTP client error."""
+    try:
+        req = urllib.request.Request(BASE)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return 200 <= resp.status < 400
+    except Exception:
+        return False
+
+
+# Route-level journeys drive a real browser against a live stack. Skip the
+# whole module when one isn't running instead of failing every test, so the
+# default offline suite stays green. Start one first if you want these:
+#   scripts/dev-stack.sh   (web :3000, api :8000)  or  ./sloughgpt serve --web
+pytestmark = pytest.mark.skipif(
+    not (_web_is_ready() and _api_is_ready()),
+    reason=(
+        "route-level journeys need a live stack "
+        "(web :3000 + api :8000 — scripts/dev-stack.sh or sloughgpt serve --web)"
+    ),
+)
 
 
 def _api_has_model() -> bool:

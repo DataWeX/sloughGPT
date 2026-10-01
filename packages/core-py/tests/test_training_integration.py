@@ -5,7 +5,7 @@ Tests complete training workflows combining multiple components:
 adaptive config + trainer + outcome tracking + export.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_integration.py -x -v
+    scripts/python -m pytest tests/test_training_integration.py -x -v
 """
 
 import tempfile

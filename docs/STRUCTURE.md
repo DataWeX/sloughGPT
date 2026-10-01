@@ -11,7 +11,7 @@ Lightweight layout:
 - `packages/standards/` — standards docs and JSON schemas; see **[packages/standards/README.md](../packages/standards/README.md)**
 - `tests/` — pytest suite (root `pyproject.toml` `testpaths`)
 - `infra/docker/` — Dockerfiles and Compose file for local runs
-- `run.sh` — optional wrapper: prepends `.venv/bin` to `PATH`, then runs the rest (e.g. `./run.sh python3 -m pytest tests/ -q`)
+- `run.sh` — optional wrapper: activates the project env (conda `sloughgpt`, else `.venv`) then runs the rest (e.g. `./run.sh python3 -m pytest tests/ -q`); `scripts/python` is the same resolution without activating anything
 - `Makefile` — optional: **`make help`** (**`dev-stack`**, **`test-repo-root`**, **`colab-smoke`** / **`colab-test`**); see **README.md** / **QUICKSTART.md**
 - `sloughgpt_colab.ipynb` — Colab-oriented walkthrough; local full execute via **`scripts/run_colab_notebook_smoke.sh`** (optional deps: `python3 -m pip install -e ".[notebook]"` — see **README.md** _Google Colab_). Native **`.soul`** checkpoints / §13 saves embed char vocab for **`cli.py eval`** — **`docs/policies/CONTRIBUTING.md`** (_Checkpoint vocabulary_).
 - `.cursor/rules/`, `.agents/skills/` — editor/agent guidance (not part of the installable Python package). Entry **`AGENTS.md`** at the repo root links here.

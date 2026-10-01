@@ -5,7 +5,7 @@ Tests the training export pipeline (CSV, JSON, GGUF, SOU) and preset management
 system for quick-start training configurations.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_export_presets.py -x -v
+    scripts/python -m pytest tests/test_training_export_presets.py -x -v
 """
 
 import csv

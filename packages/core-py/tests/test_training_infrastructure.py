@@ -5,7 +5,7 @@ Tests the supporting infrastructure for the training system: adaptive config eng
 training state management, and training queue event handling.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_infrastructure.py -x -v
+    scripts/python -m pytest tests/test_training_infrastructure.py -x -v
 """
 
 import tempfile

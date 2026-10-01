@@ -104,11 +104,10 @@ prefix_output() {
 # ── Start API ──────────────────────────────────────────────────
 start_api() {
   log_api "Starting (port $SLO_API_PORT)..."
-   local py="python3"
-   if [ -x ".venv/bin/python3" ]; then
-     py=".venv/bin/python3"
-   fi
-   $py apps/api/server/main.py 2>&1 &
+  # One interpreter resolver (conda env first) — see scripts/python.
+  # Module form so the repo root lands on sys.path (``domain`` imports).
+  local py="$ROOT/scripts/python"
+  "$py" -m apps.api.server.main 2>&1 &
   API_PID=$!
 
   if wait_for_health "$SLO_API_PORT" "api"; then

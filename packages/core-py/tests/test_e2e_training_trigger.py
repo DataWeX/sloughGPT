@@ -5,7 +5,7 @@ Tests the full flow: navigate → configure → trigger training → monitor Dev
 Requires running API (localhost:8000) and web (localhost:3000) servers.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_e2e_training_trigger.py -x -v -s
+    scripts/python -m pytest tests/test_e2e_training_trigger.py -x -v -s
 """
 
 import json

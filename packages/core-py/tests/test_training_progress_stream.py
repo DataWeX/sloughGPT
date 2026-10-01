@@ -5,7 +5,7 @@ Tests the training progress streaming pipeline: trainer â†’ progress callbacks â
 Validates that training progress is properly streamed to connected clients.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_progress_stream.py -x -v
+    scripts/python -m pytest tests/test_training_progress_stream.py -x -v
 """
 
 import tempfile

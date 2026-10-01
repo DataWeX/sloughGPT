@@ -1,0 +1,59 @@
+#!/bin/sh
+# Project interpreter resolver — conda env first, then the legacy .venv.
+#
+#   scripts/python [args...]        run with the project interpreter
+#   scripts/python --resolve        print the interpreter path instead
+#
+# Override with SLO_PYTHON=/path/to/python. Kept in ONE place so shell
+# scripts, npm scripts, and the CLI all agree on which Python we run.
+set -u
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+resolve() {
+  if [ -n "${SLO_PYTHON:-}" ]; then
+    printf '%s\n' "$SLO_PYTHON"
+    return 0
+  fi
+
+  # Active conda env, but only the project env — never silently use `base`.
+  if [ "${CONDA_DEFAULT_ENV:-}" = "sloughgpt" ] && [ -x "${CONDA_PREFIX:-}/bin/python" ]; then
+    printf '%s\n' "$CONDA_PREFIX/bin/python"
+    return 0
+  fi
+
+  for cand in \
+    "${HOME}/miniconda3/envs/sloughgpt/bin/python" \
+    "${HOME}/anaconda3/envs/sloughgpt/bin/python" \
+    "${HOME}/mambaforge/envs/sloughgpt/bin/python" \
+    "/opt/conda/envs/sloughgpt/bin/python"
+  do
+    if [ -x "$cand" ]; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  done
+
+  for cand in "$ROOT/.venv/bin/python3" "$ROOT/.venv/bin/python"; do
+    if [ -x "$cand" ]; then
+      printf '%s\n' "$cand"
+      return 0
+    fi
+  done
+
+  command -v python3
+}
+
+if [ "${1:-}" = "--resolve" ]; then
+  resolve
+else
+  # The repo root must be importable (``domain`` lives there and is not
+  # installed as a package) — matches the ``-m`` module-form invocation,
+  # where cwd is already on sys.path.
+  case ":${PYTHONPATH:-}:" in
+    *":$ROOT:"*) ;;
+    *) PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" ;;
+  esac
+  export PYTHONPATH
+  exec "$(resolve)" "$@"
+fi

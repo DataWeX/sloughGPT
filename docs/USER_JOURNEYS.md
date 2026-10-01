@@ -81,11 +81,11 @@ The following routes have `page.tsx` files but are not covered by Playwright tes
 ## Running Tests
 
 ```bash
-# Full suite
-.venv/bin/python -m pytest packages/core-py/tests/test_user_journeys.py -x -v
+# Full suite (needs a live stack — skips itself when none is running)
+scripts/python -m pytest packages/core-py/tests/test_user_journeys.py -x -v
 
 # Single journey class
-.venv/bin/python -m pytest packages/core-py/tests/test_user_journeys.py::TestDatasetsImport -v
+scripts/python -m pytest packages/core-py/tests/test_user_journeys.py::TestDatasetsImport -v
 ```
 
-Results are saved to `tests/test_results/user_journey_results.json`.
+Results are saved to `packages/core-py/tests/test_results/user_journey_results.json`.
