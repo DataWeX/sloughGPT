@@ -36,6 +36,24 @@ export const SEARCH_STORES: Record<string, SearchStoreMeta> = {
     link: '/knowledge',
     icon: '📖',
   },
+  files: {
+    label: 'Files',
+    color: 'bg-info/10 text-info dark:bg-info/15 dark:text-info',
+    link: '/files',
+    icon: '📁',
+  },
+  kb: {
+    label: 'Knowledge Base',
+    color: 'bg-primary/10 text-primary dark:bg-primary/15 dark:text-primary',
+    link: '/kb',
+    icon: '🗃️',
+  },
+  memory: {
+    label: 'Memory',
+    color: 'bg-warning/10 text-warning dark:bg-warning/15 dark:text-warning',
+    link: '/memory',
+    icon: '💭',
+  },
   docs: {
     label: 'Docs',
     color: 'bg-warning/15 text-warning dark:bg-warning/10 dark:text-warning',

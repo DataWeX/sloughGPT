@@ -53,9 +53,12 @@ def _register_default_stores(registry: SearchRegistry) -> None:
     registered (and therefore never reported, by design: registration
     is a deploy-time fact, runtime failures go to ``partial``)."""
     from domain.search.adapters.datasets import DatasetsAdapter
+    from domain.search.adapters.files import FilesAdapter
     from domain.search.adapters.filesources import default_file_adapters
+    from domain.search.adapters.kb import KBAdapter
     from domain.search.adapters.knowledge import KnowledgeAdapter
     from domain.search.adapters.members import MembersAdapter
+    from domain.search.adapters.memory import MemoryAdapter
     from domain.search.adapters.training import TrainingJobsAdapter
 
     adapters = [
@@ -63,6 +66,9 @@ def _register_default_stores(registry: SearchRegistry) -> None:
         TrainingJobsAdapter(),
         DatasetsAdapter(),
         KnowledgeAdapter(),
+        KBAdapter(),
+        MemoryAdapter(),
+        FilesAdapter(),
         *default_file_adapters(),
     ]
     for adapter in adapters:

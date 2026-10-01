@@ -13,8 +13,11 @@ from types import SimpleNamespace
 import pytest
 
 from domain.search.adapters.datasets import DatasetsAdapter
+from domain.search.adapters.files import FilesAdapter
+from domain.search.adapters.kb import KBAdapter
 from domain.search.adapters.knowledge import KnowledgeAdapter
 from domain.search.adapters.members import MembersAdapter
+from domain.search.adapters.memory import MemoryAdapter
 from domain.search.adapters.training import TrainingJobsAdapter
 from domain.search.types import SearchContext
 
@@ -23,7 +26,7 @@ from domain.search.types import SearchContext
 _NONMATCH = "zzznonexistentquery"
 
 
-def _member_adapter() -> MembersAdapter:
+def _member_adapter(tmp_path=None) -> MembersAdapter:
     member = SimpleNamespace(id="m1", user_id="user1", role=SimpleNamespace(value="admin"))
     user = SimpleNamespace(username="alice")
     return MembersAdapter(
@@ -32,21 +35,82 @@ def _member_adapter() -> MembersAdapter:
     )
 
 
-def _training_adapter() -> TrainingJobsAdapter:
+def _training_adapter(tmp_path=None) -> TrainingJobsAdapter:
     job = SimpleNamespace(id="t1", name="Fine-tune LLaMA", status="completed")
     return TrainingJobsAdapter(
         repo=SimpleNamespace(list_by_workspace=lambda ws_id: [job]),
     )
 
 
-def _dataset_adapter() -> DatasetsAdapter:
+def _dataset_adapter(tmp_path=None) -> DatasetsAdapter:
     ds = SimpleNamespace(id="d1", name="training-data", format="jsonl", record_count=1000)
     return DatasetsAdapter(repo=SimpleNamespace(list=lambda: [ds]))
 
 
-def _knowledge_adapter() -> KnowledgeAdapter:
+def _knowledge_adapter(tmp_path=None) -> KnowledgeAdapter:
     fact = SimpleNamespace(id="k1", content="Paris is the capital of France", topic="geography")
     return KnowledgeAdapter(repo=SimpleNamespace(list_facts=lambda: [fact]))
+
+
+def _files_adapter(tmp_path) -> FilesAdapter:
+    blob = tmp_path / "quarterly-report.pdf"
+    blob.write_bytes(b"%PDF-1.4")
+    docs = [
+        {
+            "file_id": "f1",
+            "filename": "quarterly-report.pdf",
+            "original_name": "quarterly-report.pdf",
+            "extension": ".pdf",
+            "tags": ["finance"],
+        }
+    ]
+    return FilesAdapter(docs_factory=lambda: docs, uploads_dir=tmp_path)
+
+
+class _FakeEngine:
+    """Seed-faithful KnowledgeEngine stand-in: casefold substring, success envelope."""
+
+    def __init__(self):
+        self._seeded = [
+            {
+                "id": "k1",
+                "content": "Paris is the capital of France",
+                "topic": "geography",
+                "score": 1.0,
+            }
+        ]
+
+    def query(self, search: str, top_k: int = 10):
+        needle = search.casefold()
+        data = [
+            e
+            for e in self._seeded
+            if needle in e["content"].casefold() or needle in e["topic"].casefold()
+        ][:top_k]
+        return SimpleNamespace(data=data, success=True)
+
+
+def _kb_adapter(tmp_path=None) -> KBAdapter:
+    return KBAdapter(engine=_FakeEngine())
+
+
+class _FakeMemoryService:
+    def __init__(self):
+        self._seeded = [
+            {"id": "m1", "content": "Remember the release checklist", "topic": "ops", "score": 1.0}
+        ]
+
+    def retrieve(self, query: str, limit: int | None = None):
+        needle = query.casefold()
+        return [
+            i
+            for i in self._seeded
+            if needle in i["content"].casefold() or needle in i["topic"].casefold()
+        ][: limit or 5]
+
+
+def _memory_adapter(tmp_path=None) -> MemoryAdapter:
+    return MemoryAdapter(service=_FakeMemoryService())
 
 
 CASES = [
@@ -54,6 +118,9 @@ CASES = [
     pytest.param(_training_adapter, "fine-tune", id="training_jobs"),
     pytest.param(_dataset_adapter, "training", id="datasets"),
     pytest.param(_knowledge_adapter, "paris", id="knowledge"),
+    pytest.param(_files_adapter, "quarterly", id="files"),
+    pytest.param(_kb_adapter, "capital", id="kb"),
+    pytest.param(_memory_adapter, "release", id="memory"),
 ]
 
 CTX = SearchContext(workspace_id="ws1", user_id="user1", is_admin=False)
@@ -92,8 +159,8 @@ async def _assert_contract(adapter, sample_q: str) -> None:
 
 
 @pytest.mark.parametrize("factory,q", CASES)
-async def test_adapter_contract(factory, q: str):
-    await _assert_contract(factory(), q)
+async def test_adapter_contract(factory, q: str, tmp_path):
+    await _assert_contract(factory(tmp_path), q)
 
 
 async def test_registered_adapters_satisfy_the_protocol():
@@ -104,12 +171,15 @@ async def test_registered_adapters_satisfy_the_protocol():
 
     registry = get_registry()
     names = set(registry.store_names())
-    # DB-backed stores + the repository corpus (docs, dev notes, kanban).
+    # DB/API stores + the repository corpus (docs, dev notes, kanban).
     assert names == {
         "members",
         "training_jobs",
         "datasets",
         "knowledge",
+        "kb",
+        "memory",
+        "files",
         "docs",
         "dev_notes",
         "kanban_cards",
