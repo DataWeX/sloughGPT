@@ -12,51 +12,24 @@ import { SearchEmptyState } from '@/components/workspace-search/SearchEmptyState
 import { apiGet } from '@/lib/http-client'
 import { useAuthStore } from '@/lib/auth'
 import { useToastStore } from '@/lib/toast-store'
+import { SEARCH_STORES } from '@/lib/search-stores'
 
-interface SearchResult {
+interface SearchHit {
   id: string
-  type: string
+  store: string
   title: string
   detail: string
+  score: number
+  locator: string
 }
 
 interface SearchResponse {
   data: {
-    results: {
-      members: SearchResult[]
-      training_jobs: SearchResult[]
-      datasets: SearchResult[]
-      knowledge: SearchResult[]
-    }
-    total: number
-    query: string
+    hits: SearchHit[]
     partial: string[]
+    skipped: string[]
+    query: string
   }
-}
-
-// Keys MUST match the result-category keys the API returns
-// (members / training_jobs / datasets / knowledge), not item.type.
-const CATEGORY_CONFIG: Record<string, { label: string; color: string; link: string }> = {
-  members: {
-    label: 'Members',
-    color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
-    link: '/workspace/members',
-  },
-  training_jobs: {
-    label: 'Training Jobs',
-    color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
-    link: '/training/queue',
-  },
-  datasets: {
-    label: 'Datasets',
-    color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
-    link: '/datasets',
-  },
-  knowledge: {
-    label: 'Knowledge',
-    color: 'bg-accent text-accent dark:bg-accent/30 dark:text-accent',
-    link: '/knowledge',
-  },
 }
 
 export default function WorkspaceSearchPage() {
@@ -64,26 +37,22 @@ export default function WorkspaceSearchPage() {
   const { currentWorkspace } = useAuthStore()
   const addToast = useToastStore(s => s.addToast)
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState<SearchResponse['data']['results'] | null>(null)
-  const [total, setTotal] = useState(0)
+  const [hits, setHits] = useState<SearchHit[] | null>(null)
   const [partial, setPartial] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
   const search = useCallback(async (q: string) => {
     if (!currentWorkspace?.id || !q.trim()) {
-      setResults(null)
-      setTotal(0)
+      setHits(null)
       setPartial([])
       return
     }
     setLoading(true)
     try {
-      const res = await apiGet<SearchResponse>(
-        `/workspaces/${currentWorkspace.id}/search?q=${encodeURIComponent(q.trim())}`
-      )
+      const params = new URLSearchParams({ q: q.trim(), workspace_id: currentWorkspace.id })
+      const res = await apiGet<SearchResponse>(`/search?${params.toString()}`)
       if (res?.data) {
-        setResults(res.data.results)
-        setTotal(res.data.total)
+        setHits(res.data.hits)
         setPartial(res.data.partial ?? [])
       }
     } catch {
@@ -96,22 +65,35 @@ export default function WorkspaceSearchPage() {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (query.trim()) search(query)
-      else { setResults(null); setTotal(0); setPartial([]) }
+      else { setHits(null); setPartial([]) }
     }, 300)
     return () => clearTimeout(timer)
   }, [query, search])
 
-  const groups = results
-    ? Object.entries(results)
-        .filter(([type]) => CATEGORY_CONFIG[type])
-        .map(([type, items]) => ({
-          type,
-          label: CATEGORY_CONFIG[type].label,
-          color: CATEGORY_CONFIG[type].color,
-          link: CATEGORY_CONFIG[type].link,
-          items,
-        }))
-    : []
+  // Grouping by store is presentation — the core returns one ranked list.
+  type GroupItem = { id: string; type: string; title: string; detail: string }
+  type Group = { type: string; label: string; color: string; link: string; items: GroupItem[] }
+  const groups: Group[] = []
+  if (hits) {
+    const byStore = new Map<string, SearchHit[]>()
+    for (const hit of hits) {
+      const bucket = byStore.get(hit.store)
+      if (bucket) bucket.push(hit)
+      else byStore.set(hit.store, [hit])
+    }
+    for (const [store, items] of byStore) {
+      const meta = SEARCH_STORES[store]
+      if (meta) {
+        groups.push({
+          type: store,
+          label: meta.label,
+          color: meta.color,
+          link: meta.link,
+          items: items.map(h => ({ id: h.id, type: store, title: h.title, detail: h.detail })),
+        })
+      }
+    }
+  }
 
   return (
     <PageContainer
@@ -122,9 +104,9 @@ export default function WorkspaceSearchPage() {
 
       {loading && <Skeleton className="h-32 w-full" />}
 
-      {!loading && !results && <SearchEmptyState />}
+      {!loading && !hits && <SearchEmptyState />}
 
-      {!loading && results && (
+      {!loading && hits && (
         <>
           {partial.length > 0 && (
             <p className="text-xs text-warning mb-2" role="status">
@@ -133,7 +115,7 @@ export default function WorkspaceSearchPage() {
           )}
           <SearchResultsCard
             groups={groups}
-            total={total}
+            total={hits.length}
             query={query}
             onNavigate={link => router.push(link)}
           />

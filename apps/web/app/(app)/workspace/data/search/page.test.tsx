@@ -103,21 +103,14 @@ import WorkspaceSearchPage from './page'
 describe('WorkspaceSearchPage', () => {
   const mockSearchResults = {
     data: {
-      results: {
-        members: [
-          { id: 'u1', type: 'member', title: 'alice', detail: 'alice@test.com' },
-        ],
-        training_jobs: [
-          { id: 't1', type: 'training', title: 'Fine-tune LLaMA', detail: 'completed' },
-        ],
-        datasets: [
-          { id: 'd1', type: 'dataset', title: 'training-data', detail: '1000 rows' },
-        ],
-        knowledge: [],
-      },
-      total: 3,
-      query: 'alice',
+      hits: [
+        { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+        { id: 't1', store: 'training_jobs', title: 'Fine-tune LLaMA', detail: 'Status: completed', score: 1.0, locator: 'route:/training/queue' },
+        { id: 'd1', store: 'datasets', title: 'training-data', detail: '1000 rows', score: 0.6, locator: 'route:/datasets' },
+      ],
       partial: [],
+      skipped: [],
+      query: 'a',
     },
   }
 
@@ -159,7 +152,7 @@ describe('WorkspaceSearchPage', () => {
 
     await screen.findByText(/result/i)
     expect(mockApiGet).toHaveBeenCalled()
-    expect(mockApiGet.mock.calls[0][0]).toContain('/workspaces/ws-1/search?q=alice')
+    expect(mockApiGet.mock.calls[0][0]).toContain('/search?q=alice&workspace_id=ws-1')
   })
 
   it('renders server results as-is — no client-side filtering', async () => {
@@ -167,15 +160,12 @@ describe('WorkspaceSearchPage', () => {
     // and the UI must still render what the server returned.
     mockApiGet.mockResolvedValue({
       data: {
-        results: {
-          members: [{ id: 'u1', type: 'member', title: 'alice', detail: 'Role: admin' }],
-          training_jobs: [],
-          datasets: [],
-          knowledge: [],
-        },
-        total: 1,
-        query: 'alice',
+        hits: [
+          { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+        ],
         partial: ['datasets'],
+        skipped: [],
+        query: 'alice',
       },
     })
     const user = userEvent.setup()
@@ -191,7 +181,7 @@ describe('WorkspaceSearchPage', () => {
 
   it('shows empty state when no results', async () => {
     mockApiGet.mockResolvedValue({
-      data: { results: { members: [], training_jobs: [], datasets: [], knowledge: [] }, total: 0 },
+      data: { hits: [], partial: [], skipped: [], query: 'zzznonexistent' },
     })
     const user = userEvent.setup()
     render(<WorkspaceSearchPage />)

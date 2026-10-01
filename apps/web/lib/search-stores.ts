@@ -1,0 +1,39 @@
+/**
+ * Shared metadata for search result stores — the single source used by
+ * the workspace search page (grouped cards) and the command palette
+ * (flat results). Keys MUST match the API's hit.store values.
+ */
+
+export interface SearchStoreMeta {
+  label: string
+  color: string
+  link: string
+  icon: string
+}
+
+export const SEARCH_STORES: Record<string, SearchStoreMeta> = {
+  members: {
+    label: 'Members',
+    color: 'bg-primary/15 text-primary dark:bg-primary/10 dark:text-primary',
+    link: '/workspace/members',
+    icon: '👥',
+  },
+  training_jobs: {
+    label: 'Training Jobs',
+    color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
+    link: '/training/queue',
+    icon: '🧠',
+  },
+  datasets: {
+    label: 'Datasets',
+    color: 'bg-success/15 text-success dark:bg-success/10 dark:text-success',
+    link: '/datasets',
+    icon: '🗄️',
+  },
+  knowledge: {
+    label: 'Knowledge',
+    color: 'bg-accent text-accent dark:bg-accent/30 dark:text-accent',
+    link: '/knowledge',
+    icon: '📖',
+  },
+}

@@ -2,14 +2,26 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 import React from 'react'
 
-const { mockPush, mockSessionList, mockModelList } = vi.hoisted(() => ({
+const { mockPush, mockSessionList, mockModelList, mockApiGet } = vi.hoisted(() => ({
   mockPush: vi.fn(),
   mockSessionList: vi.fn(),
   mockModelList: vi.fn(),
+  mockApiGet: vi.fn(),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+}))
+
+vi.mock('@/lib/http-client', () => ({
+  apiGet: (...args: unknown[]) => mockApiGet(...args),
+}))
+
+vi.mock('@/lib/auth', () => ({
+  useAuthStore: (selector?: (s: { currentWorkspace: { id: string } | null }) => unknown) => {
+    const state = { currentWorkspace: { id: 'ws-1' } }
+    return selector ? selector(state) : state
+  },
 }))
 
 vi.mock('@/lib/model-controller', () => ({
@@ -32,6 +44,7 @@ describe('CommandPalette', () => {
     vi.clearAllMocks()
     mockSessionList.mockResolvedValue([])
     mockModelList.mockResolvedValue([])
+    mockApiGet.mockResolvedValue({ data: { hits: [], partial: [], skipped: [], query: '' } })
   })
   afterEach(cleanup)
 
@@ -94,5 +107,54 @@ describe('CommandPalette', () => {
     render(<CommandPalette />)
     fireEvent.keyDown(window, { key: 'k', metaKey: true })
     expect(mockSessionList).toHaveBeenCalled()
+  })
+
+  it('queries system search with q and renders Data results', async () => {
+    mockApiGet.mockResolvedValue({
+      data: {
+        hits: [
+          {
+            id: 'k1',
+            store: 'knowledge',
+            title: 'Paris is the capital of France',
+            detail: 'geography',
+            score: 1.0,
+            locator: 'route:/knowledge',
+          },
+        ],
+        partial: [],
+        skipped: [],
+        query: 'paris',
+      },
+    })
+    render(<CommandPalette />)
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    const input = screen.getByPlaceholderText('Search pages, models, actions...')
+    fireEvent.change(input, { target: { value: 'paris' } })
+
+    await waitFor(() => {
+      expect(mockApiGet).toHaveBeenCalledWith('/search?q=paris&workspace_id=ws-1')
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Paris is the capital of France')).toBeDefined()
+    })
+    expect(screen.getByText('Data')).toBeDefined()
+    // Jumping navigates to the hit's locator route.
+    fireEvent.click(screen.getByText('Paris is the capital of France'))
+    expect(mockPush).toHaveBeenCalledWith('/knowledge')
+  })
+
+  it('shows partial notice when a store fails', async () => {
+    mockApiGet.mockResolvedValue({
+      data: { hits: [], partial: ['knowledge'], skipped: [], query: 'paris' },
+    })
+    render(<CommandPalette />)
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    const input = screen.getByPlaceholderText('Search pages, models, actions...')
+    fireEvent.change(input, { target: { value: 'paris' } })
+
+    await waitFor(() => {
+      expect(screen.getByText(/Partial results/)).toBeDefined()
+    })
   })
 })
