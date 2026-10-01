@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 from typing import Any
 
 from .structured_log import StructuredLogger
@@ -51,6 +51,7 @@ class IdleManager:
         self._lock = Lock()
         self._thread: Thread | None = None
         self._running = False
+        self._stop_event = Event()
         self._on_unload: Callable[[str], None] | None = None
         self._on_reload: Callable[[str], None] | None = None
         self._logger = logger
@@ -196,13 +197,14 @@ class IdleManager:
             if self._running:
                 return
             self._running = True
+        self._stop_event.clear()
         self._thread = Thread(target=self._check_loop, daemon=True, name="idle-manager")
         self._thread.start()
 
     def _check_loop(self) -> None:
         """Background loop: check for idle models and unload them."""
         while self._running:
-            time.sleep(self._check_interval_s)
+            self._stop_event.wait(self._check_interval_s)
             now = time.time()
             with self._lock:
                 for model_id, entry in self._models.items():
@@ -230,9 +232,10 @@ class IdleManager:
                                 )
 
     def shutdown(self) -> None:
-        """Stop the background check thread."""
+        """Stop the background check thread (promptly: wakes the sleeper)."""
         with self._lock:
             self._running = False
+        self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
 

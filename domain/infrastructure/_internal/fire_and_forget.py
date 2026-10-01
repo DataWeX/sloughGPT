@@ -50,9 +50,7 @@ class FireAndForgetPool:
         self._lock = threading.Lock()
         self._closed = False
         for _ in range(size):
-            thread = threading.Thread(
-                target=self._run, daemon=True, name="faf-worker"
-            )
+            thread = threading.Thread(target=self._run, daemon=True, name="faf-worker")
             thread.start()
             self._workers.append(thread)
 
@@ -134,3 +132,12 @@ def get_pool(size: int = POOL_SIZE, queue_size: int = QUEUE_SIZE) -> FireAndForg
             if _pool is None:
                 _pool = FireAndForgetPool(size=size, queue_size=queue_size)
     return _pool
+
+
+def reset_pool() -> None:
+    """Shutdown the global pool and forget it (test teardown)."""
+    global _pool
+    with _pool_lock:
+        pool, _pool = _pool, None
+    if pool is not None:
+        pool.shutdown()

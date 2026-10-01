@@ -41,6 +41,32 @@ def _stop_pretrain_threads():
         manager_mod.MultimodalManager.stop_pretrain(timeout=5)
 
 
+@pytest.fixture(autouse=True)
+def _stop_infra_threads():
+    """L3: stop leaked infra background threads after each test.
+
+    The leak sites already have stop APIs — workflow schedulers, the
+    fire-and-forget pool, the idle-manager loop (gate run5: 44x timeouts,
+    ~54 leaked threads). Only subsystems this test imported are touched.
+    """
+    yield
+    workflow_mod = sys.modules.get("domain.feedback._internal.workflow")
+    if workflow_mod is not None:
+        stop_all = getattr(workflow_mod, "stop_all_workflows", None)
+        if stop_all is not None:
+            stop_all()
+    faf_mod = sys.modules.get("domain.infrastructure._internal.fire_and_forget")
+    if faf_mod is not None:
+        reset = getattr(faf_mod, "reset_pool", None)
+        if reset is not None:
+            reset()
+    idle_mod = sys.modules.get("domain.infrastructure._internal.idle_manager")
+    if idle_mod is not None:
+        get = getattr(idle_mod, "get_idle_manager", None)
+        if get is not None:
+            get().reset()
+
+
 def build_test_app(*routers):
     """Build a FastAPI app with exception handlers registered.
 
