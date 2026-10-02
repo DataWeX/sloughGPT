@@ -120,4 +120,23 @@ if ! cmp -s <(dd if=/tmp/id.bin bs=1 skip=100 count=100 status=none) /tmp/rng.bi
 fi
 echo "range 206 lossless: OK"
 
+echo "=== bandwidth counters (/health/detailed) ==="
+curl -s "http://127.0.0.1:$GW_PORT/health/detailed" -o /tmp/bw.json || {
+  echo "BANDWIDTH FETCH FAILED"; exit 1;
+}
+"$PY" - <<'EOF' || exit 1
+import json, sys
+bw = json.load(open('/tmp/bw.json')).get('bandwidth') or {}
+assert bw, 'bandwidth block missing from /health/detailed'
+assert bw['identity_bytes'] > bw['wire_bytes'], \
+    f"identity {bw['identity_bytes']} <= wire {bw['wire_bytes']}"
+assert bw['compressed_responses'] >= 2, f"expected >=2 compressed, got {bw}"
+assert bw['zstd_responses'] >= 1 and bw['gzip_responses'] >= 1, f"codec mix wrong: {bw}"
+assert bw['identity_responses'] >= 1, f"no identity passthrough counted: {bw}"
+print(f"bandwidth: identity={bw['identity_bytes']} wire={bw['wire_bytes']} "
+      f"saved_pct={bw['saved_pct']:.1f} compressed={bw['compressed_responses']} "
+      f"identity={bw['identity_responses']} zstd={bw['zstd_responses']} "
+      f"gzip={bw['gzip_responses']}")
+EOF
+
 echo SMOKE_DONE
