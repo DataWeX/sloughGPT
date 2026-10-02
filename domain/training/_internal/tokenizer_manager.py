@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger("slo.training.tokenizer_manager")
@@ -141,7 +142,7 @@ class TokenizerManager:
     def train_from_directory(
         self,
         dir_path: str,
-        pattern: str | list[str] | None = None,
+        pattern: str = "*.txt",
         vocab_size: int = 1024,
         min_frequency: int = 2,
         lowercase: bool = True,
@@ -150,14 +151,11 @@ class TokenizerManager:
         algo: str = "bpe",
         **algo_kwargs: Any,
     ) -> dict[str, Any]:
-        """Train the tokenizer on corpus files in a directory.
+        """Train the tokenizer on all text files in a directory.
 
         Args:
-            dir_path: directory to scan for corpus files
-            pattern: glob pattern (str or list of str). Default ``None`` loads
-                ``corpus_loader.DEFAULT_PATTERNS`` (txt/md/py/json/jsonl/csv)
-                with structured decoding — JSONL message records render to
-                ``User:/Assistant:`` text, JSON/CSV decode to documents.
+            dir_path: directory to scan for text files
+            pattern: glob pattern (default: ``*.txt``)
             vocab_size: target vocabulary size
             min_frequency: minimum pair frequency (BPE only)
             lowercase: lowercase text before training
@@ -169,17 +167,13 @@ class TokenizerManager:
         Returns:
             vocab_stats dict
         """
-        from domain.training._internal.corpus_loader import load_corpus_dir
-
-        if pattern is None:
-            pats: tuple[str, ...] | None = None
-        elif isinstance(pattern, str):
-            pats = (pattern,)
-        else:
-            pats = tuple(pattern)
-        texts = load_corpus_dir(dir_path, patterns=pats, recursive=recursive)
-        if not texts:
-            raise ValueError(f"No corpus files found in {dir_path}")
+        # Collect texts from directory
+        root = Path(dir_path)
+        texts: list[str] = []
+        it = root.rglob(pattern) if recursive else root.glob(pattern)
+        for p in it:
+            if p.is_file():
+                texts.append(p.read_text(encoding="utf-8", errors="replace"))
 
         return self.train(
             texts,

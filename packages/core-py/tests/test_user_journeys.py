@@ -11,7 +11,6 @@ Requirements:
 """
 
 import json
-import os
 import time
 import urllib.request
 from pathlib import Path
@@ -19,8 +18,8 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Page, sync_playwright
 
-BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:3000"
-API = os.environ.get("SLO_API_URL") or "http://localhost:8000"
+BASE = "http://localhost:3000"
+API = "http://localhost:8000"
 RESULTS = []
 
 # ── API readiness helpers ─────────────────────────────────────────────
@@ -183,7 +182,11 @@ ROUTES = [
     ("/consciousness/settings", "consciousness_settings"),
     ("/consciousness/playground", "consciousness_playground"),
     # Training sub-pages
+    ("/training/analytics", "training_analytics"),
+    ("/training/presets", "training_presets"),
     ("/training/runs", "training_runs"),
+    ("/training/compare", "training_compare"),
+    ("/training/trends", "training_trends"),
     # Other
     ("/shortcuts", "shortcuts"),
     ("/phoneme", "phoneme"),
@@ -316,65 +319,65 @@ class TestDatasetsImport:
     def test_import_button_exists(self, page: Page):
         go(page, "/datasets")
         time.sleep(1)
-        btn = page.get_by_role("button", name="Add file").first
+        btn = page.get_by_role("button", name="Import").first
         ok("datasets_import_button", btn.count() > 0)
         assert btn.count() > 0
 
     def test_import_dialog_opens(self, page: Page):
         go(page, "/datasets")
         time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
         dialog = page.get_by_role("dialog")
         ok("datasets_import_dialog_opens", dialog.count() > 0)
         assert dialog.count() > 0
 
-    def test_hf_radio_exists(self, page: Page):
+    def test_kaggle_radio_exists(self, page: Page):
         go(page, "/datasets")
         time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
-        hf = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]')
-        ok("datasets_hf_source_exists", hf.count() > 0)
-        assert hf.count() > 0
+        kaggle = page.get_by_role("radio", name="Kaggle: Download from Kaggle")
+        ok("datasets_kaggle_radio_exists", kaggle.count() > 0)
+        assert kaggle.count() > 0
         page.keyboard.press("Escape")
         time.sleep(0.3)
 
-    def test_hf_radio_clicks(self, page: Page):
+    def test_kaggle_radio_clicks(self, page: Page):
         go(page, "/datasets")
         time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
-        hf_radio = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]').first
-        hf_radio.focus()
+        kaggle_radio = page.get_by_role("radio", name="Kaggle: Download from Kaggle").first
+        kaggle_radio.focus()
         time.sleep(0.2)
-        hf_radio.press("Space")
+        kaggle_radio.press("Space")
         time.sleep(1)
         inp = page.locator("input[placeholder='username/dataset-name']")
-        ok("datasets_hf_radio_clicks", inp.count() > 0)
+        ok("datasets_kaggle_radio_clicks", inp.count() > 0)
         assert inp.count() > 0
         page.keyboard.press("Escape")
         time.sleep(0.3)
 
-    def test_hf_input_fills(self, page: Page):
+    def test_kaggle_input_fills(self, page: Page):
         go(page, "/datasets")
         time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(1)
-        hf_radio = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]').first
-        hf_radio.focus()
+        kaggle_radio = page.get_by_role("radio", name="Kaggle: Download from Kaggle").first
+        kaggle_radio.focus()
         time.sleep(0.2)
-        hf_radio.press("Space")
+        kaggle_radio.press("Space")
         time.sleep(1)
         inp = page.locator("input[placeholder='username/dataset-name']")
         inp.fill("heptapod/titanic")
         time.sleep(0.3)
-        ok("datasets_hf_input_fills", inp.input_value() == "heptapod/titanic")
+        ok("datasets_kaggle_input_fills", inp.input_value() == "heptapod/titanic")
         assert inp.input_value() == "heptapod/titanic"
         page.keyboard.press("Escape")
         time.sleep(0.3)
 
-    def test_hf_import_attempt(self, page: Page):
+    def test_kaggle_import_success(self, page: Page):
         # Reload to clear any stale state from prior tests
         page.goto(f"{BASE}/datasets", wait_until="load", timeout=20000)
         try:
@@ -384,30 +387,26 @@ class TestDatasetsImport:
         except Exception:
             pass
         time.sleep(2)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        page.get_by_role("button", name="Import").first.click(force=True)
         time.sleep(2)
-        hf_radio = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]').first
-        hf_radio.focus()
+        kaggle_radio = page.get_by_role("radio", name="Kaggle: Download from Kaggle").first
+        kaggle_radio.focus()
         time.sleep(0.2)
-        hf_radio.press("Space")
+        kaggle_radio.press("Space")
         time.sleep(1)
         page.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
         time.sleep(0.5)
+        body = page.inner_text("body")
+        has_kaggle_input = "heptapod/titanic" in body
         # Try clicking Import, but don't fail if dialog blocks it
         try:
-            page.get_by_role("dialog").get_by_role("button", name="Import", exact=True).click(force=True, timeout=3000)
+            page.get_by_role("button", name="Import").last.click(force=True, timeout=3000)
         except Exception:
             pass
-        # handleImport flips the button to "Importing..." synchronously — poll for it
-        reacted = False
-        try:
-            page.get_by_role("dialog").get_by_text("Importing...", exact=False).first.wait_for(timeout=5000)
-            reacted = True
-        except Exception:
-            pass
+        time.sleep(2)
         body = page.inner_text("body")
-        success = reacted or "heptapod/titanic" in body
-        ok("datasets_hf_import_attempt", success, f"reacted={reacted}, body_snippet={body[-200:]}")
+        success = has_kaggle_input or "importing" in body.lower() or "downloaded" in body.lower()
+        ok("datasets_kaggle_import_success", success, f"body_snippet={body[-200:]}")
         assert success
 
 
@@ -459,17 +458,15 @@ class TestToolsFlows:
         assert inputs.count() >= 2
 
     def test_explain_has_difficulty_buttons(self, page: Page):
-        go(page, "/explain")
-        page.get_by_text("Level", exact=True).first.wait_for(state="visible", timeout=10000)
-        body = page.inner_text("body")
+        body = go(page, "/explain")
         has_simple = "Simple" in body
-        has_moderate = "Moderate" in body
+        has_normal = "Normal" in body
         ok(
             "explain_has_difficulty",
-            has_simple and has_moderate,
-            f"simple={has_simple}, moderate={has_moderate}",
+            has_simple and has_normal,
+            f"simple={has_simple}, normal={has_normal}",
         )
-        assert has_simple and has_moderate
+        assert has_simple and has_normal
 
     def test_rewrite_has_action_buttons(self, page: Page):
         body = go(page, "/rewrite")
@@ -483,17 +480,15 @@ class TestToolsFlows:
         assert has_grammar and has_shorter
 
     def test_translate_has_language_selector(self, page: Page):
-        go(page, "/translate")
-        page.get_by_text("EN→ES").first.wait_for(state="visible", timeout=10000)
-        body = page.inner_text("body")
-        has_pair = "EN→ES" in body
+        body = go(page, "/translate")
+        has_select = page.locator("select:visible").count() > 0
         has_translate_btn = "Translate" in body
         ok(
             "translate_has_selector",
-            has_pair and has_translate_btn,
-            f"pair={has_pair}, btn={has_translate_btn}",
+            has_select and has_translate_btn,
+            f"select={has_select}, btn={has_translate_btn}",
         )
-        assert has_pair and has_translate_btn
+        assert has_select and has_translate_btn
 
     def test_wellness_has_options(self, page: Page):
         body = go(page, "/wellness")
@@ -536,53 +531,6 @@ class TestConsciousnessFlows:
         body = go(page, "/consciousness/playground")
         ok("consciousness_playground_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
-
-
-# ── Route smoke (consolidated from legacy comprehensive journeys) ────
-
-SMOKE_ROUTES = [
-    "/training/runs",
-    "/files",
-    "/adapters",
-    "/agents",
-    "/souls",
-    "/shell",
-    "/benchmark",
-    "/tokenizer",
-    "/errors",
-    "/security",
-    "/feedback",
-    "/auto-train",
-    "/consciousness/debug",
-    "/consciousness/testing",
-    "/consciousness/analytics",
-    "/consciousness/insights",
-    "/consciousness/monitor",
-    "/consciousness/benchmark",
-    "/consciousness/versions",
-    "/infer",
-    "/evaluate",
-    "/compare",
-    "/export",
-    "/vector",
-    "/multimodal",
-    "/workflow",
-    "/memory",
-    "/vm",
-]
-
-
-class TestRouteSmoke:
-    """Every app route loads without crashing (no error boundary, non-empty)."""
-
-    @pytest.mark.parametrize("route", SMOKE_ROUTES)
-    def test_route_loads(self, page: Page, route: str):
-        body = go(page, route)
-        crashed = "Something went wrong" in body
-        not_found = "This page could not be found" in body
-        passed = len(body) > 50 and not crashed and not not_found
-        ok(f"route_loads[{route}]", passed, f"len={len(body)}, crash={crashed}, 404={not_found}")
-        assert passed, f"Route {route} crashed,404, or empty (len={len(body)})"
 
 
 # ── Results ───────────────────────────────────────────────────

@@ -87,11 +87,8 @@ def s_click(text: str, optional: bool = False, timeout: float = 10):
     async def action(ctx):
         from avion.core.element import ElementLocator
 
-        # exact=True: substring text matching is case-insensitive and would
-        # also hit accumulated session titles/messages ("...friendly email..."),
-        # whose hidden copies are never visible.
-        el = await ctx["arken"].find(ElementLocator.text(text, exact=True), timeout=timeout)
-        await ctx["arken"].click(el)
+        await ctx["arken"].find(ElementLocator.text(text), timeout=timeout)
+        await ctx["arken"].click_text(text)
 
     return _step(f"click '{text}'", action, optional=optional)
 
@@ -164,11 +161,7 @@ def _chat_flow(flow_id: str, label: str, url: str, prompt: str, pill: str | None
         if marker:
             steps.append(s_wait(marker))
         if pill:
-            # Gate on the pill itself: the marker label can substring-match
-            # decoys (e.g. 'Tone' in 'Tone_flexibility') before the ModeBar
-            # mounts, leaving the click racing session hydration.
-            steps.append(s_wait(pill, timeout=30))
-            steps.append(s_click(pill, timeout=20))
+            steps.append(s_click(pill))
         steps.append(s_send(prompt))
         return steps
 
