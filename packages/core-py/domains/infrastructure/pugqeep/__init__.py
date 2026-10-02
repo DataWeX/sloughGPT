@@ -48,6 +48,27 @@ from .engine import (
 )
 from .engine import Process as Process
 from .facade import PGQ
+from .frame import (
+    HANDSHAKE_TIMEOUT,
+    MAX_FRAME,
+    PROTOCOL_VERSION,
+    FrameEOF,
+    FrameHandler,
+    FrameTooLarge,
+    MsgType,
+    ProtocolError,
+    TruncatedFrame,
+    UnknownMessage,
+    UnsupportedType,
+    VersionMismatch,
+    chunk_text,
+    decode_value,
+    encode_frame,
+    encode_message,
+    encode_value,
+    register_type,
+    wait_readable,
+)
 from .generic import (
     AutoStrategy,
     ClusterStrategy,
@@ -139,6 +160,26 @@ __all__ = [
     "Pool",
     "EngineMetrics",
     "ResultCache",
+    # Wire protocol (execution pipeline framing)
+    "MsgType",
+    "FrameHandler",
+    "ProtocolError",
+    "FrameTooLarge",
+    "VersionMismatch",
+    "UnknownMessage",
+    "TruncatedFrame",
+    "UnsupportedType",
+    "FrameEOF",
+    "encode_frame",
+    "encode_message",
+    "encode_value",
+    "decode_value",
+    "register_type",
+    "chunk_text",
+    "wait_readable",
+    "MAX_FRAME",
+    "PROTOCOL_VERSION",
+    "HANDSHAKE_TIMEOUT",
 ]
 
 __version__ = "0.1.0"
