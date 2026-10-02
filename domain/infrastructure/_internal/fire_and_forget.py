@@ -104,7 +104,14 @@ class FireAndForgetPool:
             try:
                 self._q.put_nowait(_STOP)
             except queue.Full:
-                break
+                # Bounded queue is full of pending tasks. Workers keep
+                # draining, so a blocking put lands _STOP as space frees —
+                # otherwise workers finish the queue and block on q.get()
+                # forever (daemon leak).
+                try:
+                    self._q.put(_STOP, timeout=timeout)
+                except queue.Full:
+                    break
         for thread in self._workers:
             thread.join(timeout=timeout)
         self._workers.clear()
