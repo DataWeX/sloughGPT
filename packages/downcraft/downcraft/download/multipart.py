@@ -80,6 +80,7 @@ def download_parts(
     on_progress: Callable[[int, int, int, float], None] | None = None,
     on_part_complete: Callable[[PartResult], None] | None = None,
     skip_if_exists: bool = True,
+    compressed: bool = False,
 ) -> GroupResult:
     """Download multiple files as a single logical group.
 
@@ -101,6 +102,9 @@ def download_parts(
             total_bytes, speed_bps)``.
         on_part_complete: Called after each part finishes.
         skip_if_exists: Skip download if file exists with matching checksum.
+        compressed: Advertise lz4 accept-encoding; parts served as SLZ4 are
+            stream-decoded to identity before writing (each part's resume
+            stays in decoded byte-space — see ``download.http``).
 
     Returns:
         GroupResult with per-part details.
@@ -162,6 +166,7 @@ def download_parts(
                 checksum=cksum,
                 on_chunk=_chunk_cb,
                 skip_if_exists=skip_if_exists,
+                compressed=compressed,
             )
 
             elapsed = time.time() - pt0

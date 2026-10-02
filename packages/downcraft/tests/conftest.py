@@ -35,6 +35,12 @@ def range_server():
     RangeHandler.content_types = {}
     RangeHandler.head_responses = {}
     RangeHandler.encodings = {}
+    RangeHandler.lz4_paths = {}
+    RangeHandler.lz4_naive = {}
+    RangeHandler.lz4_bad_header = {}
+    RangeHandler.lz4_bad_resume_sha = {}
+    RangeHandler.truncate_once = {}
+    RangeHandler.requests_log = []
     server = HTTPServer(("127.0.0.1", 0), RangeHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -53,13 +59,16 @@ def range_server():
 @pytest.fixture(autouse=True)
 def _isolate_state(monkeypatch, tmp_path):
     """Give each test a private download state so tests never share/collide."""
+    from downcraft.download import multipart as multipart_mod
     from downcraft.download import state as state_mod
 
-    monkeypatch.setattr(
-        state_mod,
-        "get_state",
-        lambda: state_mod.PersistentState(state_dir=tmp_path / "state"),
-    )
+    def _fresh() -> state_mod.PersistentState:
+        return state_mod.PersistentState(state_dir=tmp_path / "state")
+
+    monkeypatch.setattr(state_mod, "get_state", _fresh)
+    # multipart does `from .state import get_state` — patch the bound name
+    # too, otherwise download_parts() writes to the real ~/.downcraft.
+    monkeypatch.setattr(multipart_mod, "get_state", _fresh)
 
 
 @pytest.fixture(autouse=True)

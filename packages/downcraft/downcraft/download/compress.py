@@ -208,6 +208,12 @@ def decompress_stream(
 
     actual_sha256 = sha256.hexdigest()
 
+    if verify_header and expected_size is not None and uncompressed_size != expected_size:
+        raise ValueError(
+            f"Size mismatch: header says {expected_size} bytes, "
+            f"decompressed {uncompressed_size}"
+        )
+
     if verify_header and expected_sha256 and actual_sha256 != expected_sha256:
         raise ValueError(f"SHA-256 mismatch: expected {expected_sha256}, got {actual_sha256}")
 
@@ -434,12 +440,23 @@ class CompressedFileServer:
     def serve_range(self, file_path: str | Path, start: int, end: int) -> dict[str, Any]:
         """Serve a byte range of a compressed file.
 
-        For range requests, we decompress the full file and extract the range.
-        This is less efficient but correct for resume support.
+        Ranges are answered in IDENTITY (decoded) byte-space: the file is
+        decompressed and the slice extracted, so a client's
+        ``Range: bytes=N-`` resume offset (its decoded ``.sgpart`` size)
+        maps 1:1 onto this response's ``Content-Range``.
+
+        ``X-SLZ4-SHA256`` relays the SHA-256 from the SLZ4 header so a
+        client that resumed mid-stream can still verify end-to-end
+        integrity after the download completes.
         """
         file_path = Path(file_path)
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
+
+        # Capture the header checksum before decompressing.
+        with open(file_path, "rb") as f:
+            header = peek_compressed_header(f)
+        header_sha = header["sha256"] if header else ""
 
         # Decompress to memory and extract range
         with open(file_path, "rb") as f:
@@ -458,5 +475,6 @@ class CompressedFileServer:
                 "Content-Type": "application/octet-stream",
                 "Content-Range": f"bytes {start}-{end}/{len(full_data)}",
                 "X-SHA256": sha256,
+                "X-SLZ4-SHA256": header_sha,
             },
         }
