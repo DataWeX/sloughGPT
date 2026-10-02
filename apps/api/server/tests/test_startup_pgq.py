@@ -1,6 +1,6 @@
 """Tests for PGQ integration in StartupOrchestrator.
 
-Verifies that startup hooks dispatch through PGQ Tree instead of
+Verifies that startup hooks dispatch through PGQ Pool instead of
 raw threading, keeping the event loop free for HTTP.
 """
 
@@ -11,18 +11,18 @@ os.environ.setdefault("SLO_AUTO_WORKFLOW", "false")
 os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 
 from domain.infrastructure._internal.pugqeep.engine import (
+    Pool,
     Process,
     ProcessStatus,
-    Tree,
 )
 
 
-class TestStartupTree:
-    """PGQ Tree dispatches sync work off the event loop."""
+class TestStartupPool:
+    """PGQ Pool dispatches sync work off the event loop."""
 
-    def test_tree_branch_runs_process_in_thread_pool(self):
-        """Tree.branch() executes process in its ThreadPoolExecutor."""
-        tree = Tree("test-bg", pool_workers=2)
+    def test_pool_branch_runs_process_in_thread_pool(self):
+        """Pool.branch() executes process in its ThreadPoolExecutor."""
+        pool = Pool("test-bg", pool_workers=2)
         result = {}
 
         def _sync_work():
@@ -30,33 +30,33 @@ class TestStartupTree:
             result["done"] = True
 
         proc = Process(fn=_sync_work, name="test")
-        stem = tree.branch([proc])
+        stem = pool.branch([proc])
         stem._done_event.wait(timeout=5)
 
         assert result.get("done") is True
-        assert "tree-test-bg" in result["thread"]
-        tree.shutdown()
+        assert "pool-test-bg" in result["thread"]
+        pool.shutdown()
 
-    def test_tree_does_not_block_caller(self):
-        """Tree.branch() returns immediately, work runs in background."""
-        tree = Tree("test-nonblock", pool_workers=2)
+    def test_pool_does_not_block_caller(self):
+        """Pool.branch() returns immediately, work runs in background."""
+        pool = Pool("test-nonblock", pool_workers=2)
         started = time.monotonic()
 
         def _slow_work():
             time.sleep(0.5)
 
         proc = Process(fn=_slow_work, name="slow")
-        stem = tree.branch([proc])
+        stem = pool.branch([proc])
         branch_time = time.monotonic() - started
 
         # branch() should return in <100ms, not block for 500ms
         assert branch_time < 0.1
         stem._done_event.wait(timeout=5)
-        tree.shutdown()
+        pool.shutdown()
 
-    def test_tree_concurrent_processes(self):
-        """Tree runs multiple processes concurrently via pool."""
-        tree = Tree("test-concurrent", pool_workers=4)
+    def test_pool_concurrent_processes(self):
+        """Pool runs multiple processes concurrently via pool."""
+        pool = Pool("test-concurrent", pool_workers=4)
         timestamps = []
 
         def _work(i):
@@ -65,7 +65,7 @@ class TestStartupTree:
             timestamps.append(("end", i, time.monotonic()))
 
         procs = [Process(fn=_work, args=(i,), name=f"w{i}") for i in range(4)]
-        stem = tree.branch(procs)
+        stem = pool.branch(procs)
         stem._done_event.wait(timeout=5)
 
         # All 4 should have started before any finished
@@ -75,28 +75,28 @@ class TestStartupTree:
         assert len(ends) == 4
         # First end should be after all starts (concurrent, not serial)
         assert min(ends) > max(starts)
-        tree.shutdown()
+        pool.shutdown()
 
-    def test_tree_process_timeout(self):
+    def test_pool_process_timeout(self):
         """Process times out when exceeding timeout."""
-        tree = Tree("test-timeout", pool_workers=2)
+        pool = Pool("test-timeout", pool_workers=2)
 
         def _slow():
             time.sleep(10)
 
         proc = Process(fn=_slow, name="slow", timeout=0.1)
-        stem = tree.branch([proc])
+        stem = pool.branch([proc])
         stem._done_event.wait(timeout=5)
 
         assert proc.status == ProcessStatus.FAILED
-        tree.shutdown()
+        pool.shutdown()
 
 
 class TestStartupPGQIntegration:
     """StartupOrchestrator uses PGQ for background work."""
 
-    def test_imports_pgq_tree(self):
-        """StartupOrchestrator imports PGQ Tree."""
+    def test_imports_pgq_pool(self):
+        """StartupOrchestrator imports PGQ Pool."""
         from infrastructure.startup import StartupOrchestrator
 
         # Should be importable without error
@@ -135,8 +135,8 @@ class TestStartupPGQIntegration:
         assert proc.is_done
         assert proc.is_cancelled
 
-    def test_bg_tree_shutdown(self):
-        """bg_tree shuts down cleanly."""
-        tree = Tree("test-shutdown", pool_workers=2)
-        tree.shutdown()
-        assert tree.status.value == "stopped"
+    def test_bg_pool_shutdown(self):
+        """bg_pool shuts down cleanly."""
+        pool = Pool("test-shutdown", pool_workers=2)
+        pool.shutdown()
+        assert pool.status.value == "stopped"

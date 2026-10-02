@@ -158,11 +158,11 @@ class StartupOrchestrator:
         self._lifecycle = None
         self._routers_registered = False
         self._model_load_task: asyncio.Task | None = None
-        # PGQ Tree for background startup work — sync hooks run in its
+        # PGQ Pool for background startup work — sync hooks run in its
         # ThreadPoolExecutor so they never starve the uvicorn event loop.
-        from domain.infrastructure._internal.pugqeep.engine import Tree
+        from domain.infrastructure._internal.pugqeep.engine import Pool
 
-        self._bg_tree = Tree("startup-bg", pool_workers=4)
+        self._bg_pool = Pool("startup-bg", pool_workers=4)
 
     async def _init_lifecycle(self):
         """Lazy-init lifecycle manager with EventBus."""
@@ -435,7 +435,7 @@ class StartupOrchestrator:
                 get_metrics_collector()
 
             proc = PgqProcess(fn=_metrics_sync, name="metrics", timeout=10)
-            stem = self._bg_tree.branch([proc])
+            stem = self._bg_pool.branch([proc])
             await asyncio.to_thread(stem._done_event.wait)
 
         async def _init_autotrainer():
@@ -447,7 +447,7 @@ class StartupOrchestrator:
                 start_auto_trainer_if_enabled()
 
             proc = PgqProcess(fn=_autotrainer_sync, name="autotrainer", timeout=10)
-            stem = self._bg_tree.branch([proc])
+            stem = self._bg_pool.branch([proc])
             await asyncio.to_thread(stem._done_event.wait)
 
         async def _init_rag():
@@ -461,7 +461,7 @@ class StartupOrchestrator:
                     rag.auto_ingest_repo_docs()
 
             proc = PgqProcess(fn=_rag_sync, name="rag_ingest", timeout=60)
-            stem = self._bg_tree.branch([proc])
+            stem = self._bg_pool.branch([proc])
             await asyncio.to_thread(stem._done_event.wait)
 
         async def _init_bandwidth():
@@ -617,7 +617,7 @@ class StartupOrchestrator:
         load_proc = PgqProcess(fn=_load_and_register, name="model_load")
         load_proc.on_complete(lambda p: self._on_pgq_model_load_done(p))
         load_proc.on_fail(lambda p: self._on_pgq_model_load_done(p))
-        self._bg_tree.branch([load_proc])
+        self._bg_pool.branch([load_proc])
 
         # Report progress to staged loader
         from infrastructure.staged_loader import get_staged_loader
@@ -852,7 +852,7 @@ class StartupOrchestrator:
                 from domain.infrastructure._internal.pugqeep.engine import Process as PgqProcess
 
                 warmup_proc = PgqProcess(fn=_warm_checkpoints, name="ckpt-warmup")
-                self._bg_tree.branch([warmup_proc])
+                self._bg_pool.branch([warmup_proc])
 
                 return
             except Exception as e:
@@ -1115,7 +1115,7 @@ class StartupOrchestrator:
         await self._shutdown_executor()
         await self._shutdown_process_guard()
         try:
-            self._bg_tree.shutdown()
+            self._bg_pool.shutdown()
         except Exception:
             pass
 

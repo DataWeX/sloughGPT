@@ -1,4 +1,4 @@
-"""Tests for domain.infrastructure._internal.pugqeep — EvictionPolicy, Tier, ProcessStatus, StemStatus, TreeStatus, TaskStatus, TaskPriority, Task, CacheEntry, Process, etc."""
+"""Tests for domain.infrastructure._internal.pugqeep — EvictionPolicy, Tier, ProcessStatus, StemStatus, PoolStatus, TaskStatus, TaskPriority, Task, CacheEntry, Process, etc."""
 
 import time
 
@@ -16,13 +16,13 @@ from domain.infrastructure._internal.pugqeep.cache import (
 )
 from domain.infrastructure._internal.pugqeep.engine import (
     EngineMetrics,
+    Pool,
+    PoolStatus,
     Process,
     ProcessStatus,
     ResultCache,
     Stem,
     StemStatus,
-    Tree,
-    TreeStatus,
 )
 from domain.infrastructure._internal.pugqeep.task_queue import (
     Task,
@@ -154,26 +154,26 @@ class TestStemStatus:
         assert StemStatus("running") is StemStatus.RUNNING
 
 
-# ── TreeStatus ─────────────────────────────────────────────────────────
+# ── PoolStatus ─────────────────────────────────────────────────────────
 
 
-class TestTreeStatus:
+class TestPoolStatus:
     def test_all_members(self):
-        assert len(TreeStatus) == 3
+        assert len(PoolStatus) == 3
 
     def test_values(self):
-        assert TreeStatus.IDLE.value == "idle"
-        assert TreeStatus.BRANCHING.value == "branching"
+        assert PoolStatus.IDLE.value == "idle"
+        assert PoolStatus.BRANCHING.value == "branching"
 
     def test_stopped_value(self):
-        assert TreeStatus.STOPPED.value == "stopped"
+        assert PoolStatus.STOPPED.value == "stopped"
 
     def test_all_statuses_unique(self):
-        values = [s.value for s in TreeStatus]
+        values = [s.value for s in PoolStatus]
         assert len(values) == len(set(values))
 
     def test_from_value(self):
-        assert TreeStatus("idle") is TreeStatus.IDLE
+        assert PoolStatus("idle") is PoolStatus.IDLE
 
 
 # ── TaskStatus ─────────────────────────────────────────────────────────
@@ -666,7 +666,7 @@ class TestStem:
         s = Stem()
         d = s.to_dict()
         assert "id" in d
-        assert "tree_id" in d
+        assert "pool_id" in d
         assert "num_processes" in d
         assert "created_at" in d
         assert "completed_at" in d
@@ -693,47 +693,47 @@ class TestStem:
         s2 = Stem()
         assert s1.id != s2.id
 
-    def test_tree_id(self):
-        s = Stem(tree_id="mytree")
+    def test_pool_id(self):
+        s = Stem(pool_id="mypool")
         d = s.to_dict()
-        assert d["tree_id"] == "mytree"
+        assert d["pool_id"] == "mypool"
 
 
-# ── Tree ───────────────────────────────────────────────────────────────
+# ── Pool ───────────────────────────────────────────────────────────────
 
 
-class TestTree:
+class TestPool:
     def test_init(self):
-        t = Tree("test")
+        t = Pool("test")
         assert t.name == "test"
-        assert t.status == TreeStatus.IDLE
+        assert t.status == PoolStatus.IDLE
 
     def test_store_recall(self):
-        t = Tree("test")
+        t = Pool("test")
         t.store("key", "value")
         assert t.recall("key") == "value"
 
     def test_recall_missing(self):
-        t = Tree("test")
+        t = Pool("test")
         assert t.recall("missing") is None
 
     def test_active_stems(self):
-        t = Tree("test")
+        t = Pool("test")
         assert t.active_stems == 0
 
     def test_to_dict(self):
-        t = Tree("test")
+        t = Pool("test")
         d = t.to_dict()
         assert d["name"] == "test"
         assert d["status"] == "idle"
 
     def test_shutdown(self):
-        t = Tree("test")
+        t = Pool("test")
         t.shutdown()
-        assert t.status == TreeStatus.STOPPED
+        assert t.status == PoolStatus.STOPPED
 
     def test_to_dict_has_all_keys(self):
-        t = Tree("test")
+        t = Pool("test")
         d = t.to_dict()
         assert "name" in d
         assert "status" in d
@@ -742,24 +742,24 @@ class TestTree:
         assert "graph_keys" in d
 
     def test_store_overwrite(self):
-        t = Tree("test")
+        t = Pool("test")
         t.store("k", "v1")
         t.store("k", "v2")
         assert t.recall("k") == "v2"
 
     def test_recall_after_store(self):
-        t = Tree("test")
+        t = Pool("test")
         t.store("a", 1)
         t.store("b", 2)
         assert t.recall("a") == 1
         assert t.recall("b") == 2
 
     def test_max_stems_default(self):
-        t = Tree("test")
+        t = Pool("test")
         assert t.max_stems == 8
 
     def test_custom_max_stems(self):
-        t = Tree("test", max_stems=16)
+        t = Pool("test", max_stems=16)
         assert t.max_stems == 16
 
 

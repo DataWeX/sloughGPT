@@ -64,7 +64,7 @@ class QueueConfig:
 
 @dataclass(slots=True)
 class SubprocessConfig:
-    """Configuration for subprocess execution in GuardTree."""
+    """Configuration for subprocess execution in GuardPool."""
 
     enabled: bool = True
     python_exe: str = "python3"
@@ -105,8 +105,8 @@ class EngineConfig:
     """Configuration for the Engine."""
 
     name: str = "main"
-    max_trees: int = 16
-    tree_workers: int = 4
+    max_pools: int = 16
+    pool_workers: int = 4
     max_stems: int = 8
     queue_size: int = 128
     poll_interval: float = 0.1

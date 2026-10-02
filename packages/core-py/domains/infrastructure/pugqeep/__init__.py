@@ -39,7 +39,8 @@ from .dedup import PointDeduplicator, PointLibrarySync
 from .engine import Engine as Engine
 from .engine import (
     EngineMetrics,
-    GuardTree,
+    GuardPool,
+    Pool,
     ProcessGroup,
     ProcessMonitor,
     ResultCache,
@@ -134,7 +135,8 @@ __all__ = [
     "ProcessGroup",
     "SubprocessProcess",
     "ProcessMonitor",
-    "GuardTree",
+    "GuardPool",
+    "Pool",
     "EngineMetrics",
     "ResultCache",
 ]

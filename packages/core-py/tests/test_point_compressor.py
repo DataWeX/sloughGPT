@@ -1692,4 +1692,4 @@ class TestConfigExtended:
 
         cfg = EngineConfig()
         assert cfg.name == "main"
-        assert cfg.max_trees == 16
+        assert cfg.max_pools == 16

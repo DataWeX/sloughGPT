@@ -499,8 +499,8 @@ class TestEngineConfig:
     def test_defaults(self):
         c = EngineConfig()
         assert c.name == "main"
-        assert c.max_trees == 16
-        assert c.tree_workers == 4
+        assert c.max_pools == 16
+        assert c.pool_workers == 4
         assert c.max_stems == 8
         assert c.queue_size == 128
         assert c.poll_interval == 0.1
@@ -512,10 +512,10 @@ class TestEngineConfig:
         assert isinstance(c.monitor, MonitorConfig)
 
     def test_custom(self):
-        c = EngineConfig(name="worker", max_trees=32, tree_workers=8)
+        c = EngineConfig(name="worker", max_pools=32, pool_workers=8)
         assert c.name == "worker"
-        assert c.max_trees == 32
-        assert c.tree_workers == 8
+        assert c.max_pools == 32
+        assert c.pool_workers == 8
 
     def test_custom_subprocess(self):
         sp = SubprocessConfig(max_workers=16)
@@ -559,14 +559,14 @@ class TestEngineConfig:
     def test_all_fields_settable(self):
         c = EngineConfig()
         c.name = "new"
-        c.max_trees = 64
-        c.tree_workers = 16
+        c.max_pools = 64
+        c.pool_workers = 16
         c.max_stems = 32
         c.queue_size = 512
         c.poll_interval = 1.0
         assert c.name == "new"
-        assert c.max_trees == 64
-        assert c.tree_workers == 16
+        assert c.max_pools == 64
+        assert c.pool_workers == 16
         assert c.max_stems == 32
         assert c.queue_size == 512
         assert c.poll_interval == 1.0

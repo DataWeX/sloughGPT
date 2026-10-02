@@ -6,7 +6,7 @@ and managing data across tiers.
 
 Architecture:
     Queue (core engine — main process)
-      └── Tree (model instance — branches stems into parallel tasks)
+      └── Pool (thread pool — branches stems into parallel tasks)
             └── Graph/PointLibrary (context — what the tree knows)
                   └── Point (star — function-calling capacity)
 
@@ -24,11 +24,13 @@ Quick start:
     data = pgq.get("weights")
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -36,7 +38,7 @@ from .cache import Tier, TieredCache
 from .compressor import PointCompressor
 from .config import QueueConfig, TreeConfig
 from .engine import Engine, Process, ProcessGroup, ProcessStatus, Stem
-from .engine import Tree as EngineTree
+from .engine import Pool as EnginePool
 from .library import PointLibrary
 from .model_tree import ModelTree
 from .point import Point
@@ -109,7 +111,7 @@ class PGQ:
         n_clusters: int = 16,
         method: str = "cluster",
         storage_dir: Path | None = None,
-    ) -> "PGQ":
+    ) -> PGQ:
         """Load a HuggingFace model and compress all weights."""
         tree = load_model_to_points(
             model_id,
@@ -123,7 +125,7 @@ class PGQ:
         return sys
 
     @classmethod
-    def from_file(cls, path: Path) -> "PGQ":
+    def from_file(cls, path: Path) -> PGQ:
         """Load a saved library from disk."""
         library = PointLibrary.load(path)
         sys = cls(library.name)
@@ -279,7 +281,7 @@ class PGQ:
         """Resume the task queue."""
         self._task_queue.resume()
 
-    # ── Core infra engine (Process/Tree/Stem) ──
+    # ── Core infra engine (Process/Pool/Stem) ──
 
     def spawn(
         self,
@@ -294,7 +296,7 @@ class PGQ:
 
         Creates a Process wrapping ``fn(*args, **kwargs)`` and adds it
         to the engine.  The process is in CREATED state — call
-        ``branch()`` to run it on a Tree.
+        ``branch()`` to run it on a Pool.
 
         Args:
             fn: Callable to execute.
@@ -311,55 +313,55 @@ class PGQ:
             fn, *args, name=name, timeout=timeout, priority=priority, **kwargs
         )
 
-    def tree(self, name: str, max_stems: int = 8, pool_workers: int = 4) -> "EngineTree":
-        """Create a Tree on the core engine.
+    def pool(self, name: str, max_stems: int = 8, pool_workers: int = 4) -> EnginePool:
+        """Create a Pool on the core engine.
 
-        A Tree is a model instance that branches Stems of parallel tasks.
+        A Pool is a thread pool that branches Stems of parallel tasks.
 
         Args:
-            name: Tree identifier.
+            name: Pool identifier.
             max_stems: Max concurrent Stems.
-            pool_workers: Thread pool size for this tree.
+            pool_workers: Thread pool size for this pool.
 
         Returns:
-            A ``Tree`` instance.
+            A ``Pool`` instance.
         """
-        return self._engine.tree(name, max_stems=max_stems, pool_workers=pool_workers)
+        return self._engine.pool(name, max_stems=max_stems, pool_workers=pool_workers)
 
-    def branch(self, tree_name: str, processes: list[Process]) -> Stem:
-        """Branch a Stem of parallel processes on a Tree.
+    def branch(self, pool_name: str, processes: list[Process]) -> Stem:
+        """Branch a Stem of parallel processes on a Pool.
 
-        Submits all processes to the tree's thread pool and returns
+        Submits all processes to the pool's thread pool and returns
         a Stem tracking their execution.
 
         Args:
-            tree_name: Name of the Tree to branch on.
+            pool_name: Name of the Pool to branch on.
             processes: List of Process instances to run in parallel.
 
         Returns:
             A ``Stem`` tracking the parallel execution.
         """
-        return self._engine.branch(tree_name, processes)
+        return self._engine.branch(pool_name, processes)
 
     def run(self, poll_interval: float = 0.1) -> None:
         """Run the core engine main loop.
 
         Processes spawn/branch events from the queue and monitors
-        active trees.  Runs until ``stop()`` is called.
+        active pools.  Runs until ``stop()`` is called.
         """
         self._engine.run(poll_interval=poll_interval)
 
     def stop(self) -> None:
-        """Stop the core engine and shutdown all trees."""
+        """Stop the core engine and shutdown all pools."""
         self._engine.stop()
 
     def get_process(self, proc_id: str) -> Process | None:
         """Get a process by id."""
         return self._engine.get_process(proc_id)
 
-    def get_engine_tree(self, name: str) -> Optional["EngineTree"]:
-        """Get a Tree by name."""
-        return self._engine.get_tree(name)
+    def get_engine_pool(self, name: str) -> EnginePool | None:
+        """Get a Pool by name."""
+        return self._engine.get_pool(name)
 
     def list_processes(self, status: ProcessStatus | None = None) -> list[Process]:
         """List processes, optionally filtered by status."""
@@ -369,14 +371,14 @@ class PGQ:
         """Core engine statistics."""
         return self._engine.to_dict()
 
-    def route(self, process_name: str, tree_name: str) -> None:
-        """Route processes by name to a specific tree.
+    def route(self, process_name: str, pool_name: str) -> None:
+        """Route processes by name to a specific pool.
 
         Args:
             process_name: Process name to match (exact match).
-            tree_name: Tree to dispatch matching processes to.
+            pool_name: Pool to dispatch matching processes to.
         """
-        self._engine.route(process_name, tree_name)
+        self._engine.route(process_name, pool_name)
 
     def on_complete(self, callback: Callable[[Process], None]) -> None:
         """Register a callback for when a process completes.
@@ -386,7 +388,7 @@ class PGQ:
         self._engine.on_complete(callback)
 
     def dispatch(self) -> int:
-        """Dispatch pending processes to trees (one-shot).
+        """Dispatch pending processes to pools (one-shot).
 
         Returns the number of processes dispatched.
         """
@@ -493,7 +495,7 @@ class PGQ:
         return p
 
     @classmethod
-    def load(cls, path: Path | str) -> "PGQ":
+    def load(cls, path: Path | str) -> PGQ:
         """Load from disk (library + task queue)."""
         p = Path(path)
         sys = cls.from_file(p)
@@ -539,7 +541,7 @@ class PGQ:
         return self._library
 
     @property
-    def tree(self) -> ModelTree:  # noqa: F811 — intentionally shadows tree() method
+    def tree(self) -> ModelTree:  # noqa: F811 — data accessor (see note below)
         return self._tree
 
     @property
@@ -580,8 +582,8 @@ class PGQ:
     def cancel_process(self, proc_id: str, propagate: bool = True) -> None:
         self._engine.cancel_process(proc_id, propagate=propagate)
 
-    def cancel_tree(self, tree_name: str) -> int:
-        return self._engine.cancel_tree(tree_name)
+    def cancel_pool(self, pool_name: str) -> int:
+        return self._engine.cancel_pool(pool_name)
 
     def cancel_all(self) -> int:
         return self._engine.cancel_all()

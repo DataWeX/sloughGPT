@@ -3,19 +3,21 @@
 PGQ Simulation — Model Loading via Dispatch Mode.
 
 Demonstrates the Engine's dispatch loop:
-  1. Create trees and set up routing
+  1. Create pools and set up routing
   2. Spawn processes (queued for dispatch)
-  3. run() auto-dispatches to appropriate trees
+  3. run() auto-dispatches to appropriate pools
   4. Completion callbacks fire on results
 
 Architecture:
     Engine (dispatch loop)
-      ├── "data" tree → load_model process
-      ├── "training" tree → train processes (auto-routed by name)
-      └── "inference" tree → inference processes (round-robin)
+      ├── "data" pool → load_model process
+      ├── "training" pool → train processes (auto-routed by name)
+      └── "inference" pool → inference processes (round-robin)
 
 Run: PYTHONPATH=packages/core-py python3 scripts/simulate_pgq_training.py
 """
+
+from __future__ import annotations
 
 import logging
 import random
@@ -53,13 +55,13 @@ class FakeModel:
 
 
 def load_model(model: FakeModel) -> dict:
-    """Load model weights (runs on 'data' tree)."""
+    """Load model weights (runs on 'data' pool)."""
     model.load_weights()
     return {"model": model.name, "loaded": True}
 
 
 def train_epoch(model: FakeModel, epoch: int) -> dict:
-    """Train one epoch (runs on 'training' tree)."""
+    """Train one epoch (runs on 'training' pool)."""
     time.sleep(random.uniform(0.1, 0.3))
     loss = 5.0 * (0.9**epoch)
     logger.info("[train] epoch %d loss=%.4f", epoch, round(loss, 4))
@@ -67,7 +69,7 @@ def train_epoch(model: FakeModel, epoch: int) -> dict:
 
 
 def inference(model: FakeModel, prompt: str) -> dict:
-    """Run inference (runs on 'inference' tree)."""
+    """Run inference (runs on 'inference' pool)."""
     time.sleep(random.uniform(0.05, 0.1))
     status = "generated" if model.loaded else "waiting"
     return {"prompt": prompt, "status": status}
@@ -83,13 +85,13 @@ def simulate():
 
     model = FakeModel("sloughgpt-v1")
 
-    # Create engine and trees
+    # Create engine and pools
     engine = Engine("main")
-    engine.tree("data", pool_workers=2)
-    engine.tree("training", pool_workers=4)
-    engine.tree("inference", pool_workers=2)
+    engine.pool("data", pool_workers=2)
+    engine.pool("training", pool_workers=4)
+    engine.pool("inference", pool_workers=2)
 
-    # Route process names to trees
+    # Route process names to pools
     engine.route("load_model", "data")
     engine.route("train_epoch", "training")
     engine.route("inference", "inference")
@@ -105,11 +107,11 @@ def simulate():
     # Model loading
     engine.spawn(load_model, model, name="load_model")
 
-    # Training epochs (will be routed to "training" tree)
+    # Training epochs (will be routed to "training" pool)
     for epoch in range(1, 6):
         engine.spawn(train_epoch, model, epoch, name="train_epoch")
 
-    # Inference requests (will be round-robin to available trees)
+    # Inference requests (will be round-robin to available pools)
     for prompt in ["Hello", "What is 2+2?", "Tell me a joke"]:
         engine.spawn(inference, model, prompt, name="inference")
 
@@ -137,12 +139,12 @@ def simulate():
     logger.info("")
     logger.info("Engine stats:")
     stats = engine.to_dict()
-    logger.info("  Trees: %d", len(stats["trees"]))
+    logger.info("  Pools: %d", len(stats["pools"]))
     logger.info("  Processes: %d", stats["processes"])
     logger.info("  Pending: %d", stats["pending"])
     logger.info("  Routing: %s", stats["routing"])
-    for name, info in stats["trees"].items():
-        logger.info("  Tree '%s': stems=%d status=%s", name, info["active_stems"], info["status"])
+    for name, info in stats["pools"].items():
+        logger.info("  Pool '%s': stems=%d status=%s", name, info["active_stems"], info["status"])
 
     logger.info("")
     logger.info("Model loaded: %s", model.loaded)

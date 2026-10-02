@@ -9,17 +9,17 @@ dispatches work over those Points.
 
 ## The three invariants
 
-1. **Arrays → Points via a pluggable encoder.** A `Point` stores a *generator
-   function* instead of raw values. The encoder is one of: Vector Quantization
+1. **Arrays → Points via a pluggable encoder.** A `Point` stores a _generator
+   function_ instead of raw values. The encoder is one of: Vector Quantization
    (`cluster`), analytic fit (`linear` / `polynomial` / `periodic`), or `raw`
    (incompressible data stored as-is). "Any model or file of the same MIME type"
-   is NOT a claim pugqeep makes — the claim is *"any component that reduces to a
-   numpy array"*. Behavior trees, configs, graphs, and weights all qualify **only
+   is NOT a claim pugqeep makes — the claim is _"any component that reduces to a
+   numpy array"_. Behavior trees, configs, graphs, and weights all qualify **only
    insofar as they are arrays**; the system does not parse their domain formats.
 
 2. **`Point` / `PointProtocol` is the compaction boundary.** Everything upstream
    (encoder, `Tree`/`ModelTree`) produces Points; everything downstream (library,
-   cache, views, serialization) consumes Points. A Point is lossy *unless*
+   cache, views, serialization) consumes Points. A Point is lossy _unless_
    `accuracy == 1.0` (`point.is_lossless`), and carries its own `residual`
    (difference from exact) plus `dtype`/`shape` so reconstruction is faithful
    within the error budget.
@@ -34,13 +34,13 @@ dispatches work over those Points.
 The encoder is chosen by fit: if an analytic/cluster fit meets the configured
 accuracy gate it is stored; otherwise `raw` is used (lossless, 1:1). Embeddings
 and small discrete tensors (biases) default to `raw` — see ModelTree. The `raw`
-fallback is what guarantees the system degrades to *lossless*, never to *wrong*.
+fallback is what guarantees the system degrades to _lossless_, never to _wrong_.
 
 ## Architecture
 
 ```
 PGQ (facade)
-  ├── Engine — process dispatch, Trees, Stems
+  ├── Engine — process dispatch, Pools, Stems
   ├── Tree / ModelTree — compresses arrays into Points
   │     └── PointLibrary — stores Points
   ├── TaskQueue — priority task execution
@@ -48,17 +48,17 @@ PGQ (facade)
   └── PointCompressor — encoder: VQ | analytic fit | raw
 ```
 
-| Component | Purpose |
-|-----------|---------|
-| **Point** | Compressed data unit (VQ cluster, function fit, or raw) |
-| **PointProtocol** | ABC defining the contract for Points |
-| **PointView** | Lazy decompression wrapper |
-| **PointLibrary** | Thread-safe Point storage with search, batch ops, views |
-| **Tree** | Generic compressor — loads any numpy array data into Points |
-| **ModelTree** | Tree subclass, ML-specific; skips VQ for embeddings/biases |
-| **TaskQueue** | Priority task execution with worker pool |
-| **Engine** | Process dispatch with Trees and Stems |
-| **PGQ** | High-level facade combining all components |
+| Component         | Purpose                                                     |
+| ----------------- | ----------------------------------------------------------- |
+| **Point**         | Compressed data unit (VQ cluster, function fit, or raw)     |
+| **PointProtocol** | ABC defining the contract for Points                        |
+| **PointView**     | Lazy decompression wrapper                                  |
+| **PointLibrary**  | Thread-safe Point storage with search, batch ops, views     |
+| **Tree**          | Generic compressor — loads any numpy array data into Points |
+| **ModelTree**     | Tree subclass, ML-specific; skips VQ for embeddings/biases  |
+| **TaskQueue**     | Priority task execution with worker pool                    |
+| **Engine**        | Process dispatch with Pools and Stems                       |
+| **PGQ**           | High-level facade combining all components                  |
 
 ## Quick start
 
@@ -91,34 +91,34 @@ result = future.result(timeout=10.0)
 
 Any Point implementation must satisfy:
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `identity` | `str` | Unique identifier |
-| `function_type` | `str \| FunctionType` | Compression method |
-| `params` | `dict` | Function parameters |
-| `accuracy` | `float` | Compression accuracy (0-1) |
-| `residual` | `Optional[np.ndarray]` | Residual array |
-| `dtype` | `str` | Original data dtype |
-| `shape` | `tuple` | Original data shape |
+| Attribute       | Type                   | Description                |
+| --------------- | ---------------------- | -------------------------- |
+| `identity`      | `str`                  | Unique identifier          |
+| `function_type` | `str \| FunctionType`  | Compression method         |
+| `params`        | `dict`                 | Function parameters        |
+| `accuracy`      | `float`                | Compression accuracy (0-1) |
+| `residual`      | `Optional[np.ndarray]` | Residual array             |
+| `dtype`         | `str`                  | Original data dtype        |
+| `shape`         | `tuple`                | Original data shape        |
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `generate` | `(n) -> np.ndarray` | Generate n values from stored function |
-| `nbytes` | `() -> int` | Compressed size in bytes |
-| `to_dict` | `() -> dict` | Serialize to dict |
-| `to_bytes` | `() -> bytes` | Serialize to bytes |
-| `from_dict` | `(d) -> PointProtocol` | Deserialize from dict |
-| `from_bytes` | `(data, identity) -> PointProtocol` | Deserialize from bytes |
+| Method       | Signature                           | Description                            |
+| ------------ | ----------------------------------- | -------------------------------------- |
+| `generate`   | `(n) -> np.ndarray`                 | Generate n values from stored function |
+| `nbytes`     | `() -> int`                         | Compressed size in bytes               |
+| `to_dict`    | `() -> dict`                        | Serialize to dict                      |
+| `to_bytes`   | `() -> bytes`                       | Serialize to bytes                     |
+| `from_dict`  | `(d) -> PointProtocol`              | Deserialize from dict                  |
+| `from_bytes` | `(data, identity) -> PointProtocol` | Deserialize from bytes                 |
 
 ### FunctionType enum
 
-| Value | Description |
-|-------|-------------|
-| `CLUSTER` | Vector quantization (centroids + assignments) |
-| `LINEAR` | Linear fit (a*x + b) |
-| `POLYNOMIAL` | Polynomial fit (a*x^2 + b*x + c) |
-| `PERIODIC` | Periodic fit (a*cos + b*sin + w) |
-| `RAW` | Uncompressed (stored as-is) |
+| Value        | Description                                   |
+| ------------ | --------------------------------------------- |
+| `CLUSTER`    | Vector quantization (centroids + assignments) |
+| `LINEAR`     | Linear fit (a*x + b)                          |
+| `POLYNOMIAL` | Polynomial fit (a*x^2 + b*x + c)              |
+| `PERIODIC`   | Periodic fit (a*cos + b*sin + w)              |
+| `RAW`        | Uncompressed (stored as-is)                   |
 
 ### PointView (lazy decompression)
 
@@ -241,9 +241,9 @@ tree = load_library(Path("model.points.json"))
 
 ### Parallel operations
 
-| Operation | Method | `num_workers` | Description |
-|-----------|--------|---------------|-------------|
-| Compress | `load_weights(..., num_workers=N)` | `0`=seq, `-1`=cpu_count | Parallel VQ compression |
+| Operation  | Method                                 | `num_workers`           | Description                    |
+| ---------- | -------------------------------------- | ----------------------- | ------------------------------ |
+| Compress   | `load_weights(..., num_workers=N)`     | `0`=seq, `-1`=cpu_count | Parallel VQ compression        |
 | Decompress | `decompress_tree(tree, num_workers=N)` | `0`=seq, `-1`=cpu_count | Parallel decompression to dict |
 
 ## TaskQueue
@@ -280,12 +280,12 @@ PENDING → RUNNING → COMPLETED
 
 ### TaskPriority
 
-| Value | Description |
-|-------|-------------|
+| Value    | Description      |
+| -------- | ---------------- |
 | `URGENT` | Highest priority |
-| `HIGH` | Above normal |
-| `NORMAL` | Default |
-| `LOW` | Below normal |
+| `HIGH`   | Above normal     |
+| `NORMAL` | Default          |
+| `LOW`    | Below normal     |
 
 ## Engine
 
@@ -327,18 +327,18 @@ CREATED → READY → RUNNING → COMPLETED
 
 ### Process
 
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `fn` | `Callable` | Function to execute |
-| `args` | `tuple` | Positional arguments |
-| `kwargs` | `dict` | Keyword arguments |
-| `id` | `str` | Unique identifier |
-| `name` | `str` | Human-readable name |
-| `status` | `ProcessStatus` | Current lifecycle state |
-| `result` | `Any` | Return value (after completion) |
-| `error` | `Optional[str]` | Error message (if failed) |
-| `parent_id` | `Optional[str]` | Parent process ID |
-| `children_ids` | `List[str]` | Child process IDs |
+| Attribute      | Type            | Description                     |
+| -------------- | --------------- | ------------------------------- |
+| `fn`           | `Callable`      | Function to execute             |
+| `args`         | `tuple`         | Positional arguments            |
+| `kwargs`       | `dict`          | Keyword arguments               |
+| `id`           | `str`           | Unique identifier               |
+| `name`         | `str`           | Human-readable name             |
+| `status`       | `ProcessStatus` | Current lifecycle state         |
+| `result`       | `Any`           | Return value (after completion) |
+| `error`        | `Optional[str]` | Error message (if failed)       |
+| `parent_id`    | `Optional[str]` | Parent process ID               |
+| `children_ids` | `List[str]`     | Child process IDs               |
 
 ## Compression strategies
 
@@ -366,13 +366,13 @@ Accuracy:  ~80-95% (varies by pattern)
 
 ### When to use which
 
-| Weight type | Best method | Typical ratio | Accuracy |
-|-------------|-------------|---------------|----------|
-| Neural net weights | `cluster` | 3-5:1 | 95-99% |
-| Embedding tables | `raw` | 1:1 | 100% |
-| Bias vectors (small) | `raw` | 1:1 | 100% |
-| Attention patterns | `linear`/`polynomial` | 100-1000:1 | 80-95% |
-| Positional encodings | `periodic` | 1000+:1 | 90-99% |
+| Weight type          | Best method           | Typical ratio | Accuracy |
+| -------------------- | --------------------- | ------------- | -------- |
+| Neural net weights   | `cluster`             | 3-5:1         | 95-99%   |
+| Embedding tables     | `raw`                 | 1:1           | 100%     |
+| Bias vectors (small) | `raw`                 | 1:1           | 100%     |
+| Attention patterns   | `linear`/`polynomial` | 100-1000:1    | 80-95%   |
+| Positional encodings | `periodic`            | 1000+:1       | 90-99%   |
 
 ## Thread safety
 

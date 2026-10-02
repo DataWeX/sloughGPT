@@ -1,9 +1,9 @@
 """
-PGQ Engine — vCPU for graph-structured infrastructure.
+PGQ Engine — an agnostic, virtualizing vCPU for process execution.
 
-Spawn a single process that seeds child processes across network,
-application, and protocol layers. Trees branch stems of tasks into
-parallel instances. Points carry function-calling capacity.
+Spawns processes and schedules them onto Pools (thread pools) or
+GuardPools (subprocess isolation). Pools branch Stems of parallel
+tasks; no host application semantics live in this module.
 
 Usage:
     from pugqeep.engine import Engine
@@ -13,11 +13,11 @@ Usage:
     # Spawn processes (queued for dispatch)
     proc = engine.spawn(my_function, arg1, arg2)
 
-    # Route processes to specific trees
+    # Route processes to specific pools
     engine.route("load_model", "data")
     engine.route("train", "training")
 
-    # Run dispatch loop (auto-dispatches to trees)
+    # Run dispatch loop (auto-dispatches to pools)
     engine.run()
 
     # Or dispatch manually
@@ -67,14 +67,14 @@ class StemStatus(Enum):
     FAILED = "failed"
 
 
-class TreeStatus(Enum):
+class PoolStatus(Enum):
     IDLE = "idle"
     BRANCHING = "branching"
     STOPPED = "stopped"
 
 
 class SchedulingPolicy(Enum):
-    """How the engine assigns ungrouped processes to trees."""
+    """How the engine assigns ungrouped processes to pools."""
 
     ROUND_ROBIN = "round_robin"
     FIRST = "first"
@@ -104,7 +104,7 @@ class Process:
     timeout: float | None = None  # seconds, None = no timeout
     depends_on: list[str] = field(default_factory=list)
     _future: Future | None = field(default=None, repr=False)
-    _tree_name: str | None = field(default=None, repr=False)
+    _pool_name: str | None = field(default=None, repr=False)
     _cancel_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _done_event: threading.Event = field(default_factory=threading.Event, repr=False)
     _priority: int = field(default=2, repr=False)
@@ -252,10 +252,10 @@ class Process:
 
 @dataclass
 class Stem:
-    """A branch of parallel execution from a Tree."""
+    """A branch of parallel execution from a Pool."""
 
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
-    tree_id: str = ""
+    pool_id: str = ""
     processes: list[Process] = field(default_factory=list)
     status: StemStatus = StemStatus.CREATED
     created_at: float = field(default_factory=time.time)
@@ -292,7 +292,7 @@ class Stem:
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "tree_id": self.tree_id,
+            "pool_id": self.pool_id,
             "status": self.status.value,
             "num_processes": len(self.processes),
             "created_at": self.created_at,
@@ -300,17 +300,17 @@ class Stem:
         }
 
 
-class Tree:
-    """Model instance that branches Stems of parallel tasks."""
+class Pool:
+    """Thread pool that branches Stems of parallel tasks."""
 
     def __init__(self, name: str, max_stems: int = 8, pool_workers: int = 4):
         self.name = name
-        self.status = TreeStatus.IDLE
+        self.status = PoolStatus.IDLE
         self.max_stems = max_stems
         self._stems: dict[str, Stem] = {}
         self._pool = ThreadPoolExecutor(
             max_workers=pool_workers,
-            thread_name_prefix=f"tree-{name}",
+            thread_name_prefix=f"pool-{name}",
         )
         self._lock = threading.Lock()
         self._graph: dict[str, Any] = {}
@@ -318,11 +318,11 @@ class Tree:
     def branch(self, processes: list[Process]) -> Stem:
         with self._lock:
             if len(self._stems) >= self.max_stems:
-                raise RuntimeError(f"Tree '{self.name}' at max stems ({self.max_stems})")
+                raise RuntimeError(f"Pool '{self.name}' at max stems ({self.max_stems})")
 
-        stem = Stem(tree_id=self.name, processes=processes)
+        stem = Stem(pool_id=self.name, processes=processes)
         self._stems[stem.id] = stem
-        self.status = TreeStatus.BRANCHING
+        self.status = PoolStatus.BRANCHING
 
         for proc in processes:
             proc.ready()
@@ -330,7 +330,7 @@ class Tree:
             proc._future = future
 
         logger.debug(
-            "Tree[%s]: branched stem %s with %d processes", self.name, stem.id, len(processes)
+            "Pool[%s]: branched stem %s with %d processes", self.name, stem.id, len(processes)
         )
         return stem
 
@@ -371,7 +371,7 @@ class Tree:
                 with self._lock:
                     self._stems.pop(stem.id, None)
                 if not self._stems:
-                    self.status = TreeStatus.IDLE
+                    self.status = PoolStatus.IDLE
         return proc.result
 
     def wait_stem(self, stem: Stem, timeout: float | None = None) -> Stem:
@@ -389,7 +389,7 @@ class Tree:
         return len(self._stems)
 
     def shutdown(self) -> None:
-        self.status = TreeStatus.STOPPED
+        self.status = PoolStatus.STOPPED
         self._pool.shutdown(wait=False)
 
     def to_dict(self) -> dict:
@@ -402,8 +402,8 @@ class Tree:
         }
 
 
-class GuardTree(Tree):
-    """Tree that wraps processes in SubprocessProcess for subprocess isolation."""
+class GuardPool(Pool):
+    """Pool that wraps processes in SubprocessProcess for subprocess isolation."""
 
     def __init__(
         self,
@@ -1107,29 +1107,29 @@ class ResultCache:
 
 
 class Engine:
-    """Core infra engine — the vCPU.
+    """An agnostic, virtualizing vCPU for processes.
 
-    Spawns the main process that seeds child processes across
-    network, application, and protocol layers. Trees branch stems
-    of parallel tasks. Points carry function-calling capacity.
+    Spawns processes, routes them to Pools (thread pools) and
+    GuardPools (subprocess isolation), and branches Stems of
+    parallel tasks. Host-application semantics stay outside.
     """
 
-    def __init__(self, name: str = "main", max_trees: int = 16, config=None):
+    def __init__(self, name: str = "main", max_pools: int = 16, config=None):
         if config is not None:
             self.name = config.name
-            self.max_trees = config.max_trees
+            self.max_pools = config.max_pools
             self._config = config
         else:
             self.name = name
-            self.max_trees = max_trees
+            self.max_pools = max_pools
             self._config = None
-        self._trees: dict[str, Tree] = {}
+        self._pools: dict[str, Pool] = {}
         self._processes: dict[str, Process] = {}
         self._pending: list[Process] = []
         self._running = False
         self._lock = threading.Lock()
         self._routing: dict[str, str] = {}
-        self._default_tree: str | None = None
+        self._default_pool: str | None = None
         self._on_complete: list[Callable[[Process], None]] = []
         self._completed: list[Process] = []
         self._dispatch_batch_size: int = 8
@@ -1158,7 +1158,7 @@ class Engine:
         return self._metrics
 
     def set_scheduling(self, policy: SchedulingPolicy) -> None:
-        """Set how ungrouped processes are routed to trees."""
+        """Set how ungrouped processes are routed to pools."""
         if not isinstance(policy, SchedulingPolicy):
             raise TypeError("policy must be a SchedulingPolicy")
         self._scheduling_policy = policy
@@ -1168,7 +1168,7 @@ class Engine:
         fn: Callable[..., Any],
         *args: Any,
         name: str = "",
-        tree: str | None = None,
+        pool: str | None = None,
         priority: int = 2,
         timeout: float | None = None,
         depends_on: list[str] | None = None,
@@ -1178,8 +1178,8 @@ class Engine:
     ) -> Process:
         proc = Process(fn=fn, args=args, kwargs=kwargs, name=name, timeout=timeout)
         proc._priority = priority
-        if tree:
-            proc._tree_name = tree
+        if pool:
+            proc._pool_name = pool
         if depends_on:
             proc.depends_on = list(depends_on)
             for dep_id in depends_on:
@@ -1214,20 +1214,20 @@ class Engine:
         )
         return proc
 
-    def tree(
+    def pool(
         self,
         name: str,
         max_stems: int = 8,
         pool_workers: int = 4,
         guarded: bool = False,
         default_timeout: float = None,
-    ) -> Tree:
+    ) -> Pool:
         with self._lock:
-            if len(self._trees) >= self.max_trees:
-                raise RuntimeError(f"Engine '{self.name}' at max trees ({self.max_trees})")
+            if len(self._pools) >= self.max_pools:
+                raise RuntimeError(f"Engine '{self.name}' at max pools ({self.max_pools})")
             if guarded:
                 config = self._config.subprocess if self._config else None
-                tree = GuardTree(
+                pool = GuardPool(
                     name,
                     config=config,
                     max_stems=max_stems,
@@ -1235,29 +1235,29 @@ class Engine:
                     default_timeout=default_timeout,
                 )
             else:
-                tree = Tree(name, max_stems=max_stems, pool_workers=pool_workers)
-            self._trees[name] = tree
-            if self._default_tree is None:
-                self._default_tree = name
-        logger.debug("Engine[%s]: created tree '%s'", self.name, name)
-        return tree
+                pool = Pool(name, max_stems=max_stems, pool_workers=pool_workers)
+            self._pools[name] = pool
+            if self._default_pool is None:
+                self._default_pool = name
+        logger.debug("Engine[%s]: created pool '%s'", self.name, name)
+        return pool
 
-    def route(self, process_name: str, tree_name: str) -> None:
-        if tree_name not in self._trees:
-            raise ValueError(f"Tree '{tree_name}' not found")
-        self._routing[process_name] = tree_name
-        logger.debug("Engine[%s]: route '%s' -> tree '%s'", self.name, process_name, tree_name)
+    def route(self, process_name: str, pool_name: str) -> None:
+        if pool_name not in self._pools:
+            raise ValueError(f"Pool '{pool_name}' not found")
+        self._routing[process_name] = pool_name
+        logger.debug("Engine[%s]: route '%s' -> pool '%s'", self.name, process_name, pool_name)
 
     def on_complete(self, callback: Callable[[Process], None]) -> None:
         self._on_complete.append(callback)
 
-    def branch(self, tree_name: str, processes: list[Process]) -> Stem:
-        tree = self._trees.get(tree_name)
-        if tree is None:
-            raise ValueError(f"Tree '{tree_name}' not found")
-        stem = tree.branch(processes)
+    def branch(self, pool_name: str, processes: list[Process]) -> Stem:
+        pool = self._pools.get(pool_name)
+        if pool is None:
+            raise ValueError(f"Pool '{pool_name}' not found")
+        stem = pool.branch(processes)
         for proc in processes:
-            proc._tree_name = tree_name
+            proc._pool_name = pool_name
         return stem
 
     def dispatch(self) -> int:
@@ -1281,44 +1281,44 @@ class Engine:
         ungrouped: list[Process] = []
 
         for proc in dispatchable:
-            tree_name = proc._tree_name or self._routing.get(proc.name)
-            if tree_name:
-                proc._tree_name = tree_name
-                groups.setdefault(tree_name, []).append(proc)
+            pool_name = proc._pool_name or self._routing.get(proc.name)
+            if pool_name:
+                proc._pool_name = pool_name
+                groups.setdefault(pool_name, []).append(proc)
             else:
                 ungrouped.append(proc)
 
         if ungrouped:
-            tree_names = list(self._trees.keys())
-            if tree_names:
+            pool_names = list(self._pools.keys())
+            if pool_names:
                 for proc in ungrouped:
-                    tree_name = tree_names[self._round_robin_idx % len(tree_names)]
-                    proc._tree_name = tree_name
-                    groups.setdefault(tree_name, []).append(proc)
+                    pool_name = pool_names[self._round_robin_idx % len(pool_names)]
+                    proc._pool_name = pool_name
+                    groups.setdefault(pool_name, []).append(proc)
                     self._round_robin_idx += 1
 
         dispatched = 0
-        for tree_name, procs in groups.items():
-            tree = self._trees.get(tree_name)
-            if tree is None:
+        for pool_name, procs in groups.items():
+            pool = self._pools.get(pool_name)
+            if pool is None:
                 logger.warning(
-                    "Engine[%s]: tree '%s' not found, skipping %d processes",
+                    "Engine[%s]: pool '%s' not found, skipping %d processes",
                     self.name,
-                    tree_name,
+                    pool_name,
                     len(procs),
                 )
                 for p in procs:
-                    p.fail(f"tree '{tree_name}' not found")
+                    p.fail(f"pool '{pool_name}' not found")
                 continue
 
             for i in range(0, len(procs), self._dispatch_batch_size):
                 batch = procs[i : i + self._dispatch_batch_size]
                 try:
-                    tree.branch(batch)
+                    pool.branch(batch)
                     dispatched += len(batch)
                 except RuntimeError as e:
                     logger.error(
-                        "Engine[%s]: failed to dispatch to '%s': %s", self.name, tree_name, e
+                        "Engine[%s]: failed to dispatch to '%s': %s", self.name, pool_name, e
                     )
                     for p in batch:
                         p.fail(str(e))
@@ -1340,7 +1340,7 @@ class Engine:
                     logger.info("Engine[%s]: dispatched %d processes", self.name, dispatched)
 
             with self._lock:
-                active = sum(t.active_stems for t in self._trees.values())
+                active = sum(t.active_stems for t in self._pools.values())
 
             for proc in list(self._processes.values()):
                 if proc.is_done and proc not in self._completed:
@@ -1425,17 +1425,17 @@ class Engine:
                 self._metrics.record_cancel()
         if self._monitor:
             self._monitor.stop()
-        for tree in self._trees.values():
-            tree.shutdown()
+        for pool in self._pools.values():
+            pool.shutdown()
 
     def get_process(self, proc_id: str) -> Process | None:
         return self._processes.get(proc_id)
 
-    def get_tree(self, name: str) -> Tree | None:
-        return self._trees.get(name)
+    def get_pool(self, name: str) -> Pool | None:
+        return self._pools.get(name)
 
-    def list_trees(self) -> list[str]:
-        return list(self._trees.keys())
+    def list_pools(self) -> list[str]:
+        return list(self._pools.keys())
 
     def list_processes(self, status: ProcessStatus | None = None) -> list[Process]:
         procs = list(self._processes.values())
@@ -1504,16 +1504,16 @@ class Engine:
                     count += 1
         return count
 
-    def cancel_tree(self, tree_name: str) -> int:
+    def cancel_pool(self, pool_name: str) -> int:
         count = 0
         for proc in self._processes.values():
-            if proc._tree_name == tree_name and not proc.is_done:
+            if proc._pool_name == pool_name and not proc.is_done:
                 proc.cancel()
                 self._metrics.record_cancel()
                 count += 1
         return count
 
-    def spawn_chain(self, *steps: tuple, name: str = "", tree: str = None) -> list[Process]:
+    def spawn_chain(self, *steps: tuple, name: str = "", pool: str = None) -> list[Process]:
         procs = []
         prev_id = None
         for i, step in enumerate(steps):
@@ -1530,7 +1530,7 @@ class Engine:
                     args = tuple(step[1:])
             step_name = f"{name or 'chain'}-{i}"
             if i == 0:
-                p = self.spawn(fn, *args, name=step_name, tree=tree, **kwargs)
+                p = self.spawn(fn, *args, name=step_name, pool=pool, **kwargs)
             else:
 
                 def _make_wrapped(base_fn, base_args, base_kwargs, _prev_id=prev_id):
@@ -1542,7 +1542,7 @@ class Engine:
                     _wrapped.__name__ = f"chain_{base_fn.__name__}"
                     return _wrapped
 
-                p = self.spawn(_make_wrapped(fn, args, kwargs), name=step_name, tree=tree)
+                p = self.spawn(_make_wrapped(fn, args, kwargs), name=step_name, pool=pool)
                 p.depends_on = [prev_id]
                 self._dependents.setdefault(prev_id, []).append(p.id)
             procs.append(p)
@@ -1597,7 +1597,7 @@ class Engine:
         return {
             "name": self.name,
             "running": self._running,
-            "tree_count": len(self._trees),
+            "pool_count": len(self._pools),
             "process_count": len(self._processes),
             "pending": len(self._pending),
             "completed": len(self._completed),
@@ -1627,10 +1627,10 @@ class Engine:
         return {
             "name": self.name,
             "running": self._running,
-            "trees": {n: t.to_dict() for n, t in self._trees.items()},
+            "pools": {n: t.to_dict() for n, t in self._pools.items()},
             "processes": len(self._processes),
             "pending": len(self._pending),
-            "active_stems": sum(t.active_stems for t in self._trees.values()),
+            "active_stems": sum(t.active_stems for t in self._pools.values()),
             "routing": dict(self._routing),
             "monitor": self._monitor.stats() if self._monitor else None,
             "metrics": self._metrics.snapshot(),
@@ -1851,21 +1851,21 @@ class Engine:
             self._spawn_queue = None
 
     def _dispatch_process(self, proc: Process) -> None:
-        tree_name = proc._tree_name or self._routing.get(proc.name) or self._default_tree
-        if not tree_name:
-            logger.warning("Engine[%s]: no tree for process '%s'", self.name, proc.name)
+        pool_name = proc._pool_name or self._routing.get(proc.name) or self._default_pool
+        if not pool_name:
+            logger.warning("Engine[%s]: no pool for process '%s'", self.name, proc.name)
             return
 
-        tree = self._trees.get(tree_name)
-        if tree is None:
+        pool = self._pools.get(pool_name)
+        if pool is None:
             logger.warning(
-                "Engine[%s]: tree '%s' not found for process '%s'", self.name, tree_name, proc.name
+                "Engine[%s]: pool '%s' not found for process '%s'", self.name, pool_name, proc.name
             )
-            proc.fail(f"tree '{tree_name}' not found")
+            proc.fail(f"pool '{pool_name}' not found")
             return
 
         try:
-            tree.branch([proc])
+            pool.branch([proc])
         except RuntimeError as e:
-            logger.error("Engine[%s]: branch failed for '%s': %s", self.name, tree_name, e)
+            logger.error("Engine[%s]: branch failed for '%s': %s", self.name, pool_name, e)
             proc.fail(str(e))

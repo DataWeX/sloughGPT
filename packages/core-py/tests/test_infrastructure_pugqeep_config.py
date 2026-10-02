@@ -84,8 +84,8 @@ class TestEngineConfig:
     def test_defaults(self):
         c = EngineConfig()
         assert c.name == "main"
-        assert c.max_trees == 16
-        assert c.tree_workers == 4
+        assert c.max_pools == 16
+        assert c.pool_workers == 4
         assert isinstance(c.subprocess, SubprocessConfig)
         assert isinstance(c.restart, RestartPolicy)
         assert isinstance(c.monitor, MonitorConfig)

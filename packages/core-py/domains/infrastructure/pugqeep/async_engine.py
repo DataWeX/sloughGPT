@@ -30,7 +30,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from .engine import Engine, Process, ProcessStatus, Tree
+from .engine import Engine, Pool, Process, ProcessStatus
 
 logger = logging.getLogger("slo.pugqeep.async_engine")
 
@@ -57,8 +57,8 @@ class AsyncEngine:
     uvicorn's async world.
     """
 
-    def __init__(self, name: str = "async-engine", max_trees: int = 4, thread_pool_size: int = 4):
-        self._engine = Engine(name=name, max_trees=max_trees)
+    def __init__(self, name: str = "async-engine", max_pools: int = 4, thread_pool_size: int = 4):
+        self._engine = Engine(name=name, max_pools=max_pools)
         self._name = name
         self._thread_pool_size = thread_pool_size
         self._processes: dict[str, AsyncProcess] = {}
@@ -72,7 +72,7 @@ class AsyncEngine:
         *args: Any,
         name: str = "",
         timeout: float | None = None,
-        tree: str | None = None,
+        pool: str | None = None,
         depends_on: list[str] | None = None,
         critical: bool = False,
         **kwargs: Any,
@@ -82,8 +82,8 @@ class AsyncEngine:
         The event loop stays free while ``fn`` executes.
         """
         proc = AsyncProcess(fn=fn, args=args, kwargs=kwargs, name=name, timeout=timeout)
-        if tree:
-            proc._tree_name = tree
+        if pool:
+            proc._pool_name = pool
         if depends_on:
             proc.depends_on = list(depends_on)
         proc._critical = critical
@@ -100,7 +100,7 @@ class AsyncEngine:
         *args: Any,
         name: str = "",
         timeout: float | None = None,
-        tree: str | None = None,
+        pool: str | None = None,
         depends_on: list[str] | None = None,
         critical: bool = False,
         **kwargs: Any,
@@ -108,8 +108,8 @@ class AsyncEngine:
         """Spawn an async callable — runs directly on the event loop."""
         proc = AsyncProcess(fn=fn, args=args, kwargs=kwargs, name=name, timeout=timeout)
         proc.set_async(fn)
-        if tree:
-            proc._tree_name = tree
+        if pool:
+            proc._pool_name = pool
         if depends_on:
             proc.depends_on = list(depends_on)
         proc._critical = critical
@@ -126,7 +126,7 @@ class AsyncEngine:
         *args: Any,
         name: str = "",
         timeout: float | None = None,
-        tree: str | None = None,
+        pool: str | None = None,
         depends_on: list[str] | None = None,
         critical: bool = False,
         **kwargs: Any,
@@ -139,8 +139,8 @@ class AsyncEngine:
         with other ``to_thread`` callers.
         """
         proc = AsyncProcess(fn=fn, args=args, kwargs=kwargs, name=name, timeout=timeout)
-        if tree:
-            proc._tree_name = tree
+        if pool:
+            proc._pool_name = pool
         if depends_on:
             proc.depends_on = list(depends_on)
         proc._critical = critical
@@ -316,11 +316,11 @@ class AsyncEngine:
 
     # ── Delegation to inner Engine ──
 
-    def tree(self, name: str, max_stems: int = 8, pool_workers: int = 4) -> Tree:
-        return self._engine.tree(name, max_stems=max_stems, pool_workers=pool_workers)
+    def pool(self, name: str, max_stems: int = 8, pool_workers: int = 4) -> Pool:
+        return self._engine.pool(name, max_stems=max_stems, pool_workers=pool_workers)
 
-    def route(self, process_name: str, tree_name: str) -> None:
-        self._engine.route(process_name, tree_name)
+    def route(self, process_name: str, pool_name: str) -> None:
+        self._engine.route(process_name, pool_name)
 
     def get_process(self, proc_id: str) -> AsyncProcess | None:
         return self._processes.get(proc_id) or self._engine.get_process(proc_id)

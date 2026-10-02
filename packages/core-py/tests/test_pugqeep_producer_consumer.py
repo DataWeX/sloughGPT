@@ -644,7 +644,7 @@ class TestTaskQueueManual:
 class TestEngineWorkers:
     def test_start_stop_workers(self):
         engine = Engine("test-engine-workers")
-        engine.tree("t1")
+        engine.pool("t1")
         engine.start_workers(num_workers=2)
         engine.stop_workers()
 
@@ -657,7 +657,7 @@ class TestEngineWorkers:
                 results.append(x)
 
         engine = Engine("test-dispatch")
-        engine.tree("default")
+        engine.pool("default")
         engine.start_workers(num_workers=2)
 
         try:
@@ -685,8 +685,8 @@ class TestEngineWorkers:
                 results.append(("train", x))
 
         engine = Engine("test-router")
-        engine.tree("data")
-        engine.tree("training")
+        engine.pool("data")
+        engine.pool("training")
         engine.route("load_fn", "data")
         engine.route("train_fn", "training")
         engine.start_workers(num_workers=2)
@@ -704,7 +704,7 @@ class TestEngineWorkers:
 
     def test_spawn_with_priority(self):
         engine = Engine("test-priority")
-        engine.tree("t1")
+        engine.pool("t1")
         engine.start_workers(num_workers=1)
         try:
             p = engine.spawn(lambda: None, name="work", priority=0)
@@ -787,20 +787,20 @@ class TestEngineWorkers:
 
     def test_engine_spawn_creates_process(self):
         engine = Engine("spawn-test")
-        engine.tree("t1")
+        engine.pool("t1")
         p = engine.spawn(lambda: None, name="test")
         assert p.name == "test"
         assert p.id in str(engine._processes)
 
-    def test_engine_tree_count(self):
+    def test_engine_pool_count(self):
         engine = Engine("tree-count")
-        engine.tree("a")
-        engine.tree("b")
-        assert len(engine._trees) == 2
+        engine.pool("a")
+        engine.pool("b")
+        assert len(engine._pools) == 2
 
     def test_engine_route(self):
         engine = Engine("route-test")
-        engine.tree("target")
+        engine.pool("target")
         engine.route("my_fn", "target")
         assert engine._routing["my_fn"] == "target"
 

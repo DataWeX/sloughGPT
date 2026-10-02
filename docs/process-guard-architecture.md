@@ -2,7 +2,7 @@
 
 ## Context: What is PGQ?
 
-PGQ (pugqeep) is a **general-purpose execution engine** — not model-specific. It provides `Tree` (thread pool), `GuardTree` (subprocess isolation), and `Process` abstractions for running work outside of asyncio. The goal is to replace raw `asyncio` and `multiprocessing` with a library we can tailor to our needs.
+PGQ (pugqeep) is a **general-purpose, agnostic virtualizing vCPU** — a standalone library, not owned by any one application. It provides `Pool` (thread pool), `GuardPool` (subprocess isolation), and `Process` abstractions for running work outside of asyncio. The goal is to replace raw `asyncio` and `multiprocessing` with a library we can tailor to our needs.
 
 ProcessGuard is one consumer of PGQ. The autoload path runs inside a PGQ `ThreadPoolExecutor` thread, which is why subprocess-based ProcessGuard was failing — `mp.Queue` handshake between a PGQ thread and a spawned subprocess is unreliable.
 
@@ -61,6 +61,7 @@ Eliminates parameter duplication. Both ProcessGuard and workers receive one conf
 @dataclass(frozen=True)
 class ModelConfig:
     """Immutable model configuration shared across guard + workers."""
+
     slnc_path: str | None = None
     model_id: str = "default"
     quantize: bool = False
@@ -76,7 +77,7 @@ class ModelConfig:
 ```python
 class ExecutionMode(Enum):
     SUBPROCESS = "subprocess"  # Manual API load — full OS isolation
-    THREAD = "thread"          # Autoload / PGQ — no IPC overhead
+    THREAD = "thread"  # Autoload / PGQ — no IPC overhead
 ```
 
 ### _ThreadWorker (in-process, for PGQ context)
@@ -114,6 +115,7 @@ class ProcessGuard:
 ### Call Sites
 
 **Autoload (startup.py) — THREAD mode, pre-loaded provider:**
+
 ```python
 provider = SloNetChatProvider.from_slnc(slnc_path, ...)  # Load once
 process_guard = ProcessGuard(
@@ -126,6 +128,7 @@ process_guard.start()
 ```
 
 **Manual API (controllers/models.py) — SUBPROCESS mode:**
+
 ```python
 guard = ProcessGuard(
     mode=ExecutionMode.SUBPROCESS,  # Full isolation
@@ -137,11 +140,11 @@ guard.start()
 
 ## File Changes
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `model_config.py` | **NEW** | `ModelConfig` dataclass + `ExecutionMode` |
-| `process_guard.py` | **REFACTOR** | `_ThreadWorker` + simplified `ProcessGuard` |
-| `model_worker.py` | **KEPT** | Subprocess worker (unchanged) |
-| `startup.py` | **UPDATED** | Autoload uses THREAD + provider injection |
-| `controllers/models.py` | **UPDATED** | Manual load uses SUBPROCESS |
-| Tests | **UPDATED** | Match new API |
+| File                    | Action       | Purpose                                     |
+| ----------------------- | ------------ | ------------------------------------------- |
+| `model_config.py`       | **NEW**      | `ModelConfig` dataclass + `ExecutionMode`   |
+| `process_guard.py`      | **REFACTOR** | `_ThreadWorker` + simplified `ProcessGuard` |
+| `model_worker.py`       | **KEPT**     | Subprocess worker (unchanged)               |
+| `startup.py`            | **UPDATED**  | Autoload uses THREAD + provider injection   |
+| `controllers/models.py` | **UPDATED**  | Manual load uses SUBPROCESS                 |
+| Tests                   | **UPDATED**  | Match new API                               |

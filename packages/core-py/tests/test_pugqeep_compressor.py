@@ -836,8 +836,8 @@ class TestEngineConfig:
 
         cfg = EngineConfig()
         assert cfg.name == "main"
-        assert cfg.max_trees == 16
-        assert cfg.tree_workers == 4
+        assert cfg.max_pools == 16
+        assert cfg.pool_workers == 4
         assert cfg.max_stems == 8
         assert cfg.queue_size == 128
         assert cfg.poll_interval == 0.1
@@ -1295,15 +1295,15 @@ class TestEngineConfigExtended:
 
         cfg = EngineConfig(
             name="test",
-            max_trees=32,
-            tree_workers=8,
+            max_pools=32,
+            pool_workers=8,
             max_stems=16,
             queue_size=256,
             poll_interval=0.5,
         )
         assert cfg.name == "test"
-        assert cfg.max_trees == 32
-        assert cfg.tree_workers == 8
+        assert cfg.max_pools == 32
+        assert cfg.pool_workers == 8
         assert cfg.max_stems == 16
         assert cfg.queue_size == 256
         assert cfg.poll_interval == 0.5
