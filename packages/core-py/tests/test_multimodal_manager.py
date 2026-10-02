@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -414,3 +415,105 @@ class TestPretrain:
         result = m._pretrain_engine(epochs=2, samples=8, batch_size=4)
         assert isinstance(result, float)
         assert engine.save.called
+
+
+# ── Pretrain thread lifecycle ──────────────────────────────────────────────
+
+
+class TestPretrainThreadLifecycle:
+    @patch("domain.multimodal._internal.manager.get_speech_recognizer")
+    @patch("domain.multimodal._internal.manager.get_multimodal_engine")
+    @patch("os.path.exists", return_value=False)
+    def test_initialize_dedupes_pretrain_spawn(
+        self, mock_exists, mock_engine, mock_speech, monkeypatch
+    ):
+        mock_engine.return_value._trained = False
+        started = threading.Event()
+
+        def stub_pretrain(self, cancel=None, **kw):
+            started.set()
+            (cancel if cancel is not None else threading.Event()).wait(10)
+            return 0.0
+
+        monkeypatch.setattr(MultimodalManager, "_pretrain_engine", stub_pretrain)
+
+        m1 = MultimodalManager()
+        m1.initialize(speech_server=False, vision_model="slonet")
+        assert started.wait(5)
+        first = MultimodalManager._pretrain_thread
+        assert first is not None and first.is_alive()
+
+        m2 = MultimodalManager()
+        m2.initialize(speech_server=False, vision_model="slonet")
+        assert MultimodalManager._pretrain_thread is first
+
+        assert MultimodalManager.stop_pretrain(timeout=5) is True
+        assert not first.is_alive()
+
+    @patch("domain.multimodal._internal.manager.get_speech_recognizer")
+    @patch("domain.multimodal._internal.manager.get_multimodal_engine")
+    @patch("os.path.exists", return_value=False)
+    def test_stop_pretrain_joins_running_thread(
+        self, mock_exists, mock_engine, mock_speech, monkeypatch
+    ):
+        mock_engine.return_value._trained = False
+        started = threading.Event()
+        seen_cancel = []
+
+        def stub_pretrain(self, cancel=None, **kw):
+            started.set()
+            event = cancel if cancel is not None else threading.Event()
+            seen_cancel.append(event)
+            event.wait(10)
+            return 0.0
+
+        monkeypatch.setattr(MultimodalManager, "_pretrain_engine", stub_pretrain)
+
+        m = MultimodalManager()
+        m.initialize(speech_server=False, vision_model="slonet")
+        assert started.wait(5)
+        thread = MultimodalManager._pretrain_thread
+        assert thread is not None and thread.is_alive()
+
+        assert MultimodalManager.stop_pretrain(timeout=5) is True
+        assert not thread.is_alive()
+        assert seen_cancel[0].is_set()
+
+    def test_pretrain_engine_honors_cancel_event(self, monkeypatch):
+        m = MultimodalManager()
+        engine = MagicMock()
+        m._multimodal_engine = engine
+
+        def fail_gen(*args, **kw):
+            raise AssertionError("synthetic data generated despite cancel")
+
+        monkeypatch.setattr(m, "_gen_synthetic_data", fail_gen)
+
+        cancel = threading.Event()
+        cancel.set()
+        result = m._pretrain_engine(epochs=3, samples=8, batch_size=4, cancel=cancel)
+
+        assert result == float("inf")
+        engine.text.build_vocab.assert_not_called()
+        engine.train_step.assert_not_called()
+        engine.save.assert_not_called()
+
+    def test_pretrain_engine_stops_midway_when_cancelled(self):
+        m = MultimodalManager()
+        engine = MagicMock()
+
+        cancel = threading.Event()
+
+        def step(*args, **kw):
+            cancel.set()
+            return 0.5
+
+        engine.train_step.side_effect = step
+        engine.generate.return_value = MagicMock(text="sample")
+        m._multimodal_engine = engine
+
+        result = m._pretrain_engine(epochs=5, samples=8, batch_size=4, cancel=cancel)
+
+        assert isinstance(result, float)
+        assert engine.train_step.call_count < 10
+        engine.save.assert_not_called()
