@@ -38,16 +38,15 @@ export function V86TerminalPanel({
   }, [init, initStarted])
 
   return (
-    <div className={cn(
-      'flex flex-col rounded-lg border border-border bg-background',
-      className,
-    )}>
+    <div className={cn('flex flex-col rounded-lg border border-border bg-background', className)}>
       {/* Status bar */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-1.5">
-        <div className={cn(
-          'h-2 w-2 rounded-full',
-          isBooted ? 'bg-success' : error ? 'bg-destructive' : 'bg-warning animate-pulse',
-        )} />
+        <div
+          className={cn(
+            'h-2 w-2 rounded-full',
+            isBooted ? 'bg-success' : error ? 'bg-destructive' : 'bg-warning animate-pulse',
+          )}
+        />
         <span className="text-xs text-muted-foreground">
           {isBooted ? 'Linux VM Running' : error ? 'VM Error' : 'Booting...'}
         </span>
@@ -62,18 +61,20 @@ export function V86TerminalPanel({
         )}
       </div>
 
-      {/* VM screen */}
-      <div
-        ref={containerRef}
-        className="flex-1 overflow-hidden bg-black"
-        data-testid="v86-screen"
-      />
+      {/* VM screen. The demo v86 build renders into a pre-existing monospace
+          text div (visible) and a hidden canvas (VGA/screenshot); the npm
+          build ignores the div and creates its own canvas. */}
+      <div ref={containerRef} className="flex-1 overflow-hidden bg-black" data-testid="v86-screen">
+        <div
+          data-v86-text
+          style={{ whiteSpace: 'pre', font: '14px monospace', lineHeight: '14px' }}
+        />
+        <canvas style={{ display: 'none' }} />
+      </div>
 
       {/* Error display */}
       {error && (
-        <div className="border-t border-border px-3 py-2 text-xs text-destructive">
-          {error}
-        </div>
+        <div className="border-t border-border px-3 py-2 text-xs text-destructive">{error}</div>
       )}
     </div>
   )

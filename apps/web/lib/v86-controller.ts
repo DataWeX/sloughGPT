@@ -8,6 +8,47 @@ const DB_VERSION = 1
 const STORE_NAME = 'state'
 const STATE_KEY = 'emulator'
 
+// v86's bundle references Node globals (`global`, `global.setImmediate`,
+// `process`) inside its cooperative scheduler. Browsers lack all three, so
+// polyfill them before the v86 module code can execute.
+if (typeof globalThis.global === 'undefined') {
+  ;(globalThis as any).global = globalThis
+}
+if (typeof globalThis.setImmediate !== 'function') {
+  ;(globalThis as any).setImmediate = (fn: (...a: unknown[]) => void, ...args: unknown[]) =>
+    setTimeout(() => fn(...args), 0) as unknown as NodeJS.Timeout
+  ;(globalThis as any).clearImmediate = (id: unknown) => clearTimeout(id as NodeJS.Timeout)
+}
+if (typeof (globalThis as any).process === 'undefined') {
+  ;(globalThis as any).process = {
+    env: {},
+    version: '',
+    platform: 'browser',
+    browser: true,
+    nextTick: (fn: (...a: unknown[]) => void, ...args: unknown[]) => {
+      setImmediate(() => fn(...args))
+    },
+  }
+}
+
+const loadedScripts = new Map<string, Promise<void>>()
+
+/** Load a classic script that sets a global (e.g. the demo's libv86.js -> window.V86). */
+function loadGlobalScript(url: string): Promise<void> {
+  let p = loadedScripts.get(url)
+  if (!p) {
+    p = new Promise<void>((resolve, reject) => {
+      const s = document.createElement('script')
+      s.src = url
+      s.onload = () => resolve()
+      s.onerror = () => reject(new Error(`Failed to load v86 library from ${url}`))
+      document.head.appendChild(s)
+    })
+    loadedScripts.set(url, p)
+  }
+  return p
+}
+
 async function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION)
@@ -26,28 +67,49 @@ export class V86Controller {
     opts: {
       biosUrl: string
       vgaBiosUrl: string
-      imageUrl: string
+      /** Disk image (hda). Omit when using cdromUrl. */
+      imageUrl?: string
       imageSize?: number
+      /** Bootable ISO (cdrom). Omit when using imageUrl. */
+      cdromUrl?: string
       memoryMb?: number
       wasmPath?: string
+      /**
+       * Classic-script v86 build (sets window.V86), e.g. the
+       * Darin755/browser-linux demo's lib. Used when the npm build regresses
+       * on the kernel we boot.
+       */
+      libUrl?: string
     },
   ): Promise<void> {
-    const mod = await import('v86')
-    this.V86Class = mod.V86 || (mod as any).default?.V86 || mod
+    if (opts.libUrl) {
+      await loadGlobalScript(opts.libUrl)
+      this.V86Class = (globalThis as any).V86
+      if (!this.V86Class) throw new Error(`v86 library at ${opts.libUrl} did not define window.V86`)
+    } else {
+      const mod = await import('v86')
+      this.V86Class = mod.V86 || (mod as any).default?.V86 || mod
+    }
 
-    this.emulator = new this.V86Class({
+    const machineOpts: Record<string, unknown> = {
       screen_container: screenContainer,
       bios: { url: opts.biosUrl },
       vga_bios: { url: opts.vgaBiosUrl },
-      hda: opts.imageSize
-        ? { url: opts.imageUrl, async: true, size: opts.imageSize }
-        : { url: opts.imageUrl },
+      // Match the working Darin755/browser-linux demo (256MB RAM, 16MB VGA).
       memory_size: (opts.memoryMb ?? 256) * 1024 * 1024,
-      vga_memory_size: 8 * 1024 * 1024,
+      vga_memory_size: 16 * 1024 * 1024,
       autostart: true,
-      fastboot: true,
       wasm_path: opts.wasmPath,
-    })
+    }
+    if (opts.cdromUrl) {
+      machineOpts.cdrom = { url: opts.cdromUrl }
+    } else {
+      machineOpts.hda = opts.imageSize
+        ? { url: opts.imageUrl, async: true, size: opts.imageSize }
+        : { url: opts.imageUrl }
+    }
+
+    this.emulator = new this.V86Class(machineOpts)
 
     await new Promise<void>((resolve) => {
       this.emulator.add_listener('emulator-started', () => resolve())

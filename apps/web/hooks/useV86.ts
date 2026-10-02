@@ -12,9 +12,15 @@ import { logger, trackEvent } from '@/lib/dev-log'
 const LINUX_IMAGE_URL = 'https://copy.sh/v86/images/buildroot'
 // Local image produced by buildroot/build.sh (copied to apps/web/public/buildroot/).
 const LOCAL_IMAGE_URL = '/buildroot/buildroot.img'
+// Bootable Buildroot ISO from the Darin755/browser-linux demo (its live demo
+// boots rootfs.iso, not the minimal build).
+const LOCAL_ISO_URL = '/v86/browser-linux-rootfs.iso'
 const BIOS_URL = '/bios/seabios.bin'
 const VGA_BIOS_URL = '/bios/vgabios.bin'
-const WASM_PATH = '/v86/v86.wasm'
+// The demo's own proven v86 build (Sept 2024): npm v86 0.5.458 kernel-panics
+// at setup_IO_APIC with this ISO, the demo's pairing does not.
+const LIB_URL = '/v86-demo/libv86.js'
+const WASM_PATH = '/v86-demo/v86.wasm'
 const MEMORY_MB = 256
 const AUTO_SAVE_INTERVAL_MS = 30_000
 const IMAGE_PROBE_TIMEOUT_MS = 5_000
@@ -36,6 +42,10 @@ async function probeImage(url: string): Promise<ProbeResult> {
       signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
     })
     if (!res.ok && res.status !== 206) return { available: false }
+    // Vite's SPA fallback returns 200 text/html for missing static files;
+    // an HTML response is not a bootable image.
+    const ctype = res.headers.get('content-type') ?? ''
+    if (ctype.toLowerCase().startsWith('text/html')) return { available: false }
     const total = res.headers.get('content-range')?.split('/')[1]
     if (total && total !== '*') {
       const n = Number(total)
@@ -48,18 +58,27 @@ async function probeImage(url: string): Promise<ProbeResult> {
   }
 }
 
+interface ResolvedBootImage {
+  url: string
+  size?: number
+  media: 'disk' | 'cdrom'
+}
+
 /**
- * Resolve the boot image: prefer the locally built image, then the upstream
- * copy.sh one (its buildroot files have been intermittently 404), and fail
- * fast with an actionable message instead of letting v86 retry a dead URL.
+ * Resolve the boot image: prefer the locally built disk image, then the local
+ * bootable ISO (cdrom), then the upstream copy.sh image (its buildroot files
+ * have been intermittently 404), and fail fast with an actionable message
+ * instead of letting v86 retry a dead URL.
  */
-async function resolveDefaultImage(): Promise<{ url: string; size?: number }> {
+async function resolveDefaultImage(): Promise<ResolvedBootImage> {
   const local = await probeImage(LOCAL_IMAGE_URL)
-  if (local.available) return { url: LOCAL_IMAGE_URL, size: local.size }
+  if (local.available) return { url: LOCAL_IMAGE_URL, size: local.size, media: 'disk' }
+  const localIso = await probeImage(LOCAL_ISO_URL)
+  if (localIso.available) return { url: LOCAL_ISO_URL, size: localIso.size, media: 'cdrom' }
   const remote = await probeImage(LINUX_IMAGE_URL)
-  if (remote.available) return { url: LINUX_IMAGE_URL, size: remote.size }
+  if (remote.available) return { url: LINUX_IMAGE_URL, size: remote.size, media: 'disk' }
   throw new Error(
-    `Linux VM image not available: ${LOCAL_IMAGE_URL} not built and upstream copy.sh buildroot unreachable. ` +
+    `Linux VM image not available: ${LOCAL_IMAGE_URL} not built, ${LOCAL_ISO_URL} missing, and upstream copy.sh buildroot unreachable. ` +
       'Run buildroot/build.sh to build the local image (installed at apps/web/public/buildroot/buildroot.img), then reload.',
   )
 }
@@ -115,27 +134,40 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
 
       try {
         const image = options.imageUrl
-          ? { url: options.imageUrl, size: options.imageSize }
+          ? { url: options.imageUrl, size: options.imageSize, media: 'disk' as const }
           : await resolveDefaultImage()
 
         const ctrl = new V86Controller()
         await ctrl.init(container, {
           biosUrl: options.biosUrl || BIOS_URL,
           vgaBiosUrl: options.vgaBiosUrl || VGA_BIOS_URL,
-          imageUrl: image.url,
+          imageUrl: image.media === 'disk' ? image.url : undefined,
           imageSize: image.size,
+          cdromUrl: image.media === 'cdrom' ? image.url : undefined,
           memoryMb: options.memoryMb || MEMORY_MB,
           wasmPath: options.wasmPath || WASM_PATH,
+          libUrl: options.wasmPath ? undefined : LIB_URL,
         })
         controllerRef.current = ctrl
         setIsBooted(true)
         setError(null)
         trackEvent('vm_booted')
 
-        // Try to restore persisted state
+        // Try to restore persisted state. A state saved from a machine with
+        // a different config (e.g. a different memory size or disk vs. cdrom
+        // boot) can make v86's PCI rebuild crash (reading `original_bar` of
+        // undefined) and leave the screen black; drop the bad state instead
+        // of poisoning every future boot.
         const saved = await ctrl.loadPersistedState()
         if (saved) {
-          await ctrl.restoreState(saved)
+          try {
+            await ctrl.restoreState(saved)
+          } catch (restoreErr) {
+            logger.warning('VM state restore failed; clearing saved state', {
+              exception: String(restoreErr),
+            })
+            await ctrl.clearPersistedState()
+          }
         }
 
         // Start auto-save — skip ticks when the emulator is not running
