@@ -203,36 +203,6 @@ def cmd_resolve(args: argparse.Namespace):
 
 
 # ---------------------------------------------------------------------------
-# Capture — local server for browser extension
-# ---------------------------------------------------------------------------
-
-
-def cmd_capture(args: argparse.Namespace):
-    """Start capture server for browser extension."""
-    from .server import start_capture_server
-
-    port = args.port
-
-    print(f"Starting capture server on http://127.0.0.1:{port}")
-    print("Extension: load extension/ folder in chrome://extensions")
-    print("Press Ctrl+C to stop.\n")
-
-    def on_capture(entry):
-        print(f"  → {entry.url}")
-        if entry.title:
-            print(f"    {entry.title}")
-
-    server = start_capture_server(port=port, on_capture=on_capture)
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nShutting down...")
-        server.shutdown()
-
-
-# ---------------------------------------------------------------------------
 # Compress / Decompress
 # ---------------------------------------------------------------------------
 
@@ -383,11 +353,6 @@ def main(argv: list = None):
         help="Try HTTP first, fall back to browser if insufficient",
     )
     p_res.set_defaults(func=cmd_resolve)
-
-    # capture
-    p_cap = sub.add_parser("capture", help="Start capture server for browser extension")
-    p_cap.add_argument("-p", "--port", type=int, default=6400, help="Port (default: 6400)")
-    p_cap.set_defaults(func=cmd_capture)
 
     # estimate <url>
     p_est = sub.add_parser("estimate", help="Estimate download size before downloading")

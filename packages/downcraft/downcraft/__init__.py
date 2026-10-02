@@ -65,7 +65,6 @@ from .resolve import (
     resolve_page_browser,
     resolve_with_browser_fallback,
 )
-from .server import CaptureEntry, start_capture_server
 
 # Compression APIs (optional dependency)
 try:
@@ -105,8 +104,6 @@ __all__ = [
     "GroupResult",
     "PartResult",
     "parse_urls_file",
-    "start_capture_server",
-    "CaptureEntry",
     # Compression (if lz4 installed)
     "compress_file",
     "decompress_file",
