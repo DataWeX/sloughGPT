@@ -250,3 +250,34 @@ describe('YourComponent', () => {
   })
 })
 ```
+
+## Site Doctor (runtime monitor — not `scripts/test-doctor.py`)
+
+`scripts/test-doctor.py` diagnoses the **test suite** (why a pytest run
+failed). The **site doctor** diagnoses the **live site**: a read-only
+monitor that probes the running stack and triages what it finds. Phase A
+is report-only — it never remediates.
+
+- **What it probes:** API health/errors (`/health*`, `/errors/*`),
+  `/health/stream` cadence + payload size (flags >256 KB frames and >8s
+  stalls), and the UX journey sweep report (`domain/journeys`).
+- **Placement:** wiring lives in `domain/core/_internal/doctor/` (the
+  "body of the system" — system-level ops); probes are seams onto the
+  core components.
+
+```bash
+# Full summary (~15s, no browser):                        exit 0/1/2
+.venv/bin/python -m domain.core._internal.doctor
+# Read existing journey report instead of sweeping:
+.venv/bin/python -m domain.core._internal.doctor --no-sweep
+# Machine-readable report on stdout; also written to the report path:
+.venv/bin/python -m domain.core._internal.doctor --json
+# --window N (SSE seconds), --skip sse,http,journey, --report PATH, --strict
+```
+
+**Exit codes:** `0` ok/info · `1` warn (with `--strict`: info too) ·
+`2` critical (e.g. API unreachable, oversized SSE frames).
+
+**Report path:** `${SLO_DOCTOR_REPORT:-~/.cache/slog-doctor/findings-report.json}`
+(JSON, `schema_version: 1`, findings ranked worst-first).
+
