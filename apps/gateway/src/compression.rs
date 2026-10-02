@@ -19,6 +19,92 @@ use flate2::write::GzEncoder;
 use flate2::Compression;
 use futures::{Stream, StreamExt};
 use std::io::Write;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::sync::OnceLock;
+
+// ── Bandwidth observability ─────────────────────────────────────────────────
+//
+// The edge owns the encode path, so it is the single source of truth for
+// byte counts. Python never re-counts: it scrapes the `bandwidth` block of
+// GET /health/detailed and logs interval deltas through the infra logger.
+// Counting is two relaxed atomic adds per chunk on the hot path — no locks,
+// no allocation, no effect on first-byte latency.
+
+/// Process-wide byte counters for relayed traffic (relayed responses only;
+/// gateway-owned routes like `/health/*` and static files never pass
+/// through `maybe_compress_response`).
+#[derive(Debug, Default)]
+pub struct BandwidthCounters {
+    /// Uncompressed payload bytes presented to clients (input to the
+    /// encoder for compressed responses; identical to `wire_bytes` for
+    /// identity passthrough).
+    pub identity_bytes: AtomicU64,
+    /// Actual bytes emitted on the wire (encoded output, or passthrough
+    /// bytes unchanged).
+    pub wire_bytes: AtomicU64,
+    pub compressed_responses: AtomicU64,
+    pub identity_responses: AtomicU64,
+    pub zstd_responses: AtomicU64,
+    pub gzip_responses: AtomicU64,
+}
+
+impl BandwidthCounters {
+    pub const fn new() -> Self {
+        Self {
+            identity_bytes: AtomicU64::new(0),
+            wire_bytes: AtomicU64::new(0),
+            compressed_responses: AtomicU64::new(0),
+            identity_responses: AtomicU64::new(0),
+            zstd_responses: AtomicU64::new(0),
+            gzip_responses: AtomicU64::new(0),
+        }
+    }
+
+    /// Point-in-time read for /health/detailed. Field loads are independent
+    /// (Relaxed) — mid-stream values are expected and fine for observability.
+    pub fn snapshot(&self) -> BandwidthSnapshot {
+        let identity = self.identity_bytes.load(Relaxed);
+        let wire = self.wire_bytes.load(Relaxed);
+        // Signed: an incompressible payload can expand on the wire, and
+        // hiding that would make savings lie.
+        let saved = identity as i64 - wire as i64;
+        let saved_pct = if identity == 0 {
+            0.0
+        } else {
+            saved as f64 * 100.0 / identity as f64
+        };
+        BandwidthSnapshot {
+            identity_bytes: identity,
+            wire_bytes: wire,
+            saved_bytes: saved,
+            saved_pct,
+            compressed_responses: self.compressed_responses.load(Relaxed),
+            identity_responses: self.identity_responses.load(Relaxed),
+            zstd_responses: self.zstd_responses.load(Relaxed),
+            gzip_responses: self.gzip_responses.load(Relaxed),
+        }
+    }
+}
+
+/// Serializable view served on `GET /health/detailed` under `bandwidth`.
+#[derive(Clone, Copy, Debug, serde::Serialize)]
+pub struct BandwidthSnapshot {
+    pub identity_bytes: u64,
+    pub wire_bytes: u64,
+    pub saved_bytes: i64,
+    pub saved_pct: f64,
+    pub compressed_responses: u64,
+    pub identity_responses: u64,
+    pub zstd_responses: u64,
+    pub gzip_responses: u64,
+}
+
+/// The process-wide counters (lazily initialized, `'static` so response
+/// streams can borrow them without an `Arc`).
+pub fn bandwidth() -> &'static BandwidthCounters {
+    static COUNTERS: OnceLock<BandwidthCounters> = OnceLock::new();
+    COUNTERS.get_or_init(BandwidthCounters::new)
+}
 
 /// Skip compression for these content-type prefixes.
 /// Note: `application/octet-stream` is intentionally NOT skipped — it is the
@@ -236,11 +322,42 @@ pub fn maybe_compress_response(
     codec: Option<Codec>,
     req_headers: &HeaderMap,
 ) -> Response {
+    maybe_compress_response_with(resp, codec, req_headers, bandwidth())
+}
+
+/// Counting core: identical to [`maybe_compress_response`] but records byte
+/// counts into `counters`. Tests pass a function-local `static` for
+/// isolation; production passes the process-wide counters.
+fn maybe_compress_response_with(
+    resp: Response,
+    codec: Option<Codec>,
+    req_headers: &HeaderMap,
+    counters: &'static BandwidthCounters,
+) -> Response {
     let (parts, body) = resp.into_parts();
 
     let codec = match codec {
         Some(c) if !should_skip_response(parts.status, req_headers, &parts.headers) => c,
-        _ => return Response::from_parts(parts, body),
+        _ => {
+            // Identity passthrough: count real bytes as they cross the
+            // wire — identity == wire here, so savings stay honest.
+            counters.identity_responses.fetch_add(1, Relaxed);
+            let counted = body.into_data_stream().map(move |chunk| {
+                if let Ok(b) = &chunk {
+                    let n = b.len() as u64;
+                    counters.identity_bytes.fetch_add(n, Relaxed);
+                    counters.wire_bytes.fetch_add(n, Relaxed);
+                }
+                chunk
+            });
+            return Response::from_parts(parts, Body::from_stream(counted));
+        }
+    };
+
+    counters.compressed_responses.fetch_add(1, Relaxed);
+    match codec {
+        Codec::Zstd => counters.zstd_responses.fetch_add(1, Relaxed),
+        Codec::Gzip => counters.gzip_responses.fetch_add(1, Relaxed),
     };
 
     let known_len = parts
@@ -249,8 +366,22 @@ pub fn maybe_compress_response(
         .and_then(|v| v.to_str().ok())
         .and_then(|s| s.parse::<u64>().ok());
 
-    let upstream = body.into_data_stream();
-    let compressed = compress_stream(upstream, codec, known_len);
+    // identity_bytes: what the client would have received uncompressed —
+    // counted at the encoder input, exact even for unknown-length SSE.
+    let upstream = body.into_data_stream().map(move |chunk| {
+        if let Ok(b) = &chunk {
+            counters.identity_bytes.fetch_add(b.len() as u64, Relaxed);
+        }
+        chunk
+    });
+    // wire_bytes: what actually leaves the process — counted at the
+    // encoder output.
+    let compressed = compress_stream(upstream, codec, known_len).map(move |chunk| {
+        if let Ok(b) = &chunk {
+            counters.wire_bytes.fetch_add(b.len() as u64, Relaxed);
+        }
+        chunk
+    });
 
     let mut headers = parts.headers;
     headers.insert(
@@ -602,5 +733,89 @@ mod tests {
         let out = maybe_compress_response(sse_response(payload.clone()), None, &HeaderMap::new());
         assert!(!out.headers().contains_key(header::CONTENT_ENCODING));
         assert_eq!(body_bytes(out).await, payload);
+    }
+
+    // ── Bandwidth counters ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn counters_track_compressed_response() {
+        static C: BandwidthCounters = BandwidthCounters::new();
+        let payload = sample_body();
+        let resp = Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/octet-stream")
+            .header(header::CONTENT_LENGTH, payload.len())
+            .body(Body::from(payload.clone()))
+            .unwrap();
+        let out = maybe_compress_response_with(resp, Some(Codec::Zstd), &HeaderMap::new(), &C);
+        let wire = body_bytes(out).await;
+
+        let snap = C.snapshot();
+        assert_eq!(snap.compressed_responses, 1);
+        assert_eq!(snap.zstd_responses, 1);
+        assert_eq!(snap.gzip_responses, 0);
+        assert_eq!(snap.identity_responses, 0);
+        // Identity counted at encoder input, wire at encoder output.
+        assert_eq!(snap.identity_bytes, payload.len() as u64);
+        assert_eq!(snap.wire_bytes, wire.len() as u64);
+        assert!(snap.saved_bytes > 0, "zstd must save bytes");
+        assert!(snap.saved_pct > 50.0);
+    }
+
+    #[tokio::test]
+    async fn counters_track_identity_passthrough() {
+        static C: BandwidthCounters = BandwidthCounters::new();
+        let payload = sample_body();
+        let resp = Response::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::CONTENT_LENGTH, payload.len())
+            .body(Body::from(payload.clone()))
+            .unwrap();
+        let out = maybe_compress_response_with(resp, None, &HeaderMap::new(), &C);
+        assert_eq!(body_bytes(out).await, payload);
+
+        let snap = C.snapshot();
+        assert_eq!(snap.identity_responses, 1);
+        assert_eq!(snap.compressed_responses, 0);
+        // Passthrough: wire == identity, savings zero — must not fabricate.
+        assert_eq!(snap.identity_bytes, payload.len() as u64);
+        assert_eq!(snap.wire_bytes, payload.len() as u64);
+        assert_eq!(snap.saved_bytes, 0);
+        assert_eq!(snap.saved_pct, 0.0);
+    }
+
+    #[tokio::test]
+    async fn counters_dont_track_uncompressed_direct_calls() {
+        // compress_stream itself stays counter-free: counting lives only in
+        // maybe_compress_response so pure encode benchmarks/tests are inert.
+        static C: BandwidthCounters = BandwidthCounters::new();
+        let payload = sample_body();
+        let chunks: Vec<Result<Bytes, std::io::Error>> = payload
+            .chunks(7 * 1024)
+            .map(|c| Ok(Bytes::copy_from_slice(c)))
+            .collect();
+        let encoded = collect(
+            compress_stream(futures::stream::iter(chunks), Codec::Gzip, None),
+        )
+        .await;
+        assert!(!encoded.is_empty());
+        assert_eq!(C.snapshot().wire_bytes, 0);
+        assert_eq!(C.snapshot().identity_bytes, 0);
+    }
+
+    #[test]
+    fn snapshot_reports_expansion_as_negative_savings() {
+        // Incompressible/tiny payload where wire > identity must not lie.
+        let c = BandwidthCounters::new();
+        c.identity_bytes.store(100, Relaxed);
+        c.wire_bytes.store(120, Relaxed);
+        let snap = c.snapshot();
+        assert_eq!(snap.saved_bytes, -20);
+        assert!((snap.saved_pct - (-20.0)).abs() < 1e-9);
+
+        let empty = BandwidthCounters::new().snapshot();
+        assert_eq!(empty.saved_pct, 0.0, "no traffic → 0%, not NaN");
+        assert_eq!(empty.identity_bytes, 0);
     }
 }

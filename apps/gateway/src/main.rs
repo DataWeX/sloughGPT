@@ -252,6 +252,10 @@ async fn detailed_health(State(state): State<AppState>) -> Json<serde_json::Valu
             "deny_prefixes": state.config.policy.deny_prefixes,
         },
         "sidecar": sidecar,
+        // Edge-owned byte counts — the single source of truth for bandwidth
+        // observability. Python scrapes this block and logs interval deltas
+        // through the infra logger; it never re-counts.
+        "bandwidth": compression::bandwidth().snapshot(),
     }))
 }
 
