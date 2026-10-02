@@ -27,7 +27,15 @@ import logging
 import time
 from collections.abc import AsyncGenerator
 
-from controllers.health import get_health_controller
+from controllers.health import (
+    DEBUG_FIELDS,
+    OF_HEALTH_SUMMARY_TEXT,
+    SSE_FIELDS,
+    SUMMARY_FIELDS,
+    get_health_controller,
+    project,
+    read_out,
+)
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from schemas.common import endpoint, success_response
@@ -680,33 +688,7 @@ class HealthRouter:
         """
         ctrl = get_health_controller()
         detailed = await asyncio.to_thread(ctrl.get_detailed_health)
-        return success_response(
-            data={
-                "model_loaded": detailed.get("model_loaded", False),
-                "model_type": detailed.get("model_type"),
-                "soul": detailed.get("soul"),
-                "uptime_seconds": detailed.get("uptime_seconds", 0),
-                "request_count": detailed.get("request_count", 0),
-                "error_count": detailed.get("error_count", 0),
-                "inference_count": detailed.get("inference_count", 0),
-                "total_tokens": detailed.get("total_tokens", 0),
-                "tokens_per_sec": detailed.get("tokens_per_sec", 0),
-                "avg_tokens_per_request": detailed.get("avg_tokens_per_request", 0),
-                "avg_latency_ms": detailed.get("avg_latency_ms", 0),
-                "requests_per_minute": detailed.get("requests_per_minute", 0),
-                "health_score": detailed.get("health_score", {}),
-                "model_metrics": detailed.get("model_metrics", []),
-                "model_events": detailed.get("model_events", []),
-                "health_history": detailed.get("health_history", []),
-                "memory_history": detailed.get("memory_history", []),
-                "rate_violations": detailed.get("rate_violations", []),
-                "path_latencies": detailed.get("path_latencies", []),
-                "recent_errors": detailed.get("recent_errors", []),
-                "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
-                "memory_percent": detailed.get("system", {}).get("memory_percent"),
-                "gpu_backend": detailed.get("gpu", {}).get("backend"),
-            }
-        )
+        return success_response(data=project(detailed, DEBUG_FIELDS))
 
     @endpoint("health.model_health")
     async def model_health(self) -> dict:
@@ -757,23 +739,7 @@ class HealthRouter:
                 asyncio.to_thread(ctrl.get_detailed_health),
                 timeout=5.0,
             )
-            hs = detailed.get("health_score", {})
-            data = {
-                "score": hs.get("score", 0),
-                "status": hs.get("status", "unknown"),
-                "summary": hs.get("summary", ""),
-                "diagnoses": hs.get("diagnoses", []),
-                "model_loaded": detailed.get("model_loaded", False),
-                "model_loading": detailed.get("model_loading", False),
-                "model_type": detailed.get("model_type"),
-                "soul": detailed.get("soul"),
-                "uptime_seconds": detailed.get("uptime_seconds", 0),
-                "request_count": detailed.get("request_count", 0),
-                "error_count": detailed.get("error_count", 0),
-                "tokens_per_sec": detailed.get("tokens_per_sec", 0),
-                "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
-                "memory_percent": detailed.get("system", {}).get("memory_percent"),
-            }
+            data = project(detailed, SUMMARY_FIELDS)
         except (TimeoutError, Exception):
             # Fast fallback during cold start
             import state as server_state
@@ -810,60 +776,13 @@ class HealthRouter:
             Standard SSE envelope dict ready for JSON serialisation.
         """
         detailed = ctrl.get_detailed_health()
-        hs = detailed.get("health_score", {})
-        sp = detailed.get("startup_progress", {}) or {}
         return {
             "stream": "health",
             "phase": "HEALTH",
             "status": "working",
-            "data": {
-                "model_loaded": detailed.get("model_loaded", False),
-                "model_loading": detailed.get("model_loading", False),
-                "model_type": detailed.get("model_type"),
-                "soul": detailed.get("soul"),
-                "is_inferencing": detailed.get("is_inferencing", False),
-                "inference_count": detailed.get("inference_count", 0),
-                "uptime_seconds": detailed.get("uptime_seconds", 0),
-                "request_count": detailed.get("request_count", 0),
-                "error_count": detailed.get("error_count", 0),
-                "tokens_per_sec": detailed.get("tokens_per_sec", 0),
-                "avg_latency_ms": detailed.get("avg_latency_ms", 0),
-                "requests_per_minute": detailed.get("requests_per_minute", 0),
-                "total_tokens": detailed.get("total_tokens", 0),
-                "avg_tokens_per_request": detailed.get("avg_tokens_per_request", 0),
-                "cpu_percent": detailed.get("system", {}).get("cpu_percent"),
-                "memory_percent": detailed.get("system", {}).get("memory_percent"),
-                # Startup stage — the StartupOverlay clears only when it sees
-                # stage "ready"/"background". These were missing, leaving the
-                # overlay stuck on "Connecting" forever. Both the flat fields
-                # (read by useLiveStatus) and the full object are included.
-                "startup_stage": sp.get("stage", "unknown"),
-                "startup_stage_value": sp.get("stage_value", 0),
-                "startup_elapsed": sp.get("elapsed_seconds", 0),
-                "startup_model_progress": sp.get("model_progress", 0),
-                "startup_model_progress_message": sp.get("model_progress_message", ""),
-                "startup_hooks": sp.get("hooks", {}),
-                "startup_progress": sp,
-                "health_score": hs.get("score", 0),
-                "health_status": hs.get("status", "unknown"),
-                "health_summary": hs.get("summary", ""),
-                "diagnoses": hs.get("diagnoses", []),
-                "num_parameters": detailed.get("num_parameters"),
-                "quantization": detailed.get("quantization"),
-                "training_pool": detailed.get("training_pool"),
-                "model_metrics": detailed.get("model_metrics", []),
-                "model_events": detailed.get("model_events", []),
-                "health_history": detailed.get("health_history", []),
-                "memory_history": detailed.get("memory_history", []),
-                "rate_violations": detailed.get("rate_violations", []),
-                "path_latencies": detailed.get("path_latencies", []),
-                "recent_errors": detailed.get("recent_errors", []),
-                # Edge bandwidth — mirrored gateway counters (None in
-                # Python-only mode; the card hides itself when absent).
-                "bandwidth": detailed.get("bandwidth"),
-            },
+            "data": project(detailed, SSE_FIELDS),
             "meta": {"ts": time.time()},
-            "message": hs.get("summary", ""),
+            "message": read_out(detailed, OF_HEALTH_SUMMARY_TEXT),
         }
 
     @endpoint("health.health_stream")

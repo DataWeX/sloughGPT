@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import logging
 import time
+from collections.abc import Callable, Iterable
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
@@ -469,6 +471,350 @@ def _get_process_info() -> dict[str, Any]:
         return {}
 
 
+# ---------------------------------------------------------------------------
+# Health read model — single source of truth
+# ---------------------------------------------------------------------------
+#
+# ``get_detailed_health()`` is the *producer*: it gathers raw state into a
+# ``HealthContext`` and materialises ``HEALTH_FIELDS``. Every downstream view
+# is a *projection* of that payload — declared below as an ordered subset of
+# ``OutField``s, so a datum is described exactly once and can be adopted by
+# any number of endpoints.
+#
+# Two guards in tests/server/test_health_model_characterization.py enforce
+# this: they pin the exact wire shape of each projection, and they fail if a
+# projection reads a key no producer emits (a read that silently falls back to
+# its default forever — see PHANTOM_READS_ALLOWED for the two known cases).
+
+
+@dataclass(frozen=True, slots=True)
+class HealthContext:
+    """Raw gathered state that every detailed-health field derives from."""
+
+    cpu: Any
+    mem: Any
+    uptime: float
+    model_loaded: bool
+    model_loading: bool
+    model_type: str | None
+    registry_health: dict[str, Any]
+    inference_stats: dict[str, Any]
+    gpu_info: dict[str, Any]
+    degraded: list[str]
+    request_count: int
+    error_count: int
+    current_soul: str | None
+    avg_latency: float
+    p95_latency: float
+    requests_per_min: float
+    path_latencies: list[Any]
+    recent_errors: list[Any]
+    inference_count: int
+    total_tokens: int
+    tokens_per_sec: float
+    avg_tokens_per_req: float
+    health_score: dict[str, Any]
+    model_metrics: list[Any]
+    model_events: list[Any]
+    health_history: list[Any]
+    memory_history: list[Any]
+    rate_violations: list[Any]
+    lifecycle: dict[str, Any]
+    startup_progress: dict[str, Any]
+    versions: dict[str, Any]
+
+
+@dataclass(frozen=True, slots=True)
+class HealthField:
+    """One datum in the detailed-health payload."""
+
+    key: str
+    derive: Callable[[HealthContext], Any]
+    default: Any = None
+
+    def fallback(self) -> Any:
+        """Fresh default instance, so failed fields never alias a shared list."""
+        if isinstance(self.default, type):
+            return self.default()
+        return self.default
+
+
+def _attr(name: str) -> Callable[[HealthContext], Any]:
+    """Field that reads a single gathered attribute."""
+
+    def read(ctx: HealthContext) -> Any:
+        return getattr(ctx, name)
+
+    return read
+
+
+def _derive_status(ctx: HealthContext) -> str:
+    if ctx.lifecycle.get("is_running", False):
+        return "healthy"
+    return ctx.lifecycle.get("phase", "unknown")
+
+
+def _derive_timestamp(ctx: HealthContext) -> str:
+    return utc_now_iso()
+
+
+def _derive_system(ctx: HealthContext) -> dict[str, Any]:
+    return {
+        "cpu_percent": round(ctx.cpu, 1),
+        "memory_percent": round(ctx.mem.percent, 1),
+        "memory_available_mb": ctx.mem.available // (1024 * 1024),
+        **_get_process_info(),
+    }
+
+
+def _derive_status_message(ctx: HealthContext) -> str:
+    return _build_status_message(
+        ctx.model_loaded,
+        ctx.model_type,
+        ctx.model_loading,
+        ctx.current_soul,
+        ctx.request_count,
+        ctx.error_count,
+        ctx.lifecycle,
+    )
+
+
+HEALTH_FIELDS: tuple[HealthField, ...] = (
+    HealthField("status", _derive_status, "unknown"),
+    HealthField("uptime_seconds", _attr("uptime"), 0.0),
+    HealthField("timestamp", _derive_timestamp, ""),
+    HealthField("request_count", _attr("request_count"), 0),
+    HealthField("error_count", _attr("error_count"), 0),
+    HealthField("avg_latency_ms", _attr("avg_latency"), 0.0),
+    HealthField("p95_latency_ms", _attr("p95_latency"), 0.0),
+    HealthField("requests_per_minute", _attr("requests_per_min"), 0.0),
+    HealthField("path_latencies", _attr("path_latencies"), list),
+    HealthField("recent_errors", _attr("recent_errors"), list),
+    HealthField("inference_count", _attr("inference_count"), 0),
+    HealthField("total_tokens", _attr("total_tokens"), 0),
+    HealthField("tokens_per_sec", _attr("tokens_per_sec"), 0.0),
+    HealthField("avg_tokens_per_request", _attr("avg_tokens_per_req"), 0.0),
+    HealthField("health_score", _attr("health_score"), dict),
+    HealthField("model_metrics", _attr("model_metrics"), list),
+    HealthField("model_events", _attr("model_events"), list),
+    HealthField("health_history", _attr("health_history"), list),
+    HealthField("memory_history", _attr("memory_history"), list),
+    HealthField("rate_violations", _attr("rate_violations"), list),
+    HealthField("degraded", _attr("degraded"), list),
+    HealthField("system", _derive_system, dict),
+    HealthField("gpu", _attr("gpu_info"), dict),
+    HealthField("mps_monitor", _get_mps_monitor_info, dict),
+    HealthField("model_loaded", _attr("model_loaded"), False),
+    HealthField("model_loading", _attr("model_loading"), False),
+    HealthField("model_type", _attr("model_type"), None),
+    HealthField("device", lambda ctx: _get_model_device(), None),
+    HealthField("soul", _attr("current_soul"), None),
+    HealthField("inference", _attr("inference_stats"), dict),
+    HealthField("registry", _attr("registry_health"), dict),
+    HealthField("quantization", lambda ctx: _get_quantization_info(), dict),
+    HealthField("kv_sessions", lambda ctx: _get_kv_session_info(), dict),
+    HealthField("lifecycle", _attr("lifecycle"), dict),
+    HealthField("startup_progress", _attr("startup_progress"), dict),
+    HealthField("training_pool", lambda ctx: _get_executor_stats(), None),
+    HealthField("resource_allocation", lambda ctx: _get_resource_allocation(), dict),
+    HealthField("process_guard", lambda ctx: _get_process_guard_status(), dict),
+    HealthField("memory_pressure", lambda ctx: _get_memory_pressure_stats(), dict),
+    HealthField("versions", _attr("versions"), dict),
+    HealthField("bandwidth", lambda ctx: _get_bandwidth_stats(), None),
+    HealthField("status_message", _derive_status_message, ""),
+)
+
+# Mutable defaults above are written as the *type* (``list``/``dict``) so a
+# failing field gets a fresh instance via ``HealthField.fallback()`` rather
+# than every degraded result sharing one list object.
+
+
+@dataclass(frozen=True, slots=True)
+class OutField:
+    """One key in a projection of the detailed payload.
+
+    ``chain`` is the read path as ``(key, default)`` steps: the first key is
+    read from the payload, each subsequent key from the value before it. The
+    last default is what the projection emits when the path runs out — which
+    is why a projection can read a key nobody produces and still send a
+    plausible-looking value instead of failing.
+    """
+
+    out: str
+    chain: tuple[tuple[str, Any], ...] = ()
+
+    @property
+    def source(self) -> str:
+        """Top-level payload key this field reads (what the guard checks)."""
+        return self.chain[0][0] if self.chain else ""
+
+
+def read_out(detailed: dict[str, Any], field: OutField) -> Any:
+    final_default = field.chain[-1][1] if field.chain else None
+    node: Any = detailed
+    for key, default in field.chain:
+        if not isinstance(node, dict):
+            return final_default
+        node = node.get(key, default)
+    return node
+
+
+def project(detailed: dict[str, Any], fields: Iterable[OutField]) -> dict[str, Any]:
+    """Materialise one projection of the detailed payload."""
+    return {f.out: read_out(detailed, f) for f in fields}
+
+
+# --- projection field constants (shared by reference across views) ----------
+
+OF_MODEL_LOADED = OutField("model_loaded", (("model_loaded", False),))
+OF_MODEL_LOADING = OutField("model_loading", (("model_loading", False),))
+OF_MODEL_TYPE = OutField("model_type", (("model_type", None),))
+OF_SOUL = OutField("soul", (("soul", None),))
+OF_UPTIME = OutField("uptime_seconds", (("uptime_seconds", 0),))
+OF_REQUEST_COUNT = OutField("request_count", (("request_count", 0),))
+OF_ERROR_COUNT = OutField("error_count", (("error_count", 0),))
+OF_INFERENCE_COUNT = OutField("inference_count", (("inference_count", 0),))
+OF_TOTAL_TOKENS = OutField("total_tokens", (("total_tokens", 0),))
+OF_TOKENS_PER_SEC = OutField("tokens_per_sec", (("tokens_per_sec", 0.0),))
+OF_AVG_TOKENS_PER_REQ = OutField("avg_tokens_per_request", (("avg_tokens_per_request", 0.0),))
+OF_AVG_LATENCY = OutField("avg_latency_ms", (("avg_latency_ms", 0.0),))
+OF_REQ_PER_MIN = OutField("requests_per_minute", (("requests_per_minute", 0),))
+OF_PATH_LATENCIES = OutField("path_latencies", (("path_latencies", []),))
+OF_RECENT_ERRORS = OutField("recent_errors", (("recent_errors", []),))
+OF_MODEL_METRICS = OutField("model_metrics", (("model_metrics", []),))
+OF_MODEL_EVENTS = OutField("model_events", (("model_events", []),))
+OF_HEALTH_HISTORY = OutField("health_history", (("health_history", []),))
+OF_MEMORY_HISTORY = OutField("memory_history", (("memory_history", []),))
+OF_RATE_VIOLATIONS = OutField("rate_violations", (("rate_violations", []),))
+OF_BANDWIDTH = OutField("bandwidth", (("bandwidth", None),))
+OF_QUANTIZATION = OutField("quantization", (("quantization", None),))
+OF_TRAINING_POOL = OutField("training_pool", (("training_pool", None),))
+# Phantom reads — see PHANTOM_READS_ALLOWED in the characterization tests.
+OF_NUM_PARAMETERS = OutField("num_parameters", (("num_parameters", None),))
+OF_IS_INFERENCING = OutField("is_inferencing", (("is_inferencing", False),))
+
+OF_CPU_PERCENT = OutField("cpu_percent", (("system", {}), ("cpu_percent", None)))
+OF_MEMORY_PERCENT = OutField("memory_percent", (("system", {}), ("memory_percent", None)))
+OF_GPU_BACKEND = OutField("gpu_backend", (("gpu", {}), ("backend", None)))
+
+# health_score is one source flattened differently per view: the debug view
+# forwards the object, summary and SSE pull individual members out of it.
+OF_HEALTH_SCORE_OBJECT = OutField("health_score", (("health_score", {}),))
+OF_SCORE = OutField("score", (("health_score", {}), ("score", 0)))
+OF_STATUS = OutField("status", (("health_score", {}), ("status", "unknown")))
+OF_SUMMARY_TEXT = OutField("summary", (("health_score", {}), ("summary", "")))
+OF_DIAGNOSES = OutField("diagnoses", (("health_score", {}), ("diagnoses", [])))
+OF_HEALTH_SCORE_INT = OutField("health_score", (("health_score", {}), ("score", 0)))
+OF_HEALTH_STATUS = OutField("health_status", (("health_score", {}), ("status", "unknown")))
+OF_HEALTH_SUMMARY_TEXT = OutField("health_summary", (("health_score", {}), ("summary", "")))
+
+OF_STARTUP_PROGRESS = OutField("startup_progress", (("startup_progress", {}),))
+OF_STARTUP_STAGE = OutField("startup_stage", (("startup_progress", {}), ("stage", "unknown")))
+OF_STARTUP_STAGE_VALUE = OutField(
+    "startup_stage_value", (("startup_progress", {}), ("stage_value", 0))
+)
+OF_STARTUP_ELAPSED = OutField("startup_elapsed", (("startup_progress", {}), ("elapsed_seconds", 0)))
+OF_STARTUP_HOOKS = OutField("startup_hooks", (("startup_progress", {}), ("hooks", {})))
+OF_STARTUP_MODEL_PROGRESS = OutField(
+    "startup_model_progress", (("startup_progress", {}), ("model_progress", 0))
+)
+OF_STARTUP_MODEL_PROGRESS_MESSAGE = OutField(
+    "startup_model_progress_message",
+    (("startup_progress", {}), ("model_progress_message", "")),
+)
+
+# --- the three projections --------------------------------------------------
+
+DEBUG_FIELDS: tuple[OutField, ...] = (
+    OF_MODEL_LOADED,
+    OF_MODEL_TYPE,
+    OF_SOUL,
+    OF_UPTIME,
+    OF_REQUEST_COUNT,
+    OF_ERROR_COUNT,
+    OF_INFERENCE_COUNT,
+    OF_TOTAL_TOKENS,
+    OF_TOKENS_PER_SEC,
+    OF_AVG_TOKENS_PER_REQ,
+    OF_AVG_LATENCY,
+    OF_REQ_PER_MIN,
+    OF_HEALTH_SCORE_OBJECT,
+    OF_MODEL_METRICS,
+    OF_MODEL_EVENTS,
+    OF_HEALTH_HISTORY,
+    OF_MEMORY_HISTORY,
+    OF_RATE_VIOLATIONS,
+    OF_PATH_LATENCIES,
+    OF_RECENT_ERRORS,
+    OF_CPU_PERCENT,
+    OF_MEMORY_PERCENT,
+    OF_GPU_BACKEND,
+)
+
+SUMMARY_FIELDS: tuple[OutField, ...] = (
+    OF_MODEL_LOADED,
+    OF_MODEL_LOADING,
+    OF_MODEL_TYPE,
+    OF_SOUL,
+    OF_UPTIME,
+    OF_REQUEST_COUNT,
+    OF_ERROR_COUNT,
+    OF_TOKENS_PER_SEC,
+    OF_CPU_PERCENT,
+    OF_MEMORY_PERCENT,
+    OF_SCORE,
+    OF_STATUS,
+    OF_SUMMARY_TEXT,
+    OF_DIAGNOSES,
+)
+
+# The SSE view carries the startup flat fields *and* the full object: the
+# StartupOverlay only clears when it sees stage "ready"/"background", so the
+# flat fields read by useLiveStatus must travel alongside the object.
+# ``bandwidth`` is the mirrored gateway counters — None in Python-only mode;
+# the card hides itself when absent.
+SSE_FIELDS: tuple[OutField, ...] = (
+    OF_MODEL_LOADED,
+    OF_MODEL_LOADING,
+    OF_MODEL_TYPE,
+    OF_SOUL,
+    OF_IS_INFERENCING,
+    OF_INFERENCE_COUNT,
+    OF_UPTIME,
+    OF_REQUEST_COUNT,
+    OF_ERROR_COUNT,
+    OF_TOKENS_PER_SEC,
+    OF_AVG_LATENCY,
+    OF_REQ_PER_MIN,
+    OF_TOTAL_TOKENS,
+    OF_AVG_TOKENS_PER_REQ,
+    OF_CPU_PERCENT,
+    OF_MEMORY_PERCENT,
+    OF_HEALTH_SCORE_INT,
+    OF_HEALTH_STATUS,
+    OF_HEALTH_SUMMARY_TEXT,
+    OF_DIAGNOSES,
+    OF_NUM_PARAMETERS,
+    OF_QUANTIZATION,
+    OF_TRAINING_POOL,
+    OF_MODEL_METRICS,
+    OF_MODEL_EVENTS,
+    OF_HEALTH_HISTORY,
+    OF_MEMORY_HISTORY,
+    OF_RATE_VIOLATIONS,
+    OF_PATH_LATENCIES,
+    OF_RECENT_ERRORS,
+    OF_BANDWIDTH,
+    OF_STARTUP_STAGE,
+    OF_STARTUP_STAGE_VALUE,
+    OF_STARTUP_ELAPSED,
+    OF_STARTUP_MODEL_PROGRESS,
+    OF_STARTUP_MODEL_PROGRESS_MESSAGE,
+    OF_STARTUP_HOOKS,
+    OF_STARTUP_PROGRESS,
+)
+
+
 class HealthController:
     """Controller for system health"""
 
@@ -669,65 +1015,49 @@ class HealthController:
             logger.debug("Version info unavailable", exc_info=True)
             versions = {}
 
-        result = {
-            "status": "healthy"
-            if lifecycle.get("is_running", False)
-            else lifecycle.get("phase", "unknown"),
-            "uptime_seconds": uptime,
-            "timestamp": utc_now_iso(),
-            "request_count": request_count,
-            "error_count": error_count,
-            "avg_latency_ms": avg_latency,
-            "p95_latency_ms": p95_latency,
-            "requests_per_minute": requests_per_min,
-            "path_latencies": path_latencies,
-            "recent_errors": recent_errors,
-            "inference_count": inference_count,
-            "total_tokens": total_tokens,
-            "tokens_per_sec": tokens_per_sec,
-            "avg_tokens_per_request": avg_tokens_per_req,
-            "health_score": health_score,
-            "model_metrics": model_metrics,
-            "model_events": model_events,
-            "health_history": health_history,
-            "memory_history": memory_history,
-            "rate_violations": rate_violations,
-            "degraded": degraded,
-            "system": {
-                "cpu_percent": round(cpu, 1),
-                "memory_percent": round(mem.percent, 1),
-                "memory_available_mb": mem.available // (1024 * 1024),
-                **_get_process_info(),
-            },
-            "gpu": gpu_info,
-            "mps_monitor": _get_mps_monitor_info(),
-            "model_loaded": model_loaded,
-            "model_loading": model_loading,
-            "model_type": model_type,
-            "device": _get_model_device(),
-            "soul": current_soul,
-            "inference": inference_stats,
-            "registry": registry_health,
-            "quantization": _get_quantization_info(),
-            "kv_sessions": _get_kv_session_info(),
-            "lifecycle": lifecycle,
-            "startup_progress": startup_progress,
-            "training_pool": _get_executor_stats(),
-            "resource_allocation": _get_resource_allocation(),
-            "process_guard": _get_process_guard_status(),
-            "memory_pressure": _get_memory_pressure_stats(),
-            "versions": versions,
-            "bandwidth": _get_bandwidth_stats(),
-            "status_message": _build_status_message(
-                model_loaded,
-                model_type,
-                model_loading,
-                current_soul,
-                request_count,
-                error_count,
-                lifecycle,
-            ),
-        }
+        ctx = HealthContext(
+            cpu=cpu,
+            mem=mem,
+            uptime=uptime,
+            model_loaded=model_loaded,
+            model_loading=model_loading,
+            model_type=model_type,
+            registry_health=registry_health,
+            inference_stats=inference_stats,
+            gpu_info=gpu_info,
+            degraded=degraded,
+            request_count=request_count,
+            error_count=error_count,
+            current_soul=current_soul,
+            avg_latency=avg_latency,
+            p95_latency=p95_latency,
+            requests_per_min=requests_per_min,
+            path_latencies=path_latencies,
+            recent_errors=recent_errors,
+            inference_count=inference_count,
+            total_tokens=total_tokens,
+            tokens_per_sec=tokens_per_sec,
+            avg_tokens_per_req=avg_tokens_per_req,
+            health_score=health_score,
+            model_metrics=model_metrics,
+            model_events=model_events,
+            health_history=health_history,
+            memory_history=memory_history,
+            rate_violations=rate_violations,
+            lifecycle=lifecycle,
+            startup_progress=startup_progress,
+            versions=versions,
+        )
+
+        # One field failing degrades that field to its default instead of
+        # 500-ing the whole payload.
+        result: dict[str, Any] = {}
+        for field in HEALTH_FIELDS:
+            try:
+                result[field.key] = field.derive(ctx)
+            except Exception:
+                logger.debug("health field %r failed", field.key, exc_info=True)
+                result[field.key] = field.fallback()
         self._cache = result
         self._cache_time = now
         return result
