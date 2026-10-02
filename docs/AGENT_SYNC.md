@@ -61,7 +61,13 @@ git push -u origin feat/<name>   # push your own branch when done
 
 - `app_planner` editable install (`.pth`) points at the **root repo** copy —
   test a worktree's planner code with
-  `PYTHONPATH=<worktree>/packages/app-planner/src`.
+  `PYTHONPATH=<worktree>/packages/app-planner/src`. **Worse: any planner
+  command run from a branch that predates the chain work (e.g. the root
+  repo before merging `main`) rewrites `board.jsonl` WITHOUT
+  `chain_index/chain_prev/chain_hash` and strips the seal.** Chain-aware
+  copies re-seal automatically (`sync()` ends in `compute_chains()`); after
+  such a write, run a chain-aware `store.sync()` or `git checkout main --
+  .kanban/board.jsonl`.
 - Chunked-gate collect paths are relative to `packages/core-py` (nearest
   `pytest.ini`) — force-prefix `packages/core-py/`, or 16 colliding basenames
   poison `from conftest import build_test_app`.
