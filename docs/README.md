@@ -9,7 +9,7 @@ Source of truth for the project. Grouped by topic.
 | [PRODUCT_ENGINEERING.md](PRODUCT_ENGINEERING.md) | **Source of truth** — feature map, build order, dead code, target routes |
 | [USER_PERSONA.md](USER_PERSONA.md) | Alex the Hobbyist — who we build for |
 | [UX_FLOWS.md](UX_FLOWS.md) | Plain-English user flows for each feature |
-| [USER_JOURNEYS.md](USER_JOURNEYS.md) | Playwright-tested end-to-end journeys |
+| [USER_JOURNEYS.md](USER_JOURNEYS.md) | avion-tested end-to-end journeys |
 | [FEATURES.md](FEATURES.md) | Dataset features — what's built vs missing |
 | [ROADMAP.md](ROADMAP.md) | Current state and next steps |
 

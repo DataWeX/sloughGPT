@@ -1,6 +1,6 @@
 # User Journeys
 
-End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user_journeys.py`.
+End-to-end user flows driven by the **avion** computer-use library (`packages/avion`) in `packages/core-py/tests/test_user_journeys.py` — one shared driver, so locator/backend fixes land in one place.
 
 ## Tested Journeys
 
@@ -60,7 +60,7 @@ End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user
 
 ## Untested Routes
 
-The following routes have `page.tsx` files but are not covered by Playwright tests:
+The following routes have `page.tsx` files but are not covered by journey tests:
 
 **Core**: `/dataset/[id]`, `/model/[id]`
 **Agents/Souls**: `/agents`, `/souls`

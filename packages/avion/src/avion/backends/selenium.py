@@ -122,14 +122,38 @@ class SeleniumBackend:
             pass
         return el
 
-    async def click(self, element: Element) -> None:
+    async def click(self, element: Element, *, force: bool = False) -> None:
         import asyncio
 
+        if force:
+            # WebDriver's click enforces actionability (scroll-into-view,
+            # intercepted-element check). force means "click anyway", so go
+            # straight through JS like Playwright's force=True does.
+            await asyncio.to_thread(
+                self._driver.execute_script, "arguments[0].click();", element.raw
+            )
+            return
         await asyncio.to_thread(element.raw.click)
 
-    async def fill(self, element: Element, value: str) -> None:
+    async def fill(self, element: Element, value: str, *, force: bool = False) -> None:
         import asyncio
 
+        if force:
+            # Skip clear/send_keys actionability: write the value via the
+            # native setter and fire input/change so controlled inputs update.
+            await asyncio.to_thread(
+                self._driver.execute_script,
+                "const el = arguments[0], v = arguments[1];"
+                "const proto = el.tagName === 'TEXTAREA'"
+                " ? window.HTMLTextAreaElement.prototype"
+                " : window.HTMLInputElement.prototype;"
+                "Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, v);"
+                "el.dispatchEvent(new Event('input', {bubbles: true}));"
+                "el.dispatchEvent(new Event('change', {bubbles: true}));",
+                element.raw,
+                value,
+            )
+            return
         await asyncio.to_thread(element.raw.clear)
         await asyncio.to_thread(element.raw.send_keys, value)
 

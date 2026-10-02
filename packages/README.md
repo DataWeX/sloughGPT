@@ -3,7 +3,7 @@
 Shared libraries consumed by apps.
 
 - `core-py/` — Python shared domain logic (`domains` package on the import path when the repo is installed); see **`core-py/README.md`**.
-- `avion/` — computer-use agent + journey library: perception-action `Agent`, 7 backends (Playwright/CDP/Selenium/API/CLI/Appium/Desktop), skill library, vision, event replay, and the **`avion`** CDP CLI (`python -m avion`). `arken/` and `voyager/` are back-compat shims that re-export it. Run **`python3 -m pytest packages/avion/tests`**; CLI smoke needs `pip install "avion[cdp]"`.
+- `avion/` — computer-use agent + journey library: perception-action `Agent`, 7 backends (Playwright/CDP/Selenium/API/CLI/Appium/Desktop), skill library, vision, event replay, and the **`avion`** CDP CLI (`python -m avion`). `arken/` and `voyager/` are back-compat shims that re-export it. Sync callers use **`SyncRunner`** (`avion.sync`, one persistent loop — not a duplicate API); page controls beyond the core `Backend` (`wait_for_function`, `set_viewport_size`, `focus`, `press_element`) are the optional **`PageControls`** protocol, and `click`/`fill` accept `force=`. The journey suite (`packages/core-py/tests/test_user_journeys.py`, 99 tests) and `apps/web/scripts/screenshot_headers.py` drive avion directly instead of rolling their own Playwright. Run **`python3 -m pytest packages/avion/tests`**; CLI smoke needs `pip install "avion[cdp]"`.
 - `sdk-py/` — Python SDK (`sloughgpt_sdk`); see **`sdk-py/sloughgpt_sdk/README.md`**.
 - `sdk-ts/typescript-sdk/` — TypeScript SDK (npm package); see **`sdk-ts/typescript-sdk/README.md`**.
 - `standards/` — contracts/schemas; see **`standards/README.md`**.

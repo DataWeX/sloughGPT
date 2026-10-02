@@ -20,6 +20,7 @@ from avion.core.element import (
     ElementFinder,
     ElementLocator,
     ElementNotFoundError,
+    PageControls,
 )
 from avion.core.navigator import NavigationEntry, Navigator
 from avion.core.session import Arken, ArkenConfig
@@ -36,6 +37,7 @@ from avion.interact.primitives import (
     Mouse,
     MouseButton,
 )
+from avion.sync import SyncRunner, get_default_runner
 
 __all__ = [
     "Action",
@@ -61,5 +63,8 @@ __all__ = [
     "MouseButton",
     "NavigationEntry",
     "Navigator",
+    "PageControls",
+    "SyncRunner",
+    "get_default_runner",
     "validate_action",
 ]

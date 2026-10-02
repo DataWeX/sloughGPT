@@ -1,17 +1,31 @@
 #!/usr/bin/env python3
 """
-Screenshot headers across all pages using Playwright.
+Screenshot headers across all pages using avion.
+
+Runs against the shared avion computer-use library (card e26dc68c) instead of
+raw Playwright, so browser-driver fixes land once in packages/avion.
 
 Usage:
     python3 scripts/screenshot_headers.py [--output DIR]
 """
 
 import argparse
+import os
+import sys
 import time
 import urllib.request
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+_AVION_SRC = os.path.join(REPO_ROOT, "packages", "avion", "src")
+if os.path.isdir(_AVION_SRC) and _AVION_SRC not in sys.path:
+    sys.path.insert(0, _AVION_SRC)
+
+from avion import SyncRunner  # noqa: E402
+from avion.backends.playwright import PlaywrightBackend  # noqa: E402
+from avion.network import MockResponse, MockRule, NetworkMocker  # noqa: E402
 
 BASE_URL = "http://localhost:3010"
 
@@ -88,28 +102,38 @@ def is_server_running():
         return False
 
 
-def setup_mock_routes(page, server_alive=False):
+def setup_mock_routes(runner, backend, server_alive=False):
+    """Fulfil canned JSON for API endpoints when no server is up.
+
+    Playwright's ``page.route("**/health")`` glob becomes an avion
+    NetworkMocker rule matched as a URL substring (``**`` stripped).
+    """
     if server_alive:
         return
-    for pattern, body in MOCK_ROUTES:
-        page.route(
-            pattern,
-            lambda route, b=body: route.fulfill(
-                status=200,
-                content_type="application/json",
-                body=b,
-            ),
+    mocker = NetworkMocker()
+    for i, (pattern, body) in enumerate(MOCK_ROUTES):
+        mocker.add_rule(
+            MockRule(
+                name=f"mock_{i}_{pattern}",
+                url_pattern=pattern.replace("**", ""),
+                response=MockResponse(
+                    status=200,
+                    body=body,
+                    headers={"content-type": "application/json"},
+                ),
+            )
         )
+    runner.run(backend.enable_network_mock(mocker))
 
 
-def wait_for_app(page, timeout_s=10):
+def wait_for_app(runner, backend, timeout_s=10):
     """Wait for Next.js client-side hydration to finish."""
     deadline = time.time() + timeout_s
     while time.time() < deadline:
         try:
-            ready = page.evaluate("() => document.readyState === 'complete'")
+            ready = runner.run(backend.evaluate("() => document.readyState === 'complete'"))
             if ready:
-                page.wait_for_timeout(500)  # extra hydration settle
+                runner.run(backend.wait_for_timeout(500))  # extra hydration settle
                 return True
         except Exception:
             pass
@@ -117,16 +141,16 @@ def wait_for_app(page, timeout_s=10):
     return False
 
 
-def screenshot_page(output_dir: Path, page, name: str, path: str):
+def screenshot_page(output_dir: Path, runner, backend, name, path):
     """Take a full-page screenshot of a route."""
     url = f"{BASE_URL}{path}"
     print(f"  [{name}] {url} ... ", end="", flush=True)
     try:
-        page.goto(url, wait_until="domcontentloaded", timeout=15000)
-        wait_for_app(page)
+        runner.run(backend.navigate(url, wait_until="domcontentloaded", timeout=15.0))
+        wait_for_app(runner, backend)
 
         full_path = output_dir / f"page-{name}.png"
-        page.screenshot(path=str(full_path), full_page=True)
+        runner.run(backend.screenshot(path=str(full_path)))
         print(f"OK -> {full_path.name}")
         return True
     except Exception as e:
@@ -134,16 +158,16 @@ def screenshot_page(output_dir: Path, page, name: str, path: str):
         return False
 
 
-def screenshot_viewports(output_dir: Path, page):
+def screenshot_viewports(output_dir: Path, runner, backend):
     """Take screenshots at different viewport sizes."""
     print("\n  Responsive (home page):")
     for vp_name, w, h in VIEWPORTS:
-        page.set_viewport_size({"width": w, "height": h})
+        runner.run(backend.set_viewport_size(w, h))
         try:
-            page.goto(BASE_URL, wait_until="domcontentloaded", timeout=15000)
-            wait_for_app(page)
+            runner.run(backend.navigate(BASE_URL, wait_until="domcontentloaded", timeout=15.0))
+            wait_for_app(runner, backend)
             path = output_dir / f"page-home-{vp_name}.png"
-            page.screenshot(path=str(path), full_page=True)
+            runner.run(backend.screenshot(path=str(path)))
             print(f"    {vp_name} ({w}x{h}) -> {path.name}")
         except Exception as e:
             print(f"    {vp_name} ({w}x{h}) FAIL: {type(e).__name__}")
@@ -160,26 +184,26 @@ def screenshot_headers(output_dir: Path):
     else:
         print("Server detected at :3010 — using live API responses")
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(viewport={"width": 1280, "height": 800})
-        page = context.new_page()
+    runner = SyncRunner()
+    backend = PlaywrightBackend(headless=True)
+    runner.run(backend.start())
+    try:
+        runner.run(backend.set_viewport_size(1280, 800))
 
-        setup_mock_routes(page, server_alive=server_alive)
+        setup_mock_routes(runner, backend, server_alive=server_alive)
 
         print("  Page screenshots:")
         success = 0
         total = 0
         for name, path in PAGES:
             total += 1
-            if screenshot_page(output_dir, page, name, path):
+            if screenshot_page(output_dir, runner, backend, name, path):
                 success += 1
 
-        screenshot_viewports(output_dir, page)
-
-        page.close()
-        context.close()
-        browser.close()
+        screenshot_viewports(output_dir, runner, backend)
+    finally:
+        runner.run(backend.stop())
+        runner.close()
 
     print(f"\n  {success}/{total} pages succeeded. Screenshots in {output_dir}/")
 

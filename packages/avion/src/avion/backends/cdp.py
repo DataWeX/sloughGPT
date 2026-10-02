@@ -278,10 +278,13 @@ class CdpBackend:
                 break
         return found
 
-    async def click(self, element: Element) -> None:
+    async def click(self, element: Element, *, force: bool = False) -> None:
+        """JS-dispatched click already bypasses actionability — force is a
+        no-op here (it documents intent for callers porting from Playwright)."""
         await self.evaluate(f"({element.raw['js']})?.click()")
 
-    async def fill(self, element: Element, value: str) -> None:
+    async def fill(self, element: Element, value: str, *, force: bool = False) -> None:
+        """JS value write already bypasses actionability — force is a no-op."""
         js = element.raw["js"]
         await self.evaluate(
             _js_iife(

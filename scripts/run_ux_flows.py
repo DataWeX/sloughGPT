@@ -31,7 +31,6 @@ from typing import Any, Callable
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "packages", "avion", "src"))
-sys.path.insert(0, os.path.join(ROOT, "packages", "arken", "src"))
 
 WEB = os.environ.get("SLO_WEB_URL", "http://localhost:5175")
 API = os.environ.get("SLO_API_URL", "http://localhost:8000")

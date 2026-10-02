@@ -159,8 +159,13 @@ class PlaywrightBackend:
 
         await page.route("**/*", handler)
 
-    async def navigate(self, url: str) -> None:
-        await self._page.goto(url, wait_until="domcontentloaded")
+    async def navigate(
+        self, url: str, *, wait_until: str = "domcontentloaded", timeout: float | None = None
+    ) -> None:
+        kwargs: dict[str, Any] = {"wait_until": wait_until}
+        if timeout is not None:
+            kwargs["timeout"] = timeout * 1000  # Backend timeouts are seconds
+        await self._page.goto(url, **kwargs)
 
     async def find_element(self, locator: ElementLocator) -> Element | None:
         for selector in locator.selectors:
@@ -178,11 +183,11 @@ class PlaywrightBackend:
                 break
         return results
 
-    async def click(self, element: Element) -> None:
-        await element.raw.click()
+    async def click(self, element: Element, *, force: bool = False) -> None:
+        await element.raw.click(force=force)
 
-    async def fill(self, element: Element, value: str) -> None:
-        await element.raw.fill(value)
+    async def fill(self, element: Element, value: str, *, force: bool = False) -> None:
+        await element.raw.fill(value, force=force)
 
     async def select_option(self, element: Element, value: str) -> None:
         await element.raw.select_option(value)
@@ -223,6 +228,26 @@ class PlaywrightBackend:
 
     async def get_accessibility_tree(self) -> dict[str, Any]:
         return await self._page.accessibility.snapshot()
+
+    # ── Page controls (PageControls protocol) ─────────────────────────────
+
+    async def wait_for_function(self, expression: str, timeout: float = 10.0) -> bool:
+        """Poll a JS predicate until it returns truthy. False on timeout."""
+        try:
+            await self._page.wait_for_function(expression, timeout=timeout * 1000)
+        except Exception:
+            return False
+        return True
+
+    async def set_viewport_size(self, width: int, height: int) -> None:
+        await self._page.set_viewport_size({"width": width, "height": height})
+
+    async def focus(self, element: Element) -> None:
+        await element.raw.focus()
+
+    async def press_element(self, element: Element, key: str) -> None:
+        """Focus an element, then press a key on it."""
+        await element.raw.press(key)
 
     # ── Low-level interaction primitives ────────────────────────────────
 

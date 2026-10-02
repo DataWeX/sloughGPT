@@ -1,14 +1,22 @@
 """
-User Journey Tests — Playwright browser automation.
+User Journey Tests — avion browser automation.
 
 Runs all web UI flow tests headlessly. For CI and local verification.
 
+This file used to drive raw ``playwright.sync_api``. It now drives the shared
+avion computer-use library (card e26dc68c) so locator/backend bugs are fixed
+once, in ``packages/avion``, instead of once per caller. Test names,
+assertions and counts are unchanged: 99 tests.
+
 Usage:
-    .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
+    SLO_WEB_URL=http://localhost:5173 .venv/bin/python -m pytest \
+        packages/core-py/tests/test_user_journeys.py -x -v
 
 Requirements:
     .venv/bin/playwright install chromium
 """
+
+from __future__ import annotations
 
 import json
 import os
@@ -17,11 +25,15 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import Page, sync_playwright
+from avion import Arken, ElementLocator, PageControls, SyncRunner
 
 BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:3000"
 API = os.environ.get("SLO_API_URL") or "http://localhost:8000"
 RESULTS = []
+
+# One persistent loop for the whole module: Playwright objects bind to the
+# loop that created them, so every call must go through the same runner.
+RUNNER = SyncRunner()
 
 # ── API readiness helpers ─────────────────────────────────────────────
 
@@ -79,22 +91,113 @@ def ok(name: str, passed: bool, detail: str = ""):
 
 
 @pytest.fixture(scope="module")
-def browser():
-    with sync_playwright() as p:
-        b = p.chromium.launch(headless=True)
-        yield b
-        b.close()
+def session():
+    """One avion session for the module, started on the shared runner."""
+    s = Arken(base_url=BASE, headless=True)
+    RUNNER.run(s.start())
+    yield s
+    RUNNER.run(s.stop())
 
 
-@pytest.fixture(scope="module")
-def page(browser):
-    ctx = browser.new_context(viewport={"width": 1280, "height": 720})
-    pg = ctx.new_page()
-    yield pg
-    ctx.close()
+@pytest.fixture(scope="session", autouse=True)
+def close_runner():
+    """Close the runner's loop after every module has torn down."""
+    yield
+    RUNNER.close()
 
 
-def go(page: Page, path: str) -> str:
+# ── avion helpers ─────────────────────────────────────────────────────
+# Thin sync shims over the async avion API. They add no browser
+# capabilities of their own — every call lands in packages/avion.
+
+
+def _backend(s: Arken):
+    b = s.backend
+    assert b is not None, "session not started"
+    return b
+
+
+def _loc(sel) -> ElementLocator:
+    return sel if isinstance(sel, ElementLocator) else ElementLocator.css(str(sel))
+
+
+def goto(s: Arken, path: str, *, wait_until: str = "load", timeout: float = 20.0) -> None:
+    backend = _backend(s)
+    # wait_until/timeout are a PageControls capability, not core Backend —
+    # probe before passing them (CLI/API backends have no such knobs).
+    assert isinstance(backend, PageControls), "backend lacks page controls"
+    RUNNER.run(backend.navigate(f"{BASE}{path}", wait_until=wait_until, timeout=timeout))
+
+
+def wait_fn(s: Arken, expression: str, timeout: float = 10.0) -> bool:
+    """Poll a JS predicate (Playwright wait_for_function equivalent)."""
+    backend = _backend(s)
+    if not isinstance(backend, PageControls):
+        return False
+    return RUNNER.run(backend.wait_for_function(expression, timeout))
+
+
+def find(s: Arken, sel, timeout: float = 10.0):
+    """First match or None; waits up to timeout for it to appear."""
+    return RUNNER.run(s.find_optional(_loc(sel), timeout=timeout))
+
+
+def find_all(s: Arken, sel) -> list:
+    return RUNNER.run(s.find_all(_loc(sel)))
+
+
+def count(s: Arken, sel) -> int:
+    return len(find_all(s, sel))
+
+
+def wait_present(s: Arken, sel, timeout: float = 10.0) -> bool:
+    """Wait until an element exists and is visible (locator.wait_for)."""
+    deadline = time.time() + timeout
+    loc = _loc(sel)
+    while time.time() < deadline:
+        if RUNNER.run(s.find_optional(loc, timeout=1.0)) is not None:
+            return True
+        time.sleep(0.2)
+    return False
+
+
+def click(s: Arken, sel, *, force: bool = False, timeout: float = 10.0) -> None:
+    el = find(s, sel, timeout=timeout)
+    assert el is not None, f"element not found: {_loc(sel).describe()}"
+    RUNNER.run(s.click(el, force=force))
+
+
+def fill(s: Arken, sel, value: str, *, force: bool = False) -> None:
+    RUNNER.run(s.fill(_loc(sel), value, force=force))
+
+
+def input_value(s: Arken, sel) -> str:
+    el = find(s, sel, timeout=5.0)
+    return str(el.value or "") if el is not None else ""
+
+
+def focus(s: Arken, sel) -> None:
+    el = find(s, sel)
+    assert el is not None, f"element not found: {_loc(sel).describe()}"
+    RUNNER.run(_backend(s).focus(el))
+
+
+def press_on(s: Arken, sel, key: str) -> None:
+    el = find(s, sel)
+    assert el is not None, f"element not found: {_loc(sel).describe()}"
+    RUNNER.run(_backend(s).press_element(el, key))
+
+
+def press_key(s: Arken, key: str) -> None:
+    RUNNER.run(s.press(key))
+
+
+def body_text(s: Arken) -> str:
+    el = find(s, "body", timeout=5.0)
+    return el.text if el is not None else ""
+
+
+def go(s: Arken, path: str) -> str:
     """Navigate and return body text.
 
     Waits for:
@@ -102,29 +205,23 @@ def go(page: Page, path: str) -> str:
     2. "Connecting..." text to disappear (15s timeout)
     3. Additional settle time for SSE streams to deliver first events
     """
-    page.goto(f"{BASE}{path}", wait_until="load", timeout=20000)
+    goto(s, path, wait_until="load", timeout=20.0)
 
     # Wait for "Connecting..." to disappear — means the health SSE stream
     # delivered its first event OR the fallback HTTP poll succeeded.
-    try:
-        page.wait_for_function(
-            "() => !document.body.innerText.includes('Connecting...')",
-            timeout=15000,
-        )
-    except Exception:
-        pass
+    wait_fn(s, "() => !document.body.innerText.includes('Connecting...')", 15.0)
 
     # Extra settle: SSE streams fire every 3s, allow 1 full cycle for
     # downstream components (status bar, KPI grid) to populate.
     time.sleep(1)
 
     # If page shows error boundary ("Something went wrong"), retry once
-    body = page.inner_text("body")
+    body = body_text(s)
     if "Something went wrong" in body and "Try again" in body:
         try:
-            page.locator("button:has-text('Try again')").first.click(timeout=5000)
+            click(s, "button:has-text('Try again')", timeout=5.0)
             time.sleep(2)
-            body = page.inner_text("body")
+            body = body_text(s)
         except Exception:
             pass
 
@@ -135,16 +232,16 @@ def go(page: Page, path: str) -> str:
 
 
 class TestDashboard:
-    def test_loads(self, page: Page):
-        body = go(page, "/")
+    def test_loads(self, session: Arken):
+        body = go(session, "/")
         ok("dashboard_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
-    def test_has_nav(self, page: Page):
-        go(page, "/")
-        links = page.get_by_role("link")
-        ok("dashboard_has_nav", links.count() > 3, f"links={links.count()}")
-        assert links.count() > 3
+    def test_has_nav(self, session: Arken):
+        go(session, "/")
+        links = count(session, ElementLocator.role("link"))
+        ok("dashboard_has_nav", links > 3, f"links={links}")
+        assert links > 3
 
 
 # ── Navigation ────────────────────────────────────────────────
@@ -192,35 +289,36 @@ ROUTES = [
 
 class TestNavigation:
     @pytest.mark.parametrize("path,name", ROUTES)
-    def test_route(self, page: Page, path: str, name: str):
-        body = go(page, path)
+    def test_route(self, session: Arken, path: str, name: str):
+        body = go(session, path)
         ok(f"nav_{name}", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50, f"{path} returned empty body"
 
 
 # ── Chat ──────────────────────────────────────────────────────
 
+CHAT_INPUT = "textarea:visible, input[type='text']:visible"
+
 
 class TestChat:
-    def test_loads(self, page: Page):
-        body = go(page, "/chat")
+    def test_loads(self, session: Arken):
+        body = go(session, "/chat")
         ok("chat_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
-    def test_has_input(self, page: Page):
-        go(page, "/chat")
-        inp = page.locator("textarea:visible, input[type='text']:visible").first
-        ok("chat_has_input", inp.count() > 0)
-        assert inp.count() > 0
+    def test_has_input(self, session: Arken):
+        go(session, "/chat")
+        inputs = count(session, CHAT_INPUT)
+        ok("chat_has_input", inputs > 0)
+        assert inputs > 0
 
-    def test_type_message(self, page: Page):
-        go(page, "/chat")
-        inp = page.locator("textarea:visible, input[type='text']:visible").first
-        if inp.count() == 0:
+    def test_type_message(self, session: Arken):
+        go(session, "/chat")
+        if count(session, CHAT_INPUT) == 0:
             ok("chat_type_message", False, "no input found")
             pytest.skip("no input")
-        inp.fill("Hello test message", force=True)
-        val = inp.input_value()
+        fill(session, CHAT_INPUT, "Hello test message", force=True)
+        val = input_value(session, CHAT_INPUT)
         ok("chat_type_message", "test message" in val, f"val={val[:40]}")
         assert "test message" in val
 
@@ -229,33 +327,33 @@ class TestChat:
 
 
 class TestTraining:
-    def test_loads(self, page: Page):
-        body = go(page, "/training")
+    def test_loads(self, session: Arken):
+        body = go(session, "/training")
         ok("training_loads", "train" in body.lower(), f"len={len(body)}")
         assert "train" in body.lower()
 
-    def test_job_detail_loads(self, page: Page):
+    def test_job_detail_loads(self, session: Arken):
         """Job detail page renders for a sample job ID (shows job info or not-found)."""
-        body = go(page, "/training/job/test-job-id")
+        body = go(session, "/training/job/test-job-id")
         has_content = len(body) > 50
         ok("training_job_detail_loads", has_content, f"len={len(body)}")
         assert has_content
 
-    def test_job_detail_back_link(self, page: Page):
+    def test_job_detail_back_link(self, session: Arken):
         """Job detail page has a back link to training list."""
-        go(page, "/training/job/test-job-id")
+        go(session, "/training/job/test-job-id")
         time.sleep(1)
-        back = page.locator('a[href="/training"]').first
-        ok("training_job_detail_back_link", back.count() > 0)
-        assert back.count() > 0
+        back = count(session, 'a[href="/training"]')
+        ok("training_job_detail_back_link", back > 0)
+        assert back > 0
 
 
 # ── Settings ──────────────────────────────────────────────────
 
 
 class TestSettings:
-    def test_loads(self, page: Page):
-        body = go(page, "/settings")
+    def test_loads(self, session: Arken):
+        body = go(session, "/settings")
         ok("settings_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
@@ -264,8 +362,8 @@ class TestSettings:
 
 
 class TestPlanner:
-    def test_loads(self, page: Page):
-        body = go(page, "/planner")
+    def test_loads(self, session: Arken):
+        body = go(session, "/planner")
         ok("planner_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
@@ -274,8 +372,8 @@ class TestPlanner:
 
 
 class TestModels:
-    def test_loads(self, page: Page):
-        body = go(page, "/models")
+    def test_loads(self, session: Arken):
+        body = go(session, "/models")
         # Page might show "Connecting..." if API is down — that's still a valid page load
         has_content = len(body) > 50
         ok("models_loads", has_content, f"len={len(body)}")
@@ -286,8 +384,8 @@ class TestModels:
 
 
 class TestMonitoring:
-    def test_loads(self, page: Page):
-        body = go(page, "/monitoring")
+    def test_loads(self, session: Arken):
+        body = go(session, "/monitoring")
         has_metrics = any(w in body.lower() for w in ["cpu", "memory", "monitor", "health", "gpu"])
         ok("monitoring_loads", has_metrics, f"len={len(body)}")
         assert has_metrics
@@ -297,8 +395,8 @@ class TestMonitoring:
 
 
 class TestKnowledge:
-    def test_loads(self, page: Page):
-        body = go(page, "/knowledge")
+    def test_loads(self, session: Arken):
+        body = go(session, "/knowledge")
         has_kw = any(w in body.lower() for w in ["knowledge", "memory", "fact", "search"])
         ok("knowledge_loads", has_kw, f"len={len(body)}")
         assert has_kw
@@ -306,106 +404,91 @@ class TestKnowledge:
 
 # ── Datasets Import ───────────────────────────────────────────
 
+HF_DIALOG = '[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]'
+HF_INPUT = "input[placeholder='username/dataset-name']"
+
+
+def _open_datasets(s: Arken, settle: float = 1.0) -> None:
+    go(s, "/datasets")
+    time.sleep(settle)
+    click(s, ElementLocator.role("button", "Add file"), force=True)
+    time.sleep(1)
+
 
 class TestDatasetsImport:
-    def test_loads(self, page: Page):
-        body = go(page, "/datasets")
+    def test_loads(self, session: Arken):
+        body = go(session, "/datasets")
         ok("datasets_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
-    def test_import_button_exists(self, page: Page):
-        go(page, "/datasets")
+    def test_import_button_exists(self, session: Arken):
+        go(session, "/datasets")
         time.sleep(1)
-        btn = page.get_by_role("button", name="Add file").first
-        ok("datasets_import_button", btn.count() > 0)
-        assert btn.count() > 0
+        btn = count(session, ElementLocator.role("button", "Add file"))
+        ok("datasets_import_button", btn > 0)
+        assert btn > 0
 
-    def test_import_dialog_opens(self, page: Page):
-        go(page, "/datasets")
-        time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
-        time.sleep(1)
-        dialog = page.get_by_role("dialog")
-        ok("datasets_import_dialog_opens", dialog.count() > 0)
-        assert dialog.count() > 0
+    def test_import_dialog_opens(self, session: Arken):
+        _open_datasets(session)
+        dialog = count(session, ElementLocator.role("dialog"))
+        ok("datasets_import_dialog_opens", dialog > 0)
+        assert dialog > 0
 
-    def test_hf_radio_exists(self, page: Page):
-        go(page, "/datasets")
-        time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
-        time.sleep(1)
-        hf = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]')
-        ok("datasets_hf_source_exists", hf.count() > 0)
-        assert hf.count() > 0
-        page.keyboard.press("Escape")
+    def test_hf_radio_exists(self, session: Arken):
+        _open_datasets(session)
+        hf = count(session, HF_DIALOG)
+        ok("datasets_hf_source_exists", hf > 0)
+        assert hf > 0
+        press_key(session, "Escape")
         time.sleep(0.3)
 
-    def test_hf_radio_clicks(self, page: Page):
-        go(page, "/datasets")
-        time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
-        time.sleep(1)
-        hf_radio = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]').first
-        hf_radio.focus()
+    def test_hf_radio_clicks(self, session: Arken):
+        _open_datasets(session)
+        focus(session, HF_DIALOG)
         time.sleep(0.2)
-        hf_radio.press("Space")
+        press_on(session, HF_DIALOG, "Space")
         time.sleep(1)
-        inp = page.locator("input[placeholder='username/dataset-name']")
-        ok("datasets_hf_radio_clicks", inp.count() > 0)
-        assert inp.count() > 0
-        page.keyboard.press("Escape")
+        inp = count(session, HF_INPUT)
+        ok("datasets_hf_radio_clicks", inp > 0)
+        assert inp > 0
+        press_key(session, "Escape")
         time.sleep(0.3)
 
-    def test_hf_input_fills(self, page: Page):
-        go(page, "/datasets")
-        time.sleep(1)
-        page.get_by_role("button", name="Add file").first.click(force=True)
-        time.sleep(1)
-        hf_radio = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]').first
-        hf_radio.focus()
+    def test_hf_input_fills(self, session: Arken):
+        _open_datasets(session)
+        focus(session, HF_DIALOG)
         time.sleep(0.2)
-        hf_radio.press("Space")
+        press_on(session, HF_DIALOG, "Space")
         time.sleep(1)
-        inp = page.locator("input[placeholder='username/dataset-name']")
-        inp.fill("heptapod/titanic")
+        fill(session, HF_INPUT, "heptapod/titanic")
         time.sleep(0.3)
-        ok("datasets_hf_input_fills", inp.input_value() == "heptapod/titanic")
-        assert inp.input_value() == "heptapod/titanic"
-        page.keyboard.press("Escape")
+        val = input_value(session, HF_INPUT)
+        ok("datasets_hf_input_fills", val == "heptapod/titanic")
+        assert val == "heptapod/titanic"
+        press_key(session, "Escape")
         time.sleep(0.3)
 
-    def test_hf_import_attempt(self, page: Page):
+    def test_hf_import_attempt(self, session: Arken):
         # Reload to clear any stale state from prior tests
-        page.goto(f"{BASE}/datasets", wait_until="load", timeout=20000)
-        try:
-            page.wait_for_function(
-                "() => !document.body.innerText.includes('Connecting...')", timeout=10000
-            )
-        except Exception:
-            pass
+        goto(session, "/datasets", wait_until="load", timeout=20.0)
+        wait_fn(session, "() => !document.body.innerText.includes('Connecting...')", 10.0)
         time.sleep(2)
-        page.get_by_role("button", name="Add file").first.click(force=True)
+        click(session, ElementLocator.role("button", "Add file"), force=True)
         time.sleep(2)
-        hf_radio = page.locator('[role="dialog"] [role="radio"][aria-label^="HuggingFace:"]').first
-        hf_radio.focus()
+        focus(session, HF_DIALOG)
         time.sleep(0.2)
-        hf_radio.press("Space")
+        press_on(session, HF_DIALOG, "Space")
         time.sleep(1)
-        page.locator("input[placeholder='username/dataset-name']").fill("heptapod/titanic")
+        fill(session, HF_INPUT, "heptapod/titanic")
         time.sleep(0.5)
         # Try clicking Import, but don't fail if dialog blocks it
         try:
-            page.get_by_role("dialog").get_by_role("button", name="Import", exact=True).click(force=True, timeout=3000)
+            click(session, '[role="dialog"] button:text-is("Import")', force=True, timeout=3.0)
         except Exception:
             pass
         # handleImport flips the button to "Importing..." synchronously — poll for it
-        reacted = False
-        try:
-            page.get_by_role("dialog").get_by_text("Importing...", exact=False).first.wait_for(timeout=5000)
-            reacted = True
-        except Exception:
-            pass
-        body = page.inner_text("body")
+        reacted = wait_present(session, '[role="dialog"] :text("Importing...")', 5.0)
+        body = body_text(session)
         success = reacted or "heptapod/titanic" in body
         ok("datasets_hf_import_attempt", success, f"reacted={reacted}, body_snippet={body[-200:]}")
         assert success
@@ -427,8 +510,8 @@ REDIRECTS = [
 
 class TestRedirects:
     @pytest.mark.parametrize("old,expected", REDIRECTS)
-    def test_redirect(self, page: Page, old: str, expected: str):
-        body = go(page, old)
+    def test_redirect(self, session: Arken, old: str, expected: str):
+        body = go(session, old)
         ok(
             f"redirect_{old.replace('/', '_')}",
             len(body) > 50,
@@ -441,9 +524,9 @@ class TestRedirects:
 
 
 class TestToolsFlows:
-    def test_brstorm_has_input_and_suggestions(self, page: Page):
-        body = go(page, "/brainstorm")
-        has_input = page.locator("textarea:visible").count() > 0
+    def test_brstorm_has_input_and_suggestions(self, session: Arken):
+        body = go(session, "/brainstorm")
+        has_input = count(session, "textarea:visible") > 0
         has_suggestions = "Name ideas" in body or "Weekend" in body
         ok(
             "brainstorm_input_and_suggestions",
@@ -452,16 +535,16 @@ class TestToolsFlows:
         )
         assert has_input and has_suggestions
 
-    def test_decide_has_two_options(self, page: Page):
-        go(page, "/decide")
-        inputs = page.locator("input:visible")
-        ok("decide_has_options", inputs.count() >= 2, f"inputs={inputs.count()}")
-        assert inputs.count() >= 2
+    def test_decide_has_two_options(self, session: Arken):
+        go(session, "/decide")
+        inputs = count(session, "input:visible")
+        ok("decide_has_options", inputs >= 2, f"inputs={inputs}")
+        assert inputs >= 2
 
-    def test_explain_has_difficulty_buttons(self, page: Page):
-        go(page, "/explain")
-        page.get_by_text("Level", exact=True).first.wait_for(state="visible", timeout=10000)
-        body = page.inner_text("body")
+    def test_explain_has_difficulty_buttons(self, session: Arken):
+        go(session, "/explain")
+        wait_present(session, ":text-is('Level')", 10.0)
+        body = body_text(session)
         has_simple = "Simple" in body
         has_moderate = "Moderate" in body
         ok(
@@ -471,8 +554,8 @@ class TestToolsFlows:
         )
         assert has_simple and has_moderate
 
-    def test_rewrite_has_action_buttons(self, page: Page):
-        body = go(page, "/rewrite")
+    def test_rewrite_has_action_buttons(self, session: Arken):
+        body = go(session, "/rewrite")
         has_grammar = "Fix Grammar" in body
         has_shorter = "Make Shorter" in body
         ok(
@@ -482,10 +565,10 @@ class TestToolsFlows:
         )
         assert has_grammar and has_shorter
 
-    def test_translate_has_language_selector(self, page: Page):
-        go(page, "/translate")
-        page.get_by_text("EN→ES").first.wait_for(state="visible", timeout=10000)
-        body = page.inner_text("body")
+    def test_translate_has_language_selector(self, session: Arken):
+        go(session, "/translate")
+        wait_present(session, ":text('EN→ES')", 10.0)
+        body = body_text(session)
         has_pair = "EN→ES" in body
         has_translate_btn = "Translate" in body
         ok(
@@ -495,8 +578,8 @@ class TestToolsFlows:
         )
         assert has_pair and has_translate_btn
 
-    def test_wellness_has_options(self, page: Page):
-        body = go(page, "/wellness")
+    def test_wellness_has_options(self, session: Arken):
+        body = go(session, "/wellness")
         has_sleep = "Sleep" in body
         has_meditate = "Meditat" in body
         ok(
@@ -506,8 +589,8 @@ class TestToolsFlows:
         )
         assert has_sleep and has_meditate
 
-    def test_writing_has_tones_and_types(self, page: Page):
-        body = go(page, "/writing")
+    def test_writing_has_tones_and_types(self, session: Arken):
+        body = go(session, "/writing")
         has_friendly = "Friendly" in body
         has_email = "Email" in body
         ok(
@@ -522,18 +605,18 @@ class TestToolsFlows:
 
 
 class TestConsciousnessFlows:
-    def test_dashboard_loads(self, page: Page):
-        body = go(page, "/consciousness/dashboard")
+    def test_dashboard_loads(self, session: Arken):
+        body = go(session, "/consciousness/dashboard")
         ok("consciousness_dashboard_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
-    def test_health_loads(self, page: Page):
-        body = go(page, "/consciousness/health")
+    def test_health_loads(self, session: Arken):
+        body = go(session, "/consciousness/health")
         ok("consciousness_health_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
-    def test_playground_loads(self, page: Page):
-        body = go(page, "/consciousness/playground")
+    def test_playground_loads(self, session: Arken):
+        body = go(session, "/consciousness/playground")
         ok("consciousness_playground_loads", len(body) > 50, f"len={len(body)}")
         assert len(body) > 50
 
@@ -576,8 +659,8 @@ class TestRouteSmoke:
     """Every app route loads without crashing (no error boundary, non-empty)."""
 
     @pytest.mark.parametrize("route", SMOKE_ROUTES)
-    def test_route_loads(self, page: Page, route: str):
-        body = go(page, route)
+    def test_route_loads(self, session: Arken, route: str):
+        body = go(session, route)
         crashed = "Something went wrong" in body
         not_found = "This page could not be found" in body
         passed = len(body) > 50 and not crashed and not not_found

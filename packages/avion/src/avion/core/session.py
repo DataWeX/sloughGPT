@@ -100,6 +100,17 @@ class Arken:
         return self._keyboard
 
     @property
+    def backend(self) -> Backend | None:
+        """The live backend, for callers that need page controls.
+
+        The core session API (goto/find/click/fill) covers most work; page
+        controls beyond it — ``wait_for_function``, ``set_viewport_size``,
+        ``focus``, ``press_element``, force fill — live on the backend. See
+        :class:`avion.core.element.PageControls`.
+        """
+        return self._backend
+
+    @property
     def recorder(self) -> EventRecorder:
         return self._recorder
 
@@ -158,10 +169,10 @@ class Arken:
         )
         return el
 
-    async def click(self, element: Element) -> None:
-        """Click an element."""
+    async def click(self, element: Element, *, force: bool = False) -> None:
+        """Click an element. force skips Playwright actionability checks."""
         start = time.perf_counter()
-        await self._backend.click(element)
+        await self._backend.click(element, force=force)
         self._recorder.record(
             EventType.CLICK,
             name=element.locator.describe(),
@@ -175,10 +186,10 @@ class Arken:
         el = await self.find(ElementLocator.text(text))
         await self.click(el)
 
-    async def fill(self, locator: ElementLocator, value: str) -> None:
+    async def fill(self, locator: ElementLocator, value: str, *, force: bool = False) -> None:
         """Find a form field and fill it with text."""
         el = await self.find(locator)
-        await self._backend.fill(el, value)
+        await self._backend.fill(el, value, force=force)
         self._recorder.record(EventType.FILL, name=locator.describe(), data={"value": value})
 
     async def select(self, locator: ElementLocator, value: str) -> None:
