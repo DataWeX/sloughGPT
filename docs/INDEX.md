@@ -60,7 +60,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **TESTING.md** | Test guide |
-| **Site Doctor** (in TESTING.md) | Live-site monitor — read-only journey/http/SSE probes |
+| **Site Doctor** (in TESTING.md) | Live-site monitor — read-only journey/http/SSE probes, `/doctor` API + page |
 | **USER_PERSONA.md** | Who we build for |
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |
