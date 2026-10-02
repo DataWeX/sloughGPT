@@ -20,6 +20,8 @@ from avion.core.element import Backend, Element, ElementFinder, ElementLocator
 from avion.core.navigator import Navigator
 from avion.core.reporter import Reporter
 from avion.core.task import Task, TaskResult, TaskStatus
+from avion.events.journal import EventJournal
+from avion.events.logger import EventLogger
 from avion.events.models import EventType
 from avion.events.recorder import EventRecorder
 from avion.interact.primitives import Keyboard, Mouse
@@ -36,6 +38,9 @@ class ArkenConfig:
     backend: str = "playwright"
     headless: bool = True
     screenshot_on_error: bool = True
+    # Durable event journal (append-only JSONL). None = in-memory logger;
+    # set a path to make the journal the source of truth for this session.
+    journal_path: str | None = None
 
 
 class Arken:
@@ -48,8 +53,14 @@ class Arken:
         self._finder: ElementFinder | None = None
         self._mouse: Mouse | None = None
         self._keyboard: Keyboard | None = None
-        self._recorder = EventRecorder(session_name="arken_session")
-        self._logger = StructuredLogger("arken")
+        self._event_logger = EventLogger(
+            journal=EventJournal(self.config.journal_path) if self.config.journal_path else None
+        )
+        # Both views share ONE logger: one journal, one seq space. No
+        # StdlibSink here — the StructuredLogger already emits the stdlib
+        # line, so attaching one would double every message.
+        self._recorder = EventRecorder(session_name="arken_session", logger=self._event_logger)
+        self._logger = StructuredLogger("arken", logger=self._event_logger)
         self._reporter = Reporter("Arken Report")
         self._rule_engine = RuleEngine()
 
@@ -90,6 +101,7 @@ class Arken:
         if self._backend:
             await self._backend.stop()
             self._backend = None
+        self._event_logger.close()
 
     @property
     def mouse(self) -> Mouse:
@@ -117,6 +129,16 @@ class Arken:
     @property
     def logger(self) -> StructuredLogger:
         return self._logger
+
+    @property
+    def event_logger(self) -> EventLogger:
+        """The journal-first event logger both views write through.
+
+        Register delivery targets here::
+
+            arken.event_logger.register_sink(StdlibSink("avion"))
+        """
+        return self._event_logger
 
     def set_context(self, **kwargs: str) -> None:
         """Attach logging context (e.g. run id)."""

@@ -6,11 +6,33 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+from avion.events.models import Event, EventType
+
+if TYPE_CHECKING:  # pragma: no cover - typing only, keeps import graph acyclic
+    from avion.events.logger import EventLogger
+
+# Entry keys that are metadata, not payload — excluded from the journal
+# data dict (they live in the Event's own fields or the stdlib record).
+_METADATA_KEYS = frozenset({"time", "logger", "kind", "message"})
 
 
 class StructuredLogger:
     """Logger that keeps machine-readable entries alongside stdlib logging.
+
+    Two views over the same call:
+
+    * the **stdlib record** — the message *plus* ``**fields`` under one
+      ``avion_fields`` key (stdibb raises ``KeyError`` when ``extra``
+      collides with a LogRecord attribute, so fields are never splatted
+      in bare, and never dropped either);
+    * the **journal** — when attached to an ``EventLogger``, the entry is
+      journaled as a ``CUSTOM`` event through the same journal-first path.
+
+    Attach a ``StdlibSink`` only when routing *not* through this class —
+    this class already emits the stdlib line, so wiring both would double
+    every message.
 
     Usage::
 
@@ -21,11 +43,16 @@ class StructuredLogger:
         log.save("arken_output/logs.json")
     """
 
-    def __init__(self, name: str = "arken"):
+    def __init__(self, name: str = "arken", *, logger: EventLogger | None = None):
         self.name = name
         self._context: dict[str, str] = {}
         self._entries: list[dict[str, Any]] = []
         self._py_logger = logging.getLogger(f"arken.{name}")
+        self._logger = logger
+
+    @property
+    def logger(self) -> EventLogger | None:
+        return self._logger
 
     def set_context(self, **kwargs: str) -> None:
         """Attach key-values included in every later entry."""
@@ -41,7 +68,21 @@ class StructuredLogger:
             **fields,
         }
         self._entries.append(entry)
-        self._py_logger.log(level, message)
+        # Fields reach the LogRecord as one safe key: preserved, not dropped,
+        # and never named anything stdlib reserves.
+        self._py_logger.log(level, message, extra={"avion_fields": dict(entry)})
+        if self._logger is not None:
+            payload = {k: v for k, v in entry.items() if k not in _METADATA_KEYS}
+            explicit = payload.pop("success", None)
+            self._logger.log(
+                Event(
+                    type=EventType.CUSTOM,
+                    name=kind,
+                    data={"message": message, **payload},
+                    success=bool(explicit) if explicit is not None else level < logging.WARNING,
+                    error=message if level >= logging.ERROR else "",
+                )
+            )
 
     def info(self, message: str, **fields: Any) -> None:
         self._log("info", message, **fields)
