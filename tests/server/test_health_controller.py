@@ -242,6 +242,30 @@ class TestGetQuantizationInfo:
         result = _get_quantization_info()
         assert isinstance(result, dict)
 
+    def test_health_payload_excludes_per_tensor(self):
+        """Health repeats on every poll/SSE event — per_tensor serializes
+        to ~10 MB (lm_head per-channel scales) and must never leave the
+        health controller, even if a provider misbehaves and returns it."""
+        fat_provider = MagicMock()
+        fat_provider.quantization_report.return_value = {
+            "quantized": True,
+            "bits": 8,
+            "mode": "symmetric",
+            "summary": {"tensors": 169, "bits": 8},
+            "per_tensor": {"lm_head": {"scale": [0.0] * 50_000}},
+        }
+        with patch(
+            "domain.models._internal.provider.get_provider",
+            return_value=fat_provider,
+        ):
+            result = _get_quantization_info()
+
+        assert "per_tensor" not in result
+        assert result["quantized"] is True
+        assert result["bits"] == 8
+        assert "summary" in result
+        fat_provider.quantization_report.assert_called_once_with(include_per_tensor=False)
+
 
 class TestGetKvSessionInfo:
     def test_returns_dict(self):
