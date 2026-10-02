@@ -105,7 +105,7 @@ export interface UseV86Result {
   save: () => Promise<void>
   restore: () => Promise<void>
   reset: () => void
-  init: (container: HTMLElement) => Promise<void>
+  init: (container: HTMLElement, serialContainer?: HTMLElement) => Promise<void>
 }
 
 export function useV86(options: UseV86Options = {}): UseV86Result {
@@ -128,7 +128,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
   }, [])
 
   const init = useCallback(
-    async (container: HTMLElement) => {
+    async (container: HTMLElement, serialContainer?: HTMLElement) => {
       if (controllerRef.current) return
       containerRef.current = container
 
@@ -147,6 +147,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
           memoryMb: options.memoryMb || MEMORY_MB,
           wasmPath: options.wasmPath || WASM_PATH,
           libUrl: options.wasmPath ? undefined : LIB_URL,
+          serialContainer,
         })
         controllerRef.current = ctrl
         setIsBooted(true)

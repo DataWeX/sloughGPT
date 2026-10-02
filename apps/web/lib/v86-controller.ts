@@ -80,6 +80,12 @@ export class V86Controller {
        * on the kernel we boot.
        */
       libUrl?: string
+      /**
+       * <textarea> that hosts the serial console (COM1). The Buildroot ISO
+       * puts its interactive shell on ttyS0, so the login prompt and shell
+       * appear here, not on the VGA screen.
+       */
+      serialContainer?: HTMLElement
     },
   ): Promise<void> {
     if (opts.libUrl) {
@@ -100,6 +106,9 @@ export class V86Controller {
       vga_memory_size: 16 * 1024 * 1024,
       autostart: true,
       wasm_path: opts.wasmPath,
+    }
+    if (opts.serialContainer) {
+      machineOpts.serial_container = opts.serialContainer
     }
     if (opts.cdromUrl) {
       machineOpts.cdrom = { url: opts.cdromUrl }
