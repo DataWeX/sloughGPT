@@ -187,7 +187,16 @@ export interface DetailedHealth {
   total_tokens: number
   tokens_per_sec: number
   avg_tokens_per_request: number
-  health_score: { score: number; status: string }
+  /**
+   * Composite health score. `summary`/`diagnoses` come from the health flow and
+   * are what the DiagnosticsCard renders; older payloads omit them, hence `?`.
+   */
+  health_score: {
+    score: number
+    status: string
+    summary?: string
+    diagnoses?: Array<{ check: string; severity: string; score: number; message: string }>
+  }
   status_message: string
   model_metrics: Array<{
     model: string

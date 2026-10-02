@@ -2,11 +2,12 @@
 
 import { memo } from 'react'
 import { cn, Card, CardContent, Progress, StatCard, KpiGrid } from '@sloughgpt/strui'
-import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import type { BandwidthBlock, BlockSlice } from '@/lib/health-blocks'
 import { formatBytes } from '@/lib/format-bytes'
 
 interface BandwidthCardProps {
-  liveHealth: LiveHealthSnapshot | null
+  /** Narrowed to its own block: this card can only ever read the gateway counters. */
+  liveHealth: BlockSlice<BandwidthBlock> | null
 }
 
 /**

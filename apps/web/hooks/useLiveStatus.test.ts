@@ -1,6 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { liveStatusStore, useLiveStatus, mapDetailedToSnapshot, initLiveStatus } from './useLiveStatus'
+import {
+  liveStatusStore,
+  useLiveStatus,
+  mapDetailedToSnapshot,
+  initLiveStatus,
+} from './useLiveStatus'
 
 const mocks = vi.hoisted(() => ({
   createSSEStream: vi.fn(),
@@ -67,7 +72,9 @@ describe('liveStatusStore', () => {
       quantization: null,
       training_pool: null,
     } as any
-    act(() => { liveStatusStore.getState().setHealth(snap) })
+    act(() => {
+      liveStatusStore.getState().setHealth(snap)
+    })
     const state = liveStatusStore.getState()
     expect(state.health).toEqual(snap)
     expect(state.lastUpdate).toBeTypeOf('number')
@@ -75,13 +82,19 @@ describe('liveStatusStore', () => {
   })
 
   it('setConnectionStatus updates status', () => {
-    act(() => { liveStatusStore.getState().setConnectionStatus('connected') })
+    act(() => {
+      liveStatusStore.getState().setConnectionStatus('connected')
+    })
     expect(liveStatusStore.getState().connectionStatus).toBe('connected')
   })
 
   it('incrementFailures increments count', () => {
-    act(() => { liveStatusStore.getState().incrementFailures() })
-    act(() => { liveStatusStore.getState().incrementFailures() })
+    act(() => {
+      liveStatusStore.getState().incrementFailures()
+    })
+    act(() => {
+      liveStatusStore.getState().incrementFailures()
+    })
     expect(liveStatusStore.getState().failureCount).toBe(2)
   })
 
@@ -90,7 +103,9 @@ describe('liveStatusStore', () => {
       liveStatusStore.getState().setConnectionStatus('connected')
       liveStatusStore.getState().incrementFailures()
     })
-    act(() => { liveStatusStore.getState().reset() })
+    act(() => {
+      liveStatusStore.getState().reset()
+    })
     const state = liveStatusStore.getState()
     expect(state.connectionStatus).toBe('connecting')
     expect(state.health).toBeNull()
@@ -98,8 +113,17 @@ describe('liveStatusStore', () => {
   })
 
   it('setHealthLegacy updates legacy shape', () => {
-    const legacy = { status: 'ok', model_loaded: true, model_type: 'gpt2', summary: 'good', inference_count: 1, is_inferencing: false } as any
-    act(() => { liveStatusStore.getState().setHealthLegacy(legacy) })
+    const legacy = {
+      status: 'ok',
+      model_loaded: true,
+      model_type: 'gpt2',
+      summary: 'good',
+      inference_count: 1,
+      is_inferencing: false,
+    } as any
+    act(() => {
+      liveStatusStore.getState().setHealthLegacy(legacy)
+    })
     expect(liveStatusStore.getState().healthLegacy).toEqual(legacy)
   })
 })
@@ -115,14 +139,18 @@ describe('mapDetailedToSnapshot', () => {
       avg_latency_ms: 80,
       requests_per_minute: 4.5,
       path_latencies: [{ path: '/inference/generate', avg_ms: 80, count: 5, p95_ms: 120 }],
-      recent_errors: [{ path: '/chat', method: 'POST', status: 500, message: 'boom', error_type: 'Err', ts: 100 }],
+      recent_errors: [
+        { path: '/chat', method: 'POST', status: 500, message: 'boom', error_type: 'Err', ts: 100 },
+      ],
       inference_count: 8,
       total_tokens: 12000,
       tokens_per_sec: 12.5,
       avg_tokens_per_request: 160,
       health_score: { score: 90, status: 'healthy' },
       status_message: 'All good',
-      model_metrics: [{ model: 'gpt2', count: 3, total_tokens: 1000, tokens_per_sec: 5, avg_tokens: 333 }],
+      model_metrics: [
+        { model: 'gpt2', count: 3, total_tokens: 1000, tokens_per_sec: 5, avg_tokens: 333 },
+      ],
       model_events: [{ type: 'load', model: 'gpt2', detail: '', ts: 100 }],
       health_history: [{ score: 90, status: 'healthy', ts: 100 }],
       memory_history: [{ rss_mb: 300, virtual_mb: 400, system_percent: 55, ts: 100 }],
@@ -202,11 +230,26 @@ describe('useLiveStatus hook', () => {
     act(() => {
       liveStatusStore.getState().setConnectionStatus('connected')
       liveStatusStore.getState().setHealth({
-        model_loaded: true, model_loading: false, model_type: 'gpt2', soul: null,
-        is_inferencing: false, inference_count: 0, uptime_seconds: 0, request_count: 0,
-        error_count: 0, tokens_per_sec: 0, avg_latency_ms: 0, cpu_percent: null,
-        memory_percent: null, health_score: 80, health_status: 'ok', health_summary: '',
-        diagnoses: [], num_parameters: null, quantization: null, training_pool: null,
+        model_loaded: true,
+        model_loading: false,
+        model_type: 'gpt2',
+        soul: null,
+        is_inferencing: false,
+        inference_count: 0,
+        uptime_seconds: 0,
+        request_count: 0,
+        error_count: 0,
+        tokens_per_sec: 0,
+        avg_latency_ms: 0,
+        cpu_percent: null,
+        memory_percent: null,
+        health_score: 80,
+        health_status: 'ok',
+        health_summary: '',
+        diagnoses: [],
+        num_parameters: null,
+        quantization: null,
+        training_pool: null,
       } as any)
     })
     const { result } = renderHook(() => useLiveStatus())
@@ -216,7 +259,9 @@ describe('useLiveStatus hook', () => {
   })
 
   it('returns offline status', () => {
-    act(() => { liveStatusStore.getState().setHealthLegacy('offline') })
+    act(() => {
+      liveStatusStore.getState().setHealthLegacy('offline')
+    })
     const { result } = renderHook(() => useLiveStatus())
     expect(result.current.healthLegacy).toBe('offline')
   })
@@ -255,7 +300,10 @@ describe('initLiveStatus', () => {
 
   it('updates the store from SSE health events', () => {
     const cleanup = initLiveStatus()
-    streamConfig.onEvent({ stream: 'health', data: { model_loaded: true, model_type: 'qwen', soul: 'friendly', health_status: 'healthy' } })
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_loaded: true, model_type: 'qwen', soul: 'friendly', health_status: 'healthy' },
+    })
     const s = liveStatusStore.getState()
     expect(s.connectionStatus).toBe('connected')
     expect(s.health?.model_type).toBe('qwen')
@@ -263,16 +311,48 @@ describe('initLiveStatus', () => {
     cleanup()
   })
 
+  it('carries gateway bandwidth through the SSE path into the store', () => {
+    const cleanup = initLiveStatus()
+    streamConfig.onEvent({
+      stream: 'health',
+      data: {
+        model_loaded: true,
+        health_status: 'healthy',
+        bandwidth: {
+          identity_bytes: 100_000,
+          wire_bytes: 42_000,
+          saved_bytes: 58_000,
+          saved_pct: 58,
+          compressed_responses: 12,
+          identity_responses: 3,
+          zstd_responses: 12,
+          gzip_responses: 0,
+        },
+      },
+    })
+    // Regression: the SSE normalizer used to omit `bandwidth` entirely, so the
+    // card stayed hidden while SSE was connected (the fallback poll, the only
+    // path that did set it, stops on the first health event).
+    expect(liveStatusStore.getState().health?.bandwidth?.identity_bytes).toBe(100_000)
+    cleanup()
+  })
+
   it('resolves unknown SSE stage to background when the model is loaded', () => {
     const cleanup = initLiveStatus()
-    streamConfig.onEvent({ stream: 'health', data: { model_loaded: true, health_status: 'healthy' } })
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_loaded: true, health_status: 'healthy' },
+    })
     expect(liveStatusStore.getState().health?.startup_stage).toBe('background')
     cleanup()
   })
 
   it('keeps unknown SSE stage when no model is loaded', () => {
     const cleanup = initLiveStatus()
-    streamConfig.onEvent({ stream: 'health', data: { model_loaded: false, health_status: 'healthy' } })
+    streamConfig.onEvent({
+      stream: 'health',
+      data: { model_loaded: false, health_status: 'healthy' },
+    })
     expect(liveStatusStore.getState().health?.startup_stage).toBe('unknown')
     cleanup()
   })
@@ -284,7 +364,13 @@ describe('initLiveStatus', () => {
       data: {
         model_loaded: true,
         health_status: 'healthy',
-        startup_progress: { stage: 'ready', stage_value: 2, elapsed_seconds: 5, model_progress: 1, hooks: {} },
+        startup_progress: {
+          stage: 'ready',
+          stage_value: 2,
+          elapsed_seconds: 5,
+          model_progress: 1,
+          hooks: {},
+        },
       },
     })
     expect(liveStatusStore.getState().health?.startup_stage).toBe('ready')
@@ -333,6 +419,26 @@ describe('initLiveStatus', () => {
     cleanup()
   })
 
+  it('carries the health flow diagnoses through the fallback poll', async () => {
+    mocks.getDetailedHealth.mockResolvedValue({
+      model_loaded: true,
+      health_score: {
+        score: 90,
+        status: 'healthy',
+        diagnoses: [{ check: 'errors', severity: 'ok', score: 100, message: '41 requests OK.' }],
+      },
+    } as any)
+    const cleanup = initLiveStatus()
+    streamConfig.onClose()
+    await new Promise((r) => setTimeout(r, 0))
+    // Regression: the HTTP normalizer hardcoded `diagnoses: []`, so the
+    // DiagnosticsCard showed nothing whenever the SSE stream was down.
+    const diagnoses = liveStatusStore.getState().health?.diagnoses
+    expect(diagnoses).toHaveLength(1)
+    expect(diagnoses?.[0].check).toBe('errors')
+    cleanup()
+  })
+
   it('increments failures when the fallback poll returns nothing', async () => {
     mocks.getDetailedHealth.mockResolvedValue(null)
     const cleanup = initLiveStatus()
@@ -348,7 +454,10 @@ describe('initLiveStatus', () => {
     try {
       const cleanup = initLiveStatus()
       expect(mocks.getDetailedHealth).not.toHaveBeenCalled()
-      streamConfig.onEvent({ stream: 'health', data: { model_type: 'qwen', health_status: 'healthy' } })
+      streamConfig.onEvent({
+        stream: 'health',
+        data: { model_type: 'qwen', health_status: 'healthy' },
+      })
       vi.advanceTimersByTime(20000)
       expect(mocks.getDetailedHealth).not.toHaveBeenCalled()
       cleanup()

@@ -19,89 +19,23 @@
 import { createStore } from 'zustand/vanilla'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import type { HealthStatus } from '@/lib/model-controller'
-import { systemController, type DetailedHealth, type BandwidthStats } from '@/lib/system-controller'
+import { systemController, type DetailedHealth } from '@/lib/system-controller'
+import type { LiveHealthSnapshot } from '@/lib/health-blocks'
+import { blocksFromDetailed, blocksFromSse, snapshotFromBlocks } from '@/lib/health-blocks'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { trackEvent } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
 
 export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
 
-export type StartupStage = 'init' | 'critical' | 'ready' | 'background' | 'unknown'
-
-export interface HookStatus {
-  name: string
-  stage: StartupStage
-  status: 'pending' | 'running' | 'ok' | 'timeout' | 'error'
-  duration_seconds: number
-  error: string | null
-}
-
-export interface StagedLoaderStatus {
-  stage: StartupStage
-  stage_value: number
-  elapsed_seconds: number
-  model_progress: number
-  model_progress_message: string
-  errors: Record<string, string>
-  hooks: Record<string, HookStatus>
-  stages: Record<string, { hooks: string[]; time: number | null }>
-}
-
-export interface LiveHealthSnapshot {
-  model_loaded: boolean
-  model_loading: boolean
-  startup_stage: StartupStage
-  startup_stage_value: number
-  startup_elapsed: number
-  startup_model_progress: number
-  startup_model_progress_message: string
-  startup_hooks: Record<string, HookStatus>
-  model_type: string | null
-  device: string | null
-  soul: string | null
-  is_inferencing: boolean
-  inference_count: number
-  uptime_seconds: number
-  request_count: number
-  error_count: number
-  tokens_per_sec: number
-  avg_latency_ms: number
-  p95_latency_ms: number
-  requests_per_minute: number
-  total_tokens: number
-  avg_tokens_per_request: number
-  cpu_percent: number | null
-  memory_percent: number | null
-  health_score: number
-  health_status: string
-  health_summary: string
-  diagnoses: Array<{ check: string; severity: string; score: number; message: string }>
-  num_parameters: number | null
-  quantization: unknown | null
-  training_pool: { active_jobs: number; max_workers: number; total_tracked: number } | null
-  model_metrics: Array<{
-    model: string
-    count: number
-    total_tokens: number
-    tokens_per_sec: number
-    avg_tokens: number
-  }>
-  model_events: Array<{ type: string; model: string; detail: string; ts: number }>
-  rate_violations: Array<{ path: string; count: number; limit: number; ts: number }>
-  health_history: Array<{ score: number; status: string; ts: number }>
-  memory_history: Array<{ rss_mb: number; virtual_mb: number; system_percent: number; ts: number }>
-  path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
-  recent_errors: Array<{
-    path: string
-    method: string
-    status: number
-    message: string
-    error_type: string
-    ts: number
-  }>
-  /** Edge bandwidth counters — null/absent without a reachable gateway. */
-  bandwidth?: BandwidthStats | null
-}
+// Health blocks are owned by @/lib/health-blocks — re-exported here so existing
+// consumers keep one import path while the transports share one normalizer.
+export type {
+  HookStatus,
+  LiveHealthSnapshot,
+  StartupStage,
+  StagedLoaderStatus,
+} from '@/lib/health-blocks'
 
 export interface LiveStatusState {
   /** Connection status: connected (SSE active), connecting (trying), offline (failed), reloading (about to reload) */
@@ -138,54 +72,13 @@ const RELOAD_WINDOW_MS = 120_000 // 2 minutes
 /**
  * Map the full /health/detailed response onto the live snapshot shape.
  * Used by the HTTP fallback poll so every field survives an SSE outage.
+ *
+ * Thin wrapper over the shared transport adapters: the payload shape is read in
+ * `blocksFromDetailed` and the snapshot is written in `snapshotFromBlocks`, so
+ * this function cannot drift from the SSE path.
  */
 export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
-  const healthScore = d.health_score ?? { score: 0, status: 'unknown' }
-  const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
-    StagedLoaderStatus | undefined
-  const rawStage = stagedLoader?.stage ?? 'unknown'
-  return {
-    model_loaded: Boolean(d.model_loaded),
-    model_loading: Boolean(d.model_loading),
-    // Same hardening as the SSE path: unknown + loaded model ⇒ background.
-    startup_stage: rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage,
-    startup_stage_value: stagedLoader?.stage_value ?? 0,
-    startup_elapsed: stagedLoader?.elapsed_seconds ?? 0,
-    startup_model_progress: stagedLoader?.model_progress ?? 0,
-    startup_model_progress_message: stagedLoader?.model_progress_message ?? '',
-    startup_hooks: stagedLoader?.hooks ?? {},
-    model_type: d.model_type ?? null,
-    device: d.device ?? null,
-    soul: d.soul ?? null,
-    is_inferencing: Boolean(d.inference?.is_inferencing),
-    inference_count: d.inference_count ?? 0,
-    uptime_seconds: Number(d.uptime_seconds) || 0,
-    request_count: Number(d.request_count) || 0,
-    error_count: Number(d.error_count) || 0,
-    tokens_per_sec: Number(d.tokens_per_sec) || 0,
-    avg_latency_ms: Number(d.avg_latency_ms) || 0,
-    p95_latency_ms: Number(d.p95_latency_ms) || 0,
-    requests_per_minute: Number(d.requests_per_minute) || 0,
-    total_tokens: Number(d.total_tokens) || 0,
-    avg_tokens_per_request: Number(d.avg_tokens_per_request) || 0,
-    cpu_percent: d.system?.cpu_percent != null ? Number(d.system.cpu_percent) : null,
-    memory_percent: d.system?.memory_percent != null ? Number(d.system.memory_percent) : null,
-    health_score: Number(healthScore.score) || 0,
-    health_status: String(healthScore.status || d.status || 'unknown'),
-    health_summary: String(d.status_message || ''),
-    diagnoses: [],
-    num_parameters: d.num_parameters != null ? Number(d.num_parameters) : null,
-    quantization: d.quantization ?? null,
-    training_pool: d.training_pool ?? null,
-    model_metrics: Array.isArray(d.model_metrics) ? d.model_metrics : [],
-    model_events: Array.isArray(d.model_events) ? d.model_events : [],
-    rate_violations: Array.isArray(d.rate_violations) ? d.rate_violations : [],
-    health_history: Array.isArray(d.health_history) ? d.health_history : [],
-    memory_history: Array.isArray(d.memory_history) ? d.memory_history : [],
-    path_latencies: Array.isArray(d.path_latencies) ? d.path_latencies : [],
-    recent_errors: Array.isArray(d.recent_errors) ? d.recent_errors : [],
-    bandwidth: d.bandwidth ?? null,
-  }
+  return snapshotFromBlocks(blocksFromDetailed(d))
 }
 
 export const liveStatusStore = createStore<LiveStatusState>((set) => ({
@@ -375,100 +268,11 @@ export function initLiveStatus(): () => void {
     if (envelope.stream !== 'health') return
     _receivedHealthEvent = true
     stopFallbackPoll()
-    const d = envelope.data as Partial<LiveHealthSnapshot>
-    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
-      StagedLoaderStatus | undefined
-    // Hardening: very old / minimal snapshots omit every startup field, which
-    // used to pin the StartupOverlay on "Connecting" forever. A loaded model
-    // means startup finished — resolve to "background" (overlay-clearing).
-    const rawStage = stagedLoader?.stage ?? d.startup_stage ?? 'unknown'
-    const resolvedStage =
-      rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
-    const snap: LiveHealthSnapshot = {
-      model_loaded: Boolean(d.model_loaded),
-      model_loading: Boolean(d.model_loading),
-      startup_stage: resolvedStage,
-      startup_stage_value: stagedLoader?.stage_value ?? d.startup_stage_value ?? 0,
-      startup_elapsed: stagedLoader?.elapsed_seconds ?? d.startup_elapsed ?? 0,
-      startup_model_progress: stagedLoader?.model_progress ?? d.startup_model_progress ?? 0,
-      startup_model_progress_message:
-        stagedLoader?.model_progress_message ?? d.startup_model_progress_message ?? '',
-      startup_hooks: stagedLoader?.hooks ?? d.startup_hooks ?? {},
-      model_type: d.model_type ?? null,
-      device: d.device ?? null,
-      soul: d.soul ?? null,
-      is_inferencing: Boolean(d.is_inferencing),
-      inference_count: Number(d.inference_count) || 0,
-      uptime_seconds: Number(d.uptime_seconds) || 0,
-      request_count: Number(d.request_count) || 0,
-      error_count: Number(d.error_count) || 0,
-      tokens_per_sec: Number(d.tokens_per_sec) || 0,
-      avg_latency_ms: Number(d.avg_latency_ms) || 0,
-      p95_latency_ms: Number(d.p95_latency_ms) || 0,
-      requests_per_minute: Number(d.requests_per_minute) || 0,
-      total_tokens: Number(d.total_tokens) || 0,
-      avg_tokens_per_request: Number(d.avg_tokens_per_request) || 0,
-      cpu_percent: d.cpu_percent != null ? Number(d.cpu_percent) : null,
-      memory_percent: d.memory_percent != null ? Number(d.memory_percent) : null,
-      health_score: Number(d.health_score) || 0,
-      health_status: String(d.health_status || 'unknown'),
-      health_summary: String(d.health_summary || ''),
-      diagnoses: Array.isArray(d.diagnoses)
-        ? (d.diagnoses as Array<{
-            check: string
-            severity: string
-            score: number
-            message: string
-          }>)
-        : [],
-      num_parameters: d.num_parameters != null ? Number(d.num_parameters) : null,
-      quantization: d.quantization ?? null,
-      training_pool: d.training_pool ?? null,
-      model_metrics: Array.isArray(d.model_metrics)
-        ? (d.model_metrics as Array<{
-            model: string
-            count: number
-            total_tokens: number
-            tokens_per_sec: number
-            avg_tokens: number
-          }>)
-        : [],
-      model_events: Array.isArray(d.model_events)
-        ? (d.model_events as Array<{ type: string; model: string; detail: string; ts: number }>)
-        : [],
-      rate_violations: Array.isArray(d.rate_violations)
-        ? (d.rate_violations as Array<{ path: string; count: number; limit: number; ts: number }>)
-        : [],
-      health_history: Array.isArray(d.health_history)
-        ? (d.health_history as Array<{ score: number; status: string; ts: number }>)
-        : [],
-      memory_history: Array.isArray(d.memory_history)
-        ? (d.memory_history as Array<{
-            rss_mb: number
-            virtual_mb: number
-            system_percent: number
-            ts: number
-          }>)
-        : [],
-      path_latencies: Array.isArray(d.path_latencies)
-        ? (d.path_latencies as Array<{
-            path: string
-            avg_ms: number
-            count: number
-            p95_ms: number
-          }>)
-        : [],
-      recent_errors: Array.isArray(d.recent_errors)
-        ? (d.recent_errors as Array<{
-            path: string
-            method: string
-            status: number
-            message: string
-            error_type: string
-            ts: number
-          }>)
-        : [],
-    }
+    // Same contract as the HTTP fallback poll: lift the payload into blocks,
+    // then flatten once. @/lib/health-blocks owns the field list for both
+    // transports, so SSE can no longer drop a field HTTP sends (bandwidth)
+    // while HTTP drops one SSE sends (diagnoses).
+    const snap = snapshotFromBlocks(blocksFromSse(envelope.data))
     liveStatusStore.getState().setHealth(snap)
 
     // Also update legacy shape for backward compat

@@ -3,10 +3,11 @@
 import { memo } from 'react'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
-import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import type { BlockSlice, InferenceBlock, TrafficBlock } from '@/lib/health-blocks'
 
 interface TrafficCardProps {
-  liveHealth: LiveHealthSnapshot | null
+  /** Rate + token volume: spans the traffic and inference blocks, nothing else. */
+  liveHealth: (BlockSlice<TrafficBlock> & BlockSlice<InferenceBlock>) | null
 }
 
 export function formatTokens(n: number): string {
@@ -25,22 +26,41 @@ export const TrafficCard = memo(function TrafficCard({ liveHealth }: TrafficCard
 
   return (
     <Card className="p-3">
-      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Traffic</span>
+      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+        Traffic
+      </span>
       <CardContent className="p-0">
         <KpiGrid columns={3}>
           <StatCard
             label="Requests/min"
-            value={rpm > 0 ? rpm.toFixed(1) : '0'} numeric
-            icon={<span className={cn('inline-block w-2 h-2 rounded-full', rpm > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
+            value={rpm > 0 ? rpm.toFixed(1) : '0'}
+            numeric
+            icon={
+              <span
+                className={cn(
+                  'inline-block w-2 h-2 rounded-full',
+                  rpm > 0 ? 'bg-success' : 'bg-muted-foreground/50',
+                )}
+              />
+            }
           />
           <StatCard
             label="Total tokens"
-            value={formatTokens(totalTokens)} numeric
-            icon={<span className={cn('inline-block w-2 h-2 rounded-full', totalTokens > 0 ? 'bg-success' : 'bg-muted-foreground/50')} />}
+            value={formatTokens(totalTokens)}
+            numeric
+            icon={
+              <span
+                className={cn(
+                  'inline-block w-2 h-2 rounded-full',
+                  totalTokens > 0 ? 'bg-success' : 'bg-muted-foreground/50',
+                )}
+              />
+            }
           />
           <StatCard
             label="Avg tokens/req"
-            value={avgPerReq > 0 ? avgPerReq.toFixed(0) : '0'} numeric
+            value={avgPerReq > 0 ? avgPerReq.toFixed(0) : '0'}
+            numeric
           />
         </KpiGrid>
       </CardContent>

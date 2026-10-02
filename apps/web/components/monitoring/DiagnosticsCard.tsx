@@ -2,18 +2,23 @@
 
 import { memo } from 'react'
 import { cn, Card, CardContent } from '@sloughgpt/strui'
-import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import type { BlockSlice, ScoringBlock } from '@/lib/health-blocks'
 
 interface DiagnosticsCardProps {
-  liveHealth: LiveHealthSnapshot | null
+  /** Narrowed to its own block: score, status, summary and per-check diagnoses. */
+  liveHealth: BlockSlice<ScoringBlock> | null
 }
 
 function severityClass(severity: string): string {
   switch (severity) {
-    case 'critical': return 'bg-destructive'
-    case 'warn': return 'bg-warning'
-    case 'info': return 'bg-primary'
-    default: return 'bg-success'
+    case 'critical':
+      return 'bg-destructive'
+    case 'warn':
+      return 'bg-warning'
+    case 'info':
+      return 'bg-primary'
+    default:
+      return 'bg-success'
   }
 }
 
@@ -25,10 +30,19 @@ export const DiagnosticsCard = memo(function DiagnosticsCard({ liveHealth }: Dia
   return (
     <Card className="p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Diagnostics</span>
-        <span className={cn('inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium', health_status === 'healthy' ? 'bg-success/10 text-success' :
-          health_status === 'degraded' ? 'bg-warning/10 text-warning' :
-          'bg-destructive/10 text-destructive')}>
+        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          Diagnostics
+        </span>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
+            health_status === 'healthy'
+              ? 'bg-success/10 text-success'
+              : health_status === 'degraded'
+                ? 'bg-warning/10 text-warning'
+                : 'bg-destructive/10 text-destructive',
+          )}
+        >
           {health_score > 0 ? `${health_score}/100` : health_status}
         </span>
       </div>
@@ -37,10 +51,17 @@ export const DiagnosticsCard = memo(function DiagnosticsCard({ liveHealth }: Dia
         <div className="space-y-1">
           {diagnoses.map((d, i) => (
             <div key={`${d.check}-${i}`} className="flex items-start gap-2 text-xs">
-              <span className={cn('mt-1 inline-block w-2 h-2 rounded-full shrink-0', severityClass(d.severity))} />
+              <span
+                className={cn(
+                  'mt-1 inline-block w-2 h-2 rounded-full shrink-0',
+                  severityClass(d.severity),
+                )}
+              />
               <span className="capitalize font-medium w-20 shrink-0">{d.check}</span>
               <span className="text-muted-foreground flex-1">{d.message}</span>
-              <span className="font-numeric text-[10px] text-muted-foreground/70">{Math.round(d.score)}</span>
+              <span className="font-numeric text-[10px] text-muted-foreground/70">
+                {Math.round(d.score)}
+              </span>
             </div>
           ))}
         </div>

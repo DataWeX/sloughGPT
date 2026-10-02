@@ -2,12 +2,13 @@
 
 import { memo } from 'react'
 import { Card, CardContent, StatCard, KpiGrid, Skeleton, StatusDot } from '@sloughgpt/strui'
-import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
+import type { BlockSlice, SystemBlock } from '@/lib/health-blocks'
 import type { SystemMetrics, DetailedHealth } from '@/lib/system-controller'
 import { SectionLabel } from '@/components/composed/SectionLabel'
 
 interface ResourceCardProps {
-  liveHealth: LiveHealthSnapshot | null
+  /** Narrowed to its own block: host CPU/memory gauges (null ⇒ falls back to metrics). */
+  liveHealth: BlockSlice<SystemBlock> | null
   metrics: SystemMetrics | null
   detailed: DetailedHealth | null
   cpuThreshold: number
@@ -15,17 +16,25 @@ interface ResourceCardProps {
   loaded: boolean
 }
 
-export const ResourceCard = memo(function ResourceCard({ liveHealth, metrics, detailed, cpuThreshold, memThreshold, loaded }: ResourceCardProps) {
+export const ResourceCard = memo(function ResourceCard({
+  liveHealth,
+  metrics,
+  detailed,
+  cpuThreshold,
+  memThreshold,
+  loaded,
+}: ResourceCardProps) {
   const cpu = liveHealth?.cpu_percent ?? metrics?.cpu_percent ?? null
   const mem = liveHealth?.memory_percent ?? metrics?.memory_percent ?? null
 
   const memUsedGB = metrics?.memory_used_gb ?? null
   const memTotalGB = metrics?.memory_total_gb ?? null
-  const memAvailableGB = memUsedGB != null && memTotalGB != null
-    ? Math.max(0, memTotalGB - memUsedGB)
-    : detailed?.system?.memory_available_mb != null
-      ? detailed.system.memory_available_mb / 1024
-      : null
+  const memAvailableGB =
+    memUsedGB != null && memTotalGB != null
+      ? Math.max(0, memTotalGB - memUsedGB)
+      : detailed?.system?.memory_available_mb != null
+        ? detailed.system.memory_available_mb / 1024
+        : null
 
   return (
     <Card className="p-3">
