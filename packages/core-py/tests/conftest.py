@@ -65,6 +65,11 @@ def _stop_infra_threads():
         stop_all = getattr(idle_mod, "stop_all_idle_managers", None)
         if stop_all is not None:
             stop_all()
+    pugqeep_mod = sys.modules.get("domain.infrastructure._internal.pugqeep.engine")
+    if pugqeep_mod is not None:
+        stop_all = getattr(pugqeep_mod, "stop_all_pugqeep", None)
+        if stop_all is not None:
+            stop_all()
 
 
 def build_test_app(*routers):

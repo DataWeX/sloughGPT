@@ -122,6 +122,33 @@ class TestOrphanInstances:
             orphan.reset()
 
 
+class TestOrphanPugqeep:
+    def test_stop_all_pugqeep_kills_orphan_monitors_and_engines(self):
+        """Leaked ProcessMonitors/Engines (gate run7: a leaked engine spawned
+        60 fork-deadlocked children in a 180s restart storm) must be stopped
+        by the shared teardown helper."""
+        from domain.infrastructure._internal.pugqeep.engine import (
+            Engine,
+            ProcessMonitor,
+            stop_all_pugqeep,
+        )
+
+        mon = ProcessMonitor(poll_interval=0.05)
+        mon.start()
+        engine = Engine("l3-orphan-engine")
+        try:
+            assert _alive("process-monitor")
+            stopped = stop_all_pugqeep()
+            assert stopped >= 1
+            deadline = time.time() + 5.0
+            while time.time() < deadline and _alive("process-monitor"):
+                time.sleep(0.05)
+            assert not _alive("process-monitor")
+        finally:
+            mon.stop()
+            engine.stop()
+
+
 class TestConftestTeardown:
     """Order-dependent: test_a leaks on purpose, the autouse conftest
     teardown must clean it before test_b asserts."""
