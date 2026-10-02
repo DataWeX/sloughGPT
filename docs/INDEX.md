@@ -11,6 +11,7 @@ Single source of truth for navigation. Read this first.
 | **PYTHON_FIRST.md** | How we write code — import → call → result |
 | **PRODUCT_ENGINEERING.md** | What we build and why |
 | **ROADMAP.md** | What's done, what's next |
+| **AGENT_SYNC.md** | Cross-session work sync — read first, update when you push |
 | **AGENTS.md** | Rules for AI agents (root) |
 
 ## Architecture
