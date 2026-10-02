@@ -100,6 +100,28 @@ class TestIdleReset:
         assert not _alive("idle-manager")
 
 
+class TestOrphanInstances:
+    def test_stop_all_idle_managers_kills_orphan_instances(self):
+        """Directly-constructed IdleManager instances (test_idle_manager leaks
+        ~45 of them: 58 register() vs 13 shutdown()) must be stopped too."""
+        from domain.infrastructure._internal.idle_manager import (
+            IdleManager,
+            stop_all_idle_managers,
+        )
+
+        orphan = IdleManager()
+        orphan.register("l3-orphan-model")
+        try:
+            assert _alive("idle-manager")
+            stop_all_idle_managers()
+            deadline = time.time() + 5.0
+            while time.time() < deadline and _alive("idle-manager"):
+                time.sleep(0.05)
+            assert not _alive("idle-manager")
+        finally:
+            orphan.reset()
+
+
 class TestConftestTeardown:
     """Order-dependent: test_a leaks on purpose, the autouse conftest
     teardown must clean it before test_b asserts."""

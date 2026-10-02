@@ -62,9 +62,9 @@ def _stop_infra_threads():
             reset()
     idle_mod = sys.modules.get("domain.infrastructure._internal.idle_manager")
     if idle_mod is not None:
-        get = getattr(idle_mod, "get_idle_manager", None)
-        if get is not None:
-            get().reset()
+        stop_all = getattr(idle_mod, "stop_all_idle_managers", None)
+        if stop_all is not None:
+            stop_all()
 
 
 def build_test_app(*routers):

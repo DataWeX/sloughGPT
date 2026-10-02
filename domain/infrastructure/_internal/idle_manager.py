@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import weakref
 from collections.abc import Callable
 from threading import Event, Lock, Thread
 from typing import Any
@@ -10,6 +11,11 @@ from typing import Any
 from .structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.idle_manager")
+
+# Every constructed instance is tracked (weakly) so test/session teardown can
+# stop ALL idle loops — directly-built IdleManager objects otherwise leak their
+# background thread (test_idle_manager: 58 register() vs 13 shutdown()).
+_instances: weakref.WeakSet[IdleManager] = weakref.WeakSet()
 
 
 def _get_bg_queue() -> Any:
@@ -55,6 +61,7 @@ class IdleManager:
         self._on_unload: Callable[[str], None] | None = None
         self._on_reload: Callable[[str], None] | None = None
         self._logger = logger
+        _instances.add(self)
 
     def register(
         self,
@@ -259,3 +266,16 @@ def get_idle_manager() -> IdleManager:
             if _idle_manager is None:
                 _idle_manager = IdleManager()
     return _idle_manager
+
+
+def stop_all_idle_managers() -> int:
+    """Stop every tracked instance's loop (teardown); returns count stopped.
+
+    Event-based shutdown makes each join prompt (<=2s), even for the ~45
+    orphan instances leaked by direct construction in tests.
+    """
+    stopped = 0
+    for inst in list(_instances):
+        inst.reset()
+        stopped += 1
+    return stopped
