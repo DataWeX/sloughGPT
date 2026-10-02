@@ -25,8 +25,12 @@ Usage:
     engine.run(poll_interval=0.5)  # continuous loop
 """
 
+import io
 import logging
-import multiprocessing
+import os
+import signal
+import socket
+import sys
 import threading
 import time
 import uuid
@@ -37,6 +41,12 @@ from enum import Enum
 from typing import Any, Optional
 
 from .config import RestartPolicy
+from .frame import FrameEOF, FrameHandler, MsgType, ProtocolError
+
+try:  # pragma: no cover - POSIX only, which is where fork exists
+    import resource as _resource
+except ImportError:  # pragma: no cover
+    _resource = None
 
 logger = logging.getLogger("slo.pugqeep.engine")
 
@@ -44,6 +54,9 @@ logger = logging.getLogger("slo.pugqeep.engine")
 # backwards compatibility with code that imports it from pugqeep.engine.
 TaskFuture = Future
 
+# Legacy string sentinels of the old multiprocessing.Pipe envelope. Nothing in
+# this module reads them any more — the wire is MsgType frames now — but they
+# are referenced by test docstrings, so they stay until that is cleaned up.
 _MSG_READY = "__READY__"
 _MSG_HEARTBEAT = "__HEARTBEAT__"
 _MSG_ERROR = "__ERROR__"
@@ -543,24 +556,229 @@ class EngineMetrics:
             self._peak_memory_bytes = 0
 
 
-class SubprocessProcess:
-    """Wraps a Process in an isolated OS subprocess.
+# Reap poll granularity for _ForkedChild.join(). Never a blocking waitpid
+# held across a lock: the reader thread calls is_alive() on the same handle
+# and would otherwise stall behind it while the child keeps writing.
+_REAP_POLL = 0.01
 
-    Runs a Process.fn in a subprocess with:
-    - Memory limits via resource.setrlimit
-    - CPU affinity
-    - Working directory (cwd)
-    - Environment variables
-    - Stdout/stderr capture
-    - Graceful SIGTERM->SIGKILL termination
-    - Timeout watchdog thread
+
+class _ForkedChild:
+    """Owns one forked child: its pid, its exit status, and how it dies.
+
+    A deliberately thin replacement for ``multiprocessing.Process``. Only
+    :meth:`poll` ever calls ``waitpid``, and only ever with ``WNOHANG`` under a
+    short-lived lock — so two threads (the reader's ``is_alive`` and the
+    monitor's ``join``) can race without one blocking the other or double-
+    reaping.
+    """
+
+    __slots__ = ("pid", "_exitcode", "_reaped", "_lock")
+
+    def __init__(self, pid: int) -> None:
+        self.pid = pid
+        self._exitcode: int | None = None
+        self._reaped = False
+        self._lock = threading.Lock()
+
+    @property
+    def is_alive(self) -> bool:
+        return self.poll() is None
+
+    @property
+    def exitcode(self) -> int | None:
+        return self._exitcode
+
+    def poll(self) -> int | None:
+        """Reap without blocking; exit code, or None while still running."""
+        with self._lock:
+            if self._reaped:
+                return self._exitcode
+            try:
+                pid, status = os.waitpid(self.pid, os.WNOHANG)
+            except ChildProcessError:
+                # Someone else reaped it (a SIGCHLD handler, a concurrent
+                # monitor). Treat as done; the exit code is unknowable.
+                self._reaped = True
+                return self._exitcode
+            if pid == 0:
+                return None
+            self._exitcode = os.waitstatus_to_exitcode(status)
+            self._reaped = True
+            return self._exitcode
+
+    def join(self, timeout: float | None = None) -> int | None:
+        """Wait for exit. ``timeout=None`` waits indefinitely."""
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while True:
+            code = self.poll()
+            if code is not None or self._reaped:
+                return code
+            if deadline is not None and time.monotonic() >= deadline:
+                return None
+            time.sleep(_REAP_POLL)
+
+    def signal(self, signum: int) -> None:
+        """Deliver ``signum``; a child that already exited is not an error."""
+        if self._reaped:
+            return
+        try:
+            os.kill(self.pid, signum)
+        except ProcessLookupError:
+            pass
+
+
+def _send_captured(
+    handler: FrameHandler, out_cap: io.StringIO | None, err_cap: io.StringIO | None
+) -> None:
+    """Emit captured output BEFORE the terminal frame.
+
+    The reader stops on RESULT/ERROR, so output written after the terminal
+    frame is silently dropped — the ordering bug this replaced.
+    """
+    if out_cap is None and err_cap is None:
+        return
+    handler.send_text(MsgType.STDOUT, out_cap.getvalue() if out_cap else "")
+    handler.send_text(MsgType.STDERR, err_cap.getvalue() if err_cap else "")
+
+
+def _subprocess_worker(
+    handler: FrameHandler,
+    *,
+    fn: Callable[..., Any],
+    args: tuple,
+    kwargs: dict,
+    capture: bool,
+    config,
+) -> None:
+    """Body of the forked child.
+
+    Takes only plain values — no locks, no the parent's objects — and does no
+    imports and no logging: this runs in a multithreaded parent's forked
+    address space, where the import lock and the logging lock may be held by a
+    thread that did not survive the fork.
+    """
+    out_cap = io.StringIO() if capture else None
+    err_cap = io.StringIO() if capture else None
+    if capture:
+        sys.stdout = out_cap
+        sys.stderr = err_cap
+
+    handler.handshake()
+
+    try:
+        if config.memory_limit_mb is not None and _resource is not None:
+            try:
+                limit_bytes = config.memory_limit_mb * 1024 * 1024
+                _resource.setrlimit(_resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+            except (ValueError, OSError):
+                pass
+
+        if config.cpu_affinity is not None:
+            try:
+                os.sched_setaffinity(0, config.cpu_affinity)
+            except (AttributeError, OSError):
+                pass
+
+        if config.cwd is not None:
+            try:
+                os.chdir(config.cwd)
+            except (OSError, FileNotFoundError):
+                pass
+
+        if config.env is not None:
+            try:
+                os.environ.update(config.env)
+            except (TypeError, OSError):
+                pass
+
+        handler.send(MsgType.READY)
+        result = fn(*args, **kwargs)
+        _send_captured(handler, out_cap, err_cap)
+        handler.send(MsgType.RESULT, result)
+    except Exception as exc:
+        # A reported failure beats a bare exit code: the parent gets the text.
+        try:
+            _send_captured(handler, out_cap, err_cap)
+            handler.send(MsgType.ERROR, str(exc))
+        except Exception:
+            pass
+
+
+def _child_main(
+    parent_sock: socket.socket,
+    handler: FrameHandler,
+    *,
+    fn: Callable[..., Any],
+    args: tuple,
+    kwargs: dict,
+    capture: bool,
+    config,
+) -> None:
+    """Child entry point after ``os.fork()``. Never returns — always ``os._exit``.
+
+    ``os._exit`` (not ``sys.exit``) is required: the child shares the parent's
+    atexit handlers and buffered streams, and running either would corrupt them.
+    """
+    try:
+        parent_sock.close()
+    except OSError:
+        pass
+
+    # The child inherits the parent's signal policy. An Engine installs a
+    # SIGTERM handler in the owning process — if it survived the fork the
+    # terminate() escalation would be swallowed and we would always wait out
+    # terminate_grace before the SIGKILL.
+    for _signum in (
+        signal.SIGTERM,
+        signal.SIGINT,
+        signal.SIGQUIT,
+        signal.SIGHUP,
+        signal.SIGCHLD,
+    ):
+        try:
+            signal.signal(_signum, signal.SIG_DFL)
+        except (OSError, ValueError, RuntimeError):
+            pass
+
+    code = 0
+    try:
+        _subprocess_worker(handler, fn=fn, args=args, kwargs=kwargs, capture=capture, config=config)
+    except BaseException as exc:  # noqa: BLE001 - the child must never return
+        code = 1
+        try:
+            os.write(
+                2,
+                f"pugqeep child failed before it could report: {exc!r}\n".encode(
+                    "utf-8", "replace"
+                ),
+            )
+        except OSError:
+            pass
+    os._exit(code)
+
+
+class SubprocessProcess:
+    """Runs a Process.fn in a forked child, over a framed channel.
+
+    Responsibilities, in order:
+
+    1. **Fork and configure** — ``os.fork()``, then rlimits / CPU affinity /
+       cwd / env applied inside the child by :func:`_subprocess_worker`.
+    2. **Report** — one reader thread turns inbound frames into Process state
+       transitions; it is the only writer of that state from this side.
+    3. **Bound the child's life** — a timeout watchdog plus :meth:`terminate`'s
+       SIGTERM -> SIGKILL escalation.
+
+    No ``multiprocessing``: the channel is a ``socket.socketpair`` wrapped in a
+    :class:`FrameHandler`, and the child handle is a :class:`_ForkedChild`.
+    Fork-only — ``SubprocessConfig.start_method`` selects nothing.
     """
 
     def __init__(self, proc: Process, config):
         self.proc = proc
         self.config = config
-        self._process: multiprocessing.Process | None = None
-        self._parent_conn = None
+        self._child: _ForkedChild | None = None
+        self._handler: FrameHandler | None = None
         self._start_time: float | None = None
         self._end_time: float | None = None
         self._lock = threading.Lock()
@@ -572,95 +790,52 @@ class SubprocessProcess:
         self._stderr: str | None = None
 
     def start(self) -> None:
-        import os
-
-        parent_r, child_w = multiprocessing.Pipe(duplex=False)
+        parent_sock, child_sock = socket.socketpair()
+        child_handler = FrameHandler(child_sock)
         self._start_time = time.monotonic()
-        capture = self.config.capture_output
+        capture = bool(self.config.capture_output)
 
-        def _worker():
-            import io
-            import sys
+        method = self.config.start_method or "fork"
+        if method != "fork":
+            logger.warning(
+                "start_method=%r selects nothing: pugqeep forks. Spawn and "
+                "forkserver were never reachable (worker was unpicklable) and "
+                "left with multiprocessing.",
+                method,
+            )
 
-            stdout_capture = None
-            stderr_capture = None
+        try:
+            pid = os.fork()
+        except OSError:
+            parent_sock.close()
+            child_sock.close()
+            raise
 
-            if capture:
-                stdout_capture = io.StringIO()
-                stderr_capture = io.StringIO()
-                sys.stdout = stdout_capture
-                sys.stderr = stderr_capture
+        if pid == 0:
+            # ── child: never returns into this stack ───────────────────
+            _child_main(
+                parent_sock,
+                child_handler,
+                fn=self.proc.fn,
+                args=self.proc.args,
+                kwargs=self.proc.kwargs,
+                capture=capture,
+                config=self.config,
+            )
+            os._exit(127)  # unreachable; _child_main always exits
 
-            try:
-                if self.config.memory_limit_mb is not None:
-                    try:
-                        import resource
-
-                        limit_bytes = self.config.memory_limit_mb * 1024 * 1024
-                        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
-                    except (ImportError, ValueError, OSError):
-                        pass
-
-                if self.config.cpu_affinity is not None:
-                    try:
-                        os.sched_setaffinity(0, self.config.cpu_affinity)
-                    except (AttributeError, OSError):
-                        pass
-
-                if self.config.cwd is not None:
-                    try:
-                        os.chdir(self.config.cwd)
-                    except (OSError, FileNotFoundError):
-                        pass
-
-                if self.config.env is not None:
-                    try:
-                        os.environ.update(self.config.env)
-                    except (TypeError, OSError):
-                        pass
-
-                try:
-                    child_w.send(_MSG_READY)
-                except Exception:
-                    logger.warning("Failed to send READY message to parent pipe")
-
-                result = self.proc.fn(*self.proc.args, **self.proc.kwargs)
-
-                try:
-                    child_w.send(("ok", result))
-                except Exception:
-                    logger.debug("Failed to send result to parent", exc_info=True)
-            except Exception as e:
-                try:
-                    child_w.send(("error", str(e)))
-                except Exception:
-                    logger.debug("Failed to send error to parent", exc_info=True)
-            finally:
-                if capture:
-                    try:
-                        child_w.send(
-                            ("stdout", stdout_capture.getvalue() if stdout_capture else "")
-                        )
-                        child_w.send(
-                            ("stderr", stderr_capture.getvalue() if stderr_capture else "")
-                        )
-                    except Exception:
-                        logger.warning("Failed to send captured output to parent pipe")
-                try:
-                    child_w.close()
-                except Exception:
-                    logger.warning("Failed to close child pipe")
-
-        start_method = self.config.start_method or "fork"
-        ctx = multiprocessing.get_context(start_method)
-        self._process = ctx.Process(target=_worker, daemon=True)
-        self._process.start()
-        self.proc._pid = self._process.pid
+        # ── parent ─────────────────────────────────────────────────────
+        # Dropping our copy of the child's end is what makes EOF observable:
+        # keep it and the reader blocks forever after the child exits.
+        child_sock.close()
+        self._child = _ForkedChild(pid)
+        self.proc._pid = pid
         self.proc.running()
 
+        self._handler = FrameHandler(parent_sock)
         self._reader_thread = threading.Thread(
             target=self._read_result,
-            args=(parent_r,),
+            args=(self._handler,),
             daemon=True,
             name=f"reader-{self.proc.name}",
         )
@@ -674,60 +849,70 @@ class SubprocessProcess:
             )
             self._watchdog.start()
 
-    def _read_result(self, conn) -> None:
+    def _read_result(self, handler: FrameHandler) -> None:
+        """Translate inbound frames into Process state — the sole writer of it."""
         try:
+            handler.handshake()
             while True:
-                if conn.poll(0.5):
-                    msg = conn.recv()
-                    if isinstance(msg, tuple) and len(msg) == 2:
-                        status, payload = msg
-                        if status == "ok":
-                            self.proc.complete(payload)
-                        elif status == "stdout":
-                            self._stdout = payload
-                        elif status == "stderr":
-                            self._stderr = payload
-                        elif self._cancel_event.is_set():
-                            self.proc.cancel()
-                        elif status == "error":
-                            self.proc.fail(payload)
-                        if status in ("ok", "error"):
-                            return
-                    elif msg == _MSG_READY:
-                        self._last_heartbeat = time.monotonic()
-                    elif msg == _MSG_HEARTBEAT:
-                        self._last_heartbeat = time.monotonic()
-                if self._process and not self._process.is_alive():
+                if not handler.poll(0.5):
+                    if not self.is_alive:
+                        break
+                    continue
+                try:
+                    msg_type, value = handler.recv()
+                except FrameEOF:
                     break
-        except (EOFError, OSError):
-            pass
+                if msg_type is MsgType.READY or msg_type is MsgType.HEARTBEAT:
+                    self._last_heartbeat = time.monotonic()
+                elif msg_type is MsgType.STDOUT:
+                    # Append, not assign: send_text splits output into chunks
+                    # and every chunk is a frame of its own.
+                    self._stdout = (self._stdout or "") + (value or "")
+                elif msg_type is MsgType.STDERR:
+                    self._stderr = (self._stderr or "") + (value or "")
+                elif msg_type is MsgType.RESULT:
+                    self.proc.complete(value)
+                    break
+                elif msg_type is MsgType.ERROR:
+                    # A cancel already in flight outranks the failure: the
+                    # child died because we killed it, not because it broke.
+                    if self._cancel_event.is_set():
+                        self.proc.cancel()
+                    else:
+                        self.proc.fail(value)
+                    break
+        except (ProtocolError, OSError, ValueError) as exc:
+            logger.debug("reader for %s stopped: %s", self.proc.name, exc)
+            if not self._cancel_event.is_set() and not self.proc.is_done:
+                self.proc.fail(f"frame protocol failure: {exc}")
         finally:
             if self._cancel_event.is_set() and not self.proc.is_done:
                 self.proc.cancel()
             elif not self.proc.is_done:
                 self.proc.fail("pipe closed unexpectedly")
             try:
-                conn.close()
+                handler.close()
             except Exception:
-                logger.warning("Failed to close parent pipe in reader thread")
+                logger.debug("failed to close frame channel", exc_info=True)
 
     def monitor(self) -> None:
-        if self._process is not None:
-            self._process.join()
+        """Block until the child is reaped, then settle anything unsettled."""
+        if self._child is not None:
+            self._child.join()
         if self._reader_thread is not None:
             self._reader_thread.join(timeout=2.0)
         self._end_time = time.monotonic()
         if not self.proc.is_done:
-            if self._process and self._process.exitcode == 0:
+            if self._child is None:
+                self.proc.fail("no process")
+            elif self._child.exitcode == 0:
                 self.proc.complete()
             else:
-                self.proc.fail(
-                    f"exit code {self._process.exitcode}" if self._process else "no process"
-                )
+                self.proc.fail(f"exit code {self._child.exitcode}")
 
     def _watchdog_loop(self) -> None:
         while not self._cancel_event.is_set():
-            if self._process is None or not self._process.is_alive():
+            if self._child is None or not self._child.is_alive:
                 break
             elapsed = time.monotonic() - (self._start_time or 0)
             if self.proc.timeout and elapsed > self.proc.timeout:
@@ -736,16 +921,16 @@ class SubprocessProcess:
             self._cancel_event.wait(0.5)
 
     def terminate(self) -> None:
-        if self._process is None or not self._process.is_alive():
+        if self._child is None or not self._child.is_alive:
             return
         self._cancel_event.set()
         try:
-            self._process.terminate()
-            self._process.join(timeout=self.config.terminate_grace)
-            if self._process.is_alive():
-                self._process.kill()
-                self._process.join(timeout=1.0)
-        except Exception:
+            self._child.signal(signal.SIGTERM)
+            self._child.join(timeout=self.config.terminate_grace)
+            if self._child.is_alive:
+                self._child.signal(signal.SIGKILL)
+                self._child.join(timeout=1.0)
+        except OSError:
             pass
         self._end_time = time.monotonic()
         if not self.proc.is_done:
@@ -756,7 +941,7 @@ class SubprocessProcess:
 
     @property
     def is_alive(self) -> bool:
-        return self._process is not None and self._process.is_alive()
+        return self._child is not None and self._child.is_alive
 
     @property
     def elapsed(self) -> float | None:
@@ -765,7 +950,7 @@ class SubprocessProcess:
 
     @property
     def pid(self) -> int | None:
-        return self._process.pid if self._process else None
+        return self._child.pid if self._child else None
 
     def cancel(self) -> None:
         self._cancel_event.set()
@@ -778,14 +963,12 @@ class SubprocessProcess:
         }
 
     def resource_usage(self) -> dict | None:
-        if self._process is None or self._process.pid is None:
+        if self._child is None or _resource is None:
             return None
         try:
-            import resource
-
-            if self._process.is_alive():
-                self._process.join(timeout=0.1)
-            usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+            if self._child.is_alive:
+                self._child.join(timeout=0.1)
+            usage = _resource.getrusage(_resource.RUSAGE_CHILDREN)
             return {
                 "ru_maxrss": usage.ru_maxrss,
                 "ru_utime": usage.ru_utime,

@@ -64,7 +64,12 @@ class QueueConfig:
 
 @dataclass(slots=True)
 class SubprocessConfig:
-    """Configuration for subprocess execution in GuardPool."""
+    """Configuration for subprocess execution in GuardPool.
+
+    ``start_method`` selects nothing: pugqeep forks (``os.fork()``) and does
+    not use ``multiprocessing``. The field is kept for config compatibility
+    and warns when set to anything but ``"fork"``.
+    """
 
     enabled: bool = True
     python_exe: str = "python3"
