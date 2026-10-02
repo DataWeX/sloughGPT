@@ -76,7 +76,7 @@ python3 -m pip install -e ".[dev]"
 Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full options are in **QUICKSTART.md**.
 
 ```bash
-# One terminal (API :8000 + web :3000)
+# One terminal (API :8000 + web :5173)
 ./scripts/dev-stack.sh
 # or: make dev-stack
 # or: npm install && npm run dev:stack   # repo root; same shell script
@@ -479,7 +479,7 @@ python3 apps/api/server/main.py
 # or, with reload:
 # cd apps/api/server && python3 -m uvicorn main:app --reload --port 8000
 
-# Web UI (separate terminal; port 3000)
+# Web UI (separate terminal; port 5173)
 cd apps/web && npm install && npm run dev
 ```
 
@@ -609,7 +609,7 @@ cd apps/web && npx vitest run && npx tsc --noEmit
 # API (http://localhost:8000 — OpenAPI at /docs)
 python3 apps/api/server/main.py
 
-# Web UI (http://localhost:3000)
+# Web UI (http://localhost:5173)
 cd apps/web && npm run dev
 ```
 

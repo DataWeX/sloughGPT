@@ -23,7 +23,7 @@ python3 apps/api/server/main.py
 
 # Terminal 2 — Web UI
 cd apps/web && npm install && npm run dev
-# → http://localhost:3000
+# → http://localhost:5173
 
 # Or both in one command
 ./scripts/dev-stack.sh
@@ -103,7 +103,7 @@ SloughGPT includes a consciousness system with 26 pages for monitoring and manag
 | Benchmark | Performance benchmarking tools |
 | API Explorer | Interactive API testing interface |
 
-Access the consciousness UI at `http://localhost:3000/consciousness/dashboard` after starting the web UI.
+Access the consciousness UI at `http://localhost:5173/consciousness/dashboard` after starting the web UI.
 
 ## API Endpoints
 

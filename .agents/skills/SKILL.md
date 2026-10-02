@@ -10,7 +10,7 @@ SloughGPT is an enterprise-grade AI framework with production-ready ML infrastru
 /Users/mac/sloughGPT/
 ├── apps/
 │   ├── api/server/          # FastAPI app (main.py), API requirements.txt
-│   ├── web/                 # Next.js 14 UI — app/(app)/ (port 3000)
+│   ├── web/                 # Next.js 14 UI — app/(app)/ (port 5173)
 │   ├── cli/                 # cli.py (repo-root launcher may wrap this)
 ├── packages/
 │   ├── core-py/             # Python core (tests, utils; domain code at repo domain/)

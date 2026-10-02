@@ -8,7 +8,7 @@
 #   - Web auto-restarts if it dies independently
 #
 # Usage:
-#   ./scripts/dev-stack.sh              # both API (:8000) + Web (:3000)
+#   ./scripts/dev-stack.sh              # both API (:8000) + Web (:5173)
 #   SLO_API_PORT=9000 ./scripts/dev-stack.sh  # custom API port
 #   MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh  # also start Rust edge (:8080)
 #
@@ -20,7 +20,7 @@ cd "$ROOT"
 
 # ── Config ─────────────────────────────────────────────────────
 export SLO_API_PORT="${SLO_API_PORT:-8000}"
-WEB_PORT="${WEB_PORT:-3000}"
+WEB_PORT="${WEB_PORT:-5173}"
 MAN_GATEWAY_PORT="${MAN_GATEWAY_PORT:-8080}"
 MAN_DEV_GATEWAY="${MAN_DEV_GATEWAY:-0}"
 MAX_RETRIES=5
