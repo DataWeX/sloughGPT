@@ -48,7 +48,6 @@ export default defineConfig({
         find: /^next-auth\/react$/,
         replacement: path.resolve(__dirname, 'vite/next-compat/next-auth.tsx'),
       },
-      { find: /^v86$/, replacement: path.resolve(__dirname, 'lib/node-builtin-stub.ts') },
       { find: /^react$/, replacement: path.resolve(__dirname, '../../node_modules/react') },
       { find: /^react-dom$/, replacement: path.resolve(__dirname, '../../node_modules/react-dom') },
     ],

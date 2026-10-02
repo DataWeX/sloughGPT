@@ -12,10 +12,13 @@ import { logger, trackEvent } from '@/lib/dev-log'
 const LINUX_IMAGE_URL = 'https://copy.sh/v86/images/buildroot'
 // Local image produced by buildroot/build.sh (copied to apps/web/public/buildroot/).
 const LOCAL_IMAGE_URL = '/buildroot/buildroot.img'
+// Local browser-linux ISO (Darin755/browser-linux minimal) — boots on the CD-ROM.
+// copy.sh's buildroot image host is dead, so this is the default Linux media.
+const LOCAL_ISO_URL = '/v86/browser-linux.iso'
 const BIOS_URL = '/bios/seabios.bin'
 const VGA_BIOS_URL = '/bios/vgabios.bin'
 const WASM_PATH = '/v86/v86.wasm'
-const MEMORY_MB = 256
+const MEMORY_MB = 64
 const AUTO_SAVE_INTERVAL_MS = 30_000
 const IMAGE_PROBE_TIMEOUT_MS = 5_000
 
@@ -36,6 +39,10 @@ async function probeImage(url: string): Promise<ProbeResult> {
       signal: AbortSignal.timeout(IMAGE_PROBE_TIMEOUT_MS),
     })
     if (!res.ok && res.status !== 206) return { available: false }
+    // Dev servers (Vite SPA fallback, Next) answer unknown paths with 200 +
+    // index.html — treat an HTML response as "image not present".
+    const ctype = res.headers.get('content-type') || ''
+    if (ctype.startsWith('text/html')) return { available: false }
     const total = res.headers.get('content-range')?.split('/')[1]
     if (total && total !== '*') {
       const n = Number(total)
@@ -48,19 +55,30 @@ async function probeImage(url: string): Promise<ProbeResult> {
   }
 }
 
+export interface ResolvedBootImage {
+  url: string
+  size?: number
+  /** How v86 should attach the media: hard disk (hda) or CD-ROM. */
+  media: 'disk' | 'cdrom'
+}
+
 /**
- * Resolve the boot image: prefer the locally built image, then the upstream
- * copy.sh one (its buildroot files have been intermittently 404), and fail
- * fast with an actionable message instead of letting v86 retry a dead URL.
+ * Resolve the boot media: prefer the locally built disk image, then the local
+ * browser-linux ISO (CD-ROM; copy.sh's image host is dead), then the upstream
+ * copy.sh buildroot image, and fail fast with an actionable message instead of
+ * letting v86 retry a dead URL.
  */
-async function resolveDefaultImage(): Promise<{ url: string; size?: number }> {
+async function resolveDefaultImage(): Promise<ResolvedBootImage> {
   const local = await probeImage(LOCAL_IMAGE_URL)
-  if (local.available) return { url: LOCAL_IMAGE_URL, size: local.size }
+  if (local.available) return { url: LOCAL_IMAGE_URL, size: local.size, media: 'disk' }
+  const iso = await probeImage(LOCAL_ISO_URL)
+  if (iso.available) return { url: LOCAL_ISO_URL, size: iso.size, media: 'cdrom' }
   const remote = await probeImage(LINUX_IMAGE_URL)
-  if (remote.available) return { url: LINUX_IMAGE_URL, size: remote.size }
+  if (remote.available) return { url: LINUX_IMAGE_URL, size: remote.size, media: 'disk' }
   throw new Error(
-    `Linux VM image not available: ${LOCAL_IMAGE_URL} not built and upstream copy.sh buildroot unreachable. ` +
-      'Run buildroot/build.sh to build the local image (installed at apps/web/public/buildroot/buildroot.img), then reload.',
+    `Linux VM image not available: ${LOCAL_IMAGE_URL} not built and ${LOCAL_ISO_URL} missing. ` +
+      'Run buildroot/build.sh to build the local image (installed at apps/web/public/buildroot/buildroot.img), ' +
+      'or restore apps/web/public/v86/browser-linux.iso, then reload.',
   )
 }
 
@@ -114,8 +132,9 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
       containerRef.current = container
 
       try {
-        const image = options.imageUrl
-          ? { url: options.imageUrl, size: options.imageSize }
+        // An explicit imageUrl is always treated as a disk image (hda).
+        const image: ResolvedBootImage = options.imageUrl
+          ? { url: options.imageUrl, size: options.imageSize, media: 'disk' }
           : await resolveDefaultImage()
 
         const ctrl = new V86Controller()
@@ -124,6 +143,7 @@ export function useV86(options: UseV86Options = {}): UseV86Result {
           vgaBiosUrl: options.vgaBiosUrl || VGA_BIOS_URL,
           imageUrl: image.url,
           imageSize: image.size,
+          cdromUrl: image.media === 'cdrom' ? image.url : undefined,
           memoryMb: options.memoryMb || MEMORY_MB,
           wasmPath: options.wasmPath || WASM_PATH,
         })
