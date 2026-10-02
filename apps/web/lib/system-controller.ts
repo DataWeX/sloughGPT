@@ -149,6 +149,22 @@ export interface KvSessionsInfo {
   oldest_session_age?: number
 }
 
+/** Cumulative edge byte counters, mirrored from the Rust gateway. */
+export interface BandwidthStats {
+  /** Uncompressed payload bytes the edge served (identity size). */
+  identity_bytes: number
+  /** Bytes actually emitted on the wire (after compression, or unchanged). */
+  wire_bytes: number
+  /** identity_bytes − wire_bytes; negative when compression expanded. */
+  saved_bytes: number
+  /** Share of identity bytes not sent (can be slightly negative). */
+  saved_pct: number
+  compressed_responses: number
+  identity_responses: number
+  zstd_responses: number
+  gzip_responses: number
+}
+
 export interface DetailedHealth {
   status: string
   uptime_seconds: number
@@ -212,6 +228,8 @@ export interface DetailedHealth {
   kv_sessions?: KvSessionsInfo
   quantization?: unknown
   training_pool?: { active_jobs: number; max_workers: number; total_tracked: number } | null
+  /** Edge bandwidth counters — null/absent without a reachable gateway. */
+  bandwidth?: BandwidthStats | null
   lifecycle?: {
     phase: string
     profile?: string

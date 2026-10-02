@@ -32,6 +32,7 @@ import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
 import { SystemStatusCard } from '@/components/monitoring/SystemStatusCard'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
 import { TrafficCard } from '@/components/monitoring/TrafficCard'
+import { BandwidthCard } from '@/components/monitoring/BandwidthCard'
 import { ModelMetricsCard } from '@/components/monitoring/ModelMetricsCard'
 import { PathLatenciesCard } from '@/components/monitoring/PathLatenciesCard'
 import { ServerErrorsCard } from '@/components/monitoring/ServerErrorsCard'
@@ -565,6 +566,7 @@ export default function SystemHealthPage() {
           <div className="space-y-3">
             <DiagnosticsCard liveHealth={liveHealth} />
             <TrafficCard liveHealth={liveHealth} />
+            <BandwidthCard liveHealth={liveHealth} />
             <ModelMetricsCard liveHealth={liveHealth} />
             <PathLatenciesCard liveHealth={liveHealth} />
             <ModelEventsCard liveHealth={liveHealth} />

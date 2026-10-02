@@ -19,7 +19,7 @@
 import { createStore } from 'zustand/vanilla'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import type { HealthStatus } from '@/lib/model-controller'
-import { systemController, type DetailedHealth } from '@/lib/system-controller'
+import { systemController, type DetailedHealth, type BandwidthStats } from '@/lib/system-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
 import { trackEvent } from '@/lib/dev-log'
 import { logStateEvent } from '@/lib/state-events'
@@ -99,6 +99,8 @@ export interface LiveHealthSnapshot {
     error_type: string
     ts: number
   }>
+  /** Edge bandwidth counters — null/absent without a reachable gateway. */
+  bandwidth?: BandwidthStats | null
 }
 
 export interface LiveStatusState {
@@ -182,6 +184,7 @@ export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
     memory_history: Array.isArray(d.memory_history) ? d.memory_history : [],
     path_latencies: Array.isArray(d.path_latencies) ? d.path_latencies : [],
     recent_errors: Array.isArray(d.recent_errors) ? d.recent_errors : [],
+    bandwidth: d.bandwidth ?? null,
   }
 }
 
@@ -274,16 +277,14 @@ export function initLiveStatus(): () => void {
         const h = await systemController.getDetailedHealth()
         if (h && h !== null) {
           const hadFailures = liveStatusStore.getState().failureCount > 0
-          liveStatusStore
-            .getState()
-            .setHealthLegacy({
-              status: 'healthy',
-              model_loaded: h.model_loaded,
-              model_type: h.model_type || '',
-              summary: '',
-              inference_count: h.inference_count,
-              is_inferencing: h.inference?.is_inferencing,
-            })
+          liveStatusStore.getState().setHealthLegacy({
+            status: 'healthy',
+            model_loaded: h.model_loaded,
+            model_type: h.model_type || '',
+            summary: '',
+            inference_count: h.inference_count,
+            is_inferencing: h.inference?.is_inferencing,
+          })
           liveStatusStore.getState().setConnectionStatus('connected')
           // Convert full detailed health to the live snapshot shape
           const snap = mapDetailedToSnapshot(h)
@@ -375,12 +376,14 @@ export function initLiveStatus(): () => void {
     _receivedHealthEvent = true
     stopFallbackPoll()
     const d = envelope.data as Partial<LiveHealthSnapshot>
-    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
+    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
+      StagedLoaderStatus | undefined
     // Hardening: very old / minimal snapshots omit every startup field, which
     // used to pin the StartupOverlay on "Connecting" forever. A loaded model
     // means startup finished — resolve to "background" (overlay-clearing).
     const rawStage = stagedLoader?.stage ?? d.startup_stage ?? 'unknown'
-    const resolvedStage = rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
+    const resolvedStage =
+      rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
       model_loading: Boolean(d.model_loading),
