@@ -224,3 +224,114 @@ def test_compare_detects_regression_and_exit_code(tmp_results, capsys):
 
     assert br.do_compare(Args()) == 1
     assert "REGRESSION" in capsys.readouterr().out
+
+
+# ── history rendering ─────────────────────────────────────────────────────
+#
+# `metrics` is not one shape: latency/Qwen stores a dict of *_ms, one
+# latency file stores a list of compression samples, startup stores *_s and
+# execution stores *_us. The renderer assumed mean_ms/p95_ms everywhere,
+# which crashed on the list and printed a row of '?' for the other two.
+
+
+class _HistArgs:
+    def __init__(self, kind=None):
+        self.kind = kind
+
+
+def test_history_survives_list_shaped_metrics(tmp_results, capsys):
+    """A record whose metrics is a list must not raise.
+
+    The stored `latency/served_*` run holds compression samples as a list of
+    per-size dicts; the old code called .get() on that list and aborted the
+    whole command with AttributeError.
+    """
+    write_result(
+        tmp_results,
+        "latency",
+        "served",
+        metrics=[{"mib": 32, "results": []}, {"mib": 64, "results": []}],
+    )
+
+    assert br.do_history(_HistArgs("latency")) == 0
+    out = capsys.readouterr().out
+    assert "list(2)" in out  # honest about the shape
+    assert "mean=?" not in out  # never a row of question marks
+    assert "Traceback" not in out
+
+
+def test_history_renders_startup_keys(tmp_results, capsys):
+    """startup stores *_s, so mean/p95 were always '?'."""
+    write_result(
+        tmp_results,
+        "startup",
+        "served",
+        metrics={
+            "time_to_health_s": 7.9,
+            "time_to_ready_s": 230.7,
+            "api_starting_timeout_s": 180,
+        },
+    )
+
+    assert br.do_history(_HistArgs("startup")) == 0
+    out = capsys.readouterr().out
+    assert "health=7.9" in out
+    assert "ready=230.7" in out
+    assert "mean=?" not in out
+    # ready past the server's own deadline is the finding, so surface it
+    assert "past 180s timeout" in out
+
+
+def test_history_renders_execution_keys(tmp_results, capsys):
+    write_result(
+        tmp_results, "execution", "served", metrics={"dispatch_us": 4.31, "peak_threads": 5}
+    )
+
+    assert br.do_history(_HistArgs("execution")) == 0
+    out = capsys.readouterr().out
+    assert "dispatch=4.31" in out
+    assert "threads=5" in out
+    assert "mean=?" not in out
+
+
+def test_history_renders_latency_percentiles(tmp_results, capsys):
+    """The shape that already worked keeps working."""
+    write_result(
+        tmp_results,
+        "latency",
+        "m",
+        metrics={"mean_ms": 31739.0, "p50_ms": 27995.0, "p95_ms": 57772.0},
+    )
+
+    assert br.do_history(_HistArgs("latency")) == 0
+    out = capsys.readouterr().out
+    assert "mean=31739" in out
+    assert "p95=57772" in out
+
+
+def test_history_renders_stability_score(tmp_results, capsys):
+    write_result(tmp_results, "stability", "m", score={"overall": 90}, passed=True)
+
+    assert br.do_history(_HistArgs("stability")) == 0
+    out = capsys.readouterr().out
+    assert "overall=90" in out
+    assert "✓" in out
+
+
+def test_history_without_kind_lists_every_kind_with_runs(tmp_results, capsys):
+    """The default hard-coded ['stability', 'latency'] and hid other runs."""
+    write_result(
+        tmp_results, "startup", "served",
+        metrics={"time_to_health_s": 1.0, "time_to_ready_s": 2.0},
+    )
+    write_result(tmp_results, "execution", "served", metrics={"dispatch_us": 1.0})
+    write_result(tmp_results, "latency", "m", metrics={"mean_ms": 10.0})
+    # an empty kind directory is not a run and must stay unlisted
+    (tmp_results / "versions").mkdir(exist_ok=True)
+
+    assert br.do_history(_HistArgs(None)) == 0
+    out = capsys.readouterr().out
+    assert "── startup:" in out
+    assert "── execution:" in out
+    assert "── latency:" in out
+    assert "── versions:" not in out
