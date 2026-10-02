@@ -61,6 +61,7 @@ _WATCHED_OPS = {
     "infra": "INFRA",
     "web": "CHAT",
     "ui": "UI",
+    "bandwidth": "INFRA",
 }
 
 _PATTERNS: list[tuple[re.Pattern, str, str]] = [
@@ -183,6 +184,17 @@ _PATTERNS: list[tuple[re.Pattern, str, str]] = [
 ]
 
 
+def _fmt_bytes(n: int) -> str:
+    """Human-readable byte size for dashboard one-liners."""
+    if n >= 1 << 30:
+        return f"{n / (1 << 30):.1f} GB"
+    if n >= 1 << 20:
+        return f"{n / (1 << 20):.1f} MB"
+    if n >= 1 << 10:
+        return f"{n / (1 << 10):.1f} KB"
+    return f"{n} B"
+
+
 def _summarize_from_op(record: logging.LogRecord, op: str) -> tuple[str, str] | None:
     """Build a punchy summary from slo.log v1 structured fields.
 
@@ -242,6 +254,16 @@ def _summarize_from_op(record: logging.LogRecord, op: str) -> tuple[str, str] | 
         phase = getattr(record, "phase", None)
         if phase:
             return category, f"System {phase}"
+
+    if domain == "bandwidth":
+        identity = getattr(record, "identity_bytes", None)
+        wire = getattr(record, "wire_bytes", None)
+        saved_pct = getattr(record, "saved_pct", None)
+        if identity is not None and wire is not None:
+            return (
+                category,
+                f"Edge {_fmt_bytes(identity)} → {_fmt_bytes(wire)} ({saved_pct}% saved)",
+            )
 
     # Fallback: truncate message
     if len(msg) > 80:

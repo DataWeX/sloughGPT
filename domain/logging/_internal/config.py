@@ -430,6 +430,7 @@ _LEGACY_TAG_TO_OP = {
     "DOWNLOAD": "download.start",
     "WORKFLOW": "workflow.start",
     "SYSTEM": "sys.info",
+    "BANDWIDTH": "bandwidth.interval",
 }
 
 
@@ -791,6 +792,13 @@ def _collect_domain_payload(record: logging.LogRecord, domain: str) -> dict:
         "rag": {"chunks", "chars", "top_k", "results", "verified", "confidence", "citations"},
         "download": {"resource", "elapsed_s", "url", "bytes", "speed"},
         "workflow": {"job_id", "kind", "status"},
+        "bandwidth": {
+            "identity_bytes",
+            "wire_bytes",
+            "saved_bytes",
+            "saved_pct",
+            "responses",
+        },
     }
     keys = _DOMAIN_KEYS.get(domain, set())
     if not keys:

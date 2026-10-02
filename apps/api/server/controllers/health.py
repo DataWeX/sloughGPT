@@ -404,6 +404,23 @@ def _get_memory_pressure_stats() -> dict[str, Any]:
         return {}
 
 
+def _get_bandwidth_stats() -> dict[str, Any] | None:
+    """Mirrored edge bandwidth counters (same shape as the gateway's block).
+
+    None until the gateway mirror's first successful poll — Python-only
+    deployments legitimately have no edge counters to report.
+    """
+    try:
+        from domain.infrastructure._internal.gateway_bandwidth import (
+            get_bandwidth_snapshot,
+        )
+
+        return get_bandwidth_snapshot()
+    except Exception:
+        logger.debug("Bandwidth snapshot unavailable", exc_info=True)
+        return None
+
+
 _cached_process: psutil.Process | None = None
 
 
@@ -700,6 +717,7 @@ class HealthController:
             "process_guard": _get_process_guard_status(),
             "memory_pressure": _get_memory_pressure_stats(),
             "versions": versions,
+            "bandwidth": _get_bandwidth_stats(),
             "status_message": _build_status_message(
                 model_loaded,
                 model_type,

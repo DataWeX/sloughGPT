@@ -46,6 +46,11 @@ class MetricsCollector:
         self._model_loaded: bool = False
         self._model_name: str = ""
 
+        # Edge bandwidth (cumulative gateway counters; None until the
+        # mirror's first successful poll — absent ≠ zero).
+        self._bandwidth_identity: int | None = None
+        self._bandwidth_wire: int | None = None
+
         # Startup metrics
         self._startup_stage: str = "init"
         self._startup_stage_value: int = 0
@@ -87,6 +92,12 @@ class MetricsCollector:
         with self._lock:
             self._model_loaded = loaded
             self._model_name = name
+
+    def record_bandwidth(self, identity_bytes: int, wire_bytes: int) -> None:
+        """Store cumulative edge byte counters (from the gateway mirror)."""
+        with self._lock:
+            self._bandwidth_identity = int(identity_bytes)
+            self._bandwidth_wire = int(wire_bytes)
 
     def record_startup_stage(self, stage: str, stage_value: int, elapsed: float) -> None:
         """Record startup stage completion."""
@@ -269,6 +280,19 @@ class MetricsCollector:
             )
             lines.append("# TYPE sloughgpt_startup_regression_count counter")
             lines.append(f"sloughgpt_startup_regression_count {self._startup_regression_count}")
+
+            # Edge bandwidth — cumulative gateway counters, mirrored by
+            # gateway_bandwidth.py. Rendered only after the first sample:
+            # absent (no gateway) must not masquerade as zero traffic.
+            if self._bandwidth_identity is not None:
+                lines.append(
+                    "# HELP sloughgpt_gateway_identity_bytes Uncompressed bytes the edge served."
+                )
+                lines.append("# TYPE sloughgpt_gateway_identity_bytes gauge")
+                lines.append(f"sloughgpt_gateway_identity_bytes {self._bandwidth_identity}")
+                lines.append("# HELP sloughgpt_gateway_wire_bytes Bytes actually sent on the wire.")
+                lines.append("# TYPE sloughgpt_gateway_wire_bytes gauge")
+                lines.append(f"sloughgpt_gateway_wire_bytes {self._bandwidth_wire}")
 
         return "\n".join(lines) + "\n"
 

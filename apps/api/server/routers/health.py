@@ -858,6 +858,9 @@ class HealthRouter:
                 "rate_violations": detailed.get("rate_violations", []),
                 "path_latencies": detailed.get("path_latencies", []),
                 "recent_errors": detailed.get("recent_errors", []),
+                # Edge bandwidth — mirrored gateway counters (None in
+                # Python-only mode; the card hides itself when absent).
+                "bandwidth": detailed.get("bandwidth"),
             },
             "meta": {"ts": time.time()},
             "message": hs.get("summary", ""),

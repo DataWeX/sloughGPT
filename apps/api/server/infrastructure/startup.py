@@ -464,11 +464,22 @@ class StartupOrchestrator:
             stem = self._bg_tree.branch([proc])
             await asyncio.to_thread(stem._done_event.wait)
 
+        async def _init_bandwidth():
+            # Edge byte-counter mirror — polls the gateway's /health/detailed
+            # on its own daemon thread; no-op (silent) when the gateway is
+            # absent or MAN_GATEWAY_URL="" disables it.
+            from domain.infrastructure._internal.gateway_bandwidth import (
+                start_bandwidth_mirror,
+            )
+
+            start_bandwidth_mirror()
+
         loader.on(Stage.BACKGROUND, "wandb", _init_wandb, timeout=30.0)
         loader.on(Stage.BACKGROUND, "multimodal", _init_multimodal, timeout=30.0)
         loader.on(Stage.BACKGROUND, "metrics", _init_metrics, timeout=10.0)
         loader.on(Stage.BACKGROUND, "autotrainer", _init_autotrainer, timeout=10.0)
         loader.on(Stage.BACKGROUND, "rag_ingest", _init_rag, timeout=60.0)
+        loader.on(Stage.BACKGROUND, "bandwidth", _init_bandwidth, timeout=5.0)
 
         # Stage 2 (READY) and Stage 3 (BACKGROUND) run *after* the socket binds.
         # uvicorn refuses connections until the lifespan yields, and READY blocks
