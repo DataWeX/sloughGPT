@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useLiveStatus, type StartupStage, type HookStatus } from '@/hooks/useLiveStatus'
 import { ManMark } from '@/components/brand/ManMark'
+import { useBannerStore } from '@/lib/banner-store'
 import { logStateEvent } from '@/lib/state-events'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,10 @@ const STAGE_LABELS: Record<StartupStage, string> = {
 const STAGE_ORDER: StartupStage[] = ['init', 'critical', 'ready', 'background']
 
 const STUCK_TIMEOUT_MS = 8_000
+
+// No-progress bound for the whole boot path: any stage transition or model-%
+// advance restarts the clock (see progressKey below).
+const STALL_TIMEOUT_MS = 20_000
 
 const HOOK_LABELS: Record<string, string> = {
   db_pool: 'Database',
@@ -47,6 +52,10 @@ export function StartupOverlay() {
 
   const stageIndex = STAGE_ORDER.indexOf(startupStage)
   const isReady = startupStage === 'background' || startupStage === 'ready'
+  // Boot-progress identity: any stage transition or model-% change restarts the
+  // stall clock. Mere health updates do NOT count — a wedged backend that keeps
+  // answering with a stuck stage must still trip the watchdog.
+  const progressKey = `${startupStage}:${startupModelProgress}`
 
   useEffect(() => {
     logStateEvent('overlay_shown', {
@@ -73,6 +82,35 @@ export function StartupOverlay() {
     }, STUCK_TIMEOUT_MS)
     return () => clearTimeout(timer)
   }, [isReady, stageIndex, startupStage])
+
+  // Stall watchdog: no boot progress for STALL_TIMEOUT_MS. The stuck watchdog
+  // above only covers an unknown stage — a wedged backend that already reported
+  // a known stage would otherwise pin this overlay forever with no exit (the
+  // "boot overlay never dismissed" journey blocker). Force-dismiss into
+  // degraded mode and surface the one global banner (deduped by key) with a
+  // Retry action.
+  useEffect(() => {
+    if (!visible || isReady) return
+    const timer = setTimeout(() => {
+      setFadeOut(true)
+      logStateEvent('overlay_timeout', {
+        kind: 'overlay',
+        message: `overlay_timeout no progress for ${STALL_TIMEOUT_MS}ms key=${progressKey}`,
+        data: { progress_key: progressKey, timeout_ms: STALL_TIMEOUT_MS },
+      })
+      useBannerStore.getState().showBanner({
+        key: 'startup-degraded',
+        tone: 'warning',
+        title: 'Backend not responding',
+        message: 'The server did not respond in time — the app is running in degraded mode.',
+        action: { label: 'Retry', onAction: () => window.location.reload() },
+      })
+      // Deliberately not tied to effect cleanup: once we give up, the
+      // dismissal completes even if progress arrives during the fade.
+      setTimeout(() => setVisible(false), 600)
+    }, STALL_TIMEOUT_MS)
+    return () => clearTimeout(timer)
+  }, [visible, isReady, progressKey])
 
   useEffect(() => {
     if (isReady && connected) {
