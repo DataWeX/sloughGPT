@@ -4,7 +4,9 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-02 23:30 — card `20260928_075` gate landed on main.
+**Last update**: 2026-10-03 ~06:35 — card `19cd41dc` downcraft compression
+landed (see Landed below). Earlier the same day: journey suites repointed to
+`:5173` (gate9's route-smoke F-class was a stale port, not a missing server).
 
 ## Sync recipe
 
@@ -24,7 +26,15 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `3cc62050a`)
+## Landed on main (origin/main = `de2fe6cf4`)
+
+- **2026-10-03 · card `19cd41dc` — download compression lands in the downcraft
+  path.** `feat/downcraft-compression`: decoded byte-space enforced across the
+  compressed resume path (Range offsets vs decompressed bytes; wire-space 206s
+  no longer corrupt resumes), streamed `resp.read()` + stale-Range duplication
+  fixes, SLZ4 resume verifies SHA-256; new
+  `scripts/benchmark_downcraft_compression.py`. Gates on the merged tree: 482
+  passed + ruff clean + benchmark green.
 
 - **2026-10-02 · card `20260928_075` — full `packages/core-py/tests` no longer
   hangs.** One merge of `feat/infra-thread-teardown` covers
@@ -47,11 +57,28 @@ git push -u origin feat/<name>   # push your own branch when done
 - **2026-10-02 · local-main backlog published**: health-payload trim
   (10 MB → ~300 B), `:3000` → `:5173` doc claims, doctor Phase A (5 commits
   that sat unpushed).
+- **2026-10-03 · journey suites repointed `:3000` → `:5173`** (gate9's
+  route-smoke class = stale port; vite lives on `:5173`, card `e47e19ee`
+  deferred core-py journey tests). `test_user_journeys`,
+  `test_computer_use_training_integration`, `test_e2e_training_trigger` now use
+  `BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"` (code edits
+  preserved mid-run by the doctor session's `6b74a4024`; results `de2fe6cf4`).
+  Live-stack census **95P/11F** (of gate9's 118: 83 green, 11 stale selectors,
+  24 no longer exist — pre-merge file collected 99, main's consolidated file
+  collects 75).
+  Residual 11 = datasets-import dialog/Kaggle ×7, tools selectors ×2,
+  Vite-proxy API URL, training config → journey session, card
+  `20260929_journey_gates_conda`.
+- **2026-10-02 · `fix/doctor-ui` merged** (`40ba857e0`) — /doctor API + page.
 - `zzz_test.py` at repo root is a stray from origin's `89e01b58c`
   (shell lazy-loading refactor) — not ours; owner please remove.
 
 ## In flight
 
+- `fix/journey-test-gates` (3 commits, validated, **awaiting sign-off**) — on
+  rebase, take main's `:5173` + `SLO_WEB_URL` BASE lines (they conflict); its
+  module-level server `skipif` (no-server case) + `test_hf_*` rework are still
+  wanted — the rework fixes 7 of the 11 residual journey failures.
 - Root-repo session on `feat/pipe-bounded-execution`; ~40 `feat/*` worktrees
   active — `git branch -vv` + the kanban board name the owners.
 - The 683 baseline failures are known drift → card `56b49cf1` (drift baseline).
