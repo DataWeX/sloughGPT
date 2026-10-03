@@ -80,6 +80,10 @@ def _collector_out():
     of the code, not the collector's schedule -- a 12% regression is smaller
     than a single collection, so leaving GC in would bury every signal this
     benchmark exists to catch.
+
+    Necessary but not sufficient on its own: it removes in-process noise only.
+    The throughput benches also read CPU time for the other half -- see
+    ``_cpu_seconds``.
     """
     gc.collect()
     gc.disable()
@@ -87,6 +91,21 @@ def _collector_out():
         yield
     finally:
         gc.enable()
+
+
+def _cpu_seconds() -> float:
+    """CPU seconds this process has consumed -- not wall-clock seconds.
+
+    Throughput benches read this instead of ``perf_counter`` because the box
+    is shared. A wall clock bills the process for time it spent descheduled:
+    at load average 18, banded spawn cost spread 4.09x on wall time with the
+    collector already held, and 1.28x on CPU time. CPU time is the only one of
+    the two that survives another session competing for the same cores.
+
+    Deliberately NOT used by bench_bound or bench_backpressure: those measure
+    waiting for a slot, which is real elapsed time and must stay wall-clock.
+    """
+    return time.process_time()
 
 
 # ── admission overhead ───────────────────────────────────────────────────────
@@ -114,11 +133,11 @@ def bench_admit_release(iters: int = N_ADMIT, repeats: int = REPEATS) -> dict:
         pipe.admit(stub)
         pipe.release(stub)  # warm
         with _collector_out():
-            start = time.perf_counter()
+            start = _cpu_seconds()
             for _ in range(iters):
                 pipe.admit(stub)
                 pipe.release(stub)
-            elapsed = time.perf_counter() - start
+            elapsed = _cpu_seconds() - start
         best = min(best, elapsed / iters * 1e9)
 
     return {
@@ -146,10 +165,10 @@ def bench_spawn(count: int = N_SPAWN, repeats: int = REPEATS) -> dict:
             _drain(engine)
 
             with _collector_out():
-                start = time.perf_counter()
+                start = _cpu_seconds()
                 for i in range(count):
                     engine.spawn(_noop, name=f"p{i}")
-                elapsed = time.perf_counter() - start
+                elapsed = _cpu_seconds() - start
             best = min(best, elapsed / count * 1e9)
             _drain(engine)
 
@@ -317,7 +336,7 @@ def _print(metrics: dict) -> None:
     bd = metrics["bound"]
     bp = metrics["backpressure"]
 
-    print(f"PGQ pipe benchmark   (best of {ar['repeats']} passes, gc held off)")
+    print(f"PGQ pipe benchmark   (best of {ar['repeats']} passes, cpu time, gc off)")
     print(f"  admit+release      {ar['ns_per_cycle']:>9.1f} ns/cycle  ({ar['cycles']:,} cycles)")
     print(
         f"  Engine.spawn       {sp['ns_per_spawn']:>9.1f} ns/spawn   ({sp['spawns']:,} spawns/pass)"
