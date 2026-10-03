@@ -281,3 +281,23 @@ is report-only — it never remediates.
 **Report path:** `${SLO_DOCTOR_REPORT:-~/.cache/slog-doctor/findings-report.json}`
 (JSON, `schema_version: 1`, findings ranked worst-first).
 
+### Surfaced: `/doctor` API + `/doctor` page
+
+| Endpoint | Data | Notes |
+|----------|------|-------|
+| `GET /doctor/report` | `{report, path, age_s}` | reads `$SLO_DOCTOR_REPORT`; missing/corrupt file → `report: null` + `age_s: null` (empty state, **not** an error); `age_s` = seconds since `report.ts` |
+| `POST /doctor/run` | `{report}` | **light run**: `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
+
+The `/doctor` page (`apps/web/app/(app)/doctor/page.tsx`) fetches the report
+on mount and after every run, then shows the overall severity pill + severity
+counts + report age, a live component strip (inference / engines-system from
+`useLiveStatus`), and the findings grouped worst-first with each detail folded
+behind a disclosure.
+
+```bash
+# Router + doctor package tests
+.venv/bin/python -m pytest tests/server/test_doctor_router.py packages/core-py/tests/test_doctor.py -q
+# Page + component tests (worktree: add --config /tmp/opencode/vitest-worktree.config.ts)
+node_modules/.bin/vitest run "app/(app)/doctor/page.test.tsx" components/doctor/
+```
+

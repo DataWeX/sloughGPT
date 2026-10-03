@@ -20,6 +20,7 @@ import {
   IconGrid,
   IconUsers,
   IconClock,
+  IconHeart,
 } from '@/components/icons/NavIcons'
 import type { ComponentType } from 'react'
 
@@ -117,6 +118,12 @@ export const NAV_SECTIONS: NavSectionDef[] = [
         shortcut: '7',
         icon: 'activity',
         description: 'System status & errors',
+      },
+      {
+        path: '/doctor',
+        labelKey: 'nav.doctor',
+        icon: 'heart',
+        description: 'Read-only site checks',
       },
       {
         path: '/settings',
@@ -225,6 +232,7 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/souls': IconSparkle,
   '/benchmark': IconBenchmark,
   '/monitoring': IconActivity,
+  '/doctor': IconHeart,
   '/settings': IconSettings,
   '/developer': IconCode,
   '/feedback': IconThumbUp,
