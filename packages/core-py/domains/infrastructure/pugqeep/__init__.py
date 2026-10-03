@@ -85,6 +85,12 @@ from .generic import (
 )
 from .library import PointLibrary
 from .model_tree import ModelTree
+from .pipe import (
+    DEFAULT_CAPACITY,
+    Pipe,
+    PipeClosed,
+    ProcessQueue,
+)
 from .point import Point
 from .point_interface import PointProtocol, PointView
 from .queue import ModelQueue
@@ -180,6 +186,11 @@ __all__ = [
     "MAX_FRAME",
     "PROTOCOL_VERSION",
     "HANDSHAKE_TIMEOUT",
+    # Execution-stack admission (one queue, one door)
+    "Pipe",
+    "PipeClosed",
+    "ProcessQueue",
+    "DEFAULT_CAPACITY",
 ]
 
 __version__ = "0.1.0"

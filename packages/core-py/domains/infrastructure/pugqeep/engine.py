@@ -42,6 +42,7 @@ from typing import Any, Optional
 
 from .config import RestartPolicy
 from .frame import FrameEOF, FrameHandler, MsgType, ProtocolError
+from .pipe import DEFAULT_CAPACITY, Pipe, PipeClosed
 
 try:  # pragma: no cover - POSIX only, which is where fork exists
     import resource as _resource
@@ -265,7 +266,12 @@ class Process:
 
 @dataclass
 class Stem:
-    """A branch of parallel execution from a Pool."""
+    """A branch of parallel execution from a Pool -- the unit that drives the queue.
+
+    A Stem is execution, not accounting: while it is alive its processes
+    hold capacity in the process queue, and the Stem is what completes or
+    fails them so that capacity returns.
+    """
 
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
     pool_id: str = ""
@@ -314,9 +320,22 @@ class Stem:
 
 
 class Pool:
-    """Thread pool that branches Stems of parallel tasks."""
+    """Task pooling and the resources it needs: threads, stems, limits.
 
-    def __init__(self, name: str, max_stems: int = 8, pool_workers: int = 4):
+    Pool decides how admitted work is laid out -- how many Stems, how many
+    worker threads. It does not manage processes: the execution stack's
+    only management layer is the queue behind :meth:`branch`, and Pool's
+    duty there is to cross that door exactly once, before it mutates any
+    of its own state.
+    """
+
+    def __init__(
+        self,
+        name: str,
+        max_stems: int = 8,
+        pool_workers: int = 4,
+        pipe: Pipe | None = None,
+    ):
         self.name = name
         self.status = PoolStatus.IDLE
         self.max_stems = max_stems
@@ -327,11 +346,35 @@ class Pool:
         )
         self._lock = threading.Lock()
         self._graph: dict[str, Any] = {}
+        # A Pool escapes Engine through Engine.pool()'s return value, so it
+        # needs a door even when nobody hands it one. Engine injects its own
+        # pipe at creation, which keeps an Engine-wide stack on a single
+        # queue; a standalone Pool mints and owns one instead.
+        self._pipe = pipe if pipe is not None else Pipe(name=f"pool:{name}")
+        self._owns_pipe = pipe is None
 
     def branch(self, processes: list[Process]) -> Stem:
         with self._lock:
             if len(self._stems) >= self.max_stems:
                 raise RuntimeError(f"Pool '{self.name}' at max stems ({self.max_stems})")
+
+        # Admit BEFORE any state change: a blocked put must not leave a
+        # half-built stem behind it. Work already admitted (the Engine.spawn
+        # path) passes through as a no-op, so the two doors meeting here
+        # never double-count, and a refusal rolls back exactly what this
+        # call added rather than leaking its capacity.
+        admitted: list[Process] = []
+        try:
+            for proc in processes:
+                fresh = not self._pipe.owns(proc)
+                if not self._pipe.admit(proc):
+                    raise PipeClosed(f"pipe '{self._pipe.name}' closed during admission")
+                if fresh:
+                    admitted.append(proc)
+        except BaseException:
+            for proc in admitted:
+                self._pipe.release(proc)
+            raise
 
         stem = Stem(pool_id=self.name, processes=processes)
         self._stems[stem.id] = stem
@@ -403,6 +446,10 @@ class Pool:
 
     def shutdown(self) -> None:
         self.status = PoolStatus.STOPPED
+        if self._owns_pipe:
+            # Only a pipe this Pool minted: an Engine-injected one is shared
+            # with every other pool and must outlive any single shutdown.
+            self._pipe.close()
         self._pool.shutdown(wait=False)
 
     def to_dict(self) -> dict:
@@ -416,7 +463,11 @@ class Pool:
 
 
 class GuardPool(Pool):
-    """Pool that wraps processes in SubprocessProcess for subprocess isolation."""
+    """Pool that wraps processes in SubprocessProcess for subprocess isolation.
+
+    Same pooling and resource responsibilities as :class:`Pool`; only the
+    isolation strategy differs.
+    """
 
     def __init__(
         self,
@@ -425,8 +476,9 @@ class GuardPool(Pool):
         max_stems: int = 8,
         pool_workers: int = 4,
         default_timeout: float = None,
+        pipe: Pipe | None = None,
     ):
-        super().__init__(name, max_stems=max_stems, pool_workers=pool_workers)
+        super().__init__(name, max_stems=max_stems, pool_workers=pool_workers, pipe=pipe)
         self.subprocess_config = config
         self.default_timeout = default_timeout
         self._subprocesses: dict[str, SubprocessProcess] = {}
@@ -1290,11 +1342,14 @@ class ResultCache:
 
 
 class Engine:
-    """An agnostic, virtualizing vCPU for processes.
+    """The execution graph: points, leaves, nodes, branches and loops.
 
-    Spawns processes, routes them to Pools (thread pools) and
-    GuardPools (subprocess isolation), and branches Stems of
-    parallel tasks. Host-application semantics stay outside.
+    Engine owns the *topology* of a computation, plus the single
+    :class:`Pipe` every path onto the execution stack must cross -- which
+    is what makes the stack's diameter knowable rather than declared. It
+    spawns processes, routes them to Pools (task pooling and resources)
+    and GuardPools (subprocess isolation), and branches Stems that carry
+    out the work. Host-application semantics stay outside.
     """
 
     def __init__(self, name: str = "main", max_pools: int = 16, config=None):
@@ -1320,6 +1375,11 @@ class Engine:
         self._scheduling_policy: SchedulingPolicy = SchedulingPolicy.ROUND_ROBIN
         self._dependents: dict[str, list[str]] = {}
         self._spawn_queue = None
+        # One queue, one door. Every path onto the execution stack enters here
+        # or through a Pool carrying this same pipe, which is what makes
+        # diameter()/usage()/headroom() derivable rather than declared.
+        capacity = self._config.queue_size if self._config else DEFAULT_CAPACITY
+        self._pipe = Pipe(name=f"{self.name}:pipe", capacity=capacity)
         self._metrics = EngineMetrics()
         self._cache: ResultCache | None = None
         self._monitor: ProcessMonitor | None = None
@@ -1360,6 +1420,16 @@ class Engine:
         **kwargs: Any,
     ) -> Process:
         proc = Process(fn=fn, args=args, kwargs=kwargs, name=name, timeout=timeout)
+
+        # Admission is the FIRST mutation — ahead of _dependents, the cache and
+        # _processes. Previously the blocking put ran last, after all three had
+        # already changed, so a full stack left records for work that was never
+        # let in and usage() disagreed with reality by exactly that window.
+        # A cache hit needs no capacity: it is complete on arrival and retires
+        # itself on the next read.
+        if not self._pipe.admit(proc):
+            raise PipeClosed(f"engine '{self.name}' is stopping; will not admit {proc.id}")
+
         proc._priority = priority
         if pool:
             proc._pool_name = pool
@@ -1416,9 +1486,15 @@ class Engine:
                     max_stems=max_stems,
                     pool_workers=pool_workers,
                     default_timeout=default_timeout,
+                    pipe=self._pipe,
                 )
             else:
-                pool = Pool(name, max_stems=max_stems, pool_workers=pool_workers)
+                pool = Pool(
+                    name,
+                    max_stems=max_stems,
+                    pool_workers=pool_workers,
+                    pipe=self._pipe,
+                )
             self._pools[name] = pool
             if self._default_pool is None:
                 self._default_pool = name
@@ -1444,6 +1520,7 @@ class Engine:
         return stem
 
     def dispatch(self) -> int:
+        self._pipe.open()
         if not self._pending:
             return 0
 
@@ -1514,6 +1591,7 @@ class Engine:
         self, poll_interval: float = 0.1, on_progress: Callable[[dict], None] | None = None
     ) -> None:
         self._running = True
+        self._pipe.open()
         logger.info("Engine[%s]: starting main loop", self.name)
 
         while self._running:
@@ -1601,6 +1679,10 @@ class Engine:
 
     def stop(self) -> None:
         self._running = False
+        # Wake anyone parked on a full stack: a stopped engine admits nothing
+        # more, so waiting for capacity that will never free is a hang rather
+        # than backpressure. run()/dispatch() re-arm it.
+        self._pipe.close()
         self.stop_workers()
         for proc in self._processes.values():
             if not proc.is_done:
