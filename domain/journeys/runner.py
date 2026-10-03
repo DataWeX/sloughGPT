@@ -60,6 +60,31 @@ def describe_steps(flow: Flow) -> list[str]:
     ]
 
 
+def render_summary(report: dict[str, Any], report_path: str = "") -> str:
+    """Plain-ASCII terminal summary ('gauge') for a journey run."""
+    flows = report.get("flows", [])
+    passed = report.get("passed", 0)
+    total = len(flows)
+    width = 56
+    rows = ["=" * width, "  JOURNEY RUN", "=" * width]
+    for rec in flows:
+        fid = str(rec.get("task", "?"))
+        dur = rec.get("duration_s", 0)
+        ok = rec.get("status") == "passed"
+        mark = "PASS" if ok else "FAIL"
+        suffix = "" if ok else f"   {str(rec.get('error', ''))[:40]}"
+        rows.append(f"  [{mark}] {fid:<14} {dur:>7}s{suffix}")
+    rows.append("-" * width)
+    rows.append(
+        f"  {passed}/{total} passed | "
+        f"console={report.get('console_error_count', 0)} "
+        f"network={report.get('network_error_count', 0)}"
+    )
+    if report_path:
+        rows.append(f"  report: {report_path}")
+    return "\n".join(rows)
+
+
 async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
     from avion import Avion
     from avion.backends.playwright import PlaywrightBackend
@@ -139,13 +164,7 @@ async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
         await a.stop()
 
     report = persist()
-    print(
-        f"\n{report['passed']}/{len(results)} journeys passed | "
-        f"console_errors={report['console_error_count']} "
-        f"network_errors={report['network_error_count']}",
-        flush=True,
-    )
-    print(f"report: {REPORT}", flush=True)
+    print(render_summary(report, REPORT), flush=True)
 
     failed = report["failed"]
     if strict_errors and (console_errors or network_errors):

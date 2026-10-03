@@ -55,6 +55,33 @@ def test_describe_steps_names_and_optional_markers():
     assert describe_steps(get_flow("0-home"))[0] == "goto /"
 
 
+def test_render_summary_gauge():
+    from domain.journeys.runner import render_summary
+
+    report = {
+        "flows": [
+            {"task": "0-home", "status": "passed", "duration_s": 1.2, "error": ""},
+            {
+                "task": "12-training",
+                "status": "failed",
+                "duration_s": 60.7,
+                "error": "boot overlay never dismissed",
+            },
+        ],
+        "passed": 1,
+        "console_error_count": 33,
+        "network_error_count": 0,
+    }
+    out = render_summary(report, "/tmp/r.json")
+    assert "[PASS] 0-home" in out
+    assert "[FAIL] 12-training" in out
+    assert "boot overlay never dismissed" in out
+    assert "1/2 passed" in out
+    assert "console=33" in out
+    assert "/tmp/r.json" in out
+    assert all(ord(c) < 128 for c in out), "summary must be plain ASCII"
+
+
 def test_list_flows_preserves_registry_order():
     assert [f.id for f in list_flows()] == [f.id for f in FLOWS]
 
