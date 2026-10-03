@@ -110,6 +110,19 @@ class TestFireAndForgetPool:
         pool.shutdown()
         assert pool.stats["workers"] == 0
 
+    def test_shutdown_stops_workers_when_queue_full(self):
+        """RED: _STOP must still be delivered when the bounded queue is
+        full at shutdown — otherwise the worker drains the queue and
+        blocks on q.get() forever (daemon leak, caught by full-suite
+        test_b_no_leaked_threads_after_teardown)."""
+        pool = FireAndForgetPool(size=1, queue_size=1)
+        pool.submit(lambda: time.sleep(0.3))  # worker busy
+        pool.submit(lambda: None)  # fills the queue (maxsize=1)
+        worker = pool._workers[0]
+        pool.shutdown()
+        worker.join(timeout=3)
+        assert not worker.is_alive(), "worker leaked: _STOP never delivered on full queue"
+
     def test_task_failure_swallowed(self):
         pool = FireAndForgetPool(size=1, queue_size=2)
         done = threading.Event()

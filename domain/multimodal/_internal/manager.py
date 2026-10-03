@@ -9,6 +9,7 @@ user-provided image data. No external downloads.
 from __future__ import annotations
 
 import logging
+import threading
 from dataclasses import dataclass
 
 import numpy as np
@@ -59,6 +60,9 @@ class MultimodalManager:
     - Speech-to-text (voice input via Web Speech API or Whisper)
     - Image captioning (learned from scratch)
     """
+
+    _pretrain_thread: threading.Thread | None = None
+    _pretrain_cancel: threading.Event | None = None
 
     def __init__(self):
         self._speech_recognizer = None
@@ -136,12 +140,23 @@ class MultimodalManager:
         if self._multimodal_engine is not None and not getattr(
             self._multimodal_engine, "_trained", False
         ):
-            import threading
-
-            t = threading.Thread(
-                target=self._pretrain_engine, daemon=True, kwargs={"epochs": 10, "samples": 216}
-            )
-            t.start()
+            cls = type(self)
+            running = cls._pretrain_thread
+            if running is not None and running.is_alive():
+                logger.debug("Pretrain already running — skipping duplicate spawn")
+            else:
+                cls._pretrain_cancel = threading.Event()
+                thread = threading.Thread(
+                    target=self._pretrain_engine,
+                    daemon=True,
+                    kwargs={
+                        "epochs": 10,
+                        "samples": 216,
+                        "cancel": cls._pretrain_cancel,
+                    },
+                )
+                cls._pretrain_thread = thread
+                thread.start()
 
         self._initialized = True
         logger.info("Multimodal initialized", extra={"tag": "MODEL"})
@@ -330,18 +345,49 @@ class MultimodalManager:
         idx = int(abs(float(arr.mean()))) % len(self._SEED_CAPTIONS)
         return self._SEED_CAPTIONS[idx]
 
+    @classmethod
+    def stop_pretrain(cls, timeout: float = 5.0) -> bool:
+        """Signal the background pretrain thread to stop and wait for it.
+
+        Returns True if no pretrain thread is running after the call.
+        """
+        event = cls._pretrain_cancel
+        if event is not None:
+            event.set()
+        thread = cls._pretrain_thread
+        if thread is None:
+            cls._pretrain_cancel = None
+            return True
+        thread.join(timeout)
+        if thread.is_alive():
+            return False
+        cls._pretrain_thread = None
+        cls._pretrain_cancel = None
+        return True
+
     def _pretrain_engine(
-        self, epochs: int = 10, samples: int = 216, batch_size: int = 8, lr: float = 5e-4
+        self,
+        epochs: int = 10,
+        samples: int = 216,
+        batch_size: int = 8,
+        lr: float = 5e-4,
+        cancel: threading.Event | None = None,
     ) -> float:
         """Run multi-epoch batched synthetic training to initialize the engine.
 
         Generates shape-caption pairs and trains both vision encoder and
         transformer decoder for the given number of epochs.
 
+        If ``cancel`` is set, training stops at the next checkpoint without
+        marking the engine trained or saving state.
+
         Returns final loss.
         """
         engine = self._multimodal_engine
         if engine is None:
+            return float("inf")
+        if cancel is not None and cancel.is_set():
+            logger.info("Pretrain cancelled before start", extra={"tag": "MODEL"})
             return float("inf")
 
         images, captions = self._gen_synthetic_data(samples)
@@ -359,10 +405,15 @@ class MultimodalManager:
 
         final_loss = float("inf")
         for ep in range(epochs):
+            if cancel is not None and cancel.is_set():
+                logger.info("Pretrain cancelled after epoch %d", ep, extra={"tag": "MODEL"})
+                return final_loss
             idx = np.random.permutation(n)
             epoch_loss = 0.0
             steps = 0
             for start in range(0, n, batch_size):
+                if cancel is not None and cancel.is_set():
+                    break
                 batch_idx = idx[start : start + batch_size]
                 batch_imgs = images[batch_idx]
                 batch_caps = [captions[i] for i in batch_idx]
@@ -387,6 +438,9 @@ class MultimodalManager:
 
             avg_loss = epoch_loss / max(steps, 1)
             final_loss = avg_loss
+            if cancel is not None and cancel.is_set():
+                logger.info("Pretrain cancelled during epoch %d", ep + 1, extra={"tag": "MODEL"})
+                return final_loss
             if (ep + 1) % 5 == 0 or ep == 0:
                 logger.info(
                     "  Pretrain epoch %d/%d — loss: %.4f",
@@ -404,6 +458,14 @@ class MultimodalManager:
                     result.text.strip()[:40],
                     extra={"tag": "MODEL"},
                 )
+
+        if cancel is not None and cancel.is_set():
+            logger.info(
+                "Pretrain cancelled before save — final loss: %.4f",
+                final_loss,
+                extra={"tag": "MODEL"},
+            )
+            return final_loss
 
         # Fill replay buffer with training data
         for i in range(min(samples, len(images))):

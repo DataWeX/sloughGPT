@@ -33,7 +33,7 @@ python3 apps/api/server/main.py
 # Access at http://localhost:8000/docs
 ```
 
-**Web UI** (another terminal): `cd apps/web && npm install && npm run dev` → http://localhost:3000
+**Web UI** (another terminal): `cd apps/web && npm install && npm run dev` → http://localhost:5173
 
 **API + web together** (one terminal; Ctrl+C stops both): `./scripts/dev-stack.sh`, `make dev-stack`, or **`npm install` at repo root once then `npm run dev:stack`** (auto-restarts on crash; same processes as the shell script).
 

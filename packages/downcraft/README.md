@@ -30,6 +30,13 @@ downcraft list
 4. Server sends only remaining bytes → appended to `.sgpart`
 5. On completion → atomically renames to final filename
 
+**Byte-space invariant**: `.sgpart` size, `Range` offsets, `Content-Range`
+responses and `state.json` `bytes_downloaded` are all measured in *decoded*
+(identity) bytes — compressed wire bytes are never persisted, including for
+gzip/zstd/lz4 responses. On every retry the resume offset is re-derived from
+disk (never reused from the previous attempt), so a partially-written chunk
+can never be duplicated or skipped.
+
 ## Compression
 
 Install with compression support:
@@ -79,6 +86,28 @@ result = download(
     compressed=True,
 )
 ```
+
+Decoding is **response-driven**: any `Content-Type: application/x-lz4`
+response is stream-decoded to identity before writing, with or without
+`compressed=True` (the flag additionally advertises
+`Accept-Encoding: zstd, gzip, lz4` so an edge gateway may answer with
+zstd/gzip — those are decoded to identity too, so resume stays consistent).
+
+### Resume + integrity for compressed downloads
+
+- Range requests are answered in **identity byte-space** and relay the
+  original SLZ4 header checksum as `X-SLZ4-SHA256`.
+- After a resumed download the relayed header checksum is verified against
+  the completed file (mismatch → the `.sgpart` is discarded, no mixed
+  versions), then the caller's SHA-256 (`download.verify`) as with any
+  other download — both run **before** the atomic rename.
+- SLZ4 header/integrity failures discard the partial and raise
+  `DownloadError`; a mid-stream truncation keeps the decoded prefix and the
+  next attempt resumes from it.
+
+Benchmark: `scripts/benchmark_downcraft_compression.py` — codec
+throughput/ratio (identity vs SLZ4 levels vs gzip/zstd) plus end-to-end
+`download_file` runs including interrupted-and-resumed downloads.
 
 ### Auto-detect compression
 

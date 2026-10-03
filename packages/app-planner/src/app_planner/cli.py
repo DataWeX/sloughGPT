@@ -228,6 +228,40 @@ def _board_stats(args: argparse.Namespace) -> int:
 # ── Sync ─────────────────────────────────────────────────────────────────
 
 
+def _verify(args: argparse.Namespace) -> int:
+    from app_planner.verify import format_report, verify_note
+
+    note_path = Path(args.note)
+    if not note_path.exists():
+        # resolve by title substring across journal markdown notes: the
+        # project notes dir first, then the user fallback (~/.config/dev-notes)
+        search_dirs = [config.default_notes_dir()]
+        if config.NOTES_FALLBACK not in search_dirs:
+            search_dirs.append(config.NOTES_FALLBACK)
+        matches = [
+            p
+            for d in search_dirs
+            for p in sorted(Path(d).glob("*.md"))
+            if args.note.lower() in p.stem.lower()
+        ]
+        matches = sorted(set(matches))
+        if len(matches) == 1:
+            note_path = matches[0]
+        elif not matches:
+            print(f"verify: no note matching '{args.note}'")
+            return 1
+        else:
+            print(f"verify: '{args.note}' matches {len(matches)} notes — give a path or more text")
+            return 1
+
+    board_file = (
+        Path(args.board_file) if args.board_file else config.default_board_dir() / "board.jsonl"
+    )
+    findings = verify_note(note_path, board_file, Path(args.repo))
+    print(format_report(findings))
+    return 0 if all(f.ok for f in findings) else 1
+
+
 def _sync(args: argparse.Namespace) -> int:
     store = _get_store(args)
     added, updated, total = store.sync()
@@ -331,6 +365,21 @@ def build_parser() -> argparse.ArgumentParser:
     sync_p = sub.add_parser("sync", help="Sync notes to board")
     sync_p.add_argument("--quiet", action="store_true")
 
+    # Verify
+    verify_p = sub.add_parser(
+        "verify",
+        help="Diff a note card against its board card + landed git shas",
+        description=(
+            "Three-way consistency check: note frontmatter (status/board/landed) "
+            "vs the board card vs actual git history. Exits 1 on any drift."
+        ),
+    )
+    verify_p.add_argument("note", help="Note file path or title substring")
+    verify_p.add_argument(
+        "--repo", default=".", help="Git repo to check landed: shas in (default: cwd)"
+    )
+    verify_p.add_argument("--board-file", default=None, help="board.jsonl path (default: config)")
+
     # GUI
     gui_p = sub.add_parser(
         "gui",
@@ -389,6 +438,7 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "tags"): _board_tags,
         ("kanban", "stats"): _board_stats,
         ("sync", None): _sync,
+        ("verify", None): _verify,
         ("gui", None): _gui,
     }
 

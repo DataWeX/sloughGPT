@@ -27,6 +27,29 @@ from .meta_weights import MetaWeightManager, get_meta_weight_manager
 from .online_train import OnlineLoRAUpdater, get_online_lora_updater
 from .per_user_lora import PerUserLoRAStore, get_per_user_lora
 
+# Started managers are tracked so teardown can stop every scheduler/
+# training thread promptly (L3: stop() was flag-only and nothing called
+# it between tests, so scheduler_loop threads leaked for the whole run).
+_started_workflows: list[FeedbackWorkflowManager] = []
+
+
+def started_workflows() -> list[FeedbackWorkflowManager]:
+    """Snapshot of started-and-not-stopped managers."""
+    return list(_started_workflows)
+
+
+def stop_all_workflows(timeout: float = 2.0) -> int:
+    """Stop every started manager and wait briefly for its threads."""
+    stopped = 0
+    for mgr in list(_started_workflows):
+        mgr.stop()
+        for attr in ("_scheduler_thread", "_training_thread"):
+            thread = getattr(mgr, attr, None)
+            if thread is not None and thread.is_alive():
+                thread.join(timeout=timeout)
+        stopped += 1
+    return stopped
+
 
 @dataclass
 class WorkflowConfig:
@@ -86,6 +109,7 @@ class FeedbackWorkflowManager:
         self._pipeline: TrainingDataPipeline | None = None
 
         self._running = False
+        self._stop_event = threading.Event()
         self._scheduler_thread: threading.Thread | None = None
         self._health_thread: threading.Thread | None = None
         self._last_aggregate_time: float = 0
@@ -850,13 +874,16 @@ class FeedbackWorkflowManager:
             return
 
         self._running = True
+        self._stop_event.clear()
         self._stats["start_time"] = time.time()
+        if self not in _started_workflows:
+            _started_workflows.append(self)
 
         def scheduler_loop():
-            while self._running:
+            while not self._stop_event.is_set():
                 self._health_check()
                 self.run_scheduled_tasks()
-                time.sleep(self.config.health_check_interval_seconds)
+                self._stop_event.wait(self.config.health_check_interval_seconds)
 
         self._scheduler_thread = threading.Thread(target=scheduler_loop, daemon=True)
         self._scheduler_thread.start()
@@ -864,12 +891,12 @@ class FeedbackWorkflowManager:
         if self.config.background_training_enabled:
 
             def background_training_loop():
-                while self._running:
+                while not self._stop_event.is_set():
                     try:
                         self._run_background_training()
                     except Exception as e:
                         logger.error("Background training failed: %s", e, extra={"tag": "INFRA"})
-                    time.sleep(self.config.background_training_interval_seconds)
+                    self._stop_event.wait(self.config.background_training_interval_seconds)
 
             self._training_thread = threading.Thread(target=background_training_loop, daemon=True)
             self._training_thread.start()
@@ -877,8 +904,11 @@ class FeedbackWorkflowManager:
         logger.info("Started automated feedback workflow", extra={"tag": "INFRA"})
 
     def stop(self):
-        """Stop the automated workflow."""
+        """Stop the automated workflow (promptly: wakes the sleeping loops)."""
         self._running = False
+        self._stop_event.set()
+        while self in _started_workflows:
+            _started_workflows.remove(self)
         logger.info("Stopped automated feedback workflow", extra={"tag": "INFRA"})
 
     def get_status(self) -> dict[str, Any]:

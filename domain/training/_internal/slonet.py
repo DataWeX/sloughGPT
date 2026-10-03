@@ -16,6 +16,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -346,7 +347,6 @@ class Tensor:
             self._children = _children
         self._backward_fn: Callable | None = None
         self._forward_fn: Callable | None = None  # (tangents...) -> output tangent
-        self._consumers: list = []  # forward edges — populated by ops
         self.shape = self.data.shape
         self.id = Tensor._id_counter
         Tensor._id_counter += 1
@@ -503,27 +503,31 @@ class Tensor:
     def backward(self):
         if self.grad is None:
             self.grad = Tensor(np.ones_like(self.data), _copy=False)
-        visited, topo = set(), []
-
-        def build(v):
+        visited: set = set()
+        topo: list = []
+        # Iterative post-order with exactly the visit order of the former
+        # recursive build(): children first (in _children order), then node.
+        # A recursive nested function self-captures, and its cell kept `topo`
+        # (every graph tensor) alive after backward() until a cyclic-GC pass —
+        # one leaked graph per training step while GC is parked (_gc_parked).
+        stack = [(self, False)]
+        while stack:
+            v, expanded = stack.pop()
+            if expanded:
+                topo.append(v)
+                continue
             if v.id in visited:
-                return
+                continue
             visited.add(v.id)
-            for c in getattr(v, "_children", None) or ():
-                if isinstance(c, Tensor):
-                    build(c)
-            topo.append(v)
-
-        build(self)
+            stack.append((v, True))
+            children = [c for c in (getattr(v, "_children", None) or ()) if isinstance(c, Tensor)]
+            for c in reversed(children):
+                stack.append((c, False))
         for node in reversed(topo):
             g = node.grad.data if node.grad is not None else np.ones_like(node.data)
             node.grad = Tensor(g, _copy=False)
             if node._backward_fn:
                 node._backward_fn(g)
-            # Release forward-DAG references after the reverse pass. Persistent
-            # leaves (model parameters) otherwise pin every step's computation
-            # graph through their _consumers lists, leaking one graph per step.
-            node._consumers.clear()
 
     def forward_grad(self, tangents: dict = None) -> dict:
         """Forward-mode automatic differentiation.
@@ -538,18 +542,24 @@ class Tensor:
             dict mapping ``tensor_id → np.ndarray`` for every reachable node.
         """
         tangents = dict(tangents or {})
-        visited, order = set(), []
-
-        def topo(v):
+        visited: set = set()
+        order: list = []
+        # Iterative post-order (same order as the former recursive topo()):
+        # a self-recursive nested function would pin `order` — and with it the
+        # whole traversed graph — after forward_grad() returns.
+        stack = [(self, False)]
+        while stack:
+            v, expanded = stack.pop()
+            if expanded:
+                order.append(v)
+                continue
             if v.id in visited:
-                return
+                continue
             visited.add(v.id)
-            for c in getattr(v, "_children", None) or ():
-                if isinstance(c, Tensor):
-                    topo(c)
-            order.append(v)
-
-        topo(self)
+            stack.append((v, True))
+            children = [c for c in (getattr(v, "_children", None) or ()) if isinstance(c, Tensor)]
+            for c in reversed(children):
+                stack.append((c, False))
 
         for node in order:
             if node.id in tangents:
@@ -583,21 +593,22 @@ class Tensor:
         """
         leaf_tangents = {}
         visited = set()
-
-        def find_leaves(node):
+        # Iterative DFS — the former recursive find_leaves() self-captured
+        # (its cell outlived the call), pinning leaf_tangents' inputs.
+        stack = [self]
+        while stack:
+            node = stack.pop()
             if node.id in visited:
-                return
+                continue
             visited.add(node.id)
             children = getattr(node, "_children", None) or ()
             has_children = False
             for c in children:
                 if isinstance(c, Tensor):
                     has_children = True
-                    find_leaves(c)
+                    stack.append(c)
             if not has_children and node.requires_grad:
                 leaf_tangents[node.id] = v.data
-
-        find_leaves(self)
         result = self.forward_grad(leaf_tangents)
         out_t = result.get(self.id, np.zeros_like(self.data))
         return Tensor(out_t)
@@ -794,11 +805,6 @@ def _add(a, b):
     _a_shape = a.shape
     _b_shape = b.shape
     _out_shape = out.shape
-    if out.requires_grad:
-        if a.requires_grad:
-            a._consumers.append(out)
-        if b.requires_grad:
-            b._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -832,8 +838,6 @@ def _neg(a):
         _children=(a,),
         _copy=False,
     )
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -867,11 +871,6 @@ def _mul(a, b):
     _a_shape = a.shape
     _b_shape = b.shape
     _out_shape = out.shape
-    if out.requires_grad:
-        if a.requires_grad:
-            a._consumers.append(out)
-        if b.requires_grad:
-            b._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -905,8 +904,6 @@ def _pow(a, p):
         _children=(a,),
         _copy=False,
     )
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -956,11 +953,6 @@ def _matmul(a, b):
     else:
         result = np.matmul(a_data, b_data)
     out = Tensor(result, requires_grad=a_req or b_req, _children=children, _copy=False)
-    if out.requires_grad:
-        if isinstance(a, Tensor) and a.requires_grad:
-            a._consumers.append(out)
-        if isinstance(b, Tensor) and b.requires_grad:
-            b._consumers.append(out)
     _a_shape = a_data.shape
     _b_shape = b_data.shape
     _out_shape = out.data.shape
@@ -1024,8 +1016,6 @@ def _matmul(a, b):
 def _transpose(a):
     out = Tensor(a.data.T, requires_grad=a.requires_grad, _children=(a,), _copy=False)
     _ndim = a.data.ndim
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -1056,8 +1046,6 @@ def _transpose(a):
 
 def _reshape(a, s):
     out = Tensor(a.data.reshape(s), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -1098,8 +1086,6 @@ def _basic_index(key: tuple) -> bool:
 def _slice(a, key):
     key = key if isinstance(key, tuple) else (key,)
     out = Tensor(a.data[key], requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -1115,9 +1101,11 @@ def _slice(a, key):
 
     out._backward_fn = bk
 
+    out_shape = out.shape
+
     def fwd(t_a):
         if t_a is None:
-            return np.zeros(out.shape, dtype=np.float32)
+            return np.zeros(out_shape, dtype=np.float32)
         return np.array(t_a[key], dtype=np.float32)
 
     out._forward_fn = fwd
@@ -1131,8 +1119,6 @@ def _sum(a):
         _children=(a,),
         _copy=False,
     )
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -1160,8 +1146,6 @@ def _mean(a):
         _children=(a,),
         _copy=False,
     )
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
     n = a.data.size
 
     def bk(g):
@@ -1185,8 +1169,6 @@ def _mean(a):
 
 def _max(a):
     out = Tensor(a.data.max(), requires_grad=a.requires_grad, _children=(a,), _copy=False)
-    if out.requires_grad and a.requires_grad:
-        a._consumers.append(out)
 
     def bk(g):
         if a.requires_grad:
@@ -1213,8 +1195,55 @@ def zeros(s, requires_grad=False):
     return Tensor(np.zeros(s, dtype=np.float32), requires_grad=requires_grad, _copy=False)
 
 
+# Thread-local private RandomState for isolated_rng(); when unset, randn()
+# keeps consuming the process-global np.random stream (legacy behavior).
+_thread_rng = threading.local()
+
+
+@contextmanager
+def isolated_rng(seed: int | None = None):
+    """Run the block on a private, thread-local legacy RandomState.
+
+    ``randn()`` inside the block draws from the private stream instead of the
+    process-global ``np.random``. Background workers (e.g. checkpoint
+    compression on ``_compress_in_background``'s daemon thread) load models
+    that construct layers with ``randn()``; without isolation those draws race
+    an in-process training run's global-stream seeding and make sequential
+    runs nondeterministic. Outside the block nothing changes: un-isolated
+    ``randn()`` still uses the global stream, so ``np.random.seed(...)``-based
+    training streams stay byte-identical. ``RandomState(seed)`` reproduces
+    ``np.random.seed(seed)``'s stream, so a fixed seed gives reproducible
+    private draws.
+    """
+    previous = getattr(_thread_rng, "rng", None)
+    _thread_rng.rng = np.random.RandomState(seed)
+    try:
+        yield
+    finally:
+        _thread_rng.rng = previous
+
+
 def randn(s, requires_grad=False):
-    return Tensor(np.random.randn(*s).astype(np.float32), requires_grad=requires_grad, _copy=False)
+    rng = getattr(_thread_rng, "rng", None)
+    data = (rng if rng is not None else np.random).randn(*s).astype(np.float32)
+    return Tensor(data, requires_grad=requires_grad, _copy=False)
+
+
+def rng_fingerprint() -> str:
+    """Short hash of the **global** MT19937 state — one line of influence audit.
+
+    Same fingerprint => the entire state (all 624 words, position, gauss
+    cache) is bit-identical, so any np.random.seed-based training stream
+    replays exactly; a moved fingerprint => some other code consumed the
+    process-global stream. Thread-local ``isolated_rng`` draws never move it.
+    """
+    import hashlib
+
+    kind, mt, pos, has_gauss, cached = np.random.get_state()
+    h = hashlib.sha1(kind.encode())
+    h.update(np.ascontiguousarray(mt).tobytes())
+    h.update(f"{pos}|{has_gauss}|{cached!r}".encode())
+    return h.hexdigest()[:12]
 
 
 def ones(s, requires_grad=False):
@@ -1233,8 +1262,6 @@ def tensor(d, requires_grad=False):
 def sigmoid(x):
     s = _accel_op("sigmoid", x.data, lambda d: 1.0 / (1.0 + np.exp(-np.clip(d, -500, 500))))
     out = Tensor(s, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-    if out.requires_grad and x.requires_grad:
-        x._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -1258,8 +1285,6 @@ def sigmoid(x):
 def tanh(x):
     t = _accel_op("tanh", x.data, lambda d: np.tanh(d))
     out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-    if out.requires_grad and x.requires_grad:
-        x._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -1287,8 +1312,6 @@ def relu(x):
         _children=(x,),
         _copy=False,
     )
-    if out.requires_grad and x.requires_grad:
-        x._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -1300,9 +1323,11 @@ def relu(x):
 
     out._backward_fn = bk
 
+    out_shape, out_dtype = out.shape, out.data.dtype
+
     def fwd(t_x):
         if t_x is None:
-            return np.zeros_like(out.data)
+            return np.zeros(out_shape, dtype=out_dtype)
         return np.where(x.data > 0, t_x, 0.0)
 
     out._forward_fn = fwd
@@ -1326,8 +1351,6 @@ def gelu(x):
         t = 0.5 * d * (1 + np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3)))
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-        if out.requires_grad and x.requires_grad:
-            x._consumers.append(out)
         # Cache tanh value for backward (avoids 3x recomputation)
         _tanh_val = np.tanh(np.sqrt(2 / np.pi) * (d + 0.044715 * d**3))
         _sqrt_2_pi = np.sqrt(2 / np.pi)
@@ -1345,9 +1368,11 @@ def gelu(x):
 
         out._backward_fn = bk
 
+        out_shape, out_dtype = out.shape, out.data.dtype
+
         def fwd(t_x):
             if t_x is None:
-                return np.zeros_like(out.data)
+                return np.zeros(out_shape, dtype=out_dtype)
             d_gelu = 0.5 * (1 + _tanh_val) + 0.5 * d * (1 - _tanh_val**2) * _sqrt_2_pi * (
                 1 + 3 * 0.044715 * d**2
             )
@@ -1375,8 +1400,6 @@ def silu(x):
             logger.debug("GPU silu failed, falling back to CPU: %s", e)
     if isinstance(x, Tensor):
         out = Tensor(t, requires_grad=x.requires_grad, _children=(x,), _copy=False)
-        if out.requires_grad and x.requires_grad:
-            x._consumers.append(out)
 
         def bk(g):
             if x.requires_grad:
@@ -1389,9 +1412,11 @@ def silu(x):
 
         out._backward_fn = bk
 
+        out_shape, out_dtype = out.shape, out.data.dtype
+
         def fwd(t_x):
             if t_x is None:
-                return np.zeros_like(out.data)
+                return np.zeros(out_shape, dtype=out_dtype)
             d_silu = s + d * s * (1 - s)
             return d_silu * t_x
 
@@ -1431,8 +1456,6 @@ def cross_entropy(logits, targets):
     t = np.clip(t, 0, lp.shape[-1] - 1)
     loss = -lp[np.arange(n), t].mean()
     out = Tensor(loss, requires_grad=True, _children=(logits, targets))
-    if logits.requires_grad:
-        logits._consumers.append(out)
     _probs = np.exp(lp)
 
     def bk(g):
@@ -3435,12 +3458,6 @@ class SloCrossAttention(SloLayer):
         out = np.einsum("bhnm,bmhd->bnhd", attn, V.data).reshape(B, N, H * E)
 
         out_t = Tensor(out, requires_grad=True, _children=(Q, K, V))
-        if Q.requires_grad:
-            Q._consumers.append(out_t)
-        if K.requires_grad:
-            K._consumers.append(out_t)
-        if V.requires_grad:
-            V._consumers.append(out_t)
 
         def bk(g):
             g_4d = g.reshape(B, N, H, E)
@@ -3561,8 +3578,6 @@ def _softmax(x: Tensor, dim: int = -1) -> Tensor:
     exp_d = np.exp(meaned)
     s = exp_d / exp_d.sum(axis=dim, keepdims=True)
     out = Tensor(s, requires_grad=x.requires_grad, _children=(x,))
-    if out.requires_grad and x.requires_grad:
-        x._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -3607,13 +3622,6 @@ def _layernorm(x: Tensor, weight: Tensor, bias: Tensor, eps: float = 1e-5) -> Te
     if result is None:
         result = normed * weight.data + bias.data
     out = Tensor(result, requires_grad=x.requires_grad, _children=(x, weight, bias))
-    if out.requires_grad:
-        if x.requires_grad:
-            x._consumers.append(out)
-        if weight.requires_grad:
-            weight._consumers.append(out)
-        if bias.requires_grad:
-            bias._consumers.append(out)
 
     def bk(g):
         sum_axes = tuple(range(g.ndim - 1))
@@ -3682,11 +3690,6 @@ def _rmsnorm(x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
         requires_grad=not _NO_GRAD and (x.requires_grad or weight.requires_grad),
         _children=(x, weight),
     )
-    if out.requires_grad:
-        if x.requires_grad:
-            x._consumers.append(out)
-        if weight.requires_grad:
-            weight._consumers.append(out)
     if not _NO_GRAD and (x.requires_grad or weight.requires_grad):
         _N = d.shape[-1]
         _w_data = weight.data.copy()
@@ -3795,13 +3798,6 @@ def _conv2d(x: Tensor, weight: Tensor, bias: Tensor, stride: int = 1, padding: i
         requires_grad=not _NO_GRAD and (x.requires_grad or weight_req or bias_req),
         _children=(x, weight, bias),
     )
-    if out.requires_grad:
-        if x.requires_grad:
-            x._consumers.append(out)
-        if weight.requires_grad:
-            weight._consumers.append(out)
-        if bias is not None and bias.requires_grad:
-            bias._consumers.append(out)
     _w_col = w_col
 
     def bk(g):
@@ -3903,13 +3899,6 @@ def _batchnorm2d(x: Tensor, gamma: Tensor, beta: Tensor, running_mean, running_v
         requires_grad=x.requires_grad or gamma.requires_grad or beta.requires_grad,
         _children=(x, gamma, beta),
     )
-    if out.requires_grad:
-        if x.requires_grad:
-            x._consumers.append(out)
-        if gamma.requires_grad:
-            gamma._consumers.append(out)
-        if beta.requires_grad:
-            beta._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -3986,8 +3975,6 @@ def _maxpool2d(x: Tensor, kernel_size, stride):
                     max_indices[(i, ch, oh, ow)] = (ih + max_idx[0], iw + max_idx[1])
 
     out = Tensor(result, requires_grad=x.requires_grad, _children=(x,))
-    if out.requires_grad and x.requires_grad:
-        x._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -4025,8 +4012,6 @@ def flatten(x: Tensor) -> Tensor:
     """Flatten a 4D tensor to 2D for classification heads."""
     orig_shape = x.shape
     out = Tensor(x.data.reshape(x.data.shape[0], -1), requires_grad=x.requires_grad, _children=(x,))
-    if out.requires_grad and x.requires_grad:
-        x._consumers.append(out)
 
     def bk(g):
         if x.requires_grad:
@@ -4038,12 +4023,14 @@ def flatten(x: Tensor) -> Tensor:
 
     out._backward_fn = bk
 
+    out_shape = out.shape
+
     def fwd(t_x):
         if t_x is None:
             return np.zeros(
-                (out.shape[0], np.prod(tuple(s for i, s in enumerate(orig_shape) if i > 0)))
+                (out_shape[0], np.prod(tuple(s for i, s in enumerate(orig_shape) if i > 0)))
             )
-        return t_x.reshape(out.shape)
+        return t_x.reshape(out_shape)
 
     out._forward_fn = fwd
     return out
@@ -7494,8 +7481,6 @@ def log_softmax(x, dim=-1):
     lp = xd - mx - np.log(np.exp(xd - mx).sum(axis=dim, keepdims=True))
     if isinstance(x, Tensor):
         out = Tensor(lp, requires_grad=x.requires_grad, _children=(x,))
-        if out.requires_grad and x.requires_grad:
-            x._consumers.append(out)
 
         def bk(g):
             if x.requires_grad:

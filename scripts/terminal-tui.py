@@ -76,7 +76,7 @@ def demo_dashboard():
     db._web_lines = [
         "> next dev",
         "  ▲ Next.js 15.5.24",
-        "  - Local: http://localhost:3000",
+        "  - Local: http://localhost:5173",
         "  ✓ Ready in 2.9s",
     ]
     db._states = {"api": "ready", "web": "ready"}

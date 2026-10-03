@@ -807,7 +807,7 @@ class SloBPE:
     def train_from_directory(
         cls,
         dir_path: str,
-        pattern: str | list[str] | None = None,
+        pattern: str = "*.txt",
         vocab_size: int = 1024,
         min_frequency: int = 2,
         lowercase: bool = True,
@@ -815,14 +815,11 @@ class SloBPE:
         verbose: bool = False,
         pretokenizer: str = "gpt2",
     ) -> SloBPE:
-        """Train a tokenizer on corpus files in a directory.
+        """Train a tokenizer on all text files in a directory.
 
         Args:
-            dir_path: directory to scan for corpus files
-            pattern: glob pattern (str or list of str); default ``None``
-                loads ``corpus_loader.DEFAULT_PATTERNS`` (txt/md/py/json/
-                jsonl/csv) with structured decoding (JSONL messages render
-                to ``User:/Assistant:`` text; JSON/CSV decode to documents)
+            dir_path: directory to scan for text files
+            pattern: glob pattern for text files (default: ``*.txt``)
             vocab_size: target vocabulary size
             min_frequency: minimum pair frequency for a merge
             lowercase: lowercase text before training
@@ -835,19 +832,18 @@ class SloBPE:
         """
         base = Path(dir_path)
         if not base.is_dir():
-            raise ValueError(f"Not a directory: {base}")
+            raise ValueError(f"Not a directory: {dir_path}")
 
-        from domain.training._internal.corpus_loader import load_corpus_dir
+        texts = []
+        for p in base.rglob(pattern) if recursive else base.glob(pattern):
+            if p.is_file() and p.stat().st_size > 0:
+                try:
+                    texts.append(p.read_text(encoding="utf-8", errors="replace"))
+                except Exception:
+                    continue
 
-        if pattern is None:
-            pats: tuple[str, ...] | None = None
-        elif isinstance(pattern, str):
-            pats = (pattern,)
-        else:
-            pats = tuple(pattern)
-        texts = load_corpus_dir(base, patterns=pats, recursive=recursive)
         if not texts:
-            raise ValueError(f"No corpus files found in {dir_path}")
+            raise ValueError(f"No {pattern} files found in {dir_path}")
 
         tok = cls(pretokenizer=pretokenizer)
         tok.train(
@@ -1516,7 +1512,7 @@ class SloUnigram:
     def train_from_directory(
         cls,
         dir_path: str,
-        pattern: str | list[str] | None = None,
+        pattern: str = "*.txt",
         vocab_size: int = 1024,
         lowercase: bool = True,
         recursive: bool = True,
@@ -1524,14 +1520,11 @@ class SloUnigram:
         pretokenizer: str = "gpt2",
         **algo_kwargs,
     ) -> SloUnigram:
-        """Train a tokenizer on corpus files in a directory.
+        """Train a tokenizer on all text files in a directory.
 
         Args:
-            dir_path: directory to scan for corpus files
-            pattern: glob pattern (str or list of str); default ``None``
-                loads ``corpus_loader.DEFAULT_PATTERNS`` (txt/md/py/json/
-                jsonl/csv) with structured decoding (JSONL messages render
-                to ``User:/Assistant:`` text; JSON/CSV decode to documents)
+            dir_path: directory to scan for text files
+            pattern: glob pattern for text files (default: ``*.txt``)
             vocab_size: target vocabulary size
             lowercase: lowercase text before training
             recursive: recurse into subdirectories
@@ -1543,20 +1536,11 @@ class SloUnigram:
             trained SloUnigram instance
         """
         base = Path(dir_path)
-        if not base.is_dir():
-            raise ValueError(f"Not a directory: {base}")
-
-        from domain.training._internal.corpus_loader import load_corpus_dir
-
-        if pattern is None:
-            pats: tuple[str, ...] | None = None
-        elif isinstance(pattern, str):
-            pats = (pattern,)
-        else:
-            pats = tuple(pattern)
-        texts = load_corpus_dir(base, patterns=pats, recursive=recursive)
-        if not texts:
-            raise ValueError(f"No corpus files found in {dir_path}")
+        texts: list[str] = []
+        it = base.rglob(pattern) if recursive else base.glob(pattern)
+        for p in it:
+            if p.is_file():
+                texts.append(p.read_text(encoding="utf-8", errors="replace"))
         tok = cls(pretokenizer=pretokenizer)
         tok.train(texts, vocab_size=vocab_size, lowercase=lowercase, verbose=verbose, **algo_kwargs)
         return tok
