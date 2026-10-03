@@ -5,7 +5,7 @@ Tests the full pipeline: agent navigates UI → triggers training → monitors D
 Requires running API (localhost:8000) and web (localhost:5173) servers.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_computer_use_training_integration.py -x -v -s
+    scripts/python -m pytest tests/test_computer_use_training_integration.py -x -v -s
 """
 
 import json

@@ -6,9 +6,9 @@ Measures gzip/zstd ratio and encode throughput on synthetic multi-MB
 targets). Mirrors apps/gateway/src/compression.rs codecs.
 
 Usage:
-    .venv/bin/python scripts/benchmark_gateway_compression.py [--mib 64]
-    .venv/bin/python scripts/benchmark_gateway_compression.py --file checkpoints/step_25.pt
-    .venv/bin/python scripts/benchmark_gateway_compression.py --file apps/web/public/v86/v86-fallback.wasm
+    scripts/python scripts/benchmark_gateway_compression.py [--mib 64]
+    scripts/python scripts/benchmark_gateway_compression.py --file checkpoints/step_25.pt
+    scripts/python scripts/benchmark_gateway_compression.py --file apps/web/public/v86/v86-fallback.wasm
 """
 
 from __future__ import annotations

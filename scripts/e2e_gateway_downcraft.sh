@@ -11,7 +11,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PY="${PY:-$REPO/.venv/bin/python}"
+PY="${PY:-$REPO/scripts/python}"
 GW="${GW:-http://127.0.0.1:8080}"
 SRC_REL="${SRC_REL:-checkpoints/step_25.pt}"
 SRC="$REPO/$SRC_REL"

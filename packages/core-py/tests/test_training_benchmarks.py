@@ -5,7 +5,7 @@ Measures training throughput, memory usage, and phase timings.
 Runs locally without servers.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_benchmarks.py -x -v -s
+    scripts/python -m pytest tests/test_training_benchmarks.py -x -v -s
 """
 
 import tempfile

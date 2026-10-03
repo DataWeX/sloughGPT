@@ -3,7 +3,7 @@
 # Alternate ports so it can run beside a live host_gateway stack.
 set -u
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-PY="$REPO/.venv/bin/python"
+PY="${PY:-$REPO/scripts/python}"
 GW="$REPO/apps/gateway/target/debug/slough-gateway"
 SIDECAR_PORT="${SIDECAR_PORT:-18010}"
 GW_PORT="${GW_PORT:-18090}"
