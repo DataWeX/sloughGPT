@@ -1,7 +1,7 @@
 """
 Tests for the Cycles path tracer and CyclesDevice VM integration.
 
-Run: PYTHONPATH=packages/core-py .venv/bin/python -m pytest tests/test_cycles.py -x -q
+Run: PYTHONPATH=packages/core-py scripts/python -m pytest tests/test_cycles.py -x -q
 """
 
 import numpy as np

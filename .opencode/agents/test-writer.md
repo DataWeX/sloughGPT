@@ -340,7 +340,7 @@ class TestMyModule:
 cd packages/core-py && .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
 ```
 
-**Requires:** API on `:8000`, web on `:3000`.
+**Requires:** API on `:8000`, web on `:5173`.
 
 ### Adding a Route Test
 
@@ -419,7 +419,7 @@ The `ROUTES` list in `test_user_journeys.py` accepts tuples of `(path, name)`:
 ```
 
 All routes in the list get a parametrized navigation test that:
-1. Navigates to `http://localhost:3000{path}`
+1. Navigates to `http://localhost:5173{path}`
 2. Waits for load + "Connecting..." to disappear
 3. Asserts `len(body) > 50`
 4. Records pass/fail via `ok()`

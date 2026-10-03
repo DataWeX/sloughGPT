@@ -46,6 +46,9 @@ app-planner move <card-id> done
 # Sync notes to board explicitly
 app-planner sync
 
+# Three-way diff: note frontmatter (status/board/landed) <-> board card <-> git
+app-planner verify card092 --repo /path/to/repo   # exit 1 on any drift
+
 # Local web UI (stdlib HTTP server, embedded SPA)
 app-planner gui
 ```
@@ -87,6 +90,7 @@ app-planner gui
 | `archive` | Archive (delete) all done cards |
 | `search-cards <query>` | Search cards |
 | `stats` | Board statistics |
+| `verify <note>` | Three-way diff: note frontmatter ↔ board card ↔ landed git shas (exit 1 on drift) |
 | `export-board` | Export board to JSON |
 | `import-board <file>` | Import board from JSON |
 | `sync` | Sync notes to board |

@@ -99,7 +99,9 @@ function TraitRadar({ values, size = 80 }: { values: Record<string, number>; siz
     return { x: cx + dist * Math.cos(angle), y: cy + dist * Math.sin(angle) }
   })
 
-  const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z'
+  // <polygon points> takes an SVG point list ("x,y x,y …"), not path syntax
+  // ("M…L…Z") — path commands make the browser reject the attribute.
+  const polygonPoints = points.map((p) => `${p.x},${p.y}`).join(' ')
 
   return (
     <svg
@@ -125,7 +127,7 @@ function TraitRadar({ values, size = 80 }: { values: Record<string, number>; siz
         />
       ))}
       <polygon
-        points={pathD}
+        points={polygonPoints}
         fill="rgb(var(--primary))"
         fillOpacity={0.15}
         stroke="rgb(var(--primary))"

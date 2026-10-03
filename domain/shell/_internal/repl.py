@@ -18,6 +18,7 @@ Features:
 from __future__ import annotations
 
 import glob
+import importlib
 import io
 import json
 import logging
@@ -32,8 +33,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from .cmds import CmdModule
-from .cmds.linux import LinuxCommandsMixin
 from .commands import ShellCommands
 from .console import Console
 from .io import ShellIO
@@ -42,6 +41,28 @@ from .state import ShellState
 
 _EM = "\u2014"  # em dash
 logger = logging.getLogger("slo.shell.repl")
+
+
+# ── Optional cmds extension — dynamic load ─────────────────────────────────
+# ``cmds`` is a separately-vendored extension package (historically shipped
+# as a symlink into the core tree).  Load it dynamically so a missing or
+# broken package degrades the REPL to its built-in command set instead of
+# breaking ``import domain.shell``.
+def _load_cmds_pkg() -> Any:
+    try:
+        return importlib.import_module(".cmds", __package__)
+    except Exception:
+        return None
+
+
+_cmds_pkg = _load_cmds_pkg()
+if _cmds_pkg is not None:
+    CmdModule = _cmds_pkg.CmdModule
+    LinuxCommandsMixin = importlib.import_module(".cmds.linux", __package__).LinuxCommandsMixin
+else:
+    logger.warning("cmds extension package unavailable; shell falls back to built-in commands")
+    CmdModule = type("CmdModule", (), {})
+    LinuxCommandsMixin = type("LinuxCommandsMixin", (), {})
 
 # ── Process-wide log handlers (shared by every ShellREPL instance) ───
 #
@@ -412,10 +433,11 @@ class ShellREPL(LinuxCommandsMixin):
             self._completion_cache_obj = None
         self._completion_cache: dict[str, tuple[float, list[str]]] = {}
 
-        # External commands from commands/ directory
-        from .cmds import discover as _discover
-
-        self._ext_cmds = _discover()
+        # External commands from the optional cmds extension
+        if _cmds_pkg is not None:
+            self._ext_cmds = _cmds_pkg.discover()
+        else:
+            self._ext_cmds = {}
 
         if _HAS_READLINE:
             self._setup_readline()
@@ -5244,59 +5266,66 @@ nl: db 10
 # ── Build COMMANDS class attribute ────────────────────────────────
 # Cannot be done in the class body because LinuxCommandsMixin methods
 # are not yet available as bare names. Built here after class creation.
+# Handlers that do not exist on ShellREPL (e.g. Linux essentials provided
+# by the optional cmds extension) are skipped instead of breaking import.
+_command_specs = [
+    ("help", "_cmd_help"),
+    ("exit", "_cmd_exit"),
+    ("cd", "_cmd_cd"),
+    ("pwd", "_cmd_pwd"),
+    ("echo", "_cmd_echo"),
+    ("ls", "_cmd_ls"),
+    ("cat", "_cmd_cat"),
+    ("head", "_cmd_head"),
+    ("tail", "_cmd_tail"),
+    ("grep", "_cmd_grep"),
+    ("find", "_cmd_find"),
+    ("clear", "_cmd_clear"),
+    ("history", "_cmd_history"),
+    ("alias", "_cmd_alias"),
+    ("unalias", "_cmd_unalias"),
+    ("py", "_cmd_py"),
+    ("chat", "_cmd_chat"),
+    ("gen", "_cmd_gen"),
+    ("ai", "_cmd_ai"),
+    ("agent", "_cmd_agent"),
+    ("models", "_cmd_models"),
+    ("load", "_cmd_load"),
+    ("train", "_cmd_train"),
+    ("ops", "_cmd_ops"),
+    ("operations", "_cmd_ops"),
+    ("datasets", "_cmd_datasets"),
+    ("knowledge", "_cmd_knowledge"),
+    ("checkpoints", "_cmd_checkpoints"),
+    ("souls", "_cmd_souls"),
+    ("agents", "_cmd_agents"),
+    ("status", "_cmd_status"),
+    ("metrics", "_cmd_metrics"),
+    ("events", "_cmd_events"),
+    ("logs", "_cmd_logs"),
+    ("api", "_cmd_api"),
+    ("kill", "_cmd_kill"),
+    ("ps", "_cmd_ps"),
+    ("permit", "_cmd_permit"),
+    ("deny", "_cmd_deny"),
+    ("permissions", "_cmd_permissions"),
+    ("confirm", "_cmd_confirm"),
+    ("protect", "_cmd_protect"),
+    ("unprotect", "_cmd_unprotect"),
+    ("tui", "_cmd_tui"),
+    ("note", "_cmd_note"),
+    ("tutorial", "_cmd_tutorial"),
+    ("boot", "_cmd_boot"),
+    ("shutdown", "_cmd_shutdown"),
+    ("svc", "_cmd_svc"),
+    ("uptime", "_cmd_uptime"),
+    ("lsdev", "_cmd_lsdev"),
+    ("render", "_cmd_render"),
+]
 _shell_commands = {
-    "help": ShellREPL._cmd_help,
-    "exit": ShellREPL._cmd_exit,
-    "cd": ShellREPL._cmd_cd,
-    "pwd": ShellREPL._cmd_pwd,
-    "echo": ShellREPL._cmd_echo,
-    "ls": ShellREPL._cmd_ls,
-    "cat": ShellREPL._cmd_cat,
-    "head": ShellREPL._cmd_head,
-    "tail": ShellREPL._cmd_tail,
-    "grep": ShellREPL._cmd_grep,
-    "find": ShellREPL._cmd_find,
-    "clear": ShellREPL._cmd_clear,
-    "history": ShellREPL._cmd_history,
-    "alias": ShellREPL._cmd_alias,
-    "unalias": ShellREPL._cmd_unalias,
-    "py": ShellREPL._cmd_py,
-    "chat": ShellREPL._cmd_chat,
-    "gen": ShellREPL._cmd_gen,
-    "ai": ShellREPL._cmd_ai,
-    "agent": ShellREPL._cmd_agent,
-    "models": ShellREPL._cmd_models,
-    "load": ShellREPL._cmd_load,
-    "train": ShellREPL._cmd_train,
-    "ops": ShellREPL._cmd_ops,
-    "operations": ShellREPL._cmd_ops,
-    "datasets": ShellREPL._cmd_datasets,
-    "knowledge": ShellREPL._cmd_knowledge,
-    "checkpoints": ShellREPL._cmd_checkpoints,
-    "souls": ShellREPL._cmd_souls,
-    "agents": ShellREPL._cmd_agents,
-    "status": ShellREPL._cmd_status,
-    "metrics": ShellREPL._cmd_metrics,
-    "events": ShellREPL._cmd_events,
-    "logs": ShellREPL._cmd_logs,
-    "api": ShellREPL._cmd_api,
-    "kill": ShellREPL._cmd_kill,
-    "ps": ShellREPL._cmd_ps,
-    "permit": ShellREPL._cmd_permit,
-    "deny": ShellREPL._cmd_deny,
-    "permissions": ShellREPL._cmd_permissions,
-    "confirm": ShellREPL._cmd_confirm,
-    "protect": ShellREPL._cmd_protect,
-    "unprotect": ShellREPL._cmd_unprotect,
-    "tui": ShellREPL._cmd_tui,
-    "note": ShellREPL._cmd_note,
-    "tutorial": ShellREPL._cmd_tutorial,
-    "boot": ShellREPL._cmd_boot,
-    "shutdown": ShellREPL._cmd_shutdown,
-    "svc": ShellREPL._cmd_svc,
-    "uptime": ShellREPL._cmd_uptime,
-    "lsdev": ShellREPL._cmd_lsdev,
-    "render": ShellREPL._cmd_render,
+    _cmd_name: getattr(ShellREPL, _handler_attr)
+    for _cmd_name, _handler_attr in _command_specs
+    if hasattr(ShellREPL, _handler_attr)
 }
 # Auto-register LinuxCommandsMixin handlers missing from the explicit map
 # (env, mkdir, rm, touch, ...). Explicit entries win via setdefault so

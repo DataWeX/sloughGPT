@@ -6,7 +6,7 @@ set -u
 BASE="$(cd "$(dirname "$0")" && pwd)"
 WT="${JOURNEY_WT:-$(cd "$BASE/../.." && pwd)}"
 LOG_DIR="$WT/logs/e2e"; mkdir -p "$LOG_DIR"
-VPY="$WT/.venv/bin/python"
+VPY="$("$BASE/../../scripts/python" --resolve 2>/dev/null || echo python3)"
 FAIL=0
 ok()  { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; FAIL=1; }

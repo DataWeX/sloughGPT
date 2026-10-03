@@ -250,3 +250,54 @@ describe('YourComponent', () => {
   })
 })
 ```
+
+## Site Doctor (runtime monitor — not `scripts/test-doctor.py`)
+
+`scripts/test-doctor.py` diagnoses the **test suite** (why a pytest run
+failed). The **site doctor** diagnoses the **live site**: a read-only
+monitor that probes the running stack and triages what it finds. Phase A
+is report-only — it never remediates.
+
+- **What it probes:** API health/errors (`/health*`, `/errors/*`),
+  `/health/stream` cadence + payload size (flags >256 KB frames and >8s
+  stalls), and the UX journey sweep report (`domain/journeys`).
+- **Placement:** wiring lives in `domain/core/_internal/doctor/` (the
+  "body of the system" — system-level ops); probes are seams onto the
+  core components.
+
+```bash
+# Full summary (~15s, no browser):                        exit 0/1/2
+.venv/bin/python -m domain.core._internal.doctor
+# Read existing journey report instead of sweeping:
+.venv/bin/python -m domain.core._internal.doctor --no-sweep
+# Machine-readable report on stdout; also written to the report path:
+.venv/bin/python -m domain.core._internal.doctor --json
+# --window N (SSE seconds), --skip sse,http,journey, --report PATH, --strict
+```
+
+**Exit codes:** `0` ok/info · `1` warn (with `--strict`: info too) ·
+`2` critical (e.g. API unreachable, oversized SSE frames).
+
+**Report path:** `${SLO_DOCTOR_REPORT:-~/.cache/slog-doctor/findings-report.json}`
+(JSON, `schema_version: 1`, findings ranked worst-first).
+
+### Surfaced: `/doctor` API + `/doctor` page
+
+| Endpoint | Data | Notes |
+|----------|------|-------|
+| `GET /doctor/report` | `{report, path, age_s}` | reads `$SLO_DOCTOR_REPORT`; missing/corrupt file → `report: null` + `age_s: null` (empty state, **not** an error); `age_s` = seconds since `report.ts` |
+| `POST /doctor/run` | `{report}` | **light run**: `http` + `sse` (6s window) + journey findings from disk, written atomically, then returned; the browser sweep is **never** triggered here (`run_sweep=False`) |
+
+The `/doctor` page (`apps/web/app/(app)/doctor/page.tsx`) fetches the report
+on mount and after every run, then shows the overall severity pill + severity
+counts + report age, a live component strip (inference / engines-system from
+`useLiveStatus`), and the findings grouped worst-first with each detail folded
+behind a disclosure.
+
+```bash
+# Router + doctor package tests
+.venv/bin/python -m pytest tests/server/test_doctor_router.py packages/core-py/tests/test_doctor.py -q
+# Page + component tests (worktree: add --config /tmp/opencode/vitest-worktree.config.ts)
+node_modules/.bin/vitest run "app/(app)/doctor/page.test.tsx" components/doctor/
+```
+

@@ -5,7 +5,7 @@ Tests the training system's resilience: invalid configs, missing files,
 error recovery, and thread safety.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_robustness.py -x -v
+    scripts/python -m pytest tests/test_training_robustness.py -x -v
 """
 
 import tempfile
