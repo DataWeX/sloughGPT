@@ -12,29 +12,50 @@ vi.mock('@/hooks/useLocale', () => ({
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: Object.assign(vi.fn((sel: any) => sel({ addToast: vi.fn() })), { getState: () => ({ addToast: vi.fn() }) }),
+  useToastStore: Object.assign(
+    vi.fn((sel: any) => sel({ addToast: vi.fn() })),
+    { getState: () => ({ addToast: vi.fn() }) },
+  ),
 }))
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 vi.mock('@/lib/config', () => ({
   PUBLIC_API_URL: 'http://localhost:8000',
 }))
 
-vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), text: async () => '{}', headers: new Headers() }))
+vi.stubGlobal(
+  'fetch',
+  vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({}),
+    text: async () => '{}',
+    headers: new Headers(),
+  }),
+)
 
 function renderPage() {
   return render(
     <LocaleProvider>
       <ConsciousnessDocsPage />
-    </LocaleProvider>
+    </LocaleProvider>,
   )
 }
 
 describe('ConsciousnessDocsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), text: async () => '{}', headers: new Headers() }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        text: async () => '{}',
+        headers: new Headers(),
+      }),
+    )
   })
 
   it('renders page title', async () => {

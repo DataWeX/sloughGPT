@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { ConsciousnessOnboarding } from './ConsciousnessOnboarding'
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
 const mockUpdateConfig = vi.fn().mockResolvedValue({})
 const mockApplyPreset = vi.fn().mockResolvedValue({})
 const mockSeedData = vi.fn().mockResolvedValue({})
@@ -26,7 +26,7 @@ vi.mock('@/lib/error-utils', () => ({
 
 function clickButton(text: string) {
   const btns = screen.getAllByText(text)
-  const btn = btns.find(el => el.tagName === 'BUTTON') ?? btns[0]
+  const btn = btns.find((el) => el.tagName === 'BUTTON') ?? btns[0]
   fireEvent.click(btn)
 }
 

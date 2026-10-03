@@ -16,7 +16,7 @@ vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: mockT, locale: 'en' }),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
 }))
 

@@ -32,7 +32,7 @@ export const RateViolationsCard = memo(function RateViolationsCard({
           >
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-medium truncate font-mono">{v.path}</span>
-              <span className="shrink-0 text-[9px] px-1.5 py-0.5 rounded font-medium bg-warning/15 text-warning tabular-nums">
+              <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-warning/15 text-warning tabular-nums">
                 {v.count}/{v.limit}/s
               </span>
             </div>

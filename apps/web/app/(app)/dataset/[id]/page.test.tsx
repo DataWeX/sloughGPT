@@ -7,10 +7,28 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: (...args: any[]) => args.join(' '),
-    Button: ({ children, onClick, disabled, variant, size, className, 'aria-label': ariaLabel }: any) => (
-      <button onClick={onClick} disabled={disabled} data-variant={variant} aria-label={ariaLabel} className={className}>{children}</button>
+    Button: ({
+      children,
+      onClick,
+      disabled,
+      variant,
+      size,
+      className,
+      'aria-label': ariaLabel,
+    }: any) => (
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        data-variant={variant}
+        aria-label={ariaLabel}
+        className={className}
+      >
+        {children}
+      </button>
     ),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     CardDescription: ({ children }: any) => <p>{children}</p>,
     Input: ({ value, onChange, className, autoFocus }: any) => (
@@ -18,10 +36,25 @@ vi.mock('@sloughgpt/strui', () => {
     ),
     Label: ({ children }: any) => <label>{children}</label>,
     Skeleton: () => <div data-testid="skeleton" />,
-    Badge: ({ children, variant, size, className }: any) => <span data-variant={variant} className={className}>{children}</span>,
-    StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    Badge: ({ children, variant, size, className }: any) => (
+      <span data-variant={variant} className={className}>
+        {children}
+      </span>
+    ),
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={`stat-${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
     KpiGrid: ({ children, columns }: any) => <div data-columns={columns}>{children}</div>,
-    Breadcrumbs: ({ items, className }: any) => <nav aria-label="Breadcrumb" className={className}>{items?.map((item: any, i: number) => <span key={i}>{item.label}</span>)}</nav>,
+    Breadcrumbs: ({ items, className }: any) => (
+      <nav aria-label="Breadcrumb" className={className}>
+        {items?.map((item: any, i: number) => (
+          <span key={i}>{item.label}</span>
+        ))}
+      </nav>
+    ),
     IconTrash: () => <span data-testid="icon-trash">trash</span>,
     IconDownload: () => <span data-testid="icon-download">download</span>,
     IconEdit: () => <span data-testid="icon-edit">edit</span>,
@@ -30,23 +63,37 @@ vi.mock('@sloughgpt/strui', () => {
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     IconClock: () => <span data-testid="icon-clock">clock</span>,
     IconChevronDown: () => <span data-testid="icon-chevron">chevron</span>,
-    AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
-    AlertDialogAction: ({ children, onClick, className }: any) => <button onClick={onClick} className={className}>{children}</button>,
-    AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    AlertDialog: ({ open, children }: any) =>
+      open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogAction: ({ children, onClick, className }: any) => (
+      <button onClick={onClick} className={className}>
+        {children}
+      </button>
+    ),
+    AlertDialogCancel: ({ children, onClick }: any) => (
+      <button onClick={onClick}>{children}</button>
+    ),
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
     AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
     AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -73,7 +120,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 const mocks = vi.hoisted(() => ({
@@ -92,8 +139,13 @@ const mocks = vi.hoisted(() => ({
 }))
 
 const stableRouter = { push: vi.fn() }
-vi.mock('next/navigation', () => ({ useParams: () => ({ id: 'ds-1' }), useRouter: () => stableRouter }))
-vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mocks.addToast }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({
+  useParams: () => ({ id: 'ds-1' }),
+  useRouter: () => stableRouter,
+}))
+vi.mock('@/lib/toast-store', () => ({
+  useToastStore: (sel: any) => sel({ addToast: mocks.addToast }),
+}))
 vi.mock('@/lib/dataset-controller', () => ({
   datasetController: {
     get: mocks.get,
@@ -119,7 +171,9 @@ vi.mock('@/components/dataset/DatasetQualityCard', () => ({
 vi.mock('@/components/dataset/DatasetInsightsCard', () => ({
   DatasetInsightsCard: ({ preview }: any) => <div data-testid="insights-card">Insights</div>,
 }))
-vi.mock('next/dynamic', () => ({ default: () => () => <div data-testid="import-modal" /> }))
+vi.mock('@/vite/next-compat/dynamic', () => ({
+  default: () => () => <div data-testid="import-modal" />,
+}))
 
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ title, children, loading, loadingContent, headerRight }: any) => (
@@ -134,14 +188,26 @@ vi.mock('@/components/PageContainer', () => ({
 import Page from './page'
 
 const SAMPLE_DATASET: any = {
-  id: 'ds-1', name: 'Shakespeare Dataset', type: 'conversations', source: 'local',
-  size: 1024, samples: 500, tags: ['english', 'classic'], created_at: '2026-08-01T00:00:00Z',
+  id: 'ds-1',
+  name: 'Shakespeare Dataset',
+  type: 'conversations',
+  source: 'local',
+  size: 1024,
+  samples: 500,
+  tags: ['english', 'classic'],
+  created_at: '2026-08-01T00:00:00Z',
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.get.mockResolvedValue(SAMPLE_DATASET)
-  mocks.getStats.mockResolvedValue({ format: 'jsonl', lines: 100, avg_length: 256, chars: 25600, suggested_method: 'distill' })
+  mocks.getStats.mockResolvedValue({
+    format: 'jsonl',
+    lines: 100,
+    avg_length: 256,
+    chars: 25600,
+    suggested_method: 'distill',
+  })
   mocks.listVersions.mockResolvedValue({ versions: ['20260801120000'] })
   mocks.preview.mockResolvedValue({ rows: [] })
 })
@@ -252,7 +318,9 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
-    const deleteBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Delete') && !b.textContent?.includes('Webhook'))
+    const deleteBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.includes('Delete') && !b.textContent?.includes('Webhook'))
     fireEvent.click(deleteBtn!)
     expect(screen.getByTestId('alert-dialog')).toBeTruthy()
   })
@@ -263,9 +331,12 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
-    const deleteBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('delete') && b.className.includes('destructive')
-    )
+    const deleteBtn = screen
+      .getAllByRole('button')
+      .find(
+        (b) =>
+          b.textContent?.toLowerCase().includes('delete') && b.className.includes('destructive'),
+      )
     expect(deleteBtn).toBeTruthy()
     fireEvent.click(deleteBtn!)
     await waitFor(() => {
@@ -283,7 +354,7 @@ describe('DatasetDetailPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Shakespeare Dataset').length).toBeGreaterThanOrEqual(1)
     })
-    const exportBtn = screen.getAllByRole('button').find(b => b.textContent?.includes('Export'))
+    const exportBtn = screen.getAllByRole('button').find((b) => b.textContent?.includes('Export'))
     fireEvent.click(exportBtn!)
     await waitFor(() => {
       expect(screen.getByText('Export as JSONL')).toBeTruthy()

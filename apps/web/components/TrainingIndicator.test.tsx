@@ -8,9 +8,11 @@ vi.mock('@/hooks/useTrainingSession', () => ({
   useTrainingSession: vi.fn(),
 }))
 
-vi.mock('next/link', () => ({
+vi.mock('@/vite/next-compat/link', () => ({
   default: ({ children, href, ...props }: any) => (
-    <a href={href} {...props}>{children}</a>
+    <a href={href} {...props}>
+      {children}
+    </a>
   ),
 }))
 

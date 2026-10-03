@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn } from '@sloughgpt/strui'
 import { modelController } from '@/lib/model-controller'
 import { sessionController } from '@/lib/session-controller'
@@ -10,13 +10,33 @@ import { useSettings, useUpdateSettings } from '@/lib/store'
 import { NAV_SECTIONS } from '@/lib/navigation'
 import { chatDB } from '@/lib/db'
 import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
+import { apiGet } from '@/lib/http-client'
+import { useAuthStore } from '@/lib/auth'
+import { SEARCH_STORES } from '@/lib/search-stores'
+
+interface SystemSearchHit {
+  id: string
+  store: string
+  title: string
+  detail: string
+  score: number
+  locator: string
+}
+
+// apiGet unwraps the {status,data} envelope — the type is the payload.
+interface SystemSearchResponse {
+  hits: SystemSearchHit[]
+  partial: string[]
+  skipped: string[]
+  query: string
+}
 
 interface CommandAction {
   id: string
   label: string
   description: string
   icon: string
-  category: 'navigation' | 'action' | 'conversation' | 'model' | 'soul'
+  category: 'navigation' | 'action' | 'conversation' | 'model' | 'soul' | 'data'
   run: () => void
 }
 
@@ -28,65 +48,183 @@ export function CommandPalette() {
   const [recentSessions, setRecentSessions] = useState<{ id: string; name: string }[]>([])
   const [models, setModels] = useState<{ id: string; name: string; loaded: boolean }[]>([])
   const [souls, setSouls] = useState<{ name: string; description?: string }[]>([])
+  const [dataHits, setDataHits] = useState<SystemSearchHit[]>([])
+  const [dataPartial, setDataPartial] = useState<string[]>([])
   const inputRef = useRef<HTMLInputElement>(null)
   const settings = useSettings()
   const updateSettings = useUpdateSettings()
+  const currentWorkspaceId = useAuthStore((s) => s.currentWorkspace?.id)
 
   useEffect(() => {
-    sessionController.list().then(sessions => {
-      setRecentSessions(sessions.slice(0, 5).map(s => ({ id: s.id, name: s.name || 'Untitled' })))
-    }).catch(() => /* session list unavailable */ {})
-    modelController.list().then(list => {
-      setModels(list.map(m => ({
-        id: m.id || m.name,
-        name: (m.id || m.name).replace(/^hf\//, ''),
-        loaded: m.loaded || false,
-      })))
-    }).catch(() => /* model list unavailable */ {})
-    soulsController.list().then(res => {
-      setSouls(res.souls.map(s => ({ name: s.name, description: s.description })))
-    }).catch(() => /* soul list unavailable */ {})
+    sessionController
+      .list()
+      .then((sessions) => {
+        setRecentSessions(
+          sessions.slice(0, 5).map((s) => ({ id: s.id, name: s.name || 'Untitled' })),
+        )
+      })
+      .catch(() => /* session list unavailable */ {})
+    modelController
+      .list()
+      .then((list) => {
+        setModels(
+          list.map((m) => ({
+            id: m.id || m.name,
+            name: (m.id || m.name).replace(/^hf\//, ''),
+            loaded: m.loaded || false,
+          })),
+        )
+      })
+      .catch(() => /* model list unavailable */ {})
+    soulsController
+      .list()
+      .then((res) => {
+        setSouls(res.souls.map((s) => ({ name: s.name, description: s.description })))
+      })
+      .catch(() => /* soul list unavailable */ {})
   }, [])
 
+  // System-wide data search: debounced, workspace-scoped, failure-silent
+  // (local results keep working when the core search is unavailable).
+  useEffect(() => {
+    if (!open || !query.trim()) {
+      setDataHits([])
+      setDataPartial([])
+      return
+    }
+    const q = query.trim()
+    const timer = setTimeout(() => {
+      const params = new URLSearchParams({ q })
+      if (currentWorkspaceId) params.set('workspace_id', currentWorkspaceId)
+      apiGet<SystemSearchResponse>(`/search?${params.toString()}`)
+        .then((res) => {
+          if (res?.hits) {
+            setDataHits(res.hits)
+            setDataPartial(res.partial ?? [])
+          }
+        })
+        .catch(() => /* data search unavailable — local results remain */ {})
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [open, query, currentWorkspaceId])
+
   const actions: CommandAction[] = useMemo(() => {
-    const nav: CommandAction[] = NAV_SECTIONS.flatMap(section =>
-      section.routes.map(route => ({
+    const nav: CommandAction[] = NAV_SECTIONS.flatMap((section) =>
+      section.routes.map((route) => ({
         id: `nav-${route.path}`,
         label: route.description || route.path,
         description: route.description || '',
         icon: route.icon || '📄',
         category: 'navigation' as const,
         run: () => router.push(route.path),
-      }))
+      })),
     )
 
-    const modelActs: CommandAction[] = models.map(m => ({
-      id: `model-${m.id}`, label: `Switch to ${m.name}`, description: m.loaded ? 'Currently loaded' : 'Load and switch',
-      icon: m.loaded ? '✓' : '🧠', category: 'model' as const,
+    const modelActs: CommandAction[] = models.map((m) => ({
+      id: `model-${m.id}`,
+      label: `Switch to ${m.name}`,
+      description: m.loaded ? 'Currently loaded' : 'Load and switch',
+      icon: m.loaded ? '✓' : '🧠',
+      category: 'model' as const,
       run: async () => {
-        if (!m.loaded) { try { await modelController.load(m.id) } catch { /* ignore */ } }
+        if (!m.loaded) {
+          try {
+            await modelController.load(m.id)
+          } catch {
+            /* ignore */
+          }
+        }
         router.push('/chat')
       },
     }))
 
     const acts: CommandAction[] = [
-      { id: 'act-newchat', label: 'New Chat', description: 'Start a new conversation', icon: '➕', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('new-chat')); router.push('/chat') } },
-      { id: 'act-search', label: 'Search Conversations', description: 'Search across all conversations', icon: '🔍', category: 'action', run: () => { setOpen(false); window.dispatchEvent(new CustomEvent('search-conversations')) } },
-      { id: 'act-export', label: 'Export Chat', description: 'Download current chat as markdown', icon: '📥', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('export-chat')); setOpen(false) } },
-      { id: 'act-theme', label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`, description: 'Toggle theme', icon: '🌓', category: 'action', run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }) },
-      { id: 'act-clear', label: 'Clear Chat History', description: 'Remove all saved conversations', icon: '🗑️', category: 'action', run: () => { chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {}); window.location.reload() } },
-      { id: 'act-shortcuts', label: 'Keyboard Shortcuts', description: 'View all shortcuts', icon: '⌨️', category: 'action', run: () => { window.dispatchEvent(new CustomEvent('open-shortcuts')); setOpen(false) } },
+      {
+        id: 'act-newchat',
+        label: 'New Chat',
+        description: 'Start a new conversation',
+        icon: '➕',
+        category: 'action',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('new-chat'))
+          router.push('/chat')
+        },
+      },
+      {
+        id: 'act-search',
+        label: 'Search Conversations',
+        description: 'Search across all conversations',
+        icon: '🔍',
+        category: 'action',
+        run: () => {
+          setOpen(false)
+          window.dispatchEvent(new CustomEvent('search-conversations'))
+        },
+      },
+      {
+        id: 'act-export',
+        label: 'Export Chat',
+        description: 'Download current chat as markdown',
+        icon: '📥',
+        category: 'action',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('export-chat'))
+          setOpen(false)
+        },
+      },
+      {
+        id: 'act-theme',
+        label: `Switch to ${settings.theme === 'dark' ? 'Light' : 'Dark'} Mode`,
+        description: 'Toggle theme',
+        icon: '🌓',
+        category: 'action',
+        run: () => updateSettings({ theme: settings.theme === 'dark' ? 'light' : 'dark' }),
+      },
+      {
+        id: 'act-clear',
+        label: 'Clear Chat History',
+        description: 'Remove all saved conversations',
+        icon: '🗑️',
+        category: 'action',
+        run: () => {
+          chatDB.deleteKV(CURRENT_SESSION_KEY).catch(() => {})
+          window.location.reload()
+        },
+      },
+      {
+        id: 'act-shortcuts',
+        label: 'Keyboard Shortcuts',
+        description: 'View all shortcuts',
+        icon: '⌨️',
+        category: 'action',
+        run: () => {
+          window.dispatchEvent(new CustomEvent('open-shortcuts'))
+          setOpen(false)
+        },
+      },
     ]
 
-    const conv: CommandAction[] = recentSessions.map(s => ({
-      id: `conv-${s.id}`, label: s.name, description: 'Open conversation', icon: '💭', category: 'conversation' as const, run: () => router.push(`/chat?session=${s.id}`),
+    const conv: CommandAction[] = recentSessions.map((s) => ({
+      id: `conv-${s.id}`,
+      label: s.name,
+      description: 'Open conversation',
+      icon: '💭',
+      category: 'conversation' as const,
+      run: () => router.push(`/chat?session=${s.id}`),
     }))
 
-    const soulActs: CommandAction[] = souls.map(s => ({
-      id: `soul-${s.name}`, label: `Switch soul: ${s.name}`, description: s.description || 'Switch personality',
-      icon: '🎭', category: 'soul' as const,
+    const soulActs: CommandAction[] = souls.map((s) => ({
+      id: `soul-${s.name}`,
+      label: `Switch soul: ${s.name}`,
+      description: s.description || 'Switch personality',
+      icon: '🎭',
+      category: 'soul' as const,
       run: async () => {
-        try { await soulsController.switch(s.name) } catch { /* soul switch failed — navigate anyway */ }
+        try {
+          await soulsController.switch(s.name)
+        } catch {
+          /* soul switch failed — navigate anyway */
+        }
         router.push('/chat')
       },
     }))
@@ -94,20 +232,48 @@ export function CommandPalette() {
     return [...nav, ...modelActs, ...soulActs, ...acts, ...conv]
   }, [router, recentSessions, models, souls, settings, updateSettings])
 
+  const dataActions = useMemo<CommandAction[]>(() => {
+    const toAction = (h: SystemSearchHit): CommandAction => {
+      const meta = SEARCH_STORES[h.store]
+      const isFile = h.locator.startsWith('file:')
+      return {
+        id: `data-${h.store}-${h.id}`,
+        label: h.title,
+        description: `${meta?.label ?? h.store}${h.detail ? ` · ${h.detail}` : ''}`,
+        icon: meta?.icon ?? '🗂️',
+        category: 'data' as const,
+        // route: hits jump straight there; file-backed hits (no viewer yet)
+        // open in the search results page seeded with their title.
+        run: () =>
+          isFile
+            ? router.push(`/workspace/data/search?q=${encodeURIComponent(h.title)}`)
+            : router.push(h.locator.slice('route:'.length)),
+      }
+    }
+    return dataHits.slice(0, 10).map(toAction)
+  }, [dataHits, router])
+
   const filtered = useMemo(() => {
-    if (!query.trim()) return actions
-    const q = query.toLowerCase()
-    return actions.filter(a =>
-      a.label.toLowerCase().includes(q) ||
-      a.description.toLowerCase().includes(q)
-    )
-  }, [actions, query])
+    const local = query.trim()
+      ? actions.filter(
+          (a) =>
+            a.label.toLowerCase().includes(query.toLowerCase()) ||
+            a.description.toLowerCase().includes(query.toLowerCase()),
+        )
+      : actions
+    return [...local, ...dataActions]
+  }, [actions, query, dataActions])
 
   useEffect(() => {
-    if (!open) { setQuery(''); setSelectedIdx(0) }
+    if (!open) {
+      setQuery('')
+      setSelectedIdx(0)
+    }
   }, [open])
 
-  useEffect(() => { setSelectedIdx(0) }, [query])
+  useEffect(() => {
+    setSelectedIdx(0)
+  }, [query])
 
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 50)
@@ -117,7 +283,7 @@ export function CommandPalette() {
     const down = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setOpen(o => !o)
+        setOpen((o) => !o)
       }
       if (e.key === 'Escape') setOpen(false)
     }
@@ -125,20 +291,32 @@ export function CommandPalette() {
     return () => window.removeEventListener('keydown', down)
   }, [])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIdx(i => Math.min(i + 1, filtered.length - 1)) }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIdx(i => Math.max(i - 1, 0)) }
-    if (e.key === 'Enter' && filtered[selectedIdx]) {
-      setOpen(false)
-      filtered[selectedIdx].run()
-    }
-  }, [filtered, selectedIdx])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedIdx((i) => Math.min(i + 1, filtered.length - 1))
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedIdx((i) => Math.max(i - 1, 0))
+      }
+      if (e.key === 'Enter' && filtered[selectedIdx]) {
+        setOpen(false)
+        filtered[selectedIdx].run()
+      }
+    },
+    [filtered, selectedIdx],
+  )
 
   if (!open) return null
 
   return (
     <>
-      <div className="fixed inset-0 z-[100] bg-background/60 backdrop-blur-sm" onClick={() => setOpen(false)} />
+      <div
+        className="fixed inset-0 z-[100] bg-background/60 backdrop-blur-sm"
+        onClick={() => setOpen(false)}
+      />
       <div className="fixed left-1/2 top-[15%] z-[101] w-full max-w-lg -translate-x-1/2">
         <div
           role="dialog"
@@ -153,9 +331,15 @@ export function CommandPalette() {
               const first = focusable[0] as HTMLElement
               const last = focusable[focusable.length - 1] as HTMLElement
               if (e.shiftKey) {
-                if (document.activeElement === first) { last.focus(); e.preventDefault() }
+                if (document.activeElement === first) {
+                  last.focus()
+                  e.preventDefault()
+                }
               } else {
-                if (document.activeElement === last) { first.focus(); e.preventDefault() }
+                if (document.activeElement === last) {
+                  first.focus()
+                  e.preventDefault()
+                }
               }
             }
           }}
@@ -165,21 +349,32 @@ export function CommandPalette() {
             <input
               ref={inputRef}
               value={query}
-              onChange={e => setQuery(e.target.value)}
+              onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Search pages, models, actions..."
               className="flex-1 bg-transparent py-3 text-sm outline-none focus:ring-2 focus:ring-ring/30 rounded placeholder:text-muted-foreground/50"
             />
-            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Esc</kbd>
+            <kbd className="rounded border border-border/40 bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+              Esc
+            </kbd>
           </div>
           <div className="max-h-80 overflow-y-auto py-1">
             {filtered.length === 0 ? (
-              <p className="px-4 py-6 text-center text-sm text-muted-foreground">No results for &ldquo;{query}&rdquo;</p>
+              <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                No results for &ldquo;{query}&rdquo;
+              </p>
             ) : (
               filtered.map((action, i) => {
                 const cat = action.category
                 const showHeader = i === 0 || filtered[i - 1].category !== cat
-                const catLabel = { navigation: 'Pages', model: 'Models', soul: 'Souls', action: 'Actions', conversation: 'Conversations' }[cat]
+                const catLabel = {
+                  navigation: 'Pages',
+                  model: 'Models',
+                  soul: 'Souls',
+                  action: 'Actions',
+                  conversation: 'Conversations',
+                  data: 'Data',
+                }[cat]
                 return (
                   <div key={action.id}>
                     {showHeader && (
@@ -190,15 +385,20 @@ export function CommandPalette() {
                     <button
                       className={cn(
                         'flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition-colors',
-                        i === selectedIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                        i === selectedIdx ? 'bg-primary/10 text-primary' : 'hover:bg-muted',
                       )}
-                      onClick={() => { setOpen(false); action.run() }}
+                      onClick={() => {
+                        setOpen(false)
+                        action.run()
+                      }}
                       onMouseEnter={() => setSelectedIdx(i)}
                     >
                       <span className="text-base">{action.icon}</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-medium">{action.label}</p>
-                        <p className="truncate text-xs text-muted-foreground">{action.description}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {action.description}
+                        </p>
                       </div>
                     </button>
                   </div>
@@ -206,6 +406,14 @@ export function CommandPalette() {
               })
             )}
           </div>
+          {dataPartial.length > 0 && (
+            <p
+              className="border-t border-border/30 px-4 py-1.5 text-[10px] text-warning"
+              role="status"
+            >
+              Partial results — some sources are unavailable: {dataPartial.join(', ')}
+            </p>
+          )}
         </div>
       </div>
     </>

@@ -10,7 +10,7 @@ import { V86TerminalPanel } from '@/components/shell/V86TerminalPanel'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { filesController, type FileEntry } from '@/lib/files-controller'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
-import { authFetch } from '@/lib/http-client'
+import { authFetch, apiGet } from '@/lib/http-client'
 import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useFileList } from '@/lib/cache'
@@ -811,25 +811,39 @@ function StartupTab() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
+    let timer: ReturnType<typeof setInterval> | null = null
+    const stopPolling = () => {
+      if (timer !== null) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
     const fetchStartup = async () => {
       try {
-        const [progressRes, historyRes] = await Promise.all([
-          fetch('/health/startup-progress'),
-          fetch('/health/startup-history'),
+        const [progress, history] = await Promise.all([
+          apiGet<Record<string, unknown>>('/health/startup-progress'),
+          apiGet<Record<string, unknown>>('/health/startup-history'),
         ])
-        const progressJson = await progressRes.json()
-        const historyJson = await historyRes.json()
-        setStartupData(progressJson.data)
-        setHistoryData(historyJson.data)
+        if (cancelled) return
+        setStartupData(progress)
+        setHistoryData(history)
+        // Startup is done — stop hammering two endpoints every 2s on a page
+        // that stays open all day. Startup history is immutable past this
+        // point, and a restart re-runs this effect from a fresh mount.
+        if ((progress as { phase?: string }).phase === 'ready') stopPolling()
       } catch {
         // ignore
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     fetchStartup()
-    const interval = setInterval(fetchStartup, 2000)
-    return () => clearInterval(interval)
+    timer = setInterval(fetchStartup, 2000)
+    return () => {
+      cancelled = true
+      stopPolling()
+    }
   }, [])
 
   const STAGE_COLORS: Record<string, string> = {

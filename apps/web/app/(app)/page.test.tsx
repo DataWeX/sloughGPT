@@ -59,6 +59,9 @@ vi.mock('@sloughgpt/strui', () => {
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
 
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    StatusDot: ({ tone, pulse, ...rest }: any) => (
+      <span data-testid="status-dot" data-tone={tone} {...rest} />
+    ),
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
     ActionCard: ({ title, children }: any) => (
       <div data-testid="action-card">
@@ -108,7 +111,7 @@ vi.mock('@/components/icons/NavIcons', () => ({
   IconModels: () => <span data-testid="icon-models">models</span>,
 }))
 
-vi.mock('next/link', () => ({
+vi.mock('@/vite/next-compat/link', () => ({
   default: ({ children, href, className, ...rest }: any) => (
     <a href={href} className={className} {...rest}>
       {children}
@@ -241,7 +244,6 @@ vi.mock('@/components/home/SystemHealth', () => ({
     )
   },
 }))
-/* eslint-disable @next/next/no-html-link-for-pages -- test mock stands in for next/link */
 vi.mock('@/components/home/NavigationGrid', () => ({
   NavigationGrid: () => (
     <div>
@@ -307,7 +309,7 @@ const mockT = vi.fn((key: string, params?: Record<string, string | number>) => {
   return text
 })
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
 vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: mockT, locale: 'en', setLocale: vi.fn(), locales: ['en'] }),
 }))
@@ -522,6 +524,42 @@ describe('HomePage', () => {
     await waitFor(() => {
       expect(screen.getByText('Good morning')).toBeTruthy()
     })
+  })
+
+  const startupCalls = () =>
+    mockApiGet.mock.calls.filter((c) => c[0] === '/health/startup-progress')
+
+  const flush = async () => {
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  it('stops polling /health/startup-progress once the app is ready', async () => {
+    vi.useFakeTimers()
+    mockApiGet.mockResolvedValue({ phase: 'ready', step: 9, total: 9, message: 'Ready' })
+    render(<HomePage />)
+    await flush()
+    expect(startupCalls().length).toBe(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(60_000)
+    })
+    expect(startupCalls().length).toBe(1)
+  })
+
+  it('keeps polling /health/startup-progress while still starting up', async () => {
+    vi.useFakeTimers()
+    mockApiGet.mockResolvedValue({ phase: 'loading-model', step: 2, total: 9, message: 'Loading' })
+    render(<HomePage />)
+    await flush()
+    expect(startupCalls().length).toBe(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(9_000)
+    })
+    expect(startupCalls().length).toBe(4)
   })
 
   it('summarizes the loaded model and conversation count in the subtitle', () => {

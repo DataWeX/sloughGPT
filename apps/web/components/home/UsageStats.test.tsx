@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from 'vitest'
 import { render } from '@testing-library/react'
 import { UsageStats } from './UsageStats'
 
-vi.mock('next/link', () => ({
-  default: ({ children, href, ...props }: any) => <a href={href} {...props}>{children}</a>,
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({ children, href, ...props }: any) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
 }))
 
 vi.mock('@/lib/format-bytes', () => ({
@@ -15,17 +19,24 @@ vi.mock('@sloughgpt/strui', () => {
   return {
     Card: passthrough,
     CardContent: passthrough,
-  
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -52,13 +63,19 @@ Spinner: ({ className }: any) => <div className={className} data-testid="spinner
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 const baseProps = {
   apiStatus: 'online' as string,
   loading: false,
-  convStats: { totalConversations: 15, totalMessages: 320, totalWords: 8500, activeDays: 5, mostActiveHour: 14 },
+  convStats: {
+    totalConversations: 15,
+    totalMessages: 320,
+    totalWords: 8500,
+    activeDays: 5,
+    mostActiveHour: 14,
+  },
   datasetStats: { totalDatasets: 3, totalSize: 10240, totalSamples: 1500 },
 }
 
@@ -87,7 +104,9 @@ describe('UsageStats', () => {
   })
 
   it('hides most active hour when null', () => {
-    const { container } = render(<UsageStats {...baseProps} convStats={{ ...baseProps.convStats, mostActiveHour: null }} />)
+    const { container } = render(
+      <UsageStats {...baseProps} convStats={{ ...baseProps.convStats, mostActiveHour: null }} />,
+    )
     expect(container.textContent).not.toMatch(/Most active/)
   })
 
@@ -100,18 +119,22 @@ describe('UsageStats', () => {
   it('links to datasets page', () => {
     const { container } = render(<UsageStats {...baseProps} />)
     const links = container.querySelectorAll('a')
-    const datasetsLink = Array.from(links).find(a => a.getAttribute('href') === '/datasets')
+    const datasetsLink = Array.from(links).find((a) => a.getAttribute('href') === '/datasets')
     expect(datasetsLink).toBeDefined()
     expect(datasetsLink!.textContent).toContain('View all →')
   })
 
   it('hides conversation card when no conversations', () => {
-    const { container } = render(<UsageStats {...baseProps} convStats={{ ...baseProps.convStats, totalConversations: 0 }} />)
+    const { container } = render(
+      <UsageStats {...baseProps} convStats={{ ...baseProps.convStats, totalConversations: 0 }} />,
+    )
     expect(container.textContent).not.toContain('Your stats')
   })
 
   it('hides dataset card when no datasets', () => {
-    const { container } = render(<UsageStats {...baseProps} datasetStats={{ ...baseProps.datasetStats, totalDatasets: 0 }} />)
+    const { container } = render(
+      <UsageStats {...baseProps} datasetStats={{ ...baseProps.datasetStats, totalDatasets: 0 }} />,
+    )
     expect(container.querySelectorAll('a[href="/datasets"]').length).toBe(0)
   })
 })

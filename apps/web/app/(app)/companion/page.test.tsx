@@ -3,12 +3,23 @@ import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-libra
 import React from 'react'
 
 const {
-  mockGetInfo, mockListPresets, mockGetPrompt, mockSetPersonality,
-  mockSetPreset, mockChat, mockReset, mockAddToast,
+  mockGetInfo,
+  mockListPresets,
+  mockGetPrompt,
+  mockSetPersonality,
+  mockSetPreset,
+  mockChat,
+  mockReset,
+  mockAddToast,
 } = vi.hoisted(() => ({
-  mockGetInfo: vi.fn(), mockListPresets: vi.fn(), mockGetPrompt: vi.fn(),
-  mockSetPersonality: vi.fn(), mockSetPreset: vi.fn(), mockChat: vi.fn(),
-  mockReset: vi.fn(), mockAddToast: vi.fn(),
+  mockGetInfo: vi.fn(),
+  mockListPresets: vi.fn(),
+  mockGetPrompt: vi.fn(),
+  mockSetPersonality: vi.fn(),
+  mockSetPreset: vi.fn(),
+  mockChat: vi.fn(),
+  mockReset: vi.fn(),
+  mockAddToast: vi.fn(),
 }))
 
 vi.mock('@/components/PageContainer', () => ({
@@ -31,29 +42,52 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, placeholder, onKeyDown }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} onKeyDown={onKeyDown} />
     ),
-    StatCard: ({ label, value }: any) => <div data-testid={`stat-${label}`}><span>{label}</span><span>{String(value)}</span></div>,
+    StatCard: ({ label, value }: any) => (
+      <div data-testid={`stat-${label}`}>
+        <span>{label}</span>
+        <span>{String(value)}</span>
+      </div>
+    ),
     KpiGrid: ({ children }: any) => <div>{children}</div>,
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Slider: ({ value, onValueChange }: any) => <input type="range" role="slider" value={value?.[0] ?? 0} onChange={(e: any) => onValueChange?.([Number(e.target.value)])} />,
-  
+    Slider: ({ value, onValueChange }: any) => (
+      <input
+        type="range"
+        role="slider"
+        value={value?.[0] ?? 0}
+        onChange={(e: any) => onValueChange?.([Number(e.target.value)])}
+      />
+    ),
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -80,7 +114,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/companion-controller', () => ({
@@ -105,7 +139,7 @@ vi.mock('@/components/companion/CompanionInsightsCard', () => ({
   ),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/companion',
@@ -117,14 +151,27 @@ afterEach(cleanup)
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mockGetInfo.mockResolvedValue({ traits: { warmth: 0.7, curiosity: 0.8, creativity: 0.5, confidence: 0.6, humor: 0.3 } })
-  mockListPresets.mockResolvedValue({ presets: [
-    { id: 'warm', name: 'Warm', description: 'A warm companion', traits: { warmth: 0.9 } },
-    { id: 'curious', name: 'Curious', description: 'An curious explorer', traits: { curiosity: 0.9 } },
-  ]})
+  mockGetInfo.mockResolvedValue({
+    traits: { warmth: 0.7, curiosity: 0.8, creativity: 0.5, confidence: 0.6, humor: 0.3 },
+  })
+  mockListPresets.mockResolvedValue({
+    presets: [
+      { id: 'warm', name: 'Warm', description: 'A warm companion', traits: { warmth: 0.9 } },
+      {
+        id: 'curious',
+        name: 'Curious',
+        description: 'An curious explorer',
+        traits: { curiosity: 0.9 },
+      },
+    ],
+  })
   mockGetPrompt.mockResolvedValue({ system_prompt: 'You are a helpful companion.' })
-  mockSetPersonality.mockResolvedValue({ traits: { warmth: 0.7, curiosity: 0.8, creativity: 0.5, confidence: 0.6, humor: 0.3 } })
-  mockSetPreset.mockResolvedValue({ traits: { warmth: 0.9, curiosity: 0.9, creativity: 0.5, confidence: 0.6, humor: 0.3 } })
+  mockSetPersonality.mockResolvedValue({
+    traits: { warmth: 0.7, curiosity: 0.8, creativity: 0.5, confidence: 0.6, humor: 0.3 },
+  })
+  mockSetPreset.mockResolvedValue({
+    traits: { warmth: 0.9, curiosity: 0.9, creativity: 0.5, confidence: 0.6, humor: 0.3 },
+  })
   mockChat.mockResolvedValue({ response: 'Hello there!' })
   mockReset.mockResolvedValue({})
 })
@@ -171,18 +218,28 @@ describe('CompanionPage — traits display flow', () => {
 
   it('displays trait values as numeric text', async () => {
     render(<CompanionPage />)
-    await waitFor(() => {
-      expect(screen.getByText('0.7')).toBeTruthy()
-      expect(screen.getByText('0.8')).toBeTruthy()
-    }, { timeout: 3000 })
+    await waitFor(
+      () => {
+        expect(screen.getByText('0.7')).toBeTruthy()
+        expect(screen.getByText('0.8')).toBeTruthy()
+      },
+      { timeout: 3000 },
+    )
   })
 
   it('allows editing trait values via sliders', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Warmth').length).toBeGreaterThan(0)
+    })
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('slider').length).toBeGreaterThanOrEqual(1)
+      },
+      { timeout: 3000 },
+    )
 
     const sliders = screen.getAllByRole('slider')
-    expect(sliders.length).toBeGreaterThanOrEqual(1)
     fireEvent.change(sliders[0], { target: { value: '0.9' } })
     expect(screen.getAllByText('Warmth').length).toBeGreaterThanOrEqual(1)
   })
@@ -200,7 +257,7 @@ describe('CompanionPage — presets flow', () => {
   it('preset buttons have titles showing descriptions', async () => {
     render(<CompanionPage />)
     await waitFor(() => {
-      const warmBtn = screen.getAllByRole('button').find(b => b.textContent === 'Warm')
+      const warmBtn = screen.getAllByRole('button').find((b) => b.textContent === 'Warm')
       expect(warmBtn).toBeDefined()
       expect(warmBtn?.getAttribute('title')).toBe('A warm companion')
     })
@@ -208,12 +265,16 @@ describe('CompanionPage — presets flow', () => {
 
   it('selecting a preset calls setPreset with correct id', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const presetBtns = screen.getAllByRole('button').filter(b =>
-      b.textContent === 'Warm' || b.textContent === 'Curious'
-    )
-    await act(async () => { fireEvent.click(presetBtns[0]) })
+    const presetBtns = screen
+      .getAllByRole('button')
+      .filter((b) => b.textContent === 'Warm' || b.textContent === 'Curious')
+    await act(async () => {
+      fireEvent.click(presetBtns[0])
+    })
     await waitFor(() => {
       expect(mockSetPreset).toHaveBeenCalledWith('warm')
     })
@@ -241,13 +302,26 @@ describe('CompanionPage — presets flow', () => {
 describe('CompanionPage — save flow', () => {
   it('save button calls setPersonality', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Warmth')).toBeTruthy() })
-
-    const saveBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('save')
+    await waitFor(() => {
+      expect(screen.getByText('Warmth')).toBeTruthy()
+    })
+    await waitFor(
+      () => {
+        const btn = screen
+          .getAllByRole('button')
+          .find((b) => b.textContent?.toLowerCase().includes('save'))
+        expect(btn).toBeDefined()
+      },
+      { timeout: 3000 },
     )
+
+    const saveBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('save'))
     expect(saveBtn).toBeDefined()
-    await act(async () => { fireEvent.click(saveBtn!) })
+    await act(async () => {
+      fireEvent.click(saveBtn!)
+    })
     await waitFor(() => {
       expect(mockSetPersonality).toHaveBeenCalled()
     })
@@ -255,34 +329,55 @@ describe('CompanionPage — save flow', () => {
 
   it('save button text changes to "Saving..." while saving', async () => {
     let resolveSave: (v: any) => void
-    mockSetPersonality.mockReturnValue(new Promise(r => { resolveSave = r }))
+    mockSetPersonality.mockReturnValue(
+      new Promise((r) => {
+        resolveSave = r
+      }),
+    )
 
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Warmth')).toBeTruthy() })
-
-    const saveBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('save')
+    await waitFor(() => {
+      expect(screen.getByText('Warmth')).toBeTruthy()
+    })
+    await waitFor(
+      () => {
+        const btn = screen
+          .getAllByRole('button')
+          .find((b) => b.textContent?.toLowerCase().includes('save'))
+        expect(btn).toBeDefined()
+      },
+      { timeout: 3000 },
     )
-    await act(async () => { fireEvent.click(saveBtn!) })
+
+    const saveBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('save'))
+    await act(async () => {
+      fireEvent.click(saveBtn!)
+    })
 
     expect(screen.getByText('Saving...')).toBeTruthy()
     expect(saveBtn!).toHaveAttribute('disabled')
 
-    await act(async () => { resolveSave!({ traits: { warmth: 0.7 } }) })
+    await act(async () => {
+      resolveSave!({ traits: { warmth: 0.7 } })
+    })
   })
 })
 
 describe('CompanionPage — chat flow', () => {
   it('chat input and send button work', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+    await screen.findByPlaceholderText(/type a message/i)
 
     const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hello companion' } })
-    const sendBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('send')
-    )
-    await act(async () => { fireEvent.click(sendBtn!) })
+    const sendBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('send'))
+    await act(async () => {
+      fireEvent.click(sendBtn!)
+    })
     await waitFor(() => {
       expect(mockChat).toHaveBeenCalledWith('Hello companion')
     })
@@ -290,14 +385,16 @@ describe('CompanionPage — chat flow', () => {
 
   it('chat response is displayed after send', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+    await screen.findByPlaceholderText(/type a message/i)
 
     const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hi' } })
-    const sendBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('send')
-    )
-    await act(async () => { fireEvent.click(sendBtn!) })
+    const sendBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('send'))
+    await act(async () => {
+      fireEvent.click(sendBtn!)
+    })
     await waitFor(() => {
       expect(screen.getByText('Hello there!')).toBeTruthy()
     })
@@ -305,7 +402,7 @@ describe('CompanionPage — chat flow', () => {
 
   it('Enter key in chat input triggers send', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+    await screen.findByPlaceholderText(/type a message/i)
 
     const chatInput = screen.getAllByPlaceholderText(/type a message/i)[0]
     fireEvent.change(chatInput, { target: { value: 'Hello' } })
@@ -319,11 +416,11 @@ describe('CompanionPage — chat flow', () => {
 
   it('send button is disabled when input is empty', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+    await screen.findByPlaceholderText(/type a message/i)
 
-    const sendBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('send')
-    )
+    const sendBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('send'))
     expect(sendBtn).toBeDefined()
     expect(sendBtn).toHaveAttribute('disabled')
   })
@@ -352,11 +449,15 @@ describe('CompanionPage — insights card', () => {
 describe('CompanionPage — reset flow', () => {
   it('reset button calls controller.reset', async () => {
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Warmth')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Warmth')).toBeTruthy()
+    })
 
     const resetBtn = screen.getByTestId('icon-refresh').closest('button')
     expect(resetBtn).toBeDefined()
-    await act(async () => { fireEvent.click(resetBtn!) })
+    await act(async () => {
+      fireEvent.click(resetBtn!)
+    })
     await waitFor(() => {
       expect(mockReset).toHaveBeenCalled()
     })
@@ -380,9 +481,9 @@ describe('CompanionPage — error handling', () => {
     mockGetPrompt.mockRejectedValue(new Error('network'))
     render(<CompanionPage />)
     await waitFor(() => {
-      const retryBtn = screen.getAllByRole('button').find(b =>
-        b.textContent?.toLowerCase().includes('retry')
-      )
+      const retryBtn = screen
+        .getAllByRole('button')
+        .find((b) => b.textContent?.toLowerCase().includes('retry'))
       expect(retryBtn).toBeDefined()
     })
   })
@@ -390,12 +491,25 @@ describe('CompanionPage — error handling', () => {
   it('save failure shows error toast', async () => {
     mockSetPersonality.mockRejectedValue(new Error('fail'))
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Warmth')).toBeTruthy() })
-
-    const saveBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('save')
+    await waitFor(() => {
+      expect(screen.getByText('Warmth')).toBeTruthy()
+    })
+    await waitFor(
+      () => {
+        const btn = screen
+          .getAllByRole('button')
+          .find((b) => b.textContent?.toLowerCase().includes('save'))
+        expect(btn).toBeDefined()
+      },
+      { timeout: 3000 },
     )
-    await act(async () => { fireEvent.click(saveBtn!) })
+
+    const saveBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('save'))
+    await act(async () => {
+      fireEvent.click(saveBtn!)
+    })
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('fail', 'error')
     })
@@ -404,10 +518,14 @@ describe('CompanionPage — error handling', () => {
   it('preset failure shows error toast', async () => {
     mockSetPreset.mockRejectedValue(new Error('fail'))
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1) })
+    await waitFor(() => {
+      expect(screen.getAllByText('Warm').length).toBeGreaterThanOrEqual(1)
+    })
 
-    const presetBtn = screen.getAllByRole('button').find(b => b.textContent === 'Warm')
-    await act(async () => { fireEvent.click(presetBtn!) })
+    const presetBtn = screen.getAllByRole('button').find((b) => b.textContent === 'Warm')
+    await act(async () => {
+      fireEvent.click(presetBtn!)
+    })
     await waitFor(() => {
       expect(mockAddToast).toHaveBeenCalledWith('fail', 'error')
     })
@@ -442,7 +560,9 @@ describe('CompanionPage — personality traits section', () => {
   it('trait card is hidden when traits are null', async () => {
     mockGetInfo.mockResolvedValue({ traits: null })
     render(<CompanionPage />)
-    await waitFor(() => { expect(screen.getByText('Companion')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Companion')).toBeTruthy()
+    })
     expect(screen.queryByText('Personality Traits')).toBeNull()
   })
 })

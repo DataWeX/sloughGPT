@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/compare',
@@ -10,25 +10,41 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title }: any) => (
-    <div data-testid="page-container"><h1>{title}</h1>{children}</div>
+    <div data-testid="page-container">
+      <h1>{title}</h1>
+      {children}
+    </div>
   ),
 }))
 
 const {
-  mockList, mockGetHealth, mockRunBenchmark, mockGetHistory, mockAddToast, mockDownloadJson,
+  mockList,
+  mockGetHealth,
+  mockRunBenchmark,
+  mockGetHistory,
+  mockAddToast,
+  mockDownloadJson,
 } = vi.hoisted(() => ({
-  mockList: vi.fn(), mockGetHealth: vi.fn(), mockRunBenchmark: vi.fn(),
-  mockGetHistory: vi.fn(), mockAddToast: vi.fn(), mockDownloadJson: vi.fn(),
+  mockList: vi.fn(),
+  mockGetHealth: vi.fn(),
+  mockRunBenchmark: vi.fn(),
+  mockGetHistory: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockDownloadJson: vi.fn(),
 }))
 
 vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, disabled }: any) => (
-      <button onClick={onClick} disabled={disabled}>{children}</button>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, placeholder }: any) => (
       <input value={value} onChange={onChange} placeholder={placeholder} />
@@ -36,16 +52,23 @@ vi.mock('@sloughgpt/strui', () => {
     IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
     IconDownload: () => <span data-testid="icon-download">download</span>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -72,7 +95,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('@/lib/model-controller', () => ({
@@ -102,11 +125,12 @@ vi.mock('@/lib/format-bytes', () => ({
   getJsonItem: vi.fn().mockReturnValue([]),
 }))
 
-vi.mock('next/dynamic', () => {
+vi.mock('@/vite/next-compat/dynamic', () => {
   const React = require('react')
   return {
     __esModule: true,
-    default: () => (props: Record<string, unknown>) => React.createElement('div', { 'data-testid': 'dynamic' }),
+    default: () => (props: Record<string, unknown>) =>
+      React.createElement('div', { 'data-testid': 'dynamic' }),
   }
 })
 
@@ -114,7 +138,9 @@ vi.mock('@/components/compare/ModelsCard', () => ({
   default: ({ models, onSelect }: any) => (
     <div data-testid="models-card">
       {models?.map((m: any) => (
-        <button key={m.id} onClick={() => onSelect?.(m.id)}>{m.name}</button>
+        <button key={m.id} onClick={() => onSelect?.(m.id)}>
+          {m.name}
+        </button>
       ))}
     </div>
   ),
@@ -188,13 +214,21 @@ describe('ComparePage — model selection flow', () => {
 describe('ComparePage — benchmark flow', () => {
   it('run benchmark button triggers benchmark', async () => {
     render(<ComparePage />)
-    await waitFor(() => { expect(screen.getByText('gpt2')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('gpt2')).toBeTruthy()
+    })
 
-    const benchBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('benchmark') || b.textContent?.toLowerCase().includes('run')
-    )
+    const benchBtn = screen
+      .getAllByRole('button')
+      .find(
+        (b) =>
+          b.textContent?.toLowerCase().includes('benchmark') ||
+          b.textContent?.toLowerCase().includes('run'),
+      )
     if (benchBtn) {
-      await act(async () => { fireEvent.click(benchBtn) })
+      await act(async () => {
+        fireEvent.click(benchBtn)
+      })
       // No crash = success
       expect(screen.getByTestId('models-card')).toBeTruthy()
     }
@@ -213,13 +247,17 @@ describe('ComparePage — results display', () => {
 describe('ComparePage — snapshot flow', () => {
   it('save snapshot button works', async () => {
     render(<ComparePage />)
-    await waitFor(() => { expect(screen.getByText('Model Comparison')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Model Comparison')).toBeTruthy()
+    })
 
-    const saveBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('save')
-    )
+    const saveBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('save'))
     if (saveBtn) {
-      await act(async () => { fireEvent.click(saveBtn) })
+      await act(async () => {
+        fireEvent.click(saveBtn)
+      })
       // No crash = success
       expect(screen.getByText('Model Comparison')).toBeTruthy()
     }
@@ -293,9 +331,13 @@ describe('ComparePage — insights card', () => {
 
   it('clicking model selects it', async () => {
     render(<ComparePage />)
-    await waitFor(() => { expect(screen.getByText('gpt2')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('gpt2')).toBeTruthy()
+    })
     const modelBtn = screen.getByText('gpt2')
-    await act(async () => { fireEvent.click(modelBtn) })
+    await act(async () => {
+      fireEvent.click(modelBtn)
+    })
     expect(screen.getByTestId('models-card')).toBeTruthy()
   })
 
@@ -304,9 +346,9 @@ describe('ComparePage — insights card', () => {
     await waitFor(() => {
       expect(screen.getByText(/no benchmark results/i)).toBeTruthy()
     })
-    const exportBtn = screen.getAllByRole('button').find(b =>
-      b.textContent?.toLowerCase().includes('export')
-    )
+    const exportBtn = screen
+      .getAllByRole('button')
+      .find((b) => b.textContent?.toLowerCase().includes('export'))
     expect(exportBtn).toBeUndefined()
   })
 })

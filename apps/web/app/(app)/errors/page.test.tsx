@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { redirect } from 'next/navigation'
+import { redirect } from '@/vite/next-compat/navigation'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   redirect: vi.fn(),
 }))
 

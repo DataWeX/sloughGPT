@@ -29,60 +29,78 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: (selector: any) => selector({ addToast: mocks.mockAddToast }),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
   Card: ({ children }: any) => <div>{children}</div>,
-  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
+  ActionCard: ({ title, actions, children, ...p }: any) => (
+    <div data-testid="action-card" {...p}>
+      {title}
+      {actions}
+      {children}
+    </div>
+  ),
   CardHeader: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   CardTitle: ({ children }: any) => <div>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
-  Button: ({ children, onClick, disabled, ...props }: any) => <button onClick={onClick} disabled={disabled} {...props}>{children}</button>,
+  Button: ({ children, onClick, disabled, ...props }: any) => (
+    <button onClick={onClick} disabled={disabled} {...props}>
+      {children}
+    </button>
+  ),
   Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
   IconTrash: () => <span data-testid="icon-trash" />,
   IconRefresh: () => <span data-testid="icon-refresh" />,
   IconX: () => <span data-testid="icon-x" />,
   Checkbox: ({ checked, onCheckedChange, className, ...props }: any) => (
-    <input type="checkbox" checked={checked} onChange={() => onCheckedChange?.(!checked)} className={className} {...props} />
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={() => onCheckedChange?.(!checked)}
+      className={className}
+      {...props}
+    />
   ),
 
-    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { FineTunedModelsCard } from './FineTunedModelsCard'
@@ -109,7 +127,14 @@ describe('FineTunedModelsCard', () => {
 
   it('renders model list', async () => {
     mocks.mockListFineTuned.mockResolvedValue([
-      { name: 'my-model', model: 'gpt2', dataset: 'shakespeare', size_mb: 100, final_loss: 0.45, epochs: 10 },
+      {
+        name: 'my-model',
+        model: 'gpt2',
+        dataset: 'shakespeare',
+        size_mb: 100,
+        final_loss: 0.45,
+        epochs: 10,
+      },
     ])
     render(<FineTunedModelsCard />)
     expect(await screen.findByText('my-model')).toBeDefined()
@@ -139,7 +164,15 @@ describe('FineTunedModelsCard', () => {
 
   it('shows unload button for active model', async () => {
     mocks.mockListFineTuned.mockResolvedValue([
-      { name: 'm1', model: 'gpt2', model_name: 'm1', dataset: '', size_mb: 0, final_loss: null, epochs: 0 },
+      {
+        name: 'm1',
+        model: 'gpt2',
+        model_name: 'm1',
+        dataset: '',
+        size_mb: 0,
+        final_loss: null,
+        epochs: 0,
+      },
     ])
     render(<FineTunedModelsCard activeModelId="m1" />)
     expect(await screen.findByText(/Unload/)).toBeDefined()

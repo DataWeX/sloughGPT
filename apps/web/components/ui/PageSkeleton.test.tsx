@@ -3,10 +3,10 @@ import { describe, it, expect } from 'vitest'
 import { PageSkeleton, CardSkeleton, ListSkeleton } from './PageSkeleton'
 
 describe('PageSkeleton', () => {
-  it('renders header by default', () => {
+  it('renders card skeletons without header by default', () => {
     const { container } = render(<PageSkeleton />)
     const skeletons = container.querySelectorAll('.animate-pulse')
-    expect(skeletons.length).toBeGreaterThanOrEqual(5) // 2 header + 3 cards
+    expect(skeletons.length).toBe(3) // 3 cards only (header defaults false)
   })
 
   it('hides header when header=false', () => {
@@ -15,8 +15,20 @@ describe('PageSkeleton', () => {
     expect(skeletons.length).toBe(3) // 3 cards only
   })
 
+  it('renders header when header=true', () => {
+    const { container } = render(<PageSkeleton header />)
+    const skeletons = container.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBeGreaterThanOrEqual(5) // 2 header + 3 cards
+  })
+
   it('renders custom card count', () => {
     const { container } = render(<PageSkeleton cards={5} />)
+    const skeletons = container.querySelectorAll('.animate-pulse')
+    expect(skeletons.length).toBe(5) // cards only, header off by default
+  })
+
+  it('renders custom card count with header', () => {
+    const { container } = render(<PageSkeleton cards={5} header />)
     const skeletons = container.querySelectorAll('.animate-pulse')
     expect(skeletons.length).toBeGreaterThanOrEqual(7) // 2 header + 5 cards
   })

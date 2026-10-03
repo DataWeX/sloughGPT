@@ -28,7 +28,9 @@ interface SearchResultsCardProps {
 export function SearchResultsCard({ groups, total, query, onNavigate }: SearchResultsCardProps) {
   if (total === 0) {
     return (
-      <p className="text-sm text-muted-foreground text-center py-8">No results for &ldquo;{query}&rdquo;</p>
+      <p className="text-sm text-muted-foreground text-center py-8">
+        No results for &ldquo;{query}&rdquo;
+      </p>
     )
   }
 
@@ -48,19 +50,40 @@ export function SearchResultsCard({ groups, total, query, onNavigate }: SearchRe
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1">
-              {group.items.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onNavigate?.(group.link)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50 transition-colors text-left group"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-medium group-hover:text-primary transition-colors">{item.title}</div>
-                    {item.detail && <div className="text-muted-foreground truncate">{item.detail}</div>}
+              {group.items.map((item) => {
+                const inner = (
+                  <>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium group-hover:text-primary transition-colors">
+                        {item.title}
+                      </div>
+                      {item.detail && (
+                        <div className="text-muted-foreground truncate">{item.detail}</div>
+                      )}
+                    </div>
+                    {group.link && (
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
+                    )}
+                  </>
+                )
+                const rowClass =
+                  'w-full flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/50 transition-colors text-left group'
+                // File-backed groups (docs/notes/kanban) have no viewer yet —
+                // render as inert rows rather than dead navigation.
+                return group.link ? (
+                  <button
+                    key={item.id}
+                    onClick={() => onNavigate?.(group.link)}
+                    className={rowClass}
+                  >
+                    {inner}
+                  </button>
+                ) : (
+                  <div key={item.id} className={rowClass}>
+                    {inner}
                   </div>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-2" />
-                </button>
-              ))}
+                )
+              })}
             </CardContent>
           </Card>
         )

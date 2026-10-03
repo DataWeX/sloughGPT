@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
 import { PUBLIC_API_URL } from '@/lib/config'

@@ -125,7 +125,7 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/datasets',
@@ -222,9 +222,9 @@ afterEach(cleanup)
 describe('DatasetsPage', () => {
   it('renders header with title', async () => {
     render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('Datasets')).toBeDefined())
+    await waitFor(() => expect(screen.getByText('My Files')).toBeDefined())
     expect(screen.getByText('Refresh')).toBeDefined()
-    expect(screen.getByText('Import')).toBeDefined()
+    expect(screen.getByText('Add file')).toBeDefined()
   })
 
   it('renders dataset cards', async () => {
@@ -239,18 +239,6 @@ describe('DatasetsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('500 samples')).toBeDefined()
       expect(screen.getByText('100.0 KB')).toBeDefined()
-    })
-  })
-
-  it('shows a version count badge when the dataset has versions', async () => {
-    mockListVersions.mockImplementation((id: string) =>
-      id === 'ds1'
-        ? Promise.resolve({ versions: ['20260801120000', '20260801110000'], count: 2 })
-        : Promise.resolve({ versions: [], count: 0 }),
-    )
-    render(<DatasetsPage />)
-    await waitFor(() => {
-      expect(screen.getByText('2 versions')).toBeDefined()
     })
   })
 
@@ -293,49 +281,26 @@ describe('DatasetsPage', () => {
   })
 
   it('filters datasets by search', async () => {
-    mockSearch.mockResolvedValue([mockDatasets[0]])
     render(<DatasetsPage />)
     await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
-    const searchInput = screen.getByPlaceholderText('Search datasets...')
+    const searchInput = screen.getByPlaceholderText('Search files...')
     await act(async () => {
       fireEvent.change(searchInput, { target: { value: 'shakes' } })
     })
     await waitFor(() => {
-      expect(mockSearch).toHaveBeenCalledWith('shakes')
-    })
-  })
-
-  it('shows a searching indicator while the search is in flight', async () => {
-    let resolveSearch: (v: unknown) => void
-    mockSearch.mockReturnValue(
-      new Promise((res) => {
-        resolveSearch = res
-      }),
-    )
-    render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
-    const searchInput = screen.getByPlaceholderText('Search datasets...')
-    await act(async () => {
-      fireEvent.change(searchInput, { target: { value: 'pending' } })
-    })
-    await waitFor(() => {
-      expect(screen.getByRole('status')).toBeDefined()
-    })
-    await act(async () => {
-      resolveSearch!([mockDatasets[0]])
-    })
-    await waitFor(() => {
-      expect(screen.queryByRole('status')).toBeNull()
+      expect(screen.getByText('Shakespeare')).toBeDefined()
+      expect(screen.queryByText('Wikipedia')).toBeNull()
+      expect(screen.queryByText('GitHub Code')).toBeNull()
     })
   })
 
   it('shows empty state when no datasets', async () => {
     mockList.mockResolvedValue([])
     render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('No datasets yet')).toBeDefined(), {
+    await waitFor(() => expect(screen.getByText('No files yet')).toBeDefined(), {
       timeout: 3000,
     })
-    expect(screen.getByText('Import Dataset')).toBeDefined()
+    expect(screen.getAllByText('Add file').length).toBeGreaterThanOrEqual(1)
   })
 
   it('navigates to dataset detail on card click', async () => {
@@ -363,15 +328,15 @@ describe('DatasetsPage', () => {
       confirmBtn.click()
     })
     await waitFor(() => {
-      expect(mockDelete).toHaveBeenCalledWith('ds3')
-      expect(mockAddToast).toHaveBeenCalledWith('Deleted "Wikipedia"', 'info')
+      expect(mockDelete).toHaveBeenCalledWith('ds1')
+      expect(mockAddToast).toHaveBeenCalledWith('Deleted "Shakespeare"', 'info')
     })
   })
 
   it('opens import modal on Import click', async () => {
     render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('Import')).toBeDefined())
-    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => expect(screen.getByText('Add file')).toBeDefined())
+    fireEvent.click(screen.getAllByText('Add file')[0])
     await waitFor(() => expect(screen.getByTestId('import-modal')).toBeTruthy())
   })
 })

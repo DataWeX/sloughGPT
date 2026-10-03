@@ -1,11 +1,17 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -43,7 +49,9 @@ function loadProgress(): Progress {
 function saveProgress(p: Progress) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(p))
-  } catch { /* ignored */ }
+  } catch {
+    /* ignored */
+  }
 }
 
 const LEVEL_LABELS = ['Off', 'Basic', 'Full', 'Deep']
@@ -63,7 +71,7 @@ const LINKS = [
 
 export default function ConsciousnessQuickstartPage() {
   const router = useRouter()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const { t } = useLocale()
   const [progress, setProgress] = useState<Progress>(DEFAULT_PROGRESS)
   const [enabling, setEnabling] = useState(false)
@@ -75,7 +83,7 @@ export default function ConsciousnessQuickstartPage() {
   }, [])
 
   const updateProgress = useCallback((partial: Partial<Progress>) => {
-    setProgress(prev => {
+    setProgress((prev) => {
       const next = { ...prev, ...partial }
       saveProgress(next)
       return next
@@ -181,7 +189,9 @@ export default function ConsciousnessQuickstartPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-base">{t('consciousness_quickstart.welcome_title')}</CardTitle>
+                <CardTitle className="text-base">
+                  {t('consciousness_quickstart.welcome_title')}
+                </CardTitle>
                 <CardDescription>{t('consciousness_quickstart.welcome_desc')}</CardDescription>
               </div>
               <Badge variant="outline">{t('consciousness_quickstart.time_estimate')}</Badge>
@@ -191,15 +201,21 @@ export default function ConsciousnessQuickstartPage() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3 text-sm">
               <div className="rounded-md bg-muted p-3">
                 <p className="font-medium mb-1">{t('consciousness_quickstart.benefit1_title')}</p>
-                <p className="text-xs text-muted-foreground">{t('consciousness_quickstart.benefit1_desc')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('consciousness_quickstart.benefit1_desc')}
+                </p>
               </div>
               <div className="rounded-md bg-muted p-3">
                 <p className="font-medium mb-1">{t('consciousness_quickstart.benefit2_title')}</p>
-                <p className="text-xs text-muted-foreground">{t('consciousness_quickstart.benefit2_desc')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('consciousness_quickstart.benefit2_desc')}
+                </p>
               </div>
               <div className="rounded-md bg-muted p-3">
                 <p className="font-medium mb-1">{t('consciousness_quickstart.benefit3_title')}</p>
-                <p className="text-xs text-muted-foreground">{t('consciousness_quickstart.benefit3_desc')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {t('consciousness_quickstart.benefit3_desc')}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -212,11 +228,10 @@ export default function ConsciousnessQuickstartPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             {steps.map((step) => (
-              <div
-                key={step.num}
-                className="flex items-start gap-3 rounded-md border p-3"
-              >
-                <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? 'bg-success text-white' : 'bg-muted text-muted-foreground'}`}>
+              <div key={step.num} className="flex items-start gap-3 rounded-md border p-3">
+                <div
+                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.done ? 'bg-success text-white' : 'bg-muted text-muted-foreground'}`}
+                >
                   {step.done ? '✓' : step.num}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -229,7 +244,11 @@ export default function ConsciousnessQuickstartPage() {
                   onClick={step.onClick}
                   disabled={(step as any).loading}
                 >
-                  {(step as any).loading ? '...' : step.done ? t('consciousness_quickstart.done') : t(step.actionKey)}
+                  {(step as any).loading
+                    ? '...'
+                    : step.done
+                      ? t('consciousness_quickstart.done')
+                      : t(step.actionKey)}
                 </Button>
               </div>
             ))}
@@ -238,29 +257,72 @@ export default function ConsciousnessQuickstartPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{t('consciousness_quickstart.quick_actions_title')}</CardTitle>
+            <CardTitle className="text-base">
+              {t('consciousness_quickstart.quick_actions_title')}
+            </CardTitle>
             <CardDescription>{t('consciousness_quickstart.quick_actions_desc')}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-              <Button variant="outline" onClick={handleEnableBasic} disabled={enabling} className="h-auto flex-col items-start p-3">
-                <span className="text-sm font-medium">{t('consciousness_quickstart.action_enable')}</span>
-                <span className="text-[10px] text-muted-foreground">PATCH /consciousness/config</span>
+              <Button
+                variant="outline"
+                onClick={handleEnableBasic}
+                disabled={enabling}
+                className="h-auto flex-col items-start p-3"
+              >
+                <span className="text-sm font-medium">
+                  {t('consciousness_quickstart.action_enable')}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  PATCH /consciousness/config
+                </span>
               </Button>
-              <Button variant="outline" onClick={handleApplyPersonality} disabled={applying} className="h-auto flex-col items-start p-3">
-                <span className="text-sm font-medium">{t('consciousness_quickstart.action_personality')}</span>
-                <span className="text-[10px] text-muted-foreground">POST /consciousness/personality/presets/apply</span>
+              <Button
+                variant="outline"
+                onClick={handleApplyPersonality}
+                disabled={applying}
+                className="h-auto flex-col items-start p-3"
+              >
+                <span className="text-sm font-medium">
+                  {t('consciousness_quickstart.action_personality')}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  POST /consciousness/personality/presets/apply
+                </span>
               </Button>
-              <Button variant="outline" onClick={handleSeed10} disabled={seeding} className="h-auto flex-col items-start p-3">
-                <span className="text-sm font-medium">{seeding ? t('consciousness_quickstart.seeding') : t('consciousness_quickstart.action_seed')}</span>
-                <span className="text-[10px] text-muted-foreground">POST /consciousness/seed?count=10</span>
+              <Button
+                variant="outline"
+                onClick={handleSeed10}
+                disabled={seeding}
+                className="h-auto flex-col items-start p-3"
+              >
+                <span className="text-sm font-medium">
+                  {seeding
+                    ? t('consciousness_quickstart.seeding')
+                    : t('consciousness_quickstart.action_seed')}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  POST /consciousness/seed?count=10
+                </span>
               </Button>
-              <Button variant="outline" onClick={handleOpenChat} className="h-auto flex-col items-start p-3">
-                <span className="text-sm font-medium">{t('consciousness_quickstart.action_chat')}</span>
+              <Button
+                variant="outline"
+                onClick={handleOpenChat}
+                className="h-auto flex-col items-start p-3"
+              >
+                <span className="text-sm font-medium">
+                  {t('consciousness_quickstart.action_chat')}
+                </span>
                 <span className="text-[10px] text-muted-foreground">/chat</span>
               </Button>
-              <Button variant="outline" onClick={() => router.push('/consciousness/dashboard')} className="h-auto flex-col items-start p-3">
-                <span className="text-sm font-medium">{t('consciousness_quickstart.action_dashboard')}</span>
+              <Button
+                variant="outline"
+                onClick={() => router.push('/consciousness/dashboard')}
+                className="h-auto flex-col items-start p-3"
+              >
+                <span className="text-sm font-medium">
+                  {t('consciousness_quickstart.action_dashboard')}
+                </span>
                 <span className="text-[10px] text-muted-foreground">/consciousness/dashboard</span>
               </Button>
             </div>
@@ -269,22 +331,31 @@ export default function ConsciousnessQuickstartPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{t('consciousness_quickstart.progress_title')}</CardTitle>
+            <CardTitle className="text-base">
+              {t('consciousness_quickstart.progress_title')}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="flex-1 h-2 rounded-full bg-muted overflow-hidden">
-                <div className="h-full rounded-full bg-primary transition-all duration-500" style={{ width: `${pct}%` }} />
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${pct}%` }}
+                />
               </div>
               <span className="text-sm font-mono tabular-nums">{pct}%</span>
             </div>
-            <p className="text-xs text-muted-foreground">{completed}/{total} {t('consciousness_quickstart.steps_completed')}</p>
+            <p className="text-xs text-muted-foreground">
+              {completed}/{total} {t('consciousness_quickstart.steps_completed')}
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">{t('consciousness_quickstart.whats_next_title')}</CardTitle>
+            <CardTitle className="text-base">
+              {t('consciousness_quickstart.whats_next_title')}
+            </CardTitle>
             <CardDescription>{t('consciousness_quickstart.whats_next_desc')}</CardDescription>
           </CardHeader>
           <CardContent>

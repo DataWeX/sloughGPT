@@ -59,7 +59,7 @@ vi.mock('@/lib/toast-store', () => ({
   useToastStore: (sel: any) => sel({ addToast: vi.fn() }),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => '/consciousness',

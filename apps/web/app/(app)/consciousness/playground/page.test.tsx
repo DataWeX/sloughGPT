@@ -60,7 +60,7 @@ vi.mock('@/lib/toast-store', () => ({
   ),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -68,7 +68,7 @@ function renderPage() {
   return render(
     <LocaleProvider>
       <ConsciousnessPlaygroundPage />
-    </LocaleProvider>
+    </LocaleProvider>,
   )
 }
 
@@ -80,15 +80,39 @@ describe('ConsciousnessPlaygroundPage', () => {
       enabled: true,
       level: 2,
       episodes: 42,
-      current_qualia: { valence: 0.5, arousal: 0.3, novelty: 0.6, coherence: 0.7, salience: 0.4, certainty: 0.3, complexity: 0.5 },
-      beliefs: { competence: 0.75, helpfulness: 0.82, creativity: 0.68, accuracy: 0.90, empathy: 0.73 },
+      current_qualia: {
+        valence: 0.5,
+        arousal: 0.3,
+        novelty: 0.6,
+        coherence: 0.7,
+        salience: 0.4,
+        certainty: 0.3,
+        complexity: 0.5,
+      },
+      beliefs: {
+        competence: 0.75,
+        helpfulness: 0.82,
+        creativity: 0.68,
+        accuracy: 0.9,
+        empathy: 0.73,
+      },
       narrative: 'Test narrative',
       response_quality: { avg_growth: 0.045, positive_ratio: 0.82, total: 42, last_growth: 0.032 },
       last_reflection: 'Test reflection',
     } as any)
     vi.mocked(consciousnessController.getEpisodeHistory).mockResolvedValue({
       episodes: [
-        { timestamp: Date.now() / 1000 - 100, input_text: 'Hello', response: 'Hi', narrative: 'Test', self_insight: 'Insight', growth_delta: 0.05, qualia: { valence: 0.5 }, rating: 4, index: 0 },
+        {
+          timestamp: Date.now() / 1000 - 100,
+          input_text: 'Hello',
+          response: 'Hi',
+          narrative: 'Test',
+          self_insight: 'Insight',
+          growth_delta: 0.05,
+          qualia: { valence: 0.5 },
+          rating: 4,
+          index: 0,
+        },
       ],
       total: 1,
     } as any)
@@ -120,10 +144,18 @@ describe('ConsciousnessPlaygroundPage', () => {
   it('shows preset buttons', async () => {
     renderPage()
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_playground.preset_curious').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_playground.preset_technical').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_playground.preset_creative').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_playground.preset_emotional').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_playground.preset_curious').length).toBeGreaterThan(
+        0,
+      )
+      expect(
+        screen.getAllByText('consciousness_playground.preset_technical').length,
+      ).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_playground.preset_creative').length,
+      ).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText('consciousness_playground.preset_emotional').length,
+      ).toBeGreaterThan(0)
     })
   })
 
@@ -154,7 +186,9 @@ describe('ConsciousnessPlaygroundPage', () => {
   it('shows belief dimensions', async () => {
     renderPage()
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_playground.beliefs_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_playground.beliefs_title').length).toBeGreaterThan(
+        0,
+      )
     })
     expect(screen.getByText('Competence')).toBeTruthy()
     expect(screen.getByText('Helpfulness')).toBeTruthy()
@@ -164,7 +198,9 @@ describe('ConsciousnessPlaygroundPage', () => {
   it('shows episodes card', async () => {
     renderPage()
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_playground.episodes_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_playground.episodes_title').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 

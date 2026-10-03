@@ -55,10 +55,13 @@ vi.mock('@/hooks/useLocale', async (importOriginal) => {
 })
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: Object.assign(vi.fn((sel: any) => sel({ addToast: vi.fn() })), { getState: () => ({ addToast: vi.fn() }) }),
+  useToastStore: Object.assign(
+    vi.fn((sel: any) => sel({ addToast: vi.fn() })),
+    { getState: () => ({ addToast: vi.fn() }) },
+  ),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -66,13 +69,22 @@ vi.mock('@/lib/config', () => ({
   PUBLIC_API_URL: 'http://localhost:8000',
 }))
 
-vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), text: async () => '{}', headers: new Headers() }))
+vi.stubGlobal(
+  'fetch',
+  vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({}),
+    text: async () => '{}',
+    headers: new Headers(),
+  }),
+)
 
 function renderPage() {
   return render(
     <LocaleProvider>
       <ConsciousnessTestingPage />
-    </LocaleProvider>
+    </LocaleProvider>,
   )
 }
 
@@ -91,7 +103,9 @@ describe('ConsciousnessTestingPage', () => {
   it('shows API tester section', async () => {
     renderPage()
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_testing.api_tester_title').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_testing.api_tester_title').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 

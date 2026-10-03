@@ -12,9 +12,12 @@ vi.mock('@/hooks/useLocale', () => ({
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: Object.assign(vi.fn((sel: any) => sel({ addToast: vi.fn() })), { getState: () => ({ addToast: vi.fn() }) }),
+  useToastStore: Object.assign(
+    vi.fn((sel: any) => sel({ addToast: vi.fn() })),
+    { getState: () => ({ addToast: vi.fn() }) },
+  ),
 }))
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 vi.mock('@/components/icons/NavIcons', () => ({
@@ -27,20 +30,38 @@ vi.mock('@/lib/config', () => ({
   PUBLIC_API_URL: 'http://localhost:8000',
 }))
 
-vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), text: async () => '{}', headers: new Headers() }))
+vi.stubGlobal(
+  'fetch',
+  vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({}),
+    text: async () => '{}',
+    headers: new Headers(),
+  }),
+)
 
 function renderPage() {
   return render(
     <LocaleProvider>
       <ConsciousnessApiExplorerPage />
-    </LocaleProvider>
+    </LocaleProvider>,
   )
 }
 
 describe('ConsciousnessApiExplorerPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({}), text: async () => '{}', headers: new Headers() }))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({}),
+        text: async () => '{}',
+        headers: new Headers(),
+      }),
+    )
     localStorage.clear()
   })
 
@@ -55,12 +76,22 @@ describe('ConsciousnessApiExplorerPage', () => {
     renderPage()
     await waitFor(() => {
       expect(screen.getAllByText('consciousness_api_explorer.cat_core').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_api_explorer.cat_history').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_api_explorer.cat_training').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_api_explorer.cat_personality').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_api_explorer.cat_personas').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_api_explorer.cat_history').length).toBeGreaterThan(
+        0,
+      )
+      expect(screen.getAllByText('consciousness_api_explorer.cat_training').length).toBeGreaterThan(
+        0,
+      )
+      expect(
+        screen.getAllByText('consciousness_api_explorer.cat_personality').length,
+      ).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_api_explorer.cat_personas').length).toBeGreaterThan(
+        0,
+      )
       expect(screen.getAllByText('consciousness_api_explorer.cat_data').length).toBeGreaterThan(0)
-      expect(screen.getAllByText('consciousness_api_explorer.cat_advanced').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_api_explorer.cat_advanced').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 
@@ -88,7 +119,9 @@ describe('ConsciousnessApiExplorerPage', () => {
   it('shows Send button', async () => {
     renderPage()
     await waitFor(() => {
-      expect(screen.getAllByText('consciousness_api_explorer.send_request').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('consciousness_api_explorer.send_request').length).toBeGreaterThan(
+        0,
+      )
     })
   })
 

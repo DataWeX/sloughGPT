@@ -143,7 +143,7 @@ export const ConsciousnessChatPanel = memo(function ConsciousnessChatPanel({
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs scrollbar-thin">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 text-xs">
         <section aria-label={t('consciousness_chat.current_state')}>
           <div className="flex items-center gap-1.5 mb-2">
             <IconSparkle className="h-3 w-3 text-muted-foreground" />

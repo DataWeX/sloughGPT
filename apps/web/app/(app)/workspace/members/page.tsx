@@ -1,0 +1,446 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { formatLocaleDate } from '@/lib/time-format'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+  Skeleton,
+} from '@sloughgpt/strui'
+import { IconPlus, IconTrash, IconUpload } from '@/components/icons/NavIcons'
+import { PageContainer } from '@/components/PageContainer'
+import { WorkspaceSectionTabs } from '@/components/workspace/WorkspaceSectionTabs'
+import { membersTabs } from '@/components/workspace/workspace-tabs'
+import { apiGet, apiPost, apiDelete } from '@/lib/http-client'
+import { useAuthStore } from '@/lib/auth'
+import { useToastStore } from '@/lib/toast-store'
+import { logger } from '@/lib/dev-log'
+
+interface Workspace {
+  id: string
+  name: string
+  member_count: number
+}
+
+interface WorkspacesResponse {
+  data: Workspace[]
+  meta: { total: number }
+}
+
+interface Member {
+  user_id: string
+  username: string
+  email: string
+  role: string
+  joined_at?: string
+}
+
+interface MembersResponse {
+  data: Member[]
+}
+
+export default function MembersPage() {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [selectedWs, setSelectedWs] = useState<string | null>(null)
+  const [members, setMembers] = useState<Member[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMembers, setLoadingMembers] = useState(false)
+  const [addMemberId, setAddMemberId] = useState('')
+  const [addMemberRole, setAddMemberRole] = useState('member')
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState('user')
+  const [inviting, setInviting] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [bulkInput, setBulkInput] = useState('')
+  const [bulkRole, setBulkRole] = useState('user')
+  const [bulkImporting, setBulkImporting] = useState(false)
+  const [showBulkImport, setShowBulkImport] = useState(false)
+  const addToast = useToastStore((s) => s.addToast)
+  const { currentWorkspace } = useAuthStore()
+
+  const fetchWorkspaces = useCallback(async () => {
+    try {
+      const res = await apiGet<WorkspacesResponse>('/workspaces')
+      setWorkspaces(res?.data ?? [])
+      // Auto-select current workspace
+      if (currentWorkspace?.id) {
+        setSelectedWs(currentWorkspace.id)
+      } else if ((res?.data ?? []).length > 0) {
+        setSelectedWs(res!.data[0].id)
+      }
+    } catch {
+      logger.warning('Could not fetch workspaces')
+    } finally {
+      setLoading(false)
+    }
+  }, [currentWorkspace?.id])
+
+  const fetchMembers = useCallback(async (wsId: string) => {
+    setLoadingMembers(true)
+    try {
+      const res = await apiGet<MembersResponse>(`/workspaces/${wsId}/members`)
+      setMembers(res?.data ?? [])
+    } catch {
+      logger.warning('Could not fetch members')
+    } finally {
+      setLoadingMembers(false)
+    }
+  }, [])
+
+  const addMember = async () => {
+    if (!selectedWs || !addMemberId.trim()) return
+    try {
+      await apiPost(`/workspaces/${selectedWs}/members`, {
+        user_id: addMemberId,
+        role: addMemberRole,
+      })
+      setAddMemberId('')
+      await fetchMembers(selectedWs)
+      addToast('Member added', 'success')
+    } catch {
+      addToast('Could not add member', 'error')
+    }
+  }
+
+  const removeMember = async (userId: string) => {
+    if (!selectedWs) return
+    if (!confirm('Remove this member from the workspace?')) return
+    try {
+      await apiDelete(`/workspaces/${selectedWs}/members/${userId}`)
+      await fetchMembers(selectedWs)
+      addToast('Member removed', 'success')
+    } catch {
+      addToast('Could not remove member', 'error')
+    }
+  }
+
+  const inviteMember = async () => {
+    if (!selectedWs || !inviteEmail.trim()) return
+    setInviting(true)
+    try {
+      await apiPost(`/workspaces/${selectedWs}/invite`, { email: inviteEmail, role: inviteRole })
+      setInviteEmail('')
+      await fetchMembers(selectedWs)
+      addToast('Member invited', 'success')
+    } catch {
+      addToast('Could not invite member', 'error')
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  const bulkImport = async () => {
+    if (!selectedWs || !bulkInput.trim()) return
+    setBulkImporting(true)
+    try {
+      const lines = bulkInput
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+      const members = lines.map((line) => {
+        const parts = line.split(',').map((p) => p.trim())
+        if (parts[0].includes('@')) {
+          return { email: parts[0], role: parts[1] || bulkRole }
+        }
+        return { user_id: parts[0], role: parts[1] || bulkRole }
+      })
+      const res = await apiPost<{ data: { added: number; skipped: number; errors: string[] } }>(
+        `/workspaces/${selectedWs}/members/bulk`,
+        { members },
+      )
+      const data = res?.data
+      setBulkInput('')
+      setShowBulkImport(false)
+      await fetchMembers(selectedWs)
+      if (data) {
+        addToast(`Imported ${data.added} member(s), ${data.skipped} skipped`, 'success')
+        if (data.errors?.length > 0) {
+          addToast(`${data.errors.length} error(s) during import`, 'error')
+        }
+      }
+    } catch {
+      addToast('Could not import members', 'error')
+    } finally {
+      setBulkImporting(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchWorkspaces()
+  }, [fetchWorkspaces])
+
+  useEffect(() => {
+    if (selectedWs) fetchMembers(selectedWs)
+  }, [selectedWs, fetchMembers])
+
+  const filteredMembers = members.filter(
+    (m) =>
+      m.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.role.toLowerCase().includes(searchQuery.toLowerCase()),
+  )
+
+  const roleCounts = members.reduce(
+    (acc, m) => {
+      acc[m.role] = (acc[m.role] || 0) + 1
+      return acc
+    },
+    {} as Record<string, number>,
+  )
+
+  if (loading) {
+    return (
+      <PageContainer
+        title="Members"
+        subtitle="Manage workspace members"
+        loadingCards={3}
+        toolbar={<WorkspaceSectionTabs tabs={membersTabs} ariaLabel="Workspace members" />}
+      >
+        <KpiGrid>
+          <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
+          <StatCard label="Loading" value={<Skeleton className="h-3.5 w-10" />} />
+        </KpiGrid>
+        <Card>
+          <CardContent>
+            <div className="h-48 animate-pulse bg-muted/50 rounded-lg" />
+          </CardContent>
+        </Card>
+      </PageContainer>
+    )
+  }
+
+  return (
+    <PageContainer
+      title="Members"
+      subtitle="Manage workspace members"
+      toolbar={<WorkspaceSectionTabs tabs={membersTabs} ariaLabel="Workspace members" />}
+    >
+      {/* Workspace selector */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Select Workspace</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex gap-2">
+            {workspaces.map((ws) => (
+              <button
+                key={ws.id}
+                onClick={() => setSelectedWs(ws.id)}
+                className={`px-3 py-1.5 rounded-md text-xs transition-colors ${
+                  selectedWs === ws.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted hover:bg-muted/80 text-muted-foreground'
+                }`}
+              >
+                {ws.name}
+                <span className="ml-1.5 text-[10px] opacity-70">({ws.member_count})</span>
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {selectedWs && (
+        <>
+          {/* KPI grid */}
+          <KpiGrid>
+            <StatCard label="Total Members" value={members.length} />
+            <StatCard label="Admins" value={roleCounts['admin'] ?? 0} />
+            <StatCard label="Members" value={roleCounts['member'] ?? 0} />
+            <StatCard label="Viewers" value={roleCounts['viewer'] ?? 0} />
+          </KpiGrid>
+
+          {/* Add member form */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs">Add Member by ID</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <Input
+                  value={addMemberId}
+                  onChange={(e) => setAddMemberId(e.target.value)}
+                  placeholder="User ID"
+                  className="flex-1 h-6 text-[10px]"
+                />
+                <select
+                  value={addMemberRole}
+                  onChange={(e) => setAddMemberRole(e.target.value)}
+                  className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                >
+                  <option value="viewer">Viewer</option>
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <Button
+                  size="sm"
+                  className="h-6 text-[10px]"
+                  onClick={addMember}
+                  disabled={!addMemberId.trim()}
+                >
+                  <IconPlus className="h-3 w-3 mr-1" />
+                  Add
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Invite by email */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs">Invite by Email</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-2">
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="user@example.com"
+                  className="flex-1 h-6 text-[10px]"
+                />
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                >
+                  <option value="viewer">Viewer</option>
+                  <option value="user">User</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <Button
+                  size="sm"
+                  className="h-6 text-[10px]"
+                  onClick={inviteMember}
+                  disabled={!inviteEmail.trim() || inviting}
+                >
+                  <IconPlus className="h-3 w-3 mr-1" />
+                  {inviting ? 'Inviting...' : 'Invite'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bulk Import */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs">Bulk Import</CardTitle>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 text-[10px]"
+                  onClick={() => setShowBulkImport(!showBulkImport)}
+                >
+                  <IconUpload className="h-3 w-3 mr-1" />
+                  {showBulkImport ? 'Cancel' : 'Import'}
+                </Button>
+              </div>
+            </CardHeader>
+            {showBulkImport && (
+              <CardContent className="space-y-2">
+                <p className="text-[10px] text-muted-foreground">
+                  One user ID or email per line. Optional role after comma (default: {bulkRole}).
+                </p>
+                <textarea
+                  value={bulkInput}
+                  onChange={(e) => setBulkInput(e.target.value)}
+                  placeholder={'user-id-1\nuser-id-2,admin\nuser@example.com,viewer'}
+                  className="w-full h-24 text-[10px] rounded-md border border-border bg-background px-2 py-1 resize-none"
+                />
+                <div className="flex gap-2">
+                  <select
+                    value={bulkRole}
+                    onChange={(e) => setBulkRole(e.target.value)}
+                    className="h-6 text-[10px] rounded-md border border-border bg-background px-2"
+                  >
+                    <option value="viewer">Default: Viewer</option>
+                    <option value="user">Default: User</option>
+                    <option value="admin">Default: Admin</option>
+                  </select>
+                  <Button
+                    size="sm"
+                    className="h-6 text-[10px]"
+                    onClick={bulkImport}
+                    disabled={!bulkInput.trim() || bulkImporting}
+                  >
+                    <IconUpload className="h-3 w-3 mr-1" />
+                    {bulkImporting ? 'Importing...' : 'Import All'}
+                  </Button>
+                </div>
+              </CardContent>
+            )}
+          </Card>
+
+          {/* Members list */}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-xs">Members</CardTitle>
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search..."
+                  className="w-48 h-6 text-[10px]"
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {loadingMembers ? (
+                <div className="h-32 animate-pulse bg-muted/50 rounded" />
+              ) : filteredMembers.length === 0 ? (
+                <p className="text-[10px] text-muted-foreground py-4 text-center">
+                  {searchQuery ? 'No members match search' : 'No members in this workspace'}
+                </p>
+              ) : (
+                filteredMembers.map((m) => (
+                  <div
+                    key={m.user_id}
+                    className="flex items-center justify-between px-3 py-2 rounded-md text-[10px] hover:bg-muted/50 border border-transparent hover:border-border/40"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="font-medium">{m.username}</div>
+                      <div className="text-muted-foreground">{m.email}</div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-medium ${
+                          m.role === 'admin'
+                            ? 'bg-info/15 text-info dark:bg-info/10 dark:text-info'
+                            : m.role === 'member'
+                              ? 'bg-success/15 text-success dark:bg-success/10 dark:text-success'
+                              : 'bg-muted text-muted-foreground'
+                        }`}
+                      >
+                        {m.role}
+                      </span>
+                      {m.joined_at && (
+                        <span className="text-muted-foreground whitespace-nowrap">
+                          Joined {formatLocaleDate(m.joined_at)}
+                        </span>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                        onClick={() => removeMember(m.user_id)}
+                      >
+                        <IconTrash className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+    </PageContainer>
+  )
+}

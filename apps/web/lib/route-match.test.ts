@@ -41,4 +41,16 @@ describe('routeMatchesPath', () => {
   it('does not match when href is longer than pathname', () => {
     expect(routeMatchesPath('/chat', '/chat/settings')).toBe(false)
   })
+
+  it('workspace nested paths match their section parent', () => {
+    expect(routeMatchesPath('/workspace/members', '/workspace')).toBe(true)
+    expect(routeMatchesPath('/workspace/members/permissions', '/workspace')).toBe(true)
+    expect(routeMatchesPath('/workspace/settings/api-keys', '/workspace')).toBe(true)
+    expect(routeMatchesPath('/workspace/data/search', '/workspace')).toBe(true)
+  })
+
+  it('workspace sibling sections do not cross-match', () => {
+    expect(routeMatchesPath('/workspace/members', '/workspace/settings')).toBe(false)
+    expect(routeMatchesPath('/workspace/data/search', '/workspace/members')).toBe(false)
+  })
 })

@@ -1,6 +1,6 @@
 /// <reference types="vitest" />
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { SearchResultsCard } from './SearchResultsCard'
 
 afterEach(() => cleanup())
@@ -121,5 +121,23 @@ describe('SearchResultsCard', () => {
     render(<SearchResultsCard groups={mockGroups} total={2} query="test" />)
     const counts = screen.getAllByText('(1)')
     expect(counts.length).toBe(2)
+  })
+
+  it('renders linkless groups as inert rows — no dead navigation', () => {
+    const onNavigate = vi.fn()
+    const groups = [
+      {
+        type: 'docs',
+        label: 'Docs',
+        color: 'bg-warning text-warning',
+        link: '',
+        items: [{ id: 'd1', type: 'docs', title: 'guide.md', detail: 'Run the dev stack first.' }],
+      },
+    ]
+    render(<SearchResultsCard groups={groups} total={1} query="setup" onNavigate={onNavigate} />)
+    const row = screen.getByText('guide.md')
+    expect(row).toBeDefined()
+    fireEvent.click(row)
+    expect(onNavigate).not.toHaveBeenCalled()
   })
 })

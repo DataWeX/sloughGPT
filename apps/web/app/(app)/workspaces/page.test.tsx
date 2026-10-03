@@ -15,7 +15,12 @@ vi.mock('@/lib/http-client', () => ({
 }))
 
 vi.mock('@/lib/auth', () => ({
-  useAuthStore: (selector?: (s: { currentWorkspace: { id: string; name: string } | null; switchWorkspace: (id: string) => void }) => unknown) => {
+  useAuthStore: (
+    selector?: (s: {
+      currentWorkspace: { id: string; name: string } | null
+      switchWorkspace: (id: string) => void
+    }) => unknown,
+  ) => {
     const state = { currentWorkspace: { id: 'ws-1', name: 'Current WS' }, switchWorkspace: vi.fn() }
     return selector ? selector(state) : state
   },
@@ -40,8 +45,24 @@ import WorkspacesPage from './page'
 describe('WorkspacesPage', () => {
   const mockWorkspaces = {
     data: [
-      { id: 'ws-1', name: 'Workspace A', description: 'First', tenant_id: 't1', role: 'owner', member_count: 5, created_at: '2024-01-01T00:00:00Z' },
-      { id: 'ws-2', name: 'Workspace B', description: 'Second', tenant_id: 't1', role: 'member', member_count: 3, created_at: '2024-02-01T00:00:00Z' },
+      {
+        id: 'ws-1',
+        name: 'Workspace A',
+        description: 'First',
+        tenant_id: 't1',
+        role: 'owner',
+        member_count: 5,
+        created_at: '2024-01-01T00:00:00Z',
+      },
+      {
+        id: 'ws-2',
+        name: 'Workspace B',
+        description: 'Second',
+        tenant_id: 't1',
+        role: 'member',
+        member_count: 3,
+        created_at: '2024-02-01T00:00:00Z',
+      },
     ],
     meta: { total: 2 },
   }
@@ -86,41 +107,41 @@ describe('WorkspacesPage', () => {
 
   it('displays KPI stats', async () => {
     render(<WorkspacesPage />)
-    await screen.findByText('Workspaces')
+    await screen.findByText('Current')
     expect(screen.getAllByText('Workspaces').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Current').length).toBeGreaterThanOrEqual(1)
   })
 
   it('displays workspace list', async () => {
     render(<WorkspacesPage />)
-    await screen.findByText('Workspaces')
+    await screen.findByText('Workspace A')
     expect(screen.getAllByText('Workspace A').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Workspace B').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows create workspace form', async () => {
     render(<WorkspacesPage />)
-    await screen.findByText('Workspaces')
+    await screen.findByPlaceholderText('Workspace name')
     expect(screen.getAllByText('Create Workspace').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByPlaceholderText('Workspace name')).toBeTruthy()
   })
 
   it('shows import button', async () => {
     render(<WorkspacesPage />)
-    await screen.findByText('Workspaces')
+    await screen.findAllByText('Import from JSON')
     expect(screen.getAllByText('Import from JSON').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows edit button for workspaces', async () => {
     render(<WorkspacesPage />)
-    await screen.findByText('Workspaces')
-    expect(screen.getAllByText('Edit').length).toBeGreaterThanOrEqual(1)
+    const edits = await screen.findAllByText('Edit')
+    expect(edits.length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows empty state when no workspaces', async () => {
     mockApiGet.mockResolvedValue({ data: [], meta: { total: 0 } })
     render(<WorkspacesPage />)
-    await screen.findByText('Workspaces')
+    await screen.findByText(/no workspaces/i)
     expect(screen.getAllByText(/no workspaces/i).length).toBeGreaterThanOrEqual(1)
   })
 })

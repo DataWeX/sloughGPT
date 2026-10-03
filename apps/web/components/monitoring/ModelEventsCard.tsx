@@ -46,7 +46,7 @@ export const ModelEventsCard = memo(function ModelEventsCard({ liveHealth }: Mod
               <div className="flex items-center justify-between gap-1.5">
                 <span
                   className={cn(
-                    'shrink-0 text-[8px] px-1 py-0.5 rounded font-medium uppercase',
+                    'shrink-0 text-[10px] px-1 py-0.5 rounded font-medium uppercase',
                     EVENT_STYLES[e.type] ?? 'bg-muted text-muted-foreground',
                   )}
                 >
@@ -56,13 +56,13 @@ export const ModelEventsCard = memo(function ModelEventsCard({ liveHealth }: Mod
               </div>
               {e.detail && (
                 <div
-                  className="text-[9px] text-muted-foreground/60 mt-0.5 truncate"
+                  className="text-[10px] text-muted-foreground/60 mt-0.5 truncate"
                   title={e.detail}
                 >
                   {e.detail}
                 </div>
               )}
-              <div className="text-[9px] text-muted-foreground/40 mt-0.5 font-mono tabular-nums">
+              <div className="text-[10px] text-muted-foreground/40 mt-0.5 font-mono tabular-nums">
                 {timeAgo(e.ts)}
               </div>
             </div>

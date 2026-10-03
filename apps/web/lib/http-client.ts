@@ -134,6 +134,18 @@ export interface RequestOptions {
   skipCircuitBreaker?: boolean
   /** Enable recent-dedup with TTL (ms). If set, identical GETs within this window return cached promise. */
   dedupTtlMs?: number
+  /**
+   * Opt a NON-idempotent request into retrying when it exceeds `timeout`.
+   * Default is off: the client-side abort does not cancel the server-side work,
+   * so retrying a slow inference request re-runs it alongside the first one.
+   */
+  retryOnTimeout?: boolean
+  /**
+   * Opt a NON-idempotent request into retrying retryable statuses
+   * (408/429/502/503/504). Default is off — the server may already have
+   * committed the work when the response came back.
+   */
+  retryOnStatus?: boolean
 }
 
 export interface HttpClientResponse<T> {
@@ -163,6 +175,28 @@ const RETRYABLE_STATUSES = new Set([408, 429, 502, 503, 504])
 const MAX_RETRIES = 2
 const BASE_DELAY = 500
 const DEFAULT_TIMEOUT_MS = 30_000
+
+// ── Retry safety ────────────────────────────────────────────────────────────
+//
+// A retry is only safe when re-sending the request cannot duplicate work the
+// server has already committed. For inference that side effect is a whole
+// backend generation: the browser aborting at `timeout` does NOT cancel the
+// work already running server-side, so a blind retry leaves two generations
+// fighting over the GIL — the frontend then times out *because* of the load it
+// just created.
+//
+//   * never-delivered (connection refused / `Failed to fetch`) → safe for ANY
+//     method: the body never reached the server. This is the uvicorn `--reload`
+//     window and must keep working for POST too.
+//   * idempotent method (GET/HEAD/OPTIONS) → safe: re-running is harmless.
+//   * anything else (timeout, ambiguous network error, 408/502/503/504) →
+//     unsafe, unless the caller explicitly opts in with `retryOnTimeout` /
+//     `retryOnStatus`.
+const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function _isIdempotent(method: string): boolean {
+  return IDEMPOTENT_METHODS.has(method.toUpperCase())
+}
 
 // 400 is intentionally NOT retryable: docstore 400s are client errors (e.g.
 // "error parsing the body" from an aborted request) — retrying amplifies
@@ -199,6 +233,25 @@ function _trackCorrId(corrId: string, url: string) {
 
 function _isDocstoreUrl(url: string): boolean {
   return url.includes('/docstore/')
+}
+
+// Blocking generation / training endpoints. These legitimately run for minutes
+// (measured `duration_ms` reaches 137s), so the 30s default would abort them
+// mid-flight — and because a client abort does NOT cancel the server-side work,
+// aborting only abandons a generation the backend is still burning CPU on.
+const LONG_OPERATION_TIMEOUT_MS = 120_000
+const LONG_OPERATION_PATHS = new Set([
+  '/chat',
+  '/inference/generate',
+  '/companion/chat',
+  '/benchmark/run',
+  '/learn/train',
+  '/learn/evaluate',
+  '/knowledge/train-adapter',
+])
+
+function _isLongOperationUrl(url: string): boolean {
+  return LONG_OPERATION_PATHS.has(url.split('?')[0])
 }
 
 // Vite's apiRoutesPlugin serves the planner/calendar route handlers
@@ -526,7 +579,8 @@ async function request<T>(
 
   logger.debug(`>>> ${method} ${url} corr=${corrId}`, { corrId, method, url })
 
-  const timeoutMs = opts?.timeout ?? _defaultTimeout
+  const timeoutMs =
+    opts?.timeout ?? (_isLongOperationUrl(url) ? LONG_OPERATION_TIMEOUT_MS : _defaultTimeout)
   const isDocstore = _isDocstoreUrl(url)
   const maxRetries = isDocstore
     ? DOCSTORE_MAX_RETRIES
@@ -656,7 +710,11 @@ async function request<T>(
       if (!finalEnvelope.ok) {
         const status = finalEnvelope.status
         const isRetryable = retryableStatuses.has(status)
-        if (isRetryable && retries < maxRetries) {
+        // 429 means the server explicitly did not process the request, so it is
+        // safe for any method. Every other retryable status is ambiguous: the
+        // request was received and may already have committed its side effect.
+        const safeToRetry = status === 429 || _isIdempotent(method) || opts?.retryOnStatus === true
+        if (isRetryable && safeToRetry && retries < maxRetries) {
           retries++
           const retryAfter = Number(finalEnvelope.headers.get('Retry-After')) || 0
           const delay = retryAfter > 0 ? retryAfter * 1000 : baseDelay * Math.pow(2, retries - 1)
@@ -753,7 +811,17 @@ async function request<T>(
 
       const kind = isTimeout ? 'timeout' : isConnRefused ? 'connection_refused' : 'unknown'
 
-      if (retries < maxRetries) {
+      // `isConnRefused` means the connection was never established, so the body
+      // never reached the server — safe to resend for ANY method. That is the
+      // uvicorn `--reload` window and must keep working for POST.
+      // A timeout is the opposite case: the body was delivered and the server is
+      // still working, so resending it would run the request twice.
+      const safeToRetry =
+        isConnRefused ||
+        _isIdempotent(method) ||
+        (isTimeout ? opts?.retryOnTimeout === true : opts?.retryOnStatus === true)
+
+      if (safeToRetry && retries < maxRetries) {
         retries++
         const delay = baseDelay * Math.pow(2, retries - 1)
         logger.warning(

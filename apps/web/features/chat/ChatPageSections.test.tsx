@@ -9,7 +9,7 @@ import {
 } from './ChatPageSections'
 import type { ChatPageController } from './hooks/useChatPageController'
 
-vi.mock('next/dynamic', () => ({
+vi.mock('@/vite/next-compat/dynamic', () => ({
   default: (importFn: () => Promise<any>, _opts?: any) => {
     const Stub = (props: any) => {
       const path = importFn.toString()

@@ -7,7 +7,16 @@ vi.mock('@sloughgpt/strui', () => ({
   cn: vi.fn((...args: any[]) => args.join(' ')),
   Spinner: () => <span data-testid="spinner">loading</span>,
   Button: ({ children, onClick, variant, size, className, disabled, ...rest }: any) => (
-    <button onClick={onClick} className={className} data-variant={variant} data-size={size} disabled={disabled} {...rest}>{children}</button>
+    <button
+      onClick={onClick}
+      className={className}
+      data-variant={variant}
+      data-size={size}
+      disabled={disabled}
+      {...rest}
+    >
+      {children}
+    </button>
   ),
   Switch: ({ checked, onCheckedChange, disabled, 'aria-label': label, ...rest }: any) => (
     <button
@@ -69,13 +78,23 @@ vi.mock('@/lib/memory-events', () => {
   return {
     subscribeMemoryEvents: vi.fn((cb: any) => {
       listeners.add(cb)
-      return () => { listeners.delete(cb) }
+      return () => {
+        listeners.delete(cb)
+      }
     }),
     publishMemoryEvent: vi.fn((info: any) => {
       for (const l of listeners) l(info)
     }),
   }
 })
+
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({ href, children, ...rest }: any) => (
+    <a href={typeof href === 'string' ? href : String(href)} {...rest}>
+      {children}
+    </a>
+  ),
+}))
 
 import { MemoryTab } from './MemoryTab'
 import { publishMemoryEvent } from '@/lib/memory-events'
@@ -103,7 +122,12 @@ describe('MemoryTab', () => {
     hoisted.memoryController.clear.mockResolvedValue({ cleared: 1 })
     hoisted.memoryController.setEnabled.mockResolvedValue({ enabled: true })
     hoisted.memoryController.search.mockResolvedValue({ results: [], total: 0 })
-    hoisted.memoryController.store.mockResolvedValue({ stored: true, content: 'stored', topic: 'manual', source: 'manual' })
+    hoisted.memoryController.store.mockResolvedValue({
+      stored: true,
+      content: 'stored',
+      topic: 'manual',
+      source: 'manual',
+    })
     hoisted.memoryController.update.mockResolvedValue({ updated: 1, duplicate: false })
     hoisted.memoryController.consolidate.mockResolvedValue({ removed: 0, kept: 1, threshold: 0.9 })
   })
@@ -120,7 +144,10 @@ describe('MemoryTab', () => {
 
   it('pluralizes the fact count', async () => {
     hoisted.memoryController.stats.mockResolvedValue({ ...statsResult, total_facts: 5 })
-    hoisted.memoryController.list.mockResolvedValue({ items: [item(), item({ id: 'm2', content: 'Another fact.' })], total: 2 })
+    hoisted.memoryController.list.mockResolvedValue({
+      items: [item(), item({ id: 'm2', content: 'Another fact.' })],
+      total: 2,
+    })
     render(<MemoryTab />)
     expect(await screen.findByText('5 facts')).toBeDefined()
   })
@@ -199,13 +226,21 @@ describe('MemoryTab', () => {
 
   it('truncates long memory content', async () => {
     const long = 'x'.repeat(200)
-    hoisted.memoryController.list.mockResolvedValue({ items: [item({ id: 'm9', content: long })], total: 1 })
+    hoisted.memoryController.list.mockResolvedValue({
+      items: [item({ id: 'm9', content: long })],
+      total: 1,
+    })
     render(<MemoryTab />)
     expect(await screen.findByText(/x{160}…/)).toBeDefined()
   })
 
   it('shows the source badge and relative time on items', async () => {
-    const recent = item({ id: 'm10', content: 'A fresh fact', source: 'manual', timestamp: Math.floor(Date.now() / 1000) - 60 })
+    const recent = item({
+      id: 'm10',
+      content: 'A fresh fact',
+      source: 'manual',
+      timestamp: Math.floor(Date.now() / 1000) - 60,
+    })
     hoisted.memoryController.list.mockResolvedValue({ items: [recent], total: 1 })
     render(<MemoryTab />)
     await screen.findByText('A fresh fact')
@@ -221,7 +256,9 @@ describe('MemoryTab', () => {
   })
 
   it('shows a Show all toggle when there are more than 8 items', async () => {
-    const many = Array.from({ length: 12 }, (_, i) => ({ ...item({ id: `m${i}`, content: `Fact number ${i + 1}` }) }))
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      ...item({ id: `m${i}`, content: `Fact number ${i + 1}` }),
+    }))
     hoisted.memoryController.list.mockResolvedValue({ items: many, total: 12 })
     render(<MemoryTab />)
     await screen.findByText('Fact number 1')
@@ -237,9 +274,14 @@ describe('MemoryTab', () => {
   })
 
   it('hides the Show all toggle when searching and restores the cap on clear', async () => {
-    const many = Array.from({ length: 12 }, (_, i) => ({ ...item({ id: `m${i}`, content: `Fact number ${i + 1}` }) }))
+    const many = Array.from({ length: 12 }, (_, i) => ({
+      ...item({ id: `m${i}`, content: `Fact number ${i + 1}` }),
+    }))
     hoisted.memoryController.list.mockResolvedValue({ items: many, total: 12 })
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'Only one search hit.' })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'Only one search hit.' })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText('Fact number 1')
     fireEvent.click(screen.getAllByText('Show all 12')[0])
@@ -262,7 +304,9 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByTitle('Copy to clipboard'))
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'))
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'),
+    )
     expect(screen.getAllByText('Copied').length).toBeGreaterThanOrEqual(1)
   })
 
@@ -272,7 +316,9 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.keyDown(screen.getByTitle('Copy to clipboard'), { key: 'Enter' })
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'))
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'),
+    )
   })
 
   it('clears the Copied indicator after a short timeout', async () => {
@@ -286,7 +332,9 @@ describe('MemoryTab', () => {
       fireEvent.click(screen.getByTitle('Copy to clipboard'))
       await act(async () => {})
       expect(screen.getAllByText('Copied').length).toBeGreaterThanOrEqual(1)
-      act(() => { vi.advanceTimersByTime(1500) })
+      act(() => {
+        vi.advanceTimersByTime(1500)
+      })
       expect(screen.queryByText('Copied')).toBeNull()
     } finally {
       vi.useRealTimers()
@@ -303,26 +351,49 @@ describe('MemoryTab', () => {
   })
 
   it('stores a manual fact and highlights it in the list', async () => {
-    const stored = item({ id: 'new1', content: 'The user is allergic to peanuts.', topic: 'health' })
-    hoisted.memoryController.store.mockResolvedValue({ stored: true, content: stored.content, topic: 'health', source: 'manual' })
+    const stored = item({
+      id: 'new1',
+      content: 'The user is allergic to peanuts.',
+      topic: 'health',
+    })
+    hoisted.memoryController.store.mockResolvedValue({
+      stored: true,
+      content: stored.content,
+      topic: 'health',
+      source: 'manual',
+    })
     hoisted.memoryController.list.mockResolvedValue({ items: [stored], total: 1 })
     render(<MemoryTab />)
     await screen.findByText('The user is allergic to peanuts.')
     fireEvent.click(screen.getByText('+ Store'))
-    fireEvent.change(screen.getByLabelText('New memory fact'), { target: { value: 'The user is allergic to peanuts.' } })
+    fireEvent.change(screen.getByLabelText('New memory fact'), {
+      target: { value: 'The user is allergic to peanuts.' },
+    })
     fireEvent.change(screen.getByLabelText('Memory fact topic'), { target: { value: 'health' } })
     fireEvent.click(screen.getByText('Save'))
-    await waitFor(() => expect(hoisted.memoryController.store).toHaveBeenCalledWith('The user is allergic to peanuts.', 'health'))
+    await waitFor(() =>
+      expect(hoisted.memoryController.store).toHaveBeenCalledWith(
+        'The user is allergic to peanuts.',
+        'health',
+      ),
+    )
     const li = (await screen.findByText('The user is allergic to peanuts.')).closest('li')
     expect(li?.className).toContain('border-primary/60')
   })
 
   it('shows an inline error when the fact already exists', async () => {
-    hoisted.memoryController.store.mockResolvedValue({ stored: false, content: 'dup', topic: 'manual', source: 'manual' })
+    hoisted.memoryController.store.mockResolvedValue({
+      stored: false,
+      content: 'dup',
+      topic: 'manual',
+      source: 'manual',
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByText('+ Store'))
-    fireEvent.change(screen.getByLabelText('New memory fact'), { target: { value: 'Duplicate fact' } })
+    fireEvent.change(screen.getByLabelText('New memory fact'), {
+      target: { value: 'Duplicate fact' },
+    })
     fireEvent.click(screen.getByText('Save'))
     expect(await screen.findByText('Already remembered (or memory is disabled)')).toBeDefined()
     expect(hoisted.memoryController.list).toHaveBeenCalledTimes(1)
@@ -338,7 +409,10 @@ describe('MemoryTab', () => {
   })
 
   it('shows the importance badge on items', async () => {
-    hoisted.memoryController.list.mockResolvedValue({ items: [item({ importance: 0.8 })], total: 1 })
+    hoisted.memoryController.list.mockResolvedValue({
+      items: [item({ importance: 0.8 })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     expect(screen.getAllByText('importance 0.8').length).toBeGreaterThanOrEqual(1)
@@ -378,7 +452,10 @@ describe('MemoryTab', () => {
   })
 
   it('shows a topic empty state when the active topic is excluded by search', async () => {
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'Only one search hit.', topic: 'manual' })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'Only one search hit.', topic: 'manual' })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByRole('button', { name: 'preferences' }))
@@ -387,7 +464,9 @@ describe('MemoryTab', () => {
   })
 
   it('caps the list at 8 within a filtered topic and counts the filtered set', async () => {
-    const geo = Array.from({ length: 12 }, (_, i) => ({ ...item({ id: `g${i}`, content: `Geo fact ${i + 1}`, topic: 'geography' }) }))
+    const geo = Array.from({ length: 12 }, (_, i) => ({
+      ...item({ id: `g${i}`, content: `Geo fact ${i + 1}`, topic: 'geography' }),
+    }))
     hoisted.memoryController.list.mockResolvedValue({ items: geo, total: 12 })
     render(<MemoryTab />)
     await screen.findByText('Geo fact 1')
@@ -422,22 +501,35 @@ describe('MemoryTab', () => {
   })
 
   it('disables the sort toggle while searching', async () => {
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'Only one search hit.' })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'Only one search hit.' })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.change(screen.getByPlaceholderText('Search memory...'), { target: { value: 'hit' } })
     await screen.findByText('Only one search hit.')
-    expect((screen.getByLabelText('Toggle memory sort order') as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByLabelText('Toggle memory sort order') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
   })
 
   it('searches memory after typing with debounce', async () => {
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    fireEvent.change(screen.getByPlaceholderText('Search memory...'), { target: { value: 'coffee' } })
-    await waitFor(() => {
-      expect(hoisted.memoryController.search).toHaveBeenCalledWith('coffee')
-    }, { timeout: 2000 })
+    fireEvent.change(screen.getByPlaceholderText('Search memory...'), {
+      target: { value: 'coffee' },
+    })
+    await waitFor(
+      () => {
+        expect(hoisted.memoryController.search).toHaveBeenCalledWith('coffee')
+      },
+      { timeout: 2000 },
+    )
   })
 
   it('shows search results instead of the full list', async () => {
@@ -445,10 +537,15 @@ describe('MemoryTab', () => {
       items: [item(), item({ id: 'm2', content: 'The Seine flows through Paris.' })],
       total: 2,
     })
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    fireEvent.change(screen.getByPlaceholderText('Search memory...'), { target: { value: 'pour-over' } })
+    fireEvent.change(screen.getByPlaceholderText('Search memory...'), {
+      target: { value: 'pour-over' },
+    })
     await screen.findByText(/prefers pour-over coffee/)
     expect(screen.queryByText(/prefers espresso over drip coffee/)).toBeNull()
     expect(screen.queryByText(/The Seine flows through Paris/)).toBeNull()
@@ -466,10 +563,15 @@ describe('MemoryTab', () => {
   })
 
   it('clears the search from the input clear button', async () => {
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    fireEvent.change(screen.getByPlaceholderText('Search memory...'), { target: { value: 'pour-over' } })
+    fireEvent.change(screen.getByPlaceholderText('Search memory...'), {
+      target: { value: 'pour-over' },
+    })
     await screen.findByText(/prefers pour-over coffee/)
     const xBtn = screen.getByTestId('icon-x').closest('button')
     expect(xBtn).not.toBeNull()
@@ -487,17 +589,28 @@ describe('MemoryTab', () => {
   })
 
   it('re-runs the active search when a memory event refreshes', async () => {
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'The user prefers pour-over coffee.' })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    fireEvent.change(screen.getByPlaceholderText('Search memory...'), { target: { value: 'coffee' } })
-    await waitFor(() => {
-      expect(hoisted.memoryController.search).toHaveBeenCalledWith('coffee')
-    }, { timeout: 2000 })
+    fireEvent.change(screen.getByPlaceholderText('Search memory...'), {
+      target: { value: 'coffee' },
+    })
+    await waitFor(
+      () => {
+        expect(hoisted.memoryController.search).toHaveBeenCalledWith('coffee')
+      },
+      { timeout: 2000 },
+    )
     publishMemoryEvent({ stored: true, fact: 'The user prefers pour-over coffee.' })
-    await waitFor(() => {
-      expect(hoisted.memoryController.search).toHaveBeenCalledTimes(2)
-    }, { timeout: 2000 })
+    await waitFor(
+      () => {
+        expect(hoisted.memoryController.search).toHaveBeenCalledTimes(2)
+      },
+      { timeout: 2000 },
+    )
   })
 
   it('shows the Remember switch reflecting the enabled state', async () => {
@@ -568,7 +681,11 @@ describe('MemoryTab', () => {
     })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    publishMemoryEvent({ stored: true, fact: 'A.', facts: ['The user prefers espresso over drip coffee.', 'The Seine flows through Paris.'] })
+    publishMemoryEvent({
+      stored: true,
+      fact: 'A.',
+      facts: ['The user prefers espresso over drip coffee.', 'The Seine flows through Paris.'],
+    })
     await waitFor(() => {
       const li = screen.getByText(/prefers espresso over drip coffee/).closest('li')
       expect(li?.className).toContain('border-primary/60')
@@ -588,7 +705,9 @@ describe('MemoryTab', () => {
       await act(async () => {})
       const li = screen.getByText(/prefers espresso over drip coffee/).closest('li')
       expect(li?.className).toContain('border-primary/60')
-      act(() => { vi.advanceTimersByTime(4000) })
+      act(() => {
+        vi.advanceTimersByTime(4000)
+      })
       const liAfter = screen.getByText(/prefers espresso over drip coffee/).closest('li')
       expect(liAfter?.className).not.toContain('border-primary/60')
     } finally {
@@ -600,8 +719,12 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByLabelText('Edit memory item'))
-    expect((screen.getByLabelText('Edit memory fact text') as HTMLTextAreaElement).value).toBe('The user prefers espresso over drip coffee.')
-    expect((screen.getByLabelText('Edit memory fact topic') as HTMLInputElement).value).toBe('preferences')
+    expect((screen.getByLabelText('Edit memory fact text') as HTMLTextAreaElement).value).toBe(
+      'The user prefers espresso over drip coffee.',
+    )
+    expect((screen.getByLabelText('Edit memory fact topic') as HTMLInputElement).value).toBe(
+      'preferences',
+    )
     expect(screen.getByText('3.0')).toBeDefined()
   })
 
@@ -609,11 +732,20 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByLabelText('Edit memory item'))
-    fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'The user prefers pour-over coffee.' } })
-    fireEvent.change(screen.getByLabelText('Edit memory fact topic'), { target: { value: 'coffee' } })
+    fireEvent.change(screen.getByLabelText('Edit memory fact text'), {
+      target: { value: 'The user prefers pour-over coffee.' },
+    })
+    fireEvent.change(screen.getByLabelText('Edit memory fact topic'), {
+      target: { value: 'coffee' },
+    })
     fireEvent.click(screen.getByText('Save'))
     await waitFor(() => {
-      expect(hoisted.memoryController.update).toHaveBeenCalledWith('m1', 'The user prefers pour-over coffee.', 'coffee', 3)
+      expect(hoisted.memoryController.update).toHaveBeenCalledWith(
+        'm1',
+        'The user prefers pour-over coffee.',
+        'coffee',
+        3,
+      )
     })
     await waitFor(() => {
       expect(hoisted.memoryController.list).toHaveBeenCalledTimes(2)
@@ -626,7 +758,9 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByLabelText('Edit memory item'))
-    fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'Same as another fact.' } })
+    fireEvent.change(screen.getByLabelText('Edit memory fact text'), {
+      target: { value: 'Same as another fact.' },
+    })
     fireEvent.click(screen.getByText('Save'))
     expect(await screen.findByText('That fact already exists in memory')).toBeDefined()
     expect(hoisted.memoryController.list).toHaveBeenCalledTimes(1)
@@ -637,7 +771,9 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByLabelText('Edit memory item'))
-    fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'Changed but cancelled.' } })
+    fireEvent.change(screen.getByLabelText('Edit memory fact text'), {
+      target: { value: 'Changed but cancelled.' },
+    })
     fireEvent.click(screen.getByText('Cancel'))
     expect(hoisted.memoryController.update).not.toHaveBeenCalled()
     expect(screen.queryByLabelText('Edit memory fact text')).toBeNull()
@@ -648,23 +784,33 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByLabelText('Edit memory item'))
-    fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'Updated text.' } })
+    fireEvent.change(screen.getByLabelText('Edit memory fact text'), {
+      target: { value: 'Updated text.' },
+    })
     fireEvent.click(screen.getByText('Save'))
     expect(await screen.findByText('Could not update memory item')).toBeDefined()
   })
 
   it('shows search score when results are from search', async () => {
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', score: 0.42 })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', score: 0.42 })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     expect(screen.queryByText('0.42')).toBeNull()
-    fireEvent.change(screen.getByPlaceholderText('Search memory...'), { target: { value: 'espresso' } })
+    fireEvent.change(screen.getByPlaceholderText('Search memory...'), {
+      target: { value: 'espresso' },
+    })
     await screen.findByText('0.42')
     expect(screen.queryByText('0.80')).toBeNull()
   })
 
   it('hides the score badge once search is cleared', async () => {
-    hoisted.memoryController.search.mockResolvedValue({ results: [item({ id: 's1', content: 'Scored hit.', score: 0.77 })], total: 1 })
+    hoisted.memoryController.search.mockResolvedValue({
+      results: [item({ id: 's1', content: 'Scored hit.', score: 0.77 })],
+      total: 1,
+    })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.change(screen.getByPlaceholderText('Search memory...'), { target: { value: 'hit' } })
@@ -700,12 +846,21 @@ describe('MemoryTab', () => {
 
   it('disables the consolidate button while running', async () => {
     let release!: (v: { removed: number; kept: number; threshold: number }) => void
-    hoisted.memoryController.consolidate.mockImplementation(() => new Promise(res => { release = res }))
+    hoisted.memoryController.consolidate.mockImplementation(
+      () =>
+        new Promise((res) => {
+          release = res
+        }),
+    )
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByText('Consolidate'))
-    await waitFor(() => expect((screen.getByText('Consolidating…') as HTMLButtonElement).disabled).toBe(true))
-    await act(async () => { release({ removed: 0, kept: 1, threshold: 0.9 }) })
+    await waitFor(() =>
+      expect((screen.getByText('Consolidating…') as HTMLButtonElement).disabled).toBe(true),
+    )
+    await act(async () => {
+      release({ removed: 0, kept: 1, threshold: 0.9 })
+    })
     expect(screen.getByText('Consolidate')).toBeDefined()
   })
 

@@ -29,7 +29,7 @@ vi.mock('@/lib/toast-store', () => ({
   ),
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -37,7 +37,9 @@ vi.mock('@sloughgpt/strui', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@sloughgpt/strui')>()
   return {
     ...actual,
-    Skeleton: ({ className, ...props }: any) => <div className={className} data-testid="skeleton" {...props} />,
+    Skeleton: ({ className, ...props }: any) => (
+      <div className={className} data-testid="skeleton" {...props} />
+    ),
   }
 })
 
@@ -50,7 +52,15 @@ const mockHealthData = {
   episodes: 30,
   avg_growth: 0.05,
   positive_ratio: 0.75,
-  qualia: { valence: 0.8, arousal: 0.5, novelty: 0.6, coherence: 0.7, salience: 0.65, certainty: 0.6, complexity: 0.55 },
+  qualia: {
+    valence: 0.8,
+    arousal: 0.5,
+    novelty: 0.6,
+    coherence: 0.7,
+    salience: 0.65,
+    certainty: 0.6,
+    complexity: 0.55,
+  },
   beliefs: { 'Self-awareness': 0.7, 'Emotional range': 0.5, 'Context awareness': 0.8 },
 }
 

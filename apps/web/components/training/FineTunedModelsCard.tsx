@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, ActionCard, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
 import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
@@ -17,7 +17,7 @@ export function FineTunedModelsCard({
   activeModelId?: string | null
   onLoaded?: () => void
 }) {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const router = useRouter()
   const [models, setModels] = useState<FineTunedModel[]>([])
   const [loading, setLoading] = useState(true)
@@ -44,7 +44,9 @@ export function FineTunedModelsCard({
   useEffect(() => {
     activeRef.current = true
     void fetchModels()
-    return () => { activeRef.current = false }
+    return () => {
+      activeRef.current = false
+    }
   }, [fetchModels])
 
   const handleLoad = async (name: string) => {
@@ -84,7 +86,7 @@ export function FineTunedModelsCard({
   }
 
   const toggleSelect = (name: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev)
       if (next.has(name)) next.delete(name)
       else next.add(name)
@@ -96,7 +98,7 @@ export function FineTunedModelsCard({
     if (selectedIds.size === models.length) {
       setSelectedIds(new Set())
     } else {
-      setSelectedIds(new Set(models.map(m => m.name)))
+      setSelectedIds(new Set(models.map((m) => m.name)))
     }
   }
 
@@ -104,7 +106,9 @@ export function FineTunedModelsCard({
     if (selectedIds.size === 0) return
     setBatchDeleting(true)
     try {
-      await Promise.all(Array.from(selectedIds).map(name => trainingJobsController.deleteFineTuned(name)))
+      await Promise.all(
+        Array.from(selectedIds).map((name) => trainingJobsController.deleteFineTuned(name)),
+      )
       setSelectedIds(new Set())
       addToast(`Deleted ${selectedIds.size} models`, 'success')
       void fetchModels()
@@ -119,118 +123,184 @@ export function FineTunedModelsCard({
     <ActionCard
       title="Fine-tuned models"
       actions={
-        <Button size="sm" variant="ghost" onClick={() => void fetchModels()} aria-label="Refresh fine-tuned models">
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => void fetchModels()}
+          aria-label="Refresh fine-tuned models"
+        >
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
       }
     >
-        {loading ? (
-          <div className="grid gap-2 sm:grid-cols-2" aria-busy="true">
-            {[1, 2].map(i => (
-              <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
-                <div className="space-y-1.5 flex-1">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-28" />
-                </div>
-                <Skeleton className="h-5 w-12 rounded" />
+      {loading ? (
+        <div className="grid gap-2 sm:grid-cols-2" aria-busy="true">
+          {[1, 2].map((i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between rounded-lg border border-border/50 p-3"
+            >
+              <div className="space-y-1.5 flex-1">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-28" />
               </div>
-            ))}
-          </div>
-        ) : error ? (
-          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchModels()} />
-        ) : models.length === 0 ? (
-          <div className="text-center py-4 space-y-2">
-            <p className="text-xs text-muted-foreground">No fine-tuned models yet. HF fine-tuned outputs under models/hf-finetuned appear here.</p>
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => router.push('/training')}>
-              Go to Training
-            </Button>
-          </div>
-        ) : (
-          <>
-            {selectedIds.size > 0 && (
-              <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 mb-2">
-                <span className="text-xs text-destructive font-medium">{selectedIds.size} selected</span>
-                <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px] ml-auto" onClick={handleBatchDelete} disabled={batchDeleting}>
-                  {batchDeleting ? 'Deleting...' : 'Delete Selected'}
-                </Button>
-                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setSelectedIds(new Set())}>
-                  Clear
-                </Button>
-              </div>
-            )}
-            {models.length > 2 && (
-              <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mb-2">
-                <Checkbox
-                  checked={selectedIds.size === models.length && models.length > 0}
-                  onCheckedChange={toggleSelectAll}
-                  className="rounded border-border"
-                />
-                Select all ({models.length})
-              </label>
-            )}
-            <div className="grid gap-1.5 sm:grid-cols-2">
-              {models.map((m) => {
-                const isActive = !!activeModelId && (activeModelId === m.model_name || activeModelId === m.name)
-                const isSelected = selectedIds.has(m.name)
-                return (
-                  <div key={m.name} className={cn(
+              <Skeleton className="h-5 w-12 rounded" />
+            </div>
+          ))}
+        </div>
+      ) : error ? (
+        <StatusBanner
+          variant="error"
+          message={error}
+          dismissible={false}
+          onRetry={() => void fetchModels()}
+        />
+      ) : models.length === 0 ? (
+        <div className="text-center py-4 space-y-2">
+          <p className="text-xs text-muted-foreground">
+            No fine-tuned models yet. HF fine-tuned outputs under models/hf-finetuned appear here.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => router.push('/training')}
+          >
+            Go to Training
+          </Button>
+        </div>
+      ) : (
+        <>
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2 mb-2">
+              <span className="text-xs text-destructive font-medium">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive h-6 text-[10px] ml-auto"
+                onClick={handleBatchDelete}
+                disabled={batchDeleting}
+              >
+                {batchDeleting ? 'Deleting...' : 'Delete Selected'}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-6 text-[10px]"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          )}
+          {models.length > 2 && (
+            <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mb-2">
+              <Checkbox
+                checked={selectedIds.size === models.length && models.length > 0}
+                onCheckedChange={toggleSelectAll}
+                className="rounded border-border"
+              />
+              Select all ({models.length})
+            </label>
+          )}
+          <div className="grid gap-1.5 sm:grid-cols-2">
+            {models.map((m) => {
+              const isActive =
+                !!activeModelId && (activeModelId === m.model_name || activeModelId === m.name)
+              const isSelected = selectedIds.has(m.name)
+              return (
+                <div
+                  key={m.name}
+                  className={cn(
                     'flex items-center justify-between rounded-lg border p-2.5 text-sm transition-colors',
-                    isActive ? 'border-primary/30 bg-primary/[0.08]' : isSelected ? 'border-primary/40 bg-primary/5' : 'border-border/40 hover:bg-muted/20',
-                  )}>
-                    <div className="flex items-start gap-2 min-w-0 flex-1">
-                      {models.length > 2 && (
-                        <Checkbox
-                          checked={isSelected}
-                          onCheckedChange={() => toggleSelect(m.name)}
-                          aria-label={`Select ${m.name}`}
-                          className="mt-1 rounded border-border shrink-0"
-                        />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/model/${encodeURIComponent(m.name)}`)}
-                          className="flex items-center gap-2 text-left w-full"
-                          aria-label={`View details for ${m.name}`}
-                        >
-                          <p className="truncate font-medium text-xs hover:text-primary transition-colors">{m.name}</p>
-                          {isActive && <span className="text-primary text-[10px]">✓</span>}
-                        </button>
-                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground/60 mt-0.5">
-                          <span>{m.model}</span>
-                          {m.dataset && <span>· {m.dataset}</span>}
-                          {m.size_mb > 0 && <span>· {m.size_mb.toFixed(1)} MB</span>}
-                          {m.final_loss != null && <span>· loss {Number(m.final_loss).toFixed(4)}</span>}
-                          {m.epochs && m.epochs > 0 && <span>· {m.epochs} ep</span>}
-                        </div>
+                    isActive
+                      ? 'border-primary/30 bg-primary/[0.08]'
+                      : isSelected
+                        ? 'border-primary/40 bg-primary/5'
+                        : 'border-border/40 hover:bg-muted/20',
+                  )}
+                >
+                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                    {models.length > 2 && (
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelect(m.name)}
+                        aria-label={`Select ${m.name}`}
+                        className="mt-1 rounded border-border shrink-0"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/model/${encodeURIComponent(m.name)}`)}
+                        className="flex items-center gap-2 text-left w-full"
+                        aria-label={`View details for ${m.name}`}
+                      >
+                        <p className="truncate font-medium text-xs hover:text-primary transition-colors">
+                          {m.name}
+                        </p>
+                        {isActive && <span className="text-primary text-[10px]">✓</span>}
+                      </button>
+                      <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground/60 mt-0.5">
+                        <span>{m.model}</span>
+                        {m.dataset && <span>· {m.dataset}</span>}
+                        {m.size_mb > 0 && <span>· {m.size_mb.toFixed(1)} MB</span>}
+                        {m.final_loss != null && (
+                          <span>· loss {Number(m.final_loss).toFixed(4)}</span>
+                        )}
+                        {m.epochs && m.epochs > 0 && <span>· {m.epochs} ep</span>}
                       </div>
                     </div>
-                    <div className="flex items-center gap-0.5 shrink-0 ml-2">
-                      {!isActive && (
-                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={loadingName !== null} onClick={() => handleLoad(m.name)}>
-                          {loadingName === m.name ? 'Loading...' : 'Load'}
-                        </Button>
-                      )}
-                      {isActive && (
-                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={loadingName !== null} onClick={() => handleUnload(m.name)} aria-label={`Unload ${m.name}`}>
-                          {loadingName === m.name ? 'Unloading...' : (
-                            <>
-                              <IconX className="h-3 w-3 mr-0.5" />
-                              Unload
-                            </>
-                          )}
-                        </Button>
-                      )}
-                      <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive hover:text-destructive" onClick={() => handleDelete(m.name)} aria-label={`Delete ${m.name}`}>
-                        <IconTrash className="h-3 w-3" />
-                      </Button>
-                    </div>
                   </div>
-                )
-              })}
-            </div>
-          </>
-        )}
+                  <div className="flex items-center gap-0.5 shrink-0 ml-2">
+                    {!isActive && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[10px]"
+                        disabled={loadingName !== null}
+                        onClick={() => handleLoad(m.name)}
+                      >
+                        {loadingName === m.name ? 'Loading...' : 'Load'}
+                      </Button>
+                    )}
+                    {isActive && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[10px]"
+                        disabled={loadingName !== null}
+                        onClick={() => handleUnload(m.name)}
+                        aria-label={`Unload ${m.name}`}
+                      >
+                        {loadingName === m.name ? (
+                          'Unloading...'
+                        ) : (
+                          <>
+                            <IconX className="h-3 w-3 mr-0.5" />
+                            Unload
+                          </>
+                        )}
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-6 text-[10px] text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(m.name)}
+                      aria-label={`Delete ${m.name}`}
+                    >
+                      <IconTrash className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
     </ActionCard>
   )
 }

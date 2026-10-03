@@ -26,7 +26,7 @@ export function MemoryItemList({
   onDelete,
 }: MemoryItemListProps) {
   return (
-    <ul className="space-y-1 max-h-60 overflow-y-auto">
+    <ul className="space-y-1">
       {items.map((item) => (
         <li
           key={item.id}

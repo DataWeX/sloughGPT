@@ -3,7 +3,7 @@ import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
 import NotFound from './not-found'
 
-vi.mock('next/link', () => ({
+vi.mock('@/vite/next-compat/link', () => ({
   default: ({ children, href, className, ...rest }: any) => (
     <a href={href} className={className} {...rest}>
       {children}
@@ -19,9 +19,7 @@ describe('NotFound', () => {
   it('renders the 404 heading and description', () => {
     render(<NotFound />)
     expect(screen.getByText('Page not found')).toBeInTheDocument()
-    expect(
-      screen.getByText(/doesn't exist or has been moved/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/doesn't exist or has been moved/)).toBeInTheDocument()
   })
 
   it('links Home to /', () => {

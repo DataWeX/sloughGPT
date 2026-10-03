@@ -51,7 +51,7 @@ vi.mock('@sloughgpt/strui', () => ({
   CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
-vi.mock('next/dynamic', () => ({
+vi.mock('@/vite/next-compat/dynamic', () => ({
   __esModule: true,
   default: () => (props: Record<string, unknown>) =>
     React.createElement('div', { 'data-testid': 'dynamic' }),
@@ -114,7 +114,7 @@ const state = vi.hoisted(() => ({
   ui: { showSettings: false, toolPanelOpen: false },
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => ({ get: mockSearchParamsGet }),
 }))
@@ -557,6 +557,9 @@ describe('ChatPage', () => {
     mockSearchParamsGet.mockReturnValue('session-42')
     await renderChat()
     expect(mockLoadSession).toHaveBeenCalledWith('session-42')
+    // Exactly once: `chat` is an unmemoized object literal, so depending on it
+    // re-ran this effect every render → the ?session= bootloop.
+    expect(mockLoadSession).toHaveBeenCalledTimes(1)
   })
 
   it('does not load a session when none is present', async () => {

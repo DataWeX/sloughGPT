@@ -42,18 +42,18 @@ export const ServerErrorsCard = memo(function ServerErrorsCard({
                 <span className="text-[10px] font-medium truncate font-mono">
                   {e.method} {e.path}
                 </span>
-                <span className="shrink-0 text-[8px] px-1 py-0.5 rounded font-medium bg-destructive/10 text-destructive tabular-nums">
+                <span className="shrink-0 text-[10px] px-1 py-0.5 rounded font-medium bg-destructive/10 text-destructive tabular-nums">
                   {e.status}
                 </span>
               </div>
               <div
-                className="text-[9px] text-muted-foreground/60 mt-0.5 truncate"
+                className="text-[10px] text-muted-foreground/60 mt-0.5 truncate"
                 title={e.message}
               >
                 {e.error_type && <span className="text-destructive/80">{e.error_type}: </span>}
                 {e.message}
               </div>
-              <div className="text-[9px] text-muted-foreground/40 mt-0.5 font-mono tabular-nums">
+              <div className="text-[10px] text-muted-foreground/40 mt-0.5 font-mono tabular-nums">
                 {timeAgo(e.ts)}
               </div>
             </div>

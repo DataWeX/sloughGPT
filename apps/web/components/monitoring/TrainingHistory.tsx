@@ -27,7 +27,7 @@ function StatusBadge({ status }: { status: string }) {
   return (
     <span
       className={cn(
-        'text-[9px] px-1.5 py-0.5 rounded font-medium',
+        'text-[10px] px-1.5 py-0.5 rounded font-medium',
         status === 'completed'
           ? 'bg-success/15 text-success'
           : status === 'running'
@@ -79,7 +79,7 @@ export const TrainingHistory = memo(function TrainingHistory({
             <Button
               size="sm"
               variant="outline"
-              className="h-6 text-[9px]"
+              className="h-6 text-[10px]"
               onClick={() => router.push('/training')}
             >
               Go to Training
@@ -107,12 +107,12 @@ export const TrainingHistory = memo(function TrainingHistory({
                     {job.name || job.id}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground/60 shrink-0 ml-1.5 font-mono tabular-nums">
+                <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60 shrink-0 ml-1.5 font-mono tabular-nums">
                   {RESUMABLE.has(job.status) && (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-4 text-[8px] px-1"
+                      className="h-4 text-[10px] px-1"
                       disabled={resuming === job.id}
                       onClick={(e) => {
                         e.stopPropagation()
@@ -130,7 +130,7 @@ export const TrainingHistory = memo(function TrainingHistory({
           </div>
         )}
         {jobs.length > 6 && (
-          <p className="text-[9px] text-muted-foreground/40 mt-1 font-mono tabular-nums">
+          <p className="text-[10px] text-muted-foreground/40 mt-1 font-mono tabular-nums">
             +{jobs.length - 6} more
           </p>
         )}

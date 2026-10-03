@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import dynamic from 'next/dynamic'
+import dynamic from '@/vite/next-compat/dynamic'
 import { cn, IconStar } from '@sloughgpt/strui'
 import { formatRelativeTime } from '@/lib/time-format'
 import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'

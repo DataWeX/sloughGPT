@@ -1,10 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { PageContainer } from '@/components/PageContainer'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from '@sloughgpt/strui'
 import { useLocale } from '@/hooks/useLocale'
 
@@ -27,18 +33,66 @@ const FAQ_ITEMS: FaqItem[] = [
 ]
 
 const QUICK_LINKS = [
-  { path: '/consciousness/quickstart', labelKey: 'consciousness_help.link_quickstart', descKey: 'consciousness_help.link_quickstart_desc' },
-  { path: '/consciousness/dashboard', labelKey: 'consciousness_help.link_dashboard', descKey: 'consciousness_help.link_dashboard_desc' },
-  { path: '/consciousness/monitor', labelKey: 'consciousness_help.link_monitor', descKey: 'consciousness_help.link_monitor_desc' },
-  { path: '/consciousness/insights', labelKey: 'consciousness_help.link_insights', descKey: 'consciousness_help.link_insights_desc' },
-  { path: '/consciousness/personality', labelKey: 'consciousness_help.link_personality', descKey: 'consciousness_help.link_personality_desc' },
-  { path: '/consciousness/training', labelKey: 'consciousness_help.link_training', descKey: 'consciousness_help.link_training_desc' },
-  { path: '/consciousness/docs', labelKey: 'consciousness_help.link_api', descKey: 'consciousness_help.link_api_desc' },
-  { path: '/consciousness/settings', labelKey: 'consciousness_help.link_settings', descKey: 'consciousness_help.link_settings_desc' },
-  { path: '/consciousness/playground', labelKey: 'consciousness_help.link_playground', descKey: 'consciousness_help.link_playground_desc' },
-  { path: '/consciousness/analytics', labelKey: 'consciousness_help.link_analytics', descKey: 'consciousness_help.link_analytics_desc' },
-  { path: '/consciousness/history', labelKey: 'consciousness_help.link_history', descKey: 'consciousness_help.link_history_desc' },
-  { path: '/consciousness/benchmark', labelKey: 'consciousness_help.link_benchmark', descKey: 'consciousness_help.link_benchmark_desc' },
+  {
+    path: '/consciousness/quickstart',
+    labelKey: 'consciousness_help.link_quickstart',
+    descKey: 'consciousness_help.link_quickstart_desc',
+  },
+  {
+    path: '/consciousness/dashboard',
+    labelKey: 'consciousness_help.link_dashboard',
+    descKey: 'consciousness_help.link_dashboard_desc',
+  },
+  {
+    path: '/consciousness/monitor',
+    labelKey: 'consciousness_help.link_monitor',
+    descKey: 'consciousness_help.link_monitor_desc',
+  },
+  {
+    path: '/consciousness/insights',
+    labelKey: 'consciousness_help.link_insights',
+    descKey: 'consciousness_help.link_insights_desc',
+  },
+  {
+    path: '/consciousness/personality',
+    labelKey: 'consciousness_help.link_personality',
+    descKey: 'consciousness_help.link_personality_desc',
+  },
+  {
+    path: '/consciousness/training',
+    labelKey: 'consciousness_help.link_training',
+    descKey: 'consciousness_help.link_training_desc',
+  },
+  {
+    path: '/consciousness/docs',
+    labelKey: 'consciousness_help.link_api',
+    descKey: 'consciousness_help.link_api_desc',
+  },
+  {
+    path: '/consciousness/settings',
+    labelKey: 'consciousness_help.link_settings',
+    descKey: 'consciousness_help.link_settings_desc',
+  },
+  {
+    path: '/consciousness/playground',
+    labelKey: 'consciousness_help.link_playground',
+    descKey: 'consciousness_help.link_playground_desc',
+  },
+  {
+    path: '/consciousness/analytics',
+    labelKey: 'consciousness_help.link_analytics',
+    descKey: 'consciousness_help.link_analytics_desc',
+  },
+  {
+    path: '/consciousness/history',
+    labelKey: 'consciousness_help.link_history',
+    descKey: 'consciousness_help.link_history_desc',
+  },
+  {
+    path: '/consciousness/benchmark',
+    labelKey: 'consciousness_help.link_benchmark',
+    descKey: 'consciousness_help.link_benchmark_desc',
+  },
 ]
 
 const KEYBOARD_SHORTCUTS = [
@@ -71,7 +125,9 @@ export default function ConsciousnessHelpPage() {
                   className="w-full flex items-center justify-between px-4 py-3 text-left text-sm font-medium hover:bg-muted/30 transition-colors"
                 >
                   <span>{t(item.qKey)}</span>
-                  <span className="text-muted-foreground text-xs">{openFaq === idx ? '−' : '+'}</span>
+                  <span className="text-muted-foreground text-xs">
+                    {openFaq === idx ? '−' : '+'}
+                  </span>
                 </button>
                 {openFaq === idx && (
                   <div className="px-4 pb-3 text-xs text-muted-foreground leading-relaxed">
@@ -112,9 +168,14 @@ export default function ConsciousnessHelpPage() {
           <CardContent>
             <div className="space-y-2">
               {KEYBOARD_SHORTCUTS.map((item) => (
-                <div key={item.shortcut} className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
+                <div
+                  key={item.shortcut}
+                  className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2"
+                >
                   <span className="text-sm">{t(item.actionKey)}</span>
-                  <Badge variant="outline" className="font-mono text-xs">{item.shortcut}</Badge>
+                  <Badge variant="outline" className="font-mono text-xs">
+                    {item.shortcut}
+                  </Badge>
                 </div>
               ))}
             </div>
@@ -133,7 +194,9 @@ export default function ConsciousnessHelpPage() {
                 <span className="font-mono text-xs">3.0.0</span>
               </div>
               <div className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
-                <span className="text-muted-foreground">{t('consciousness_help.api_endpoint')}</span>
+                <span className="text-muted-foreground">
+                  {t('consciousness_help.api_endpoint')}
+                </span>
                 <span className="font-mono text-xs">/consciousness</span>
               </div>
               <div className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
@@ -141,7 +204,9 @@ export default function ConsciousnessHelpPage() {
                 <span className="font-mono text-xs">26</span>
               </div>
               <div className="flex items-center justify-between rounded-md border border-border/40 px-4 py-2">
-                <span className="text-muted-foreground">{t('consciousness_help.total_endpoints')}</span>
+                <span className="text-muted-foreground">
+                  {t('consciousness_help.total_endpoints')}
+                </span>
                 <span className="font-mono text-xs">37</span>
               </div>
             </div>

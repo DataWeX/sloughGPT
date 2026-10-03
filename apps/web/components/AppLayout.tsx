@@ -1,7 +1,7 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import Link from '@/vite/next-compat/link'
+import { usePathname } from '@/vite/next-compat/navigation'
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 

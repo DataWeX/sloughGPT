@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 import { memo, useEffect, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { useTrainingSession } from '@/hooks/useTrainingSession'

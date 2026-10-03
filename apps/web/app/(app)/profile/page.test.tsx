@@ -13,8 +13,18 @@ vi.mock('@/lib/http-client', () => ({
 }))
 
 vi.mock('@/lib/auth', () => ({
-  useAuthStore: (selector?: (s: { currentWorkspace: { id: string } | null; user: { id: string; email: string } | null; setUser: (u: unknown) => void }) => unknown) => {
-    const state = { currentWorkspace: { id: 'ws-1' }, user: { id: 'u1', email: 'test@test.com' }, setUser: vi.fn() }
+  useAuthStore: (
+    selector?: (s: {
+      currentWorkspace: { id: string } | null
+      user: { id: string; email: string } | null
+      setUser: (u: unknown) => void
+    }) => unknown,
+  ) => {
+    const state = {
+      currentWorkspace: { id: 'ws-1' },
+      user: { id: 'u1', email: 'test@test.com' },
+      setUser: vi.fn(),
+    }
     return selector ? selector(state) : state
   },
 }))
@@ -74,15 +84,15 @@ describe('ProfilePage', () => {
 
   it('displays KPI stats', async () => {
     render(<ProfilePage />)
-    await screen.findByText('Profile')
-    expect(screen.getAllByText('Username').length).toBeGreaterThanOrEqual(1)
+    const usernames = await screen.findAllByText('Username')
+    expect(usernames.length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Role').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Status').length).toBeGreaterThanOrEqual(1)
   })
 
   it('displays profile information', async () => {
     render(<ProfilePage />)
-    await screen.findByText('Profile')
+    await screen.findByText('Profile Information')
     expect(screen.getAllByText('Profile Information').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByDisplayValue('alice')).toBeTruthy()
     expect(screen.getByDisplayValue('alice@test.com')).toBeTruthy()
@@ -90,7 +100,7 @@ describe('ProfilePage', () => {
 
   it('displays change password form', async () => {
     render(<ProfilePage />)
-    await screen.findByText('Profile')
+    await screen.findByPlaceholderText('Current password')
     expect(screen.getAllByText('Change Password').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByPlaceholderText('Current password')).toBeTruthy()
     expect(screen.getByPlaceholderText('New password (min 8 characters)')).toBeTruthy()
@@ -98,7 +108,7 @@ describe('ProfilePage', () => {
 
   it('displays account details', async () => {
     render(<ProfilePage />)
-    await screen.findByText('Profile')
+    await screen.findByText('Account Details')
     expect(screen.getAllByText('Account Details').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('User ID:').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('Tenant ID:').length).toBeGreaterThanOrEqual(1)
@@ -108,14 +118,15 @@ describe('ProfilePage', () => {
     const user = userEvent.setup()
     mockApiPut.mockResolvedValueOnce({ data: { email: 'new@test.com', display_name: 'New Name' } })
     render(<ProfilePage />)
-    await screen.findByText('Profile')
-
-    const emailInput = screen.getByDisplayValue('alice@test.com')
+    const emailInput = await screen.findByDisplayValue('alice@test.com')
     await user.clear(emailInput)
     await user.type(emailInput, 'new@test.com')
 
-    const saveBtn = screen.getByText('Save Changes')
+    const saveBtn = await screen.findByText('Save Changes')
     await user.click(saveBtn)
-    expect(mockApiPut).toHaveBeenCalledWith('/users/me/profile', expect.objectContaining({ email: 'new@test.com' }))
+    expect(mockApiPut).toHaveBeenCalledWith(
+      '/users/me/profile',
+      expect.objectContaining({ email: 'new@test.com' }),
+    )
   })
 })

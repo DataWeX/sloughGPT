@@ -49,7 +49,7 @@ export const AutoTrainCard = memo(function AutoTrainCard({ status }: AutoTrainCa
           />
         </KpiGrid>
         {status.last_train && (
-          <p className="text-[11px] text-muted-foreground mt-1.5 font-mono">
+          <p className="text-[10px] text-muted-foreground mt-1.5 font-mono">
             Last: {formatDateTime(status.last_train)}
             {status.last_checkpoint && <> · {status.last_checkpoint}</>}
           </p>

@@ -2,44 +2,70 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
 import { act } from 'react'
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
 // ── strui mock ──
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
+    C.displayName = `Icon${name}`
+    return C
+  }
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...args: any[]) => args.join(' ')),
-    Card: passthrough, CardContent: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
     CardHeader: ({ children, className }: any) => <div className={className}>{children}</div>,
     CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
     Button: ({ children, onClick, variant, size, className, disabled }: any) => (
-      <button onClick={onClick} className={className} disabled={disabled} data-variant={variant}>{children}</button>
+      <button onClick={onClick} className={className} disabled={disabled} data-variant={variant}>
+        {children}
+      </button>
     ),
-    IconRefresh: iconMock('refresh'), IconTrash: iconMock('trash'),
-    StatCard: ({ label, value }: any) => <div data-testid="stat-card"><span>{label}</span>: <span>{String(value)}</span></div>,
+    IconRefresh: iconMock('refresh'),
+    IconTrash: iconMock('trash'),
+    StatCard: ({ label, value }: any) => (
+      <div data-testid="stat-card">
+        <span>{label}</span>: <span>{String(value)}</span>
+      </div>
+    ),
     KpiGrid: ({ children }: any) => <div data-testid="kpi-grid">{children}</div>,
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    AlertDialog: ({ open, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
-    AlertDialogAction: ({ children, onClick, className }: any) => <button onClick={onClick} className={className}>{children}</button>,
-    AlertDialogCancel: ({ children, onClick }: any) => <button onClick={onClick}>{children}</button>,
+    AlertDialog: ({ open, children }: any) =>
+      open ? <div data-testid="alert-dialog">{children}</div> : null,
+    AlertDialogAction: ({ children, onClick, className }: any) => (
+      <button onClick={onClick} className={className}>
+        {children}
+      </button>
+    ),
+    AlertDialogCancel: ({ children, onClick }: any) => (
+      <button onClick={onClick}>{children}</button>
+    ),
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogDescription: ({ children }: any) => <p>{children}</p>,
     AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
     AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -66,20 +92,40 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 // ── controller / toast / config / fetch mocks ──
-const { mockList, mockGetQuality, mockAggregateBest, mockPrune, mockReset, mockAddToast, mockFetch, mockRunEval, mockGetHistory } = vi.hoisted(() => ({
-  mockList: vi.fn(), mockGetQuality: vi.fn(), mockAggregateBest: vi.fn(),
-  mockPrune: vi.fn(), mockReset: vi.fn(), mockAddToast: vi.fn(), mockFetch: vi.fn(),
-  mockRunEval: vi.fn(), mockGetHistory: vi.fn(),
+const {
+  mockList,
+  mockGetQuality,
+  mockAggregateBest,
+  mockPrune,
+  mockReset,
+  mockAddToast,
+  mockFetch,
+  mockRunEval,
+  mockGetHistory,
+} = vi.hoisted(() => ({
+  mockList: vi.fn(),
+  mockGetQuality: vi.fn(),
+  mockAggregateBest: vi.fn(),
+  mockPrune: vi.fn(),
+  mockReset: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockFetch: vi.fn(),
+  mockRunEval: vi.fn(),
+  mockGetHistory: vi.fn(),
 }))
 
 vi.mock('@/lib/user-adapters-controller', () => ({
   userAdaptersController: {
-    list: mockList, getQuality: mockGetQuality, aggregateBest: mockAggregateBest,
-    prune: mockPrune, reset: mockReset, get: vi.fn(),
+    list: mockList,
+    getQuality: mockGetQuality,
+    aggregateBest: mockAggregateBest,
+    prune: mockPrune,
+    reset: mockReset,
+    get: vi.fn(),
   },
 }))
 
@@ -87,7 +133,9 @@ vi.mock('@/lib/lora-eval-controller', () => ({
   loraEvalController: { runEval: mockRunEval, getHistory: mockGetHistory },
 }))
 
-vi.mock('@/lib/toast-store', () => ({ useToastStore: (sel: any) => sel({ addToast: mockAddToast }) }))
+vi.mock('@/lib/toast-store', () => ({
+  useToastStore: (sel: any) => sel({ addToast: mockAddToast }),
+}))
 vi.mock('@/lib/config', () => ({ PUBLIC_API_URL: 'http://test-api' }))
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ title, children, loading, error, onRetry, headerRight }: any) => (
@@ -99,7 +147,9 @@ vi.mock('@/components/PageContainer', () => ({
           <div>{error}</div>
           <button onClick={onRetry}>Retry</button>
         </div>
-      ) : children}
+      ) : (
+        children
+      )}
     </div>
   ),
 }))
@@ -107,18 +157,25 @@ vi.mock('@/components/adapters/AdapterHealthCard', () => ({
   AdapterHealthCard: ({ adapters }: any) => (
     <div data-testid="adapter-health-card">
       <div>Total Feedback</div>
-      {adapters?.length > 0 && <div>Rank {adapters[0]?.rank} ({adapters.length})</div>}
+      {adapters?.length > 0 && (
+        <div>
+          Rank {adapters[0]?.rank} ({adapters.length})
+        </div>
+      )}
       {adapters?.[0] && <div>{adapters[0].feedback_count} fb</div>}
     </div>
   ),
 }))
 vi.mock('@/lib/error-utils', () => ({
-  extractErrorMessage: (e: any, fallback: string) => e instanceof Error ? e.message : fallback,
+  extractErrorMessage: (e: any, fallback: string) => (e instanceof Error ? e.message : fallback),
 }))
 
 import AdaptersPage from './page'
 
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 const mockStats = {
   total_users: 12,
@@ -132,8 +189,24 @@ const mockStats = {
 const mockQuality = {
   count: 2,
   adapters: [
-    { user_id: 'user-1', rank: 8, alpha: 8, model_dim: 768, created_at: '2026-06-01T00:00:00Z', updated_at: '2026-07-01T00:00:00Z', feedback_count: 5 },
-    { user_id: 'user-2', rank: 8, alpha: 8, model_dim: 768, created_at: '2026-05-01T00:00:00Z', updated_at: '2026-06-15T00:00:00Z', feedback_count: 3 },
+    {
+      user_id: 'user-1',
+      rank: 8,
+      alpha: 8,
+      model_dim: 768,
+      created_at: '2026-06-01T00:00:00Z',
+      updated_at: '2026-07-01T00:00:00Z',
+      feedback_count: 5,
+    },
+    {
+      user_id: 'user-2',
+      rank: 8,
+      alpha: 8,
+      model_dim: 768,
+      created_at: '2026-05-01T00:00:00Z',
+      updated_at: '2026-06-15T00:00:00Z',
+      feedback_count: 3,
+    },
   ],
 }
 
@@ -144,7 +217,10 @@ function mockHistoryFetch() {
     }
     return Promise.resolve({
       ok: true,
-      json: () => Promise.resolve({ data: { results: [{ adapter_path: 'best_aggregated.npz', status: 'completed' }] } }),
+      json: () =>
+        Promise.resolve({
+          data: { results: [{ adapter_path: 'best_aggregated.npz', status: 'completed' }] },
+        }),
     })
   })
 }
@@ -170,7 +246,9 @@ describe('AdaptersPage', () => {
 
   it('displays adapter stats after loading', async () => {
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Adapter Stats')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Adapter Stats')).toBeTruthy()
+    })
     expect(screen.getByText('12')).toBeTruthy()
     expect(screen.getByText('5.0 MB')).toBeTruthy()
     expect(screen.getByText('3.5 KB')).toBeTruthy()
@@ -178,7 +256,9 @@ describe('AdaptersPage', () => {
 
   it('lists adapters with feedback and rank', async () => {
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
+    await waitFor(() => {
+      expect(screen.getAllByText('user-1').length).toBeGreaterThan(0)
+    })
     expect(screen.getAllByText('user-2').length).toBeGreaterThan(0)
     expect(screen.getAllByText('5 feedback').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('rank 8').length).toBeGreaterThanOrEqual(1)
@@ -187,127 +267,227 @@ describe('AdaptersPage', () => {
 
   it('renders the adapter health card when adapters exist', async () => {
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByTestId('adapter-health-card')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByTestId('adapter-health-card')).toBeTruthy()
+    })
   })
 
   it('shows empty state when no adapters exist', async () => {
     mockList.mockResolvedValue({ adapters: [], stats: mockStats })
     mockGetQuality.mockResolvedValue({ count: 0, adapters: [] })
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText(/No adapters yet/)).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText(/No adapters yet/)).toBeTruthy()
+    })
     expect(screen.queryByText('Adapter Health')).toBeNull()
   })
 
   it('shows error state with retry on fetch failure', async () => {
     mockList.mockRejectedValueOnce(new Error('backend down'))
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('backend down')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('backend down')).toBeTruthy()
+    })
     expect(screen.getByText('Retry')).toBeTruthy()
   })
 
   it('recovers after retry', async () => {
     mockList.mockRejectedValueOnce(new Error('backend down'))
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('backend down')).toBeTruthy() })
-    await act(async () => { screen.getByText('Retry').click() })
-    await waitFor(() => { expect(screen.getByText('Adapter Stats')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('backend down')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Retry').click()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Adapter Stats')).toBeTruthy()
+    })
   })
 
   it('aggregates best adapters and shows verdict', async () => {
-    mockAggregateBest.mockResolvedValue({ status: 'ok', user_count: 3, eval: { verdict: 'better' } })
+    mockAggregateBest.mockResolvedValue({
+      status: 'ok',
+      user_count: 3,
+      eval: { verdict: 'better' },
+    })
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Aggregate Best')).toBeTruthy() })
-    await act(async () => { screen.getByText('Aggregate Best').click() })
-    await waitFor(() => { expect(screen.getByText('Aggregated 3 adapters. Verdict: better')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Aggregate Best')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Aggregate Best').click()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Aggregated 3 adapters. Verdict: better')).toBeTruthy()
+    })
   })
 
   it('shows aggregate failure message', async () => {
     mockAggregateBest.mockRejectedValue(new Error('no adapters to aggregate'))
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Aggregate Best')).toBeTruthy() })
-    await act(async () => { screen.getByText('Aggregate Best').click() })
-    await waitFor(() => { expect(screen.getByText('no adapters to aggregate')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Aggregate Best')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Aggregate Best').click()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('no adapters to aggregate')).toBeTruthy()
+    })
   })
 
   it('dismisses the aggregate result message', async () => {
-    mockAggregateBest.mockResolvedValue({ status: 'ok', user_count: 3, eval: { verdict: 'better' } })
+    mockAggregateBest.mockResolvedValue({
+      status: 'ok',
+      user_count: 3,
+      eval: { verdict: 'better' },
+    })
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Aggregate Best')).toBeTruthy() })
-    await act(async () => { screen.getByText('Aggregate Best').click() })
-    await waitFor(() => { expect(screen.getByText('Aggregated 3 adapters. Verdict: better')).toBeTruthy() })
-    await act(async () => { screen.getByText('Dismiss').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Aggregate Best')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Aggregate Best').click()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('Aggregated 3 adapters. Verdict: better')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Dismiss').click()
+    })
     expect(screen.queryByText('Aggregated 3 adapters. Verdict: better')).toBeNull()
   })
 
   it('prunes old adapters and refetches', async () => {
-    mockPrune.mockResolvedValue({ status: 'ok', deleted_count: 2, deleted_users: ['user-1', 'user-2'] })
+    mockPrune.mockResolvedValue({
+      status: 'ok',
+      deleted_count: 2,
+      deleted_users: ['user-1', 'user-2'],
+    })
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Prune Old')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Prune Old')).toBeTruthy()
+    })
     expect(mockList).toHaveBeenCalledTimes(1)
-    await act(async () => { screen.getByText('Prune Old').click() })
-    await waitFor(() => { expect(mockPrune).toHaveBeenCalled() })
+    await act(async () => {
+      screen.getByText('Prune Old').click()
+    })
+    await waitFor(() => {
+      expect(mockPrune).toHaveBeenCalled()
+    })
     expect(screen.getByText('Pruned 2 adapters')).toBeTruthy()
-    await waitFor(() => { expect(mockList).toHaveBeenCalledTimes(2) })
+    await waitFor(() => {
+      expect(mockList).toHaveBeenCalledTimes(2)
+    })
   })
 
   it('shows prune failure message', async () => {
     mockPrune.mockRejectedValue(new Error('prune failed'))
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Prune Old')).toBeTruthy() })
-    await act(async () => { screen.getByText('Prune Old').click() })
-    await waitFor(() => { expect(screen.getByText('prune failed')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Prune Old')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Prune Old').click()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('prune failed')).toBeTruthy()
+    })
   })
 
   it('resets an adapter and refetches', async () => {
     mockReset.mockResolvedValue({ status: 'ok', user_id: 'user-1', feedback_count: 0 })
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
-    const delBtns = screen.getAllByRole('button').filter(b => b.className.includes('text-destructive'))
-    await act(async () => { fireEvent.click(delBtns[0]) })
-    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getAllByText('user-1').length).toBeGreaterThan(0)
+    })
+    const delBtns = screen
+      .getAllByRole('button')
+      .filter((b) => b.className.includes('text-destructive'))
+    await act(async () => {
+      fireEvent.click(delBtns[0])
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+    })
     const resetBtn = screen.getByTestId('alert-dialog').querySelectorAll('button')[1]
-    await act(async () => { fireEvent.click(resetBtn) })
-    await waitFor(() => { expect(mockReset).toHaveBeenCalledWith('user-1') })
+    await act(async () => {
+      fireEvent.click(resetBtn)
+    })
+    await waitFor(() => {
+      expect(mockReset).toHaveBeenCalledWith('user-1')
+    })
   })
 
   it('shows error toast when reset fails', async () => {
     mockReset.mockRejectedValue(new Error('boom'))
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getAllByText('user-1').length).toBeGreaterThan(0) })
-    const delBtns = screen.getAllByRole('button').filter(b => b.className.includes('text-destructive'))
-    await act(async () => { fireEvent.click(delBtns[0]) })
-    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getAllByText('user-1').length).toBeGreaterThan(0)
+    })
+    const delBtns = screen
+      .getAllByRole('button')
+      .filter((b) => b.className.includes('text-destructive'))
+    await act(async () => {
+      fireEvent.click(delBtns[0])
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+    })
     const resetBtn = screen.getByTestId('alert-dialog').querySelectorAll('button')[1]
-    await act(async () => { fireEvent.click(resetBtn) })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not reset adapter', 'error') })
+    await act(async () => {
+      fireEvent.click(resetBtn)
+    })
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Could not reset adapter', 'error')
+    })
   })
 
   it('runs LoRA eval and shows eval history', async () => {
     mockGetHistory.mockResolvedValue([{ adapter_path: 'best_aggregated.npz', verdict: 'better' }])
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Run LoRA Eval')).toBeTruthy() })
-    await act(async () => { screen.getByText('Run LoRA Eval').click() })
+    await waitFor(() => {
+      expect(screen.getByText('Run LoRA Eval')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Run LoRA Eval').click()
+    })
     await waitFor(() => {
       expect(mockRunEval).toHaveBeenCalledWith('data/user_adapters/best_aggregated.npz')
     })
     expect(mockAddToast).toHaveBeenCalledWith('Evaluation complete', 'success')
-    await waitFor(() => { expect(screen.getAllByText('better').length).toBeGreaterThan(0) })
+    await waitFor(() => {
+      expect(screen.getAllByText('better').length).toBeGreaterThan(0)
+    })
   })
 
   it('shows error toast when eval fails', async () => {
     mockRunEval.mockRejectedValueOnce(new Error('network'))
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Run LoRA Eval')).toBeTruthy() })
-    await act(async () => { screen.getByText('Run LoRA Eval').click() })
-    await waitFor(() => { expect(mockAddToast).toHaveBeenCalledWith('Could not eval', 'error') })
+    await waitFor(() => {
+      expect(screen.getByText('Run LoRA Eval')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Run LoRA Eval').click()
+    })
+    await waitFor(() => {
+      expect(mockAddToast).toHaveBeenCalledWith('Could not eval', 'error')
+    })
   })
 
   it('loads eval history after running eval', async () => {
     mockRunEval.mockResolvedValue({ status: 'done' })
     mockGetHistory.mockResolvedValue([{ adapter_path: 'best_aggregated.npz', verdict: 'better' }])
     render(<AdaptersPage />)
-    await waitFor(() => { expect(screen.getByText('Run LoRA Eval')).toBeTruthy() })
-    await act(async () => { screen.getByText('Run LoRA Eval').click() })
-    await waitFor(() => { expect(screen.getByText('best_aggregated.npz')).toBeTruthy() })
+    await waitFor(() => {
+      expect(screen.getByText('Run LoRA Eval')).toBeTruthy()
+    })
+    await act(async () => {
+      screen.getByText('Run LoRA Eval').click()
+    })
+    await waitFor(() => {
+      expect(screen.getByText('best_aggregated.npz')).toBeTruthy()
+    })
   })
 })

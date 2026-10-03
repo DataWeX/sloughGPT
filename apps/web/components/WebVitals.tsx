@@ -1,22 +1,22 @@
 'use client'
 
 /**
- * WebVitals — browser performance metrics collector.
+ * WebVitals — browser performance metrics collector (placeholder).
  *
- * Uses Next.js built-in ``useReportWebVitals`` (bundled ``web-vitals`` 3.0.0,
- * no extra dependency) to capture CLS, INP, FCP, LCP, TTFB.
- *
- * Metrics are forwarded at ``warning`` level through the dev-log WebLogger,
- * which in production forwards warnings+ to ``POST /errors/logs/ingest`` and
- * into the server OutputBuffer — tailable via ``/system/output`` and
- * ``/system/stream``. Slow thresholds (LCP > 2500ms, INP > 200ms, CLS > 0.1)
- * are marked in the ``slow`` context field so a hang surfaces as a visible
- * spike in the server log stream.
+ * In the Vite SPA, ``next/web-vitals`` resolves to the no-op compat shim
+ * (vite/next-compat/web-vitals.ts) — its ``useReportWebVitals`` never invokes
+ * the callback, so no CLS/INP/FCP/LCP/TTFB metrics are currently captured for
+ * the web app. This mount point is kept so wiring the real ``web-vitals``
+ * package later is a one-line import change; the callback below documents the
+ * intended forwarding: warnings through the dev-log WebLogger, which in
+ * production forwards warnings+ to ``POST /errors/logs/ingest`` and into the
+ * server OutputBuffer, marking slow thresholds (LCP > 2500ms, INP > 200ms,
+ * CLS > 0.1) in the ``slow`` context field.
  *
  * Rendering: ``null`` (instrumentation only).
  */
 
-import { useReportWebVitals } from 'next/web-vitals'
+import { useReportWebVitals } from '@/vite/next-compat/web-vitals'
 import { logger } from '@/lib/dev-log'
 
 const _log = logger.child('web-vitals')

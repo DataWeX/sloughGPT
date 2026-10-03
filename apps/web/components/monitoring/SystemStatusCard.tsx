@@ -110,11 +110,16 @@ export const SystemStatusCard = memo(function SystemStatusCard({
           />
           <StatCard
             label="Model"
+            // Identifiers are not metrics: the model name gets the full row so a
+            // long name reads on one line instead of spilling across the tile.
+            className="sm:col-span-2"
             value={
               !loaded ? (
                 <Skeleton className="h-5 w-20" />
               ) : (
-                <span className="font-mono">{modelValue}</span>
+                <span className="block break-words font-mono text-sm" title={modelValue}>
+                  {modelValue}
+                </span>
               )
             }
             icon={

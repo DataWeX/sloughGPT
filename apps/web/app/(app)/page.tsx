@@ -228,6 +228,13 @@ export default function HomePage() {
   useEffect(() => {
     if (apiStatus === 'loading' || apiStatus === 'offline') return
     let cancelled = false
+    let timer: ReturnType<typeof setInterval> | null = null
+    const stopPolling = () => {
+      if (timer !== null) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
     const poll = async () => {
       try {
         const result = await apiGet<{
@@ -236,7 +243,13 @@ export default function HomePage() {
           total: number
           message: string
         }>('/health/startup-progress')
-        if (!cancelled) setModelReadiness({ ...result, ready: result.phase === 'ready' })
+        if (cancelled) return
+        const ready = result.phase === 'ready'
+        setModelReadiness({ ...result, ready })
+        // Startup is finished — stop asking. Polling forever here would be
+        // ~20 req/min of pure overhead against an already-busy backend.
+        // A later restart re-arms this effect via the apiStatus transition.
+        if (ready) stopPolling()
       } catch {
         if (!cancelled)
           setModelReadiness({
@@ -249,10 +262,10 @@ export default function HomePage() {
       }
     }
     poll()
-    const id = setInterval(poll, 3000)
+    timer = setInterval(poll, 3000)
     return () => {
       cancelled = true
-      clearInterval(id)
+      stopPolling()
     }
   }, [apiStatus])
 

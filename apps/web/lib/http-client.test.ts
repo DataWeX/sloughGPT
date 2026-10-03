@@ -258,6 +258,101 @@ describe('apiPost', () => {
   })
 })
 
+describe('retry safety for non-idempotent methods', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFetch.mockReset()
+  })
+
+  /**
+   * Behaves like real fetch: the request only settles when the internal
+   * AbortController fires. Without this a mocked timeout never rejects.
+   */
+  function hangingFetch(_url: string, init?: RequestInit) {
+    return new Promise((_resolve, reject) => {
+      const signal = init?.signal
+      const abort = () => reject(new DOMException('The operation was aborted.', 'AbortError'))
+      if (signal?.aborted) abort()
+      else signal?.addEventListener('abort', abort)
+    })
+  }
+
+  /**
+   * Count attempts against one path only. `logger` fires its own
+   * `POST /errors/logs/ingest` whenever an ApiError surfaces, and that would
+   * otherwise be counted as an extra attempt.
+   */
+  const attemptsOn = (path: string) =>
+    mockFetch.mock.calls.filter((c) => String(c[0]).includes(path)).length
+
+  it('does NOT retry a POST timeout — the client abort does not cancel the backend generation', async () => {
+    mockFetch.mockImplementation(hangingFetch)
+    await expect(apiPost('/inference/generate', { prompt: 'hi' }, { timeout: 20 })).rejects.toThrow(
+      ApiError,
+    )
+    expect(attemptsOn('/inference/generate')).toBe(1)
+  })
+
+  it('does NOT retry a 503 on POST — the server may already have committed the work', async () => {
+    mockFetch.mockResolvedValue(mockError(503))
+    await expect(apiPost('/chat', { messages: [] })).rejects.toThrow(ApiError)
+    expect(attemptsOn('/chat')).toBe(1)
+  })
+
+  it('still retries a POST when the connection was never established (uvicorn --reload window)', async () => {
+    const refused = Object.assign(new TypeError('Failed to fetch'), {
+      cause: { code: 'ECONNREFUSED' },
+    })
+    mockFetch.mockRejectedValue(refused)
+    await expect(apiPost('/chat', { messages: [] })).rejects.toThrow(ApiError)
+    expect(attemptsOn('/chat')).toBe(3)
+  })
+
+  it('still retries a GET timeout — idempotent and safe', async () => {
+    mockFetch.mockImplementation(hangingFetch)
+    await expect(apiGet('/health', undefined, { timeout: 20 })).rejects.toThrow(ApiError)
+    expect(attemptsOn('/health')).toBe(3)
+  })
+
+  it('retryOnTimeout opts a non-idempotent call back into retries explicitly', async () => {
+    mockFetch.mockImplementation(hangingFetch)
+    await expect(apiPost('/safe-op', {}, { timeout: 20, retryOnTimeout: true })).rejects.toThrow(
+      ApiError,
+    )
+    expect(attemptsOn('/safe-op')).toBe(3)
+  })
+
+  it('lets blocking inference run past the 30s default instead of aborting it', async () => {
+    vi.useFakeTimers()
+    let aborted = false
+    mockFetch.mockImplementation((_url: string, init?: RequestInit) => {
+      const signal = init?.signal
+      return new Promise((_resolve, reject) => {
+        const onAbort = () => {
+          aborted = true
+          reject(new DOMException('The operation was aborted.', 'AbortError'))
+        }
+        if (signal?.aborted) onAbort()
+        else signal?.addEventListener('abort', onAbort)
+      })
+    })
+
+    const pending = apiPost('/inference/generate', { prompt: 'hi' })
+    // Attach the rejection handler up front so the failure at t=120s is never
+    // an unhandled rejection while the fake clock advances.
+    const settled = expect(pending).rejects.toThrow(ApiError)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(aborted).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(90_000) // t = 120s = long-operation timeout
+    expect(aborted).toBe(true)
+
+    await settled
+    vi.useRealTimers()
+  })
+})
+
 describe('apiPut', () => {
   beforeEach(() => {
     vi.clearAllMocks()

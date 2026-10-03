@@ -5,19 +5,37 @@ import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...args: any[]) => args.filter(Boolean).join(' '),
-  Card: ({ children, ...props }: any) => <div data-testid="card" {...props}>{children}</div>,
-  CardContent: ({ children, ...props }: any) => <div data-testid="card-content" {...props}>{children}</div>,
-  CardHeader: ({ children, ...props }: any) => <div data-testid="card-header" {...props}>{children}</div>,
-  CardTitle: ({ children, ...props }: any) => <div data-testid="card-title" {...props}>{children}</div>,
+  Card: ({ children, ...props }: any) => (
+    <div data-testid="card" {...props}>
+      {children}
+    </div>
+  ),
+  CardContent: ({ children, ...props }: any) => (
+    <div data-testid="card-content" {...props}>
+      {children}
+    </div>
+  ),
+  CardHeader: ({ children, ...props }: any) => (
+    <div data-testid="card-header" {...props}>
+      {children}
+    </div>
+  ),
+  CardTitle: ({ children, ...props }: any) => (
+    <div data-testid="card-title" {...props}>
+      {children}
+    </div>
+  ),
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   Input: (props: any) => <input {...props} />,
   IconRefresh: (props: any) => <span data-testid="icon-refresh" {...props} />,
   IconDownload: (props: any) => <span data-testid="icon-download" {...props} />,
 }))
 
-vi.mock('next/dynamic', () => {
+vi.mock('@/vite/next-compat/dynamic', () => {
   const mock = (factory: any, opts?: any) => {
-    const Component = React.forwardRef((props: any, ref: any) => React.createElement('div', { 'data-testid': 'dynamic-component', ref }, null))
+    const Component = React.forwardRef((props: any, ref: any) =>
+      React.createElement('div', { 'data-testid': 'dynamic-component', ref }, null),
+    )
     Component.displayName = 'DynamicComponent'
     return Component
   }
@@ -91,7 +109,16 @@ describe('ComparisonView', () => {
   })
 
   it('renders snapshots when present', () => {
-    const snapshots = [{ id: 's1', name: 'Snapshot 1', savedAt: '2026-01-01T00:00:00Z', modelIds: ['m1'], results: {}, modelNames: {} }]
+    const snapshots = [
+      {
+        id: 's1',
+        name: 'Snapshot 1',
+        savedAt: '2026-01-01T00:00:00Z',
+        modelIds: ['m1'],
+        results: {},
+        modelNames: {},
+      },
+    ]
     render(<ComparisonView {...baseProps} snapshots={snapshots} />)
     expect(screen.getByText('Saved Comparisons')).toBeTruthy()
     expect(screen.getByText('Snapshot 1')).toBeTruthy()
@@ -117,24 +144,68 @@ describe('ComparisonView', () => {
 
 describe('ComparisonHeader', () => {
   it('renders without crashing', () => {
-    render(<ComparisonHeader completedResults={[]} snapshotName="" onSnapshotNameChange={vi.fn()} onSaveSnapshot={vi.fn()} onExport={vi.fn()} onRunAll={vi.fn()} loading={false} running={new Set()} />)
+    render(
+      <ComparisonHeader
+        completedResults={[]}
+        snapshotName=""
+        onSnapshotNameChange={vi.fn()}
+        onSaveSnapshot={vi.fn()}
+        onExport={vi.fn()}
+        onRunAll={vi.fn()}
+        loading={false}
+        running={new Set()}
+      />,
+    )
   })
 
   it('shows save input when results exist', () => {
     const results = [['m1', {}]] as [string, any][]
-    render(<ComparisonHeader completedResults={results} snapshotName="test" onSnapshotNameChange={vi.fn()} onSaveSnapshot={vi.fn()} onExport={vi.fn()} onRunAll={vi.fn()} loading={false} running={new Set()} />)
+    render(
+      <ComparisonHeader
+        completedResults={results}
+        snapshotName="test"
+        onSnapshotNameChange={vi.fn()}
+        onSaveSnapshot={vi.fn()}
+        onExport={vi.fn()}
+        onRunAll={vi.fn()}
+        loading={false}
+        running={new Set()}
+      />,
+    )
     expect(screen.getByRole('button', { name: /Save/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Export/ })).toBeTruthy()
   })
 
   it('hides save input when no results', () => {
-    render(<ComparisonHeader completedResults={[]} snapshotName="" onSnapshotNameChange={vi.fn()} onSaveSnapshot={vi.fn()} onExport={vi.fn()} onRunAll={vi.fn()} loading={false} running={new Set()} />)
+    render(
+      <ComparisonHeader
+        completedResults={[]}
+        snapshotName=""
+        onSnapshotNameChange={vi.fn()}
+        onSaveSnapshot={vi.fn()}
+        onExport={vi.fn()}
+        onRunAll={vi.fn()}
+        loading={false}
+        running={new Set()}
+      />,
+    )
     expect(screen.queryByRole('button', { name: /Save/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Export/ })).toBeNull()
   })
 
   it('disables benchmark all when loading', () => {
-    render(<ComparisonHeader completedResults={[]} snapshotName="" onSnapshotNameChange={vi.fn()} onSaveSnapshot={vi.fn()} onExport={vi.fn()} onRunAll={vi.fn()} loading={true} running={new Set()} />)
+    render(
+      <ComparisonHeader
+        completedResults={[]}
+        snapshotName=""
+        onSnapshotNameChange={vi.fn()}
+        onSaveSnapshot={vi.fn()}
+        onExport={vi.fn()}
+        onRunAll={vi.fn()}
+        loading={true}
+        running={new Set()}
+      />,
+    )
     expect(screen.getByRole('button', { name: /Benchmark all/ })).toHaveProperty('disabled', true)
   })
 })

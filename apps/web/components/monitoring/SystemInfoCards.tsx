@@ -37,7 +37,7 @@ export const GpuCard = memo(function GpuCard({ gpu }: { gpu?: GPUInfo }) {
                   <span className="text-muted-foreground/60 capitalize">
                     {k.replace(/_/g, ' ')}
                   </span>
-                  <span className="text-right text-[9px] font-mono">
+                  <span className="text-right text-[10px] font-mono">
                     {typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)}
                   </span>
                 </div>
@@ -72,7 +72,7 @@ export const DiskCard = memo(function DiskCard({ disk }: { disk?: DiskUsage }) {
             style={{ width: `${pct}%` }}
           />
         </div>
-        <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono tabular-nums">
+        <div className="flex justify-between text-[10px] text-muted-foreground/60 font-mono tabular-nums">
           <span>{disk.free_gb.toFixed(1)} GB free</span>
           <span>{pct}%</span>
         </div>
@@ -106,7 +106,7 @@ export const ServerInfoCard = memo(function ServerInfoCard({ info }: { info?: Sy
         <div className="flex justify-between py-px">
           <span className="text-muted-foreground/60">Processor</span>
           <span
-            className="text-[9px] max-w-[180px] text-right truncate font-mono"
+            className="text-[10px] max-w-[180px] text-right truncate font-mono"
             title={info.processor}
           >
             {info.processor || '—'}
@@ -190,13 +190,13 @@ export const BatteryCard = memo(function BatteryCard({
             style={{ width: `${pct}%` }}
           />
         </div>
-        <div className="flex justify-between text-[9px] text-muted-foreground/60 font-mono tabular-nums">
+        <div className="flex justify-between text-[10px] text-muted-foreground/60 font-mono tabular-nums">
           <span>{packLabel}</span>
           <span>{pct}%</span>
         </div>
         <div className="flex items-center justify-between gap-2 pt-0.5">
           <span
-            className="text-[9px] text-muted-foreground/60 font-mono truncate"
+            className="text-[10px] text-muted-foreground/60 font-mono truncate"
             title={control.supported ? control.reason || undefined : control.reason}
           >
             {control.supported
@@ -209,7 +209,7 @@ export const BatteryCard = memo(function BatteryCard({
             <Button
               variant="outline"
               size="sm"
-              className="text-[9px] h-6 shrink-0"
+              className="text-[10px] h-6 shrink-0"
               onClick={() => onSetLimit?.(capped ? 100 : advice.limit)}
             >
               {capped ? 'Lift cap' : `Cap ${advice.limit}%`}
@@ -221,7 +221,7 @@ export const BatteryCard = memo(function BatteryCard({
           data-testid="battery-policy"
         >
           <span
-            className="text-[9px] text-muted-foreground/60 font-mono truncate"
+            className="text-[10px] text-muted-foreground/60 font-mono truncate"
             title={policy.explain}
           >
             {policy.enabled ? `Band ${policy.band}%` : 'Policy off'}
@@ -231,7 +231,7 @@ export const BatteryCard = memo(function BatteryCard({
             <Button
               variant="outline"
               size="sm"
-              className="text-[9px] h-6 shrink-0"
+              className="text-[10px] h-6 shrink-0"
               onClick={() => onTogglePolicy(!policy.enabled)}
             >
               {policy.enabled ? 'Stop' : 'Manage'}
@@ -239,7 +239,7 @@ export const BatteryCard = memo(function BatteryCard({
           )}
         </div>
         <div
-          className="text-[9px] text-muted-foreground/70 truncate"
+          className="text-[10px] text-muted-foreground/70 truncate"
           title={advice.reason}
           data-testid="battery-advice"
         >

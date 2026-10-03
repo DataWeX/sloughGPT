@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, memo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/vite/next-compat/navigation'
 import { cn, Card, CardContent, CardHeader, CardTitle, Progress, Spinner } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconStar } from '@sloughgpt/strui'

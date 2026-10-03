@@ -1,6 +1,6 @@
 export const dynamic = 'force-dynamic'
 
-import Link from 'next/link'
+import Link from '@/vite/next-compat/link'
 
 export default function NotFound() {
   return (
@@ -13,8 +13,20 @@ export default function NotFound() {
         The page you&apos;re looking for doesn&apos;t exist or has been moved.
       </p>
       <div className="flex gap-2 mt-2">
-        <Link href="/" prefetch={false} className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors">Home</Link>
-        <Link href="/chat" prefetch={false} className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-3 h-8 text-xs font-medium hover:bg-primary/90 transition-colors">Chat</Link>
+        <Link
+          href="/"
+          prefetch={false}
+          className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          Home
+        </Link>
+        <Link
+          href="/chat"
+          prefetch={false}
+          className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-3 h-8 text-xs font-medium hover:bg-primary/90 transition-colors"
+        >
+          Chat
+        </Link>
       </div>
     </div>
   )

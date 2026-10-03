@@ -93,12 +93,20 @@ function SidebarContent({
   const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>('updated')
   const deferredSearch = useDeferredValue(search)
 
+  // Hydration guards the mount write: don't PUT the sort key until the read
+  // settles, and don't PUT a value identical to the one just read.
+  const [sortHydrated, setSortHydrated] = useState(false)
+  const sortPersisted = useRef<string | null>(null)
+
   useEffect(() => {
     let cancelled = false
     chatDB.getKV<string>(SORT_KEY).then((saved) => {
-      if (!cancelled && (saved === 'name' || saved === 'messages')) {
+      if (cancelled) return
+      sortPersisted.current = saved ?? null
+      if (saved === 'name' || saved === 'messages') {
         setSortMode(saved)
       }
+      setSortHydrated(true)
     })
     return () => {
       cancelled = true
@@ -111,8 +119,11 @@ function SidebarContent({
   const [sortOpen, setSortOpen] = useState(false)
 
   useEffect(() => {
+    if (!sortHydrated) return
+    if (sortPersisted.current === sortMode) return
+    sortPersisted.current = sortMode
     chatDB.setKV(SORT_KEY, sortMode).catch(() => {})
-  }, [sortMode])
+  }, [sortMode, sortHydrated])
 
   const sorted = useMemo(() => {
     return [...conversations].sort((a, b) => {

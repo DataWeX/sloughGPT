@@ -1,6 +1,6 @@
 'use client'
 
-import dynamicNext from 'next/dynamic'
+import dynamicNext from '@/vite/next-compat/dynamic'
 import { memo, useCallback, useMemo } from 'react'
 
 import type { ChatPageController } from '@/features/chat/hooks/useChatPageController'
@@ -549,7 +549,7 @@ export const ChatSearchSection = memo(function ChatSearchSection({
       <ConversationSearch
         open={ui.showConversationSearch}
         onClose={() => ui.setShowConversationSearch(false)}
-        onNavigate={(sessionId) => chat.loadSession(sessionId)}
+        onNavigate={(sessionId: string) => chat.loadSession(sessionId)}
       />
     </>
   )
@@ -614,7 +614,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
           pendingDownload={model.pendingDownload}
           modelInfoMap={model.modelInfoMap}
           onCancel={() => model.setPendingDownload(null)}
-          onConfirm={(modelId) => {
+          onConfirm={(modelId: string) => {
             const info = model.modelInfoMap[modelId]
             model.startDownloadFlowRef.current(modelId, info?.size_gb)
           }}
@@ -623,7 +623,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
 
       {ui.voiceMode && (
         <VoiceChatMode
-          onMessage={async (text) => {
+          onMessage={async (text: string) => {
             chat.setInput(text)
             await chat.sendMessage(text)
           }}
@@ -657,7 +657,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
         <ThreadPanel
           parentMessage={chat.messages.find((m) => m.id === activeThreadMessageId)!}
           threadMessages={activeThreadMessages}
-          onSend={(content) => onReplyInThread(activeThread.id, content)}
+          onSend={(content: string) => onReplyInThread(activeThread.id, content)}
           onClose={onCloseThread}
           className="w-80"
         />
@@ -668,7 +668,7 @@ export const ChatDialogSection = memo(function ChatDialogSection({
       <TemplateDialog
         open={templatesOpen}
         onClose={() => setTemplatesOpen(false)}
-        onSelect={(content) => {
+        onSelect={(content: string) => {
           chat.sendMessage(content)
           setTemplatesOpen(false)
         }}

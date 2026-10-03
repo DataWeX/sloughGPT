@@ -9,11 +9,11 @@ const mockStats = vi.fn()
 const mockHistory = vi.fn()
 const mockApiPost = vi.fn()
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }))
 
-vi.mock('next/dynamic', () => ({
+vi.mock('@/vite/next-compat/dynamic', () => ({
   __esModule: true,
   default: () => {
     const Dyn = () => null
@@ -45,7 +45,8 @@ vi.mock('@/lib/http-client', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) => selector({ addToast: vi.fn() }),
+  useToastStore: (selector: (s: { addToast: (...a: unknown[]) => void }) => unknown) =>
+    selector({ addToast: vi.fn() }),
 }))
 
 vi.mock('@/lib/download-utils', () => ({
@@ -97,14 +98,23 @@ describe('EvaluatePage', () => {
     vi.clearAllMocks()
     mockGetHealth.mockResolvedValue({ model_type: 'gpt2' })
     mockListModel.mockResolvedValue([])
-    mockMetrics.mockResolvedValue({ model: 'gpt2', inference_count: 0, tokens_per_second: 0, memory_mb: 0, total_tokens: 0, model_loaded: false })
+    mockMetrics.mockResolvedValue({
+      model: 'gpt2',
+      inference_count: 0,
+      tokens_per_second: 0,
+      memory_mb: 0,
+      total_tokens: 0,
+      model_loaded: false,
+    })
     mockQuality.mockResolvedValue(null)
     mockStats.mockResolvedValue(null)
     mockHistory.mockResolvedValue([])
     mockApiPost.mockResolvedValue({})
   })
 
-  afterEach(() => { cleanup() })
+  afterEach(() => {
+    cleanup()
+  })
 
   it('renders and shows section tabs after loading', async () => {
     render(<EvaluatePage />)
@@ -137,8 +147,12 @@ describe('EvaluatePage', () => {
 
   it('displays metrics KPIs', async () => {
     mockMetrics.mockResolvedValue({
-      model: 'gpt2', inference_count: 10, tokens_per_second: 5.5,
-      memory_mb: 512, total_tokens: 1000, model_loaded: true,
+      model: 'gpt2',
+      inference_count: 10,
+      tokens_per_second: 5.5,
+      memory_mb: 512,
+      total_tokens: 1000,
+      model_loaded: true,
     })
     render(<EvaluatePage />)
     await screen.findAllByText('gpt2')
@@ -148,7 +162,13 @@ describe('EvaluatePage', () => {
 
   it('shows no-metrics message when metrics is null but page loads', async () => {
     mockMetrics.mockResolvedValue(null)
-    mockQuality.mockResolvedValue({ coherence_score: 0.5, quality_score: 0.5, repetition_rate: 0.1, total_responses: 5, avg_length: 100 })
+    mockQuality.mockResolvedValue({
+      coherence_score: 0.5,
+      quality_score: 0.5,
+      repetition_rate: 0.1,
+      total_responses: 5,
+      avg_length: 100,
+    })
     render(<EvaluatePage />)
     await screen.findByText('Single Model')
     expect(screen.getByText('Single Model')).toBeTruthy()

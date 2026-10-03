@@ -21,7 +21,7 @@ vi.mock('@/hooks/useLocale', () => ({
   LocaleProvider: ({ children }: { children: React.ReactNode }) => children,
 }))
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }))
 
@@ -33,7 +33,7 @@ function renderComponent() {
   return render(
     <LocaleProvider>
       <ConsciousnessSidebarWidget />
-    </LocaleProvider>
+    </LocaleProvider>,
   )
 }
 

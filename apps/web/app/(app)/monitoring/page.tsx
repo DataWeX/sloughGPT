@@ -423,13 +423,20 @@ export default function SystemHealthPage() {
   const headerRight = (
     <div className="flex items-center gap-3">
       {lastUpdated && (
-        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">
+        <span className="text-[10px] text-muted-foreground hidden sm:inline font-mono">
           Updated {lastUpdated}
         </span>
       )}
       <div className="flex items-center gap-1.5">
         <label className="text-[10px] text-muted-foreground">Auto</label>
-        <Switch checked={autoRefresh} onCheckedChange={setAutoRefresh} className="scale-75" />
+        {/* aria-label: the visible <label> is a sibling of the button, not associated
+            with it, so the switch would otherwise announce as an unnamed "switch". */}
+        <Switch
+          checked={autoRefresh}
+          onCheckedChange={setAutoRefresh}
+          aria-label="Auto refresh"
+          className="scale-75"
+        />
       </div>
       <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
         Export
@@ -449,14 +456,14 @@ export default function SystemHealthPage() {
     <PageContainer title="System Health" headerRight={headerRight}>
       {/* Loading: skeleton matching actual 3-card layout */}
       {!loaded && !error && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Status card skeleton: 2x4 KPI grid */}
+        <div className="grid grid-cols-1 items-start md:grid-cols-3 gap-3">
+          {/* Status card skeleton: KPI grid, model tile spans the row (matches SystemStatusCard) */}
           <Card className="p-3">
             <Skeleton className="h-3 w-12 mb-2" />
             <CardContent className="p-0">
               <div className="grid grid-cols-2 gap-3">
                 {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                  <div key={i} className="space-y-1">
+                  <div key={i} className={i === 2 ? 'col-span-2 space-y-1' : 'space-y-1'}>
                     <Skeleton className="h-2 w-10" />
                     <Skeleton className="h-4 w-16" />
                   </div>
@@ -515,9 +522,11 @@ export default function SystemHealthPage() {
         />
       )}
 
-      {/* Row 1: Status + Resources + Alerts — essential overview */}
+      {/* Row 1: Status + Resources + Alerts — essential overview.
+          items-start: the status card carries ~2x the KPIs of its neighbours, so
+          stretching them all to its height leaves ~300px of hollow card body. */}
       {loaded && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 items-start md:grid-cols-3 gap-3">
           <SystemStatusCard
             liveHealth={liveHealth}
             detailed={detailed}

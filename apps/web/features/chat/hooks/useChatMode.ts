@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { useToastStore } from '@/lib/toast-store'
 import { imagesController } from '@/lib/images-controller'
@@ -36,14 +36,17 @@ interface UseChatModeOptions {
 export function useChatMode({ chat }: UseChatModeOptions) {
   const [chatMode, _setChatMode] = useState<ChatMode>('chat')
   const setChatMode = useCallback((mode: ChatMode | ((prev: ChatMode) => ChatMode)) => {
-    _setChatMode((prev) => {
-      const next = typeof mode === 'function' ? mode(prev) : mode
-      if (prev !== next) {
-        trackEvent('chat_mode_changed', { from: prev, to: next })
-      }
-      return next
-    })
+    _setChatMode(mode)
   }, [])
+  // Log after commit, not inside the setState updater — updaters must stay
+  // pure (React may invoke them twice under StrictMode, double-firing events).
+  const prevChatModeRef = useRef<ChatMode>('chat')
+  useEffect(() => {
+    if (prevChatModeRef.current !== chatMode) {
+      trackEvent('chat_mode_changed', { from: prevChatModeRef.current, to: chatMode })
+      prevChatModeRef.current = chatMode
+    }
+  }, [chatMode])
   const [writeTone, setWriteTone] = useState('Friendly')
   const [writeType, setWriteType] = useState('Email')
   const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar')
@@ -57,117 +60,151 @@ export function useChatMode({ chat }: UseChatModeOptions) {
 
   const placeholder = MODE_CONFIGS[chatMode]?.placeholder || 'Type a message...'
 
-  const handleCreateImage = useCallback(async (prompt: string) => {
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: 'user',
-      content: prompt,
-      timestamp: new Date(),
-    }
-    const pendingId = crypto.randomUUID()
-    const pendingMsg: ChatMessage = {
-      id: pendingId,
-      role: 'assistant',
-      content: '✨ **Creating your image...**',
-      timestamp: new Date(),
-    }
-    chat.setMessages(prev => [...prev, userMsg, pendingMsg])
-    chat.setLoading(true)
-    try {
-      const result = await imagesController.generate(prompt, createStyle.toLowerCase() as ImageStyle)
-      chat.setMessages(prev => prev.map(m =>
-        m.id === pendingId
-          ? { ...m, content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${prompt}](${result.image})` }
-          : m
-      ))
-    } catch (err: unknown) {
-      chat.setMessages(prev => prev.map(m =>
-        m.id === pendingId
-          ? { ...m, content: `❌ Sorry, I couldn't create that image. ${extractErrorMessage(err, 'Please try again.')}` }
-          : m
-      ))
-    } finally {
-      chat.setLoading(false)
-    }
-  }, [chat, createStyle])
+  const handleCreateImage = useCallback(
+    async (prompt: string) => {
+      const userMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        role: 'user',
+        content: prompt,
+        timestamp: new Date(),
+      }
+      const pendingId = crypto.randomUUID()
+      const pendingMsg: ChatMessage = {
+        id: pendingId,
+        role: 'assistant',
+        content: '✨ **Creating your image...**',
+        timestamp: new Date(),
+      }
+      chat.setMessages((prev) => [...prev, userMsg, pendingMsg])
+      chat.setLoading(true)
+      try {
+        const result = await imagesController.generate(
+          prompt,
+          createStyle.toLowerCase() as ImageStyle,
+        )
+        chat.setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? {
+                  ...m,
+                  content: `Here's your ${createStyle.toLowerCase()} image:\n\n![${prompt}](${result.image})`,
+                }
+              : m,
+          ),
+        )
+      } catch (err: unknown) {
+        chat.setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? {
+                  ...m,
+                  content: `❌ Sorry, I couldn't create that image. ${extractErrorMessage(err, 'Please try again.')}`,
+                }
+              : m,
+          ),
+        )
+      } finally {
+        chat.setLoading(false)
+      }
+    },
+    [chat, createStyle],
+  )
 
-  const buildModePrompt = useCallback((input: string): string | null => {
-    switch (chatMode) {
-      case 'chat':
-        return null // no transform
-      case 'write':
-        return `Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`
-      case 'rewrite': {
-        const rewritePrompts: Record<string, string> = {
-          'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
-          'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
-          'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
-          'Make Professional': 'Rewrite this text in a professional, formal tone',
-          'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+  const buildModePrompt = useCallback(
+    (input: string): string | null => {
+      switch (chatMode) {
+        case 'chat':
+          return null // no transform
+        case 'write':
+          return `Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`
+        case 'rewrite': {
+          const rewritePrompts: Record<string, string> = {
+            'Fix Grammar':
+              'Fix all grammar and spelling errors in this text while keeping the meaning',
+            'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
+            'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
+            'Make Professional': 'Rewrite this text in a professional, formal tone',
+            'Sound Like Me':
+              'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+          }
+          return `${rewritePrompts[rewriteStyle] || 'Rewrite this text'}:\n\n${input}`
         }
-        return `${rewritePrompts[rewriteStyle] || 'Rewrite this text'}:\n\n${input}`
-      }
-      case 'decide':
-        return `Help me decide using ${decideStructure.toLowerCase()}: ${input}`
-      case 'explain':
-        return `Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): ${input}`
-      case 'translate': {
-        const [src, tgt] = translateLangPair.split('→')
-        return `Translate this from ${src} to ${tgt}: ${input}`
-      }
-      case 'brainstorm':
-        return `Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`
-      case 'wellness': {
-        const prompts: Record<string, string> = {
-          'Sleep Story': 'Tell me a calming sleep story',
-          'Meditation': 'Guide me through a short meditation',
-          'Breathing': 'Guide me through a breathing exercise',
-          'Affirmation': 'Share a positive affirmation',
+        case 'decide':
+          return `Help me decide using ${decideStructure.toLowerCase()}: ${input}`
+        case 'explain':
+          return `Explain this at a ${explainDifficulty.toLowerCase()} level (as if explaining to a ${explainDifficulty.toLowerCase()} learner): ${input}`
+        case 'translate': {
+          const [src, tgt] = translateLangPair.split('→')
+          return `Translate this from ${src} to ${tgt}: ${input}`
         }
-        return `Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: ${input}`
+        case 'brainstorm':
+          return `Let's brainstorm ${brainstormTopic.toLowerCase()}. Be creative, give me ideas in a friendly list format: ${input}`
+        case 'wellness': {
+          const prompts: Record<string, string> = {
+            'Sleep Story': 'Tell me a calming sleep story',
+            Meditation: 'Guide me through a short meditation',
+            Breathing: 'Guide me through a breathing exercise',
+            Affirmation: 'Share a positive affirmation',
+          }
+          return `Respond in a gentle, soothing tone. ${prompts[wellnessType] || 'Help me feel calm'}: ${input}`
+        }
+        case 'talk':
+          return null
+        default:
+          return null
       }
-      case 'talk':
-        return null
-      default:
-        return null
-    }
-  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType])
+    },
+    [
+      chatMode,
+      writeTone,
+      writeType,
+      rewriteStyle,
+      decideStructure,
+      explainDifficulty,
+      translateLangPair,
+      brainstormTopic,
+      wellnessType,
+    ],
+  )
 
-  const handleSend = useCallback(async (readFileData?: { text: string; filename: string } | null) => {
-    const input = chat.input.trim()
+  const handleSend = useCallback(
+    async (readFileData?: { text: string; filename: string } | null) => {
+      const input = chat.input.trim()
 
-    if (chatMode === 'read') {
-      if (!readFileData) {
-        useToastStore.getState().addToast('Upload a file first, then ask your question', 'info')
+      if (chatMode === 'read') {
+        if (!readFileData) {
+          useToastStore.getState().addToast('Upload a file first, then ask your question', 'info')
+          return
+        }
+        chat.setInput('')
+        await chat.sendMessage(
+          `[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, 12000)}\n\n---\n\nMy question: ${input}`,
+        )
         return
       }
-      chat.setInput('')
-      await chat.sendMessage(
-        `[I'm asking about the file "${readFileData.filename}"]\n\nHere is the file content:\n${readFileData.text.slice(0, 12000)}\n\n---\n\nMy question: ${input}`
-      )
-      return
-    }
 
-    if (chatMode === 'create') {
-      chat.setInput('')
-      await handleCreateImage(input)
-      return
-    }
+      if (chatMode === 'create') {
+        chat.setInput('')
+        await handleCreateImage(input)
+        return
+      }
 
-    if (chatMode === 'talk') {
-      // talk mode handled by VoiceChatMode overlay
-      return
-    }
+      if (chatMode === 'talk') {
+        // talk mode handled by VoiceChatMode overlay
+        return
+      }
 
-    const prompt = buildModePrompt(input)
-    if (prompt) {
-      chat.setInput('')
-      await chat.sendMessage(prompt)
-    } else {
-      // 'chat' mode — send as-is
-      await chat.sendMessage()
-    }
-  }, [chatMode, chat, buildModePrompt, handleCreateImage])
+      const prompt = buildModePrompt(input)
+      if (prompt) {
+        chat.setInput('')
+        await chat.sendMessage(prompt)
+      } else {
+        // 'chat' mode — send as-is
+        await chat.sendMessage()
+      }
+    },
+    [chatMode, chat, buildModePrompt, handleCreateImage],
+  )
 
   return {
     chatMode,

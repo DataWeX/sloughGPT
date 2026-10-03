@@ -56,43 +56,94 @@ const LogLine = React.memo(function LogLine({ line }: { line: OutputLine }) {
   const tagColor = line.tag ? (TAG_COLOR[line.tag] ?? 'rgb(var(--muted-foreground))') : undefined
 
   return (
-    <div className="flex font-mono text-[11px] leading-5 py-[1px]">
-      <span className="shrink-0 w-[58px] sm:w-[70px] text-muted-foreground/50 tabular-nums">{ts}</span>
-      <span className="shrink-0 w-[32px] text-center font-semibold" style={{ color: lvlColor }}>{lvl}</span>
+    <div className="flex font-mono text-[10px] leading-5 py-[1px]">
+      <span className="shrink-0 w-[58px] sm:w-[70px] text-muted-foreground/50 tabular-nums">
+        {ts}
+      </span>
+      <span className="shrink-0 w-[32px] text-center font-semibold" style={{ color: lvlColor }}>
+        {lvl}
+      </span>
       {line.tag ? (
-        <span className="shrink-0 w-[56px] text-center font-medium" style={{ color: tagColor }}>[{line.tag}]</span>
+        <span className="shrink-0 w-[56px] text-center font-medium" style={{ color: tagColor }}>
+          [{line.tag}]
+        </span>
       ) : (
         <span className="shrink-0 w-[56px]" />
       )}
       {line.source ? (
-        <span className="shrink-0 text-muted-foreground/30 truncate max-w-[96px] sm:max-w-[160px] pr-2">{line.source}</span>
+        <span className="shrink-0 text-muted-foreground/30 truncate max-w-[96px] sm:max-w-[160px] pr-2">
+          {line.source}
+        </span>
       ) : (
         <span className="shrink-0 w-[96px] sm:w-[160px]" />
       )}
-      <span className={cn('flex-1 min-w-0 break-all', line.level === 'error' || line.level === 'critical' ? 'text-destructive' : line.level === 'warning' ? 'text-warning' : '')}>
+      <span
+        className={cn(
+          'flex-1 min-w-0 break-all',
+          line.level === 'error' || line.level === 'critical'
+            ? 'text-destructive'
+            : line.level === 'warning'
+              ? 'text-warning'
+              : '',
+        )}
+      >
         {line.text}
       </span>
     </div>
   )
 })
 
-export function OutputCard({ title = 'Service Output', height, tail, maxLines, compact }: OutputCardProps) {
-  const { lines, streaming, clear, scrollRef, paused, togglePause, exportLines } = useServerOutput({ tail, maxLines })
+export function OutputCard({
+  title = 'Service Output',
+  height,
+  tail,
+  maxLines,
+  compact,
+}: OutputCardProps) {
+  const { lines, streaming, clear, scrollRef, paused, togglePause, exportLines } = useServerOutput({
+    tail,
+    maxLines,
+  })
   const h = height ?? (compact ? 'h-[220px]' : 'h-[280px]')
 
   const controls = (
     <div className="flex items-center gap-2">
-      <span className={cn('inline-block w-2 h-2 rounded-full', paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50')} />
-      <span className="text-[11px] text-muted-foreground font-mono">{paused ? 'Paused' : streaming ? 'Live' : 'Off'}</span>
-      <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={togglePause} aria-label={paused ? 'Resume output' : 'Pause output'}>
+      <span
+        className={cn(
+          'inline-block w-2 h-2 rounded-full',
+          paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50',
+        )}
+      />
+      <span className="text-[10px] text-muted-foreground font-mono">
+        {paused ? 'Paused' : streaming ? 'Live' : 'Off'}
+      </span>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-7 text-[10px]"
+        onClick={togglePause}
+        aria-label={paused ? 'Resume output' : 'Pause output'}
+      >
         {paused ? '▶' : '⏸'}
       </Button>
       {lines.length > 0 && (
         <>
-          <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => exportLines('text')} aria-label="Export as log file">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 text-[10px]"
+            onClick={() => exportLines('text')}
+            aria-label="Export as log file"
+          >
             <IconDownload className="h-2.5 w-2.5" aria-hidden="true" />
           </Button>
-          <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={clear} aria-label="Clear output">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-5 text-[10px]"
+            onClick={clear}
+            aria-label="Clear output"
+          >
             Clear
           </Button>
         </>
@@ -104,7 +155,9 @@ export function OutputCard({ title = 'Service Output', height, tail, maxLines, c
     <Card className={compact ? 'p-3' : ''}>
       {compact ? (
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{title}</span>
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            {title}
+          </span>
           {controls}
         </div>
       ) : (
@@ -125,7 +178,9 @@ export function OutputCard({ title = 'Service Output', height, tail, maxLines, c
         >
           {lines.length === 0 ? (
             <div className="text-zinc-500 py-4 text-center text-xs">
-              {streaming ? 'Waiting for output...' : 'Output will appear here during service activity'}
+              {streaming
+                ? 'Waiting for output...'
+                : 'Output will appear here during service activity'}
             </div>
           ) : (
             lines.map((line, i) => <LogLine key={`${line.ts}-${i}`} line={line} />)

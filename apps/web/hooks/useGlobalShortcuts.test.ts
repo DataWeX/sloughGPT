@@ -5,7 +5,7 @@ import { renderHook, cleanup } from '@testing-library/react'
 
 const mockPush = vi.fn()
 
-vi.mock('next/navigation', () => ({
+vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 

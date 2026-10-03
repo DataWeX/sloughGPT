@@ -4,7 +4,7 @@ import { memo, useState } from 'react'
 import { cn, Card, CardContent, CardHeader, CardTitle, IconCheck } from '@sloughgpt/strui'
 import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
-import dynamic from 'next/dynamic'
+import dynamic from '@/vite/next-compat/dynamic'
 import { trainingJobsController } from '@/lib/controllers'
 import type { TrainingFormState } from '@/hooks/useTrainingForm'
 import type { UseTrainingDatasetsReturn } from '@/hooks/useTrainingDatasets'
@@ -138,6 +138,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   onStepChange,
   completedSteps,
   onStepComplete,
+  onRecovered,
 }: {
   form: TrainingFormState
   datasets: UseTrainingDatasetsReturn
@@ -149,6 +150,13 @@ export const TrainingPipeline = memo(function TrainingPipeline({
   onStepChange: (step: StepId) => void
   completedSteps: Set<StepId>
   onStepComplete: (id: StepId) => void
+  onRecovered?: (result: {
+    status: string
+    original_job_id?: string
+    recovery_job_id?: string
+    checkpoint_path?: string
+    message?: string
+  }) => void
 }) {
   const runningJob =
     form.allJobs.find((j) => j.status === 'running' && !j.id.startsWith('pending-')) ??
@@ -435,6 +443,7 @@ export const TrainingPipeline = memo(function TrainingPipeline({
           goToTrain={goToTrain}
           onTest={onTest}
           addToast={addToast}
+          onRecovered={onRecovered}
         />
       )}
     </div>

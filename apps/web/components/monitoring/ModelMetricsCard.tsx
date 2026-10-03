@@ -33,7 +33,7 @@ export const ModelMetricsCard = memo(function ModelMetricsCard({
               {m.avg_tokens.toFixed(0)}/req
             </div>
             <div className="mt-1 flex flex-wrap gap-1.5">
-              <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-primary/10 text-primary">
                 {m.tokens_per_sec.toFixed(1)} tok/s
               </span>
             </div>

@@ -1,5 +1,5 @@
 /**
- * Compare current pathname to a nav `href` when Next.js uses `trailingSlash: true`
+ * Compare current pathname to a nav `href`, normalizing any trailing slash
  * (`/chat/` vs `/chat`). Also normalizes root.
  * Supports prefix matching so nested routes (e.g. /training/job/xyz) highlight parent.
  */
