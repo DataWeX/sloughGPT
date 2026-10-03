@@ -177,7 +177,7 @@ BCRYPT_ROUNDS=12
 # API Settings
 API_HOST=127.0.0.1
 API_PORT=8000
-# Web UI (local): cd apps/web && npm run dev — http://localhost:3000
+# Web UI (local): cd apps/web && npm run dev — http://localhost:5173
 
 # Logging
 LOG_LEVEL=INFO

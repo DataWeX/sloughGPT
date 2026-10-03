@@ -302,6 +302,27 @@ journey suite cannot drift apart.
 `scripts/run_ux_flows.py` is the legacy runner; this library is the
 spec-linked successor.
 
+## Site Doctor UI + API
+
+The read-only site doctor (probes in `domain/core/_internal/doctor/`,
+documented in `TESTING.md` → *Site Doctor*) surfaced in the app.
+
+| Piece | Where | Notes |
+|-------|-------|-------|
+| Router | `apps/api/server/routers/doctor.py` | `GET /doctor/report`, `POST /doctor/run` — registered additively in `routers/__init__.py` |
+| Page | `apps/web/app/(app)/doctor/page.tsx` | header + `RunDoctorButton`, summary, live component strip, findings |
+| Components | `apps/web/components/doctor/` | `DoctorSummary`, `FindingsList` (detail folded), `RunDoctorButton`, `ComponentHealthStrip` |
+| Nav | `apps/web/lib/navigation.ts` | one **Doctor** entry in the system section |
+
+- **Contract:** `GET /doctor/report` → `{report, path, age_s}` (missing or
+  corrupt report file → `report: null`, an empty state rather than an error);
+  `POST /doctor/run` → `{report}`.
+- **Light run only:** the API runs `run_doctor(run_sweep=False, window_s=6.0)`
+  — `http` + `sse` probes plus journey findings read **from disk**. The
+  browser journey sweep is never triggered from the API.
+- **Data path:** the page uses `apiGet`/`apiPost` from `lib/http-client.ts`
+  exclusively; the component strip reads the shared `useLiveStatus` snapshot.
+
 ## Test Coverage
 
 | Area | Coverage | Tests |

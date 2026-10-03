@@ -98,6 +98,7 @@ def get_all_routers() -> list[APIRouter]:
         "tools",
         "model_stack",
         "phoneme",
+        "doctor",
     ]
 
     _cached_routers = []

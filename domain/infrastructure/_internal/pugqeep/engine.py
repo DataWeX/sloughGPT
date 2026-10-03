@@ -30,6 +30,7 @@ import multiprocessing
 import threading
 import time
 import uuid
+import weakref
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -40,6 +41,13 @@ from ..cancel_manager import OpType, get_cancel_manager
 from .config import RestartPolicy
 
 logger = logging.getLogger("slo.pugqeep.engine")
+
+# Teardown registries: every Engine/ProcessMonitor (incl. directly-built test
+# instances) is tracked so per-test cleanup can stop leaked background threads
+# and fork children (gate run7: leaked engine -> 60 fork-deadlocked children
+# respawned in a 180s storm; pytest then hung 9h in waitpid at exit).
+_engines = weakref.WeakSet()
+_monitors = weakref.WeakSet()
 
 # TaskFuture is an alias for concurrent.futures.Future, re-exported for
 # backwards compatibility with code that imports it from pugqeep.engine.
@@ -906,6 +914,7 @@ class ProcessMonitor:
         self._on_stall: list[Callable] = []
         self._on_restart: list[Callable] = []
         self._restart_count: dict[str, int] = {}
+        _monitors.add(self)
 
     @property
     def active_count(self) -> int:
@@ -1157,6 +1166,7 @@ class Engine:
             self._monitor.start()
 
         self.install_signal_handlers()
+        _engines.add(self)
 
     @property
     def metrics(self) -> EngineMetrics:
@@ -1852,3 +1862,24 @@ class Engine:
         except RuntimeError as e:
             logger.error("Engine[%s]: branch failed for '%s': %s", self.name, tree_name, e)
             proc.fail(str(e))
+
+
+def stop_all_pugqeep() -> int:
+    """Stop every tracked engine and orphan monitor (test/session teardown).
+
+    Engines' own monitors and fork children are cleaned by Engine.stop();
+    directly-built ProcessMonitor instances are stopped separately.
+    """
+    stopped = 0
+    for eng in list(_engines):
+        try:
+            eng.stop()
+        except Exception:
+            logger.debug("pugqeep engine stop failed during teardown", exc_info=True)
+        stopped += 1
+    for mon in list(_monitors):
+        try:
+            mon.stop()
+        except Exception:
+            logger.debug("pugqeep monitor stop failed during teardown", exc_info=True)
+    return stopped

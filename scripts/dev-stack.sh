@@ -8,7 +8,7 @@
 #   - Web auto-restarts if it dies independently
 #
 # Usage:
-#   ./scripts/dev-stack.sh              # both API (:8000) + Web (:3000)
+#   ./scripts/dev-stack.sh              # both API (:8000) + Web (:5173)
 #   SLO_API_PORT=9000 ./scripts/dev-stack.sh  # custom API port
 #   MAN_DEV_GATEWAY=1 ./scripts/dev-stack.sh  # also start Rust edge (:8080)
 #
@@ -20,7 +20,7 @@ cd "$ROOT"
 
 # ── Config ─────────────────────────────────────────────────────
 export SLO_API_PORT="${SLO_API_PORT:-8000}"
-WEB_PORT="${WEB_PORT:-3000}"
+WEB_PORT="${WEB_PORT:-5173}"
 MAN_GATEWAY_PORT="${MAN_GATEWAY_PORT:-8080}"
 MAN_DEV_GATEWAY="${MAN_DEV_GATEWAY:-0}"
 MAX_RETRIES=5
@@ -104,11 +104,10 @@ prefix_output() {
 # ── Start API ──────────────────────────────────────────────────
 start_api() {
   log_api "Starting (port $SLO_API_PORT)..."
-   local py="python3"
-   if [ -x ".venv/bin/python3" ]; then
-     py=".venv/bin/python3"
-   fi
-   $py apps/api/server/main.py 2>&1 &
+  # One interpreter resolver (conda env first) — see scripts/python.
+  # Module form so the repo root lands on sys.path (``domain`` imports).
+  local py="$ROOT/scripts/python"
+  "$py" -m apps.api.server.main 2>&1 &
   API_PID=$!
 
   if wait_for_health "$SLO_API_PORT" "api"; then

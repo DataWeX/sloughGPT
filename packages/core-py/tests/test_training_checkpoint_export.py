@@ -4,7 +4,7 @@ Training Checkpoint and Export Tests — checkpoint operations, export formats, 
 Tests checkpoint loading, listing, export formats, and model metadata handling.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_checkpoint_export.py -x -v
+    scripts/python -m pytest tests/test_training_checkpoint_export.py -x -v
 """
 
 import tempfile

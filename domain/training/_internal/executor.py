@@ -449,19 +449,31 @@ def compress_checkpoint(
     try:
         from domain.infrastructure._internal.pugqeep import PointCompressor
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
-        from domain.training._internal.slonet import import_from_sou
+        from domain.training._internal.slonet import import_from_sou, isolated_rng
     except ImportError as exc:
         logger.warning("Pugqeep/SloNet not available: %s", exc, extra={"tag": "TRAIN"})
         return None
 
-    try:
-        model = import_from_sou(str(soul_file))
-        if model is None:
+    # The load constructs SloTransformer layers (randn) before load_state_dict
+    # overwrites them. When called from _compress_in_background's daemon
+    # thread, those global-stream draws race the next in-process training
+    # run's seeding (sequential benchmark configs / auto-trainer loops) and
+    # make batched results nondeterministic — load on a private thread-local
+    # stream instead (stable md5-of-path seed keeps private draws reproducible).
+    import hashlib
+
+    load_seed = int(hashlib.md5(str(soul_file).encode("utf-8")).hexdigest()[:8], 16)
+    with isolated_rng(load_seed):
+        try:
+            model = import_from_sou(str(soul_file))
+            if model is None:
+                return None
+            state_dict = model.state_dict()
+        except Exception as exc:
+            logger.warning(
+                "Failed to load model from %s: %s", soul_path, exc, extra={"tag": "TRAIN"}
+            )
             return None
-        state_dict = model.state_dict()
-    except Exception as exc:
-        logger.warning("Failed to load model from %s: %s", soul_path, exc, extra={"tag": "TRAIN"})
-        return None
 
     out_dir = Path(output_dir) if output_dir else soul_file.parent
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -471,7 +483,6 @@ def compress_checkpoint(
     compressor = PointCompressor()
     library = PointLibrary(name=lib_name, storage_dir=out_dir)
 
-    import hashlib
     import os
 
     import numpy as np

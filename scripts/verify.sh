@@ -93,7 +93,7 @@ if [ "$all_found" = true ]; then
     echo ""
     echo "Docker: docker compose -f infra/docker/docker-compose.yml up -d api"
     echo ""
-    echo "Then open the web dev URL (often http://localhost:3000)"
+    echo "Then open the web dev URL (often http://localhost:5173)"
     echo ""
     echo "With a repo .venv, you can prefix commands:"
     echo "  ./run.sh python3 -m pytest tests/ -q"

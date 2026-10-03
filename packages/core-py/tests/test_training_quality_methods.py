@@ -4,7 +4,7 @@ Training Quality and Method Tests — quality scoring, DPO, LoRA, distillation.
 Tests the quality scoring system and training method-specific functionality.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_quality_methods.py -x -v
+    scripts/python -m pytest tests/test_training_quality_methods.py -x -v
 """
 
 import tempfile

@@ -2,7 +2,7 @@
 """Simple demo: reflection loop with consciousness engine.
 
 Usage:
-    PYTHONPATH=packages/core-py .venv/bin/python scripts/demo_reflection_loop.py
+    PYTHONPATH=packages/core-py scripts/python scripts/demo_reflection_loop.py
 """
 
 from __future__ import annotations

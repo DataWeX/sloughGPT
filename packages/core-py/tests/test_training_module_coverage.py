@@ -4,7 +4,7 @@ Training Module Coverage Tests.
 Tests for training modules that don't have dedicated test files.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_training_module_coverage.py -x -v
+    scripts/python -m pytest tests/test_training_module_coverage.py -x -v
 """
 
 import tempfile

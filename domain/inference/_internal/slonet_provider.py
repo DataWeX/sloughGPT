@@ -1182,23 +1182,34 @@ class SloNetChatProvider:
 
         return result
 
-    def quantization_report(self) -> dict:
+    def quantization_report(self, include_per_tensor: bool = True) -> dict:
         """Get quantization error report (if quantized).
 
+        Args:
+            include_per_tensor: Include the full per-tensor error metrics.
+                The per-tensor dict serializes to ~10 MB on a 630M int8
+                model (per-channel scale arrays; ``lm_head`` alone ~3.4 MB),
+                so polling/health callers must pass ``False`` and read
+                ``summary`` instead. Per-layer detail stays available
+                on-demand from the quantization endpoints.
+
         Returns:
-            Dict with per-tensor error metrics and aggregate summary.
-            Empty dict if model was not quantized.
+            Dict with aggregate summary (plus per-tensor metrics when
+            requested). ``{"quantized": False}`` if the model was not
+            quantized.
         """
         if self._quant_engine is None:
             return {"quantized": False}
         summary = self._quant_engine.summary()
-        return {
+        report = {
             "quantized": True,
             "bits": summary.get("bits", 0),
             "mode": summary.get("mode", "symmetric"),
             "summary": summary,
-            "per_tensor": self._quant_engine.error_report(),
         }
+        if include_per_tensor:
+            report["per_tensor"] = self._quant_engine.error_report()
+        return report
 
     def session_stats(self) -> dict:
         """Get cross-turn KV cache session statistics.

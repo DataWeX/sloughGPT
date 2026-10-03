@@ -8,9 +8,9 @@ Measures the self-awareness/reflection path under domain/cognition:
   4. persistence — save/reload preserves episodes + beliefs.
 
 Usage:
-    .venv/bin/python scripts/benchmark_consciousness_reflection.py
-    .venv/bin/python scripts/benchmark_consciousness_reflection.py --episodes 200 --reflects 50
-    .venv/bin/python scripts/benchmark_consciousness_reflection.py --json out.json
+    scripts/python scripts/benchmark_consciousness_reflection.py
+    scripts/python scripts/benchmark_consciousness_reflection.py --episodes 200 --reflects 50
+    scripts/python scripts/benchmark_consciousness_reflection.py --json out.json
 
 Gold Standard (pass/fail thresholds):
   - min_process_ops_per_sec: >= 200

@@ -45,7 +45,7 @@ else:
     PYTEST = [str(REPO_ROOT / ".venv" / "bin" / "python"), "-m", "pytest"]
 
 UNIT_TEST_FILE = "packages/core-py/tests/test_comprehensive_trainer_unit.py"
-JOURNEY_TEST_FILE = "packages/core-py/tests/test_user_journeys.py"
+JOURNEY_TEST_FILE = "packages/core-py/tests/test_comprehensive_training_journeys.py"
 E2E_TEST_FILE = "packages/core-py/tests/test_e2e_training_trigger.py"
 INTEGRATION_TEST_FILE = "packages/core-py/tests/test_computer_use_training_integration.py"
 PROGRESS_STREAM_FILE = "packages/core-py/tests/test_training_progress_stream.py"

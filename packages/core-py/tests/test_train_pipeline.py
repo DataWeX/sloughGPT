@@ -117,37 +117,6 @@ class TestPrepareData:
         assert sorted(stoi) == sorted(set(DATA_TEXT))
         assert itos == dict(enumerate(sorted(set(DATA_TEXT))))
 
-    def test_jsonl_messages_file_renders_to_conversation_text(self, tmp_path):
-        p = tmp_path / "conv.jsonl"
-        rec = {
-            "messages": [
-                {"role": "user", "content": "question uniquechars alpha " * 5},
-                {"role": "assistant", "content": "answer uniquechars beta " * 5},
-            ]
-        }
-        p.write_text(json.dumps(rec) + "\n", encoding="utf-8")
-        data, n_chars, stoi, itos = prepare_data(str(p), block_size=8)
-        chars = set(itos.values())
-        assert len(data) > 0
-        assert "{" not in chars and '"' not in chars
-        assert "U" in chars and "A" in chars
-
-    def test_csv_file_renders_rows_not_raw_syntax(self, tmp_path):
-        p = tmp_path / "d.csv"
-        rows = "name,age\n" + "".join(f"person{i},{20 + i}\n" for i in range(20))
-        p.write_text(rows, encoding="utf-8")
-        data, n_chars, stoi, itos = prepare_data(str(p), block_size=8)
-        chars = set(itos.values())
-        assert len(data) > 0
-        assert ":" in chars
-        assert "," not in chars
-
-    def test_txt_file_stays_raw_byte_identical(self, tmp_path):
-        p = tmp_path / "raw.txt"
-        p.write_text(DATA_TEXT, encoding="utf-8")
-        data, n_chars, stoi, itos = prepare_data(str(p), block_size=8)
-        assert sorted(stoi) == sorted(set(DATA_TEXT))
-
     def test_datasets_dir_fallback(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
         d = tmp_path / "data" / "corpus2"

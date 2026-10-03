@@ -236,7 +236,7 @@ docker-compose up -d
 
 # Local dev
 python -m apps.api.server.main --reload    # API :8000
-cd apps/web && npm run dev                  # Web :3001
+cd apps/web && npm run dev                  # Web :5173
 cd apps/gateway && cargo run                # Gateway :8080
 
 # Or one shot (API + Web; opt-in edge):

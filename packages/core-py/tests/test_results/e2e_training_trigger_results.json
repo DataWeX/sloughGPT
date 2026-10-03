@@ -11,8 +11,8 @@
   },
   {
     "test": "e2e_training_start_button",
-    "passed": false,
-    "detail": "found=False"
+    "passed": true,
+    "detail": "found=True"
   },
   {
     "test": "e2e_datasets_import_button",
@@ -41,17 +41,17 @@
   },
   {
     "test": "e2e_api_health_reachable",
-    "passed": false,
-    "detail": "body=S\nConnecting\nConnecting\nSkip to main content\nS\nMan\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatase"
+    "passed": true,
+    "detail": "body=S\nConnecting\nConnecting\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatase"
   },
   {
     "test": "e2e_training_job_detail",
     "passed": true,
-    "detail": "len=306"
+    "detail": "len=67"
   },
   {
     "test": "e2e_monitoring_metrics",
     "passed": true,
-    "detail": "body_snippet=S\nConnecting\nConnecting\nSkip to main content\nS\nMan\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL0\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS\n\nFee"
+    "detail": "body_snippet=S\nConnecting\nConnecting\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS"
   }
 ]
