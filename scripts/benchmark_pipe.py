@@ -26,6 +26,7 @@ import argparse
 import contextlib
 import gc
 import json
+import os
 import sys
 import threading
 import time
@@ -91,6 +92,20 @@ def _collector_out():
         yield
     finally:
         gc.enable()
+
+
+def _load1() -> float:
+    """1-minute load average -- contention on this box that we do not control.
+
+    Recorded so ``--ci`` can refuse to call a number a regression when the
+    machine is simply busier than it was at baseline: the same spawn measured
+    17.2 us at moderate load and 23.0 us at load 18, which is 33% and would
+    trip a 25% budget with no change to the code at all.
+    """
+    try:
+        return round(os.getloadavg()[0], 2)
+    except OSError:  # platforms without getloadavg
+        return 0.0
 
 
 def _cpu_seconds() -> float:
@@ -323,6 +338,7 @@ def bench_backpressure() -> dict:
 
 def run() -> dict:
     return {
+        "load1": _load1(),
         "admit_release": bench_admit_release(),
         "spawn": bench_spawn(),
         "bound": bench_bound(),
@@ -336,7 +352,10 @@ def _print(metrics: dict) -> None:
     bd = metrics["bound"]
     bp = metrics["backpressure"]
 
-    print(f"PGQ pipe benchmark   (best of {ar['repeats']} passes, cpu time, gc off)")
+    print(
+        f"PGQ pipe benchmark   (best of {ar['repeats']} passes, cpu time, gc off, "
+        f"load {metrics.get('load1', 0.0)})"
+    )
     print(f"  admit+release      {ar['ns_per_cycle']:>9.1f} ns/cycle  ({ar['cycles']:,} cycles)")
     print(
         f"  Engine.spawn       {sp['ns_per_spawn']:>9.1f} ns/spawn   ({sp['spawns']:,} spawns/pass)"
@@ -419,10 +438,23 @@ def main() -> int:
         if base_ns:
             limit = base_ns * (1 + REGRESSION_TOLERANCE)
             if now_ns > limit:
-                failures.append(
-                    f"spawn cost regressed: {now_ns:.1f} ns > {limit:.1f} ns "
+                detail = (
+                    f"spawn cost {now_ns:.1f} ns > {limit:.1f} ns "
                     f"(baseline {base_ns:.1f}, +{REGRESSION_TOLERANCE:.0%} budget)"
                 )
+                # CPU time still drifts with contention: enough page faults and
+                # cache pressure and the same code bills more. Failing here
+                # would teach the next reader to ignore this gate, so only
+                # compare when the box is about as busy as it was at baseline.
+                base_load = baseline.get("load1", 0.0)
+                now_load = metrics.get("load1", 0.0)
+                if base_load and now_load > max(base_load * 1.5, base_load + 2.0):
+                    print(
+                        f"\n[advisory] not failing on {detail} -- machine busy: "
+                        f"load {now_load} vs baseline {base_load}"
+                    )
+                else:
+                    failures.append(f"spawn cost regressed: {detail}")
 
     if failures:
         print("\nFAIL")
