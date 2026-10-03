@@ -283,18 +283,49 @@ def cmd_setup(args):
     except Exception as e:
         log.warning(f"Accelerator probe failed: {e}")
 
-    if not args.docker_only:
-        log.section("Virtual Environment")
-        venv_dir = args.venv
-        if not os.path.exists(venv_dir):
-            subprocess.run([sys.executable, "-m", "venv", venv_dir])
-            log.success(f"Created {venv_dir}")
+    import shutil
 
-        pip_exe = os.path.join(venv_dir, "bin", "pip")
-        log.info("Installing dependencies...")
-        subprocess.run([pip_exe, "install", "--upgrade", "pip"])
-        subprocess.run([pip_exe, "install", "transformers", "fastapi", "uvicorn", "pydantic"])
-        log.success("Dependencies installed")
+    conda = shutil.which("conda")
+    conda_env = "sloughgpt"
+    # conda is the project default; an explicit --venv DIR opts out.
+    use_conda = conda is not None and args.venv == ".venv"
+
+    if not args.docker_only:
+        if use_conda:
+            log.section(f"Conda environment ({conda_env})")
+            envs = {
+                line.split()[0]
+                for line in subprocess.run(
+                    [conda, "env", "list"], capture_output=True, text=True
+                ).stdout.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            }
+            if conda_env not in envs:
+                subprocess.run([conda, "create", "-n", conda_env, "python=3.12", "-y"], check=False)
+                log.success(f"Created conda env {conda_env}")
+            else:
+                log.info(f"Conda env '{conda_env}' already exists")
+
+            log.info("Installing dependencies...")
+            pip = [conda, "run", "-n", conda_env, "python", "-m", "pip"]
+            subprocess.run([*pip, "install", "--upgrade", "pip"], check=False)
+            subprocess.run(
+                [*pip, "install", "transformers", "fastapi", "uvicorn", "pydantic"],
+                check=False,
+            )
+            log.success("Dependencies installed")
+        else:
+            log.section("Virtual Environment")
+            venv_dir = args.venv
+            if not os.path.exists(venv_dir):
+                subprocess.run([sys.executable, "-m", "venv", venv_dir])
+                log.success(f"Created {venv_dir}")
+
+            pip_exe = os.path.join(venv_dir, "bin", "pip")
+            log.info("Installing dependencies...")
+            subprocess.run([pip_exe, "install", "--upgrade", "pip"])
+            subprocess.run([pip_exe, "install", "transformers", "fastapi", "uvicorn", "pydantic"])
+            log.success("Dependencies installed")
 
     if not args.local_only:
         log.section("Docker")
@@ -307,7 +338,10 @@ def cmd_setup(args):
 
     log.blank()
     log.success("Setup complete!")
-    log.info("Next: source .venv/bin/activate")
+    if use_conda:
+        log.info(f"Next: conda activate {conda_env}")
+    else:
+        log.info(f"Next: source {args.venv}/bin/activate")
     log.info("Then: python3 cli.py dev")
 
 

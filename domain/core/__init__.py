@@ -88,6 +88,8 @@ __all__ = [
     "QualiaState",
     "SelfEpisode",
     "SelfIdentity",
+    "run_doctor",
+    "DoctorReport",
 ]
 
 
@@ -130,6 +132,9 @@ def __getattr__(name):
         "MultimodalManager": "domain.multimodal",
         "get_multimodal_manager": "domain.multimodal",
         "MultimodalCapabilities": "domain.multimodal",
+        # Site doctor (Phase A: report-only probes)
+        "run_doctor": "domain.core._internal.doctor",
+        "DoctorReport": "domain.core._internal.doctor",
     }
     if name in _lazy:
         mod = _importlib.import_module(_lazy[name])

@@ -32,7 +32,7 @@
 - **NEVER duplicate training loops.** The training infrastructure lives in `domain/training/_internal/`. There is ONE training loop (`SloughGPTTrainer` in `train_pipeline.py`), ONE tokenizer pipeline, ONE checkpoint system. If you need to train something new, create a **dataset adapter** that feeds into the existing `SloughGPTTrainer`, or extend it with a new mode. Do NOT copy-paste the forward/loss/backward/grad-clip/optimize loop into a new file. The three existing copies (`train_pipeline.py`, `chat_trainer.py`, `consciousness/training.py`) are a known debt — we are actively consolidating them. Before writing any training code, ask: "Can I reuse `SloughGPTTrainer` or `SloChatTrainer`?" If the answer is yes, write an adapter, not a new trainer.
 - **Do NOT make changes or delete files without explicit user approval first.** Always describe what you plan to do, wait for confirmation, then execute. Even if the user asks you to "build X" or "fix Y", confirm the approach before writing code.
 - **During discussions and brainstorming, DO NOT take action.** When the user is explaining ideas, asking questions, or exploring concepts — listen and respond verbally. Do not edit files, create docs, or make changes unless explicitly told to. Jumping ahead during discussion breaks the conversation flow and shows you're not reading the interaction context.
-- **Always use the project venv.** Check for `.venv/`, `venv/`, or `poetry env` before running Python commands. Never use bare `python` or `pip` without activating the project environment first.
+- **Always use the project env (conda `sloughgpt`).** Never use bare `python` or `pip` outside the project env. Resolution order lives in `scripts/python`: `SLO_PYTHON` → conda env `sloughgpt` → `.venv` → `python3`; prefix commands with `./scripts/python` or `./run.sh` instead of activating by hand.
 - **Run benchmarks after every training/inference implementation.** After implementing or modifying any fine-tuning method, training loop, inference optimization, quantization, or model architecture change, run the relevant benchmark before committing. This catches performance regressions and validates improvements. Benchmark scripts live in `scripts/benchmark_*.py`. Key benchmarks:
   - `scripts/benchmark_slonet_training.py` — training speed, convergence, loss curves
   - `scripts/benchmark_quantization.py` — int8/int4 quality vs speed tradeoffs
@@ -53,6 +53,7 @@
 - **Notes** (`~/.config/dev-notes/*.md`) are the user's journal — source of truth for task metadata (sprint, gh, status, body).
 - **Board** (`.kanban/board.jsonl`) is the kanban view derived from notes via sync.
 - Sync is bidirectional: note status ↔ card column.
+- **Agent sync** (`docs/AGENT_SYNC.md`) — read it first: what has landed across sessions, what is in flight, how to push your own changes; update it when you push.
 - **Product docs** (`docs/PRODUCT_ENGINEERING.md`) are the source of truth for what to build. Reference before creating new features, routers, or pages. User flows in `docs/UX_FLOWS.md`, persona in `docs/USER_PERSONA.md`.
 
 ## Core Infrastructure Sync Rule

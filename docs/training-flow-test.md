@@ -5,14 +5,14 @@ Run this test using opencode's chrome-devtools MCP.
 ## Prerequisites
 
 1. Start the API server: `FORCE_COLOR=1 ./sloughgpt serve` (port 8000)
-2. Start the web app: `cd apps/web && npm run dev` (port 3000)
+2. Start the web app: `cd apps/web && npm run dev` (port 5173)
 3. Run in opencode: `/test-training-flow`
 
 ## Manual Test Steps
 
 ### Step 1: Open Training Page
 ```
-chrome-devtools_new_page → http://localhost:3000/training
+chrome-devtools_new_page → http://localhost:5173/training
 ```
 
 ### Step 2: Wait for Load

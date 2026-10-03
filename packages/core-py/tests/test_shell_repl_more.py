@@ -20264,8 +20264,22 @@ class TestCmdLogsExplainV2:
         assert repl._last_exit_code == 0
 
     def test_logs_follow(self, repl):
+        import signal
+
         repl._log_buffer.clear()
-        _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
+
+        def _alarm(signum, frame):
+            raise KeyboardInterrupt()
+
+        old_handler = signal.signal(signal.SIGALRM, _alarm)
+        signal.alarm(1)
+        try:
+            _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
         assert repl._last_exit_code == 0
 
 

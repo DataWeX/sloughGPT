@@ -514,15 +514,28 @@ class Kernel:
 _kernel: Kernel | None = None
 
 
+def _install_optional_addons(kernel: Kernel) -> None:
+    """Install the neural/filesystem/shell_ui addons.
+
+    The addons extension is separately vendored (historically a symlink), so
+    when it is missing or broken the kernel still works without them; this
+    mirrors the tolerant install in ``Kernel.boot``.
+    """
+    try:
+        from .addons import filesystem, neural, shell_ui
+    except Exception as e:
+        logger.debug("addons extension unavailable, skipping install: %s", e)
+        return
+    kernel.install_addon(neural)
+    kernel.install_addon(filesystem)
+    kernel.install_addon(shell_ui)
+
+
 def get_kernel() -> Kernel:
     global _kernel
     if _kernel is None:
         _kernel = Kernel()
-        from .addons import filesystem, neural, shell_ui
-
-        _kernel.install_addon(neural)
-        _kernel.install_addon(filesystem)
-        _kernel.install_addon(shell_ui)
+        _install_optional_addons(_kernel)
     return _kernel
 
 
@@ -531,11 +544,7 @@ def reset_kernel() -> Kernel:
     if _kernel is not None and _kernel.running:
         _kernel.shutdown()
     _kernel = Kernel()
-    from .addons import filesystem, neural, shell_ui
-
-    _kernel.install_addon(neural)
-    _kernel.install_addon(filesystem)
-    _kernel.install_addon(shell_ui)
+    _install_optional_addons(_kernel)
     return _kernel
 
 

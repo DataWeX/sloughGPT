@@ -44,6 +44,11 @@ def main():
     from domain.training._internal.cache_tags import get_cache_root
     from domain.training._internal.train_pipeline import SloughGPTTrainer, TrainerConfig
 
+    try:  # rng_fingerprint arrived with the acyclic/rng-fix line; old-slonet A/B runs lack it
+        from domain.training._internal.slonet import rng_fingerprint
+    except ImportError:
+        rng_fingerprint = None
+
     candidates = [
         Path(__file__).resolve().parents[1] / "data" / "datasets" / "tinyshakespeare" / "input.txt",
         Path(__file__).resolve().parents[1] / "data" / "tinyshakespeare" / "input.txt",
@@ -254,6 +259,11 @@ def main():
             f"{r['steps_per_sec']} steps/s | loss {r['initial_loss']} → {r['final_loss']} | "
             f"ppl {r['perplexity']} | {r['peak_memory_mb']} MB"
         )
+        # Global-MT19937 influence audit: identical across runs/batch positions
+        # iff the entire training stream (624 state words, not just the printed
+        # loss) replayed bit-identically.
+        if rng_fingerprint is not None:
+            print(f"  rng-fingerprint: {rng_fingerprint()}")
 
         if name == "gate":
             verdict = "PASS" if converged else "FAIL"

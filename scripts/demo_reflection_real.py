@@ -5,7 +5,7 @@ Loads the cached Qwen model via NumpyEngine, generates responses,
 feeds them through the consciousness engine, shows structured reflection.
 
 Usage:
-    PYTHONPATH=packages/core-py .venv/bin/python scripts/demo_reflection_real.py
+    PYTHONPATH=packages/core-py scripts/python scripts/demo_reflection_real.py
 """
 
 from __future__ import annotations

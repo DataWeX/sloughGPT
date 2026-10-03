@@ -2,20 +2,22 @@
 E2E Training Trigger Test — uses computer-use agent to trigger training via web UI.
 
 Tests the full flow: navigate → configure → trigger training → monitor DevTools.
-Requires running API (localhost:8000) and web (localhost:3000) servers.
+Requires running API (localhost:8000) and web (localhost:5173) servers.
 
 Usage:
-    .venv/bin/python -m pytest tests/test_e2e_training_trigger.py -x -v -s
+    scripts/python -m pytest tests/test_e2e_training_trigger.py -x -v -s
 """
 
 import json
+import os
 import time
 import urllib.request
 from pathlib import Path
 
 import pytest
 
-BASE = "http://localhost:3000"
+# vite :5173 (card e47e19ee retired the stale :3000 default); SLO_WEB_URL overrides.
+BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = "http://localhost:8000"
 RESULTS = []
 

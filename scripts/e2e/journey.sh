@@ -9,7 +9,7 @@ LOG_DIR="$WT/logs/e2e"; mkdir -p "$LOG_DIR"
 LOG=$LOG_DIR/journey_${LABEL}.log
 export FAKE_NPM_LOG=$LOG_DIR/fake_npm_${LABEL}.log
 NPMLOG="$FAKE_NPM_LOG"
-VPY="$WT/.venv/bin/python"
+VPY="$("$BASE/../../scripts/python" --resolve 2>/dev/null || echo python3)"
 FAIL=0
 ok()  { echo "PASS: $*"; }
 bad() { echo "FAIL: $*"; FAIL=1; }

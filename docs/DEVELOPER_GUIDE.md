@@ -11,7 +11,7 @@ This guide covers development practices, contribution guidelines, and technical 
 SloughGPT uses a domain-driven architecture where each domain represents a bounded context with its own:
 
 - **Models**: Business logic and entities
-- **Services**: Domain services and application logic  
+- **Services**: Domain services and application logic
 - **Interfaces**: Contracts between domains
 - **Infrastructure**: External dependencies and persistence
 
@@ -63,12 +63,16 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 git clone https://github.com/iamtowbee/sloughGPT.git
 cd sloughGPT
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+# Project Python env: conda env `sloughgpt` is the default
+# (a `.venv` still works — see `scripts/python` for the resolution order)
+conda env list | grep -q sloughgpt || conda create -n sloughgpt python=3.12 -y
+conda activate sloughgpt
 
 # Install development dependencies
 python3 -m pip install -e ".[dev]"
+
+# Or skip activation entirely — every script uses the same resolver:
+./scripts/python -m pytest tests/ -q
 ```
 
 ### API + web (local)
@@ -76,7 +80,7 @@ python3 -m pip install -e ".[dev]"
 Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full options are in **QUICKSTART.md**.
 
 ```bash
-# One terminal (API :8000 + web :3000)
+# One terminal (API :8000 + web :5173)
 ./scripts/dev-stack.sh
 # or: make dev-stack
 # or: npm install && npm run dev:stack   # repo root; same shell script
@@ -89,6 +93,7 @@ npm run test:repo-root
 ### Development Workflow
 
 1. **Create Feature Branch**
+
 ```bash
 git checkout -b feature/your-feature-name
 ```
@@ -100,11 +105,13 @@ git checkout -b feature/your-feature-name
    - Ensure type safety
 
 3. **Run Tests**
+
 ```bash
 pytest tests/ -q -k "your_keyword"
 ```
 
 4. **Commit Changes**
+
 ```bash
 git add .
 git commit -m "feat: add your feature description"
@@ -219,12 +226,13 @@ cd apps/web && npx tsc --noEmit
 [tool.coverage.run]
 source = ["domains"]
 omit = [
-    "*/tests/*",
-    "*/test_*",
-    "*/__pycache__/*",
-    "*/site-packages/*",
+"_/tests/_",
+"_/test__",
+"_/**pycache**/_",
+"_/site-packages/_",
 ]
-```
+
+````
 
 ### Running Tests
 
@@ -240,7 +248,7 @@ python3 -m pytest tests/ --cov=domain --cov-report=html
 
 # Run integration-focused tests
 python3 -m pytest tests/test_integration.py -v
-```
+````
 
 ## 📊 Monitoring & Debugging
 
@@ -283,6 +291,7 @@ state.record_training(tokens=1000, elapsed_ms=30000)
 ### Debugging
 
 #### Local Development
+
 ```python
 # Enable debug mode
 import os
@@ -343,8 +352,10 @@ async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as 
     resp = await client.get("/health")
     data = resp.json()
 ```
+
     result = await db_manager.execute_query("SELECT * FROM table")
-```
+
+````
 
 ### Caching Strategy
 
@@ -372,7 +383,7 @@ def cached_get(key: str):
             return result
         return wrapper
     return decorator
-```
+````
 
 ## 🔒 Security Best Practices
 
@@ -479,7 +490,7 @@ python3 apps/api/server/main.py
 # or, with reload:
 # cd apps/api/server && python3 -m uvicorn main:app --reload --port 8000
 
-# Web UI (separate terminal; port 3000)
+# Web UI (separate terminal; port 5173)
 cd apps/web && npm install && npm run dev
 ```
 
@@ -581,8 +592,8 @@ Docs live flat in `docs/`. Auto-generated API docs at `http://localhost:8000/doc
 # Clone and set up
 git clone https://github.com/iamtowbee/sloughGPT.git
 cd sloughGPT
-python3 -m venv .venv
-source .venv/bin/activate
+conda env list | grep -q sloughgpt || conda create -n sloughgpt python=3.12 -y
+conda activate sloughgpt        # or skip activation: ./scripts/python ...
 python3 -m pip install -e ".[dev]"
 
 # Set up environment
@@ -594,7 +605,7 @@ cp .env.example .env
 
 ```bash
 # Full suite
-python3 -m pytest tests/ -q
+./scripts/python -m pytest tests/ -q
 
 # Skip slow tests
 python3 -m pytest tests/ -m "not slow"
@@ -609,7 +620,7 @@ cd apps/web && npx vitest run && npx tsc --noEmit
 # API (http://localhost:8000 — OpenAPI at /docs)
 python3 apps/api/server/main.py
 
-# Web UI (http://localhost:3000)
+# Web UI (http://localhost:5173)
 cd apps/web && npm run dev
 ```
 

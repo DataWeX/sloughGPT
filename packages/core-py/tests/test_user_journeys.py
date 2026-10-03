@@ -6,10 +6,10 @@ Runs all web UI flow tests headlessly. For CI and local verification.
 This file used to drive raw ``playwright.sync_api``. It now drives the shared
 avion computer-use library (card e26dc68c) so locator/backend bugs are fixed
 once, in ``packages/avion``, instead of once per caller. Test names,
-assertions and counts are unchanged: 99 tests.
+assertions and counts are unchanged: 103 tests.
 
 Usage:
-    SLO_WEB_URL=http://localhost:5173 .venv/bin/python -m pytest \
+    SLO_WEB_URL=http://localhost:5173 scripts/python -m pytest \
         packages/core-py/tests/test_user_journeys.py -x -v
 
 Requirements:
@@ -27,7 +27,9 @@ from pathlib import Path
 import pytest
 from avion import Arken, ElementLocator, PageControls, SyncRunner
 
-BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:3000"
+# Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
+# stale :3000 default). Override with SLO_WEB_URL for non-standard setups.
+BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = os.environ.get("SLO_API_URL") or "http://localhost:8000"
 RESULTS = []
 
@@ -56,6 +58,29 @@ def _wait_for_api(timeout: int = 60) -> bool:
             return True
         time.sleep(1)
     return False
+
+
+def _web_is_ready() -> bool:
+    """Check if the web app answers without an HTTP client error."""
+    try:
+        req = urllib.request.Request(BASE)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return 200 <= resp.status < 400
+    except Exception:
+        return False
+
+
+# Route-level journeys drive a real browser against a live stack. Skip the
+# whole module when one isn't running instead of failing every test, so the
+# default offline suite stays green. Start one first if you want these:
+#   scripts/dev-stack.sh   (web :5173, api :8000)  or  ./sloughgpt serve --web
+pytestmark = pytest.mark.skipif(
+    not (_web_is_ready() and _api_is_ready()),
+    reason=(
+        "route-level journeys need a live stack "
+        "(web :5173 + api :8000 — scripts/dev-stack.sh or sloughgpt serve --web)"
+    ),
+)
 
 
 def _api_has_model() -> bool:
@@ -280,7 +305,11 @@ ROUTES = [
     ("/consciousness/settings", "consciousness_settings"),
     ("/consciousness/playground", "consciousness_playground"),
     # Training sub-pages
+    ("/training/analytics", "training_analytics"),
+    ("/training/presets", "training_presets"),
     ("/training/runs", "training_runs"),
+    ("/training/compare", "training_compare"),
+    ("/training/trends", "training_trends"),
     # Other
     ("/shortcuts", "shortcuts"),
     ("/phoneme", "phoneme"),

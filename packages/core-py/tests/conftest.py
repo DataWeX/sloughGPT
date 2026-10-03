@@ -36,6 +36,50 @@ def _ensure_event_loop():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _stop_pretrain_threads():
+    """Stop any background multimodal pretrain thread after each test.
+
+    Leaked pretrain threads run active BLAS compute and deadlock later
+    os.fork() calls (SubprocessProcess start) — the core-py full-suite hang.
+    """
+    yield
+    manager_mod = sys.modules.get("domain.multimodal._internal.manager")
+    if manager_mod is not None:
+        manager_mod.MultimodalManager.stop_pretrain(timeout=5)
+
+
+@pytest.fixture(autouse=True)
+def _stop_infra_threads():
+    """L3: stop leaked infra background threads after each test.
+
+    The leak sites already have stop APIs — workflow schedulers, the
+    fire-and-forget pool, the idle-manager loop (gate run5: 44x timeouts,
+    ~54 leaked threads). Only subsystems this test imported are touched.
+    """
+    yield
+    workflow_mod = sys.modules.get("domain.feedback._internal.workflow")
+    if workflow_mod is not None:
+        stop_all = getattr(workflow_mod, "stop_all_workflows", None)
+        if stop_all is not None:
+            stop_all()
+    faf_mod = sys.modules.get("domain.infrastructure._internal.fire_and_forget")
+    if faf_mod is not None:
+        reset = getattr(faf_mod, "reset_pool", None)
+        if reset is not None:
+            reset()
+    idle_mod = sys.modules.get("domain.infrastructure._internal.idle_manager")
+    if idle_mod is not None:
+        stop_all = getattr(idle_mod, "stop_all_idle_managers", None)
+        if stop_all is not None:
+            stop_all()
+    pugqeep_mod = sys.modules.get("domain.infrastructure._internal.pugqeep.engine")
+    if pugqeep_mod is not None:
+        stop_all = getattr(pugqeep_mod, "stop_all_pugqeep", None)
+        if stop_all is not None:
+            stop_all()
+
+
 def build_test_app(*routers):
     """Build a FastAPI app with exception handlers registered.
 
