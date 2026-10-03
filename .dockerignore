@@ -1,5 +1,8 @@
 node_modules
+**/node_modules
 .next
+apps/web/.next
+apps/web/dist-vite
 .git
 __pycache__
 *.pyc
@@ -28,6 +31,4 @@ infra/
 docs/
 scripts/
 tests/
-packages/strui/
-apps/web/
 apps/cli/

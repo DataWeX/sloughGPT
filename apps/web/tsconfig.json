@@ -2,39 +2,27 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "preserve",
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "types": [
-      "@webgpu/types"
-    ],
+    "types": ["@webgpu/types"],
     "paths": {
-      "@/*": [
-        "./*"
-      ],
-      "@sloughgpt/strui": [
-        "../../packages/strui/src"
-      ],
-      "@sloughgpt/strui/*": [
-        "../../packages/strui/src/*"
-      ]
+      "@/*": ["./*"],
+      "@sloughgpt/strui": ["../../packages/strui/src"],
+      "@sloughgpt/strui/*": ["../../packages/strui/src/*"],
+      "next/server": ["./vite/next-compat/server.ts"],
+      "next/link": ["./vite/next-compat/link.tsx"],
+      "next/navigation": ["./vite/next-compat/navigation.ts"],
+      "next/dynamic": ["./vite/next-compat/dynamic.tsx"],
+      "next/web-vitals": ["./vite/next-compat/web-vitals.ts"],
+      "next-auth/react": ["./vite/next-compat/next-auth.tsx"]
     }
   },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next-build-test/types/**/*.ts",
-    ".next-dev/types/**/*.ts",
-    ".next-dev/dev/types/**/*.ts",
-    ".next/dev/types/**/*.ts"
-  ],
+  "include": ["**/*.ts", "**/*.tsx"],
   "exclude": [
     "node_modules",
     "cypress",
-    "cypress.config.ts"
+    "cypress.config.ts",
+    "dist-vite",
+    ".next",
+    ".next-dev",
+    ".next-build-test"
   ]
 }

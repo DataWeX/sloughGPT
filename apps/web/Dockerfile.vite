@@ -1,4 +1,4 @@
-# Vite static SPA image — Phase 5 dual-path (Next image stays apps/web/Dockerfile).
+# Vite static SPA image (apps/web is Vite-only; the old Next image was removed).
 # Build from repository root:
 #   docker build -f apps/web/Dockerfile.vite -t sloughgpt/web:vite .
 # Optional: --build-arg API_BASE=http://api:8000  (default for compose)

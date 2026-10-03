@@ -13,7 +13,7 @@ Modern TypeScript-based web interface for SloughGPT using Base UI components.
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router), React 18, TypeScript
+- **Framework**: Vite + React 19, TypeScript, React Router v7
 - **UI Library**: Base UI
 - **State Management**: Zustand
 - **Charts**: Recharts
@@ -29,7 +29,7 @@ Modern TypeScript-based web interface for SloughGPT using Base UI components.
 ### Installation
 
 ```bash
-# From repository root — Next.js app lives under apps/web
+# From repository root — frontend lives under apps/web
 cd apps/web
 
 # Install dependencies
@@ -42,25 +42,25 @@ yarn install
 ### Development
 
 ```bash
-# Start development server
+# Start development server (Vite)
 npm run dev
 
-# The app will open at http://localhost:3000
+# The app will open at http://localhost:5173
 ```
 
-Before pushing changes, run the same checks as CI: **`npm ci && npm run ci`** (from this directory — lint, typecheck, Vitest, then **`npm run build:clean`**, i.e. remove **`.next`** and **`next build`**; same as job **`test-web`**).
+Before pushing changes, run the same checks as CI: **`npm ci && npm run ci`** (from this directory — lint, typecheck, Vitest, `vite build`; same as CI **`frontend-build`**).
 
-**Talking to models:** set **`NEXT_PUBLIC_API_URL`** to your FastAPI base (default `http://localhost:8000`). Use **Models** to **`POST /models/load`** (`model_id` in JSON), then **Chat** sends message history to **`POST /chat/stream`** (SSE) with fallback to **`POST /chat`**. Older single-prompt paths **`/inference/generate/stream`** / **`/inference/generate`** remain available for other clients. The client **`api.loadModel`** matches that contract (not `/models/{id}/load`).
+**Talking to models:** set **`NEXT_PUBLIC_API_URL`** to your FastAPI base (default `http://localhost:8000`). Use **Models** to **`POST /models/load`** (`model_id` in JSON), then **Chat** sends message history to **`POST /chat/stream`** (SSE) with fallback to **`POST /chat`**. Older single-prompt paths **`/inference/generate/stream`** / **`/inference/generate`** remain available for other clients. The client **`modelController.load()`** matches that contract (not `/models/{id}/load`).
 
-**UI vs core engine:** this app is **only** HTML/CSS/TS and `fetch` to the API. It does **not** bundle or import Python (`packages/core-py`, trainers, or inference kernels). Deploy the Next build on any static/hosted frontend; run the FastAPI process separately — the only link is **`NEXT_PUBLIC_API_URL`** and the JSON contracts in **`lib/api.ts`** (see also **`docs/STRUCTURE.md`**).
+**UI vs core engine:** this app is **only** HTML/CSS/TS and `fetch` to the API. It does **not** bundle or import Python (`packages/core-py`, trainers, or inference kernels). Deploy the Vite build on any static/hosted frontend; run the FastAPI process separately — the only link is **`NEXT_PUBLIC_API_URL`** and the JSON contracts in **`lib/http-client.ts`** — the single source of truth for every API call, never bypass it with raw `fetch` (see also **`docs/STRUCTURE.md`**).
 
-**Cypress E2E** (mocked API, no Python process): after a production build (`npm run build` or **`npm run build:clean`**), run **`npm run e2e:ci`** (starts `next dev` on port **3010** so it does not clash with `output: 'standalone'` + `next start`). Or `npm run dev` on 3000 and **`npm run e2e`** / **`npm run e2e:open`**. **`npm run ci:e2e`** runs **`build:clean`** then **`e2e:ci`**.
+**Cypress E2E** (mocked API, no Python process): after a production build (`npm run build`), run **`npm run e2e:vite`** (starts `dev:vite` on port **5173**). Or `npm run dev` and **`npm run e2e`** / **`npm run e2e:open`**.
 
 ### Build for Production
 
 ```bash
-npm run build
-npm run start   # serves the production build (default port 3000)
+npm run build        # vite build → dist-vite/
+npm run preview      # serve the production build locally
 ```
 
 ### Docker image
@@ -68,10 +68,12 @@ npm run start   # serves the production build (default port 3000)
 The **`file:../../packages/strui`** dependency must resolve, so build the image from the **repository root**:
 
 ```bash
-docker build -f apps/web/Dockerfile -t sloughgpt/web:latest .
+# Vite static SPA (compose `web` service, port 3000)
+docker build -f apps/web/Dockerfile.vite -t sloughgpt/web:latest .
+docker compose -f infra/docker/docker-compose.yml up -d web
 ```
 
-**`infra/docker/docker-compose.yml`** `web` service uses `context: ../..` and `dockerfile: apps/web/Dockerfile`. Root **`.dockerignore`** excludes **`.next/`** and **`node_modules/`** so local caches are not copied into the build context.
+**`infra/docker/docker-compose.yml`** `web` service uses `context: ../..` and `dockerfile: apps/web/Dockerfile.vite`. Root **`.dockerignore`** excludes **`apps/web/.next`**, **`apps/web/dist-vite`**, and **`**/node_modules`** (source stays in context for image builds).
 
 ## API Configuration
 
@@ -81,20 +83,18 @@ To change the API URL, copy **`.env.example`** to **`.env.local`** (or edit **`.
 
 ## Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start development server (Next.js) |
-| `npm run build` | Production build (may reuse **`.next`**) |
-| `npm run build:clean` | **`rm -rf .next`** then **`next build`** — final step of **`npm run ci`** / CI **`test-web`** |
-| `npm run start` | Run production server after `build` |
-| `npm run lint` | Run ESLint (`next lint`) |
-| `npm run typecheck` | TypeScript `tsc --noEmit` |
-| `npm run test` | Vitest unit tests (`lib/**/*.test.ts`, `hooks/**/*.test.ts`) — fast API/UX helpers |
-| `npm run ci` | Lint + typecheck + Vitest + **`build:clean`** (parity with CI **`test-web`**) |
-| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:3000` |
-| `npm run e2e:ci` | `next dev -p 3010` + headless Cypress with mocked FastAPI — complements Vitest, not a substitute |
-| `npm run ci:e2e` | **`build:clean`** then `e2e:ci` (full UI smoke with mocked backend) |
-| `npm run clean` | Deletes **`.next`** (use if dev server shows missing chunk errors like `Cannot find module './NNN.js'` or `/_next/static/chunks/*.js` **404**) |
+| Script                     | Description                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------ |
+| `npm run dev`              | Start Vite dev server (`http://localhost:5173`)                                      |
+| `npm run build`            | Vite production build → **`dist-vite/`**                                             |
+| `npm run preview`          | Serve the production build locally                                                   |
+| `npm run lint`             | Run ESLint                                                                           |
+| `npm run typecheck`        | TypeScript `tsc --noEmit`                                                            |
+| `npm run test`             | Vitest unit tests                                                                    |
+| `npm run ci`               | Lint + typecheck + Vitest + **`build:vite`** (parity with CI **`frontend-build`**)   |
+| `npm run ci:vite`          | Typecheck + Vitest + **`build:vite`**                                                |
+| `npm run e2e` / `e2e:open` | Cypress E2E (browser) against a running app; default baseUrl `http://localhost:5173` |
+| `npm run e2e:vite`         | Cypress Vite smoke + redirect specs against `dev:vite` (CI **`frontend-e2e`**)       |
 
 ## Project Structure
 
@@ -102,10 +102,13 @@ From the monorepo root, this app lives at **`apps/web/`**:
 
 ```
 apps/web/
-├── app/                 # Next.js App Router (routes, layouts, `globals.css`)
+├── app/                 # Route page components (loaded by vite/routes.ts)
 ├── components/          # Shared React components
-├── lib/                 # API client and helpers (e.g. `lib/api.ts`)
-├── next.config.js
+├── lib/                 # API client and helpers (e.g. `lib/http-client.ts`)
+├── vite/                # Vite plugins, next-compat shims, route helpers
+├── vite-entry.tsx       # SPA shell + React Router routes
+├── vite.config.ts
+├── index.html
 ├── tailwind.config.js
 ├── tsconfig.json
 └── package.json
@@ -126,13 +129,13 @@ python3 apps/api/server/main.py
 
 1. **Node 20+** — match **`.nvmrc`**; run `node -v`.
 2. **Install & build** — from `apps/web`: `npm ci` (or `npm install`), then `npm run dev` or `npm run ci` to match CI.
-3. **Environment** — copy **`.env.example`** → **`.env.local`**. Set **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`) so NextAuth can issue sessions. **`NEXTAUTH_URL`** should match where you open the app (e.g. `http://localhost:3000`).
+3. **Environment** — copy **`.env.example`** → **`.env.local`**. Set **`NEXTAUTH_SECRET`** (e.g. `openssl rand -base64 32`) so auth can issue sessions. **`NEXTAUTH_URL`** should match where you open the app (e.g. `http://localhost:5173`).
 4. **API must be up** — the UI calls **`NEXT_PUBLIC_API_URL`** (default `http://localhost:8000`). Login and most actions use the FastAPI backend; if the API is down, the home page shows **offline** and login will fail.
 5. **GitHub OAuth** — optional. If **`GITHUB_ID`** / **`GITHUB_SECRET`** are unset, NextAuth still runs with a placeholder provider; use the **`/login`** form (FastAPI `/auth/login`) for username/password.
 
 ## Training console
 
-The **Training** page calls `POST /training/start`. Native trainer `.soul` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (*Checkpoint vocabulary*).
+The **Training** page calls `POST /training/start`. Native trainer `.soul` files on the API host embed `stoi` / `itos` / `chars` for fair `cli.py eval`; formats and caveats are in [docs/policies/CONTRIBUTING.md](../../docs/policies/CONTRIBUTING.md) (_Checkpoint vocabulary_).
 
 ## License
 

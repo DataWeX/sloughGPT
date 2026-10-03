@@ -33,30 +33,31 @@ services:
     networks:
       - sloughgpt-net
 
-  # ─── Web UI (Next.js) ─────────────────────────────────────────────
+  # ─── Web UI (Vite static SPA — Phase 6 cutover) ───────────────────
   web:
     build:
       context: ../..
-      dockerfile: apps/web/Dockerfile
+      dockerfile: apps/web/Dockerfile.vite
+      args:
+        API_BASE: http://api:8000
     container_name: sloughgpt-web
     image: sloughgpt/web:latest
     ports:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://api:8000
-      - NODE_ENV=production
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:3000"]
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 30s
+      start_period: 15s
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: "0.5"
+          memory: 128M
+          cpus: "0.25"
     networks:
       - sloughgpt-net
     depends_on:

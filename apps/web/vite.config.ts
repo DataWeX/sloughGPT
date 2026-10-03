@@ -1,18 +1,57 @@
 import path from 'node:path'
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { apiRoutesPlugin } from './vite/api-middleware-plugin'
 import { redirectsPlugin } from './vite/redirect-plugin'
 
-// Phase 0 migration spike — Vite coexists with Next.
-// Maps next/* onto local compat shims so existing AppLayout/Sidebar work unchanged.
-// Does NOT replace `next dev` / `next build`.
+// Vite is the single web build stack (Next.js coexistence removed).
+// Maps next/* onto local compat shims so App Router page components work unchanged
+// (aliases remain as a safety net for codemoded client code).
 //
-// Phase 2: apiRoutesPlugin serves planner/calendar app/api route handlers in dev.
-// Phase 3: client code codemods onto @/vite/next-compat/* (aliases remain as safety net).
-// Phase 4: redirectsPlugin 307s legacy paths (proxy.ts parity via lib/redirects.ts).
+// apiRoutesPlugin serves planner/calendar app/api route handlers in dev.
+// redirectsPlugin 307s legacy paths (proxy.ts parity via lib/redirects.ts).
+//
+// Env: loadEnv reads .env.local / .env / .env.[mode] so NEXT_PUBLIC_API_URL
+// points the client at the edge (:8080) without exporting shell vars.
+const env = loadEnv('development', __dirname, '')
+const apiUrl = env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const nodeEnv = env.NODE_ENV || process.env.NODE_ENV || 'development'
+
+/**
+ * Vite 8 applies `define` to bundled builds / SSR, but client modules in
+ * classic dev are `isBundled: false` and the built-in define plugin skips
+ * them. Inline `process.env.NEXT_PUBLIC_*` ourselves so .env.local wins
+ * in the browser without `experimental.bundledDev`.
+ */
+function inlinePublicEnv(values: Record<string, string>) {
+  return {
+    name: 'inline-public-env',
+    transform(code: string, id: string) {
+      if (id.includes('node_modules')) return null
+      let out = code
+      let changed = false
+      for (const [key, val] of Object.entries(values)) {
+        const re = new RegExp(`process\\.env\\.${key}`, 'g')
+        if (re.test(out)) {
+          out = out.replace(re, JSON.stringify(val))
+          changed = true
+        }
+      }
+      return changed ? { code: out, map: null } : null
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), redirectsPlugin(), apiRoutesPlugin()],
+  plugins: [
+    react(),
+    redirectsPlugin(),
+    apiRoutesPlugin(),
+    inlinePublicEnv({
+      NEXT_PUBLIC_API_URL: apiUrl,
+      NODE_ENV: nodeEnv,
+    }),
+  ],
   root: __dirname,
   publicDir: 'public',
   server: {
@@ -48,7 +87,6 @@ export default defineConfig({
         find: /^next-auth\/react$/,
         replacement: path.resolve(__dirname, 'vite/next-compat/next-auth.tsx'),
       },
-      { find: /^v86$/, replacement: path.resolve(__dirname, 'lib/node-builtin-stub.ts') },
       { find: /^react$/, replacement: path.resolve(__dirname, '../../node_modules/react') },
       { find: /^react-dom$/, replacement: path.resolve(__dirname, '../../node_modules/react-dom') },
     ],
@@ -56,16 +94,11 @@ export default defineConfig({
     preserveSymlinks: true,
   },
   define: {
-    'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(
-      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
-    ),
-    'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
+    'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(apiUrl),
+    'process.env.NODE_ENV': JSON.stringify(nodeEnv),
   },
   build: {
     outDir: 'dist-vite',
     emptyOutDir: true,
-  },
-  ssr: {
-    external: ['next'],
   },
 })

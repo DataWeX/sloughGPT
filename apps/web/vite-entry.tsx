@@ -1,7 +1,6 @@
 /**
- * Phase 1 Vite entry — AppLayout shell + every app/(app) route via import.meta.glob.
- * Coexists with Next (index.html is ignored by next dev/build).
- * Phase 4: legacy REDIRECTS mount before discovered routes (proxy.ts shadowing).
+ * Vite entry — AppLayout shell + every app/(app) route via import.meta.glob.
+ * Legacy REDIRECTS mount before discovered routes (redirects.ts parity).
  */
 import './app/globals.css'
 
@@ -10,6 +9,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 
 import AppLayout from '@/components/AppLayout'
+import AppNotFound from '@/app/not-found'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import { ModelProvider } from '@/contexts/ModelContext'
 import { LocaleProvider } from '@/hooks/useLocale'
@@ -43,12 +43,9 @@ function Shell() {
 }
 
 function NotFound() {
-  return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
-      <p className="text-2xl font-semibold">404</p>
-      <p className="text-sm text-muted-foreground">This page could not be found.</p>
-    </div>
-  )
+  // Route-layer parity: reuse the real app/not-found.tsx instead of a divergent
+  // placeholder (spec not-found-page expects its h1 + Home link).
+  return <AppNotFound />
 }
 
 function App() {

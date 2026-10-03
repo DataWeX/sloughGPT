@@ -30,7 +30,7 @@ build() {
 
     log "Building Web image..."
     docker build -t "$REGISTRY/sloughgpt-web:$TAG" \
-        -f "$REPO_ROOT/apps/web/Dockerfile" "$REPO_ROOT"
+        -f "$REPO_ROOT/apps/web/Dockerfile.vite" "$REPO_ROOT"
 }
 
 push() {

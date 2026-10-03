@@ -1,1 +1,9 @@
 cypress/
+dist-vite/
+.next/
+.next-dev/
+.next-build-test/
+node_modules/
+coverage/
+public/
+*.d.ts

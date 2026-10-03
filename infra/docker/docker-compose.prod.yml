@@ -124,11 +124,11 @@ services:
     networks:
       - sloughgpt-net
 
-  # ─── Web UI (Next.js) ────────────────────────────────────────
+  # ─── Web UI (Vite static SPA — Phase 6 cutover) ─────────────────
   web:
     build:
       context: ../..
-      dockerfile: apps/web/Dockerfile
+      dockerfile: apps/web/Dockerfile.vite
     container_name: sloughgpt-web
     image: sloughgpt/web:${VERSION:-latest}
     environment:

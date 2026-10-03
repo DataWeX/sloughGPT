@@ -56,7 +56,7 @@ jobs:
         working-directory: apps/web
 
   frontend-build:
-    name: Next.js build
+    name: Vite build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,15 +71,35 @@ jobs:
         working-directory: apps/web
       - run: npm ci --omit=peer
         working-directory: packages/strui
-      - run: npm run build
+      - name: Ensure @sloughgpt/strui symlink
+        run: |
+          if [ ! -L node_modules/@sloughgpt/strui ] && [ ! -d node_modules/@sloughgpt/strui ]; then
+            mkdir -p node_modules/@sloughgpt
+            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
+          fi
         working-directory: apps/web
+      - name: Typecheck
+        run: npx tsc --noEmit
+        working-directory: apps/web
+      - name: Unit tests
+        run: npx vitest run
+        working-directory: apps/web
+      - name: Vite production build
+        run: npm run build:vite
+        working-directory: apps/web
+      - name: Assert dist-vite
+        run: test -f dist-vite/index.html
+        working-directory: apps/web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-vite
+          path: apps/web/dist-vite
+          retention-days: 7
 
   frontend-e2e:
     name: E2E tests
     runs-on: ubuntu-latest
     needs: [frontend-build]
-    env:
-      NEXTAUTH_SECRET: ci-test-secret
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -93,9 +113,15 @@ jobs:
         working-directory: apps/web
       - run: npm ci --omit=peer
         working-directory: packages/strui
-      - run: npm run build
+      - name: Ensure @sloughgpt/strui symlink
+        run: |
+          if [ ! -L node_modules/@sloughgpt/strui ] && [ ! -d node_modules/@sloughgpt/strui ]; then
+            mkdir -p node_modules/@sloughgpt
+            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
+          fi
         working-directory: apps/web
-      - run: npx start-server-and-test "npx next start -p 3010" http://localhost:3010 "npx cypress run --config baseUrl=http://localhost:3010"
+      - name: Cypress (Vite smoke + redirects)
+        run: npm run e2e:vite
         working-directory: apps/web
 
   python-checks:
@@ -143,3 +169,21 @@ jobs:
       - name: Check feature tags
         run: |
           PYTHONPATH=packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
+
+  # Doc-vs-code parity. The Router Playbook used to be a prose checklist
+  # ("grep -c _internal <router> = 0"), which is how the documented figures
+  # drifted from the code without anyone noticing. This runs the executable
+  # form: route tables, API.md counts, per-router tests, and the
+  # parity-claims contract block in docs/DOC_VS_CODE_GAP_AUDIT.md are all
+  # parsed and diffed against code. Exit 1 fails the build.
+  # Pure stdlib (ast, pathlib, json) - no dependency install needed.
+  doc-code-parity:
+    name: Doc/code parity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check doc-vs-code parity
+        run: python3 scripts/check_docs_api_parity.py

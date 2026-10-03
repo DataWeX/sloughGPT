@@ -191,9 +191,9 @@ jobs:
         working-directory: apps/web
         run: npx vitest run
 
-      - name: Build
+      - name: Vite build
         working-directory: apps/web
-        run: npx next build --webpack
+        run: npm run build:vite
 
   # ─── Python SDK tests ──────────────────────────────────────────
   test-sdk-py:
@@ -262,7 +262,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: apps/web/Dockerfile
+          file: apps/web/Dockerfile.vite
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
