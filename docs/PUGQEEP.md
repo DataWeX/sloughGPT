@@ -41,6 +41,7 @@ fallback is what guarantees the system degrades to _lossless_, never to _wrong_.
 ```
 PGQ (facade)
   ├── Engine — process dispatch, Pools, Stems
+  ├── Pipe — bounded execution admission (ProcessQueue + framed channel)
   ├── Tree / ModelTree — compresses arrays into Points
   │     └── PointLibrary — stores Points
   ├── TaskQueue — priority task execution
@@ -81,8 +82,9 @@ model_tree.load_weights(model.state_dict(), num_workers=4)
 weight = model_tree.get_weight("blocks.0.attn.c_attn.weight")
 
 # Process management
-future = engine.submit(my_fn, arg1, arg2)
-result = future.result(timeout=10.0)
+proc = engine.spawn(my_fn, arg1, arg2)
+engine.wait(timeout=10.0)
+print(proc.result)
 ```
 
 ## Point interface
@@ -289,7 +291,7 @@ PENDING → RUNNING → COMPLETED
 
 ## Engine
 
-Process dispatch with Trees and Stems.
+Process dispatch with Pools and Stems.
 
 ```python
 from domains.infrastructure.pugqeep import Engine
@@ -340,6 +342,28 @@ CREATED → READY → RUNNING → COMPLETED
 | `parent_id`    | `Optional[str]` | Parent process ID               |
 | `children_ids` | `List[str]`     | Child process IDs               |
 
+## Pipe (bounded execution)
+
+`Pipe` is the single admission door for the execution stack — its owned
+`ProcessQueue` makes the stack's diameter knowable. Spawning is **fork-only**
+(own `os.fork()` wrapper, no `multiprocessing`), and child I/O runs over a
+socketpair with a framed wire protocol.
+
+```python
+from domains.infrastructure.pugqeep import Pipe, ProcessQueue, PipeClosed
+
+pipe = Pipe(limit=64)          # bounded: capacity hit => block (backpressure)
+proc = engine.spawn(fn, arg)   # admission is the FIRST mutation in spawn
+pipe.close()                   # Engine.stop() closes it; run()/dispatch() re-open
+```
+
+- **Bound** — at capacity `put()` blocks on a `Condition`; no visited-set rejection.
+- **`_retire_locked()`** runs on read and only at the ceiling (not per admission).
+- **Ownership** — standalone `Pool` mints its own pipe; `Engine.pool()` injects
+  Engine's. `Pool.shutdown()` closes only a pipe it minted (`_owns_pipe`).
+- **`PipeClosed`** is raised once the pipe is closed — import it from
+  `domains.infrastructure.pugqeep`, never `domain.infrastructure._internal`.
+
 ## Compression strategies
 
 ### Vector quantization (cluster)
@@ -378,7 +402,7 @@ Accuracy:  ~80-95% (varies by pattern)
 
 - `PointLibrary` uses `threading.RLock` for all mutations
 - `ProducerConsumerQueue` uses `queue.PriorityQueue` (thread-safe)
-- `Engine._processes` and `Engine._trees` use `threading.Lock`
+- `Engine._processes` and `Engine._pools` use `threading.Lock`
 - `TaskQueue` operations are atomic (single-threaded dispatch)
 
 ## Integration with CancelManager
@@ -403,11 +427,14 @@ except Exception as e:
 
 ```bash
 # All pugqeep tests
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep*.py tests/test_producer_consumer.py -v
+PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
+  -m pytest packages/core-py/tests/test_pugqeep*.py packages/core-py/tests/test_producer_consumer.py -q
 
 # Specific suites
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep_point_interface.py -v  # Point protocol + views
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep_parallel.py -v         # Parallel batch ops
-PYTHONPATH=. python3 -m pytest tests/test_pugqeep_producer_consumer.py -v # Integration tests
-PYTHONPATH=. python3 -m pytest tests/test_producer_consumer.py -v         # Queue unit tests
+PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
+  -m pytest packages/core-py/tests/test_pugqeep_point_interface.py -q  # Point protocol + views
+PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
+  -m pytest packages/core-py/tests/test_pugqeep_parallel.py -q         # Parallel batch ops
+PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
+  -m pytest packages/core-py/tests/test_pugqeep_pipe.py -q             # Bounded execution: Pipe/ProcessQueue
 ```

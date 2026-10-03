@@ -24,6 +24,7 @@ Single source of truth for navigation. Read this first.
 | **DOMAIN_CONSOLIDATION.md**       | CCGT four + core-py merge    |
 | **process-guard-architecture.md** | Process isolation design     |
 | **PRODUCER_CONSUMER_QUEUE.md**    | Queue pattern                |
+| **PUGQEEP.md**                    | PGQ: points, pools, Pipe     |
 
 ## Features
 
