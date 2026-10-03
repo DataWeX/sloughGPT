@@ -4,9 +4,15 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-03 ~06:35 — card `19cd41dc` downcraft compression
-landed (see Landed below). Earlier the same day: journey suites repointed to
-`:5173` (gate9's route-smoke F-class was a stale port, not a missing server).
+**Last update**: 2026-10-03 ~07:45 — `fix/journey-test-gates` landed on user
+sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`, see Landed).
+Earlier the same day: the **avion stack** — cards `13f50db7` journeys takeover
++ `e26dc68c` drivers + `24676ff2` event logger + `553da7a7` agent loop, see
+Landed — and downcraft compression (card `19cd41dc`); journey suites repointed
+to `:5173` (gate9's route-smoke F-class was a stale port, not a missing
+server). Gates and benchmarks now run on conda `sloughgpt` + `PYTHONPATH` —
+the root `.venv` is NOT authoritative (its green was hiding 2 zstd failures;
+`zstandard` is now installed into conda, user-approved).
 
 ## Sync recipe
 
@@ -26,7 +32,49 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `4d6a056d3`)
+## Landed on main (origin/main = `175d7db8c`)
+
+- **2026-10-03 · `fix/journey-test-gates` landed (user sign-off).** merge
+  `e081ea9f4` (46 files) + stabilization `175d7db8c`: conda-first
+  `scripts/python` resolver (`domain.shared.find_server_python`), journey
+  module `skipif` server gate + `_web_is_ready`, `hf-*` import tests restored
+  (a preserve-commit had regressed them to `kaggle-*`), `SMOKE_ROUTES`
+  restored (+28 route smokes), stale `Import`→`Add file` labels, gateway
+  `:8080`-aware API assertion, bounded poll-waits for fixed-sleep races.
+  Validation (conda + `PYTHONPATH`, load avg 11.6): **journeys 103/103,
+  computer_use 21/21, e2e 9/10** — sole red is `config_elements` (training
+  config gated behind the guided-setup flow; UX-owner call, drift card). This
+  push also carried the avion session's own main-merges (they had merged but
+  not pushed).
+
+- **2026-10-03 · cards `13f50db7` `e26dc68c` `24676ff2` `553da7a7` — the avion
+  stack lands** (4 branches, carried on shared main by the gates session's
+  push):
+  - `feat/avion-journeys` (takeover of the dormant journeys card): the 6
+    journey commits land; the `test_user_journeys.py` overlap with
+    `fix/journey-test-gates` was resolved by keeping the avion port and
+    porting all 5 gates deltas into it (`scripts/python` usage, `:5173`
+    default + comment, `_web_is_ready` + module skip-guard, 4 training routes
+    → 103 tests, DatasetsImport poll already equivalent in avion form).
+  - `feat/avion-unify-drivers`: journeys / `run_ux_flows.py` /
+    `screenshot_headers.py` drive avion `SyncRunner` instead of ad-hoc
+    Playwright (`force=`, `PageControls`); `arken`/`voyager` shims remain.
+  - `feat/avion-event-logger`: stdlib-only write-through JSONL journal +
+    modular `EventSink` API — `tests/test_stdlib_only.py` proves it never
+    imports `domain/`.
+  - `feat/avion-agent-loop`: bounded awaits, honest deadline stop, retry only
+    the pure-predict path, transcript write safety.
+  - **Gates (conda + `PYTHONPATH`)**: avion **366 passed, 1 skipped** (skip =
+    the no-websockets degradation test, env-conditional — correct here);
+    live journeys **103/103** (avion port validated pre- and post-
+    stabilization); ruff clean. **Benchmarks (authoritative env, load <3.5)**:
+    agent loop 21.7k steps/s bare / 15.7k with JSONL transcript; event logger
+    86.7k ev/s — broken sink isolated at ~journal-only, +5 sinks costs ~5%;
+    downcraft e2e sha256 `ok` incl. the zstd-3 row.
+  - **Insight → candidate**: residual journey failures that bucket to stale
+    selectors are selector drift — a selector-contract probe validating
+    journey selectors against the live DOM would fail loudly instead of as
+    scattered journey F's.
 
 - **2026-10-03 · card `19cd41dc` — download compression lands in the downcraft
   path.** `feat/downcraft-compression`: decoded byte-space enforced across the
@@ -75,10 +123,6 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
-- `fix/journey-test-gates` (3 commits, validated, **awaiting sign-off**) — on
-  rebase, take main's `:5173` + `SLO_WEB_URL` BASE lines (they conflict); its
-  module-level server `skipif` (no-server case) + `test_hf_*` rework are still
-  wanted — the rework fixes 7 of the 11 residual journey failures.
 - Root-repo session on `feat/pipe-bounded-execution`; ~40 `feat/*` worktrees
   active — `git branch -vv` + the kanban board name the owners.
 - The 683 baseline failures are known drift → card `56b49cf1` (drift baseline).
@@ -86,6 +130,14 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Gotchas that cost hours (add yours here)
 
+- **`PYTHONNOUSERSITE=1` (AGENTS.md) breaks browser suites**: playwright is
+  installed in `~/.local/lib/python3.12/site-packages/` (user site), not in
+  the conda env — with the flag, `import playwright` dies and every
+  Playwright suite fails at fixture setup. Browser suites
+  (`test_user_journeys`, `test_computer_use_*`, `test_e2e_*`) currently run
+  *without* the flag — green, no `tests`-shadow hit observed for
+  `packages/core-py/tests`. Fix = install playwright into the conda env
+  (needs user approval), then the flag can apply everywhere.
 - `app_planner` editable install (`.pth`) points at the **root repo** copy —
   test a worktree's planner code with
   `PYTHONPATH=<worktree>/packages/app-planner/src`. **Worse: any planner
