@@ -26,7 +26,7 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `de2fe6cf4`)
+## Landed on main (origin/main = `4d6a056d3`)
 
 - **2026-10-03 · card `19cd41dc` — download compression lands in the downcraft
   path.** `feat/downcraft-compression`: decoded byte-space enforced across the
