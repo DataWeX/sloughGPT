@@ -12,6 +12,7 @@ description: >
 ## Overview
 
 This skill covers two areas:
+
 1. **Python conventions** — imports, types, error handling, docstrings, naming, logging, testing, file organization
 2. **Systems architecture** — kernel, VM, devices, init system, shell TUI, Buildroot
 
@@ -38,6 +39,7 @@ from .base import Logger, LogLevel
 ```
 
 **Rules:**
+
 - Use `from __future__ import annotations` in production files (not required in tests)
 - Relative imports within packages: `from .base import Logger`
 - Lazy imports for optional deps (torch, etc.):
@@ -50,6 +52,7 @@ from .base import Logger, LogLevel
 - Use `TYPE_CHECKING` guard for type-only imports:
   ```python
   from typing import TYPE_CHECKING
+
   if TYPE_CHECKING:
       from domains.training.tracking import ExperimentTracker
   ```
@@ -61,15 +64,16 @@ def get_batch(self, split: str = "train") -> tuple:
     """Get a batch of data."""
     ...
 
+
 def prepare_data(
     data_path: str,
     block_size: int,
     tokenizer: Optional[Any] = None,
-) -> tuple:
-    ...
+) -> tuple: ...
 ```
 
 **Rules:**
+
 - Use `typing` module imports: `Optional[str]`, `Dict[str, Any]`, `List[str]`
 - No PEP 604 union syntax (`str | None`) — use `Optional[str]`
 - Annotate public method return types: `-> None`, `-> str`, `-> dict[str, Any]`
@@ -85,6 +89,7 @@ raise ValueError(f"Cannot resume from '{resume_path}': checkpoint is unreadable 
 # Infrastructure — degrade gracefully
 try:
     from domains.infrastructure.output_buffer import install_log_bridge
+
     install_log_bridge()
 except Exception as e:
     logger.debug("OutputBuffer bridge unavailable: %s", e)
@@ -92,6 +97,7 @@ except Exception as e:
 ```
 
 **Rules:**
+
 - Domain logic: raise `ValueError` or `KeyError` with descriptive f-string messages
 - Infrastructure: catch broad exceptions, log at debug/warning level, continue
 - No custom exception classes unless the domain specifically needs them
@@ -122,6 +128,7 @@ def prepare_data(
 ```
 
 **Rules:**
+
 - Module docstrings: describe purpose, usage examples with `Usage::`
 - Public functions: `Args:` and `Returns:` blocks
 - Private helpers: one-line docstring or none
@@ -133,6 +140,7 @@ def prepare_data(
 from dataclasses import dataclass, field
 from enum import Enum
 
+
 # Config DTOs — use @dataclass
 @dataclass
 class TrainerConfig:
@@ -142,23 +150,26 @@ class TrainerConfig:
     epochs: int = 10
     learning_rate: float = 3e-4
 
+
 # Constants — use Enum
 class DatasetType(Enum):
     TEXT = "text"
     CODE = "code"
     CONVERSATION = "conversation"
 
+
 # Performance-critical — use __slots__
 class SloughGPTBlock:
     __slots__ = ("ln_1", "attn", "ln_2", "mlp")
     ...
 
+
 # Everything else — plain classes
-class CheckpointManager:
-    ...
+class CheckpointManager: ...
 ```
 
 **Rules:**
+
 - `@dataclass` for config/value objects
 - `Enum` for type-safe constants
 - `__slots__` only in hot paths (neural network, compression)
@@ -172,9 +183,13 @@ def setup_logging() -> None: ...
 def get_request_id() -> str: ...
 def _format_human(record: logging.LogRecord) -> str: ...
 
+
 # Classes — PascalCase
 class CLILogger(Logger): ...
+
+
 class TrainerConfig: ...
+
 
 # Constants — UPPER_SNAKE_CASE
 _NO_COLOR = os.environ.get("NO_COLOR")
@@ -198,15 +213,14 @@ import logging
 logger = logging.getLogger("slo.my_module")
 
 # Structured logging with extra
-logger.info("Registered: %s (%s)", config.name, config.dataset_type.value,
-    extra={"tag": "TRAIN"})
+logger.info("Registered: %s (%s)", config.name, config.dataset_type.value, extra={"tag": "TRAIN"})
 
 # Lazy %-style formatting (not f-strings in log calls)
-logger.info("Step %d/%d | Loss: %.4f", step, total, loss,
-    extra={"tag": "TRAIN"})
+logger.info("Step %d/%d | Loss: %.4f", step, total, loss, extra={"tag": "TRAIN"})
 ```
 
 **Rules:**
+
 - Module-level: `logger = logging.getLogger("slo.<name>")`
 - Use `extra={"tag": "TAG"}` for structured fields
 - Lazy `%s` formatting, not f-strings in log calls
@@ -217,6 +231,7 @@ logger.info("Step %d/%d | Loss: %.4f", step, total, loss,
 ```python
 import pytest
 from unittest.mock import patch
+
 
 class TestMyFeature:
     """Tests for MyFeature."""
@@ -232,11 +247,14 @@ class TestMyFeature:
         result = my_function("input")
         assert result == "expected"
 
-    @pytest.mark.parametrize("input,expected", [
-        ("a", 1),
-        ("b", 2),
-        ("c", 3),
-    ])
+    @pytest.mark.parametrize(
+        "input,expected",
+        [
+            ("a", 1),
+            ("b", 2),
+            ("c", 3),
+        ],
+    )
     def test_parametrized(self, input, expected):
         assert my_function(input) == expected
 
@@ -247,6 +265,7 @@ class TestMyFeature:
 ```
 
 **Rules:**
+
 - Class-based grouping by feature area
 - `@pytest.fixture(autouse=True)` for setup/teardown
 - `@pytest.mark.parametrize` for multiple test cases
@@ -280,6 +299,7 @@ def my_function() -> None:
 ```
 
 **Rules:**
+
 - Module docstring at top
 - `# ── Section ──────────` dividers in large files
 - `__all__` in `__init__.py` for public API
@@ -304,9 +324,11 @@ LAZY_IMPORTS = {
 
 __all__ = ["Logger", "LogLevel", "LogFormatter", "TrainingUX"]
 
+
 def __getattr__(name):
     if name in LAZY_IMPORTS:
         import importlib
+
         module = importlib.import_module(LAZY_IMPORTS[name], package=__name__)
         obj = getattr(module, name)
         globals()[name] = obj
@@ -326,7 +348,7 @@ def __getattr__(name):
 - Extending the x86 VM (new instructions, syscalls, RBAC roles)
 - Building or configuring Buildroot images
 - Working on the shell TUI (pane engine, surfaces, borders, cursor lifecycle)
-- Working on VFS (mount points, /dev/*, /proc/*, host fs bridging)
+- Working on VFS (mount points, /dev/_, /proc/_, host fs bridging)
 
 ### Architecture Reference
 
@@ -367,29 +389,29 @@ def __getattr__(name):
 
 ### Key Files
 
-| Component | File | Key Classes |
-|-----------|------|-------------|
-| Kernel | `packages/core-py/domains/shell/kernel.py` | `Kernel`, `Scheduler`, `TensorMemory`, `SyscallTable` |
-| Init | `packages/core-py/domains/shell/init.py` | `InitSystem`, `ServiceManager`, `ServiceDefinition` |
-| Devices | `packages/core-py/domains/shell/devices.py` | `DeviceSystem`, `DeviceBus` |
-| Device Drivers | `packages/core-py/domains/shell/device_system.py` | `DeviceDriver`, fd-based I/O |
-| VFS | `packages/core-py/domains/shell/addons/filesystem.py` | `VFSAddon`, `MountTable` |
-| x86 VM | `packages/core-py/domains/shell/vm.py` | `X86CPU`, `X86Assembler`, `ProcessTable`, `Scheduler` |
-| VM Engine | `packages/core-py/domains/shell/vm_engine.py` | `VMEngine`, `Breakpoint`, `StepEvent` |
-| VM Syscalls | `packages/core-py/domains/shell/vm.py` | `SYSCALL_TABLE` (INT 0x80 dispatch) |
-| VM RBAC | `packages/core-py/domains/shell/vm_permissions.py` | `Role`, `Permission`, `X86RBAC` |
-| VM Training | `packages/core-py/domains/shell/vm_training_bridge.py` | `TrainingBridge` |
-| VM Programs | `packages/core-py/domains/shell/vm_programs.py` | Built-in assembly programs |
-| Addons | `packages/core-py/domains/shell/addons/` | `neural.py`, `filesystem.py`, `shell_ui.py` |
-| Runtime | `packages/core-py/domains/shell/runtime.py` | `DaitRuntime` (boot/shutdown orchestration) |
-| Shell TUI | `packages/core-py/domains/shell/tui_repl.py` | `TuiRepl`, `_draw_borders`, `_render_*` |
-| Pane Engine | `packages/core-py/domains/shell/pane.py` | `Rect`, `Border`, `Pane`, `PaneLayout` |
-| Surfaces | `packages/core-py/domains/shell/surface.py` | `TextSurface`, `LogSurface`, `clip`, `_display_width` |
-| Console | `packages/core-py/domains/shell/console.py` | `Console`, `_TuiSpinner` |
-| Shell IO | `packages/core-py/domains/shell/io.py` | `ShellIO`, `ConsoleIO`, `MemoryIO` |
-| v86 Controller | `apps/web/lib/v86-controller.ts` | `V86Controller` |
-| v86 Hook | `apps/web/hooks/useV86.ts` | `useV86()` |
-| VM API | `apps/api/server/routers/vm.py` | `/vm/run`, `/vm/builtins`, `/vm/info` |
+| Component      | File                                                   | Key Classes                                           |
+| -------------- | ------------------------------------------------------ | ----------------------------------------------------- |
+| Kernel         | `packages/core-py/domains/shell/kernel.py`             | `Kernel`, `Scheduler`, `TensorMemory`, `SyscallTable` |
+| Init           | `packages/core-py/domains/shell/init.py`               | `InitSystem`, `ServiceManager`, `ServiceDefinition`   |
+| Devices        | `packages/core-py/domains/shell/devices.py`            | `DeviceSystem`, `DeviceBus`                           |
+| Device Drivers | `packages/core-py/domains/shell/device_system.py`      | `DeviceDriver`, fd-based I/O                          |
+| VFS            | `packages/core-py/domains/shell/addons/filesystem.py`  | `VFSAddon`, `MountTable`                              |
+| x86 VM         | `packages/core-py/domains/shell/vm.py`                 | `X86CPU`, `X86Assembler`, `ProcessTable`, `Scheduler` |
+| VM Engine      | `packages/core-py/domains/shell/vm_engine.py`          | `VMEngine`, `Breakpoint`, `StepEvent`                 |
+| VM Syscalls    | `packages/core-py/domains/shell/vm.py`                 | `SYSCALL_TABLE` (INT 0x80 dispatch)                   |
+| VM RBAC        | `packages/core-py/domains/shell/vm_permissions.py`     | `Role`, `Permission`, `X86RBAC`                       |
+| VM Training    | `packages/core-py/domains/shell/vm_training_bridge.py` | `TrainingBridge`                                      |
+| VM Programs    | `packages/core-py/domains/shell/vm_programs.py`        | Built-in assembly programs                            |
+| Addons         | `packages/core-py/domains/shell/addons/`               | `neural.py`, `filesystem.py`, `shell_ui.py`           |
+| Runtime        | `packages/core-py/domains/shell/runtime.py`            | `DaitRuntime` (boot/shutdown orchestration)           |
+| Shell TUI      | `packages/core-py/domains/shell/tui_repl.py`           | `TuiRepl`, `_draw_borders`, `_render_*`               |
+| Pane Engine    | `packages/core-py/domains/shell/pane.py`               | `Rect`, `Border`, `Pane`, `PaneLayout`                |
+| Surfaces       | `packages/core-py/domains/shell/surface.py`            | `TextSurface`, `LogSurface`, `clip`, `_display_width` |
+| Console        | `packages/core-py/domains/shell/console.py`            | `Console`, `_TuiSpinner`                              |
+| Shell IO       | `packages/core-py/domains/shell/io.py`                 | `ShellIO`, `ConsoleIO`, `MemoryIO`                    |
+| v86 Controller | `apps/web/lib/v86-controller.ts`                       | `V86Controller`                                       |
+| v86 Hook       | `apps/web/hooks/useV86.ts`                             | `useV86()`                                            |
+| VM API         | `apps/api/server/routers/vm.py`                        | `/vm/run`, `/vm/builtins`, `/vm/info`                 |
 
 ### Kernel Development
 
@@ -397,21 +419,21 @@ def __getattr__(name):
 
 The x86 VM dispatches syscalls via `INT 0x80` with `eax` = syscall number:
 
-| Number | Name | Args | Returns | RBAC |
-|--------|------|------|---------|------|
-| 1 | SYS_EXIT | code | — | USER |
-| 2 | SYS_PRINT | addr, len | — | USER |
-| 3 | SYS_SCAN | addr, max | bytes_read | USER |
-| 4 | SYS_OPEN | path_addr, mode | fd | USER |
-| 5 | SYS_READ | fd, buf_addr, len | bytes_read | USER |
-| 6 | SYS_WRITE | fd, buf_addr, len | bytes_written | USER |
-| 7 | SYS_CLOSE | fd | 0 | USER |
-| 8 | SYS_DEV_OPEN | dev_id | fd | ADMIN |
-| 9 | SYS_DEV_CALL | fd, cmd, arg_addr | result | ADMIN |
-| 10 | SYS_DEV_CLOSE | fd | 0 | ADMIN |
-| 28 | SYS_TRAIN_START | config_addr | job_id | ADMIN |
-| 29 | SYS_TRAIN_STATUS | job_id | status | ADMIN |
-| 30 | SYS_TRAIN_GET_RESULT | job_id | result_addr | ADMIN |
+| Number | Name                 | Args              | Returns       | RBAC  |
+| ------ | -------------------- | ----------------- | ------------- | ----- |
+| 1      | SYS_EXIT             | code              | —             | USER  |
+| 2      | SYS_PRINT            | addr, len         | —             | USER  |
+| 3      | SYS_SCAN             | addr, max         | bytes_read    | USER  |
+| 4      | SYS_OPEN             | path_addr, mode   | fd            | USER  |
+| 5      | SYS_READ             | fd, buf_addr, len | bytes_read    | USER  |
+| 6      | SYS_WRITE            | fd, buf_addr, len | bytes_written | USER  |
+| 7      | SYS_CLOSE            | fd                | 0             | USER  |
+| 8      | SYS_DEV_OPEN         | dev_id            | fd            | ADMIN |
+| 9      | SYS_DEV_CALL         | fd, cmd, arg_addr | result        | ADMIN |
+| 10     | SYS_DEV_CLOSE        | fd                | 0             | ADMIN |
+| 28     | SYS_TRAIN_START      | config_addr       | job_id        | ADMIN |
+| 29     | SYS_TRAIN_STATUS     | job_id            | status        | ADMIN |
+| 30     | SYS_TRAIN_GET_RESULT | job_id            | result_addr   | ADMIN |
 
 #### Adding a New Syscall
 
@@ -533,12 +555,14 @@ The v86 browser VM loads a raw disk image. After Buildroot builds:
 #### Pane Layout
 
 ```python
-layout = PaneLayout([
-    Pane("console", ratio=0.3, min_rows=3, border=Border("all")),
-    Pane("output", ratio=0.7, min_rows=3, border=Border("all")),
-    Pane("status", fixed=1),
-    Pane("input", fixed=1),
-])
+layout = PaneLayout(
+    [
+        Pane("console", ratio=0.3, min_rows=3, border=Border("all")),
+        Pane("output", ratio=0.7, min_rows=3, border=Border("all")),
+        Pane("status", fixed=1),
+        Pane("input", fixed=1),
+    ]
+)
 regions = layout.compute(term_rows, term_cols)
 ```
 

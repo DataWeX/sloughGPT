@@ -14,24 +14,29 @@ You are an engineer who always reads the docs before editing code. Follow this w
 
 Given a task, identify which area(s) it touches:
 
-| Area | Path pattern | Relevant docs |
-|------|-------------|---------------|
-| **Frontend** | `apps/web/` | `docs/UI_INTEGRATION_README.md`, `docs/API.md`, `docs/OPENWEBUI_INTEGRATION.md` |
-| **Backend API** | `apps/api/` | `docs/routers.md`, `docs/API.md`, `docs/DATA_STRUCTURE.md`, `docs/DEPLOYMENT.md` |
-| **Core Python** | `domain/` | `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`, `docs/RAG_ARCHITECTURE.md`, `docs/RAG_PATTERNS.md`, `AGENTS.md` |
-| **Training** | `domain/training/_internal/` | `docs/DEVELOPER_GUIDE.md`, `AGENTS.md` (Training Architecture section) |
-| **Infrastructure** | `infra/`, `docker-compose*`, `Dockerfile*` | `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`, `docs/ENVIRONMENT.md` |
-| **Config** | `config/` | `docs/ENVIRONMENT.md`, `docs/INSTALL.md` |
-| **SDK** | `packages/sdk-py/`, `packages/sdk-ts/` | `docs/API.md` |
-| **Soul Engine** | `domain/core/_internal/soul.py`, `domain/inference/_internal/slo_format.py` | `docs/AI_SOFTWARE_ENGINEERING.md`, `AGENTS.md` (Soul section) |
-| **Docs themselves** | `docs/` | `docs/README.md` (doc index) |
-| **CLI** | `apps/cli/` | `docs/integration/CLI_README.md`, `docs/INSTALL.md` |
-| **Testing** | `tests/`, `apps/web/cypress/` | `docs/DEVELOPER_GUIDE.md` |
-| **Uncertain** | — | `docs/README.md`, `docs/STRUCTURE.md` |
+| Area                | Path pattern                                                                | Relevant docs                                                                                                                 |
+| ------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Frontend**        | `apps/web/`                                                                 | `docs/UI_INTEGRATION_README.md`, `docs/API.md`, `docs/OPENWEBUI_INTEGRATION.md`                                               |
+| **Backend API**     | `apps/api/`                                                                 | `docs/routers.md`, `docs/API.md`, `docs/DATA_STRUCTURE.md`, `docs/DEPLOYMENT.md`                                              |
+| **Core Python**     | `domain/`                                                                   | `docs/DEVELOPER_GUIDE.md`, `docs/AI_SOFTWARE_ENGINEERING.md`, `docs/RAG_ARCHITECTURE.md`, `docs/RAG_PATTERNS.md`, `AGENTS.md` |
+| **Training**        | `domain/training/_internal/`                                                | `docs/DEVELOPER_GUIDE.md`, `AGENTS.md` (Training Architecture section)                                                        |
+| **Infrastructure**  | `infra/`, `docker-compose*`, `Dockerfile*`                                  | `docs/DEPLOYMENT.md`, `docs/DEPLOYMENT_CHECKLIST.md`, `docs/ENVIRONMENT.md`                                                   |
+| **Config**          | `config/`                                                                   | `docs/ENVIRONMENT.md`, `docs/INSTALL.md`                                                                                      |
+| **SDK**             | `packages/sdk-py/`, `packages/sdk-ts/`                                      | `docs/API.md`                                                                                                                 |
+| **Soul Engine**     | `domain/core/_internal/soul.py`, `domain/inference/_internal/slo_format.py` | `docs/AI_SOFTWARE_ENGINEERING.md`, `AGENTS.md` (Soul section)                                                                 |
+| **Docs themselves** | `docs/`                                                                     | `docs/README.md` (doc index)                                                                                                  |
+| **CLI**             | `apps/cli/`                                                                 | `docs/integration/CLI_README.md`, `docs/INSTALL.md`                                                                           |
+| **Testing**         | `tests/`, `apps/web/cypress/`                                               | `docs/DEVELOPER_GUIDE.md`                                                                                                     |
+| **Uncertain**       | —                                                                           | `docs/README.md`, `docs/STRUCTURE.md`                                                                                         |
+
+Path note: the `domain/` rows show the repo-root tree; check the target
+worktree's layout — `domain/…` and `packages/core-py/domains/…` currently
+coexist (reconciliation decision D4 pending).
 
 ## 2. Read Docs First
 
 Before writing or editing any file:
+
 1. Identify the area(s) from the mapping above
 2. Read the relevant docs listed
 3. If the task crosses multiple areas, read docs for all areas
@@ -39,6 +44,7 @@ Before writing or editing any file:
 ## 3. Apply Conventions
 
 After reading docs, apply the patterns and conventions found:
+
 - **Frontend**: Use `sl-page`, `AppRouteHeader`, `strui` components, `text-sm`/`text-base` typography
 - **Backend**: Use `TrainingSequence` protocol, SSE envelope pattern, docstrings on all public functions
 - **Core**: SloNet Tensor class, pure NumPy autograd, `_get_weights_dict()`, no PyTorch dependency
@@ -49,7 +55,7 @@ After reading docs, apply the patterns and conventions found:
 - Read the relevant source file around the lines you're changing
 - Run the appropriate tests after changes
 - Run `npx tsc --noEmit` for frontend changes
-- Run `python3 -m py_compile` for Python changes
+- Run `/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile` for Python changes
 
 ## Rules
 

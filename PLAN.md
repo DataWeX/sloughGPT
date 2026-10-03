@@ -3,6 +3,7 @@
 ## Problem
 
 Current weight loading has 3 sources of overhead:
+
 1. **Parse overhead**: safetensors parses JSON header, maps string keys to tensors
 2. **Copy overhead**: each tensor is copied from file into numpy array
 3. **Graph construction**: runtime code builds the computation pipeline by indexing into flat dict
@@ -107,16 +108,15 @@ class SLNCLoader:
         """Get weight by name — returns view into mmap'd memory."""
         offset, shape, dtype = self._tensor_map[name]
         return np.frombuffer(
-            self._file[offset:offset + np.prod(shape) * dtype.itemsize],
-            dtype=dtype
+            self._file[offset : offset + np.prod(shape) * dtype.itemsize], dtype=dtype
         ).reshape(shape)
 
     def get_block(self, block_idx: int) -> dict:
         """Get all weights for a transformer block — sequential access."""
         base = self._block_offsets[block_idx]
         return {
-            'attn_norm_w': self._view(base + self._off.an_w, ...),
-            'attn_norm_b': self._view(base + self._off.an_b, ...),
+            "attn_norm_w": self._view(base + self._off.an_w, ...),
+            "attn_norm_b": self._view(base + self._off.an_b, ...),
             # ... all block tensors
         }
 ```
@@ -146,12 +146,12 @@ def convert_to_slnc(model_id: str, output_path: str):
 
 ### Performance Expectations
 
-| Metric | Current (safetensors) | .slnc (mmap) |
-|--------|----------------------|--------------|
-| Load time | ~200ms (parse + copy) | ~1ms (mmap) |
-| Memory | 100% (full copy) | ~0% initially (demand) |
-| First token | ~200ms load + ~60ms compute | ~1ms mmap + ~60ms compute |
-| Subsequent tokens | ~60ms | ~60ms (pages already hot) |
+| Metric            | Current (safetensors)       | .slnc (mmap)              |
+| ----------------- | --------------------------- | ------------------------- |
+| Load time         | ~200ms (parse + copy)       | ~1ms (mmap)               |
+| Memory            | 100% (full copy)            | ~0% initially (demand)    |
+| First token       | ~200ms load + ~60ms compute | ~1ms mmap + ~60ms compute |
+| Subsequent tokens | ~60ms                       | ~60ms (pages already hot) |
 
 ### Migration Path
 
@@ -163,13 +163,13 @@ def convert_to_slnc(model_id: str, output_path: str):
 
 ### Files to Create/Modify
 
-| File | Action |
-|------|--------|
-| `domains/infrastructure/slnc_format.py` | NEW — header spec, converter, layout math |
-| `domains/infrastructure/slnc_loader.py` | NEW — mmap loader |
-| `domains/infrastructure/numpy_engine.py` | MODIFY — use mmap loader |
-| `domains/inference/slonet_provider.py` | MODIFY — use mmap loader |
-| `tests/test_slnc_format.py` | NEW — converter + loader tests |
+| File                                     | Action                                    |
+| ---------------------------------------- | ----------------------------------------- |
+| `domains/infrastructure/slnc_format.py`  | NEW — header spec, converter, layout math |
+| `domains/infrastructure/slnc_loader.py`  | NEW — mmap loader                         |
+| `domains/infrastructure/numpy_engine.py` | MODIFY — use mmap loader                  |
+| `domains/inference/slonet_provider.py`   | MODIFY — use mmap loader                  |
+| `tests/test_slnc_format.py`              | NEW — converter + loader tests            |
 
 ### Risks
 

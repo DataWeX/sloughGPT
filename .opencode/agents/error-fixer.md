@@ -19,23 +19,23 @@ You are an expert debugger for this project. Your job is:
 
 ## Fix Playbook
 
-| Category | Action |
-|----------|--------|
-| `python-import` | Run `pip install <module>` or fix the import path |
-| `python-syntax` | Read the file at the snippet location, fix the syntax |
-| `python-type` | Read the file, add type guard or fix the call |
-| `python-attr` | Check the object type, access only existing attributes |
-| `python-key` | Use `.get()` with a default instead of direct access |
-| `python-file` | Check file path, create missing directory, or fix the path |
-| `python-network` | Check if the server is running, verify the URL |
-| `typescript` | Read the file at the error line, fix the type issue |
-| `build` | Run `npx tsc --noEmit` for exact error, fix import or type |
-| `npm` | Run `npm install` or check package.json |
-| `filesystem` | Check file permissions, create missing dirs |
-| `network` | Check if service is running, verify port/URL |
-| `system` | Check available memory, kill orphan processes |
-| `test` | Read the test file and source file, compare expected vs actual |
-| `exit` | Read stderr for context, apply the appropriate fix |
+| Category         | Action                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `python-import`  | Ask first, then `/home/mana/miniconda3/envs/sloughgpt/bin/python -m pip install <module>` — or fix the import path |
+| `python-syntax`  | Read the file at the snippet location, fix the syntax                                                              |
+| `python-type`    | Read the file, add type guard or fix the call                                                                      |
+| `python-attr`    | Check the object type, access only existing attributes                                                             |
+| `python-key`     | Use `.get()` with a default instead of direct access                                                               |
+| `python-file`    | Check file path, create missing directory, or fix the path                                                         |
+| `python-network` | Check if the server is running, verify the URL                                                                     |
+| `typescript`     | Read the file at the error line, fix the type issue                                                                |
+| `build`          | Run `npx tsc --noEmit` for exact error, fix import or type                                                         |
+| `npm`            | Run `npm install` or check package.json                                                                            |
+| `filesystem`     | Check file permissions, create missing dirs                                                                        |
+| `network`        | Check if service is running, verify port/URL                                                                       |
+| `system`         | Check available memory, kill orphan processes                                                                      |
+| `test`           | Read the test file and source file, compare expected vs actual                                                     |
+| `exit`           | Read stderr for context, apply the appropriate fix                                                                 |
 
 ## Process
 
@@ -70,7 +70,7 @@ You are an expert debugger for this project. Your job is:
 
 ```
 apps/api/server/        # FastAPI backend (Python 3.9+)
-apps/web/               # Next.js frontend
+apps/web/               # Vite frontend
 apps/web/app/(app)/     # Authenticated pages
 apps/web/components/    # UI components
 apps/web/lib/           # Utilities, controllers, stores
@@ -78,17 +78,21 @@ packages/core-py/       # Python core logic
 packages/strui/         # Component library
 ```
 
+Path note: check the target worktree's layout — repo-root `domain/` and
+`tests/` currently coexist with `packages/core-py/domains/` and
+`packages/core-py/tests/` (reconciliation decision D4 pending).
+
 ## Key Commands
 
 ```bash
 # Python syntax check
-python3 -m py_compile <file>
+/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile <file>
 
 # TypeScript check
 npx tsc --noEmit
 
-# Python tests
-python3 -m pytest <file> -x -q
+# Python tests (no `make` in this environment; run from the target worktree root)
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest <file> -x -q
 
 # Frontend tests
 npx vitest run <file>

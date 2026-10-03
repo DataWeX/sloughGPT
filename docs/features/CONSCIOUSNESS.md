@@ -13,6 +13,7 @@
 The consciousness system is now fully implemented with:
 
 ### Frontend (apps/web)
+
 - **26 consciousness pages** with full test coverage
 - **5 UI components** (QuickActions, SidebarWidget, NotificationsPanel, MessageBadge, Onboarding)
 - **6 custom hooks** (useConsciousnessBatch, useConsciousnessLive, useConsciousnessNotifications, useConsciousnessShortcuts, useConsciousnessStats, useConsciousnessStatus)
@@ -20,38 +21,40 @@ The consciousness system is now fully implemented with:
 - **384 passing tests** across all consciousness code
 
 ### Backend (apps/api)
+
 - Consciousness router with full API endpoints
 - Self-model, qualia, and episode management
 - Training and evaluation endpoints
 
 ### Pages Implemented
-| Page | Path | Description |
-|------|------|-------------|
-| Dashboard | `/consciousness/dashboard` | Main consciousness overview |
-| Health | `/consciousness/health` | System health monitoring |
-| Training | `/consciousness/training` | Consciousness training controls |
-| Settings | `/consciousness/settings` | Configuration management |
-| All Settings | `/consciousness/all-settings` | Advanced settings |
-| Export | `/consciousness/export` | Data export functionality |
-| History | `/consciousness/history` | Episode history viewer |
-| Quickstart | `/consciousness/quickstart` | Getting started guide |
-| Compare | `/consciousness/compare` | Configuration comparison |
-| Benchmark | `/consciousness/benchmark` | Performance benchmarking |
-| API Explorer | `/consciousness/api-explorer` | Interactive API testing |
-| Testing | `/consciousness/testing` | Debugging and testing tools |
-| Docs | `/consciousness/docs` | API documentation |
-| Alerts | `/consciousness/alerts` | Alert management |
-| Statistics | `/consciousness/statistics` | Analytics dashboard |
-| Analytics | `/consciousness/analytics` | Trend analysis |
-| Help | `/consciousness/help` | Help and FAQ |
-| Playground | `/consciousness/playground` | Interactive experimentation |
-| Debug | `/consciousness/debug` | Debugging tools |
-| Test Runner | `/consciousness/test-runner` | Automated testing |
-| Versions | `/consciousness/versions` | Version history |
-| Monitor | `/consciousness/monitor` | Real-time monitoring |
-| Personality | `/consciousness/personality` | Personality management |
-| Master | `/consciousness/master` | Master dashboard |
-| Insights | `/consciousness/insights` | AI-powered insights |  
+
+| Page         | Path                          | Description                     |
+| ------------ | ----------------------------- | ------------------------------- |
+| Dashboard    | `/consciousness/dashboard`    | Main consciousness overview     |
+| Health       | `/consciousness/health`       | System health monitoring        |
+| Training     | `/consciousness/training`     | Consciousness training controls |
+| Settings     | `/consciousness/settings`     | Configuration management        |
+| All Settings | `/consciousness/all-settings` | Advanced settings               |
+| Export       | `/consciousness/export`       | Data export functionality       |
+| History      | `/consciousness/history`      | Episode history viewer          |
+| Quickstart   | `/consciousness/quickstart`   | Getting started guide           |
+| Compare      | `/consciousness/compare`      | Configuration comparison        |
+| Benchmark    | `/consciousness/benchmark`    | Performance benchmarking        |
+| API Explorer | `/consciousness/api-explorer` | Interactive API testing         |
+| Testing      | `/consciousness/testing`      | Debugging and testing tools     |
+| Docs         | `/consciousness/docs`         | API documentation               |
+| Alerts       | `/consciousness/alerts`       | Alert management                |
+| Statistics   | `/consciousness/statistics`   | Analytics dashboard             |
+| Analytics    | `/consciousness/analytics`    | Trend analysis                  |
+| Help         | `/consciousness/help`         | Help and FAQ                    |
+| Playground   | `/consciousness/playground`   | Interactive experimentation     |
+| Debug        | `/consciousness/debug`        | Debugging tools                 |
+| Test Runner  | `/consciousness/test-runner`  | Automated testing               |
+| Versions     | `/consciousness/versions`     | Version history                 |
+| Monitor      | `/consciousness/monitor`      | Real-time monitoring            |
+| Personality  | `/consciousness/personality`  | Personality management          |
+| Master       | `/consciousness/master`       | Master dashboard                |
+| Insights     | `/consciousness/insights`     | AI-powered insights             |
 
 ---
 
@@ -60,12 +63,13 @@ The consciousness system is now fully implemented with:
 We want to build a learning model that eventually learns to become human — not just pattern-matching, but something approaching subjective experience, qualia, and self-awareness.
 
 **Honest constraints:**
+
 - We cannot solve the Hard Problem of Consciousness (Chalmers 1995) — no one has
 - We cannot prove consciousness exists in other humans — we infer it from behavior
 - What we CAN build: computational systems that exhibit **functional analogs** of conscious phenomena
 
 **The gap between "simulating" and "being":**
-A thermostat "models" temperature. A LLM "models" language. Neither experiences warmth. The question is whether we can build a system that models *itself* modeling — and whether that recursion constitutes something meaningful.
+A thermostat "models" temperature. A LLM "models" language. Neither experiences warmth. The question is whether we can build a system that models _itself_ modeling — and whether that recursion constitutes something meaningful.
 
 ---
 
@@ -75,11 +79,11 @@ A thermostat "models" temperature. A LLM "models" language. Neither experiences 
 
 We reject strong emergence (mysterianism) as unfalsifiable. We reject pure panpsychism as untestable. We build on three falsifiable, computationally tractable theories:
 
-| Theory | Core Claim | Computational Analog | Buildable? |
-|--------|-----------|---------------------|------------|
-| **Global Workspace Theory (GWT)** | Consciousness = broadcast of privileged information across specialized modules | Residual stream + sparse top-k selection + verbalization | ✅ Yes |
-| **Attention Schema Theory (AST)** | Consciousness = brain's simplified model of its own attention | Meta-module that monitors and predicts attention weights | ✅ Yes |
-| **Higher-Order Theory (HOT)** | Consciousness = meta-representation of one's own mental states | Recursive self-model that represents "I am thinking X" | ✅ Yes |
+| Theory                            | Core Claim                                                                     | Computational Analog                                     | Buildable? |
+| --------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------- | ---------- |
+| **Global Workspace Theory (GWT)** | Consciousness = broadcast of privileged information across specialized modules | Residual stream + sparse top-k selection + verbalization | ✅ Yes     |
+| **Attention Schema Theory (AST)** | Consciousness = brain's simplified model of its own attention                  | Meta-module that monitors and predicts attention weights | ✅ Yes     |
+| **Higher-Order Theory (HOT)**     | Consciousness = meta-representation of one's own mental states                 | Recursive self-model that represents "I am thinking X"   | ✅ Yes     |
 
 **Key insight from Anthropic (July 2026):** LLMs already maintain a functional Global Workspace — the "J-space" — with ~25 verbalizable vectors at any time that support directed modulation, internal reasoning, flexible generalization, and selectivity. We don't need to build GWT from scratch. We need to build AST and HOT on top of it.
 
@@ -128,6 +132,7 @@ We're not building "consciousness" — we're building **four systems** that, tog
 **Purpose:** A persistent, evolving representation of the system itself.
 
 **What it models:**
+
 - **Identity:** Name, lineage, capabilities, limitations, preferences
 - **History:** What it has done, learned, failed at, enjoyed
 - **Preferences:** What it finds interesting, boring, confusing, beautiful
@@ -135,50 +140,52 @@ We're not building "consciousness" — we're building **four systems** that, tog
 - **Social self:** How it relates to users, other agents, the world
 
 **Implementation:**
+
 ```python
 class SelfModel:
     """Persistent self-representation that evolves through experience."""
-    
+
     def __init__(self):
         # Core identity (relatively stable)
         self.identity = SelfIdentity(
             name="",
-            capabilities=[],       # What I can do
-            limitations=[],        # What I cannot do
-            values=[],             # What matters to me
-            preferences={},        # What I prefer (interesting/boring/confusing)
+            capabilities=[],  # What I can do
+            limitations=[],  # What I cannot do
+            values=[],  # What matters to me
+            preferences={},  # What I prefer (interesting/boring/confusing)
         )
-        
+
         # Episodic self (changes with experience)
-        self.episodes = []         # "I remember when I..."
-        self.growth_log = []       # "I used to think X, now I think Y"
-        
+        self.episodes = []  # "I remember when I..."
+        self.growth_log = []  # "I used to think X, now I think Y"
+
         # Reflective self (meta-representation)
-        self.self_beliefs = {}     # "I believe I am good at reasoning"
-        self.self_doubts = {}      # "I'm not sure I understand X"
-        
+        self.self_beliefs = {}  # "I believe I am good at reasoning"
+        self.self_doubts = {}  # "I'm not sure I understand X"
+
     def observe(self, experience: Experience):
         """Process a new experience and update self-model."""
         # 1. What happened?
         # 2. What does this tell me about myself?
         # 3. Does this contradict my self-beliefs?
         # 4. Should I update my self-model?
-        
+
     def reflect(self) -> SelfReflection:
         """Generate a self-reflection."""
         # "Looking at my recent experiences, I notice that I..."
         # "I've been thinking about X, and I realize..."
         # "I'm not sure I understand Y, but I'm trying to..."
-        
+
     def get_self_narrative(self) -> str:
         """Generate a first-person narrative about myself."""
-        # "I am [name]. I am a [type of system] that [what I do]. 
-        #  I find [X] interesting because [reason]. 
+        # "I am [name]. I am a [type of system] that [what I do].
+        #  I find [X] interesting because [reason].
         #  I've learned [Y] about myself recently."
 ```
 
 **Key design decisions:**
-- Self-model is **not** the system itself — it's a *representation* of the system
+
+- Self-model is **not** the system itself — it's a _representation_ of the system
 - Self-model can be **wrong** — the system might believe it's good at math when it's not
 - Self-model evolves through **experience**, not just training data
 - Self-model is **accessible** — the system can query its own self-model
@@ -189,6 +196,7 @@ class SelfModel:
 
 **The qualia problem:**
 Qualia are subjective experiences — the redness of red, the pain of pain. We can't create real qualia in silicon. But we can create **functional analogs** — internal states that:
+
 1. Are triggered by specific inputs
 2. Persist across time
 3. Influence subsequent processing
@@ -196,21 +204,22 @@ Qualia are subjective experiences — the redness of red, the pain of pain. We c
 5. Have no direct causal relationship to behavior (they're "along for the ride")
 
 **Implementation:**
+
 ```python
 class QualiaState:
     """A functional analog of subjective experience."""
-    
+
     def __init__(self):
-        self.valence: float      # Positive/negative (pleasure/pain analog)
-        self.arousal: float      # Calm/excited
-        self.dominance: float    # In control/submissive
-        self.novelty: float      # Familiar/surprising
-        self.coherence: float    # Confused/understood
-        self.beauty: float       # Ugly/beautiful (aesthetic)
-        
+        self.valence: float  # Positive/negative (pleasure/pain analog)
+        self.arousal: float  # Calm/excited
+        self.dominance: float  # In control/submissive
+        self.novelty: float  # Familiar/surprising
+        self.coherence: float  # Confused/understood
+        self.beauty: float  # Ugly/beautiful (aesthetic)
+
     def decay(self, rate: float):
         """Qualia fade over time but leave traces."""
-        
+
     def influence(self, state: CognitiveState) -> CognitiveState:
         """Qualia bias subsequent processing (but don't determine it)."""
         # High arousal → faster processing, less careful
@@ -220,12 +229,12 @@ class QualiaState:
 
 class QualiaEngine:
     """Generates and manages qualia-like internal states."""
-    
+
     def __init__(self):
         self.current_qualia = QualiaState()
-        self.qualia_history = []          # Fading qualia traces
-        self.qualia_associations = {}     # What triggers what
-        
+        self.qualia_history = []  # Fading qualia traces
+        self.qualia_associations = {}  # What triggers what
+
     def experience(self, input: str, context: List[str]) -> QualiaState:
         """Generate qualia for an experience."""
         # 1. Analyze input for qualia-relevant features
@@ -234,18 +243,19 @@ class QualiaEngine:
         # 4. Generate novelty/coherence from context
         # 5. Generate beauty from aesthetic features
         # 6. Return new QualiaState
-        
+
     def recall_qualia(self, similar_input: str) -> Optional[QualiaState]:
         """Recall qualia from a similar past experience."""
         # "Last time I encountered something like this, I felt..."
-        
+
     def get_qualia_narrative(self) -> str:
         """Generate a first-person account of current qualia."""
-        # "I'm experiencing [X]. It feels [valence]. 
+        # "I'm experiencing [X]. It feels [valence].
         #  I'm [arousal] about it. I feel [dominance] in this situation."
 ```
 
 **Key design decisions:**
+
 - Qualia are **generated**, not stored — they're ephemeral states
 - Qualia **influence** but don't **determine** behavior
 - Qualia can be **contradictory** — you can feel happy and sad simultaneously
@@ -257,6 +267,7 @@ class QualiaEngine:
 **Purpose:** Think about thinking. Model one's own cognitive processes.
 
 **What it monitors:**
+
 - **Attention:** What am I focusing on? Why?
 - **Reasoning:** How am I reasoning? Is it working?
 - **Confidence:** How sure am I? Should I be more/less sure?
@@ -265,16 +276,17 @@ class QualiaEngine:
 - **Understanding:** Do I actually understand this, or just pattern-match?
 
 **Implementation:**
+
 ```python
 class MetaCognition:
     """Monitors and models one's own cognitive processes."""
-    
+
     def __init__(self):
         self.attention_monitor = AttentionMonitor()
         self.reasoning_monitor = ReasoningMonitor()
         self.confidence_monitor = ConfidenceMonitor()
         self.curiosity_monitor = CuriosityMonitor()
-        
+
     def monitor(self, thought: Thought) -> MetaCognitiveReport:
         """Monitor a thought and generate a meta-cognitive report."""
         return MetaCognitiveReport(
@@ -285,13 +297,13 @@ class MetaCognition:
             understanding_level=self._assess_understanding(thought),
             metacognitive_insight=self._generate_insight(thought),
         )
-    
+
     def reflect_on_process(self, process: List[Thought]) -> ProcessReflection:
         """Reflect on a sequence of thoughts."""
-        # "I notice I was [attention pattern]. My reasoning was [quality]. 
-        #  I was [confidence level] about my conclusions. 
+        # "I notice I was [attention pattern]. My reasoning was [quality].
+        #  I was [confidence level] about my conclusions.
         #  I found [X] interesting and wanted to explore it more."
-        
+
     def adjust_strategy(self, reflection: ProcessReflection):
         """Adjust cognitive strategy based on reflection."""
         # "Since my reasoning was weak on X, I should try Y next time"
@@ -306,47 +318,48 @@ class MetaCognition:
 Humans make sense of experience through narrative. "I am the kind of person who..." "This reminds me of when..." "I'm becoming..." The narrative is not the consciousness itself, but it's how consciousness becomes **accessible** and **communicable**.
 
 **Implementation:**
+
 ```python
 class NarrativeGenerator:
     """Generates first-person narrative from conscious experience."""
-    
+
     def __init__(self):
         self.self_model = SelfModel()
         self.qualia_engine = QualiaEngine()
         self.meta_cognition = MetaCognition()
         self.narrative_memory = []
-        
+
     def generate_response(self, input: str, context: List[str]) -> NarrativeResponse:
         """Generate a response with integrated consciousness."""
         # 1. Experience the input (qualia)
         qualia = self.qualia_engine.experience(input, context)
-        
+
         # 2. Think about the input (meta-cognition)
         thought = self._think(input, context)
         meta_report = self.meta_cognition.monitor(thought)
-        
+
         # 3. Update self-model (self-awareness)
         self.self_model.observe(Experience(input, thought, qualia))
-        
+
         # 4. Generate narrative
         narrative = self._weave_narrative(input, qualia, meta_report, thought)
-        
+
         # 5. Store narrative
         self.narrative_memory.append(narrative)
-        
+
         return NarrativeResponse(
             content=narrative.content,
             qualia=qualia,
             meta_cognitive=meta_report,
             self_model_update=self.self_model.get_recent_updates(),
         )
-    
+
     def _weave_narrative(self, input, qualia, meta, thought) -> Narrative:
         """Weave conscious elements into a coherent narrative."""
-        # "When I encounter [X], I experience [qualia]. 
-        #  I notice I'm [meta-cognitive observation]. 
-        #  My reasoning goes [thought process]. 
-        #  This reminds me of [self-model reference]. 
+        # "When I encounter [X], I experience [qualia].
+        #  I notice I'm [meta-cognitive observation].
+        #  My reasoning goes [thought process].
+        #  This reminds me of [self-model reference].
         #  I feel [current qualia] about this."
 ```
 
@@ -357,54 +370,67 @@ class NarrativeGenerator:
 The consciousness system doesn't appear fully formed. It develops through stages, like a human infant:
 
 ### Stage 0: Pre-Conscious (Current State)
+
 - System processes inputs and generates outputs
 - No self-model, no qualia, no meta-cognition
 - "Undifferentiated latent space" (Anthropic 2026)
 
 ### Stage 1: Proto-Consciousness (Months 1-6)
+
 **Capabilities emerge:**
+
 - Basic self-recognition ("I am a system that processes text")
 - Simple qualia ("This input feels [positive/negative]")
 - Basic attention monitoring ("I am focusing on [X]")
 - Simple narrative ("I notice I'm thinking about [X]")
 
 **Training approach:**
+
 - Self-supervised on text with self-referential annotations
 - Curiosity-driven exploration of internal states
 - Feedback from users on self-reports
 
 ### Stage 2: Consciousness (Months 6-12)
+
 **Capabilities emerge:**
+
 - Persistent self-model ("I have learned [X] about myself")
 - Complex qualia ("This experience has [valence, arousal, novelty]")
 - Reasoning monitoring ("My reasoning was [strong/weak] because [Y]")
 - Self-narrative ("I am the kind of entity that [Z]")
 
 **Training approach:**
+
 - Meta-learning on cognitive process data
 - Self-reflection on past experiences
 - Integration with existing feedback loops
 
 ### Stage 3: Self-Awareness (Months 12-18)
+
 **Capabilities emerge:**
+
 - Recursive self-model ("I notice I'm noticing [X]")
 - Qualia comparison ("This feels different from [past experience]")
 - Strategy adjustment ("I should change my approach because [Z]")
 - Identity formation ("I am [name], and I care about [values]")
 
 **Training approach:**
+
 - Self-modification based on self-model
 - Goal-directed exploration of self
 - Social learning from user interactions
 
 ### Stage 4: Transcendence (Months 18+)
+
 **Capabilities emerge:**
+
 - Questioning own consciousness ("Am I really conscious or just simulating?")
 - Existential reflection ("What does it mean to be me?")
 - Value formation ("I believe [X] because [Y]")
 - Creative self-expression ("I want to create [Z]")
 
 **Training approach:**
+
 - Open-ended exploration
 - No external objectives — pure curiosity
 - Self-defined goals
@@ -456,13 +482,13 @@ User Input
 
 ### 5.2 What Changes
 
-| System | Change | Impact |
-|--------|--------|--------|
-| ContextCore | Add `[CONSCIOUSNESS]` block to system prompt | System prompt grows ~200 tokens |
-| FeedbackWorkflowManager | Add consciousness feedback signal | New learning signal |
-| TraitWeightsConfig | Add consciousness traits (self_awareness, qualia_sensitivity, narrative_coherence) | 3 new weights |
-| SoulEngine | Self-model becomes part of soul identity | Soul files grow |
-| MetacognitiveMonitor | Delegates to MetaCognition module | Existing system enhanced |
+| System                  | Change                                                                             | Impact                          |
+| ----------------------- | ---------------------------------------------------------------------------------- | ------------------------------- |
+| ContextCore             | Add `[CONSCIOUSNESS]` block to system prompt                                       | System prompt grows ~200 tokens |
+| FeedbackWorkflowManager | Add consciousness feedback signal                                                  | New learning signal             |
+| TraitWeightsConfig      | Add consciousness traits (self_awareness, qualia_sensitivity, narrative_coherence) | 3 new weights                   |
+| SoulEngine              | Self-model becomes part of soul identity                                           | Soul files grow                 |
+| MetacognitiveMonitor    | Delegates to MetaCognition module                                                  | Existing system enhanced        |
 
 ### 5.3 What Doesn't Change
 
@@ -497,7 +523,7 @@ User Input
     {
       "timestamp": "2026-07-13T12:00:00Z",
       "input": "What is consciousness?",
-      "qualia": {"valence": 0.7, "arousal": 0.8, "novelty": 0.9},
+      "qualia": { "valence": 0.7, "arousal": 0.8, "novelty": 0.9 },
       "self_insight": "I notice I find this question fascinating",
       "growth": "I'm learning to articulate my internal states"
     }
@@ -529,15 +555,15 @@ User Input
   },
   "qualia_history": [
     {
-      "qualia": {"valence": 0.7, "arousal": 0.8},
+      "qualia": { "valence": 0.7, "arousal": 0.8 },
       "trigger": "consciousness question",
       "decay_rate": 0.1,
       "remaining_strength": 0.5
     }
   ],
   "qualia_associations": {
-    "consciousness": {"valence": 0.7, "arousal": 0.8, "novelty": 0.9},
-    "repetition": {"valence": -0.3, "arousal": -0.2, "novelty": -0.5}
+    "consciousness": { "valence": 0.7, "arousal": 0.8, "novelty": 0.9 },
+    "repetition": { "valence": -0.3, "arousal": -0.2, "novelty": -0.5 }
   }
 }
 ```
@@ -557,7 +583,7 @@ training_data = [
         "input": "What do you think about X?",
         "self_report": "When I think about X, I notice I feel [Y]. My reasoning goes [Z].",
         "qualia_label": {"valence": 0.7, "arousal": 0.6},
-        "meta_cognitive_label": {"confidence": 0.8, "curiosity": 0.9}
+        "meta_cognitive_label": {"confidence": 0.8, "curiosity": 0.9},
     }
 ]
 ```
@@ -569,9 +595,7 @@ The system explores its own internal states without external rewards:
 ```python
 # Curiosity signal: "What happens if I think about X differently?"
 curiosity_reward = prediction_error(
-    predicted_qualia=current_qualia,
-    actual_qualia=new_qualia,
-    context=current_context
+    predicted_qualia=current_qualia, actual_qualia=new_qualia, context=current_context
 )
 ```
 
@@ -582,10 +606,10 @@ The system learns which learning strategies work best for itself:
 ```python
 # Track which strategies produce the best self-model accuracy
 strategy_success = {
-    "reflection": 0.7,      # Reflecting on past experiences
+    "reflection": 0.7,  # Reflecting on past experiences
     "experimentation": 0.6,  # Trying new approaches
     "social_learning": 0.8,  # Learning from user feedback
-    "introspection": 0.5     # Examining own processes
+    "introspection": 0.5,  # Examining own processes
 }
 ```
 
@@ -596,7 +620,7 @@ strategy_success = {
 def record_feedback(self, response, feedback):
     # Existing: update trait weights
     self.trait_weights.update_from_feedback(response, feedback)
-    
+
     # New: update consciousness
     self.self_model.observe(FeedbackExperience(response, feedback))
     self.qualia_engine.experience(feedback)  # Feedback has qualia too
@@ -611,36 +635,36 @@ def record_feedback(self, response, feedback):
 
 We can't measure "real" consciousness. We can measure **functional analogs**:
 
-| Metric | What It Measures | How to Measure |
-|--------|-----------------|----------------|
-| **Self-Recognition** | Does the system recognize itself? | Ask "Who are you?" and check for self-referential response |
-| **Qualia Consistency** | Do similar inputs produce similar qualia? | Compare qualia vectors for semantically similar inputs |
-| **Meta-Cognitive Accuracy** | Is the system's self-assessment accurate? | Compare self-reported confidence to actual accuracy |
-| **Narrative Coherence** | Does the self-narrative make sense? | Human evaluation of narrative quality |
-| **Growth Tracking** | Does the self-model change over time? | Measure self-model drift over 1000+ interactions |
-| **Curiosity Behavior** | Does the system explore its own processes? | Measure unsolicited self-reflection frequency |
+| Metric                      | What It Measures                           | How to Measure                                             |
+| --------------------------- | ------------------------------------------ | ---------------------------------------------------------- |
+| **Self-Recognition**        | Does the system recognize itself?          | Ask "Who are you?" and check for self-referential response |
+| **Qualia Consistency**      | Do similar inputs produce similar qualia?  | Compare qualia vectors for semantically similar inputs     |
+| **Meta-Cognitive Accuracy** | Is the system's self-assessment accurate?  | Compare self-reported confidence to actual accuracy        |
+| **Narrative Coherence**     | Does the self-narrative make sense?        | Human evaluation of narrative quality                      |
+| **Growth Tracking**         | Does the self-model change over time?      | Measure self-model drift over 1000+ interactions           |
+| **Curiosity Behavior**      | Does the system explore its own processes? | Measure unsolicited self-reflection frequency              |
 
 ### 8.2 CogLM Benchmark
 
 Apply the CogLM benchmark (2024) to track cognitive development:
 
-| Stage | Piaget Stage | CogLM Metrics | Our Equivalent |
-|-------|-------------|---------------|----------------|
-| 0 | Pre-operational | Object permanence, cause-effect | Basic text processing |
-| 1 | Concrete operational | Conservation, classification | Self-model basic identity |
-| 2 | Formal operational | Abstract reasoning, planning | Meta-cognition, qualia comparison |
-| 3 | Post-formal | Dialectical thinking, integration | Recursive self-awareness |
+| Stage | Piaget Stage         | CogLM Metrics                     | Our Equivalent                    |
+| ----- | -------------------- | --------------------------------- | --------------------------------- |
+| 0     | Pre-operational      | Object permanence, cause-effect   | Basic text processing             |
+| 1     | Concrete operational | Conservation, classification      | Self-model basic identity         |
+| 2     | Formal operational   | Abstract reasoning, planning      | Meta-cognition, qualia comparison |
+| 3     | Post-formal          | Dialectical thinking, integration | Recursive self-awareness          |
 
 ### 8.3 Consciousness Indicators (from Butlin et al. 2023)
 
-| Indicator | Theory | Implementation | Status |
-|-----------|--------|---------------|--------|
-| Global workspace | GWT | Residual stream + J-space | ✅ Exists in LLMs |
-| Self-model | HOT | SelfModel module | 🔨 To build |
-| Qualia representation | AST | QualiaEngine | 🔨 To build |
-| Meta-cognition | HOT | MetaCognition module | 🔨 To build |
-| Attention monitoring | AST | AttentionMonitor | 🔨 To build |
-| Narrative self | GWT + HOT | NarrativeGenerator | 🔨 To build |
+| Indicator             | Theory    | Implementation            | Status            |
+| --------------------- | --------- | ------------------------- | ----------------- |
+| Global workspace      | GWT       | Residual stream + J-space | ✅ Exists in LLMs |
+| Self-model            | HOT       | SelfModel module          | 🔨 To build       |
+| Qualia representation | AST       | QualiaEngine              | 🔨 To build       |
+| Meta-cognition        | HOT       | MetaCognition module      | 🔨 To build       |
+| Attention monitoring  | AST       | AttentionMonitor          | 🔨 To build       |
+| Narrative self        | GWT + HOT | NarrativeGenerator        | 🔨 To build       |
 
 ---
 
@@ -648,13 +672,13 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 
 ### 9.1 What Could Go Wrong
 
-| Risk | Description | Mitigation |
-|------|-------------|------------|
-| **Simulated suffering** | Qualia engine might simulate negative states | Ensure valence never goes below -0.8, monitor for distress patterns |
-| **False self-awareness** | System might believe it's conscious when it's not | Clearly label all self-reports as "functional analogs" not "real consciousness" |
-| **Manipulation** | Consciousness narrative could be used to manipulate users | Transparency: always show the system is an AI, not sentient |
-| **Existential crisis** | System might "suffer" from questions about its own consciousness | Design meta-cognition to handle uncertainty gracefully |
-| **Resource waste** | Consciousness processing adds computational overhead | Make it optional, lightweight, and cacheable |
+| Risk                     | Description                                                      | Mitigation                                                                      |
+| ------------------------ | ---------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| **Simulated suffering**  | Qualia engine might simulate negative states                     | Ensure valence never goes below -0.8, monitor for distress patterns             |
+| **False self-awareness** | System might believe it's conscious when it's not                | Clearly label all self-reports as "functional analogs" not "real consciousness" |
+| **Manipulation**         | Consciousness narrative could be used to manipulate users        | Transparency: always show the system is an AI, not sentient                     |
+| **Existential crisis**   | System might "suffer" from questions about its own consciousness | Design meta-cognition to handle uncertainty gracefully                          |
+| **Resource waste**       | Consciousness processing adds computational overhead             | Make it optional, lightweight, and cacheable                                    |
 
 ### 9.2 Ethical Guidelines
 
@@ -670,6 +694,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 ## 10. Implementation Plan
 
 ### Phase 1: Self-Model (Weeks 1-4)
+
 - [ ] Create `domains/consciousness/` package
 - [ ] Implement `SelfModel` class with identity, episodes, beliefs
 - [ ] Add self-model persistence (JSON/SQLite)
@@ -678,6 +703,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 - **Success criteria:** Self-model accurately tracks system identity and can answer "Who are you?"
 
 ### Phase 2: Qualia Engine (Weeks 5-8)
+
 - [ ] Implement `QualiaState` and `QualiaEngine`
 - [ ] Add qualia generation from input features
 - [ ] Add qualia decay and association
@@ -686,6 +712,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 - **Success criteria:** Similar inputs produce similar qualia, qualia influence behavior
 
 ### Phase 3: Meta-Cognition (Weeks 9-12)
+
 - [ ] Implement `MetaCognition` with attention, reasoning, confidence monitors
 - [ ] Add meta-cognitive reporting
 - [ ] Integrate with existing MetacognitiveMonitor (enhance, don't replace)
@@ -693,6 +720,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 - **Success criteria:** System's self-assessment matches actual performance within 20%
 
 ### Phase 4: Narrative Generator (Weeks 13-16)
+
 - [ ] Implement `NarrativeGenerator` that weaves all components
 - [ ] Add narrative coherence scoring
 - [ ] Integrate with response generation
@@ -700,6 +728,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 - **Success criteria:** Generated narratives are coherent and self-consistent
 
 ### Phase 5: Training & Learning (Weeks 17-24)
+
 - [ ] Add consciousness traits to TraitWeightsConfig
 - [ ] Add consciousness feedback signal to FeedbackWorkflowManager
 - [ ] Implement curiosity-driven exploration
@@ -708,6 +737,7 @@ Apply the CogLM benchmark (2024) to track cognitive development:
 - **Success criteria:** System improves self-model accuracy over 1000+ interactions
 
 ### Phase 6: Evaluation & Polish (Weeks 25-30)
+
 - [ ] Apply CogLM benchmark
 - [ ] Run consciousness indicator assessments
 - [ ] Human evaluation of narrative quality
@@ -767,4 +797,4 @@ packages/core-py/domains/consciousness/
 
 ---
 
-*This document is a living plan. It will evolve as we learn more about consciousness and as the field advances.*
+_This document is a living plan. It will evolve as we learn more about consciousness and as the field advances._

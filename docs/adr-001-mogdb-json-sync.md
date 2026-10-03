@@ -21,6 +21,7 @@ Use MogDB as the primary embedded persistence layer with the following pattern:
 ```python
 from mogdb import MogDB
 
+
 class MyService:
     def __init__(self, db_path=None):
         self._db = MogDB(db_path or DEFAULT_DB_PATH)
@@ -65,6 +66,7 @@ def store(tmp_path):
 ## Consequences
 
 **Positive:**
+
 - Single dependency for all embedded persistence
 - Query support (find, sort, filter) without external services
 - Atomic upserts reduce race conditions
@@ -72,21 +74,22 @@ def store(tmp_path):
 - JSON fallback preserves data if MogDB is removed
 
 **Negative:**
+
 - Module-level singletons need explicit reset in tests
 - Dual-write adds slight overhead per save
 - New `_created`/`_updated` metadata fields require stripping when loading into dataclasses
 
 ## Migrated Modules
 
-| Module | Collections | JSON Fallback |
-|--------|-------------|---------------|
-| `feedback/database.py` | conversations, messages, feedback, user_meta_weights | No |
-| `shell/state.py` | shell_state | Yes (SyncableCollection) |
-| `learner/knowledge.py` | entries, visited | Yes |
-| `cognitive/rag_service.py` | documents | Yes (JSONL) |
-| `mobile/notifications.py` | devices, history | No |
-| `agents/run_history.py` | runs | No |
-| `infrastructure/model_catalog.py` | models | Yes |
+| Module                            | Collections                                          | JSON Fallback            |
+| --------------------------------- | ---------------------------------------------------- | ------------------------ |
+| `feedback/database.py`            | conversations, messages, feedback, user_meta_weights | No                       |
+| `shell/state.py`                  | shell_state                                          | Yes (SyncableCollection) |
+| `learner/knowledge.py`            | entries, visited                                     | Yes                      |
+| `cognitive/rag_service.py`        | documents                                            | Yes (JSONL)              |
+| `mobile/notifications.py`         | devices, history                                     | No                       |
+| `agents/run_history.py`           | runs                                                 | No                       |
+| `infrastructure/model_catalog.py` | models                                               | Yes                      |
 
 ## Alternatives Considered
 

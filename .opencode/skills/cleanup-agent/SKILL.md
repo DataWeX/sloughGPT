@@ -1,3 +1,8 @@
+---
+name: cleanup-agent
+description: Searches for code-quality issues when the todo list is empty or the user says "continue building". Finds f-string logging, bare excepts, a missing future import, print() in production code, TODO comments, and unused imports.
+---
+
 # Cleanup Agent
 
 Searches for code quality issues when todo list is empty or user says "continue building".
@@ -9,31 +14,37 @@ When there are no active todos, run this agent to find and fix common issues.
 ## Patterns to Search
 
 ### 1. f-string log calls (should be lazy %s)
+
 ```bash
 rg 'logger\.(info|warning|error|debug)\(f"' packages/core-py/apps scripts
 ```
 
 ### 2. Missing `from __future__ import annotations`
+
 ```bash
 rg -L 'from __future__ import annotations' packages/core-py/domains/**/*.py
 ```
 
 ### 3. Bare except clauses
+
 ```bash
 rg 'except:' packages/core-py
 ```
 
 ### 4. print() in production code (should use logger)
+
 ```bash
 rg '^\s*print\(' packages/core-py/domains --include '*.py'
 ```
 
 ### 5. TODO/FIXME/HACK comments
+
 ```bash
 rg '(TODO|FIXME|HACK|XXX):' packages/core-py
 ```
 
 ### 6. Unused imports
+
 ```bash
 rg '^import ' packages/core-py/domains | head -20
 ```
@@ -51,6 +62,7 @@ rg '^import ' packages/core-py/domains | head -20
 ## Kanban Integration
 
 When creating cleanup tasks, add to kanban:
+
 ```json
 {
   "id": "cleanup_<date>_<issue>",

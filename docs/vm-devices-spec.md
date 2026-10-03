@@ -19,20 +19,22 @@ Bit-based file descriptor management.
 
 ```python
 class DeviceTable:
-    _fd_bitmap: int          # 64 fds in one integer
-    _fd_device: list[...]    # fd → device (direct index)
-    _fd_mode: list[int]      # fd → mode bits
-    _fd_offset: list[int]    # fd → offset
-    _devices: dict[str, ...] # name → device
+    _fd_bitmap: int  # 64 fds in one integer
+    _fd_device: list[...]  # fd → device (direct index)
+    _fd_mode: list[int]  # fd → mode bits
+    _fd_offset: list[int]  # fd → offset
+    _devices: dict[str, ...]  # name → device
 ```
 
 **Operations:**
+
 - `register(device, type)` → add device to table
 - `open(name, mode)` → alloc fd, return int
 - `close(fd)` → free fd
 - `ioctl(fd, command, *args)` → route to device
 
 **Bit operations:**
+
 - `_alloc_fd()` → bit scan for free fd
 - `_free_fd(fd)` → bit clear
 - `_fd_is_open(fd)` → bit test
@@ -59,12 +61,12 @@ Bit flags for device categories:
 
 ```python
 INFERENCE = 1 << 0  # 0b000001
-TRAINING  = 1 << 1  # 0b000010
-STORAGE   = 1 << 2  # 0b000100
-NETWORK   = 1 << 3  # 0b001000
-DISPLAY   = 1 << 4  # 0b010000
-INPUT     = 1 << 5  # 0b100000
-CUSTOM    = 0       # no type
+TRAINING = 1 << 1  # 0b000010
+STORAGE = 1 << 2  # 0b000100
+NETWORK = 1 << 3  # 0b001000
+DISPLAY = 1 << 4  # 0b010000
+INPUT = 1 << 5  # 0b100000
+CUSTOM = 0  # no type
 ```
 
 ## TensorDevice
@@ -72,6 +74,7 @@ CUSTOM    = 0       # no type
 Standalone compute hardware — wraps numpy.
 
 **59 commands via ioctl:**
+
 - Linear algebra: MATMUL, DOT, INV, SVD, EIG
 - Activations: RELU, SIGMOID, TANH, SOFTMAX, GELU, SILU, ELU, SELU
 - Arithmetic: ADD, SUB, MUL, DIV, NEG, ABS, POW, SQRT, EXP, LOG
@@ -86,6 +89,7 @@ Standalone compute hardware — wraps numpy.
 - Utility: CLIP_GRAD_NORM, DROPOUT, EMBEDDING, LINEAR
 
 **Interface:**
+
 ```python
 tensor = TensorDevice()
 result = tensor.ioctl("MATMUL", a, b)  # → SyscallResult
@@ -96,6 +100,7 @@ result = tensor.ioctl("MATMUL", a, b)  # → SyscallResult
 Standalone neural processing hardware — uses TensorDevice.
 
 **13 commands via ioctl:**
+
 - INFO, LIST_COMMANDS
 - LOAD, UNLOAD, CALL
 - BATCH, PIPELINE, PROFILE, QUANTIZE
@@ -103,6 +108,7 @@ Standalone neural processing hardware — uses TensorDevice.
 - MEMORY, COMPUTE
 
 **Interface:**
+
 ```python
 npu = NPUDevice()
 result = npu.ioctl("LOAD", "/path/to/model.slnc")

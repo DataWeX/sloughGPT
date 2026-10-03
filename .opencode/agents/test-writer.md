@@ -27,14 +27,17 @@ What are you testing?
 ## 1. Frontend Component Tests
 
 ### Run
+
 ```bash
 cd apps/web && npm test -- --run <relative-path-to-test>
 ```
 
 ### File Location
+
 Next to source: `app/(app)/my-page/page.test.tsx`
 
 ### Environment
+
 Vitest auto-selects `jsdom` for files in `app/`, `components/`, `hooks/`, `features/` via `vitest.config.ts` globs. No `@vitest-environment` comment needed.
 
 ### How Mocking Works in This Codebase
@@ -86,7 +89,9 @@ import BrainstormPage from './page'
 import { generateTool } from '@/lib/tools-controller'
 
 describe('BrainstormPage', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
 
   it('renders the page title', () => {
     render(<BrainstormPage />)
@@ -105,7 +110,7 @@ describe('BrainstormPage', () => {
         'brainstorm',
         expect.objectContaining({ history: expect.any(Array) }),
         expect.any(Object),
-        expect.any(Object)
+        expect.any(Object),
       )
     })
   })
@@ -113,6 +118,7 @@ describe('BrainstormPage', () => {
 ```
 
 **Key details:**
+
 - `useToastStore: (sel: any) => sel({ addToast: mockAddToast })` — the `(sel: any) => sel({...})` pattern is required because Zustand stores use selector functions
 - `vi.mocked(generateTool).mockResolvedValue(undefined)` — cast the mock for TypeScript
 - `expect.objectContaining({...})` — match partial payload, not exact shape
@@ -141,9 +147,12 @@ vi.mock('@/lib/download-utils', () => ({
 ```tsx
 it('renders after loading', async () => {
   render(<MyPage />)
-  await waitFor(() => {
-    expect(screen.getAllByText(/Analytics/i).length).toBeGreaterThan(0)
-  }, { timeout: 5000 })
+  await waitFor(
+    () => {
+      expect(screen.getAllByText(/Analytics/i).length).toBeGreaterThan(0)
+    },
+    { timeout: 5000 },
+  )
 })
 ```
 
@@ -239,55 +248,59 @@ it('renders after load', async () => {
 ```
 
 **Key: `screen.findByText` (async) vs `screen.getByText` (sync)**
+
 - Use `findByText` when data loads asynchronously (API calls, useEffect)
 - Use `getByText` when content is static (rendered immediately)
 
 ### Assertion Cheat Sheet
 
-| What to check | Code |
-|--------------|------|
-| Element exists | `screen.getByText('X')` |
-| Element absent | `expect(screen.queryByText('X')).toBeNull()` |
-| Multiple elements | `screen.getAllByText('X').length` |
-| Button disabled | `expect(btn).toBeDisabled()` |
-| Button enabled | `expect(btn).not.toBeDisabled()` |
-| Input value | `expect(input).toHaveValue('text')` |
-| Placeholder | `screen.getByPlaceholderText(/pattern/i)` |
-| Role | `screen.getByRole('button', { name: /x/i })` |
-| Label | `screen.getByLabelText('X')` |
-| API called | `expect(mockFn).toHaveBeenCalledWith(...)` |
-| API not called | `expect(mockFn).not.toHaveBeenCalled()` |
-| Toast shown | `expect(mockAddToast).toHaveBeenCalledWith('msg', 'error')` |
-| Loading state | `document.querySelectorAll('[class*="animate-pulse"]').length` |
-| CSS class | `element.className.toContain('primary')` |
-| Aria attribute | `expect(el.getAttribute('aria-checked')).toBe('true')` |
+| What to check     | Code                                                           |
+| ----------------- | -------------------------------------------------------------- |
+| Element exists    | `screen.getByText('X')`                                        |
+| Element absent    | `expect(screen.queryByText('X')).toBeNull()`                   |
+| Multiple elements | `screen.getAllByText('X').length`                              |
+| Button disabled   | `expect(btn).toBeDisabled()`                                   |
+| Button enabled    | `expect(btn).not.toBeDisabled()`                               |
+| Input value       | `expect(input).toHaveValue('text')`                            |
+| Placeholder       | `screen.getByPlaceholderText(/pattern/i)`                      |
+| Role              | `screen.getByRole('button', { name: /x/i })`                   |
+| Label             | `screen.getByLabelText('X')`                                   |
+| API called        | `expect(mockFn).toHaveBeenCalledWith(...)`                     |
+| API not called    | `expect(mockFn).not.toHaveBeenCalled()`                        |
+| Toast shown       | `expect(mockAddToast).toHaveBeenCalledWith('msg', 'error')`    |
+| Loading state     | `document.querySelectorAll('[class*="animate-pulse"]').length` |
+| CSS class         | `element.className.toContain('primary')`                       |
+| Aria attribute    | `expect(el.getAttribute('aria-checked')).toBe('true')`         |
 
 ### Common Errors
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `useToastStore.mockReturnValue is not a function` | Wrong mock pattern | Use `(sel: any) => sel({...})` |
-| `Found multiple elements` | StrictMode double-render | Use `getAllByText(...).length` |
-| `Unable to find role="button"` | Button text wrong | Check actual button label in source |
-| `Expected mock to have been called` | Missing `await waitFor` | Wrap assertion in `waitFor(() => ...)` |
-| `ReferenceError: ... is not defined` | Import before mock | Move `vi.mock()` above `import` |
+| Error                                             | Cause                    | Fix                                    |
+| ------------------------------------------------- | ------------------------ | -------------------------------------- |
+| `useToastStore.mockReturnValue is not a function` | Wrong mock pattern       | Use `(sel: any) => sel({...})`         |
+| `Found multiple elements`                         | StrictMode double-render | Use `getAllByText(...).length`         |
+| `Unable to find role="button"`                    | Button text wrong        | Check actual button label in source    |
+| `Expected mock to have been called`               | Missing `await waitFor`  | Wrap assertion in `waitFor(() => ...)` |
+| `ReferenceError: ... is not defined`              | Import before mock       | Move `vi.mock()` above `import`        |
 
 ---
 
 ## 2. Backend Unit Tests (Python)
 
 ### Run
+
 ```bash
-cd packages/core-py && .venv/bin/python -m pytest tests/test_<module>.py -x -v
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>.py -x -v
 ```
 
 ### File Location
+
 `packages/core-py/tests/test_<module>.py`
 
 ### Pattern
 
 ```python
 """Tests for domains.<area>.<module>."""
+
 import pytest
 import tempfile
 from pathlib import Path
@@ -305,19 +318,23 @@ FAST_CONFIG = {
     "n_head": 2,
 }
 
+
 class TestMyModule:
     def test_basic(self):
         from domains.my_module import my_function
+
         result = my_function("input")
         assert result == "expected"
 
     def test_error(self):
         from domains.my_module import my_function
+
         with pytest.raises(ValueError, match="not found"):
             my_function(None)
 
     def test_with_temp_file(self, tmp_path):
         from domains.my_module import process_file
+
         f = tmp_path / "test.txt"
         f.write_text(DATA_TEXT)
         result = process_file(str(f))
@@ -325,6 +342,7 @@ class TestMyModule:
 ```
 
 **Rules:**
+
 - Import inside test methods (lazy imports)
 - Use `tmp_path` for file I/O
 - Use `DATA_TEXT` constant for test data
@@ -336,8 +354,9 @@ class TestMyModule:
 ## 3. Playwright Journey Tests
 
 ### Run
+
 ```bash
-cd packages/core-py && .venv/bin/python -m pytest tests/test_user_journeys.py -x -v
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_user_journeys.py -x -v
 ```
 
 **Requires:** API on `:8000`, web on `:3000`.
@@ -375,10 +394,12 @@ class TestToolsFlows:
 ```
 
 **Helpers:**
+
 - `go(page, path)` — navigate, wait for load, settle SSE streams, retry on error boundary, return body text
 - `ok(name, passed, detail)` — record non-fatal test result (won't stop suite)
 
 **Rules:**
+
 - Use `go()` not `page.goto()` — it handles settling
 - Use `ok()` for non-fatal checks, `assert` for fatal
 - If a page fails, log and continue — never stop on first failure
@@ -390,10 +411,10 @@ class TestToolsFlows:
 ## 4. Coverage Workflow
 
 ### Measure
+
 ```bash
-# Python
-cd packages/core-py
-.venv/bin/python -m pytest tests/test_<module>*.py \
+# Python (from the target worktree root)
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>*.py \
   --cov=domains/<area>/<module> \
   --cov-report=term-missing -q
 
@@ -402,6 +423,7 @@ cd apps/web && npm test -- --coverage
 ```
 
 ### Process
+
 1. Read source → find uncovered lines
 2. Write test targeting that specific path
 3. Verify test passes + coverage increases
@@ -415,10 +437,11 @@ cd apps/web && npm test -- --coverage
 The `ROUTES` list in `test_user_journeys.py` accepts tuples of `(path, name)`:
 
 ```python
-("/page-path", "page_name"),
+(("/page-path", "page_name"),)
 ```
 
 All routes in the list get a parametrized navigation test that:
+
 1. Navigates to `http://localhost:3000{path}`
 2. Waits for load + "Connecting..." to disappear
 3. Asserts `len(body) > 50`

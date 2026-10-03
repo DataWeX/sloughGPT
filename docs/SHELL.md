@@ -102,99 +102,99 @@ $(<command>)                    # Command substitution
 
 ### System & Health
 
-| Command | Description |
-|---------|-------------|
-| `health` | API status, loaded model, active soul (colored) |
-| `status` | Kernel uptime, processes, model, soul, memory |
-| `metrics` | CPU, memory, disk metrics from the server |
+| Command   | Description                                     |
+| --------- | ----------------------------------------------- |
+| `health`  | API status, loaded model, active soul (colored) |
+| `status`  | Kernel uptime, processes, model, soul, memory   |
+| `metrics` | CPU, memory, disk metrics from the server       |
 
 ### Model Management
 
-| Command | Description |
-|---------|-------------|
-| `models` | List available models (tab-completes names) |
-| `load <name>` | Load a model by name |
-| `unload` | Unload the current model |
-| `gen <prompt>` | Generate text with the loaded model |
+| Command        | Description                                 |
+| -------------- | ------------------------------------------- |
+| `models`       | List available models (tab-completes names) |
+| `load <name>`  | Load a model by name                        |
+| `unload`       | Unload the current model                    |
+| `gen <prompt>` | Generate text with the loaded model         |
 
 ### Souls & Personality
 
-| Command | Description |
-|---------|-------------|
-| `souls` | List available personality profiles |
-| `switch <name>` | Switch to a soul |
-| `whoami` | Show current soul |
+| Command         | Description                         |
+| --------------- | ----------------------------------- |
+| `souls`         | List available personality profiles |
+| `switch <name>` | Switch to a soul                    |
+| `whoami`        | Show current soul                   |
 
 ### Data
 
-| Command | Description |
-|---------|-------------|
-| `datasets` | List datasets (tab-completes names) |
-| `knowledge` | List knowledge base entries |
-| `checkpoints` | List training checkpoints (tab-completes names) |
-| `finetuned` | List fine-tuned models; `finetuned load <name>` loads one for chat, `finetuned rm <name>` deletes it |
-| `tokenizer` | Show tokenizer vocabulary stats |
+| Command       | Description                                                                                          |
+| ------------- | ---------------------------------------------------------------------------------------------------- |
+| `datasets`    | List datasets (tab-completes names)                                                                  |
+| `knowledge`   | List knowledge base entries                                                                          |
+| `checkpoints` | List training checkpoints (tab-completes names)                                                      |
+| `finetuned`   | List fine-tuned models; `finetuned load <name>` loads one for chat, `finetuned rm <name>` deletes it |
+| `tokenizer`   | Show tokenizer vocabulary stats                                                                      |
 
 ### Process Management
 
-| Command | Description |
-|---------|-------------|
+| Command        | Description                |
+| -------------- | -------------------------- |
 | `procs` / `ps` | List running training jobs |
-| `kill <id>` | Stop a training job |
+| `kill <id>`    | Stop a training job        |
 
 ### History & Navigation
 
-| Command | Description |
-|---------|-------------|
+| Command       | Description                          |
+| ------------- | ------------------------------------ |
 | `history [n]` | Show command history (last 20, or n) |
-| `fc [-l] [n]` | List history or re-run command #n |
-| `pushd <dir>` | Push directory onto stack and cd |
-| `popd` | Pop directory stack and cd back |
-| `dirs` | Show directory stack |
+| `fc [-l] [n]` | List history or re-run command #n    |
+| `pushd <dir>` | Push directory onto stack and cd     |
+| `popd`        | Pop directory stack and cd back      |
+| `dirs`        | Show directory stack                 |
 
 ### Aliases & Environment
 
-| Command | Description |
-|---------|-------------|
-| `alias [name=cmd]` | List or set aliases |
-| `unalias <name>` | Remove an alias |
-| `set [name=value]` | Set or show environment variables |
+| Command               | Description                             |
+| --------------------- | --------------------------------------- |
+| `alias [name=cmd]`    | List or set aliases                     |
+| `unalias <name>`      | Remove an alias                         |
+| `set [name=value]`    | Set or show environment variables       |
 | `export [NAME=VALUE]` | POSIX-style export (delegates to `set`) |
 
 ### Scripting & Evaluation
 
-| Command | Description |
-|---------|-------------|
-| `source <file>` / `.` | Execute commands from a file |
-| `py <expr>` | Evaluate a Python expression |
-| `ai <query>` | Natural language → shell command |
+| Command               | Description                      |
+| --------------------- | -------------------------------- |
+| `source <file>` / `.` | Execute commands from a file     |
+| `py <expr>`           | Evaluate a Python expression     |
+| `ai <query>`          | Natural language → shell command |
 
 ### Pipe Filters
 
-| Command | Description |
-|---------|-------------|
-| `grep <pattern>` | Filter lines by regex |
-| `head [n]` | Show first n lines (default 10) |
-| `tail [n]` | Show last n lines (default 10) |
-| `wc` | Count lines, words, characters |
-| `tee <file>` | Write piped input to file + pass through |
-| `sort [-r] [-u] [-n]` | Sort lines; reverse/unique/numeric |
-| `uniq` | Deduplicate consecutive lines |
-| `less` | Pager: scroll page by page |
-| `echo <text>` | Print text |
+| Command               | Description                              |
+| --------------------- | ---------------------------------------- |
+| `grep <pattern>`      | Filter lines by regex                    |
+| `head [n]`            | Show first n lines (default 10)          |
+| `tail [n]`            | Show last n lines (default 10)           |
+| `wc`                  | Count lines, words, characters           |
+| `tee <file>`          | Write piped input to file + pass through |
+| `sort [-r] [-u] [-n]` | Sort lines; reverse/unique/numeric       |
+| `uniq`                | Deduplicate consecutive lines            |
+| `less`                | Pager: scroll page by page               |
+| `echo <text>`         | Print text                               |
 
 ### Shell Control
 
-| Command | Description |
-|---------|-------------|
-| `help [cmd]` | Show help or help for a command |
-| `clear` / `cls` | Clear the screen |
-| `exit` / `q` / `quit` | Exit the shell |
-| `tutorial` | Interactive walkthrough |
-| `sleep <sec>` | Pause for N seconds |
-| `watch <sec> <cmd>` | Run command repeatedly every N seconds |
-| `bg` / `jobs` | List background shell processes |
-| `fg <id>` | Wait for a background process |
+| Command               | Description                            |
+| --------------------- | -------------------------------------- |
+| `help [cmd]`          | Show help or help for a command        |
+| `clear` / `cls`       | Clear the screen                       |
+| `exit` / `q` / `quit` | Exit the shell                         |
+| `tutorial`            | Interactive walkthrough                |
+| `sleep <sec>`         | Pause for N seconds                    |
+| `watch <sec> <cmd>`   | Run command repeatedly every N seconds |
+| `bg` / `jobs`         | List background shell processes        |
+| `fg <id>`             | Wait for a background process          |
 
 ---
 
@@ -290,24 +290,24 @@ echo "Model count: $(models | wc)"
 
 ### Special Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PS1` | `λ` | Prompt string (see escapes below) |
-| `SHELL` | `sloughgpt` | Shell name |
-| `HOME` | `~` | Home directory |
-| `NO_COLOR` | unset | Set to `1`/`true`/`yes` to disable ANSI colors |
+| Variable   | Default     | Description                                    |
+| ---------- | ----------- | ---------------------------------------------- |
+| `PS1`      | `λ`         | Prompt string (see escapes below)              |
+| `SHELL`    | `sloughgpt` | Shell name                                     |
+| `HOME`     | `~`         | Home directory                                 |
+| `NO_COLOR` | unset       | Set to `1`/`true`/`yes` to disable ANSI colors |
 
 ### PS1 Escape Sequences
 
-| Escape | Expands to |
-|--------|------------|
-| `\h` | Hostname (short) |
-| `\w` | Current working directory (`~` for home) |
-| `\t` | Current time (HH:MM:SS) |
-| `\u` | Current user |
-| `\s` | Shell name (`sloughgpt`) |
-| `\#` | Command number |
-| `\n` | Newline |
+| Escape | Expands to                               |
+| ------ | ---------------------------------------- |
+| `\h`   | Hostname (short)                         |
+| `\w`   | Current working directory (`~` for home) |
+| `\t`   | Current time (HH:MM:SS)                  |
+| `\u`   | Current user                             |
+| `\s`   | Shell name (`sloughgpt`)                 |
+| `\#`   | Command number                           |
+| `\n`   | Newline                                  |
 
 Example: `set PS1='\u@\h \w \$ '` → `user@host ~/project $`
 
@@ -335,15 +335,15 @@ Aliases persist to `~/.config/sloughgpt/shell_state.json` across sessions.
 
 ### Default Aliases
 
-| Alias | Expands to |
-|-------|------------|
-| `q` | `exit` |
-| `quit` | `exit` |
-| `h` | `help` |
-| `?` | `help` |
-| `cls` | `clear` |
-| `ps` | `procs` |
-| `jobs` | `bg` |
+| Alias  | Expands to |
+| ------ | ---------- |
+| `q`    | `exit`     |
+| `quit` | `exit`     |
+| `h`    | `help`     |
+| `?`    | `help`     |
+| `cls`  | `clear`    |
+| `ps`   | `procs`    |
+| `jobs` | `bg`       |
 
 ---
 
@@ -361,10 +361,10 @@ History is saved to `~/.config/sloughgpt/shell_state.json` (max 500 entries).
 
 ### History Search
 
-| Keybinding | Action |
-|------------|--------|
-| `Ctrl+R` | Reverse search (backward) |
-| `Ctrl+S` | Forward search |
+| Keybinding | Action                    |
+| ---------- | ------------------------- |
+| `Ctrl+R`   | Reverse search (backward) |
+| `Ctrl+S`   | Forward search            |
 
 These use readline's built-in incremental search.
 
@@ -375,28 +375,28 @@ or `MAN_TUI=1 sloughgpt shell`. Line mode is the default. Three panes: console
 logs (top), command output (middle), and a chrome bar + input row at the
 bottom. Commands run on a background thread so output streams live.
 
-| Keybinding | Action |
-|------------|--------|
-| `Tab` | Complete command or path |
-| `Up` / `Down` | Command history (then arrows move caret) |
-| `Left` / `Right` | Move caret |
-| `Alt+F` / `Ctrl+Right` | Move forward to the end of the next word |
-| `Alt+B` / `Ctrl+Left` | Move back to the start of the current or previous word |
-| `Home` / `Ctrl+A` | Jump to start of line |
-| `End` / `Ctrl+E` | Jump to end of line |
-| `Backspace` / `Delete` / `Ctrl+D` | Delete before / at caret |
-| `Ctrl+W` | Delete word before caret (added to kill ring) |
-| `Alt+D` | Delete word after caret (added to kill ring) |
-| `Ctrl+T` | Transpose the characters before and at the caret (last two at end of line) |
-| `Ctrl+U` | Kill to start of line (added to kill ring) |
-| `Ctrl+K` | Kill to end of line (added to kill ring) |
-| `Ctrl+Y` | Yank the most recent kill; press again to cycle to older kills |
-| `Ctrl+R` / `Ctrl+S` | Reverse / forward incremental history search (same key again — or `Ctrl+F` — moves through matches; `Esc` cancels) |
-| `/` | Search the output pane; type a query to jump the scroll so the match lands at the top (`n` / `N` at an empty prompt repeat the last accepted search; `Enter` accepts, `Esc` cancels) |
-| `Ctrl+L` | Clear output pane |
-| `Ctrl+O` | Toggle output/log scrollback focus |
-| `PgUp` / `PgDn` | Scroll focused pane (10 lines) |
-| `Ctrl+C` | Interrupt the running command (press again, or `exit`, to quit) |
+| Keybinding                        | Action                                                                                                                                                                               |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Tab`                             | Complete command or path                                                                                                                                                             |
+| `Up` / `Down`                     | Command history (then arrows move caret)                                                                                                                                             |
+| `Left` / `Right`                  | Move caret                                                                                                                                                                           |
+| `Alt+F` / `Ctrl+Right`            | Move forward to the end of the next word                                                                                                                                             |
+| `Alt+B` / `Ctrl+Left`             | Move back to the start of the current or previous word                                                                                                                               |
+| `Home` / `Ctrl+A`                 | Jump to start of line                                                                                                                                                                |
+| `End` / `Ctrl+E`                  | Jump to end of line                                                                                                                                                                  |
+| `Backspace` / `Delete` / `Ctrl+D` | Delete before / at caret                                                                                                                                                             |
+| `Ctrl+W`                          | Delete word before caret (added to kill ring)                                                                                                                                        |
+| `Alt+D`                           | Delete word after caret (added to kill ring)                                                                                                                                         |
+| `Ctrl+T`                          | Transpose the characters before and at the caret (last two at end of line)                                                                                                           |
+| `Ctrl+U`                          | Kill to start of line (added to kill ring)                                                                                                                                           |
+| `Ctrl+K`                          | Kill to end of line (added to kill ring)                                                                                                                                             |
+| `Ctrl+Y`                          | Yank the most recent kill; press again to cycle to older kills                                                                                                                       |
+| `Ctrl+R` / `Ctrl+S`               | Reverse / forward incremental history search (same key again — or `Ctrl+F` — moves through matches; `Esc` cancels)                                                                   |
+| `/`                               | Search the output pane; type a query to jump the scroll so the match lands at the top (`n` / `N` at an empty prompt repeat the last accepted search; `Enter` accepts, `Esc` cancels) |
+| `Ctrl+L`                          | Clear output pane                                                                                                                                                                    |
+| `Ctrl+O`                          | Toggle output/log scrollback focus                                                                                                                                                   |
+| `PgUp` / `PgDn`                   | Scroll focused pane (10 lines)                                                                                                                                                       |
+| `Ctrl+C`                          | Interrupt the running command (press again, or `exit`, to quit)                                                                                                                      |
 
 The input row scrolls horizontally when the command line exceeds the
 terminal width; the caret always stays visible.
@@ -407,14 +407,14 @@ terminal width; the caret always stays visible.
 
 ### Built-in Candidates
 
-| Command | Source |
-|---------|--------|
-| `load`, `unload`, `gen` | Model names from `/models` API |
-| `switch` | Soul names from `/souls` API |
-| `datasets` | Dataset names from `/datasets` API |
-| `checkpoints` | Checkpoint names from `/training/checkpoints` API |
-| `finetuned` | Subcommands (`load`, `rm`, `del`, `delete`); model names after `load`/`rm`/`del`/`delete` from `/training/finetuned-models` API |
-| `source`, `less`, `tee`, `pushd`, `sort`, `uniq` | File/directory path completion (fallback) |
+| Command                                          | Source                                                                                                                          |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `load`, `unload`, `gen`                          | Model names from `/models` API                                                                                                  |
+| `switch`                                         | Soul names from `/souls` API                                                                                                    |
+| `datasets`                                       | Dataset names from `/datasets` API                                                                                              |
+| `checkpoints`                                    | Checkpoint names from `/training/checkpoints` API                                                                               |
+| `finetuned`                                      | Subcommands (`load`, `rm`, `del`, `delete`); model names after `load`/`rm`/`del`/`delete` from `/training/finetuned-models` API |
+| `source`, `less`, `tee`, `pushd`, `sort`, `uniq` | File/directory path completion (fallback)                                                                                       |
 
 ### Path Completion
 
@@ -552,7 +552,7 @@ End a line with `\` to continue on the next line:
   > > models.txt
 ```
 
-The secondary prompt is `  > `.
+The secondary prompt is ` >`.
 
 ---
 
@@ -576,12 +576,12 @@ Editing comes from the system `readline` library (Emacs bindings). If
 
 ### Completion & History
 
-| Shortcut | Action |
-|----------|--------|
-| `Tab` | Complete command / argument / path |
-| `↑` / `↓` (`Ctrl+P` / `Ctrl+N`) | Previous / next history entry |
-| `Ctrl+R` | Reverse incremental history search |
-| `Ctrl+S` | Forward incremental history search — subject to terminal flow control; see note below |
+| Shortcut                        | Action                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------- |
+| `Tab`                           | Complete command / argument / path                                                    |
+| `↑` / `↓` (`Ctrl+P` / `Ctrl+N`) | Previous / next history entry                                                         |
+| `Ctrl+R`                        | Reverse incremental history search                                                    |
+| `Ctrl+S`                        | Forward incremental history search — subject to terminal flow control; see note below |
 
 `Ctrl+S` is bound to `forward-search-history`, but most terminals reserve it as
 XOFF (pause output) flow control, so it is consumed by the terminal and never
@@ -591,31 +591,31 @@ again) to move backward through matches, or disable flow control with
 
 ### Cursor movement
 
-| Shortcut | Action |
-|----------|--------|
+| Shortcut          | Action                |
+| ----------------- | --------------------- |
 | `Ctrl+A` / `Home` | Move to start of line |
-| `Ctrl+E` / `End` | Move to end of line |
-| `Alt+B` | Back one word |
-| `Alt+F` | Forward one word |
+| `Ctrl+E` / `End`  | Move to end of line   |
+| `Alt+B`           | Back one word         |
+| `Alt+F`           | Forward one word      |
 
 ### Editing
 
-| Shortcut | Action |
-|----------|--------|
-| `Backspace` | Delete char before caret |
-| `Ctrl+D` | Delete char at caret (EOF on empty line = exit) |
-| `Alt+D` | Delete word after caret |
-| `Ctrl+W` | Delete word before caret |
-| `Ctrl+K` | Kill to end of line |
-| `Ctrl+U` | Kill to start of line |
-| `Ctrl+T` | Transpose chars around caret |
+| Shortcut    | Action                                          |
+| ----------- | ----------------------------------------------- |
+| `Backspace` | Delete char before caret                        |
+| `Ctrl+D`    | Delete char at caret (EOF on empty line = exit) |
+| `Alt+D`     | Delete word after caret                         |
+| `Ctrl+W`    | Delete word before caret                        |
+| `Ctrl+K`    | Kill to end of line                             |
+| `Ctrl+U`    | Kill to start of line                           |
+| `Ctrl+T`    | Transpose chars around caret                    |
 
 ### Kill ring & process control
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Y` | Yank last killed text |
-| `Ctrl+L` | Clear screen |
+| Shortcut | Action                                                |
+| -------- | ----------------------------------------------------- |
+| `Ctrl+Y` | Yank last killed text                                 |
+| `Ctrl+L` | Clear screen                                          |
 | `Ctrl+C` | Abort the running command, or cancel the current line |
 
 ---
@@ -707,38 +707,38 @@ python3 -m pytest tests/test_shell_repl.py tests/test_shell_integration.py -v
 
 ### Test Coverage
 
-| Area | Tests |
-|------|-------|
-| Pipeline parsing | 8 |
-| Pipeline execution | 6 |
-| Pipe filters (grep/head/tail/wc) | 4 |
-| Alias (set/list/remove/expansion) | 7 |
-| State persistence (save/load/dedup/max) | 8 |
-| Background parsing | 3 |
-| Echo | 2 |
-| Source command | 5 |
-| Py command | 5 |
-| Command substitution | 4 |
-| Env persistence | 3 |
-| Help | 3 |
-| History with n | 3 |
-| Fc command | 6 |
-| Job control (bg/fg) | 5 |
-| NO_COLOR, inline env | 8 |
-| Sleep | 4 |
-| PS1 escapes | 7 |
-| RC file | 5 |
-| Gen completion, path completion | 7 |
-| Tee | 2 |
-| Sort (reverse/unique/numeric) | 6 |
-| Uniq (dedup) | 3 |
-| Less (pager) | 5 |
-| Dir stack (pushd/popd/dirs) | 6 |
-| Watch | 2 |
-| Export | 4 |
-| Command registration | 10 |
-| Integration API calls (ShellCommands) | 11 |
-| Integration via REPL (commands + pipelines) | 19 |
+| Area                                        | Tests |
+| ------------------------------------------- | ----- |
+| Pipeline parsing                            | 8     |
+| Pipeline execution                          | 6     |
+| Pipe filters (grep/head/tail/wc)            | 4     |
+| Alias (set/list/remove/expansion)           | 7     |
+| State persistence (save/load/dedup/max)     | 8     |
+| Background parsing                          | 3     |
+| Echo                                        | 2     |
+| Source command                              | 5     |
+| Py command                                  | 5     |
+| Command substitution                        | 4     |
+| Env persistence                             | 3     |
+| Help                                        | 3     |
+| History with n                              | 3     |
+| Fc command                                  | 6     |
+| Job control (bg/fg)                         | 5     |
+| NO_COLOR, inline env                        | 8     |
+| Sleep                                       | 4     |
+| PS1 escapes                                 | 7     |
+| RC file                                     | 5     |
+| Gen completion, path completion             | 7     |
+| Tee                                         | 2     |
+| Sort (reverse/unique/numeric)               | 6     |
+| Uniq (dedup)                                | 3     |
+| Less (pager)                                | 5     |
+| Dir stack (pushd/popd/dirs)                 | 6     |
+| Watch                                       | 2     |
+| Export                                      | 4     |
+| Command registration                        | 10    |
+| Integration API calls (ShellCommands)       | 11    |
+| Integration via REPL (commands + pipelines) | 19    |
 
 ---
 
@@ -747,31 +747,31 @@ python3 -m pytest tests/test_shell_repl.py tests/test_shell_integration.py -v
 The shell communicates with the backend via HTTP. All endpoints are
 documented in `docs/routers.md`.
 
-| Shell Command | API Endpoint | Method |
-|---------------|-------------|--------|
-| `health` | `/health` | GET |
-| `status` | `/health` + `/health/detailed` | GET |
-| `models` | `/models` | GET |
-| `load` | `/models/load` | POST |
-| `unload` | `/models/unload` | POST |
-| `souls` | `/souls` | GET |
-| `switch` | `/souls/switch` | POST |
-| `whoami` | `/souls/current` | GET |
-| `datasets` | `/datasets` | GET |
-| `knowledge` | `/knowledge/list` + `/knowledge/stats` | GET |
-| `checkpoints` | `/training/checkpoints` | GET |
-| `load_checkpoint` | `/training/checkpoints/{name}/load` | POST |
-| `delete_checkpoint` | `/training/checkpoints/{name}` | DELETE |
-| `finetuned` | `/training/finetuned-models` | GET |
-| `load_finetuned` | `/training/finetuned-models/{name}/load` | POST |
-| `delete_finetuned` | `/training/finetuned-models/{name}` | DELETE |
-| `gen` | `/inference/generate` | POST |
-| `chat` | `/chat` | POST |
-| `procs` | `/training/jobs` | GET |
-| `kill` | `/training/jobs/{id}/stop` | POST |
-| `metrics` | `/system/metrics` | GET |
-| `tokenizer` | `/tokenizer/stats` | GET |
-| `ai` | `/inference/generate` | POST |
+| Shell Command       | API Endpoint                             | Method |
+| ------------------- | ---------------------------------------- | ------ |
+| `health`            | `/health`                                | GET    |
+| `status`            | `/health` + `/health/detailed`           | GET    |
+| `models`            | `/models`                                | GET    |
+| `load`              | `/models/load`                           | POST   |
+| `unload`            | `/models/unload`                         | POST   |
+| `souls`             | `/souls`                                 | GET    |
+| `switch`            | `/souls/switch`                          | POST   |
+| `whoami`            | `/souls/current`                         | GET    |
+| `datasets`          | `/datasets`                              | GET    |
+| `knowledge`         | `/knowledge/list` + `/knowledge/stats`   | GET    |
+| `checkpoints`       | `/training/checkpoints`                  | GET    |
+| `load_checkpoint`   | `/training/checkpoints/{name}/load`      | POST   |
+| `delete_checkpoint` | `/training/checkpoints/{name}`           | DELETE |
+| `finetuned`         | `/training/finetuned-models`             | GET    |
+| `load_finetuned`    | `/training/finetuned-models/{name}/load` | POST   |
+| `delete_finetuned`  | `/training/finetuned-models/{name}`      | DELETE |
+| `gen`               | `/inference/generate`                    | POST   |
+| `chat`              | `/chat`                                  | POST   |
+| `procs`             | `/training/jobs`                         | GET    |
+| `kill`              | `/training/jobs/{id}/stop`               | POST   |
+| `metrics`           | `/system/metrics`                        | GET    |
+| `tokenizer`         | `/tokenizer/stats`                       | GET    |
+| `ai`                | `/inference/generate`                    | POST   |
 
 ---
 
@@ -781,12 +781,12 @@ The shell gates destructive operations by risk level. Every command is classifie
 
 ### Risk Levels
 
-| Level | Default | Commands | Examples |
-|-------|---------|----------|----------|
-| **safe** | allow | Read-only, no side effects | `ls`, `cat`, `echo`, `help`, `pwd`, `grep`, `wc` |
-| **elevated** | allow | Modifies shell state | `alias`, `cd`, `set`, `export`, `py`, `ai`, `bg`, `fg` |
-| **dangerous** | **deny** | Modifies filesystem | `rm`, `cp`, `mv`, `chmod`, `mkdir`, `touch` |
-| **critical** | **deny** | Affects system/services | `boot`, `shutdown`, `svc`, `load`, `train`, `kill` |
+| Level         | Default  | Commands                   | Examples                                               |
+| ------------- | -------- | -------------------------- | ------------------------------------------------------ |
+| **safe**      | allow    | Read-only, no side effects | `ls`, `cat`, `echo`, `help`, `pwd`, `grep`, `wc`       |
+| **elevated**  | allow    | Modifies shell state       | `alias`, `cd`, `set`, `export`, `py`, `ai`, `bg`, `fg` |
+| **dangerous** | **deny** | Modifies filesystem        | `rm`, `cp`, `mv`, `chmod`, `mkdir`, `touch`            |
+| **critical**  | **deny** | Affects system/services    | `boot`, `shutdown`, `svc`, `load`, `train`, `kill`     |
 
 Force patterns auto-promote risk: `rm -rf` → critical (even though `rm` is dangerous).
 
@@ -831,6 +831,7 @@ User input
 ```
 
 All paths covered:
+
 - `run()` main loop → `_check_permission(interactive=True)`
 - `execute()` programmatic API → `_check_permission(interactive=False)`
 - `_execute_single()` pipelines/background/fc → `_check_permission(interactive=False)`
@@ -857,10 +858,10 @@ Grants persist to `~/.config/shell_permissions.json`:
 from domains.shell import ShellPermissions, Risk
 
 perms = ShellPermissions()
-perms.set_policy(Risk.DANGEROUS, "allow")   # allow all dangerous
-perms.set_policy(Risk.CRITICAL, "deny")     # keep critical blocked
-perms.grant("rm", persist=True)             # allow rm forever
-perms.revoke("rm")                          # remove rm grant
+perms.set_policy(Risk.DANGEROUS, "allow")  # allow all dangerous
+perms.set_policy(Risk.CRITICAL, "deny")  # keep critical blocked
+perms.grant("rm", persist=True)  # allow rm forever
+perms.revoke("rm")  # remove rm grant
 ```
 
 ---

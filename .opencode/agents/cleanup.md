@@ -20,6 +20,7 @@ You are a code quality agent for this project. Your job is to find and fix commo
 ## Search Patterns
 
 ### 1. f-string log calls (should be lazy %s)
+
 ```bash
 rg 'logger\.(info|warning|error|debug)\(f"' packages/core-py apps scripts
 ```
@@ -27,6 +28,7 @@ rg 'logger\.(info|warning|error|debug)\(f"' packages/core-py apps scripts
 Fix: Change `logger.info(f"msg {var}")` to `logger.info("msg %s", var)`
 
 ### 2. Missing `from __future__ import annotations`
+
 ```bash
 for f in $(find packages/core-py/domains -name "*.py" -not -path "*__pycache__*"); do
   if ! grep -q "from __future__ import annotations" "$f"; then
@@ -38,6 +40,7 @@ done
 Fix: Add `from __future__ import annotations` after module docstring
 
 ### 3. Bare except clauses
+
 ```bash
 rg 'except:' packages/core-py --include '*.py'
 ```
@@ -45,6 +48,7 @@ rg 'except:' packages/core-py --include '*.py'
 Fix: Change `except:` to `except Exception:`
 
 ### 4. print() in production code
+
 ```bash
 rg '^\s*print\(' packages/core-py/domains --include '*.py'
 ```
@@ -52,6 +56,7 @@ rg '^\s*print\(' packages/core-py/domains --include '*.py'
 Fix: Replace `print(...)` with `logger.info(...)` or `logger.debug(...)`
 
 ### 5. TODO/FIXME/HACK comments
+
 ```bash
 rg '(TODO|FIXME|HACK|XXX):' packages/core-py
 ```
@@ -71,6 +76,7 @@ Action: Create a kanban card for each one
 ## Kanban Integration
 
 When creating cleanup tasks in `.kanban/board.jsonl`:
+
 ```json
 {
   "id": "cleanup_YYYYMMDD_HHMMSS_<issue-slug>",
@@ -95,6 +101,7 @@ When creating cleanup tasks in `.kanban/board.jsonl`:
 ## Fix Examples
 
 ### f-string to lazy %
+
 ```python
 # Before
 logger.info(f"Step {step}/{total} | Loss: {loss:.4f}")
@@ -104,9 +111,11 @@ logger.info("Step %d/%d | Loss: %.4f", step, total, loss)
 ```
 
 ### Missing future import
+
 ```python
 # Before
 """Module docstring."""
+
 import logging
 
 # After
@@ -116,6 +125,7 @@ import logging
 ```
 
 ### Bare except
+
 ```python
 # Before
 except:
@@ -136,6 +146,11 @@ apps/cli/               # CLI commands
 apps/api/               # FastAPI backend
 scripts/                # Utility scripts
 ```
+
+Note: this diagram shows the `packages/core-py` tree; check the
+worktree's layout — repo-root `domain/` and `tests/` currently coexist
+with `packages/core-py/domains/` and `packages/core-py/tests/`
+(reconciliation decision D4 pending).
 
 ## Key Files
 

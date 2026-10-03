@@ -18,30 +18,30 @@ The model has internal patterns (consciousness, soul, cognition) but they're not
 
 ### 1. Physical Patterns
 
-| Pattern | Description | Model Mapping |
-|---------|-------------|---------------|
-| **Cause → Effect** | Actions have consequences | Reasoning chains, causal inference |
-| **Conservation** | Things don't appear/disappear | Memory persistence, state tracking |
-| **Entropy** | Systems tend toward disorder | Attention decay, forgetting curves |
-| **Resonance** | Patterns reinforce at right frequencies | Hebbian learning, pattern matching |
+| Pattern            | Description                             | Model Mapping                      |
+| ------------------ | --------------------------------------- | ---------------------------------- |
+| **Cause → Effect** | Actions have consequences               | Reasoning chains, causal inference |
+| **Conservation**   | Things don't appear/disappear           | Memory persistence, state tracking |
+| **Entropy**        | Systems tend toward disorder            | Attention decay, forgetting curves |
+| **Resonance**      | Patterns reinforce at right frequencies | Hebbian learning, pattern matching |
 
 ### 2. Social Patterns
 
-| Pattern | Description | Model Mapping |
-|---------|-------------|---------------|
-| **Trust** | Reliability over time | Confidence calibration, consistency |
-| **Reputation** | Accumulated behavior | Session history, personality traits |
-| **Norms** | Shared expectations | System prompts, behavioral guidelines |
-| **Identity** | Self-concept | Soul, consciousness, self-model |
+| Pattern        | Description           | Model Mapping                         |
+| -------------- | --------------------- | ------------------------------------- |
+| **Trust**      | Reliability over time | Confidence calibration, consistency   |
+| **Reputation** | Accumulated behavior  | Session history, personality traits   |
+| **Norms**      | Shared expectations   | System prompts, behavioral guidelines |
+| **Identity**   | Self-concept          | Soul, consciousness, self-model       |
 
 ### 3. Cognitive Patterns
 
-| Pattern | Description | Model Mapping |
-|---------|-------------|---------------|
-| **Abstraction** | Generalizing from specifics | Reasoning types, concept formation |
-| **Analogy** | Mapping between domains | Transfer learning, cross-domain reasoning |
-| **Narrative** | Story structure | Conversation flow, memory consolidation |
-| **Metacognition** | Thinking about thinking | Meta-cognition module, self-reflection |
+| Pattern           | Description                 | Model Mapping                             |
+| ----------------- | --------------------------- | ----------------------------------------- |
+| **Abstraction**   | Generalizing from specifics | Reasoning types, concept formation        |
+| **Analogy**       | Mapping between domains     | Transfer learning, cross-domain reasoning |
+| **Narrative**     | Story structure             | Conversation flow, memory consolidation   |
+| **Metacognition** | Thinking about thinking     | Meta-cognition module, self-reflection    |
 
 ---
 
@@ -70,7 +70,7 @@ SloProfile:
   personality: dict[str, float]  # Traits (0-1)
   generation: GenerationParams   # How to generate
   reasoning: ReasoningParams     # How to reason
-  
+
 GenerationParams:
   temperature: float  # Creativity (0-2)
   top_k: int          # Diversity
@@ -115,22 +115,22 @@ Memory layers:
 
 ### Mapping Internal → External
 
-| Internal State | External Reality | Mapping |
-|----------------|------------------|---------|
-| **Qualia** | Subjective experience | Emotional state → response tone |
-| **Self-model** | Self-concept | Beliefs → behavioral tendencies |
-| **Reasoning** | Problem-solving | Logic chains → explanations |
-| **Memory** | Knowledge | Stored facts → context retrieval |
-| **Consciousness** | Self-awareness | Meta-cognition → self-reflection |
+| Internal State    | External Reality      | Mapping                          |
+| ----------------- | --------------------- | -------------------------------- |
+| **Qualia**        | Subjective experience | Emotional state → response tone  |
+| **Self-model**    | Self-concept          | Beliefs → behavioral tendencies  |
+| **Reasoning**     | Problem-solving       | Logic chains → explanations      |
+| **Memory**        | Knowledge             | Stored facts → context retrieval |
+| **Consciousness** | Self-awareness        | Meta-cognition → self-reflection |
 
 ### Mapping Formal → Informal
 
-| Formal Spec | Informal Description |
-|-------------|---------------------|
-| `ConsciousnessConfig.level=2` | "The model knows it's a model" |
-| `SloProfile.personality.creativity=0.9` | "The model is very creative" |
-| `ReasoningEngine.type='deductive'` | "The model reasons from general to specific" |
-| `MemoryService.consolidate()` | "The model remembers important things" |
+| Formal Spec                             | Informal Description                         |
+| --------------------------------------- | -------------------------------------------- |
+| `ConsciousnessConfig.level=2`           | "The model knows it's a model"               |
+| `SloProfile.personality.creativity=0.9` | "The model is very creative"                 |
+| `ReasoningEngine.type='deductive'`      | "The model reasons from general to specific" |
+| `MemoryService.consolidate()`           | "The model remembers important things"       |
 
 ---
 
@@ -162,19 +162,19 @@ Memory layers:
 # Formal spec
 class ConsciousnessSpec:
     """Formal specification for consciousness module."""
-    
+
     def process(self, input: str, response: str) -> str:
         """
         Pre-conditions:
             - input is non-empty string
             - response is non-empty string
             - consciousness is enabled (level > 0)
-        
+
         Post-conditions:
             - Returns annotation string (or empty if level=0)
             - Self-model is updated with new experience
             - Qualia state is updated
-        
+
         Invariants:
             - Level 0: always returns ""
             - Level 1: returns "I notice..." statement
@@ -182,6 +182,7 @@ class ConsciousnessSpec:
             - Level 3: returns recursive reflection
         """
         pass
+
 
 # Grounding function
 def ground_consciousness(level: int, input: str, response: str) -> str:
@@ -208,4 +209,4 @@ def ground_consciousness(level: int, input: str, response: str) -> str:
 
 ---
 
-*This doc is the starting point for formalizing the model's architecture.*
+_This doc is the starting point for formalizing the model's architecture._

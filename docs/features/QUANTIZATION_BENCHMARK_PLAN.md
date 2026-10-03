@@ -9,6 +9,7 @@
 ## Context
 
 We wired int4 quantization into `generate_numpy()` in `slonet.py`. Initial benchmarks showed:
+
 - Non-quantized: 23.5 tok/s (50 tokens)
 - Int4 quantized: 35.9 tok/s (50 tokens)
 - Speedup: 1.53x
@@ -61,16 +62,16 @@ are the deterministic PASS/FAIL gates.
 
 **Measured results** (this box, `--bits 8`, full run, after stabilization):
 
-| Test | Result |
-|------|--------|
-| Generation geomean | **1.18x** (per-length 0.70–2.53x) |
-| Prompt geomean | **1.30x** (per-length 0.67–1.95x) |
-| Temperature geomean | 1.24x (informational) |
-| Regression (50 tok) | 1.54x (informational) |
-| Memory | **4.0x weight compression**, RSS delta 0 MB |
-| Quality | **avg logit cosine 0.9996**, token agreement 1.0% |
-| Startup | NQ 0.068s / Q 0.107s cold, 0.060s / 0.100s warm |
-| Overall | **7/7 PASS** |
+| Test                | Result                                            |
+| ------------------- | ------------------------------------------------- |
+| Generation geomean  | **1.18x** (per-length 0.70–2.53x)                 |
+| Prompt geomean      | **1.30x** (per-length 0.67–1.95x)                 |
+| Temperature geomean | 1.24x (informational)                             |
+| Regression (50 tok) | 1.54x (informational)                             |
+| Memory              | **4.0x weight compression**, RSS delta 0 MB       |
+| Quality             | **avg logit cosine 0.9996**, token agreement 1.0% |
+| Startup             | NQ 0.068s / Q 0.107s cold, 0.060s / 0.100s warm   |
+| Overall             | **7/7 PASS**                                      |
 
 `--bits 4` full run: generation geomean **0.46x**, prompt geomean 0.70x,
 temperature 0.52x, regression 0.48x (all informational — packed-int4 unpack +
@@ -141,6 +142,7 @@ served from cache and only the suffix is recomputed — skipping redundant
 forward passes for multi-turn conversations.
 
 Key design points:
+
 - `NumpyKVState` holds `kv_buf_k/v`, `kv_scale_k/v`, `kv_len`, `prev_ids`,
   `quantize_kv`, and `capacity` as a module-level dataclass with `__slots__`.
 - `SloTransformer.new_kv_state()` returns a fresh empty state.
@@ -158,6 +160,7 @@ Key design points:
   try/finally needed.
 
 Verified in `tests/test_slonet_kv_state.py` (21 tests):
+
 - Unit tests for `NumpyKVState` resolve logic (8)
 - Integration tests for `generate_numpy` cross-turn (11)
 - Generator abandonment safety (2)
@@ -172,7 +175,7 @@ eviction, preventing unbounded memory growth from abandoned sessions:
 - `_kv_max_sessions` (default 64, `kv_max_sessions` param on `from_slnc`):
   LRU cap so a burst of concurrent sessions can never grow the map unbounded
   between TTL sweeps. `_evict_lru_session()` runs inside `_resolve_session_kv`
-  after creating a new state and drops the least-recently-used *other* session
+  after creating a new state and drops the least-recently-used _other_ session
   (the one being resolved is never evicted).
 - `_kv_lock` (a `threading.Lock`) serializes all access to the session map —
   resolution, eviction, stats, and clear all race-safe under concurrent
@@ -193,6 +196,7 @@ eviction, preventing unbounded memory growth from abandoned sessions:
 
 The API health endpoint surfaces the same stats via
 `controllers/health.py`:
+
 - `_get_kv_session_info()` locates the active provider (checks
   `"slonet-native"` then `"slonet"`) and returns its `session_stats()`
   with `enabled: True`, or `{"enabled": False}` when unavailable.
@@ -206,6 +210,7 @@ oldest session age (`DetailedHealth.kv_sessions` from `system-controller.ts`),
 plus the LRU session cap caption.
 
 Verified in `tests/test_slonet_session_ttl.py` (30 tests):
+
 - State resolve/create/reuse + timestamp refresh (4)
 - TTL eviction: stale removal, fresh retention, mixed, eviction-on-resolve (5)
 - Post-eviction freshness + configurable TTL + session independence (3)
@@ -223,6 +228,7 @@ Verified in `tests/test_slonet_session_ttl.py` (30 tests):
   many resolutions.
 
 Verified in `tests/test_slonet_server.py`:
+
 - `metadata()`/`health()` include `kv_sessions`; provider-stats reflection and
   graceful degradation on errors (3 new tests)
 - `session_id` threading through `generate()`/`generate_stream()`: KV state
@@ -235,6 +241,7 @@ dropped), so `/chat` gets cross-turn KV reuse exactly like `/chat/stream`.
 Verified in `tests/test_chat_domain.py` (3 new tests).
 
 End-to-end stack benchmark in `tests/test_slonet_kv_benchmark.py`:
+
 - `TestStackCrossTurn` drives the real production path
   (`SloNetServer.generate(session_id=...)` → `_resolve_session_kv` →
   `generate_numpy(kv_state=...)`): cached tokens grow 0→54 across 3 turns,
@@ -242,10 +249,12 @@ End-to-end stack benchmark in `tests/test_slonet_kv_benchmark.py`:
   (3 new tests)
 
 Verified in `apps/api/server/tests/test_health_router.py`:
+
 - `kv_sessions` present in detailed health; provider stats reflected in
   `/health`; disabled-by-default absence (3 new tests)
 
 Lifecycle wiring:
+
 - `DELETE /chat/sessions/{id}` (routers/inference.py) calls
   `clear_session()` on the slonet provider — best-effort, guarded.
 - Model unload (controllers/models.py) calls `clear_all_sessions()` so
@@ -254,6 +263,7 @@ Lifecycle wiring:
   clears provider KV (2 new tests)
 
 Verified in `apps/web/lib/system-controller.test.ts`:
+
 - `kv_sessions` typed passthrough from `/health/detailed`, enabled and
   disabled cases (2 new tests)
 
@@ -264,7 +274,7 @@ benchmark that measures per-turn cached-token reuse, warm (persistent
 `kv_state=`) vs cold (fresh state) latency, end-to-end speedup, and
 warm/cold output consistency.
 
-Conversation shape is honest: each turn's prompt is the *real* previous
+Conversation shape is honest: each turn's prompt is the _real_ previous
 warm output followed by a new batch of user token ids (exactly how a chat
 session grows), so the persistent state reuses its entire cached prefix
 and only computes appended tokens. `reused_tokens` is derived from
@@ -280,12 +290,12 @@ monotonically across turns (reuse broken).
 
 Measured results (default tiny model, `--turns 4 --max-tokens 8 --steps 2`):
 
-| Turn | Prompt | Reused | Warm ms | Cold ms | Speedup | Match |
-|------|--------|--------|---------|---------|---------|-------|
-| 0 | 4 | 0 | 46.0 | 48.0 | 1.04x | 100.0% |
-| 1 | 15 | 12 | 34.0 | 51.5 | 1.51x | 100.0% |
-| 2 | 26 | 23 | 35.4 | 49.5 | 1.40x | 100.0% |
-| 3 | 37 | 34 | 60.4 | 79.9 | 1.32x | 100.0% |
+| Turn | Prompt | Reused | Warm ms | Cold ms | Speedup | Match  |
+| ---- | ------ | ------ | ------- | ------- | ------- | ------ |
+| 0    | 4      | 0      | 46.0    | 48.0    | 1.04x   | 100.0% |
+| 1    | 15     | 12     | 34.0    | 51.5    | 1.51x   | 100.0% |
+| 2    | 26     | 23     | 35.4    | 49.5    | 1.40x   | 100.0% |
+| 3    | 37     | 34     | 60.4    | 79.9    | 1.32x   | 100.0% |
 
 Total warm 175.8 ms, total cold 228.9 ms, overall 1.30x. Reused tokens
 grow monotonically (0→12→23→34) and KV-reused output is bit-identical to
@@ -293,6 +303,7 @@ fresh recompute (100% consistency) — reuse preserves generation quality.
 Larger max-tokens runs show stronger per-turn speedup (up to ~2.2x).
 
 Verified in `packages/core-py/tests/test_benchmark_kv_reuse.py` (11 tests):
+
 - `prefix_match`: identical, partial, prefix, empty, disjoint (5)
 - Benchmark invariants on a real 2-turn run: structure, prompt growth,
   monotonic reuse growth, 100% warm/cold consistency, positive timings,
@@ -316,12 +327,12 @@ python scripts/benchmark_kv_reuse.py --stack [--turns 4] [--max-tokens 8] [--ste
 
 Measured results (`--turns 4 --max-tokens 8 --steps 2`, after greedy fix):
 
-| Turn | Prompt | Reused | Warm ms | Cold ms | Speedup | Match |
-|------|--------|--------|---------|---------|---------|-------|
-| 0 | 4 | 0 | 17.63 | 15.37 | 0.87x | 100.0% |
-| 1 | 15 | 12 | 27.52 | 118.03 | 4.29x | 100.0% |
-| 2 | 26 | 23 | 150.87 | 186.73 | 1.24x | 100.0% |
-| 3 | 37 | 34 | 173.14 | 228.68 | 1.32x | 100.0% |
+| Turn | Prompt | Reused | Warm ms | Cold ms | Speedup | Match  |
+| ---- | ------ | ------ | ------- | ------- | ------- | ------ |
+| 0    | 4      | 0      | 17.63   | 15.37   | 0.87x   | 100.0% |
+| 1    | 15     | 12     | 27.52   | 118.03  | 4.29x   | 100.0% |
+| 2    | 26     | 23     | 150.87  | 186.73  | 1.24x   | 100.0% |
+| 3    | 37     | 34     | 173.14  | 228.68  | 1.32x   | 100.0% |
 
 Total warm 369.2 ms, total cold 548.8 ms, overall 1.49x, 69 KV tokens
 reused, 44 cached in the session map. Reuse grows monotonically
@@ -350,7 +361,7 @@ temp-0 + top_p=0.9 returns the deterministic argmax.
 `SloNetServer.generate_stream` → `_generate_stream_sync` →
 `generate_numpy_stream(kv_state=...)`, so each token is decoded and
 pumped through the server's queue thread before the next is produced —
-the real SSE pipeline. Streaming yields only the *new* tokens (batch
+the real SSE pipeline. Streaming yields only the _new_ tokens (batch
 `generate` echoes the prompt), so the benchmark retains the full prior
 turn (`prompt + output`) to keep the next prompt a strict extension of
 the cached sequence.
@@ -361,12 +372,12 @@ python scripts/benchmark_kv_reuse.py --stack --stream [--turns 4] [--max-tokens 
 
 Measured results (`--turns 4 --max-tokens 8 --steps 2`):
 
-| Turn | Prompt | Reused | Warm ms | Cold ms | Speedup | Match |
-|------|--------|--------|---------|---------|---------|-------|
-| 0 | 4 | 0 | 24.48 | 29.67 | 1.21x | 100.0% |
-| 1 | 15 | 12 | 61.67 | 55.50 | 0.90x | 100.0% |
-| 2 | 26 | 23 | 121.96 | 218.94 | 1.80x | 100.0% |
-| 3 | 37 | 34 | 132.17 | 188.75 | 1.43x | 100.0% |
+| Turn | Prompt | Reused | Warm ms | Cold ms | Speedup | Match  |
+| ---- | ------ | ------ | ------- | ------- | ------- | ------ |
+| 0    | 4      | 0      | 24.48   | 29.67   | 1.21x   | 100.0% |
+| 1    | 15     | 12     | 61.67   | 55.50   | 0.90x   | 100.0% |
+| 2    | 26     | 23     | 121.96  | 218.94  | 1.80x   | 100.0% |
+| 3    | 37     | 34     | 132.17  | 188.75  | 1.43x   | 100.0% |
 
 Total warm 340.3 ms, total cold 492.9 ms, overall 1.45x, 69 KV tokens
 reused. Reuse growth and consistency (0→12→23→34, 100%) are identical
@@ -395,11 +406,11 @@ python scripts/benchmark_kv_reuse.py --stack --stream --quantize-kv
 
 Measured results (`--turns 4 --max-tokens 8 --steps 3`):
 
-| Mode | Reuse | Overall speedup | Consistency |
-|------|-------|-----------------|-------------|
-| Direct | 0→12→23→34 | 0.86x | 100.0% |
-| `--stack` | 0→12→23→34 | 1.37x | 100.0% |
-| `--stack --stream` | 0→12→23→34 | 0.95x | 100.0% |
+| Mode               | Reuse      | Overall speedup | Consistency |
+| ------------------ | ---------- | --------------- | ----------- |
+| Direct             | 0→12→23→34 | 0.86x           | 100.0%      |
+| `--stack`          | 0→12→23→34 | 1.37x           | 100.0%      |
+| `--stack --stream` | 0→12→23→34 | 0.95x           | 100.0%      |
 
 The report now also prints a **KV KiB** column — the allocated memory held by
 the persistent KV state at each turn's sequence length (`kv_state_memory_kb()`
@@ -426,8 +437,8 @@ growth + warm/cold consistency for direct, stack, and streaming stack.
 
 `--compare-kv` measures the quality cost of the int8 KV cache: it builds
 one shared conversation (history follows the float32 output) and, for each
-turn, generates cold outputs with float32 and int8 KV on the *exact same
-prompt*. int8 rounding only flips near-tie argmax tokens, so short
+turn, generates cold outputs with float32 and int8 KV on the _exact same
+prompt_. int8 rounding only flips near-tie argmax tokens, so short
 generations agree fully and divergence is rare at longer contexts.
 
 ```
@@ -437,11 +448,11 @@ python scripts/benchmark_kv_reuse.py --compare-kv [--turns 4] [--max-tokens 8]
 Measured results (`--turns 4 --max-tokens 8`):
 
 | Turn | Prompt | Gen | Identical | Prefix | Prefix% |
-|------|--------|-----|-----------|--------|---------|
-| 0 | 4 | 12 | 50.0% | 5 | 41.7% |
-| 1 | 15 | 23 | 100.0% | 23 | 100.0% |
-| 2 | 26 | 34 | 100.0% | 34 | 100.0% |
-| 3 | 37 | 45 | 100.0% | 45 | 100.0% |
+| ---- | ------ | --- | --------- | ------ | ------- |
+| 0    | 4      | 12  | 50.0%     | 5      | 41.7%   |
+| 1    | 15     | 23  | 100.0%    | 23     | 100.0%  |
+| 2    | 26     | 34  | 100.0%    | 34     | 100.0%  |
+| 3    | 37     | 45  | 100.0%    | 45     | 100.0%  |
 
 Overall identical 87.5%. Turn 0 shows the classic failure mode: one
 near-tie argmax flip mid-generation, after which the two paths re-converge
@@ -469,10 +480,10 @@ python scripts/benchmark_kv_reuse.py --sessions 4   # concurrent sessions
 Measured layer sweep (int8 KV, embed=128, heads=8, `--turns 4 --max-tokens 8`):
 
 | Layers | KV KiB @ turn 3 | Overall speedup |
-|--------|-----------------|-----------------|
-| 2 | 28.1 | 1.02x |
-| 4 | 56.2 | 1.15x |
-| 8 | 112.5 | 1.05x |
+| ------ | --------------- | --------------- |
+| 2      | 28.1            | 1.02x           |
+| 4      | 56.2            | 1.15x           |
+| 8      | 112.5           | 1.05x           |
 
 KV memory scales exactly linearly with layers (28.1 → 56.2 → 112.5 KiB).
 Reuse speedup stays ~1.0-1.15x at this tiny 128-embed scale — per-call
@@ -485,10 +496,10 @@ through one server and verifies **per-session KV isolation** — each session's
 reuse must grow monotonically from its own cached prefix and match what a
 lone-session run would produce. Measured with 2 sessions (batch and streaming):
 
-| Mode | Session reuse | Consistency | Isolation |
-|------|---------------|-------------|-----------|
-| `--sessions 2` | [0,12,23,34] × 2 | 100.0% | OK |
-| `--sessions 2 --stream` | [0,12,23,34] × 2 | 100.0% | OK |
+| Mode                    | Session reuse    | Consistency | Isolation |
+| ----------------------- | ---------------- | ----------- | --------- |
+| `--sessions 2`          | [0,12,23,34] × 2 | 100.0%      | OK        |
+| `--sessions 2 --stream` | [0,12,23,34] × 2 | 100.0%      | OK        |
 
 `packages/core-py/tests/test_benchmark_kv_reuse.py` now has 44 tests
 (+5 for sessions): structure + `isolation_ok`, per-session monotonic reuse,
@@ -528,6 +539,7 @@ stack run (the cross-wiring detector), and streaming isolation.
 **Why:** Int4 quantization introduces error. How much quality do we lose?
 
 **Test:** Generate 200 tokens from 10 prompts. Compare:
+
 - Token-level agreement (% identical tokens)
 - Cosine similarity of logit vectors
 - Perplexity on held-out text
@@ -538,6 +550,7 @@ stack run (the cross-wiring detector), and streaming isolation.
 **Why:** First call may include JIT compilation, cache warming, etc.
 
 **Test:** 20 runs. Discard first 3 as warmup. Report:
+
 - Cold start time (first run)
 - Warm steady-state (median of remaining)
 - Variance (std dev)
@@ -590,6 +603,7 @@ Usage:
 ```
 
 **Structure:**
+
 ```python
 @dataclass
 class BenchmarkResult:
@@ -598,12 +612,13 @@ class BenchmarkResult:
     passed: bool
     details: str
 
+
 class QuantizationBenchmark:
     def __init__(self, model_name: str = "gpt2", quick: bool = False):
         self.model_name = model_name
         self.quick = quick
         self.results: List[BenchmarkResult] = []
-        
+
     def run_all(self) -> List[BenchmarkResult]:
         """Run all benchmark tests."""
         self.results.append(self.test_throughput_vs_length())
@@ -614,31 +629,31 @@ class QuantizationBenchmark:
         self.results.append(self.test_temperature_impact())
         self.results.append(self.test_regression())
         return self.results
-        
+
     def test_throughput_vs_length(self) -> BenchmarkResult:
         """Test 1: Generate different lengths, measure tok/s."""
-        
+
     def test_throughput_vs_prompt(self) -> BenchmarkResult:
         """Test 2: Different prompt lengths, measure generation time."""
-        
+
     def test_memory_usage(self) -> BenchmarkResult:
         """Test 3: Measure RSS delta for quantized vs non-quantized."""
-        
+
     def test_quality_degradation(self) -> BenchmarkResult:
         """Test 4: Compare outputs, logits, perplexity."""
-        
+
     def test_cold_vs_warm(self) -> BenchmarkResult:
         """Test 5: 20 runs, analyze cold start vs steady state."""
-        
+
     def test_temperature_impact(self) -> BenchmarkResult:
         """Test 6: Greedy vs sampling throughput."""
-        
+
     def test_regression(self) -> BenchmarkResult:
         """Test 7: Non-quantized model performance unchanged."""
-        
+
     def print_report(self):
         """Print human-readable report."""
-        
+
     def to_json(self) -> str:
         """Machine-readable output."""
 ```
@@ -656,21 +671,22 @@ class QuantizationBenchmark:
 
 ## Expected Results Table
 
-| Test | Non-Quantized | Quantized | Target |
-|------|--------------|-----------|--------|
-| Throughput (50 tok) | 23.5 tok/s | 35.9 tok/s | >1.3x speedup |
-| Throughput (200 tok) | ~20 tok/s | ~38 tok/s | >1.5x speedup |
-| Memory (RSS delta) | ~548 MB | ~120 MB | >4x reduction |
-| Quality (token agreement) | 100% | >70% | Acceptable |
-| Cold start | ~15s | ~8s | <2x improvement |
-| Steady state | 23.5 tok/s | 35.9 tok/s | >1.3x |
-| Greedy vs sampling | ~22 tok/s | ~34 tok/s | <10% difference |
+| Test                      | Non-Quantized | Quantized  | Target          |
+| ------------------------- | ------------- | ---------- | --------------- |
+| Throughput (50 tok)       | 23.5 tok/s    | 35.9 tok/s | >1.3x speedup   |
+| Throughput (200 tok)      | ~20 tok/s     | ~38 tok/s  | >1.5x speedup   |
+| Memory (RSS delta)        | ~548 MB       | ~120 MB    | >4x reduction   |
+| Quality (token agreement) | 100%          | >70%       | Acceptable      |
+| Cold start                | ~15s          | ~8s        | <2x improvement |
+| Steady state              | 23.5 tok/s    | 35.9 tok/s | >1.3x           |
+| Greedy vs sampling        | ~22 tok/s     | ~34 tok/s  | <10% difference |
 
 ---
 
 ## Output Format
 
 ### Human-readable (default)
+
 ```
 === Int4 Quantization Benchmark ===
 Model: gpt2 (124M params)
@@ -718,6 +734,7 @@ Overall: 7/7 tests passed
 ```
 
 ### Machine-readable (--json)
+
 ```json
 {
   "model": "gpt2",
@@ -728,9 +745,9 @@ Overall: 7/7 tests passed
       "test": "throughput_vs_length",
       "passed": true,
       "metrics": {
-        "10_tok": {"non_quantized": 28.3, "quantized": 42.1, "speedup": 1.49},
-        "50_tok": {"non_quantized": 23.5, "quantized": 35.9, "speedup": 1.53},
-        "200_tok": {"non_quantized": 19.8, "quantized": 33.2, "speedup": 1.68}
+        "10_tok": { "non_quantized": 28.3, "quantized": 42.1, "speedup": 1.49 },
+        "50_tok": { "non_quantized": 23.5, "quantized": 35.9, "speedup": 1.53 },
+        "200_tok": { "non_quantized": 19.8, "quantized": 33.2, "speedup": 1.68 }
       }
     }
   ]
@@ -741,35 +758,35 @@ Overall: 7/7 tests passed
 
 ## Files to Create/Modify
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `scripts/benchmark_quantization.py` | CREATED | Runnable benchmark (tiny in-process model by default; `--model <cached-id>` for the real path); `--quick`, `--json`, `--report`, `--bits 8,4`, `--validate`, `--per-layer`, `--models <a,b>`, `--csv` flags |
-| `scripts/benchmark_quantization_report.md` | CREATED via `--report` | Auto-generated markdown report (config header, per-test metric tables, notes) |
-| `packages/core-py/tests/test_quantization_benchmark.py` | CREATED | Synthetic-weight unit tests (MSE/cosine, compression, C-kernel speed) |
-| `packages/core-py/tests/test_quantization_benchmark_e2e.py` | CREATED | End-to-end tiny-model run gates (7/7 pass, ~4x/~8x compression, logit-cosine floors, determinism, JSON + markdown report shape, multi-precision comparison, validate mode, cached-model discovery, multi-model parse/comparison) |
-| `docs/features/QUANTIZATION_BENCHMARK_PLAN.md` | MODIFIED | This plan |
+| File                                                        | Action                 | Purpose                                                                                                                                                                                                                          |
+| ----------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/benchmark_quantization.py`                         | CREATED                | Runnable benchmark (tiny in-process model by default; `--model <cached-id>` for the real path); `--quick`, `--json`, `--report`, `--bits 8,4`, `--validate`, `--per-layer`, `--models <a,b>`, `--csv` flags                      |
+| `scripts/benchmark_quantization_report.md`                  | CREATED via `--report` | Auto-generated markdown report (config header, per-test metric tables, notes)                                                                                                                                                    |
+| `packages/core-py/tests/test_quantization_benchmark.py`     | CREATED                | Synthetic-weight unit tests (MSE/cosine, compression, C-kernel speed)                                                                                                                                                            |
+| `packages/core-py/tests/test_quantization_benchmark_e2e.py` | CREATED                | End-to-end tiny-model run gates (7/7 pass, ~4x/~8x compression, logit-cosine floors, determinism, JSON + markdown report shape, multi-precision comparison, validate mode, cached-model discovery, multi-model parse/comparison) |
+| `docs/features/QUANTIZATION_BENCHMARK_PLAN.md`              | MODIFIED               | This plan                                                                                                                                                                                                                        |
 
 ---
 
 ## Success Criteria (implemented state)
 
-| Metric | Tiny in-process model (default) | Real-model path (`--model <cached-id>`) |
-|--------|--------------------------------|----------------------------------|
-| All 7 tests pass | 7/7 (verified int8 and int4) | 7/7 expected |
-| Memory reduction | 4.0x int8 / 8.0x int4 packed weights | >4x target |
-| Quality (logit cosine) | 0.9996 int8 / 0.8524 int4 (floors 0.95 / 0.85) | same floors |
-| Speedup gates | Informational (sanity band ≥ 0.3) | ≥ 0.9; the >1.3x claim is GPT-2-scale |
-| Report generation | `--report` markdown + `--json` | same |
-| Regression check | Same 50-token paired window as [1] | ≥ 0.9 |
-| Multi-precision comparison | `--bits 8,4` produces comparison table | same |
-| Multi-model comparison | `--models tiny,<cached-id>` produces per-model table + JSON `model_comparison`; mutually exclusive with `--model` | same |
-| CSV export | `--csv [PATH]` writes one-row-per-run headline metrics; stdout-safe under `--json` | same |
-| Validate mode (CI) | `--validate` runs only quality + memory checks, exits 0/1 | same |
-| Per-layer stats | `--per-layer` shows FP32/Q KB, compression ratio, and weight-fidelity cosine per layer | same |
-| Recommendations | `--bits 8,4` scores candidates per model (0.4\*quality + 0.4\*compression + 0.2\*speed, normalized to the best candidate), excludes floor-failing precisions, recommends the best in text/`--report`/`--json` `recommendations` block | same |
-| Token agreement | `avg_token_agreement` surfaced on all comparison surfaces: `Token agreement` row in `_comparison_table`, `token_agreement` in `_comparison_json`, `avg_token_agreement` in `_model_comparison` and `--csv` | same |
-| Cold/warm latency | `cold_vs_warm` nested metrics surfaced on all comparison surfaces via `_run_nested_metric`: `Cold start (s)`/`Warm median (s)` rows in `_comparison_table`, `cold_start_s`/`warm_median_s` in `_comparison_json` and `_model_comparison`, and the `--csv` columns (now backed by the shared helper) | same |
-| Baseline regression check | `--baseline [PATH]` writes headline metrics when the file is absent (default `quantization_baseline.json`); when present it compares `passed`/compression/quality (absolute 0.05 tolerance) and speed (25% relative) per `model:int<bits>` key, emits a `## Baseline Regression Check` section (text/`--report`/`--json` `baseline` block), and exits 1 on any regression | same |
+| Metric                     | Tiny in-process model (default)                                                                                                                                                                                                                                                                                                                                           | Real-model path (`--model <cached-id>`) |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| All 7 tests pass           | 7/7 (verified int8 and int4)                                                                                                                                                                                                                                                                                                                                              | 7/7 expected                            |
+| Memory reduction           | 4.0x int8 / 8.0x int4 packed weights                                                                                                                                                                                                                                                                                                                                      | >4x target                              |
+| Quality (logit cosine)     | 0.9996 int8 / 0.8524 int4 (floors 0.95 / 0.85)                                                                                                                                                                                                                                                                                                                            | same floors                             |
+| Speedup gates              | Informational (sanity band ≥ 0.3)                                                                                                                                                                                                                                                                                                                                         | ≥ 0.9; the >1.3x claim is GPT-2-scale   |
+| Report generation          | `--report` markdown + `--json`                                                                                                                                                                                                                                                                                                                                            | same                                    |
+| Regression check           | Same 50-token paired window as [1]                                                                                                                                                                                                                                                                                                                                        | ≥ 0.9                                   |
+| Multi-precision comparison | `--bits 8,4` produces comparison table                                                                                                                                                                                                                                                                                                                                    | same                                    |
+| Multi-model comparison     | `--models tiny,<cached-id>` produces per-model table + JSON `model_comparison`; mutually exclusive with `--model`                                                                                                                                                                                                                                                         | same                                    |
+| CSV export                 | `--csv [PATH]` writes one-row-per-run headline metrics; stdout-safe under `--json`                                                                                                                                                                                                                                                                                        | same                                    |
+| Validate mode (CI)         | `--validate` runs only quality + memory checks, exits 0/1                                                                                                                                                                                                                                                                                                                 | same                                    |
+| Per-layer stats            | `--per-layer` shows FP32/Q KB, compression ratio, and weight-fidelity cosine per layer                                                                                                                                                                                                                                                                                    | same                                    |
+| Recommendations            | `--bits 8,4` scores candidates per model (0.4\*quality + 0.4\*compression + 0.2\*speed, normalized to the best candidate), excludes floor-failing precisions, recommends the best in text/`--report`/`--json` `recommendations` block                                                                                                                                     | same                                    |
+| Token agreement            | `avg_token_agreement` surfaced on all comparison surfaces: `Token agreement` row in `_comparison_table`, `token_agreement` in `_comparison_json`, `avg_token_agreement` in `_model_comparison` and `--csv`                                                                                                                                                                | same                                    |
+| Cold/warm latency          | `cold_vs_warm` nested metrics surfaced on all comparison surfaces via `_run_nested_metric`: `Cold start (s)`/`Warm median (s)` rows in `_comparison_table`, `cold_start_s`/`warm_median_s` in `_comparison_json` and `_model_comparison`, and the `--csv` columns (now backed by the shared helper)                                                                       | same                                    |
+| Baseline regression check  | `--baseline [PATH]` writes headline metrics when the file is absent (default `quantization_baseline.json`); when present it compares `passed`/compression/quality (absolute 0.05 tolerance) and speed (25% relative) per `model:int<bits>` key, emits a `## Baseline Regression Check` section (text/`--report`/`--json` `baseline` block), and exits 1 on any regression | same                                    |
 
 ---
 
@@ -823,10 +840,10 @@ headline-metric refinement:
 
 ### Verification results
 
-| Path | int8 | int4 |
-|------|------|------|
-| tiny (in-process, embed=128) | 7/7, cos 0.9996, ppl 1.00 | 7/7, cos 0.9208, ppl 1.00 |
-| Qwen/Qwen2.5-0.5B-Instruct | **7/7 PASS** (validate exit 0), cos 0.9868, ppl 1.02, 3.15x | 6/7 — quality FAIL (cos 0.8366 < 0.85, ppl 2.58 > 1.5) |
+| Path                         | int8                                                        | int4                                                   |
+| ---------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ |
+| tiny (in-process, embed=128) | 7/7, cos 0.9996, ppl 1.00                                   | 7/7, cos 0.9208, ppl 1.00                              |
+| Qwen/Qwen2.5-0.5B-Instruct   | **7/7 PASS** (validate exit 0), cos 0.9868, ppl 1.02, 3.15x | 6/7 — quality FAIL (cos 0.8366 < 0.85, ppl 2.58 > 1.5) |
 
 Real-model guidance confirmed: <1B → int8; int4 requires a calibrated scheme at
 500M scale. Full numbers in `QUANTIZATION_BENCHMARK_REPORT.md`.
@@ -835,8 +852,8 @@ Real-model guidance confirmed: <1B → int8; int4 requires a calibrated scheme a
 
 - `quantization_baseline.json` committed: tiny int8, tiny int4, and
   `Qwen/Qwen2.5-0.5B-Instruct:int8` headline metrics (deterministic tiny fixture
-  + one real-model int8 quick run; Qwen int4 deliberately excluded because it is
-  a known-failing run, so a good-state baseline gates regressions).
+  - one real-model int8 quick run; Qwen int4 deliberately excluded because it is
+    a known-failing run, so a good-state baseline gates regressions).
 - `_compare_baselines` `passed` gate now only fires when current and baseline ran
   the same test set (`total` equal). `--validate` runs a 2-test subset, so
   `--validate --baseline` previously false-failed `passed` (2 vs 7) — fixed.

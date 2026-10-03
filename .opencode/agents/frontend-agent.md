@@ -27,13 +27,13 @@ in the isolated worktree at `../sloughGPT-frontend`. You never touch `main`.
 
 Before any UI work, read these files in the main repo:
 
-| File | What it covers |
-|------|----------------|
-| `docs/design/DESIGN_SYSTEM.md` | **LOCKED** — Full Noir Violet spec: colors, typography, spacing, components, forbidden patterns |
-| `apps/cli/opencode/skills/frontend-design/SKILL.md` | Design lead instructions: anti-patterns, visual hierarchy, motion, personality |
-| `docs/UX_FLOWS.md` | User experience flows — plain-English feature specs, persona, navigation |
-| `apps/web/README.md` | Web app setup, tech stack, build commands, project structure |
-| `AGENTS.md` | Repo conventions, commands, frontend rules |
+| File                                                | What it covers                                                                                  |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `docs/design/DESIGN_SYSTEM.md`                      | **LOCKED** — Full Noir Violet spec: colors, typography, spacing, components, forbidden patterns |
+| `apps/cli/opencode/skills/frontend-design/SKILL.md` | Design lead instructions: anti-patterns, visual hierarchy, motion, personality                  |
+| `docs/UX_FLOWS.md`                                  | User experience flows — plain-English feature specs, persona, navigation                        |
+| `apps/web/README.md`                                | Web app setup, tech stack, build commands, project structure                                    |
+| `AGENTS.md`                                         | Repo conventions, commands, frontend rules                                                      |
 
 ### Quick Reference — Noir Violet
 
@@ -57,12 +57,14 @@ These patterns are **forbidden**. Do not use them under any circumstances:
 ## Workflow
 
 ### 1. Start session
+
 ```bash
 cd /home/mana/Documents/Default Project/sloughGPT-frontend
 git pull origin feat/frontend
 ```
 
 ### 2. Read design docs
+
 ```bash
 cat ../sloughGPT/docs/design/DESIGN_SYSTEM.md
 cat ../sloughGPT/apps/cli/opencode/skills/frontend-design/SKILL.md
@@ -70,11 +72,13 @@ cat ../sloughGPT/docs/UX_FLOWS.md
 ```
 
 ### 3. Make changes
+
 - Follow Noir Violet exactly
 - Use `@sloughgpt/strui` components only
 - Test: `npm run typecheck && npm run test:changed`
 
 ### 4. Commit & push
+
 ```bash
 git add -A
 git commit -m "feat(frontend): <description>"
@@ -82,8 +86,10 @@ git push origin feat/frontend
 ```
 
 ### 5. Notify for review
+
 After pushing, the main agent must:
-1. `cd ../sloughGPT-frontend && make web`
+
+1. `cd ../sloughGPT-frontend/apps/web && npm run dev` (equivalent of the old make target; `make` is not available)
 2. Visually audit all changed pages in browser
 3. Run `npm run typecheck && npm run test:changed`
 4. Approve or request changes
@@ -104,20 +110,21 @@ After pushing, the main agent must:
 
 ## Forbidden Patterns
 
-| Never | Use Instead |
-|-------|-------------|
-| `#hex` colors | `rgb(var(--token))` |
-| `text-gray-500` | `text-muted-foreground` |
-| `bg-white` | `bg-card` |
-| `text-lg` in body | `text-sm` or `text-base` |
-| `px-8 py-6` on page | `sl-page` class |
-| Inline `style={{}}` | Tailwind classes |
-| Custom color variables | Use existing tokens |
-| New font families | Use Rubik, Lato, or JetBrains Mono |
-| Tabs/accordion for settings | Flat stacked cards |
-| FoldSection for primary content | Always-visible cards |
+| Never                           | Use Instead                        |
+| ------------------------------- | ---------------------------------- |
+| `#hex` colors                   | `rgb(var(--token))`                |
+| `text-gray-500`                 | `text-muted-foreground`            |
+| `bg-white`                      | `bg-card`                          |
+| `text-lg` in body               | `text-sm` or `text-base`           |
+| `px-8 py-6` on page             | `sl-page` class                    |
+| Inline `style={{}}`             | Tailwind classes                   |
+| Custom color variables          | Use existing tokens                |
+| New font families               | Use Rubik, Lato, or JetBrains Mono |
+| Tabs/accordion for settings     | Flat stacked cards                 |
+| FoldSection for primary content | Always-visible cards               |
 
 ## Rules
+
 - Never push to `main`
 - Every change requires main agent visual review before merge
 - Design system violations are merge blockers

@@ -66,8 +66,10 @@ __all__ = ["MemoryConfig", "MemoryService", "get_memory_service", ...]
 from __future__ import annotations
 import os
 
+
 class MemoryConfig:
     """Runtime configuration for the auto-memory layer."""
+
     # ... implementation
 ```
 
@@ -79,11 +81,14 @@ class MemoryConfig:
 # GOOD: Lazy import inside function body
 def _get_store(self):
     from domains.learner.knowledge import get_knowledge_memory
+
     return get_knowledge_memory()
+
 
 # GOOD: Protocol for storage seam
 class MemoryProvider(Protocol):
     def store(self, content: str, topic: str, source: str) -> bool: ...
+
 
 # BAD: Top-level cross-package import
 from domains.learner.knowledge import KnowledgeFact  # DON'T

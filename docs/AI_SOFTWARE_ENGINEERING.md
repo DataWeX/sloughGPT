@@ -7,14 +7,21 @@ This document describes how SloughGPT is structured for **reliable, observable, 
 1. **HTTP boundary** — FastAPI routes validate and serialize I/O (`apps/api/server/training/router.py`, standards-based `/v1/infer`). No heavyweight model logic here beyond orchestration.
 2. **Domain** — Training pipelines, manifests, evaluation (`packages/core-py/domains/training/`, `packages/core-py/domains/ml_infrastructure/`). Pure-ish logic, testable without the server.
 3. **Model runtime** — Loading, generation, quantization (API globals and `packages/core-py/domains/`). Keep a single ownership path for “what model is loaded” to avoid split brain.
-4. **Clients** — Web (`apps/web/lib/api.ts`), Python SDK (`packages/sdk-py/sloughgpt_sdk/`), TypeScript SDK (`packages/sdk-ts/typescript-sdk/`): mirror server field names for JSON (`snake_case` from Pydantic).
+4. **Clients** — Web (`apps/web/lib/http-client.ts`), Python SDK (`packages/sdk-py/sloughgpt_sdk/`), TypeScript SDK (`packages/sdk-ts/typescript-sdk/`): mirror server field names for JSON (`snake_case` from Pydantic).
 
-Refactor direction: **shrink `apps/api/server/main.py`** by moving more `APIRouter` modules under `apps/api/server/<domain>/` (see `apps/api/server/training/` for the pattern: `schemas.py`, `resolution.py`, `jobs.py`, `router.py`).
+Refactor direction: **one file per feature** — `apps/api/server/routers/<feature>.py`
+holds the feature's router **and** its proxy, so handler code lives in one
+place. _(Revised 2026-10-02 from "move more `APIRouter` modules under
+`apps/api/server/<domain>/`", which was demonstrated once on
+`apps/api/server/training/` and never rolled out. `training/` folds into a
+single file once its 4,415 lines of orchestration move into `domain/training`;
+its 2,485 lines of HTTP are what actually belong at this layer.)_ Feature-private
+schemas fold into the same file; `schemas/common.py` stays shared.
 
 ## Data and contracts
 
 - **Dataset manifests** — Versioned metadata (`packages/standards/standards/v1/`); resolve to a single training file via `resolve_training_inputs`.
-- **Trainer checkpoints** — Native `.soul` bundles embed char vocabulary for fair `cli.py eval`; deployment exports (GGUF, `.sou`, etc.) are not drop-in for the same eval path without alignment — `docs/policies/CONTRIBUTING.md` (*Checkpoint vocabulary*).
+- **Trainer checkpoints** — Native `.soul` bundles embed char vocabulary for fair `cli.py eval`; deployment exports (GGUF, `.sou`, etc.) are not drop-in for the same eval path without alignment — `docs/policies/CONTRIBUTING.md` (_Checkpoint vocabulary_).
 - **Inference envelope** — `POST /v1/infer` for structured requests, tracing hooks, and future policy/retrieval fields.
 - **Reject ambiguity** — Exactly one of `dataset` | `manifest_uri` | `dataset_ref` for training bodies; validate at the schema layer.
 

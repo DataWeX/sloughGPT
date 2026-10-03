@@ -30,9 +30,11 @@ col.update_one({"name": "item1"}, {"$set": {"value": 100}})
 col.delete_one({"name": "item1"})
 
 # Aggregate
-results = col.aggregate([
-    {"$group": {"_id": "$status", "count": {"$sum": 1}}},
-])
+results = col.aggregate(
+    [
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}},
+    ]
+)
 ```
 
 ## SyncableCollection
@@ -72,6 +74,7 @@ col.create_ttl_index("created_at", expire_after_seconds=30 * 24 * 3600)
 
 # Note: TTL field must be numeric (epoch seconds), not ISO string
 import time
+
 col.insert_one({"data": "value", "created_at": time.time()})
 ```
 
@@ -135,6 +138,7 @@ slo db migrate     # Run migration
 ## Performance
 
 Based on benchmarks (1K documents):
+
 - Insert: ~6K docs/sec
 - Find all: ~1.5M docs/sec
 - Find one: ~700 ops/sec

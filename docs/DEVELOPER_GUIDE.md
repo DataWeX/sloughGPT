@@ -11,7 +11,7 @@ This guide covers development practices, contribution guidelines, and technical 
 SloughGPT uses a domain-driven architecture where each domain represents a bounded context with its own:
 
 - **Models**: Business logic and entities
-- **Services**: Domain services and application logic  
+- **Services**: Domain services and application logic
 - **Interfaces**: Contracts between domains
 - **Infrastructure**: External dependencies and persistence
 
@@ -89,6 +89,7 @@ npm run test:repo-root
 ### Development Workflow
 
 1. **Create Feature Branch**
+
 ```bash
 git checkout -b feature/your-feature-name
 ```
@@ -100,11 +101,13 @@ git checkout -b feature/your-feature-name
    - Ensure type safety
 
 3. **Run Tests**
+
 ```bash
 pytest tests/ -q -k "your_keyword"
 ```
 
 4. **Commit Changes**
+
 ```bash
 git add .
 git commit -m "feat: add your feature description"
@@ -127,6 +130,7 @@ import asyncio
 import logging
 from typing import Dict, Any, List, Optional
 
+
 # Class definitions
 class ExampleService:
     """Example service following the project's patterns."""
@@ -138,7 +142,9 @@ class ExampleService:
 
     async def process_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process data and return results."""
-        self.logger.info("Processing data", extra={"tag": "SERVICE", "context": {"keys": list(data.keys())}})
+        self.logger.info(
+            "Processing data", extra={"tag": "SERVICE", "context": {"keys": list(data.keys())}}
+        )
         # Implementation
         return {}
 ```
@@ -151,9 +157,11 @@ All public interfaces must have comprehensive type hints:
 from typing import Dict, List, Optional, Union
 from dataclasses import dataclass
 
+
 @dataclass
 class CognitiveRequest:
     """Request for cognitive processing."""
+
     content: str
     context: Dict[str, Any]
     options: Optional[Dict[str, Any]] = None
@@ -168,7 +176,7 @@ Use comprehensive docstrings for all public modules, classes, and functions:
 def process_memory(
     memory_data: Dict[str, Any],
     memory_type: str = "episodic",
-    options: Optional[Dict[str, Any]] = None
+    options: Optional[Dict[str, Any]] = None,
 ) -> str:
     """Process memory data and return storage confirmation.
 
@@ -219,12 +227,13 @@ cd apps/web && npx tsc --noEmit
 [tool.coverage.run]
 source = ["domains"]
 omit = [
-    "*/tests/*",
-    "*/test_*",
-    "*/__pycache__/*",
-    "*/site-packages/*",
+"_/tests/_",
+"_/test__",
+"_/**pycache**/_",
+"_/site-packages/_",
 ]
-```
+
+````
 
 ### Running Tests
 
@@ -240,7 +249,7 @@ python3 -m pytest tests/ --cov=domains --cov-report=html
 
 # Run integration-focused tests
 python3 -m pytest tests/test_integration.py -v
-```
+````
 
 ## 📊 Monitoring & Debugging
 
@@ -252,6 +261,7 @@ Use structured logging with appropriate levels:
 import logging
 
 logger = logging.getLogger("slo.services.example")
+
 
 class ExampleService:
     def __init__(self):
@@ -283,16 +293,21 @@ state.record_training(tokens=1000, elapsed_ms=30000)
 ### Debugging
 
 #### Local Development
+
 ```python
 # Enable debug mode
 import os
-os.environ['SLO_DEBUG'] = '1'
+
+os.environ["SLO_DEBUG"] = "1"
 
 # Use Python debugger
-import pdb; pdb.set_trace()
+import pdb
+
+pdb.set_trace()
 
 # Enable async debugging
 import asyncio
+
 asyncio.run(main())
 ```
 
@@ -312,6 +327,7 @@ Always use async/await for I/O operations:
 ```python
 import asyncio
 from typing import List
+
 
 class OptimizedProcessor:
     async def process_batch(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -343,8 +359,10 @@ async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as 
     resp = await client.get("/health")
     data = resp.json()
 ```
+
     result = await db_manager.execute_query("SELECT * FROM table")
-```
+
+````
 
 ### Caching Strategy
 
@@ -372,7 +390,7 @@ def cached_get(key: str):
             return result
         return wrapper
     return decorator
-```
+````
 
 ## 🔒 Security Best Practices
 
@@ -384,16 +402,18 @@ Always validate and sanitize input:
 from pydantic import BaseModel, validator
 from typing import Optional
 
+
 class UserCreateRequest(BaseModel):
     username: str
     email: str
     password: str
 
-    @validator('password')
+    @validator("password")
     def validate_password(cls, v):
         if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
+            raise ValueError("Password must be at least 8 characters")
         return v
+
 
 class UserService:
     async def create_user(self, request: UserCreateRequest) -> User:
@@ -418,8 +438,9 @@ app.add_middleware(
     allow_origins=["https://trusted-origin.com"],
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    max_age=3600
+    max_age=3600,
 )
+
 
 # Add security headers
 @app.middleware("http")
@@ -448,6 +469,7 @@ ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 security = HTTPBearer()
+
 
 class JWTManager:
     def create_access_token(self, data: dict, expires_delta: timedelta = None) -> str:

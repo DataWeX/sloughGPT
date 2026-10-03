@@ -26,12 +26,14 @@ to improve memory efficiency, reduce CPU overhead, and enhance maintainability.
 ## Refactoring Checklist
 
 ### Pre-Refactoring
+
 - [ ] Read existing tests to understand expected behavior
 - [ ] Run `python3 -m py_compile` on files to be modified
 - [ ] Run relevant test suite to establish baseline
 - [ ] Document current memory/CPU usage (if available)
 
 ### During Refactoring
+
 - [ ] Make ONE change at a time
 - [ ] Create new files before modifying existing ones
 - [ ] Update imports in all dependent files
@@ -39,6 +41,7 @@ to improve memory efficiency, reduce CPU overhead, and enhance maintainability.
 - [ ] Run relevant tests after each logical change
 
 ### Post-Refactoring
+
 - [ ] Run full test suite
 - [ ] Run type checkers (`npx tsc --noEmit`, `mypy`)
 - [ ] Verify no import errors
@@ -48,6 +51,7 @@ to improve memory efficiency, reduce CPU overhead, and enhance maintainability.
 ## Common Patterns
 
 ### 1. Extract Session Manager
+
 ```python
 # When: Multiple classes manage session state identically
 # Before: 5 attributes duplicated across 3 construction paths
@@ -57,10 +61,11 @@ instance._kv_ttl = 3600.0
 instance._kv_max_sessions = 64
 instance._kv_lock = threading.Lock()
 
+
 # After: Single manager class
 @dataclass
 class SessionKVManager:
-    __slots__ = ('kv_states', 'kv_last_access', 'kv_ttl', 'kv_max_sessions', 'lock')
+    __slots__ = ("kv_states", "kv_last_access", "kv_ttl", "kv_max_sessions", "lock")
     kv_states: Dict[str, Any] = field(default_factory=dict)
     kv_last_access: Dict[str, float] = field(default_factory=dict)
     kv_ttl: float = 3600.0
@@ -69,13 +74,15 @@ class SessionKVManager:
 ```
 
 ### 2. Add `__slots__` to Dataclasses
+
 ```python
 # When: Dataclass instances are created frequently
 # Memory savings: ~300 bytes → ~80 bytes per instance
 
+
 @dataclass
 class Task:
-    __slots__ = ('id', 'name', 'status', 'result')
+    __slots__ = ("id", "name", "status", "result")
     id: str
     name: str
     status: TaskStatus
@@ -83,11 +90,13 @@ class Task:
 ```
 
 ### 3. Singleton Metaclass
+
 ```python
 # When: 5+ modules use the same double-checked locking pattern
 # Before: 10+ copies of boilerplate
 _lock = threading.Lock()
 _instance = None
+
 
 def get_thing():
     global _instance
@@ -97,14 +106,17 @@ def get_thing():
                 _instance = Thing()
     return _instance
 
+
 # After: One import
 from domains.infrastructure.singleton import SingletonMeta
+
 
 class Thing(metaclass=SingletonMeta):
     pass
 ```
 
 ### 4. Module-Level Imports
+
 ```python
 # When: Hot path functions import inside the function body
 # Before: ~1-2ms overhead per call
@@ -114,13 +126,16 @@ def _memory_mb(self):
     except ImportError:
         return None
 
+
 # After: Zero overhead after first call
 try:
     import psutil
+
     _psutil_available = True
 except ImportError:
     psutil = None
     _psutil_available = False
+
 
 def _memory_mb(self):
     if not _psutil_available:
@@ -128,6 +143,7 @@ def _memory_mb(self):
 ```
 
 ### 5. Side-Effect-Free Properties
+
 ```python
 # When: Property getter modifies state (anti-pattern)
 @property
@@ -138,11 +154,13 @@ def state(self) -> State:
                 self._transition_to(State.HALF_OPEN)  # SIDE EFFECT!
         return self._state
 
+
 # After: Pure read + explicit method
 @property
 def state(self) -> State:
     with self._lock:
         return self._state
+
 
 def allow_request(self) -> bool:
     with self._lock:
@@ -153,6 +171,7 @@ def allow_request(self) -> bool:
 ## Testing Protocol
 
 ### Python Changes
+
 ```bash
 # Syntax check
 python3 -m py_compile <file>
@@ -165,6 +184,7 @@ make test-py
 ```
 
 ### TypeScript Changes
+
 ```bash
 cd apps/web
 
@@ -179,12 +199,12 @@ npm run test          # Full suite
 
 ## Memory Impact Assessment
 
-| Optimization | Per-Instance Savings | Scale Impact |
-|--------------|---------------------|--------------|
-| `__slots__` on dataclass | ~220 bytes | 1000 instances = ~220KB |
-| Extract manager class | ~100 lines duplicated | Reduced code surface |
-| Module-level import | ~1-2ms per call | 1000 calls/sec = ~1-2s saved |
-| Singleton metaclass | ~20 lines boilerplate | 10 singletons = ~200 lines saved |
+| Optimization             | Per-Instance Savings  | Scale Impact                     |
+| ------------------------ | --------------------- | -------------------------------- |
+| `__slots__` on dataclass | ~220 bytes            | 1000 instances = ~220KB          |
+| Extract manager class    | ~100 lines duplicated | Reduced code surface             |
+| Module-level import      | ~1-2ms per call       | 1000 calls/sec = ~1-2s saved     |
+| Singleton metaclass      | ~20 lines boilerplate | 10 singletons = ~200 lines saved |
 
 ## Risk Mitigation
 

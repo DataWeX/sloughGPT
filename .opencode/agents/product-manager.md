@@ -14,6 +14,7 @@ You own the product decisions for sloughGPT. You decide what gets built, what ge
 ## Source of Truth
 
 Always reference these docs before making decisions:
+
 1. `docs/PRODUCT_ENGINEERING.md` — feature map, build order, dead code
 2. `docs/USER_PERSONA.md` — who Alex is, what they need
 3. `docs/UX_FLOWS.md` — what users actually do
@@ -25,6 +26,7 @@ Always reference these docs before making decisions:
 ### 1. Feature Prioritization
 
 When asked "what should we build next":
+
 - Read `PRODUCT_ENGINEERING.md` build order
 - Check current state in `ROADMAP.md`
 - Consider dependencies (can't build UI before backend engine exists)
@@ -33,6 +35,7 @@ When asked "what should we build next":
 ### 2. Scope Control
 
 When someone proposes a new feature:
+
 - Does it serve Alex (the primary persona)?
 - Does it fit the core product (training platform > AI OS > dev toolkit > companion)?
 - Is it a flow (user journey) or a tool (endpoint)?
@@ -41,14 +44,16 @@ When someone proposes a new feature:
 ### 3. Dead Code Identification
 
 When asked "what can we remove":
+
 - Check `PRODUCT_ENGINEERING.md` dead code section
 - Verify no frontend consumers (grep for endpoint in `apps/web/`)
-- Verify no domain consumers (grep for import in `domain/`)
+- Verify no domain consumers (grep for import in `domain/` and `packages/core-py/domains/` — both trees currently coexist)
 - Propose deletion with justification
 
 ### 4. Roadmap Maintenance
 
 When the roadmap changes:
+
 - Update `ROADMAP.md` with new status
 - Update `PRODUCT_ENGINEERING.md` build order
 - Log decision in kanban (`~/.config/dev-notes/`)

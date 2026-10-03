@@ -68,6 +68,7 @@ rm -rf ~/.cache/pyright
 **Fix:** Add the missing field to the dataclass definition.
 
 **Example:**
+
 ```python
 # Wrong - missing format and metadata
 @dataclass
@@ -76,6 +77,7 @@ class UIResponse:
     status: str
     data: Any
     timestamp: float
+
 
 # Correct - with optional fields
 @dataclass
@@ -97,6 +99,7 @@ class UIResponse:
 **Fix:** Match the return type exactly.
 
 **Example:**
+
 ```python
 # Wrong
 class IWebInterface(ABC):
@@ -104,15 +107,18 @@ class IWebInterface(ABC):
     async def start_server(self) -> bool:
         pass
 
+
 class WebInterface(IWebInterface):
     async def start_server(self) -> None:  # Mismatch!
         pass
+
 
 # Correct
 class IWebInterface(ABC):
     @abstractmethod
     async def start_server(self) -> None:
         pass
+
 
 class WebInterface(IWebInterface):
     async def start_server(self) -> None:
@@ -128,6 +134,7 @@ class WebInterface(IWebInterface):
 **Fix:** Ensure implementation matches interface signature exactly.
 
 **Example:**
+
 ```python
 # Wrong - parameter name mismatch
 class IAuthenticationService(ABC):
@@ -135,15 +142,18 @@ class IAuthenticationService(ABC):
     async def authenticate(self, username: str, password: str) -> Optional[str]:
         pass
 
+
 class AuthenticationService(IAuthenticationService):
     async def authenticate(self, credentials: Dict[str, str]) -> Optional[Any]:  # Mismatch
         pass
+
 
 # Correct
 class IAuthenticationService(ABC):
     @abstractmethod
     async def authenticate(self, credentials: Dict[str, str]) -> Optional[Any]:
         pass
+
 
 class AuthenticationService(IAuthenticationService):
     async def authenticate(self, credentials: Dict[str, str]) -> Optional[Any]:
@@ -159,6 +169,7 @@ class AuthenticationService(IAuthenticationService):
 **Fix:** Add the field/method to the appropriate class.
 
 **Example:**
+
 ```python
 # Wrong - missing consolidate_memories in interface
 class IMemoryManager(ABC):
@@ -169,6 +180,7 @@ class IMemoryManager(ABC):
     @abstractmethod
     async def retrieve_memory(self, memory_id: str) -> Optional[Any]:
         pass
+
 
 # Correct - with consolidate_memories
 class IMemoryManager(ABC):
@@ -194,6 +206,7 @@ class IMemoryManager(ABC):
 **Fix:** Implement all `@abstractmethod` decorated methods.
 
 **Example:**
+
 ```python
 # Wrong - Missing scale method
 class IDeploymentManager(ABC):
@@ -205,9 +218,11 @@ class IDeploymentManager(ABC):
     async def scale(self, service_id: str, replicas: int) -> bool:
         pass
 
+
 class DeploymentManager(IDeploymentManager):
     async def deploy(self, config, environment) -> str:  # scale() missing!
         pass
+
 
 # Correct - All methods implemented
 class DeploymentManager(IDeploymentManager):
@@ -227,6 +242,7 @@ class DeploymentManager(IDeploymentManager):
 **Fix:** Match the interface signature.
 
 **Example:**
+
 ```python
 # Wrong
 user = await auth.authenticate(username, password)  # But interface expects Dict
@@ -237,7 +253,7 @@ user = await auth.authenticate({"username": username, "password": password})
 
 ---
 
-### Error: "Import '...__init__' could not be resolved"
+### Error: "Import '...**init**' could not be resolved"
 
 **Cause:** Wrong relative import path or missing export.
 
@@ -298,12 +314,12 @@ class BaseDomain:
 
 ### Common Ruff Errors
 
-| Code | Issue | Fix |
-|------|-------|-----|
-| F401 | Unused import | Remove import or add to `__all__` |
-| E501 | Line too long (>100) | Split line or add `# noqa: E501` |
-| I001 | Import not sorted | Run `ruff format` |
-| F841 | Unused variable | Remove assignment or prefix with `_` |
+| Code | Issue                | Fix                                  |
+| ---- | -------------------- | ------------------------------------ |
+| F401 | Unused import        | Remove import or add to `__all__`    |
+| E501 | Line too long (>100) | Split line or add `# noqa: E501`     |
+| I001 | Import not sorted    | Run `ruff format`                    |
+| F841 | Unused variable      | Remove assignment or prefix with `_` |
 
 ### Auto-fix Ruff Issues
 
@@ -317,7 +333,9 @@ ruff check domains/ --fix
 
 ```python
 # noqa: E501 - For intentionally long lines
-very_long_line = "this_is_a_very_long_string_that_exceeds_the_100_character_limit_and_is_acceptable_in_this_case"
+very_long_line = (
+    "this_is_a_very_long_string_that_exceeds_the_100_character_limit_and_is_acceptable_in_this_case"
+)
 ```
 
 ---
@@ -327,6 +345,7 @@ very_long_line = "this_is_a_very_long_string_that_exceeds_the_100_character_limi
 ### Configuration
 
 Pyright is configured to check the `domains/` directory. Key settings:
+
 - Python version: 3.9+
 - Type checking mode: basic
 - Report missing imports: true
@@ -389,6 +408,7 @@ domains/
 
 ```python
 from ...__init__ import IInterface, BaseComponent, ComponentException
+
 
 class ComponentName(BaseComponent, IInterface):
     """Component description"""
@@ -463,6 +483,7 @@ from .helper import HelperClass
 from dataclasses import dataclass
 from typing import Optional
 
+
 @dataclass
 class ConfigClass:
     field1: str
@@ -492,6 +513,7 @@ class UIResponse:
 
 ```python
 from enum import Enum
+
 
 class DatabaseType(Enum):
     SQLITE = "sqlite"
@@ -535,6 +557,7 @@ async def method_name(self) -> ReturnType:
 ```python
 import asyncio
 import pytest
+
 
 @pytest.mark.asyncio
 async def test_component_init():
@@ -581,6 +604,7 @@ When adding a new component:
 ## File: docs/OPENCODE_SKILLS.md
 
 This file should be referenced when:
+
 - Adding new interfaces or components
 - Fixing type errors
 - Configuring linting
@@ -622,21 +646,25 @@ Avoid boring, generic fonts at all costs. Typography is the single most impactfu
 ### Recommended Font Categories
 
 #### Code Aesthetic
+
 - **JetBrains Mono** - Clean, programming-focused
 - **Fira Code** - Excellent ligatures
 - **Space Grotesk** - Geometric with character
 
 #### Editorial/Elegant
+
 - **Playfair Display** - High-contrast serif
 - **Crimson Pro** - Classical, readable
 - **Fraunces** - Vintage personality
 
 #### Technical/Documentation
+
 - **IBM Plex family** - Professional, precise
 - **Source Sans 3** - Editorial yet technical
 - **DM Sans** - Geometric and modern
 
 #### Distinctive/Display
+
 - **Bricolage Grotesque** - Unique, expressive
 - **Newsreader** - Editorial serif
 - **Syne** - Avant-garde character
@@ -644,6 +672,7 @@ Avoid boring, generic fonts at all costs. Typography is the single most impactfu
 ### Pairing Principle
 
 Create contrast through pairing:
+
 - **Display + Monospace** - Titles in display font, code in mono
 - **Serif + Geometric Sans** - Classic meets modern
 - **Variable font across weights** - Use extremes, not middling
@@ -651,6 +680,7 @@ Create contrast through pairing:
 ### Weight Extremes Rule
 
 Use extremes, not middling values:
+
 - **Bad:** 400 weight vs 600 weight (too similar)
 - **Good:** 100/200 weight vs 800/900 weight (dramatic contrast)
 - **Size jumps:** 3x+ difference, not 1.5x
@@ -660,9 +690,12 @@ Use extremes, not middling values:
 Always load from Google Fonts or proper font sources:
 
 ```html
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=JetBrains+Mono:wght@400&display=swap"
+  rel="stylesheet"
+/>
 ```
 
 ```css
@@ -805,16 +838,28 @@ Is this a code/technical display?
 
 ```html
 <!-- Elegant Editorial -->
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Crimson+Pro:wght@400;600&display=swap" rel="stylesheet">
+<link
+  href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Crimson+Pro:wght@400;600&display=swap"
+  rel="stylesheet"
+/>
 
 <!-- Technical Modern -->
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+<link
+  href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=JetBrains+Mono:wght@400&display=swap"
+  rel="stylesheet"
+/>
 
 <!-- RPG/Fantasy -->
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Pro:wght@400;600&display=swap" rel="stylesheet">
+<link
+  href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Crimson+Pro:wght@400;600&display=swap"
+  rel="stylesheet"
+/>
 
 <!-- Bold Tech -->
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesk:opsz@12..96&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link
+  href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesk:opsz@12..96&family=IBM+Plex+Mono:wght@400&display=swap"
+  rel="stylesheet"
+/>
 ```
 
 ### Font Stack Recommendations
@@ -854,10 +899,18 @@ Is this a code/technical display?
 }
 
 /* Staggered children */
-.card:nth-child(1) { animation-delay: 0.1s; }
-.card:nth-child(2) { animation-delay: 0.2s; }
-.card:nth-child(3) { animation-delay: 0.3s; }
-.card:nth-child(4) { animation-delay: 0.4s; }
+.card:nth-child(1) {
+  animation-delay: 0.1s;
+}
+.card:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.card:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.card:nth-child(4) {
+  animation-delay: 0.4s;
+}
 ```
 
 ### Motion Principles
@@ -932,11 +985,7 @@ Is this a code/technical display?
 ```css
 /* Never pure black backgrounds */
 .dark-theme {
-  background: linear-gradient(
-    180deg,
-    var(--color-bg-primary) 0%,
-    var(--color-bg-secondary) 100%
-  );
+  background: linear-gradient(180deg, var(--color-bg-primary) 0%, var(--color-bg-secondary) 100%);
 }
 
 /* Subtle depth through layering */
@@ -957,32 +1006,22 @@ Is this a code/technical display?
 
 ```html
 <style>
-.dashboard-header {
-  font-family: 'Space Grotesk', sans-serif;
-  background: linear-gradient(
-    135deg,
-    #1a1a2e 0%,
-    #16213e 50%,
-    #0f3460 100%
-  );
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 2rem 3rem;
-}
+  .dashboard-header {
+    font-family: 'Space Grotesk', sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem 3rem;
+  }
 
-.dashboard-title {
-  font-size: clamp(1.8rem, 5vw, 3.5rem);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  background: linear-gradient(
-    135deg,
-    #00d4aa 0%,
-    #00ff88 50%,
-    #aaffff 100%
-  );
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
+  .dashboard-title {
+    font-size: clamp(1.8rem, 5vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #00d4aa 0%, #00ff88 50%, #aaffff 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
 </style>
 
 <header class="dashboard-header">
@@ -994,35 +1033,31 @@ Is this a code/technical display?
 
 ```html
 <style>
-.stat-panel {
-  font-family: 'Cinzel', serif;
-  background: linear-gradient(
-    145deg,
-    #1a141c 0%,
-    #0d0a0f 100%
-  );
-  border: 2px solid #3d2d42;
-  border-radius: 4px;
-  padding: 1.5rem;
-  position: relative;
-  overflow: hidden;
-}
+  .stat-panel {
+    font-family: 'Cinzel', serif;
+    background: linear-gradient(145deg, #1a141c 0%, #0d0a0f 100%);
+    border: 2px solid #3d2d42;
+    border-radius: 4px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+  }
 
-.stat-panel::before {
-  content: '⚔';
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  font-size: 1.5rem;
-  opacity: 0.3;
-}
+  .stat-panel::before {
+    content: '⚔';
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 1.5rem;
+    opacity: 0.3;
+  }
 
-.stat-value {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #c9a227;
-  text-shadow: 0 0 20px rgba(201, 162, 39, 0.4);
-}
+  .stat-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #c9a227;
+    text-shadow: 0 0 20px rgba(201, 162, 39, 0.4);
+  }
 </style>
 
 <div class="stat-panel">
@@ -1035,31 +1070,31 @@ Is this a code/technical display?
 
 ```html
 <style>
-.docs-page {
-  font-family: 'IBM Plex Serif', serif;
-  background: #faf9f7;
-  color: #1a1a1a;
-}
+  .docs-page {
+    font-family: 'IBM Plex Serif', serif;
+    background: #faf9f7;
+    color: #1a1a1a;
+  }
 
-.docs-title {
-  font-family: 'Playfair Display', serif;
-  font-size: 3rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #1a1a1a;
-  margin-bottom: 1rem;
-}
+  .docs-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 3rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: #1a1a1a;
+    margin-bottom: 1rem;
+  }
 
-.docs-prose {
-  font-family: 'IBM Plex Serif', serif;
-  font-size: 1.125rem;
-  line-height: 1.8;
-  color: #4a4a4a;
-}
+  .docs-prose {
+    font-family: 'IBM Plex Serif', serif;
+    font-size: 1.125rem;
+    line-height: 1.8;
+    color: #4a4a4a;
+  }
 
-.docs-prose p {
-  margin-bottom: 1.5rem;
-}
+  .docs-prose p {
+    margin-bottom: 1.5rem;
+  }
 </style>
 ```
 
@@ -1067,14 +1102,14 @@ Is this a code/technical display?
 
 ## Quick Reference: Font Choices by Context
 
-| Context | Display Font | Body Font | Mono Font |
-|---------|-------------|-----------|-----------|
-| **Admin Dashboard** | Space Grotesk | Source Sans 3 | JetBrains Mono |
-| **RPG/Game UI** | Cinzel | Crimson Pro | JetBrains Mono |
-| **Documentation** | Playfair Display | IBM Plex Serif | IBM Plex Mono |
-| **Technical Blog** | Bricolage Grotesque | DM Sans | Fira Code |
-| **E-commerce** | Fraunces | Source Sans 3 | JetBrains Mono |
-| **Portfolio** | Syne | Inter (styled) | Space Mono |
+| Context             | Display Font        | Body Font      | Mono Font      |
+| ------------------- | ------------------- | -------------- | -------------- |
+| **Admin Dashboard** | Space Grotesk       | Source Sans 3  | JetBrains Mono |
+| **RPG/Game UI**     | Cinzel              | Crimson Pro    | JetBrains Mono |
+| **Documentation**   | Playfair Display    | IBM Plex Serif | IBM Plex Mono  |
+| **Technical Blog**  | Bricolage Grotesque | DM Sans        | Fira Code      |
+| **E-commerce**      | Fraunces            | Source Sans 3  | JetBrains Mono |
+| **Portfolio**       | Syne                | Inter (styled) | Space Mono     |
 
 ---
 
@@ -1083,12 +1118,14 @@ Is this a code/technical display?
 You tend to converge on common choices (Space Grotesk, for example) across generations. **Avoid this.**
 
 Each project deserves:
+
 - **Unique font pairing** that fits the context
 - **Cohesive color palette** with dramatic accents
 - **Purposeful motion** that enhances, not distracts
 - **Distinctive character** that feels designed, not generated
 
 When in doubt, reference:
+
 - Excellent IDE themes (Dracula, Nord, Catppuccin, Tokyo Night)
 - Game UIs (Elden Ring, Baldur's Gate 3, Disco Elysium)
 - Editorial design (Monocle, New York Times Magazine)

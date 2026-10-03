@@ -27,14 +27,14 @@ Note_hash = hash(root_seed + note_content)  — derived from root, not independe
 
 ### Key Rules
 
-| Rule | Implementation |
-|------|---------------|
-| Root never changes | Computed once at card+slot creation, stored permanently |
-| Note hash derived from root | `note_hash = hash(root + note_content)` — root is the key |
-| Note edit → new note hash | Root stays, note hash recomputed via root |
-| History stored | Every root hash + note hash change logged |
-| One root retrieves all | From root hash, derive all current note hashes (like BIP32) |
-| Boomerang encryption | Root hash encrypted — shows structure, not data |
+| Rule                        | Implementation                                              |
+| --------------------------- | ----------------------------------------------------------- |
+| Root never changes          | Computed once at card+slot creation, stored permanently     |
+| Note hash derived from root | `note_hash = hash(root + note_content)` — root is the key   |
+| Note edit → new note hash   | Root stays, note hash recomputed via root                   |
+| History stored              | Every root hash + note hash change logged                   |
+| One root retrieves all      | From root hash, derive all current note hashes (like BIP32) |
+| Boomerang encryption        | Root hash encrypted — shows structure, not data             |
 
 ### Data Structures
 
@@ -43,13 +43,13 @@ Note_hash = hash(root_seed + note_content)  — derived from root, not independe
 ```python
 @dataclass
 class CardSlotHash:
-    root: str           # hash(card + slot) — permanent
-    card_id: str        # reference to card
-    slot_id: str        # reference to slot (tray + position)
-    tray: str           # which tray (column/state)
-    position: int       # position within tray
-    placed_at: str      # when card entered this slot
-    created_at: str     # when root hash was computed
+    root: str  # hash(card + slot) — permanent
+    card_id: str  # reference to card
+    slot_id: str  # reference to slot (tray + position)
+    tray: str  # which tray (column/state)
+    position: int  # position within tray
+    placed_at: str  # when card entered this slot
+    created_at: str  # when root hash was computed
 ```
 
 #### 2. `NoteHash` (derived from root)
@@ -57,10 +57,10 @@ class CardSlotHash:
 ```python
 @dataclass
 class NoteHash:
-    note_id: str        # reference to note
-    hash_value: str     # hash(root + note_content)
-    root_ref: str       # which root this belongs to
-    version: int        # incremented on each edit
+    note_id: str  # reference to note
+    hash_value: str  # hash(root + note_content)
+    root_ref: str  # which root this belongs to
+    version: int  # incremented on each edit
     created_at: str
     updated_at: str
 ```
@@ -70,11 +70,11 @@ class NoteHash:
 ```python
 @dataclass
 class HashHistoryEntry:
-    root_ref: str       # which root changed
-    old_hash: str       # previous hash
-    new_hash: str       # new hash
-    change_type: str    # "note_edit" | "note_add" | "note_delete"
-    note_id: str        # which note changed
+    root_ref: str  # which root changed
+    old_hash: str  # previous hash
+    new_hash: str  # new hash
+    change_type: str  # "note_edit" | "note_add" | "note_delete"
+    note_id: str  # which note changed
     timestamp: str
 ```
 
@@ -179,11 +179,11 @@ apps/web/app/api/planner/
 
 ## Files to Create/Modify
 
-| File | Action |
-|------|--------|
-| `packages/planner/src/planner/hashtree.py` | CREATE |
-| `packages/planner/src/planner/kanban.py` | MODIFY (add root_hash to Card) |
-| `packages/planner/src/planner/core.py` | MODIFY (add note_hash to Note) |
-| `apps/web/app/api/planner/helpers.ts` | MODIFY (add hash functions) |
-| `apps/web/app/api/planner/hashtree/route.ts` | CREATE |
-| `packages/planner/tests/test_hashtree.py` | CREATE |
+| File                                         | Action                         |
+| -------------------------------------------- | ------------------------------ |
+| `packages/planner/src/planner/hashtree.py`   | CREATE                         |
+| `packages/planner/src/planner/kanban.py`     | MODIFY (add root_hash to Card) |
+| `packages/planner/src/planner/core.py`       | MODIFY (add note_hash to Note) |
+| `apps/web/app/api/planner/helpers.ts`        | MODIFY (add hash functions)    |
+| `apps/web/app/api/planner/hashtree/route.ts` | CREATE                         |
+| `packages/planner/tests/test_hashtree.py`    | CREATE                         |

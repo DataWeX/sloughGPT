@@ -1,13 +1,13 @@
 # Testing Guide
 
-This document covers the testing infrastructure for sloughGPT across both the Python backend and Next.js frontend.
+This document covers the testing infrastructure for sloughGPT across both the Python backend and Vite frontend.
 
 ## Test Overview
 
-| Stack | Framework | Location | Run Command |
-|-------|-----------|----------|-------------|
-| Frontend | Vitest + React Testing Library | `apps/web/` | `cd apps/web && npm test` |
-| Backend | pytest | `packages/core-py/tests/` | `cd packages/core-py && python -m pytest -n auto -x -q` |
+| Stack    | Framework                      | Location                  | Run Command                                             |
+| -------- | ------------------------------ | ------------------------- | ------------------------------------------------------- |
+| Frontend | Vitest + React Testing Library | `apps/web/`               | `cd apps/web && npm test`                               |
+| Backend  | pytest                         | `packages/core-py/tests/` | `cd packages/core-py && python -m pytest -n auto -x -q` |
 
 ## Frontend Testing
 
@@ -55,40 +55,44 @@ import { createMockController } from '@/lib/__test-helper'
 
 const consciousnessController = createMockController()
 vi.mock('@/lib/consciousness-controller', () => ({
-  consciousnessController
+  consciousnessController,
 }))
 ```
 
 ### Common Mock Patterns
 
 **LocaleProvider:**
+
 ```tsx
 import { LocaleProvider } from '@/hooks/useLocale'
 
 render(
   <LocaleProvider>
     <Component />
-  </LocaleProvider>
+  </LocaleProvider>,
 )
 ```
 
-**Next.js Navigation:**
+**Navigation (next/navigation compat):**
+
 ```typescript
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn() }),
   usePathname: () => '/current/path',
-  useSearchParams: () => new URLSearchParams()
+  useSearchParams: () => new URLSearchParams(),
 }))
 ```
 
 **Toast Store:**
+
 ```typescript
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: () => ({ addToast: vi.fn() })
+  useToastStore: () => ({ addToast: vi.fn() }),
 }))
 ```
 
 **Strui Components:**
+
 ```typescript
 vi.mock('@sloughgpt/strui', () => ({
   Button: ({ children, ...props }) => <button {...props}>{children}</button>,
@@ -106,11 +110,7 @@ import { LocaleProvider } from '@/hooks/useLocale'
 import MyComponent from './page'
 
 const renderWithProviders = (ui: React.ReactElement) => {
-  return render(
-    <LocaleProvider>
-      {ui}
-    </LocaleProvider>
-  )
+  return render(<LocaleProvider>{ui}</LocaleProvider>)
 }
 
 describe('MyComponent', () => {
@@ -169,16 +169,16 @@ packages/core-py/tests/
 
 ### Current Status
 
-| Component | Coverage | Tests |
-|-----------|----------|-------|
-| Consciousness pages | 100% | 26 page tests |
-| Consciousness components | 100% | 5 component tests |
-| Consciousness hooks | 100% | 6 hook tests |
-| Consciousness lib | 100% | 3 lib tests |
-| Navigation | 100% | 8 tests |
-| Hooks/Lib | 95%+ | 1793 tests |
-| Features/Chat | 95%+ | 1467 tests |
-| Tools pages | 100% | 7 page tests |
+| Component                | Coverage | Tests             |
+| ------------------------ | -------- | ----------------- |
+| Consciousness pages      | 100%     | 26 page tests     |
+| Consciousness components | 100%     | 5 component tests |
+| Consciousness hooks      | 100%     | 6 hook tests      |
+| Consciousness lib        | 100%     | 3 lib tests       |
+| Navigation               | 100%     | 8 tests           |
+| Hooks/Lib                | 95%+     | 1793 tests        |
+| Features/Chat            | 95%+     | 1467 tests        |
+| Tools pages              | 100%     | 7 page tests      |
 
 ### Achieving High Coverage
 
@@ -190,6 +190,7 @@ packages/core-py/tests/
 ## CI/CD Integration
 
 Tests run automatically on:
+
 - Pull request creation
 - Push to main branch
 - Manual trigger via GitHub Actions
@@ -225,15 +226,11 @@ import { YourComponent } from './page'
 
 // Mock external dependencies
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn() })
+  useRouter: () => ({ push: vi.fn() }),
 }))
 
 const renderWithProviders = (ui: React.ReactElement) => {
-  return render(
-    <LocaleProvider>
-      {ui}
-    </LocaleProvider>
-  )
+  return render(<LocaleProvider>{ui}</LocaleProvider>)
 }
 
 describe('YourComponent', () => {

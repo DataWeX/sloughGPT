@@ -71,7 +71,7 @@ sloughgpt system status
 sloughGPT/
 ├── apps/
 │   ├── api/server/            # FastAPI backend
-│   ├── web/                   # Next.js frontend
+│   ├── web/                   # Vite frontend (React SPA)
 │   ├── cli/                   # CLI implementation
 │   ├── mobile/                # React Native app
 │   ├── gateway/               # API gateway
@@ -99,14 +99,14 @@ sloughGPT/
 
 SloughGPT includes a consciousness system with 26 pages for monitoring and managing AI self-awareness:
 
-| Feature | Description |
-|---------|-------------|
-| Dashboard | Main consciousness overview with health metrics |
-| Training | Consciousness training controls and progress |
-| Playground | Interactive experimentation with qualia and beliefs |
-| Analytics | Trend analysis and statistics |
-| Benchmark | Performance benchmarking tools |
-| API Explorer | Interactive API testing interface |
+| Feature      | Description                                         |
+| ------------ | --------------------------------------------------- |
+| Dashboard    | Main consciousness overview with health metrics     |
+| Training     | Consciousness training controls and progress        |
+| Playground   | Interactive experimentation with qualia and beliefs |
+| Analytics    | Trend analysis and statistics                       |
+| Benchmark    | Performance benchmarking tools                      |
+| API Explorer | Interactive API testing interface                   |
 
 Access the consciousness UI at `http://localhost:3000/consciousness/dashboard` after starting the web UI.
 
@@ -116,21 +116,21 @@ Start the server and visit `http://localhost:8000/docs` for the full interactive
 
 Core endpoints:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `POST` | `/chat` | Chat with a loaded model |
-| `POST` | `/chat/stream` | Streaming chat (SSE) |
-| `POST` | `/inference/generate` | Text generation |
-| `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
-| `POST` | `/training/start` | Start training (SSE progress) |
-| `GET` | `/health` | Server and model health |
-| `GET` | `/models` | List available models |
-| `GET` | `/souls` | List available souls |
-| `POST` | `/souls/switch` | Switch active soul |
-| `GET` | `/datasets` | List datasets |
-| `GET` | `/consciousness/status` | Get consciousness status |
-| `POST` | `/consciousness/reflect` | Trigger self-reflection |
-| `GET` | `/consciousness/health` | Consciousness health check |
+| Method | Path                         | Description                   |
+| ------ | ---------------------------- | ----------------------------- |
+| `POST` | `/chat`                      | Chat with a loaded model      |
+| `POST` | `/chat/stream`               | Streaming chat (SSE)          |
+| `POST` | `/inference/generate`        | Text generation               |
+| `POST` | `/inference/generate/stream` | Streaming generation (SSE)    |
+| `POST` | `/training/start`            | Start training (SSE progress) |
+| `GET`  | `/health`                    | Server and model health       |
+| `GET`  | `/models`                    | List available models         |
+| `GET`  | `/souls`                     | List available souls          |
+| `POST` | `/souls/switch`              | Switch active soul            |
+| `GET`  | `/datasets`                  | List datasets                 |
+| `GET`  | `/consciousness/status`      | Get consciousness status      |
+| `POST` | `/consciousness/reflect`     | Trigger self-reflection       |
+| `GET`  | `/consciousness/health`      | Consciousness health check    |
 
 ## Development
 
@@ -150,29 +150,29 @@ cd apps/web && npm run lint
 
 ## GPU Support
 
-| Hardware | Status | Notes |
-|----------|--------|-------|
-| NVIDIA (CUDA) | Supported | Fastest |
-| Apple Silicon (MPS) | Supported | M1/M2/M3/M4 |
-| AMD (ROCm) | Supported | Linux only |
-| Intel Mac | CPU only | Stable, slower |
+| Hardware            | Status    | Notes          |
+| ------------------- | --------- | -------------- |
+| NVIDIA (CUDA)       | Supported | Fastest        |
+| Apple Silicon (MPS) | Supported | M1/M2/M3/M4    |
+| AMD (ROCm)          | Supported | Linux only     |
+| Intel Mac           | CPU only  | Stable, slower |
 
 ## Documentation
 
-| Document | Description |
-|----------|-------------|
-| [QUICKSTART.md](QUICKSTART.md) | Get started in 5 minutes |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
-| [SECURITY.md](SECURITY.md) | Security policy |
-| [AGENTS.md](AGENTS.md) | AI agent workflow and conventions |
-| [INFRASTRUCTURE.md](INFRASTRUCTURE.md) | Pre-LLM infrastructure layers |
-| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Developer reference |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Deployment guide |
-| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Environment configuration |
-| [docs/STRUCTURE.md](docs/STRUCTURE.md) | Project structure and conventions |
-| [docs/SHELL.md](docs/SHELL.md) | Shell REPL documentation |
-| [docs/mogdb-guide.md](docs/mogdb-guide.md) | MogDB usage guide |
-| [docs/engineering-overview.md](docs/engineering-overview.md) | System architecture overview |
+| Document                                                     | Description                       |
+| ------------------------------------------------------------ | --------------------------------- |
+| [QUICKSTART.md](QUICKSTART.md)                               | Get started in 5 minutes          |
+| [CONTRIBUTING.md](CONTRIBUTING.md)                           | Contribution guidelines           |
+| [SECURITY.md](SECURITY.md)                                   | Security policy                   |
+| [AGENTS.md](AGENTS.md)                                       | AI agent workflow and conventions |
+| [INFRASTRUCTURE.md](INFRASTRUCTURE.md)                       | Pre-LLM infrastructure layers     |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)           | Developer reference               |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)                     | Deployment guide                  |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md)                   | Environment configuration         |
+| [docs/STRUCTURE.md](docs/STRUCTURE.md)                       | Project structure and conventions |
+| [docs/SHELL.md](docs/SHELL.md)                               | Shell REPL documentation          |
+| [docs/mogdb-guide.md](docs/mogdb-guide.md)                   | MogDB usage guide                 |
+| [docs/engineering-overview.md](docs/engineering-overview.md) | System architecture overview      |
 
 ## Data Infrastructure
 

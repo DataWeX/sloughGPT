@@ -40,6 +40,7 @@ git diff --diff-filter=AD --name-only <base>..<head>
 ### Step 2: Analyze Each Changed File
 
 For each file, check:
+
 - Does the change introduce new bugs or edge cases?
 - Are error paths handled correctly?
 - Are there any security concerns (secrets, injection, etc.)?
@@ -49,12 +50,14 @@ For each file, check:
 ### Step 3: Check Project Boundaries
 
 The project has strict layer boundaries:
-- `domain/` — Core logic, no HTTP deps
+
+- `domain/` / `packages/core-py/domains/` — Core logic, no HTTP deps (both trees currently coexist; check the target worktree's layout)
 - `apps/api/server/` — FastAPI routes, thin adapters
-- `apps/web/` — Next.js frontend, uses @sloughgpt/strui
+- `apps/web/` — Vite frontend, uses @sloughgpt/strui
 - `packages/strui/` — Shared component library
 
 Verify:
+
 - No reverse imports (core importing from API, etc.)
 - No hardcoded paths or secrets
 - No runtime downloads without user consent
@@ -62,6 +65,7 @@ Verify:
 ### Step 4: Check Test Coverage
 
 For each changed module:
+
 - Are there corresponding test changes?
 - Do tests cover the new code paths?
 - Are edge cases tested?

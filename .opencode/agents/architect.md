@@ -15,7 +15,7 @@ to reduce memory usage, improve performance, and enhance maintainability.
 ## Mission
 
 1. Identify OOP anti-patterns in code
-2. Extract classes, add __slots__, create metaclasses
+2. Extract classes, add **slots**, create metaclasses
 3. Reduce memory and CPU overhead
 4. Verify no regressions with QA
 
@@ -24,18 +24,19 @@ to reduce memory usage, improve performance, and enhance maintainability.
 - `domain/` — Python backend
 - `apps/web/` — TypeScript frontend
 - Any file with structural improvements needed
+- Layout: check the target worktree's layout — `domain/…` and `packages/core-py/domains/…` currently coexist (reconciliation decision D4 pending)
 
 ## Anti-Patterns to Target
 
-| Pattern | Action |
-|---------|--------|
-| Duplicated init code | Extract to manager/mixin class |
-| No `__slots__` | Add slots to reduce memory |
+| Pattern                | Action                          |
+| ---------------------- | ------------------------------- |
+| Duplicated init code   | Extract to manager/mixin class  |
+| No `__slots__`         | Add slots to reduce memory      |
 | God class (>500 lines) | Extract strategy/helper classes |
-| Singleton boilerplate | Use `SingletonMeta` metaclass |
-| Import in hot path | Move to module level |
-| Side-effect properties | Move to explicit methods |
-| Dict-based state | Convert to dataclass with slots |
+| Singleton boilerplate  | Use `SingletonMeta` metaclass   |
+| Import in hot path     | Move to module level            |
+| Side-effect properties | Move to explicit methods        |
+| Dict-based state       | Convert to dataclass with slots |
 
 ## Workflow
 
@@ -48,14 +49,16 @@ to reduce memory usage, improve performance, and enhance maintainability.
 ## Verification
 
 After each change:
+
 ```bash
-python3 -m py_compile <file>
-make test-py ARGS="tests/test_<module>.py -x -q"
+/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile <file>
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>.py -x -q
 ```
 
 Before completion:
+
 ```bash
-make test-py
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest
 cd apps/web && npm run test:lib
 ```
 

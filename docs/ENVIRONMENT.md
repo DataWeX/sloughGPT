@@ -413,6 +413,17 @@ Disable file-based log output entirely (logs go to stderr only).
 SLO_LOG_NO_FILE=1   # no sloughgpt.log file created
 ```
 
+### SLO_LOG_DEDUP_WINDOW
+
+**Optional**
+
+Seconds before a burst of near-identical `WARN`+ lines is collapsed to one line plus a `suppressed N similar lines` summary. Fingerprints ignore digits and correlation IDs, so repeats of the same template match. Applies to console, file, and the OutputBuffer bridge handlers.
+
+```bash
+SLO_LOG_DEDUP_WINDOW=10  # default
+SLO_LOG_DEDUP_WINDOW=0   # disable repeat suppression
+```
+
 ### SLO_LOG_COLOR
 
 **Optional**

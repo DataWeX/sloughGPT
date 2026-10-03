@@ -17,7 +17,7 @@ sloughGPT/
 ├── apps/
 │   ├── api/server/       # FastAPI server
 │   ├── cli/              # CLI app
-│   ├── web/              # Next.js web UI
+│   ├── web/              # Vite web UI
 │   └── tui/              # Terminal UI
 └── tests/                # pytest suite
 ```
@@ -26,15 +26,15 @@ sloughGPT/
 
 ### `packages/core-py/domains/` - Domain Logic
 
-| Module | Purpose |
-|--------|---------|
-| `models/` | Model interfaces, SloughGPTModel (RoPE + SwiGLU + RMSNorm) |
-| `training/` | Model training, `SloughGPTTrainer` (canonical), `TrainerProtocol` |
-| `inference/` | Production inference engine, KV cache, batching |
-| `cognitive/` | Memory, reasoning, learning, creativity |
-| `soul/` | SLO (Soul) evolution stages |
-| `infrastructure/` | Database, cache, RAG, deployment |
-| `enterprise/` | Auth, monitoring, billing |
+| Module            | Purpose                                                           |
+| ----------------- | ----------------------------------------------------------------- |
+| `models/`         | Model interfaces, SloughGPTModel (RoPE + SwiGLU + RMSNorm)        |
+| `training/`       | Model training, `SloughGPTTrainer` (canonical), `TrainerProtocol` |
+| `inference/`      | Production inference engine, KV cache, batching                   |
+| `cognitive/`      | Memory, reasoning, learning, creativity                           |
+| `soul/`           | SLO (Soul) evolution stages                                       |
+| `infrastructure/` | Database, cache, RAG, deployment                                  |
+| `enterprise/`     | Auth, monitoring, billing                                         |
 
 ### `packages/sdk-py/` - Python SDK
 
@@ -76,6 +76,7 @@ All other `TrainingConfig` classes are deprecated.
 **Canonical:** `domains.models.SloughGPTModel`
 
 Uses:
+
 - Rotary Position Embeddings (RoPE)
 - SwiGLU activation
 - RMSNorm
@@ -87,20 +88,21 @@ Uses:
 
 ## Deprecated/Unified Classes
 
-| Deprecated | Use Instead |
-|------------|-------------|
-| `Trainer` (unified_training) | `SloughGPTTrainer` |
-| `OptimizedTrainer` | `SloughGPTTrainer` |
-| `TrainingConfig` (optimized_trainer) | `TrainerConfig` |
-| `TrainingConfig` (unified_training) | `TrainerConfig` |
-| `InferenceEngine` (training/) | `InferenceEngine` (inference/) |
-| `InferenceEngine` (ml_infrastructure/) | `Predictor` |
+| Deprecated                             | Use Instead                    |
+| -------------------------------------- | ------------------------------ |
+| `Trainer` (unified_training)           | `SloughGPTTrainer`             |
+| `OptimizedTrainer`                     | `SloughGPTTrainer`             |
+| `TrainingConfig` (optimized_trainer)   | `TrainerConfig`                |
+| `TrainingConfig` (unified_training)    | `TrainerConfig`                |
+| `InferenceEngine` (training/)          | `InferenceEngine` (inference/) |
+| `InferenceEngine` (ml_infrastructure/) | `Predictor`                    |
 
 ## Duplicate Consolidations
 
 ### TextDataset (4 copies → 1)
 
 Consolidate into `domains/training/train_pipeline.py`:
+
 - `domains/training/unified_training.py`
 - `domains/training/train_pipeline.py`
 
@@ -109,6 +111,7 @@ Consolidate into `domains/training/train_pipeline.py`:
 Choose canonical: `domains/infrastructure/rag.RAGSystem`
 
 Deprecate:
+
 - `domains/cognitive/rag.ProductionRAG`
 - `domains/inference/streaming.StreamingRAG`
 - `domains/cognitive/grounding.RAGGrounder`
@@ -118,6 +121,7 @@ Deprecate:
 Choose canonical: `domains/cognitive/knowledge_graph_v2.KnowledgeGraph`
 
 Deprecate:
+
 - `domains/cognitive/knowledge_graph.KnowledgeGraph` (v1)
 - `domains/infrastructure/rag.SLOKnowledgeGraph`
 
@@ -126,6 +130,7 @@ Deprecate:
 Choose canonical: `domains/infrastructure/rag.BM25`
 
 Deprecate:
+
 - `domains/cognitive/rag.BM25Indexer`
 
 ### InferenceEngine
@@ -133,9 +138,11 @@ Deprecate:
 **Canonical:** `domains/inference/engine.InferenceEngine`
 
 **Deprecated:**
+
 - `domains/training/inference_engine.InferenceEngine` → use canonical
 
 **Removed:**
+
 - `domains/ml_infrastructure/model_serving.py` → entirely unused (contained duplicate InferenceEngine + generic ModelServer)
 
 ## Public API Contracts
@@ -149,38 +156,39 @@ class TrainerProtocol(Protocol):
         resume: bool = False,
         resume_path: Optional[str] = None,
         on_progress: Optional[Callable[[Dict[str, Any]], None]] = None,
-    ) -> Dict[str, Any]:
-        ...
+    ) -> Dict[str, Any]: ...
 ```
 
 ### Model Interface
 
 ```python
 class ModelInterface(Protocol):
-    def forward(self, x: torch.Tensor, y: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, Optional[torch.Tensor]]:
-        ...
+    def forward(
+        self, x: torch.Tensor, y: Optional[torch.Tensor] = None
+    ) -> Tuple[torch.Tensor, Optional[torch.Tensor]]: ...
 
-    def generate(self, input_ids: torch.Tensor, max_new_tokens: int, **kwargs) -> torch.Tensor:
-        ...
+    def generate(self, input_ids: torch.Tensor, max_new_tokens: int, **kwargs) -> torch.Tensor: ...
 ```
 
 ## Entry Points
 
-| Entry Point | Command |
-|-------------|---------|
-| Training | `sloughgpt train` |
-| CLI | `python -m apps.cli` |
-| API Server | `python -m apps.api.server.main` |
-| TUI | `sloughgpt shell` (split-pane curses TUI on a terminal; `sloughgpt tui` alias) |
+| Entry Point | Command                                                                        |
+| ----------- | ------------------------------------------------------------------------------ |
+| Training    | `sloughgpt train`                                                              |
+| CLI         | `python -m apps.cli`                                                           |
+| API Server  | `python -m apps.api.server.main`                                               |
+| TUI         | `sloughgpt shell` (split-pane curses TUI on a terminal; `sloughgpt tui` alias) |
 
 ## Development
 
 ### Testing
+
 ```bash
 python3 -m pytest tests/ -q
 ```
 
 ### Dev Stack
+
 ```bash
 ./scripts/dev-stack.sh
 ```
@@ -216,14 +224,14 @@ from typing import Optional, Dict, Any
 - [x] Simplify SDK imports
 - [x] Fix duplicate ConnectionManager bug
 - [x] Consolidate DatasetQualityScorer
-- [x] Add __all__ exports to key modules
+- [x] Add **all** exports to key modules
 - [x] Consolidate InferenceEngine classes (3 implementations)
-- [x] Add __all__ exports to infrastructure submodules
-- [x] Fix string literal bug in inference/__init__.py
+- [x] Add **all** exports to infrastructure submodules
+- [x] Fix string literal bug in inference/**init**.py
 - [x] Deprecate duplicate device functions (get_optimal_device, get_device_name)
 - [x] Deprecate duplicate RoPE functions (rotate_half, apply_rotary_pos_emb)
 - [x] Remove unused deployment_utils.py
-- [x] Fix empty apps/cli/__init__.py
+- [x] Fix empty apps/cli/**init**.py
 - [x] Consolidate find_available_port (3 copies → shared utils)
 - [x] Remove unused files: benchmark.py, model_loader.py, wandb_integration.py, mlflow_integration.py, external_integrations.py, knowledge_graph_engine.py
 - [x] Remove unused deployment_utils.py (331 lines)
@@ -234,13 +242,14 @@ from typing import Optional, Dict, Any
 
 ### Hardware Analysis
 
-| Hardware | Configuration | Prompt | Generation |
-|----------|---------------|--------|------------|
-| Intel MacBook Pro 15,1 | AMD Radeon 555X (CPU faster!) | ~31 tok/s | ~16 tok/s |
-| llama.cpp CPU | llama3.2-1b Q8_0 | ~31 tok/s | ~16 tok/s |
-| llama.cpp Metal (AMD) | llama3.2-1b Q8_0 | ~25 tok/s | ~5 tok/s |
+| Hardware               | Configuration                 | Prompt    | Generation |
+| ---------------------- | ----------------------------- | --------- | ---------- |
+| Intel MacBook Pro 15,1 | AMD Radeon 555X (CPU faster!) | ~31 tok/s | ~16 tok/s  |
+| llama.cpp CPU          | llama3.2-1b Q8_0              | ~31 tok/s | ~16 tok/s  |
+| llama.cpp Metal (AMD)  | llama3.2-1b Q8_0              | ~25 tok/s | ~5 tok/s   |
 
 ### Benchmark (llama3.2-1b Q8_0, 1.22GB)
+
 ```
 llama-bench -m ~/models/llama3.2-1b-q8_0.gguf -t 8 -ngl 0
 | model    | pp32 | tg32 |
@@ -268,10 +277,12 @@ llama-bench -m ~/models/llama3.2-1b-q8_0.gguf -t 8 -ngl 0
 ### llama.cpp Inference Engine
 
 GGUF models handled by llama.cpp:
+
 - **llama-cpp-python**: Primary (if installed)
 - **llama-cli**: Subprocess fallback
 
 Located at `packages/core-py/domains/inference/llama_engine.py`:
+
 - `LlamaInferenceEngine`: Main engine
 - `LlamaCLIInferenceEngine`: CLI subprocess
 - `detect_gpu()`: Detect Metal/CUDA GPU
@@ -279,14 +290,15 @@ Located at `packages/core-py/domains/inference/llama_engine.py`:
 
 ### GPU Auto-Detection
 
-| GPU | Detection | Result |
-|-----|-----------|--------|
-| Apple M3/M4/M5 | Metal tensor ops | ✅ GPU |
-| AMD Radeon (Intel Mac) | No tensor ops | ❌ CPU (faster) |
-| Intel integrated | No GPU | ❌ CPU |
-| NVIDIA (Linux) | CUDA tensor cores | ✅ GPU |
+| GPU                    | Detection         | Result          |
+| ---------------------- | ----------------- | --------------- |
+| Apple M3/M4/M5         | Metal tensor ops  | ✅ GPU          |
+| AMD Radeon (Intel Mac) | No tensor ops     | ❌ CPU (faster) |
+| Intel integrated       | No GPU            | ❌ CPU          |
+| NVIDIA (Linux)         | CUDA tensor cores | ✅ GPU          |
 
 **Environment Variables:**
+
 ```bash
 MAN_MODEL_PATH=~/models/model.gguf  # Required
 MAN_FORCE_GPU=1                      # Force GPU
@@ -307,6 +319,7 @@ curl -X POST http://localhost:8000/generate \
 ```
 
 ### Status
+
 - ✅ GGUF model loading
 - ✅ Smart CPU/GPU selection
 - ✅ llama-cli fallback

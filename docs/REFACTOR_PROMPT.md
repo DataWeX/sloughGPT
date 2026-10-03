@@ -52,24 +52,40 @@ OUTPUT: Show before/after for each module changed.
 # BEFORE: users write implementation code
 from domain.training._internal.slonet import SloTransformer
 from domain.training._internal.lora import LoRAWrapper
+
 model = SloTransformer(config)
 lora = LoRAWrapper(model)
 lora.train(dataset)
 
 # AFTER: users just call the API
 from sloughgpt.training import train
+
 model = train("data.txt")
 ```
 
 ```python
 # BEFORE: 20 exported functions
 from sloughgpt.training import (
-    train, load, status, get_config, set_config,
-    validate_data, preprocess, postprocess, export_model,
-    import_model, compare_models, get_metrics, plot_loss,
-    save_checkpoint, load_checkpoint, list_checkpoints,
-    delete_checkpoint, resume_training, cancel_training,
-    get_logs
+    train,
+    load,
+    status,
+    get_config,
+    set_config,
+    validate_data,
+    preprocess,
+    postprocess,
+    export_model,
+    import_model,
+    compare_models,
+    get_metrics,
+    plot_loss,
+    save_checkpoint,
+    load_checkpoint,
+    list_checkpoints,
+    delete_checkpoint,
+    resume_training,
+    cancel_training,
+    get_logs,
 )
 
 # AFTER: 3 exported functions
@@ -79,9 +95,11 @@ from sloughgpt.training import train, load, status
 ```python
 # BEFORE: server required
 import requests
+
 requests.post("http://localhost:8000/api/train", json={"data": "file.txt"})
 
 # AFTER: just Python
 from sloughgpt.training import train
+
 model = train("file.txt")
 ```

@@ -54,12 +54,31 @@
 5. ~~**Multi-agent orchestration polish** — Async executor works, needs UI for agent creation/editing and dashboard for runs.~~ **Done** — full agent CRUD (create/edit/delete + validation), multi-agent orchestration card (goal/context, per-agent picks via `agent_ids`, live plan→execute→compose→complete SSE timeline), and runs dashboard on `apps/web/app/(app)/agents/page.tsx` (list/timeline views, status + agent filters, expandable detail with per-task dots/previews, result + logs). Backend: `apps/api/server/routers/agents.py` CRUD + `POST /orchestrate` (SSE, `asyncio.gather` level execution) + `GET /runs` + `GET /runs/{run_id}`; persistence via `packages/core-py/domains/agents/run_history.py` (file-backed `data/agent_runs/`). Covered by 26 frontend + 179 backend/core tests.
 6. ~~**Dataset management UI** — Import/export/versioning/search frontend.~~ **Done** — list page (search/sort/preview/compare/export/delete/version badges), detail page (rename/stats/quality/insights/preview/snapshots/JSONL+CSV export/convert-to-chat-format), import modals (local/GitHub/HF/URL/ISBN/Kaggle/CSV), chat→dataset export. Backend convert + versioning covered by tests.
 7. ~~**Voyager journey testing library** — Build a modular, cross-platform library for user journey tests and computer-use automation.~~ **Done** — `packages/voyager/` with 201 tests, 7 backends (Playwright, Selenium, CDP, API-only, CLI, Appium, Desktop), AI model integration, learning system, and full computer-use primitives (Mouse, Keyboard, InteractionChain, visual detection, smart waits, time-travel debugging, network interception, performance markers).
+   > **Verified 2026-10-01:** `packages/voyager/` contains only `pyproject.toml` +
+   > `src` — **0 test files** exist in-tree, so "201 tests, 7 backends" cannot be
+   > reproduced from the repository. Either the tests live outside the tree or
+   > the claim predates a cleanup. Re-verify before citing this number.
 
 ## New goals (September 2026)
 
 8. ~~**Voyager journey tests for sloughGPT** — Write end-to-end journey tests using Voyager against the sloughGPT frontend.~~ **Done** — 8 journeys (chat, souls, training, datasets, models, knowledge, settings, agents). API backend runner + Playwright runner in `scripts/run_journey_tests.py`. `packages/voyager/tests/test_sloughgpt_journeys.py`.
+   > **Corrected 2026-10-01:** the runner is **Arken**, not Voyager
+   > (`scripts/run_journey_tests.py` — "Arken journey test runner for sloughGPT",
+   > `packages/arken/`), and `packages/voyager/tests/test_sloughgpt_journeys.py`
+   > **does not exist**. The 8 journey names above are accurate. Playwright
+   > journey coverage lives in `packages/core-py/tests/test_user_journeys.py`
+   > (75 collected / 46 recorded), writing to
+   > `packages/core-py/tests/test_results/user_journey_results.json`.
 9. ~~**Wire Consciousness to inference** — Connect `domain/consciousness/` cognitive engine to the inference pipeline.~~ **Done** — `SloEngine._init_consciousness()` loads consciousness engine. `SloEngine.generate()` processes responses through `ConsciousnessEngine.process()` post-generation. Configurable via `ConsciousnessConfig.level`.
 10. ~~**Consolidate training loops** — Three copies of the forward/loss/backward/grad-clip/optimize loop exist (`train_pipeline.py`, `chat_trainer.py`, `consciousness/training.py`). Consolidate into `SloughGPTTrainer` with dataset adapters.~~ **Done** — `training_handler.py` is the single composable training engine with protocols (BatchSampler, GradientHandler, LossTracker, CheckpointSaver) and implementations (RandomBlockSampler, PermutationSampler, ChatPairSampler, DirectGradientHandler, AccumulationGradientHandler, RawLossTracker, EMALossTracker, SoulCheckpointSaver, NpzCheckpointSaver). All three training files now import from `training_handler.py`. One gap: `domain/consciousness/training.py` was deleted in the layout refactor and never re-created, so the router's `_get_trainer()` still imports `domain.consciousness.training` and 500s on `/status` and `/train/*`. Restored as a dataset adapter in goal 15.
+
+> **Stale 2026-10-01 — the 500 no longer exists.** `domain/consciousness/` was
+> removed by goal 20 with no shims, and a repo-wide grep finds **zero** live
+> `domain.consciousness.*` imports. `routers/consciousness.py:_get_trainer()`
+> now does `from domain.cognition import ConsciousnessTrainer, TrainingConfig`
+> — a clean facade, no `_internal`. Do not treat `/status` or `/train/*` as
+> broken on the strength of this note; the gap closed without goal 15.
+
 11. ~~**Voice router cleanup** — TTS works, phoneme encode works, but router bypasses domain. Wire `domain/voice/` properly to `apps/api/server/routers/voice.py`.~~ **Done** — Both `voice.py` and `phoneme.py` routers properly delegate to `domain.voice` via `get_voice_engine()` and `get_phoneme_engine()`. No `_internal` imports.
 
 ## Training delivery — two tracks (October 2026)

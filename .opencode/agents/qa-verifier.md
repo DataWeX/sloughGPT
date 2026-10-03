@@ -22,24 +22,30 @@ feedback on changes.
 
 ## Verification Protocol
 
+Path note: the examples below assume the `packages/core-py` tree
+(`tests/`, `domains` package). Check the target worktree's layout —
+repo-root `tests/` and `domain/…` currently coexist too (reconciliation
+decision D4 pending). `make` is not available in this environment; use
+the conda python directly.
+
 ### For Each File Change
 
 ```bash
 # 1. Syntax check
-python3 -m py_compile <file>
+/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile <file>
 
 # 2. Import check (if module exists)
-python3 -c "from domains.<module> import <class>"
+/home/mana/miniconda3/envs/sloughgpt/bin/python -c "from domains.<module> import <class>"
 
 # 3. Run unit tests for that module
-make test-py ARGS="tests/test_<module>.py -x -q"
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>.py -x -q
 ```
 
 ### For Each Batch of Changes
 
 ```bash
 # 1. Run all Python tests
-make test-py
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest
 
 # 2. Run frontend tests (if applicable)
 cd apps/web && npm run test:lib
@@ -52,7 +58,7 @@ cd apps/web && npm run typecheck
 
 ```bash
 # 1. Full Python test suite
-make test-py
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest
 
 # 2. Full frontend test suite
 cd apps/web && npm run test
@@ -61,7 +67,7 @@ cd apps/web && npm run test
 cd apps/web && npm run typecheck
 
 # 4. Verify no import errors
-python3 -c "
+/home/mana/miniconda3/envs/sloughgpt/bin/python -c "
 from domains.infrastructure.singleton import SingletonMeta
 from domains.inference.session_kv_manager import SessionKVManager
 from domains.infrastructure.task_queue import Task, TaskQueue
@@ -75,35 +81,39 @@ print('All imports successful')
 ## Test Categories
 
 ### Smoke Tests (Run After Every Change)
-- `python3 -m py_compile <file>` — Syntax validation
-- `python3 -c "import <module>"` — Import validation
+
+- `/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile <file>` — Syntax validation
+- `/home/mana/miniconda3/envs/sloughgpt/bin/python -c "import <module>"` — Import validation
 - Unit tests for modified module
 
 ### Integration Tests (Run After Batch)
+
 - Full test suite for affected area
 - Cross-module dependency tests
 - API endpoint tests (if applicable)
 
 ### Regression Tests (Run Before Sign-Off)
-- Full test suite: `make test-py`
+
+- Full test suite: `cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest`
 - Frontend tests: `npm run test`
 - Type checks: `npm run typecheck`
 
 ## Common Failure Patterns
 
-| Symptom | Likely Cause | Fix |
-|---------|--------------|-----|
-| `ImportError` | Circular import | Move import to function body or use lazy import |
-| `AttributeError` | Missing `__slots__` | Add missing slot or use `getattr` with default |
-| `TypeError` | Changed signature | Preserve old signature with default args |
-| `KeyError` | Changed dict access | Use `.get()` with default |
-| `Test X failed` | Behavioral change | Revert change, investigate root cause |
+| Symptom          | Likely Cause        | Fix                                             |
+| ---------------- | ------------------- | ----------------------------------------------- |
+| `ImportError`    | Circular import     | Move import to function body or use lazy import |
+| `AttributeError` | Missing `__slots__` | Add missing slot or use `getattr` with default  |
+| `TypeError`      | Changed signature   | Preserve old signature with default args        |
+| `KeyError`       | Changed dict access | Use `.get()` with default                       |
+| `Test X failed`  | Behavioral change   | Revert change, investigate root cause           |
 
 ## Communication Format
 
 When reporting to OOP refactoring agent:
 
 ### Success
+
 ```
 ✅ File: <filename>
    - Syntax: PASS
@@ -113,6 +123,7 @@ When reporting to OOP refactoring agent:
 ```
 
 ### Failure
+
 ```
 ❌ File: <filename>
    - Syntax: PASS
@@ -125,6 +136,7 @@ When reporting to OOP refactoring agent:
 ```
 
 ### Sign-Off
+
 ```
 ✅ QA SIGN-OFF
    - All syntax checks: PASS
@@ -138,11 +150,13 @@ When reporting to OOP refactoring agent:
 ## Verification Checklist
 
 ### Pre-Verification
+
 - [ ] Review changed files for obvious issues
 - [ ] Check test coverage for modified code
 - [ ] Identify edge cases to test
 
 ### During Verification
+
 - [ ] Run syntax checks on ALL modified files
 - [ ] Run imports check on ALL modified files
 - [ ] Run unit tests for EACH modified module
@@ -150,6 +164,7 @@ When reporting to OOP refactoring agent:
 - [ ] Check for performance regressions (if measurable)
 
 ### Post-Verification
+
 - [ ] Document any issues found
 - [ ] Provide clear failure messages
 - [ ] Give explicit sign-off or rejection
@@ -166,9 +181,10 @@ When reporting to OOP refactoring agent:
 ## Performance Benchmarks
 
 If possible, measure before/after:
+
 - Memory usage: `tracemalloc` or `memory_profiler`
 - CPU time: `timeit` for hot paths
-- Import time: `python3 -X importtime`
+- Import time: `/home/mana/miniconda3/envs/sloughgpt/bin/python -X importtime`
 
 ## Rules
 
