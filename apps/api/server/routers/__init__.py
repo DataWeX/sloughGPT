@@ -94,6 +94,7 @@ def get_all_routers() -> list[APIRouter]:
         "users",
         "tenants",
         "workspaces",
+        "search",
         "openwebui",
         "cloud_training",
         "plugins",
