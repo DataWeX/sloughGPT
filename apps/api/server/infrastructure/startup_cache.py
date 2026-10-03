@@ -9,6 +9,8 @@ Usage:
     stats = cache.get_stats()
 """
 
+from __future__ import annotations
+
 import importlib
 import logging
 import time
@@ -176,3 +178,4 @@ def cached_import(module_name: str) -> Any:
     cache.put(module_name, module, import_time_ms)
 
     return module
+

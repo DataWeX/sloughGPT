@@ -445,7 +445,7 @@ class TestIngestUrl:
         data = resp.json()["data"]
         assert data["new_facts"] == 3
 
-    @patch("domain.infrastructure.classify_exception")
+    @patch("domain.infrastructure._internal.errors.classify_exception")
     @patch("domain.infrastructure._internal.errors.emit_error_event")
     @patch("domain.knowledge.get_knowledge_ingestor")
     def test_ingestor_exception_maps_to_http(self, mock_get_ing, mock_emit, mock_classify, client):

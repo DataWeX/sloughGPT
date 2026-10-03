@@ -11,6 +11,8 @@ Usage:
     python train_tokenizer.py sample --tokenizer my_tokenizer.json
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import sys
@@ -208,3 +210,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

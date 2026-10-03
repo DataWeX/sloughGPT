@@ -2,6 +2,8 @@
 Data commands - Dataset management, import, and validation.
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -352,3 +354,4 @@ def register(subparsers):
     validate_parser = data_sub.add_parser("validate", help="Validate dataset")
     validate_parser.add_argument("path", help="Dataset path")
     validate_parser.set_defaults(func=lambda a: cmd_data_tool(a, "validate"))
+

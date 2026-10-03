@@ -3,6 +3,8 @@ SloughGPT Performance Testing Suite
 Tests inference performance with various models and configurations.
 """
 
+from __future__ import annotations
+
 import os
 import sys
 
@@ -362,3 +364,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

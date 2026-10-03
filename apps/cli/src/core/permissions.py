@@ -14,6 +14,8 @@ Usage::
         # proceed with download
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import sys
@@ -272,3 +274,4 @@ class PermissionsManager:
                 f"{f['name'].split('/')[-1]} ({format_size(f['size'])})" for f in sorted_files
             )
             _line(f"    {_c('Largest:', _DIM)} {top_files}")
+

@@ -2,6 +2,8 @@
 Model Schemas - Data models for model management
 """
 
+from __future__ import annotations
+
 from enum import StrEnum
 
 from pydantic import BaseModel, Field
@@ -52,3 +54,4 @@ class LoadModelResponse(BaseModel):
     error: str | None = None
     type: str | None = None
     loaded_at: str | None = None
+

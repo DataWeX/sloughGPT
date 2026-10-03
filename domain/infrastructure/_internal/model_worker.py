@@ -18,8 +18,6 @@ restart it.
 
 Architecture::
 
-from __future__ import annotations
-
     API Process                Worker Process
     ┌──────────────┐           ┌──────────────────────┐
     │ ProcessGuard │───req_q──▶│ ModelWorkerProcess   │
@@ -34,6 +32,8 @@ from __future__ import annotations
     └──────────────┘
 """
 
+from __future__ import annotations
+
 import gc
 import itertools
 import logging
@@ -41,7 +41,6 @@ import multiprocessing as mp
 import os
 import queue
 import sys
-import threading
 import time
 import traceback
 from collections.abc import Generator
@@ -105,6 +104,18 @@ class WorkerHealth:
     crash_count: int = 0
 
 
+def _strip_worker_meta(kwargs: dict) -> dict:
+    """Drop worker-loop reserved keys that callers may forward via **kwargs.
+
+    ModelServer passes ``session_id=None`` (and similar) into
+    ``backend.generate_stream(..., session_id=...)`` even for backend workers,
+    which would collide with the explicit ``session_id=``/``hb_q=`` arguments
+    dispatched in ``_worker_loop``.
+    """
+    reserved = {"session_id", "resp_q", "resp_q_inner", "hb_q"}
+    return {k: v for k, v in kwargs.items() if k not in reserved}
+
+
 def _worker_loop(
     req_q: mp.Queue,
     resp_q: mp.Queue,
@@ -150,6 +161,7 @@ def _worker_loop(
             session_id = None
             try:
                 session_id, prompt, kwargs = payload
+                kwargs = _strip_worker_meta(kwargs)
                 result = generate_fn(prompt, **kwargs)
                 resp_q.put_nowait(("result", session_id, result))
                 requests_served += 1
@@ -171,6 +183,7 @@ def _worker_loop(
             session_id = None
             try:
                 session_id, prompt, kwargs = payload
+                kwargs = _strip_worker_meta(kwargs)
                 stream_fn(prompt, resp_q, session_id=session_id, hb_q=hb_q, **kwargs)
                 requests_served += 1
             except Exception as e:
@@ -664,23 +677,14 @@ def _hf_worker_main(
         repetition_penalty: float = 1.0,
         **gen_kwargs: Any,
     ) -> None:
-        from .model_server import _TokenStreamer
+        import numpy as np
 
         inputs = tokenizer(prompt, return_tensors="pt")
-        input_ids = inputs["input_ids"]
+        input_ids = np.asarray(inputs["input_ids"], dtype=np.int64)
         attention_mask = inputs.get("attention_mask")
-
-        device = getattr(model, "device", None)
-        if device is not None and device != "cpu":
-            input_ids = input_ids.to(device)
-            if attention_mask is not None:
-                attention_mask = attention_mask.to(device)
-
-        streamer = _TokenStreamer(tokenizer, skip_prompt=True)
 
         gen_kwargs.update(
             input_ids=input_ids,
-            attention_mask=attention_mask,
             max_new_tokens=max_new_tokens,
             do_sample=True,
             temperature=temperature,
@@ -689,29 +693,28 @@ def _hf_worker_main(
             repetition_penalty=repetition_penalty,
             pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            streamer=streamer,
         )
+        if attention_mask is not None:
+            gen_kwargs["attention_mask"] = np.asarray(attention_mask, dtype=np.int64)
 
-        thread = threading.Thread(target=model.generate, kwargs=gen_kwargs, daemon=True)
-        thread.start()
-
-        tokens_generated = 0
         start = time.time()
-        for text_chunk in streamer:
+        output_ids = model.generate(**gen_kwargs)
+        generated = np.asarray(output_ids)[0][input_ids.shape[1] :]
+        tokens_generated = int(len(generated))
+        elapsed_ms = (time.time() - start) * 1000
+
+        for token_id in generated:
             if hb_q is not None:
                 try:
                     hb_q.put_nowait(("alive", os.getpid()))
                 except Exception as exc:
                     logger.debug("worker: heartbeat put failed: %s", exc)
             try:
+                text_chunk = tokenizer.decode([token_id], skip_special_tokens=True)
                 resp_q_inner.put(("token", session_id, text_chunk), timeout=_STREAM_PUT_TIMEOUT_S)
             except Exception as exc:
                 logger.debug("worker: HF token put failed for session %s: %s", session_id, exc)
                 break
-            tokens_generated += 1
-
-        thread.join(timeout=10)
-        elapsed_ms = (time.time() - start) * 1000
 
         try:
             resp_q_inner.put(
@@ -1310,7 +1313,7 @@ class ModelWorkerProcess:
 
     # ── Context manager ────────────────────────────────────────────────
 
-    def __enter__(self) -> "ModelWorkerProcess":
+    def __enter__(self) -> ModelWorkerProcess:
         self.start()
         return self
 

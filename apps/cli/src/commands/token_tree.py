@@ -6,6 +6,9 @@ module (infrastructure before endpoints): training materializes BPE merges as
 a tree, and every query handler (encode/decode/similar/lineage/embedding/
 path) descends the tree or its Point-generated embeddings.
 """
+
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
@@ -148,7 +151,11 @@ def cmd_token_tree_encode(args) -> None:
     rows = []
     for i, tid in enumerate(ids):
         token = tree.itos.get(tid, "?")
-        display = token.replace("</w>", "") if token not in ("<PAD>", "<UNK>", "<BOS>", "<EOS>") else token
+        display = (
+            token.replace("</w>", "")
+            if token not in ("<PAD>", "<UNK>", "<BOS>", "<EOS>")
+            else token
+        )
         rows.append([str(i), str(tid), display])
     log.header(f"Encoding ({len(ids)} tokens)")
     log.table(["#", "id", "token"], rows)
@@ -246,12 +253,14 @@ def cmd_token_tree_vocab(args) -> None:
             flags.append("special")
         if e["is_merged"]:
             flags.append("merged")
-        rows.append([
-            str(e["id"]),
-            e["token"].replace("</w>", "") or e["token"],
-            str(e["freq"]),
-            "+".join(flags) if flags else "",
-        ])
+        rows.append(
+            [
+                str(e["id"]),
+                e["token"].replace("</w>", "") or e["token"],
+                str(e["freq"]),
+                "+".join(flags) if flags else "",
+            ]
+        )
     log.table(["id", "token", "freq", "flags"], rows)
     if out["entries"]:
         log.info(f"Showing {lo}–{hi} of {out['total']}")
@@ -283,10 +292,7 @@ def cmd_token_tree_embedding(args) -> None:
     log.key_value("L2 norm", f"{float(np.linalg.norm(vec)):.4f}")
     log.key_value("Embedding points", str(tree.embedding_points()))
     log.key_value("Compression", f"{tree.embedding_compression_ratio():.2f}x")
-    rows = [
-        [str(int(i)), f"{float(vec[i]):+.4f}"]
-        for i in top_idx
-    ]
+    rows = [[str(int(i)), f"{float(vec[i]):+.4f}"] for i in top_idx]
     log.table(["dim", "value"], rows)
 
 
@@ -340,24 +346,15 @@ def cmd_token_tree_matrix(args) -> None:
     log.key_value("L2 norm min", f"{stats['norm_min']:.4f}")
     log.key_value("L2 norm mean", f"{stats['norm_mean']:.4f}")
     log.key_value("L2 norm max", f"{stats['norm_max']:.4f}")
-    log.key_value(
-        "Tokens", f"{stats['live_tokens']} live, {stats['dead_tokens']} dead"
-    )
+    log.key_value("Tokens", f"{stats['live_tokens']} live, {stats['dead_tokens']} dead")
 
     def energy_rows(key: str):
-        return [
-            [tok.replace("</w>", ""), str(tid), f"{norm:.4f}"]
-            for tok, tid, norm in stats[key]
-        ]
+        return [[tok.replace("</w>", ""), str(tid), f"{norm:.4f}"] for tok, tid, norm in stats[key]]
 
     log.header("Most energetic")
-    log.table(
-        ["token", "id", "norm"], energy_rows("most_energetic")
-    )
+    log.table(["token", "id", "norm"], energy_rows("most_energetic"))
     log.header("Least energetic")
-    log.table(
-        ["token", "id", "norm"], energy_rows("least_energetic")
-    )
+    log.table(["token", "id", "norm"], energy_rows("least_energetic"))
 
 
 def cmd_token_tree_compare(args) -> None:
@@ -457,12 +454,14 @@ def cmd_token_tree_saved(args) -> None:
         return
     rows = []
     for t in saved:
-        rows.append([
-            t["name"],
-            str(t["vocab_size"]),
-            str(t["num_merges"]),
-            t["path"],
-        ])
+        rows.append(
+            [
+                t["name"],
+                str(t["vocab_size"]),
+                str(t["num_merges"]),
+                t["path"],
+            ]
+        )
     log.header("Saved token trees")
     log.table(["name", "vocab", "merges", "path"], rows)
 
@@ -507,9 +506,7 @@ def cmd_token_tree_load(args) -> None:
     except (FileNotFoundError, ValueError) as e:
         log.error(str(e))
         sys.exit(2)
-    log.success(
-        f"Loaded {out['name']!r} ({out['vocab_size']} vocab, {out['num_merges']} merges)"
-    )
+    log.success(f"Loaded {out['name']!r} ({out['vocab_size']} vocab, {out['num_merges']} merges)")
 
 
 def cmd_token_tree_delete(args) -> None:
@@ -531,3 +528,4 @@ def cmd_token_tree_delete(args) -> None:
         log.error(f"No saved token tree named {args.name!r}")
         sys.exit(2)
     log.success(f"Deleted {args.name!r}")
+

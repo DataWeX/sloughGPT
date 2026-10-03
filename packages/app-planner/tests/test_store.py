@@ -196,7 +196,12 @@ class TestSurgicalBoardUpdates:
 
         after = board_file.read_text().splitlines()
         assert len(after) == len(before) + 1
-        assert after[: len(before)] == before  # every existing line unchanged
+        # Existing card lines stay byte-for-byte identical; only the header's
+        # chain aggregates may refresh (Gamma opens a new slot -> new tray root).
+        before_cards = [raw for raw in before if json.loads(raw).get("title")]
+        after_cards = [raw for raw in after if json.loads(raw).get("title")]
+        assert after_cards[: len(before_cards)] == before_cards
+        assert json.loads(after[0]).get("schema") == "planner/1"
         assert "Gamma" in after[-1]
 
     def test_archive_done_preserves_other_lines(self, store):

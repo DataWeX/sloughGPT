@@ -7,10 +7,11 @@ happy path + 404/405/422 + auth edge.
 
 POST /chat + POST /chat/stream are owned by THIS router (InferenceRouter's
 duplicate registrations were removed; scripts/check_docs_api_parity.py fails
-on any duplicate path+method). Both delegate to the inference kernel
-(`routers.inference._instance`), which tests/server/test_inference_router.py
-exercises end-to-end — here the kernel seam is faked so these stay a fast
-HTTP-contract check (validation, SSE framing, auth).
+on any duplicate path+method). Both delegate through the inference router's
+public facades (`handle_chat` / `handle_chat_stream` — the only sanctioned
+cross-router seam), which tests/server/test_inference_router.py exercises
+end-to-end — here the facade seam is faked so these stay a fast HTTP-contract
+check (validation, SSE framing, auth).
 
 The chat manager is faked for the session routes (regenerate, cancel, read
 models).
@@ -57,16 +58,16 @@ class _FakeManager:
 
 
 class _FakeKernel:
-    """Stands in for routers.inference._instance (the chat kernel)."""
+    """Stands in for the inference public facades (handle_chat/handle_chat_stream)."""
 
-    async def chat(self, req, auth_user=None):
+    async def handle_chat(self, req, auth_user=None):
         return ChatResponse(
             message="hello from fake",
             session_id=req.session_id or "default",
             done=True,
         )
 
-    async def chat_stream(self, req, http_request, auth_user=None):
+    async def handle_chat_stream(self, req, http_request, auth_user=None):
         frames = (
             'data: {"stream":"chat","phase":"STREAMING","status":"working",'
             '"data":{"token":"Hello"}}\n\n'
@@ -80,7 +81,9 @@ class _FakeKernel:
 @pytest.fixture(autouse=True)
 def _fake_chat_manager(monkeypatch):
     monkeypatch.setattr("domain.chat.get_chat_manager", lambda: _FakeManager())
-    monkeypatch.setattr("routers.chat._chat_kernel", _FakeKernel())
+    _fake = _FakeKernel()
+    monkeypatch.setattr("routers.chat.handle_chat", _fake.handle_chat)
+    monkeypatch.setattr("routers.chat.handle_chat_stream", _fake.handle_chat_stream)
 
 
 def _msg_body():

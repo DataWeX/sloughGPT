@@ -6,6 +6,8 @@ Choice, Path, Context with invoke/obj/invoked_subcommand, auto-correct,
 fuzzy matching, grouped help, usage tracking.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from collections.abc import Callable
@@ -310,7 +312,7 @@ class Group:
     def add_command(self, cmd: Command, name: str = ""):
         self.commands[name or cmd.name] = cmd
 
-    def add_group(self, grp: "Group", name: str = ""):
+    def add_group(self, grp: Group, name: str = ""):
         self.groups[name or grp.name] = grp
 
     def _fuzzy_match(self, cmd_name: str) -> list[str]:
@@ -957,3 +959,4 @@ def _show_error(group: Group, cmd_name: str):
         _p()
         _p(f"  {_c("Tip: Use 'sloughgpt --help' to see all commands", _DIM)}")
         _p()
+

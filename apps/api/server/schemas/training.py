@@ -2,6 +2,8 @@
 Training Schemas - Data models for training
 """
 
+from __future__ import annotations
+
 from datetime import datetime
 from enum import StrEnum
 
@@ -73,3 +75,4 @@ class DatasetInfo(BaseModel):
     name: str
     path: str
     file_count: int
+

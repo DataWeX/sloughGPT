@@ -78,6 +78,38 @@ def test_parse_frontmatter_keeps_extra_keys(tmp_path):
     assert meta["title"] == "Card X"
 
 
+def test_parse_frontmatter_unquotes_quoted_values(tmp_path):
+    """The real journal shape: quoted title (with an inner colon) + closing
+    ``---`` + markdown body. yaml.safe_load must see the block only — never
+    the body as a second document — so quoted values come back unquoted."""
+    p = tmp_path / "n.md"
+    p.write_text(
+        "---\n"
+        'title: "Card X — Fix decode: optimize GEMV (8.6 -> 25)"\n'
+        "status: done\n"
+        "board: uuid-1\n"
+        "---\n\n"
+        "# body\n\n"
+        "status: bogus-from-body\n"
+        "board: must-not-leak\n"
+    )
+    meta = parse_frontmatter(p)
+    assert meta["title"] == "Card X — Fix decode: optimize GEMV (8.6 -> 25)"
+    assert meta["status"] == "done"  # body line must not win
+    assert meta["board"] == "uuid-1"  # body line must not win
+
+
+def test_parse_frontmatter_keeps_raw_non_string_values(tmp_path):
+    """YAML may coerce scalars (date, underscore int); verify compares raw
+    strings, so non-string parses must not overwrite the line value."""
+    p = tmp_path / "n.md"
+    p.write_text("---\nid: 20260929_081\ndate: 2026-09-29\nstatus: done\n---\n\n# body\n")
+    meta = parse_frontmatter(p)
+    assert meta["id"] == "20260929_081"  # yaml would int-parse away the underscore
+    assert meta["date"] == "2026-09-29"
+    assert meta["status"] == "done"
+
+
 def test_verify_all_consistent(note, board, git_repo):
     repo, sha = git_repo
     _write_note(note.parent / "n.md", board="uuid-1", landed=sha)
@@ -106,6 +138,16 @@ def test_verify_matches_card_by_title_when_no_board_key(note, board):
     findings = verify_note(note, board, Path("."))
     bad = [f for f in findings if not f.ok]
     assert not bad, f"title fallback should match the card: {bad}"
+
+
+def test_verify_matches_card_by_quoted_title(note, board, tmp_path):
+    """Journal notes write ``title: "..."`` — quoting must not break the
+    card-title fallback (it did until parse_frontmatter parsed the block)."""
+    quoted = tmp_path / "q.md"
+    quoted.write_text('---\ntitle: "Card X"\nstatus: done\n---\n\n# body\n')
+    findings = verify_note(quoted, board, Path("."))
+    bad = [f for f in findings if not f.ok]
+    assert not bad, f"quoted title must match the card title: {bad}"
 
 
 def test_verify_landed_sha_missing_from_repo(note, board):

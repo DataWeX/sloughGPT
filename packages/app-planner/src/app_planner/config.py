@@ -25,7 +25,8 @@ BACKENDS = ("file", "mogdb")
 
 STATUS_TO_COLUMN = {
     "done": "done",
-    "wip": "in_progress",
+    "doing": "in_progress",
+    "wip": "in_progress",  # legacy spelling — still accepted (120 journal entries)
     "review": "review",
     "todo": "todo",
     "open": "todo",
@@ -36,16 +37,17 @@ STATUS_TO_COLUMN = {
 
 COLUMN_TO_STATUS = {
     "todo": "open",
-    "in_progress": "wip",
+    "in_progress": "doing",
     "review": "review",
     "done": "done",
 }
 
-STATUSES = ["open", "wip", "done", "blocked", "review", "todo"]
+STATUSES = ["open", "doing", "wip", "done", "blocked", "review", "todo"]
 
 STATUS_ICONS = {
     "open": "\u25cb",
-    "wip": "\u25d0",
+    "doing": "\u25d0",
+    "wip": "\u25d0",  # legacy spelling
     "done": "\u25cf",
     "blocked": "\u2715",
     "review": "\u25c8",

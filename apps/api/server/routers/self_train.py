@@ -2,6 +2,8 @@
 Self-Train Router - Start/stop/status for self-training subprocess.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import re
@@ -161,3 +163,4 @@ class SelfTrainRouter:
 
 
 router = SelfTrainRouter().router
+

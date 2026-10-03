@@ -74,10 +74,10 @@ def demo_dashboard():
     db = DevDashboard("SloughGPT Dev Server", tabs=tabs)
     db._api_lines = api_lines
     db._web_lines = [
-        "> next dev",
-        "  ▲ Next.js 15.5.24",
+        "> vite",
+        "  VITE v8.3.0",
         "  - Local: http://localhost:3000",
-        "  ✓ Ready in 2.9s",
+        "  ✓ Ready in 542ms",
     ]
     db._states = {"api": "ready", "web": "ready"}
 

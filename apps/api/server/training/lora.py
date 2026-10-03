@@ -83,6 +83,7 @@ async def start_lora_finetune(
     job: dict[str, Any] = {
         "id": job_id,
         "name": request.name or f"LoRA-{dataset_name}-r{request.rank}",
+        "type": "lora",
         "model": model_stem,
         "dataset": dataset_name,
         "data_path": str(data_path),

@@ -5,6 +5,8 @@ Tests: TCP, UDP, Unix Socket, WebSocket, HTTP, Shared Memory
 Metrics: latency (p50/p95/p99), throughput, overhead
 """
 
+from __future__ import annotations
+
 import socket
 import struct
 import tempfile
@@ -289,3 +291,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

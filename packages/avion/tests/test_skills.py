@@ -16,16 +16,30 @@ def run(coro):
 
 def trajectory():
     t = Trajectory(task="open chat")
-    t.add_step(Step(step_number=0,
-                    action=Action(ActionType.NAVIGATE, {"url": "http://x/chat"}),
-                    observation="nav", reward=0.0))
-    t.add_step(Step(step_number=1, action=Action(ActionType.WAIT, {"ms": 5}),
-                    observation="wait", reward=0.0))
-    t.add_step(Step(step_number=2,
-                    action=Action(ActionType.KEYBOARD_TYPE, {"text": "hi"}),
-                    observation="typed", reward=0.1))
-    t.add_step(Step(step_number=3, action=Action(ActionType.DONE),
-                    observation="ok", reward=1.0, done=True))
+    t.add_step(
+        Step(
+            step_number=0,
+            action=Action(ActionType.NAVIGATE, {"url": "http://x/chat"}),
+            observation="nav",
+            reward=0.0,
+        )
+    )
+    t.add_step(
+        Step(
+            step_number=1, action=Action(ActionType.WAIT, {"ms": 5}), observation="wait", reward=0.0
+        )
+    )
+    t.add_step(
+        Step(
+            step_number=2,
+            action=Action(ActionType.KEYBOARD_TYPE, {"text": "hi"}),
+            observation="typed",
+            reward=0.1,
+        )
+    )
+    t.add_step(
+        Step(step_number=3, action=Action(ActionType.DONE), observation="ok", reward=1.0, done=True)
+    )
     t.success = True
     return t
 
@@ -35,7 +49,10 @@ class TestDistill:
         lib = SkillLibrary()
         skill = lib.add_from_trajectory(trajectory(), "open_chat", "go to chat")
         assert [a.action_type for a in skill.actions] == [
-            ActionType.NAVIGATE, ActionType.KEYBOARD_TYPE, ActionType.DONE]
+            ActionType.NAVIGATE,
+            ActionType.KEYBOARD_TYPE,
+            ActionType.DONE,
+        ]
         assert skill.source_task == "open chat"
 
     def test_keep_waits_opt_in(self):

@@ -26,11 +26,12 @@ classifiers = [
 ]
 dependencies = [
     "requests>=2.28",
+    "zstandard>=0.22",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest", "pytest-cov"]
-compress = ["lz4>=4.0"]
+compress = ["lz4>=4.0", "zstandard>=0.22"]
 browser = ["playwright>=1.40"]
 
 [project.urls]

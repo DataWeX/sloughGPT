@@ -14,6 +14,8 @@ Usage:
     python scripts/benchmark_mogdb_sync.py --docs 5000 --ops 2000
 """
 
+from __future__ import annotations
+
 import gzip
 import json
 import sys
@@ -250,3 +252,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

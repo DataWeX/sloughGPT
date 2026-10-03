@@ -6,6 +6,8 @@ RAG, KG, embedder, spaced repetition, and truth labeling use their
 respective domain modules directly.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -529,8 +531,14 @@ class KBRouter:
                     "Internal/private host URLs not allowed", "E_BAD_REQUEST", status_code=400
                 )
 
-            ingestor = self._engine.get_ingestor()
-            result = ingestor.ingest_url(req.url)
+            engine_result = self._engine.ingest_url(req.url)
+            if not engine_result.success:
+                raise_error(
+                    engine_result.error or "URL ingestion failed",
+                    "E_UNHANDLED",
+                    status_code=500,
+                )
+            result = engine_result.data or {}
 
             if result.get("new_facts", 0) > 0:
                 try:
@@ -674,6 +682,43 @@ class KBRouter:
         except Exception as e:
             classify_and_raise(e, source="kb.get_context")
 
+    @staticmethod
+    def _extract_pdf_text(raw: bytes) -> str:
+        """Extract text from raw PDF bytes — PyMuPDF preferred, PyPDF2 fallback.
+
+        Plain-text decode of PDF bytes yields garbage, so document uploads
+        need a real extractor (same strategy as domain training data import).
+        """
+        try:
+            import fitz  # PyMuPDF
+
+            with fitz.open(stream=raw, filetype="pdf") as doc:
+                return "\n".join(page.get_text() for page in doc)
+        except ImportError:
+            pass
+        except Exception as e:
+            raise_error(f"Could not read that PDF: {e}", "E_BAD_REQUEST", status_code=400)
+
+        try:
+            import io
+
+            try:
+                from pypdf import PdfReader
+            except ImportError:  # legacy name
+                from PyPDF2 import PdfReader  # type: ignore[no-redef]
+
+            reader = PdfReader(io.BytesIO(raw))
+            return "\n".join((page.extract_text() or "") for page in reader.pages)
+        except ImportError:
+            raise_error(
+                "PDF support needs PyMuPDF or PyPDF2 installed — "
+                "or upload a .txt/.md file instead",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+        except Exception as e:
+            raise_error(f"Could not read that PDF: {e}", "E_BAD_REQUEST", status_code=400)
+
     async def ingest_file(
         self,
         file: UploadFile = File(...),
@@ -688,10 +733,26 @@ class KBRouter:
             raise_error("chunk_size must be 100–10000", "E_BAD_REQUEST", status_code=400)
 
         raw = await file.read()
-        try:
-            text = raw.decode("utf-8")
-        except UnicodeDecodeError:
-            text = raw.decode("latin-1")
+        name = (file.filename or "").lower()
+        if name.endswith((".docx", ".doc")):
+            raise_error(
+                "Word files aren't supported yet — upload a PDF or a text file",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+        if name.endswith(".pdf"):
+            text = self._extract_pdf_text(raw)
+            if not text or not text.strip():
+                raise_error(
+                    "No readable text found in that PDF",
+                    "E_BAD_REQUEST",
+                    status_code=400,
+                )
+        else:
+            try:
+                text = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                text = raw.decode("latin-1")
 
         if file.filename and file.filename.endswith(".json"):
             import json as _json

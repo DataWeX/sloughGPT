@@ -14,6 +14,8 @@ Usage::
 The function recursively replaces ``nn.Linear`` modules with ``LoRALinear``.
 """
 
+from __future__ import annotations
+
 import math
 
 import torch
@@ -89,3 +91,4 @@ def apply_lora_to_model(model: nn.Module, rank: int = 4, alpha: float = 1.0) -> 
         else:
             apply_lora_to_model(module, rank=rank, alpha=alpha)
     return model
+

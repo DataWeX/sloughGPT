@@ -11,6 +11,8 @@ Usage:
     python scripts/benchmark_inference_quality.py
 """
 
+from __future__ import annotations
+
 import sys
 
 sys.path.insert(0, "packages/core-py")
@@ -330,3 +332,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

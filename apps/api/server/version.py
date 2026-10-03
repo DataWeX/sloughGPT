@@ -8,6 +8,8 @@ Includes per-feature version registry that maps backend routers to
 their version numbers, matching the strui component versioning system.
 """
 
+from __future__ import annotations
+
 import importlib.metadata
 
 APP_NAME = "SloughGPT"
@@ -71,3 +73,4 @@ def version_info() -> dict:
         "pydantic": PYDANTIC_VERSION,
         "features": FEATURE_VERSIONS,
     }
+

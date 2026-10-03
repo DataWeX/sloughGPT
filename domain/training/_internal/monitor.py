@@ -9,6 +9,8 @@ Usage:
     alerts = monitor.get_alerts()
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
@@ -446,3 +448,4 @@ def get_training_monitor() -> TrainingMonitor:
     if _global_monitor is None:
         _global_monitor = TrainingMonitor()
     return _global_monitor
+

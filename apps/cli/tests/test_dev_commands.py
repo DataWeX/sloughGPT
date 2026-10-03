@@ -363,3 +363,63 @@ class TestCmdApiAndWebMonitorLoop:
 
             # Should not raise AttributeError: 'NoneType' object has no attribute 'poll'
             # The function should complete without crashing
+
+
+class TestStartupBudget:
+    """The CLI's API-wait budget must cover the server's real startup cost."""
+
+    def test_budget_covers_stage_ready_worst_case(self):
+        from commands.dev import API_STARTUP_TIMEOUT
+
+        # Stage READY's model_ready hook polls 120s (startup.py) under a 130s
+        # hook timeout, and Stage CRITICAL spends ~40s before READY begins.
+        # A budget below that kills a healthy server mid-model-load and
+        # reports it as "error".
+        assert API_STARTUP_TIMEOUT >= 160
+
+    def test_no_hardcoded_90s_api_waits_remain(self):
+        import commands.dev as mod
+
+        src = open(mod.__file__).read()
+        assert "range(90)" not in src, "reintroduced a hardcoded 90s API wait"
+        assert "timeout=90" not in src, "reintroduced a hardcoded 90s API wait"
+        # every readiness loop must be driven by the shared budget
+        assert src.count("API_STARTUP_TIMEOUT") >= 5
+
+
+class TestLatestStartupPhase:
+    """The wait loops surface the API's own startup markers while polling."""
+
+    def test_returns_latest_phase_marker(self):
+        from commands.dev import _latest_startup_phase
+
+        lines = [
+            "06:46:15 INF [START] startup Phase: all routers registered (61 routes)",
+            "06:46:30 INF [START] startup Phase 4: loading model Qwen (background)",
+            "06:47:00 INF [SYS] startup Startup complete — server ready for requests",
+        ]
+        assert _latest_startup_phase(lines) == "Startup complete — server ready for requests"
+
+    def test_prefers_stage_markers_over_older_phases(self):
+        from commands.dev import _latest_startup_phase
+
+        lines = [
+            "06:46:30 INF [START] startup Phase 4: loading model (background)",
+            "06:46:30 INF [START] startup Stage READY: running 2 hooks",
+        ]
+        assert _latest_startup_phase(lines) == "Stage READY: running 2 hooks"
+
+    def test_empty_when_no_marker(self):
+        from commands.dev import _latest_startup_phase
+
+        assert _latest_startup_phase([]) == ""
+        assert _latest_startup_phase(["06:46:15 INF [INFRA] quantization Quarantine"]) == ""
+
+    def test_ignores_non_startup_lines_and_truncates(self):
+        from commands.dev import _latest_startup_phase
+
+        lines = ["noise", "no marker here"]
+        assert _latest_startup_phase(lines) == ""
+        long_marker = "Phase 4: loading model " + "x" * 200
+        out = _latest_startup_phase([f"INF startup {long_marker}"])
+        assert len(out) <= 72

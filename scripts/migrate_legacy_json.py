@@ -8,6 +8,8 @@ Usage:
     python -m scripts.migrate_legacy_json [--dry-run] [--force]
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import re
@@ -304,3 +306,4 @@ def main(argv: list[str] | None = None) -> int | None:
 
 if __name__ == "__main__":
     main()
+

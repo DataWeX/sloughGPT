@@ -89,6 +89,26 @@ def _process_memory_mb() -> float:
     return 0.0
 
 
+def _resolve_num_parameters(provider: Any) -> Any:
+    """Return the provider's parameter count, or ``None`` when unavailable.
+
+    ``num_parameters`` is declared as a plain ``def`` on every provider
+    (``SloneNetChatProvider.num_parameters``, ``SloneNetProvider.num_parameters``),
+    not as a ``@property``. Returning the bound method from the response caused
+    ``GET /benchmark/metrics`` to fail serialization whenever a model was
+    resident — ``Unable to serialize unknown type: <class 'function'>`` — taking
+    the whole endpoint down with a 500.
+    """
+    raw = getattr(provider, "num_parameters", None)
+    if not callable(raw):
+        return raw
+    try:
+        return raw()
+    except Exception as exc:
+        logger.debug("num_parameters() failed: %s", exc)
+        return None
+
+
 class BenchmarkRouter:
     """Router for model benchmarking and quality evaluation."""
 
@@ -131,20 +151,19 @@ class BenchmarkRouter:
             from domain.infrastructure.server_state import get_server_state
 
             ctrl = get_models_controller()
-            provider = get_server_state().model.get()
+            state = get_server_state()
+            provider = state.model.get()
             if provider is None:
                 return {"model": model, "model_loaded": False}
 
-            inference_time = (
-                _time.time() - ctrl._last_inference_time if ctrl._last_inference_time else 0
-            )
             total_tokens = ctrl._total_tokens_generated
             total_inferences = ctrl._inference_count
 
-            # Calculate throughput
-            tokens_per_sec = 0
-            if inference_time > 0 and total_tokens > 0 and total_inferences > 0:
-                tokens_per_sec = total_tokens / (inference_time * total_inferences)
+            # Throughput has to be measured over a generation window. The
+            # previous formula divided by `now - last_inference_time` — idle
+            # seconds — so the reported rate decayed toward zero the longer
+            # the server sat idle between requests.
+            tokens_per_sec = state.get_tokens_per_second()
 
             return {
                 "model": model,
@@ -154,7 +173,7 @@ class BenchmarkRouter:
                 "total_tokens": total_tokens,
                 "tokens_per_second": round(tokens_per_sec, 1),
                 "memory_mb": round(_process_memory_mb(), 1),
-                "num_parameters": getattr(provider, "num_parameters", None),
+                "num_parameters": _resolve_num_parameters(provider),
             }
         except Exception as e:
             raise_error(str(e), "E_DOMAIN", details={"model": model})

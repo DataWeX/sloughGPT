@@ -41,8 +41,8 @@ def walk_slo_linears(model) -> dict:
     """Find all SloLinear layers in a SloTransformer model.
 
     SloTransformer stores sub-modules in a plain list (``model.layers``)
-    rather than via ``nn.ModuleList`` or ``named_modules()``, so standard
-    PyTorch module walking does not work. This function manually walks
+    rather than module-list containers or ``named_modules()``-style walks,
+    so a generic tree walk does not see them. This function manually walks
     the known structure:
 
     - ``layers[-1]`` — lm_head (output projection, SloLinear)
@@ -80,15 +80,14 @@ def walk_slo_linears(model) -> dict:
 
 
 def walk_hf_linears(model) -> dict:
-    """Find all nn.Linear layers in a HuggingFace model.
+    """Find `Linear` layers (with `.weight`) across a duck-typed module tree.
 
-    Unlike SloNet models (which store layers in plain Python lists),
-    HuggingFace models use standard ``nn.Module`` hierarchy, so
-    ``named_modules()`` works. This function extracts all ``nn.Linear``
-    layers, which are the targets for int8/int4 quantization.
+    Crawls any model that exposes a ``named_modules()`` iterator — including
+    models downloaded from HuggingFace. Uses the class name plus a
+    ``weight`` attribute check, so it works without a framework dependency.
 
     Returns:
-        dict of ``{name: nn.Linear_layer}``.
+        dict of ``{name: layer_module}``.
     """
     layers = {}
     for name, module in model.named_modules():
@@ -1461,22 +1460,20 @@ def int4_quantized_linear(
 
 
 class QuantizedLinear:
-    """Drop-in replacement for nn.Linear that uses quantized int8/int4 weights.
+    """Quantized linear layer with int8/int4 weights, pure-numpy forward.
 
-    Stores the quantized weight data and dequantizes on the fly during forward().
-    Weight memory drops from float32 (4 bytes/elem) to int8 (1 byte/elem).
+    Stores the quantized weight data and dequantizes on the fly during
+    forward(). Weight memory drops from float32 (4 bytes/elem) to int8
+    (1 byte/elem).
 
-    Uses the industry-standard forward monkey-patching pattern (same as
-    bitsandbytes, GPTQ, AWQ): the original ``nn.Linear.forward`` is replaced
-    with a closure that dequantizes and calls ``forward_numpy``.
+    The forward path is pure numpy (``forward_numpy``) and is exposed via
+    ``__call__``, so callers get the same API whether they hold a bare array
+    or a framework wrapper that converts to numpy.
 
     Usage::
 
         ql = QuantizedLinear.from_linear(original_linear, tensor_info)
-        # Wire into model via forward monkey-patching:
-        module._orig_forward = module.forward
-        module._ql = ql
-        module.forward = ql.make_torch_forward()
+        out = ql(x)  # pure-numpy forward
     """
 
     def __init__(
@@ -1493,10 +1490,10 @@ class QuantizedLinear:
 
     @classmethod
     def from_linear(cls, linear_module, tensor_info):
-        """Create a QuantizedLinear from a quantized nn.Linear module.
+        """Create a QuantizedLinear from a duck-typed linear module.
 
         Args:
-            linear_module: The original nn.Linear with quantized weight data
+            linear_module: Original linear layer carrying ``bias`` (optional)
             tensor_info: TensorInfo with quantized array + meta
         """
         bias = None
@@ -1529,7 +1526,7 @@ class QuantizedLinear:
         return w
 
     def forward_numpy(self, x):
-        """Forward pass using numpy (for inference without torch)."""
+        """Pure-numpy forward pass."""
         w = self.dequantize()
         result = np.matmul(x, w.T)
         if self.bias is not None:

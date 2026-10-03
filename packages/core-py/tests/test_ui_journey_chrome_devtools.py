@@ -10,13 +10,13 @@ class TestChromeDevToolsBrowser:
     """Tests for ChromeDevToolsBrowser."""
 
     def test_browser_creation(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
         assert browser.base_url == "http://localhost:3000"
 
     def test_browser_state(self):
-        from domain.testing._internal.chrome_devtools import BrowserState
+        from testing._internal.chrome_devtools import BrowserState
 
         state = BrowserState()
         assert state.page_id is None
@@ -24,20 +24,20 @@ class TestChromeDevToolsBrowser:
         assert state.errors == []
 
     def test_commands_tracking(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser()
         assert len(browser.commands) == 0
 
     def test_get_commands(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser()
         commands = browser.get_commands()
         assert isinstance(commands, list)
 
     def test_report_generation(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
         report = browser.report()
@@ -49,33 +49,33 @@ class TestSloughGPTConfig:
     """Tests for sloughGPT-specific config."""
 
     def test_sloughgpt_site_config(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
+        from testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         assert SLOUGHPGPT_SITE.name == "sloughGPT"
         assert SLOUGHPGPT_SITE.base_url == "http://localhost:3000"
         assert len(SLOUGHPGPT_SITE.pages) > 0
 
     def test_sloughgpt_pages(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_PAGES
+        from testing._internal.sloughgpt import SLOUGHPGPT_PAGES
 
         assert "training" in SLOUGHPGPT_PAGES
         assert "chat" in SLOUGHPGPT_PAGES
         assert "datasets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_training_pages(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
+        from testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
 
         assert "queue" in SLOUGHPGPT_TRAINING_PAGES
         assert "runs" in SLOUGHPGPT_TRAINING_PAGES
         assert "presets" in SLOUGHPGPT_TRAINING_PAGES
 
     def test_sloughgpt_api_endpoints(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_API_ENDPOINTS
+        from testing._internal.sloughgpt import SLOUGHPGPT_API_ENDPOINTS
 
         assert "health" in SLOUGHPGPT_API_ENDPOINTS
 
     def test_page_check_creation(self):
-        from domain.testing import Page
+        from testing import Page
 
         check = Page(
             name="Test",
@@ -86,7 +86,7 @@ class TestSloughGPTConfig:
         assert check.path == "/test"
 
     def test_sloughgpt_journey(self):
-        from domain.testing._internal.sloughgpt import SloughGPTJourney
+        from testing._internal.sloughgpt import SloughGPTJourney
 
         journey = SloughGPTJourney()
         assert journey.config.name == "sloughGPT"
@@ -96,10 +96,10 @@ class TestJourneyIntegration:
     """Integration tests for the journey testing library."""
 
     def test_import_all_modules(self):
-        from domain.testing import Journey
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
-        from domain.testing._internal.journeys import FullSuiteJourney, PageJourney
-        from domain.testing._internal.sloughgpt import SloughGPTJourney
+        from testing import Journey
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.journeys import FullSuiteJourney, PageJourney
+        from testing._internal.sloughgpt import SloughGPTJourney
 
         assert Journey is not None
         assert ChromeDevToolsBrowser is not None
@@ -108,8 +108,8 @@ class TestJourneyIntegration:
         assert FullSuiteJourney is not None
 
     def test_uisuite_with_chrome_devtools(self):
-        from domain.testing import Journey, SiteConfig
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing import Journey, SiteConfig
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -118,7 +118,7 @@ class TestJourneyIntegration:
         assert journey.config.base_url == browser.base_url
 
     def test_sloughgpt_journey_results(self):
-        from domain.testing._internal.sloughgpt import SloughGPTJourney
+        from testing._internal.sloughgpt import SloughGPTJourney
 
         journey = SloughGPTJourney()
         assert len(journey.journey.results) == 0

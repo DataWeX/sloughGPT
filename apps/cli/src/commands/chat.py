@@ -2,6 +2,8 @@
 Chat commands - Interactive chat and one-shot generation.
 """
 
+from __future__ import annotations
+
 import os
 import tempfile
 from pathlib import Path
@@ -297,3 +299,4 @@ def register(subparsers):
     gen_parser.add_argument("--max-tokens", type=int, default=100, help="Max tokens")
     gen_parser.add_argument("--temperature", type=float, default=0.8, help="Temperature")
     gen_parser.set_defaults(func=cmd_generate)
+

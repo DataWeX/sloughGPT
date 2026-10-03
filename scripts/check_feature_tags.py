@@ -16,6 +16,8 @@ Exit codes:
     1 = feature-tagged file deleted or validation failed
 """
 
+from __future__ import annotations
+
 import argparse
 import re
 import sys
@@ -178,3 +180,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

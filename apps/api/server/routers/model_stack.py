@@ -1,5 +1,7 @@
 """ModelStack — one-time model + overlay stacks (knowledge/dataset/cache)."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
@@ -111,3 +113,4 @@ class ModelStackRouter:
 
 
 router = ModelStackRouter().router
+

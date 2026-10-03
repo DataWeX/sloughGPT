@@ -17,6 +17,8 @@ Gold Standard (pass/fail thresholds):
   - batch_p95:          <= 50 ms
 """
 
+from __future__ import annotations
+
 import argparse
 import statistics
 import sys
@@ -110,3 +112,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

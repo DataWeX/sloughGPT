@@ -26,6 +26,7 @@ Exit codes: 0 = parity, 1 = gaps found, 2 = parse/setup error.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -34,11 +35,18 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 ROUTERS_DIR = REPO / "apps" / "api" / "server" / "routers"
+CONTROLLERS_DIR = REPO / "apps" / "api" / "server" / "controllers"
 MAIN_PY = REPO / "apps" / "api" / "server" / "main.py"
 TRAINING_ROUTER = REPO / "apps" / "api" / "server" / "training" / "router.py"
 ROUTERS_MD = REPO / "docs" / "routers.md"
 API_MD = REPO / "docs" / "API.md"
+# the contract block lives with the evidence pack
+CLAIMS_MD = REPO / "docs" / "DOC_VS_CODE_GAP_AUDIT.md"
 TEST_DIRS = (REPO / "tests" / "server", REPO / "apps" / "api" / "server" / "tests")
+
+# Routers in a concurrent-refactor zone owned by another session — excluded from
+# the handler `_internal` assertions until that work lands.
+HANDLER_ALLOWLIST = frozenset({"shell", "vm", "world_render"})
 
 # docs/routers.md section title -> router file stem. Sections that map to no
 # single file (OpenAPI) or to main.py-registered routers are noted inline.
@@ -164,6 +172,11 @@ class Findings:
     undocumented: dict[str, int] = field(default_factory=dict)  # router -> #routes w/o doc row
     dynamic_routes: list[str] = field(default_factory=list)
     collisions: list[str] = field(default_factory=list)  # "METHOD path -> [routers]"
+    # doc-vs-code architectural contract (the `parity-claims` block)
+    arch_claims: dict[str, int] = field(default_factory=dict)
+    arch_measured: dict[str, int] = field(default_factory=dict)
+    arch_mismatch: list[str] = field(default_factory=list)  # "key: doc=11 code=8"
+    arch_missing: list[str] = field(default_factory=list)  # claim keys absent from docs
 
 
 def _join(prefix: str, path: str) -> str:
@@ -265,6 +278,117 @@ def collect_tests(findings: Findings) -> None:
         key = stem.replace("_", "")
         if not any(key in f.replace("_", "").replace("-", "") for f in test_files):
             findings.untested.append(stem)
+
+
+CLAIMS_BLOCK_RE = re.compile(r"<!--\s*parity-claims:v1\s*(?P<body>.*?)-->", re.DOTALL)
+
+
+def _internal_stats(path: Path) -> tuple[list[int], set[str]]:
+    """Return (line numbers, module names) of `domain.*_internal*` imports.
+
+    Parses imports; never greps the token. Docstrings legitimately *mention*
+    ``_internal`` to assert they do not import it (``tokenizer.py:6``,
+    ``cloud_training.py:4``), which is what made the prose checklist drift.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        return [], set()
+    lines: list[int] = []
+    mods: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module.startswith("domain.") and "_internal" in node.module:
+                lines.append(node.lineno)
+                mods.add(node.module)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("domain.") and "_internal" in alias.name:
+                    lines.append(node.lineno)
+                    mods.add(alias.name)
+    return lines, mods
+
+
+def _py_files(directory: Path) -> list[Path]:
+    return [p for p in sorted(directory.glob("*.py")) if p.name != "__init__.py"]
+
+
+def collect_architecture(findings: Findings) -> None:
+    """Diff the ``parity-claims`` contract block against measured code."""
+    if CLAIMS_MD.exists():
+        m = CLAIMS_BLOCK_RE.search(CLAIMS_MD.read_text(encoding="utf-8", errors="replace"))
+        if not m:
+            findings.arch_missing.append("no parity-claims block in " + CLAIMS_MD.name)
+        else:
+            for line in m.group("body").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, raw = line.partition("=")
+                key = key.strip()
+                try:
+                    findings.arch_claims[key] = int(raw.strip())
+                except ValueError:
+                    findings.arch_missing.append(f"{key}: {raw.strip()!r} is not an int")
+    else:
+        findings.arch_missing.append(f"{CLAIMS_MD.name} missing")
+
+    # --- routers (all, plus the in-scope subset that excludes the allowlist) ---
+    r_files = r_stmts = scope_files = 0
+    for p in _py_files(ROUTERS_DIR):
+        lines, _ = _internal_stats(p)
+        if not lines:
+            continue
+        r_files += 1
+        r_stmts += len(lines)
+        if p.stem not in HANDLER_ALLOWLIST:
+            scope_files += 1
+
+    # --- controllers ---
+    c_files = c_lines = c_defs = c_ifiles = c_istmts = 0
+    c_mods: set[str] = set()
+    for p in _py_files(CONTROLLERS_DIR):
+        text = p.read_text(encoding="utf-8", errors="replace")
+        lines, mods = _internal_stats(p)
+        c_files += 1
+        c_lines += len(text.splitlines())
+        try:
+            tree = ast.parse(text)
+            c_defs += sum(
+                1 for n in ast.walk(tree)
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+        except SyntaxError:
+            findings.arch_missing.append(f"{p.name}: unparseable")
+        if lines:
+            c_ifiles += 1
+            c_istmts += len(lines)
+            c_mods |= mods
+
+    findings.arch_measured = {
+        "routers_internal_files": r_files,
+        "routers_internal_stmts": r_stmts,
+        "routers_internal_in_scope_files": scope_files,
+        "controllers_files": c_files,
+        "controllers_lines": c_lines,
+        "controllers_defs": c_defs,
+        "controllers_internal_files": c_ifiles,
+        "controllers_internal_stmts": c_istmts,
+        "controllers_internal_modules": len(c_mods),
+        "combined_internal_files": r_files + c_ifiles,
+        "combined_internal_stmts": r_stmts + c_istmts,
+    }
+
+    for key, claimed in findings.arch_claims.items():
+        if key not in findings.arch_measured:
+            findings.arch_missing.append(f"{key}: claimed but not measurable")
+            continue
+        got = findings.arch_measured[key]
+        if got != claimed:
+            findings.arch_mismatch.append(f"{key}: doc={claimed} code={got}")
+    for key in findings.arch_measured:
+        if key not in findings.arch_claims:
+            findings.arch_missing.append(f"{key}: measured but not claimed in docs")
 
 
 def _mounted_routers() -> set[str] | None:
@@ -497,6 +621,7 @@ def main() -> int:
     collect_code(findings)
     collect_docs(findings)
     collect_tests(findings)
+    collect_architecture(findings)
     diff(findings)
 
     if args.render_routers:
@@ -506,9 +631,15 @@ def main() -> int:
         collect_code(f2)
         collect_docs(f2)
         collect_tests(f2)
+        collect_architecture(f2)
         diff(f2)
         gaps2 = bool(
-            f2.doc_not_in_code or f2.code_not_documented or f2.untested or f2.collisions
+            f2.doc_not_in_code
+            or f2.code_not_documented
+            or f2.untested
+            or f2.collisions
+            or f2.arch_mismatch
+            or f2.arch_missing
         )
         print(
             f"rendered {ROUTERS_MD.name}: {len(f2.doc_claims)} rows, "
@@ -526,6 +657,8 @@ def main() -> int:
         or findings.code_not_documented
         or findings.untested
         or findings.collisions
+        or findings.arch_mismatch
+        or findings.arch_missing
     )
 
     if args.json:
@@ -548,6 +681,12 @@ def main() -> int:
                     "untested_routers": findings.untested,
                     "dynamic": findings.dynamic_routes,
                     "route_collisions": findings.collisions,
+                    "architecture": {
+                        "claims": findings.arch_claims,
+                        "measured": findings.arch_measured,
+                        "mismatch": findings.arch_mismatch,
+                        "missing": findings.arch_missing,
+                    },
                 },
                 indent=2,
             )
@@ -586,6 +725,13 @@ def main() -> int:
         print(f"   ... +{len(findings.collisions) - 10} more")
     if findings.dynamic_routes:
         print(f"dynamic (skipped):       {findings.dynamic_routes}")
+    print(f"architecture contract:    {len(findings.arch_claims)} claims, "
+          f"{len(findings.arch_mismatch)} mismatched, "
+          f"{len(findings.arch_missing)} unresolved")
+    for row in findings.arch_mismatch:
+        print(f"   ALARM  {row}")
+    for row in findings.arch_missing:
+        print(f"   ALARM  {row}")
     return 1 if gaps else 0
 
 

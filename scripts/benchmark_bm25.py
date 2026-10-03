@@ -12,6 +12,8 @@ Usage:
         [--repeats N] [--top-k K] [--json-out PATH]
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import random
@@ -172,3 +174,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

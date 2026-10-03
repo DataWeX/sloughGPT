@@ -1,5 +1,7 @@
 """Backward-compatibility shim — imports from the new ``domain.cognition._internal.reasoning`` package."""
 
+from __future__ import annotations
+
 from domain.cognition._internal.reasoning import (
     CausalReasoning,
     ChainOfThought,
@@ -109,3 +111,4 @@ class ReasoningEngine:
 
     async def get_history(self) -> list:
         return self.reasoning_history
+

@@ -5,6 +5,8 @@ endpoints): the chat loop writes facts automatically, and these commands give
 operators visibility and manual control over that store.
 """
 
+from __future__ import annotations
+
 import sys
 import time
 
@@ -282,3 +284,4 @@ def cmd_memory_archive(args) -> None:
                     [when, r.get("task_type") or "-", r.get("task_id") or "-", _archive_summary(r)]
                 )
             log.table(["when", "task", "task_id", "summary"], rows)
+

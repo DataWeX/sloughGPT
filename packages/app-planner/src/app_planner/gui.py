@@ -659,6 +659,7 @@ main{padding:18px;max-width:1400px;margin:0 auto}
           <label>Status</label>
           <select id="f_status">
             <option value="open">open</option>
+            <option value="doing">doing</option>
             <option value="wip">wip</option>
             <option value="review">review</option>
             <option value="done">done</option>
@@ -701,8 +702,8 @@ main{padding:18px;max-width:1400px;margin:0 auto}
 
 <script>
 "use strict";
-const SICON = {open:"\u25cb", wip:"\u25d0", done:"\u25cf", blocked:"\u2715", review:"\u25c8"};
-const SCOL  = {open:"#968cac", wip:"#f0c050", done:"#48c08c", blocked:"#eb646e", review:"#c0aaf4"};
+const SICON = {open:"\u25cb", doing:"\u25d0", wip:"\u25d0", done:"\u25cf", blocked:"\u2715", review:"\u25c8"};
+const SCOL  = {open:"#968cac", doing:"#f0c050", wip:"#f0c050", done:"#48c08c", blocked:"#eb646e", review:"#c0aaf4"};
 const PICO  = {low:"", medium:"!", high:"!!", critical:"!!!"};
 let state = { tab:"board", notes:[], board:null, tags:[], stats:null, editing:null };
 

@@ -58,6 +58,7 @@ async def start_visual_training(
     job: dict[str, Any] = {
         "id": job_id,
         "name": request.name or f"VLM-{job_id}",
+        "type": "visual",
         "model": f"{request.vision_encoder}+{request.llm}",
         "dataset": request.dataset,
         "status": "queued",

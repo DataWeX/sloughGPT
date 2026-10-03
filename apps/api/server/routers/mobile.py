@@ -951,7 +951,7 @@ class MobileRouter:
             Returns:
                 Registration status.
             """
-            from domain.mobile import get_notification_service
+            from services.mobile import get_notification_service
 
             svc = get_notification_service()
             result = svc.register_device(
@@ -970,7 +970,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Unregister a device from push notifications."""
-            from domain.mobile import get_notification_service
+            from services.mobile import get_notification_service
 
             svc = get_notification_service()
             removed = svc.unregister_device(body.token)
@@ -990,7 +990,7 @@ class MobileRouter:
             Returns:
                 List of registered devices.
             """
-            from domain.mobile import get_notification_service
+            from services.mobile import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"devices": svc.get_devices(topic=topic)})
@@ -1011,7 +1011,7 @@ class MobileRouter:
             Returns:
                 Send result with recipient count.
             """
-            from domain.mobile import (
+            from services.mobile import (
                 NotificationPayload,
                 get_notification_service,
             )
@@ -1037,7 +1037,7 @@ class MobileRouter:
     async def notification_history(self, limit: int = Query(50, ge=1, le=200)) -> dict:
         try:
             """Get recent notification history."""
-            from domain.mobile import get_notification_service
+            from services.mobile import get_notification_service
 
             svc = get_notification_service()
             return success_response(data={"history": svc.get_history(limit=limit)})
@@ -1053,7 +1053,7 @@ class MobileRouter:
             Returns:
                 Count of removed devices.
             """
-            from domain.mobile import get_notification_service
+            from services.mobile import get_notification_service
 
             svc = get_notification_service()
             removed = svc.cleanup_stale()
@@ -1067,7 +1067,7 @@ class MobileRouter:
     ) -> dict:
         try:
             """Send a training-complete notification to all registered devices."""
-            from domain.mobile import (
+            from services.mobile import (
                 NotificationPayload,
                 get_notification_service,
             )

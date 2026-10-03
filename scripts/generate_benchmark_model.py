@@ -9,6 +9,8 @@ Usage:
     python scripts/generate_benchmark_model.py --epochs 200 --output models/bench_shakespeare.soul
 """
 
+from __future__ import annotations
+
 import sys
 import time
 from pathlib import Path
@@ -156,3 +158,4 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="models/bench_shakespeare.soul")
     args = parser.parse_args()
     train_benchmark_model(args.epochs, args.output)
+

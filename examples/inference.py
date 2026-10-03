@@ -23,7 +23,11 @@ def main():
     model.eval()
 
     # Simple character-level generation
-    chars = [chr(i + 65) for i in range(26)] + [chr(i + 97) for i in range(26)] + [' ', '.', ',', '!', '?']
+    chars = (
+        [chr(i + 65) for i in range(26)]
+        + [chr(i + 97) for i in range(26)]
+        + [" ", ".", ",", "!", "?"]
+    )
     stoi = {c: i for i, c in enumerate(chars)}
     itos = {i: c for i, c in enumerate(chars)}
 
@@ -50,7 +54,7 @@ def main():
             idx_next = torch.multinomial(probs, num_samples=1)
             idx = torch.cat([idx, idx_next], dim=1)
 
-    result = ''.join([itos.get(i, '?') for i in idx[0].tolist()])
+    result = "".join([itos.get(i, "?") for i in idx[0].tolist()])
     print(f"\nGenerated: {result}")
 
 

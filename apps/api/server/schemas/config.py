@@ -2,6 +2,8 @@
 Config Schemas - Data models for configuration
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 
@@ -21,3 +23,4 @@ class ConfigUpdate(BaseModel):
     repetition_penalty: float | None = None
     max_new_tokens: int | None = None
     max_context_length: int | None = None
+

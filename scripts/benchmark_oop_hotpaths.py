@@ -99,11 +99,7 @@ def run(n: int, reps: int) -> dict:
     prompt_len = idx.size
     step_new = _median_us(lambda: generated_ids[prompt_len:], n, reps)
 
-    # 3. memory footprint (steady state: the FIRST instance of a class in a
-    #    process uses a one-off shared-keys init path with a larger values
-    #    array (344B total); every instance after it = the real workload
-    #    shape. The construct loops above warm the class, so this measures
-    #    the steady-state 248B shape the server actually pays per call.
+    # 3. memory footprint
     twin = _UnslottedContext(**kw)
     mem_old = sys.getsizeof(twin) + sys.getsizeof(twin.__dict__)
     slot = GenerationContext(**kw)

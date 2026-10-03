@@ -53,6 +53,35 @@ class _Capture(logging.Handler):
         self.records.append(record)
 
 
+class _MultiCapture(logging.Handler):
+    """Captures records from several loggers into one list."""
+
+    def __init__(self, names):
+        super().__init__(logging.DEBUG)
+        self.records = []
+        self._loggers = [logging.getLogger(n) for n in names]
+        for lg in self._loggers:
+            lg.addHandler(self)
+            lg.setLevel(logging.DEBUG)
+
+    def emit(self, record):
+        self.records.append(record)
+
+    def close(self):
+        for lg in self._loggers:
+            lg.removeHandler(self)
+        super().close()
+
+
+def _both_capture(fn):
+    """Run fn with slo.middleware + slo.exception_handlers records captured."""
+    cap = _MultiCapture(["slo.middleware", "slo.exception_handlers"])
+    try:
+        return fn(cap)
+    finally:
+        cap.close()
+
+
 def _capture_logger() -> _Capture:
     logger = logging.getLogger("slo.middleware")
     cap = _Capture()
@@ -262,3 +291,263 @@ class TestClientExtensionFilter:
             assert len(notes) == 0
 
         _with_capture(app, run)
+
+
+class TestSingleOwner4xxLogging:
+    """Exception handlers own the 4xx WARN line; the middleware must not
+    duplicate it (its timing line drops to DEBUG).  5xx keeps both lines —
+    handler ERROR + middleware ERROR are different severities."""
+
+    @staticmethod
+    def _raising_app():
+        app = FastAPI()
+        from infrastructure.exception_handlers import register_all_handlers
+
+        register_all_handlers(app)
+        register_all_middleware(app, request_timeout=5.0)
+
+        @app.get("/raise404")
+        async def raise404():
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=404, detail="nope")
+
+        @app.get("/raise500")
+        async def raise500():
+            from fastapi import HTTPException
+
+            raise HTTPException(status_code=500, detail="kaput")
+
+        return app
+
+    def test_4xx_handler_warn_not_duplicated_by_middleware(self):
+        app = self._raising_app()
+        client = TestClient(app)
+
+        def run(cap):
+            resp = client.get("/raise404")
+            assert resp.status_code == 404
+            handler_warns = [
+                r
+                for r in cap.records
+                if r.name == "slo.exception_handlers"
+                and r.levelno == logging.WARNING
+                and "HTTP 404" in r.getMessage()
+            ]
+            middleware_warns = [
+                r
+                for r in cap.records
+                if r.name == "slo.middleware"
+                and r.levelno == logging.WARNING
+                and "404 on GET /raise404" in r.getMessage()
+            ]
+            middleware_debugs = [
+                r
+                for r in cap.records
+                if r.name == "slo.middleware"
+                and r.levelno == logging.DEBUG
+                and "404 on GET /raise404" in r.getMessage()
+            ]
+            assert len(handler_warns) == 1, "handler must emit exactly one WARN"
+            assert middleware_warns == [], "middleware must not repeat the WARN"
+            assert len(middleware_debugs) == 1, "timing line survives at DEBUG"
+
+        _both_capture(run)
+
+    def test_4xx_without_handler_still_warns(self):
+        """Routes that return 4xx without raising keep the middleware WARN."""
+        app = _make_app()
+        client = TestClient(app)
+
+        def run(cap):
+            resp = client.get("/fail")
+            assert resp.status_code == 404
+            warns = [
+                r
+                for r in cap.records
+                if r.levelno == logging.WARNING and "404 on GET /fail" in r.getMessage()
+            ]
+            assert len(warns) == 1
+
+        _with_capture(app, run)
+
+    def test_5xx_keeps_both_error_lines(self):
+        app = self._raising_app()
+        client = TestClient(app)
+
+        def run(cap):
+            resp = client.get("/raise500")
+            assert resp.status_code == 500
+            handler_errors = [
+                r
+                for r in cap.records
+                if r.name == "slo.exception_handlers" and r.levelno >= logging.ERROR
+            ]
+            middleware_errors = [
+                r
+                for r in cap.records
+                if r.name == "slo.middleware"
+                and r.levelno == logging.ERROR
+                and "500 on GET /raise500" in r.getMessage()
+            ]
+            assert len(handler_errors) == 1
+            assert len(middleware_errors) == 1
+
+        _both_capture(run)
+
+    def test_body_parse_400_logs_cause(self, caplog):
+        """Starlette body-parse 400 carries __cause__ type as `cause` context."""
+        import asyncio
+
+        import tests.test_support  # noqa: F401  (registers feature routers on `main.app`)
+        from main import app
+
+        received = []
+        calls = 0
+
+        async def receive():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return {"type": "http.request", "body": b'{"partial"', "more_body": True}
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            received.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "http_version": "1.1",
+            "method": "PUT",
+            "scheme": "http",
+            "path": "/docstore/kv/_cause_probe",
+            "raw_path": b"/docstore/kv/_cause_probe",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [
+                (b"host", b"testserver"),
+                (b"content-type", b"application/json"),
+                (b"content-length", b"999"),
+            ],
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+        }
+
+        with caplog.at_level(logging.WARNING, logger="slo.exception_handlers"):
+            asyncio.run(app(scope, receive, send))
+
+        start = next(m for m in received if m["type"] == "http.response.start")
+        assert start["status"] == 400
+        ctxs = [
+            getattr(r, "context", {})
+            for r in caplog.records
+            if r.name == "slo.exception_handlers" and "HTTP 400" in r.getMessage()
+        ]
+        assert any("cause" in c for c in ctxs), ctxs
+
+
+class TestStormEndToEnd:
+    """The original bug: 24 client-disconnect 400s produced 48 WARN lines
+    (handler + middleware, one each per request).  With single-owner logging
+    plus RepeatSuppressionFilter the whole storm collapses to 1 handler WARN
+    + 1 middleware DEBUG line."""
+
+    @staticmethod
+    def _storm_app():
+        app = FastAPI()
+        from infrastructure.exception_handlers import register_all_handlers
+
+        register_all_handlers(app)
+        register_all_middleware(app, request_timeout=5.0)
+
+        @app.put("/docstore/kv/{key}")
+        async def put_kv(key: str, body: dict):
+            return {"key": key, "ok": True}
+
+        return app
+
+    @staticmethod
+    def _disconnect_once(app, key: str) -> int:
+        """Drive the ASGI app with a mid-body client disconnect (the real
+        ClientDisconnect -> HTTP 400 path) and return the status code."""
+        import asyncio
+
+        received: list[dict] = []
+        calls = 0
+
+        async def receive():
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return {"type": "http.request", "body": b'{"partial"', "more_body": True}
+            return {"type": "http.disconnect"}
+
+        async def send(message):
+            received.append(message)
+
+        scope = {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.3"},
+            "http_version": "1.1",
+            "method": "PUT",
+            "scheme": "http",
+            "path": f"/docstore/kv/{key}",
+            "raw_path": f"/docstore/kv/{key}".encode(),
+            "query_string": b"",
+            "root_path": "",
+            "headers": [
+                (b"host", b"testserver"),
+                (b"content-type", b"application/json"),
+                (b"content-length", b"999"),
+            ],
+            "client": ("127.0.0.1", 12345),
+            "server": ("testserver", 80),
+        }
+        asyncio.run(app(scope, receive, send))
+        start = next(m for m in received if m["type"] == "http.response.start")
+        return int(start["status"])
+
+    def test_twenty_four_400s_emit_one_warn_line(self):
+        from domain.logging._internal.config import RepeatSuppressionFilter
+
+        app = self._storm_app()
+        dedup = RepeatSuppressionFilter(window_s=60)
+
+        class Capture(logging.Handler):
+            def __init__(self):
+                super().__init__(logging.DEBUG)
+                self.records = []
+
+            def emit(self, record):
+                self.records.append(record)
+
+        caps = []
+        loggers = [logging.getLogger("slo.exception_handlers"), logging.getLogger("slo.middleware")]
+        try:
+            for lg in loggers:
+                cap = Capture()
+                cap.addFilter(dedup)  # shared instance, like setup_logging
+                lg.addHandler(cap)
+                lg.setLevel(logging.DEBUG)
+                caps.append(cap)
+
+            for i in range(24):
+                assert self._disconnect_once(app, f"conv_{i}") == 400
+        finally:
+            for lg, cap in zip(loggers, caps):
+                lg.removeHandler(cap)
+
+        handler_warns = [
+            r for r in caps[0].records
+            if r.levelno == logging.WARNING and "HTTP 400" in r.getMessage()
+        ]
+        middleware_warns = [r for r in caps[1].records if r.levelno == logging.WARNING]
+        middleware_debugs = [r for r in caps[1].records if r.levelno == logging.DEBUG]
+
+        assert len(handler_warns) == 1, f"storm not collapsed: {len(handler_warns)}"
+        assert middleware_warns == [], "middleware must not add WARN lines to the storm"
+        # Timing lines are DEBUG (below the dedup threshold) — one per request
+        # is fine, they never reach the WARN stream.
+        assert len(middleware_debugs) == 24, f"timing line count: {len(middleware_debugs)}"
+        # 48 WARN lines (old) -> 1 WARN with the shared dedup filter.

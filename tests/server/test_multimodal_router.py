@@ -20,6 +20,7 @@ client = TestClient(app, raise_server_exceptions=False)
 
 @pytest.fixture(autouse=True)
 def _reset_voice_engine():
+    """Voice engine is cached on the shared module-level router — reset per test."""
     multimodal_router._voice_engine = None
     yield
     multimodal_router._voice_engine = None
@@ -161,12 +162,14 @@ class TestTranscribe:
     """POST /multimodal/transcribe"""
 
     @patch("domain.voice.get_voice_engine")
-    def test_transcribe_audio(self, mock_get_engine):
-        engine = MagicMock()
-        engine.recognize.return_value = MagicMock(
-            success=True, data="hello world", metadata={"confidence": 0.9}
-        )
-        mock_get_engine.return_value = engine
+    def test_transcribe_audio(self, mock_get_voice):
+        ve = MagicMock()
+        result = MagicMock()
+        result.success = True
+        result.data = "hello world"
+        result.metadata = {"language": "en"}
+        ve.recognize.return_value = result
+        mock_get_voice.return_value = ve
         resp = client.post(
             "/multimodal/transcribe",
             files={"file": ("test.wav", b"fake-audio", "audio/wav")},
@@ -176,7 +179,7 @@ class TestTranscribe:
         data = _get_data(resp)
         assert data["text"] == "hello world"
         assert data["language"] == "en"
-        assert data["metadata"]["confidence"] == 0.9
+        assert "elapsed_ms" in data
 
     @patch(MGR_TARGET)
     def test_transcribe_rejects_non_audio(self, mock_get):
@@ -304,9 +307,6 @@ class TestDPO:
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_run(self):
-        import sys
-        import types
-
         class _FakeTrainer:
             def __init__(self, model, tokenizer, learning_rate):
                 self._lr = learning_rate
@@ -322,19 +322,19 @@ class TestDPO:
                     "pairs_trained": max_pairs,
                 }
 
-        fake_mod = types.ModuleType("domain.feedback._internal.hf_dpo")
-        fake_mod.HFDPOTrainer = _FakeTrainer
-        with patch.dict(sys.modules, {"domain.feedback._internal.hf_dpo": fake_mod}):
-            with patch(
+        with (
+            patch("domain.feedback.HFDPOTrainer", _FakeTrainer),
+            patch(
                 "apps.api.server.routers.multimodal.MultimodalRouter._get_active_model_and_tokenizer",
                 return_value=(object(), object()),
-            ):
-                multimodal_router._dpo_state["status"] = "idle"
-                resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
-                assert resp.status_code == 200
-                data = resp.json()["data"]
-                assert data["status"] == "accepted"
-                assert data["pairs_trained"] == 4
+            ),
+        ):
+            multimodal_router._dpo_state["status"] = "idle"
+            resp = client.post("/multimodal/dpo", json={"max_pairs": 4})
+            assert resp.status_code == 200
+            data = resp.json()["data"]
+            assert data["status"] == "accepted"
+            assert data["pairs_trained"] == 4
         multimodal_router._dpo_state["status"] = "idle"
 
     def test_dpo_rejects_invalid_pairs(self):
@@ -462,7 +462,7 @@ class TestAnalyze:
 class TestSynthesizeSpeech:
     """POST /multimodal/synthesize-speech"""
 
-    @patch("domain.multimodal._internal.tts.TTSEngine")
+    @patch("domain.voice._internal.tts.TTSEngine")
     def test_synthesizes_waveform(self, mock_tts_cls):
         import numpy as np
 

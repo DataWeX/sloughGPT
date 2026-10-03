@@ -4,6 +4,8 @@ Health check script for SloughGPT API
 Can be used for monitoring or as a simple CLI tool
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import time
@@ -147,3 +149,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

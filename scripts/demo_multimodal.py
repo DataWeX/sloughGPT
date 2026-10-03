@@ -1,5 +1,7 @@
 """Multimodal inference demo — generate captions for image + audio samples."""
 
+from __future__ import annotations
+
 import sys
 import time
 from pathlib import Path
@@ -91,3 +93,4 @@ print()
 
 print("Done — model runs end-to-end.")
 print(f"Chars used: {set(result.text + result2.text + result_a.text + result_both.text)}")
+

@@ -2,6 +2,8 @@
 Feedback Router - MVC View layer
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
@@ -219,3 +221,4 @@ class FeedbackRouter:
 
 
 router = FeedbackRouter().router
+

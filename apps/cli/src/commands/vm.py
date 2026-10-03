@@ -2,6 +2,8 @@
 VM commands - x86 Virtual Machine console and management.
 """
 
+from __future__ import annotations
+
 import time
 from pathlib import Path
 
@@ -378,3 +380,4 @@ COMMANDS = {
         },
     }
 }
+

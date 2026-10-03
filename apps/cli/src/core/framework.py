@@ -5,6 +5,8 @@ Reimplements Click's decorator API (group, command, option, argument, etc.)
 using pure Python. The rest of the CLI uses this as if it were Click.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from collections.abc import Callable
@@ -304,7 +306,7 @@ class Group:
     def add_command(self, cmd: Command, name: str = ""):
         self.commands[name or cmd.name] = cmd
 
-    def add_group(self, grp: "Group", name: str = ""):
+    def add_group(self, grp: Group, name: str = ""):
         self.groups[name or grp.name] = grp
 
     def _fuzzy_match(self, cmd_name: str) -> list[str]:
@@ -846,3 +848,4 @@ click = SimpleNamespace(
     BadParameter=BadParameter,
     run=run,
 )
+

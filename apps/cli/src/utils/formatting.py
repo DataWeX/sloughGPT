@@ -4,6 +4,8 @@ Formatting utilities for consistent CLI output.
 Provides file size formatting, time formatting, and text wrapping.
 """
 
+from __future__ import annotations
+
 
 def format_size(size_bytes: int) -> str:
     """Format bytes to human-readable size.
@@ -155,3 +157,4 @@ def pad(text: str, width: int, alignment: str = "left") -> str:
     elif alignment == "center":
         return text.center(width)
     return text.ljust(width)
+

@@ -2,6 +2,8 @@
 DB command group — MogDB embedded database: migrate, sync, status.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path
@@ -116,3 +118,4 @@ def register(cli):
                 echo(f"{row['collection']}: {row['count']} docs")
 
     return db
+

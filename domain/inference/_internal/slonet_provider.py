@@ -981,29 +981,60 @@ class SloNetChatProvider:
             FileNotFoundError: If soul_path does not exist
             ValueError: If the .soul file is invalid or missing model config
         """
-        from domain.infrastructure._internal.weight_loader import (
-            SoulWeightLoader,
-            build_model_from_config,
-        )
+        from domain.inference._internal.slo_format import load_soul
+        from domain.infrastructure._internal.weight_loader import build_model_from_config
 
-        loader = SoulWeightLoader(soul_path)
-        meta = loader.load_metadata()
-        soul = meta.pop("soul")
+        soul, state_dict = load_soul(soul_path)
+        # Keep only real weight tensors (skip dict-valued state like _config).
+        weights = {k: v for k, v in state_dict.items() if hasattr(v, "shape")}
+        cfg = soul.metadata.get("config") or {}
 
-        # Native .soul models don't use RoPE or RMSNorm — use simple config
-        model = build_model_from_config(
-            {
-                "vocab_size": meta["vocab_size"],
-                "hidden_size": meta["n_embed"],
-                "num_hidden_layers": meta["n_layer"],
-                "num_attention_heads": meta.get("n_head", 4),
-                "max_position_embeddings": meta.get("block_size", 128),
-            },
-            _lazy=True,
-        )
+        # Infer intermediate_size from native w1 when not stored in config.
+        intermediate_size = cfg.get("intermediate_size")
+        if not intermediate_size:
+            for key, arr in weights.items():
+                if key.endswith("ff.w1.weight") and getattr(arr, "ndim", 0) == 2:
+                    intermediate_size = int(arr.shape[0])
+                    break
 
-        # Load weights — already in SloNet format from training
-        loader.load(model)
+        # Native .soul defaults: RoPE + RMSNorm unless config/weights say otherwise.
+        # (SloughGPTModel trains with RoPE + RMSNorm; abs-pos + LayerNorm was a
+        # rebuild bug that silently mismatched the trained architecture.)
+        use_rope = cfg.get("use_rope")
+        if use_rope is None:
+            use_rope = "pos_emb.weight" not in weights
+        norm_type = cfg.get("norm_type")
+        if norm_type is None:
+            norm_type = "layer_norm" if "blocks.0.attn_norm.bias" in weights else "rms_norm"
+
+        max_pos = cfg.get("block_size") or soul.metadata.get("block_size") or 128
+        max_seq_len = cfg.get("max_seq_len") or max_pos
+        n_embed = cfg.get("n_embed") or soul.metadata.get("n_embed") or 128
+        n_layer = cfg.get("n_layer") or soul.metadata.get("n_layer") or 1
+        n_head = cfg.get("n_head") or soul.metadata.get("n_head") or 4
+        vocab_size = soul.metadata.get("vocab_size") or cfg.get("vocab_size") or 256
+
+        build_cfg = {
+            "vocab_size": vocab_size,
+            "hidden_size": n_embed,
+            "num_hidden_layers": n_layer,
+            "num_attention_heads": n_head,
+            "max_position_embeddings": max_pos,
+            "max_seq_len": max_seq_len,
+            "block_size": max_pos,
+            "use_rope": use_rope,
+            "norm_type": norm_type,
+        }
+        if intermediate_size:
+            build_cfg["intermediate_size"] = intermediate_size
+        if use_rope:
+            build_cfg["rope_theta"] = cfg.get("rope_theta", 10000.0)
+            build_cfg["position_embedding_type"] = "rope"
+        if norm_type == "rms_norm":
+            build_cfg["rms_norm_eps"] = cfg.get("rms_norm_eps", 1e-5)
+
+        model = build_model_from_config(build_cfg, _lazy=True)
+        model.load_state_dict(weights)
 
         # Create instance (bypass __init__)
         instance = cls.__new__(cls)
@@ -1044,11 +1075,13 @@ class SloNetChatProvider:
                 instance._tokenizer = None
 
         logger.info(
-            "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d",
+            "SloNetChatProvider.from_soul: %s, %d layers, vocab=%d, embed=%d rope=%s norm=%s",
             soul_path,
-            meta["n_layer"],
-            meta["vocab_size"],
-            meta["n_embed"],
+            n_layer,
+            vocab_size,
+            n_embed,
+            use_rope,
+            norm_type,
             extra={"tag": "INF"},
         )
 
@@ -1246,9 +1279,19 @@ class SloNetChatProvider:
     def _load_tokenizer(self, model_dir, config):
         """Load tokenizer — MorphTokenizer.from_pretrained handles all parsing.
 
-        Prefers a tokenizer.json shipped with a local fine-tuned model dir;
-        falls back to the base HuggingFace model id's tokenizer.
+        Prefers a tokenizer embedded in the SLNC config (native .soul → .slnc
+        bridge, no HuggingFace), then a tokenizer.json shipped with a local
+        fine-tuned model dir; falls back to the base HuggingFace model id.
         """
+        # 1) Embedded native tokenizer in SLNC config (owned path, goal 12)
+        if isinstance(config, dict):
+            emb = config.get("slo_tokenizer")
+            if isinstance(emb, dict):
+                try:
+                    return self._tokenizer_from_embedded(emb)
+                except Exception as e:
+                    logger.warning("Embedded tokenizer load failed: %s", e, extra={"tag": "INF"})
+
         try:
             from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
@@ -1267,6 +1310,22 @@ class SloNetChatProvider:
             logger.warning("MorphTokenizer load failed: %s", e, extra={"tag": "INF"})
 
         raise RuntimeError(f"No tokenizer found for {self._hf_model_id}")
+
+    @staticmethod
+    def _tokenizer_from_embedded(emb: dict):
+        """Rebuild a char/token-tree tokenizer from SLNC-embedded metadata."""
+        tok = emb.get("tokenizer")
+        if isinstance(tok, dict) and tok.get("type") == "token_tree" and isinstance(tok.get("tree"), dict):
+            from domain.training._internal.token_tree import TokenTree
+
+            return _TreeTokenizer(TokenTree.from_dict(tok["tree"]))
+
+        stoi = emb.get("stoi")
+        itos = emb.get("itos")
+        if stoi and itos:
+            return _CharTokenizer(stoi, itos)
+
+        raise ValueError("Embedded tokenizer missing stoi/itos/tree")
 
     def _get_model(self):
         """Return the loaded model, loading lazily on first access.

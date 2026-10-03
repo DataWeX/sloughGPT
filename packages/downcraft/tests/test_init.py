@@ -17,6 +17,8 @@ from helpers import RangeHandler, _range_url
 class TestDownload:
     def test_download_already_complete(self):
         with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "file.bin"
+            dest.write_bytes(b"already here")
             with patch("downcraft.download.state.get_state") as mock_state:
                 st = MagicMock()
                 existing = MagicMock()
@@ -24,8 +26,28 @@ class TestDownload:
                 st.get.return_value = existing
                 mock_state.return_value = st
 
-                result = download("https://example.com/file", str(Path(td) / "file.bin"))
+                result = download("https://example.com/file", str(dest))
                 assert result["status"] == "already_downloaded"
+
+    def test_download_complete_state_but_missing_dest_redownloads(self, range_server):
+        """State says complete but dest was deleted → must fetch again."""
+        content = b"re-fetch me"
+        RangeHandler.payloads["/reget.bin"] = content
+
+        with tempfile.TemporaryDirectory() as td:
+            dest = Path(td) / "reget.bin"
+            # Stale state: complete, but dest does not exist
+            with patch("downcraft.download.state.get_state") as mock_state:
+                st = MagicMock()
+                existing = MagicMock()
+                existing.status = "complete"
+                st.get.return_value = existing
+                mock_state.return_value = st
+
+                result = download(_range_url(range_server, "/reget.bin"), str(dest))
+
+            assert result["status"] == "complete"
+            assert dest.read_bytes() == content
 
     def test_small_file_download(self, range_server):
         content = b"test content for download"

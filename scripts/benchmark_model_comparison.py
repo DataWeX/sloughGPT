@@ -20,6 +20,8 @@ Usage:
     python scripts/benchmark_model_comparison.py --sou models/checkpoint.soul --hf gpt2
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import math

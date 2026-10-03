@@ -4,6 +4,8 @@ Validator (Doctor) - Environment and project validation.
 Checks for common issues before running commands.
 """
 
+from __future__ import annotations
+
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -194,3 +196,4 @@ class Doctor:
             self.result.add_pass(".env", "Found")
         else:
             self.result.add_warn(".env", "Not found", "Copy from .env.example if available")
+

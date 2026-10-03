@@ -2,6 +2,8 @@
 Train commands - Training, evaluation, and quick smoke tests.
 """
 
+from __future__ import annotations
+
 import math
 import os
 import re
@@ -2031,3 +2033,4 @@ def cmd_train_from_sessions(args):
             "num_pairs": num_pairs,
         }
         print(_json2.dumps(result, indent=2))
+

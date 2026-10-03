@@ -3,8 +3,9 @@ Chat Router - the prompting surface: respond, stream, regenerate, cancel.
 
 Owns POST /chat and POST /chat/stream (single registration owner — the parity
 gate fails on any duplicate path+method). Those two delegate to the inference
-kernel (`routers.inference._instance`) so model-readiness gates, enrichment
-phases, reconnect replay and the SSE framing stay identical for every caller.
+kernel through its public facades (`handle_chat` / `handle_chat_stream`) so
+model-readiness gates, enrichment phases, reconnect replay and the SSE
+framing stay identical for every caller.
 Session state lives in session.py.
 """
 
@@ -22,8 +23,7 @@ from infrastructure.sse_fallback import sse_event as _sse_event
 from schemas.common import classify_and_raise, endpoint, safe_audit_log, success_response
 
 from config import ServerConfig
-from routers.inference import ChatRequest, ChatResponse
-from routers.inference import _instance as _chat_kernel
+from routers.inference import ChatRequest, ChatResponse, handle_chat, handle_chat_stream
 
 logger = logging.getLogger(__name__)
 
@@ -59,11 +59,11 @@ class ChatRouter:
         """Non-streaming chat response.
 
         Prompting surface lives here; generation runs in the shared inference
-        kernel (`_instance.chat` — the same entry the mobile BFF calls via
-        ``handle_chat``), so readiness/circuit-breaker gates and the response
-        shape are identical for every caller.
+        kernel via its public facade — the same entry the mobile BFF calls —
+        so readiness/circuit-breaker gates and the response shape are
+        identical for every caller.
         """
-        return await _chat_kernel.chat(request, auth_user)
+        return await handle_chat(request)
 
     @endpoint("chat.stream")
     async def stream(
@@ -72,8 +72,8 @@ class ChatRouter:
         http_request: Request,
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> StreamingResponse:
-        """Streaming chat response (SSE) — delegates to the inference kernel."""
-        return await _chat_kernel.chat_stream(request, http_request, auth_user)
+        """Streaming chat response (SSE) — delegates to the inference kernel facade."""
+        return await handle_chat_stream(request, http_request, auth_user)
 
     @endpoint("chat.regenerate")
     async def regenerate(

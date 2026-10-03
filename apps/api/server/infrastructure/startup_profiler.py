@@ -10,6 +10,8 @@ Usage:
         hook.add_metric("warm_time_ms", 12.3)
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from collections.abc import Generator
@@ -215,3 +217,4 @@ def reset_profiler() -> StartupProfiler:
     global _global_profiler
     _global_profiler = StartupProfiler()
     return _global_profiler
+

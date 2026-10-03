@@ -23,7 +23,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 logger = logging.getLogger("slo.config")
 
@@ -87,26 +87,10 @@ class TrackingConfig(BaseModel):
 
 
 class EmbeddingConfig(BaseModel):
-    """Embedding provider configuration.
-
-    ``api_key``/``base_url`` target any OpenAI-compatible endpoint (ollama,
-    LM Studio, vLLM). ``openai_api_key`` is a deprecated alias kept in sync
-    for back-compat — reads and writes work on either field.
-    """
+    """Embedding provider configuration."""
 
     provider: str = "n_gram"
-    api_key: str = ""
-    base_url: str = ""
     openai_api_key: str = ""
-
-    @model_validator(mode="after")
-    def _sync_openai_alias(self) -> EmbeddingConfig:
-        """Mirror api_key <-> openai_api_key so old and new readers agree."""
-        if self.api_key:
-            self.openai_api_key = self.api_key
-        elif self.openai_api_key:
-            self.api_key = self.openai_api_key
-        return self
 
 
 class StorageConfig(BaseModel):
@@ -318,9 +302,7 @@ class ConfigManager:
             f'  provider: "{defaults.tracking.provider}"\n'
             f'  wandb_project: "{defaults.tracking.wandb_project}"\n\n'
             "embedding:\n"
-            f'  provider: "{defaults.embedding.provider}"\n'
-            f'  api_key: "{defaults.embedding.api_key}"\n'
-            f'  base_url: "{defaults.embedding.base_url}"\n\n'
+            f'  provider: "{defaults.embedding.provider}"\n\n'
             "storage:\n"
             f'  data_dir: "{defaults.storage.data_dir}"\n'
             f'  datasets_dir: "{defaults.storage.datasets_dir}"\n'

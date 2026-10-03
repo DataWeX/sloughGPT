@@ -5,6 +5,8 @@ Receives logs from API, Web, and Core Engine via HTTP POST.
 Displays them in real-time in the terminal.
 """
 
+from __future__ import annotations
+
 import http.server
 import json
 import socketserver
@@ -83,3 +85,4 @@ def run_server(port: int = 9999):
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 9999
     run_server(port)
+

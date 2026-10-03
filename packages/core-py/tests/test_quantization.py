@@ -1309,7 +1309,7 @@ class TestInt4Quantization:
 # QuantizedLinear (class)
 # ---------------------------------------------------------------------------
 class TestQuantizedLinear:
-    """Test QuantizedLinear drop-in replacement for nn.Linear."""
+    """Tests for the numpy-forward QuantizedLinear class."""
 
     def test_create_from_quantized_data(self):
         w = np.random.randn(32, 32).astype(np.float32) * 0.02
@@ -1370,34 +1370,6 @@ class TestQuantizedLinear:
         result = ql.forward_numpy(x)
         expected = x @ w.T + b
         np.testing.assert_allclose(result, expected, atol=0.1)
-
-    def test_make_torch_forward_returns_callable(self):
-        try:
-            import torch
-        except ImportError:
-            pytest.skip("torch not installed")
-
-        w = np.random.randn(8, 16).astype(np.float32) * 0.02
-        engine = Quantine(bits=8, mode="symmetric")
-        info = engine.quantize("test.weight", w)
-
-        ql = QuantizedLinear(
-            weight_int8=info.array,
-            scale=info.meta.scale,
-            zero_point=info.meta.zero_point,
-            bias=None,
-            bits=info.meta.bits,
-            original_shape=info.meta.original_shape,
-            mode=info.meta.mode,
-        )
-
-        fwd = ql.make_torch_forward()
-        assert callable(fwd)
-
-        x_torch = torch.randn(2, 16)
-        result = fwd(x_torch)
-        assert isinstance(result, torch.Tensor)
-        assert result.shape == (2, 8)
 
     def test_from_linear_extraction(self):
         try:

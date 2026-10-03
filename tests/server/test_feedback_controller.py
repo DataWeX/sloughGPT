@@ -233,26 +233,26 @@ class TestRecordFeedbackPipeline:
 
     def test_get_workflow_failure_returns_none(self, ctrl):
         with patch(
-            "domain.feedback.get_feedback_workflow",
+            "domain.feedback._internal.workflow.get_feedback_workflow",
             side_effect=RuntimeError("down"),
         ):
             assert ctrl._get_workflow() is None
 
     def test_get_lora_failure_returns_none(self, ctrl):
         with patch(
-            "domain.feedback.get_online_lora_updater",
+            "domain.feedback._internal.online_train.get_online_lora_updater",
             side_effect=RuntimeError("down"),
         ):
             assert ctrl._get_lora_updater() is None
 
-    @patch("domain.feedback.get_feedback_workflow")
+    @patch("domain.feedback._internal.workflow.get_feedback_workflow")
     def test_workflow_wired_with_model(self, mock_get_wf, ctrl):
         workflow = MagicMock()
         mock_get_wf.return_value = workflow
         student = object()
         tokenizer = object()
         ctrl._workflow = None
-        with patch("domain.training._internal.state.get_state") as mock_get_state:
+        with patch("domain.training._internal.service.get_state") as mock_get_state:
             mock_state = MagicMock()
             mock_state.student_net = student
             mock_state.student_tokenizer = tokenizer
@@ -263,12 +263,12 @@ class TestRecordFeedbackPipeline:
 
 
 class TestTriggerHFDpo:
-    @patch("domain.feedback.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_no_model_returns(self, mock_trainer, ctrl):
         with patch("state.model", None), patch("state.tokenizer", None):
             feedback_module._trigger_hf_dpo()  # should not raise
 
-    @patch("domain.feedback.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_fewer_than_two_pairs_skips_train(self, mock_trainer, ctrl):
         trainer = MagicMock()
         trainer.prepare_dpo_pairs.return_value = [{"a": 1}]
@@ -277,7 +277,7 @@ class TestTriggerHFDpo:
             feedback_module._trigger_hf_dpo()
         trainer.train.assert_not_called()
 
-    @patch("domain.feedback.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_full_dpo_run(self, mock_trainer, ctrl):
         trainer = MagicMock()
         trainer.prepare_dpo_pairs.return_value = [{"a": 1}, {"b": 2}]
@@ -287,7 +287,7 @@ class TestTriggerHFDpo:
             feedback_module._trigger_hf_dpo()
         trainer.train.assert_called_once()
 
-    @patch("domain.feedback.HFDPOTrainer")
+    @patch("domain.feedback._internal.hf_dpo.HFDPOTrainer")
     def test_exception_suppressed(self, mock_trainer, ctrl):
         trainer = MagicMock()
         trainer.prepare_dpo_pairs.side_effect = RuntimeError("boom")

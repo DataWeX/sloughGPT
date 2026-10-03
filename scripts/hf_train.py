@@ -12,6 +12,8 @@ Non-stream mode (default):
     Writes a single JSON result to stdout on completion.
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -255,3 +257,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

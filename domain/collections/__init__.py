@@ -12,6 +12,8 @@ Public API:
     collect_file, collect_url, collect_rss, collect_api, collect_records
 """
 
+from __future__ import annotations
+
 from domain.collections._internal.builders import (
     CollectorBuilder,
     DataSink,
@@ -199,3 +201,4 @@ __all__ = [
     "collect_api",
     "collect_records",
 ]
+

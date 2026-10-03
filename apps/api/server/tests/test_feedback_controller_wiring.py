@@ -38,7 +38,7 @@ class TestWireModel:
         mock_state = MagicMock()
         mock_state.student_net = "student-net"
         mock_state.student_tokenizer = "student-tok"
-        with patch("domain.training._internal.state.get_state", return_value=mock_state):
+        with patch("domain.training._internal.service.get_state", return_value=mock_state):
             controller._wire_model()
         controller._workflow.set_model.assert_called_once_with("student-net", "student-tok")
 
@@ -49,7 +49,7 @@ class TestWireModel:
         mock_state = MagicMock()
         mock_state.student_net = None
         with (
-            patch("domain.training._internal.state.get_state", return_value=mock_state),
+            patch("domain.training._internal.service.get_state", return_value=mock_state),
             patch.dict(sys.modules, {"state": server_state}),
         ):
             controller._wire_model()
@@ -60,6 +60,6 @@ class TestWireModel:
         controller._workflow = None
         mock_state = MagicMock()
         mock_state.student_net = None
-        with patch("domain.training._internal.state.get_state", return_value=mock_state):
+        with patch("domain.training._internal.service.get_state", return_value=mock_state):
             controller._wire_model()
         assert True

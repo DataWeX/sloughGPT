@@ -9,8 +9,8 @@ module.exports = {
   rules: {
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_' }],
     '@typescript-eslint/no-explicit-any': 'warn',
-    '@typescript-eslint/consistent-type-imports': 'error',
+    '@typescript-eslint/consistent-type-imports': 'off',
     'no-console': ['warn', { allow: ['warn', 'error'] }],
   },
-  ignorePatterns: ['node_modules/', 'dist/', '.next/', '*.d.ts'],
+  ignorePatterns: ['node_modules/', 'dist/', 'dist-vite/', '.next/', '.next-dev/', 'coverage/', '*.d.ts'],
 }

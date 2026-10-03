@@ -3,6 +3,8 @@
 Teacher-student self-training: gpt2 generates → SloughGPT learns
 """
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
@@ -57,3 +59,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

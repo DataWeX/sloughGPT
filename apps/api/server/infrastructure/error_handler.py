@@ -27,7 +27,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from schemas.common import error_response, get_correlation_id
 
-from domain.infrastructure import (
+from domain.infrastructure._internal.errors import (
     AppError,
     AuthError,
     ConfigError,

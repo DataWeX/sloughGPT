@@ -5,6 +5,8 @@ Uses MogDB as the storage engine with automatic JSON sync.
 Presets are stored in MogDB and synced to JSON for human readability.
 """
 
+from __future__ import annotations
+
 import logging
 import time as _time
 
@@ -326,3 +328,4 @@ def _get_companion():
 
 
 __all__ = ["router"]
+

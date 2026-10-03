@@ -9,6 +9,8 @@ Usage:
         await init_db_pool()
 """
 
+from __future__ import annotations
+
 import logging
 import sys
 import time
@@ -190,3 +192,4 @@ def terminal_hook(name: str) -> Generator[None, None, None]:
         duration_ms = (time.perf_counter() - start) * 1000
         viz.update_hook(name, "error", duration_ms)
         raise
+

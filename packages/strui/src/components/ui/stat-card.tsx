@@ -44,7 +44,16 @@ export function StatCard({ label, value, icon, trend, description, loading, clas
           </span>
         )}
       </div>
-      <span className={cn("text-xl font-bold tracking-tight text-foreground", numeric && "font-numeric")}>{value}</span>
+      {/* break-words: long identifiers (model names) must wrap inside the tile
+          instead of spilling over the neighbouring stat in the KpiGrid. */}
+      <span
+        className={cn(
+          'text-xl font-bold tracking-tight text-foreground break-words',
+          numeric && 'font-numeric',
+        )}
+      >
+        {value}
+      </span>
       {(description || trend?.label) && (
         <p className="text-[10px] text-muted-foreground leading-relaxed">
           {trend?.label ?? description}

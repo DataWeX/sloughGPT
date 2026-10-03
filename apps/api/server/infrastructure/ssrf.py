@@ -1,3 +1,6 @@
+
+from __future__ import annotations
+
 import ipaddress
 import logging
 import socket
@@ -38,3 +41,4 @@ def validate_url_not_private(url: str) -> None:
         if "E_BAD_REQUEST" in str(e):
             raise
         logger.warning("URL validation failed: %s", e)
+

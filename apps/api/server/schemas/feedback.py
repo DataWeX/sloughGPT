@@ -2,6 +2,8 @@
 Feedback Schemas - Data models for feedback
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -57,3 +59,4 @@ class ConversationResponse(BaseModel):
     pinned: bool = False
     starred: bool = False
     message_count: int = 0
+

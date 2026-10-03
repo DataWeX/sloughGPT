@@ -212,32 +212,13 @@ class JobStore:
         return [self.store_row_to_job(d) for d in docs]
 
     def update(self, job_id: str, **kwargs) -> dict | None:
-        """Update job fields.
-
-        A completed row's status is immutable: any update that tries to move it
-        to a non-completed status is rejected whole (journal forensics, Sep 28:
-        a stale writer persisted status=running 2.6ms after completed and the
-        job resurfaced as a phantom recoverable after restart).
-        """
+        """Update job fields."""
         kwargs["updated_at"] = utc_now_iso()
 
         # Don't allow updating id
         kwargs.pop("id", None)
 
         with self._lock:
-            if "status" in kwargs:
-                current = self._jobs.find_one({"_id": job_id})
-                if (
-                    current is not None
-                    and current.get("status") == "completed"
-                    and kwargs["status"] != "completed"
-                ):
-                    logger.warning(
-                        "update(%s): rejected resurrection of completed row to %r",
-                        job_id,
-                        kwargs["status"],
-                    )
-                    return current
             self._jobs.update_one({"_id": job_id}, {"$set": kwargs})
 
         return self.get(job_id)

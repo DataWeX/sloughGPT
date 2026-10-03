@@ -2,6 +2,8 @@
 Meta Weights Router - Feedback-driven weight adaptation.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time as _time
@@ -121,3 +123,4 @@ class MetaWeightsRouter:
 
 
 router = MetaWeightsRouter().router
+

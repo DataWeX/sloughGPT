@@ -4,6 +4,8 @@ Workflow Router - Background task management
 Delegates to the canonical FeedbackWorkflowManager from the feedback domain.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Any
 
@@ -123,3 +125,4 @@ router = _workflow_router.router
 
 def _get_workflow():
     return _workflow_router._get_workflow()
+

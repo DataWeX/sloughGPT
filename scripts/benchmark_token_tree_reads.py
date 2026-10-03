@@ -15,6 +15,8 @@ Usage:
     python scripts/benchmark_token_tree_reads.py --json
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
@@ -165,3 +167,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

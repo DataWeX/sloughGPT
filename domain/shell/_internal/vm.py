@@ -9151,6 +9151,7 @@ class X86SyscallHandler:
     SYS_TRAIN_START = 28
     SYS_TRAIN_STATUS = 29
     SYS_TRAIN_GET_RESULT = 30
+    SYS_UNLINK = 31
 
     def __init__(
         self,
@@ -9170,8 +9171,8 @@ class X86SyscallHandler:
         self._heap: dict[int, int] = {}
         self._heap_break = 0x400000  # 4 MB default heap start
 
-        # File descriptor table per process (fd → filename)
-        self._fd_table: dict[int, str] = {}
+        # File descriptor table per process (fd → open-file description)
+        self._fd_table: dict[int, dict] = {}
         self._next_fd = 3  # 0=stdin, 1=stdout, 2=stderr reserved
 
         # Clock ticks
@@ -9201,6 +9202,7 @@ class X86SyscallHandler:
             self.SYS_WRITE: P.FILE_WRITE,
             self.SYS_OPEN: P.FILE_READ,
             self.SYS_CLOSE: P.FILE_READ,
+            self.SYS_UNLINK: P.FILE_WRITE,
             self.SYS_FORK: P.PROCESS_SPAWN,
             self.SYS_EXEC: P.PROCESS_SPAWN,
             self.SYS_WAIT: P.PROCESS_SELF,
@@ -9261,6 +9263,7 @@ class X86SyscallHandler:
             self.SYS_WRITE: lambda: self._sys_write(arg1, arg2, arg3),
             self.SYS_OPEN: lambda: self._sys_open(arg1, arg2),
             self.SYS_CLOSE: lambda: self._sys_close(arg1),
+            self.SYS_UNLINK: lambda: self._sys_unlink(arg1),
             self.SYS_FORK: lambda: self._sys_fork(),
             self.SYS_EXEC: lambda: self._sys_exec(arg1),
             self.SYS_WAIT: lambda: self._sys_wait(),
@@ -9343,7 +9346,8 @@ class X86SyscallHandler:
                 read += 1
             return read
         elif self._fs and fd in self._fd_table:
-            filename = self._fd_table[fd]
+            entry = self._fd_table[fd]
+            filename = entry["name"] if isinstance(entry, dict) else entry
             data = self._fs.read(filename)
             to_read = min(count, len(data))
             for i in range(to_read):
@@ -9361,9 +9365,15 @@ class X86SyscallHandler:
             logger.debug(text, end="", flush=True)
             return count
         elif self._fs and fd in self._fd_table:
-            filename = self._fd_table[fd]
-            existing = self._fs.read(filename)
-            self._fs.write(filename, existing + data)
+            entry = self._fd_table[fd]
+            filename = entry["name"] if isinstance(entry, dict) else entry
+            pos = entry.get("pos", 0) if isinstance(entry, dict) else 0
+            raw = self._fs.read(filename) if self._fs.exists(filename) else b""
+            base = raw[:pos] if pos <= len(raw) else raw
+            merged = base + data
+            self._fs.write(filename, merged)
+            if isinstance(entry, dict):
+                entry["pos"] = len(merged)
             return count
         return -1
 
@@ -9373,16 +9383,29 @@ class X86SyscallHandler:
         filename = self._read_string(name_addr)
         if not filename:
             return -1
-        # mode: 0=read, 1=write, 2=create+write
-        if mode == 0 and not self._fs.exists(filename):
+        # mode: 0=read, 1=append, 2=create+truncate (fopen "w")
+        if mode in (0, 1) and not self._fs.exists(filename):
             return -1
         fd = self._next_fd
         self._next_fd += 1
-        self._fd_table[fd] = filename
         if mode == 2:
-            if not self._fs.exists(filename):
-                self._fs.write(filename, b"")
+            self._fs.write(filename, b"")
+            pos = 0
+        elif mode == 0:
+            pos = 0
+        else:  # append — logical end of existing text (first NUL or raw end)
+            raw = self._fs.read(filename)
+            nul = raw.find(b"\x00")
+            pos = nul if nul >= 0 else len(raw)
+        self._fd_table[fd] = {"name": filename, "mode": mode, "pos": pos}
         return fd
+
+    def _sys_unlink(self, name_addr: int) -> int:
+        """Remove a file. EBX = path address. Returns 0, or -1 if not found."""
+        name = self._read_string(name_addr)
+        if not name or not self._fs:
+            return -1
+        return 0 if self._fs.delete(name) else -1
 
     def _sys_close(self, fd: int) -> int:
         if fd in self._fd_table:

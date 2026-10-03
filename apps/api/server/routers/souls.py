@@ -5,6 +5,8 @@ Encapsulates router state in ``SloRouterState`` dataclass rather than module-lev
 mutable globals. Actual soul state lives in ``SloManager`` singleton.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import re
@@ -787,3 +789,4 @@ Be yourself — let your personality shape how you respond."""
 
 
 router = SoulsRouter().router
+

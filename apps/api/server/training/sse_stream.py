@@ -135,10 +135,11 @@ def build_training_sse_response(
         }
         get_training_runtime().register(task_id, runtime_job, None, dict(config))
 
-        # Engine helpers (core layer, zero HTTP deps)
-        from domain.training import get_training_engine
-
-        _engine = get_training_engine()
+        # Import service helpers (core layer, zero HTTP deps)
+        from domain.training._internal.service import (
+            cleanup_stream_state,
+            process_training_completion,
+        )
 
         state_dict: dict[str, Any] = {"running": True}
 
@@ -194,7 +195,7 @@ def build_training_sse_response(
                         try:
                             ev = json.loads(event[6:])
                             if ev.get("status") in ("complete", "error"):
-                                _engine.process_training_completion(
+                                process_training_completion(
                                     ev, task_id, config, checkpoints_dir, _finish_cm
                                 )
                                 break
@@ -225,7 +226,7 @@ def build_training_sse_response(
                     task_name, "FAILED", str(e), code="E_INFRA_GENERATION", http_status=500
                 )
             finally:
-                _engine.cleanup_stream_state(task_id, config, state_dict, _finish_cm)
+                cleanup_stream_state(task_id, config, state_dict, _finish_cm)
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -249,33 +250,39 @@ def stop_all_training() -> dict:
 
     # Also signal service-layer cancel events
     try:
-        from domain.training import get_training_engine
+        from domain.training._internal.service import (
+            get_cancel_event,
+            get_pgq,
+            get_state,
+            get_turbo_cancel_event,
+            get_turbo_pause_event,
+            get_turbo_state,
+        )
 
-        _engine = get_training_engine()
-        ev = _engine.get_cancel_event()
+        ev = get_cancel_event()
         if ev is not None:
             ev.set()
-        tev = _engine.get_turbo_cancel_event()
+        tev = get_turbo_cancel_event()
         tev.set()
-        tpause = _engine.get_turbo_pause_event()
+        tpause = get_turbo_pause_event()
         tpause.clear()
         # Try to cancel PGQ job
-        pgq = _engine.get_pgq()
+        pgq = get_pgq()
         if pgq is not None:
-            turbo_state = _engine.turbo_state().data
+            turbo_state = get_turbo_state()
             job_id = turbo_state.get("job_id")
             if job_id:
                 try:
                     pgq.cancel_training(job_id)
                 except Exception as exc:
                     logger.warning("Failed to cancel PGQ turbo job %s: %s", job_id, exc)
-        _engine.training_state().running = False
+        get_state().running = False
     except Exception as e:
         logger.warning("cancel_all_training failed: %s", e)
         try:
-            from domain.training import get_training_engine
+            from domain.training._internal.service import get_state
 
-            get_training_engine().training_state().running = False
+            get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_all failure")
 
@@ -292,19 +299,18 @@ def cancel_from_sessions() -> dict:
         logger.warning("CancelManager.cancel_all failed: %s", e)
 
     try:
-        from domain.training import get_training_engine
+        from domain.training._internal.service import get_cancel_event, get_state
 
-        _engine = get_training_engine()
-        ev = _engine.get_cancel_event()
+        ev = get_cancel_event()
         if ev is not None:
             ev.set()
-        _engine.training_state().running = False
+        get_state().running = False
     except Exception as e:
         logger.warning("cancel_from_sessions state reset failed: %s", e)
         try:
-            from domain.training import get_training_engine
+            from domain.training._internal.service import get_state
 
-            get_training_engine().training_state().running = False
+            get_state().running = False
         except Exception:
             logger.debug("Failed to reset training state after cancel_from_sessions failure")
 

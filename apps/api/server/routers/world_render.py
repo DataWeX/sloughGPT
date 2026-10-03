@@ -2,6 +2,8 @@
 World Render Router — rendering endpoints for the programmable world.
 """
 
+from __future__ import annotations
+
 import logging
 import time as _time
 
@@ -262,3 +264,4 @@ class WorldRenderRouter:
 
 
 router = WorldRenderRouter().router
+

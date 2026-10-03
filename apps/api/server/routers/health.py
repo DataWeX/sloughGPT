@@ -21,6 +21,8 @@ Side effects:
     - ``/health/stream`` holds the connection open until client disconnect
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging

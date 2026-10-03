@@ -67,7 +67,12 @@ class VisionProcessor:
         vision = get_provider(self._provider_name)
         if vision is not None:
             try:
-                msg = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": img_data}}]}]
+                msg = [
+                    {
+                        "role": "user",
+                        "content": [{"type": "image_url", "image_url": {"url": img_data}}],
+                    }
+                ]
                 text = ""
                 async for token in vision.chat_stream(msg, max_tokens=30, temperature=0.8):
                     text += token
@@ -98,7 +103,11 @@ class VisionProcessor:
             for msg in messages:
                 content = msg.get("content", "")
                 if isinstance(content, list):
-                    text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                    text_parts = [
+                        p.get("text", "")
+                        for p in content
+                        if isinstance(p, dict) and p.get("type") == "text"
+                    ]
                     content = "\n".join(text_parts)
                     if text_parts and msg.get("role") == "user":
                         content = f"{content}\n[Image attached but model does not support vision]"
@@ -115,7 +124,11 @@ class VisionProcessor:
         for msg in messages:
             content = msg.get("content", "")
             if isinstance(content, list):
-                text_parts = [p.get("text", "") for p in content if isinstance(p, dict) and p.get("type") == "text"]
+                text_parts = [
+                    p.get("text", "")
+                    for p in content
+                    if isinstance(p, dict) and p.get("type") == "text"
+                ]
                 content = "\n".join(text_parts)
             if not injected and msg.get("role") == "user":
                 content = f"{content}\n{caption_block}"

@@ -101,12 +101,10 @@ def test_no_new_legacy_domains_patch_targets() -> None:
 # any new ``file|module`` pair is a contract violation.
 _INTERNAL_IMPORT = re.compile(r"^\s*(?:from|import)\s+(domain\.[\w.]*_internal(?:\.[\w.]*)?)", re.M)
 
-# Pinned baseline (23 entries; shrunk from 44 — benchmark, dashboard,
-# models, status, system, tenants, tokens, users and workspaces routers
-# now go through domain facades/engines, plus earlier rewires of
-# tokenizer / token_tree / cloud_training onto domain.training engines,
-# settings.py onto the domain.settings / domain.training / domain.inference
-# facades, and consciousness.py onto the domain.cognition facade).
+# Pinned baseline (44 entries after rewiring tokenizer / token_tree /
+# cloud_training onto domain.training engines, settings.py onto the
+# domain.settings / domain.training / domain.inference facades, and
+# consciousness.py onto the domain.cognition facade).
 # Re-generate when reducing:
 #   python -c "import re,pathlib; ..."
 _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
@@ -115,6 +113,12 @@ _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
         "agents.py|domain.agents._internal.run_history",
         "agents.py|domain.agents._internal.system",
         "agents.py|domain.api._internal.sse_envelope",
+        "benchmark.py|domain.feedback._internal.response_tracker",
+        "benchmark.py|domain.infrastructure._internal.errors",
+        "dashboard.py|domain.infrastructure._internal.event_buffer",
+        "dashboard.py|domain.settings._internal.persistent",
+        "dashboard.py|domain.training._internal.outcome_tracker",
+        "dashboard.py|domain.training._internal.service",
         "files.py|domain.cognition._internal.rag_service",
         "lora_eval.py|domain.feedback._internal.lora_eval",
         "lora_eval.py|domain.feedback._internal.per_user_lora",
@@ -123,15 +127,30 @@ _ROUTER_INTERNAL_IMPORTS: frozenset[str] = frozenset(
         "memory.py|domain.memory._internal.service",
         "memory.py|domain.memory._internal.task_memory",
         "model_stack.py|domain.training._internal.cache_tags",
+        "models.py|domain.models._internal.provider",
+        "models.py|domain.slolib._internal.gpu",
+        "models.py|domain.training._internal.export",
         "registry.py|domain.infrastructure._internal",
         "self_train.py|domain.infrastructure._internal.errors",
         "shell.py|domain.shell._internal.io",
         "shell.py|domain.shell._internal.repl",
         "shell.py|domain.shell._internal.runtime",
+        "status.py|domain.inference._internal.native.engine",
+        "system.py|domain.infrastructure._internal.output_buffer",
+        "system.py|domain.training._internal",
+        "tenants.py|services.auth._internal.models",
+        "tenants.py|services.auth._internal.repositories",
+        "tokens.py|services.billing._internal.token_service",
         "tools.py|domain.models._internal.provider",
+        "users.py|services.auth._internal.models",
+        "users.py|services.auth._internal.repositories",
         "vm.py|domain.shell._internal.vm",
         "vm.py|domain.shell._internal.vm_permissions",
         "vm.py|domain.shell._internal.vm_training_bridge",
+        "workspaces.py|services.auth._internal.models",
+        "workspaces.py|services.auth._internal.repositories",
+        "workspaces.py|domain.dataset._internal.repository",
+        "workspaces.py|domain.learner._internal.knowledge",
         "world_render.py|domain.shell._internal.simulation",
         "world_render.py|domain.shell._internal.world_render",
     }

@@ -31,7 +31,7 @@ def _run_async(coro: Coroutine) -> None:
             logger.debug("Fire-and-forget coroutine failed: %s", exc)
 
     try:
-        from domain.infrastructure import get_pool
+        from domain.infrastructure._internal.fire_and_forget import get_pool
 
         get_pool().submit(_target)
     except Exception as exc:
@@ -45,7 +45,7 @@ def notify_push(title: str, body: str, **kwargs: Any) -> None:
     worker threads past completion. Dispatches via :func:`_run_async`.
     """
     try:
-        from domain.mobile import get_notification_service
+        from services.mobile import get_notification_service
 
         service = get_notification_service()
 

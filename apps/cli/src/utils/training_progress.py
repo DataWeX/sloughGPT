@@ -14,6 +14,8 @@ The loss sparkline draws recent train loss as bars; lower loss is better, so
 bars shrinking toward the left (``▇▆▄▁``) indicate improvement.
 """
 
+from __future__ import annotations
+
 import sys
 import time
 
@@ -267,3 +269,4 @@ class TrainingProgressBar:
             sys.stdout.flush()
         else:
             print(line)
+

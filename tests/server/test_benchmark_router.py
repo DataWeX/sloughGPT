@@ -109,6 +109,39 @@ class TestGetMetrics:
         resp = client.get("/benchmark/metrics")
         assert resp.json()["data"]["model_loaded"] in (True, False)
 
+    def test_callable_num_parameters_is_serialized_as_int(self, client):
+        """num_parameters is a plain `def`, not a @property.
+
+        Returning the bound method made the whole endpoint 500 with
+        E_SERIALIZATION whenever a model was resident.
+        """
+        provider = _fake_provider([1, 2, 3])
+        provider.num_parameters = lambda: 123_000_000
+        with _patch_server(provider):
+            resp = client.get("/benchmark/metrics")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["num_parameters"] == 123_000_000
+        assert isinstance(resp.json()["data"]["num_parameters"], int)
+
+    def test_tokens_per_second_is_a_real_rate(self, client):
+        """One tps figure only, and it comes from a real generation window.
+
+        The old formula divided by seconds-since-last-inference (idle time),
+        so the rate decayed toward zero the longer the server sat idle."""
+        provider = _fake_provider([1, 2, 3])
+        provider.num_parameters = lambda: 123_000_000
+        # `as mock_get_state` binds the patched accessor; the ServerState it
+        # returns is its return_value.
+        with _patch_server(provider) as mock_get_state:
+            fake_state = mock_get_state.return_value
+            fake_state.get_tokens_per_second.return_value = 10.7
+            resp = client.get("/benchmark/metrics")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["tokens_per_second"] == 10.7
+        # Single metric: no second, differently-windowed rate alongside it.
+        assert "end_to_end_tps" not in data
+
     @patch("apps.api.server.routers.benchmark.BenchmarkRouter._get_model_metrics")
     def test_metrics_forwards_model(self, mock_metrics, client):
         mock_metrics.return_value = {"model": "gpt2", "model_loaded": False}

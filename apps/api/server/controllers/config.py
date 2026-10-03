@@ -2,6 +2,8 @@
 Config Controller - Business logic for configuration
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 
@@ -38,3 +40,4 @@ def get_config_controller() -> ConfigController:
     if _config_controller is None:
         _config_controller = ConfigController()
     return _config_controller
+

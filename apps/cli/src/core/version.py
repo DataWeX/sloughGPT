@@ -4,6 +4,8 @@ Version tracking for SloughGPT CLI.
 Provides version information and update checking.
 """
 
+from __future__ import annotations
+
 import json
 
 __version__ = "0.1.0"
@@ -66,3 +68,4 @@ def format_version_display() -> str:
     """Format version for display in help/about."""
     info = get_version()
     return f"{CLI_NAME} v{info.version} ({info.platform}, Python {info.python_version})"
+

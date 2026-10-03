@@ -2,6 +2,8 @@
 Voice commands - Text-to-speech and speech-to-text via the API.
 """
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 
@@ -89,3 +91,4 @@ def _play_audio(path: str):
         except (FileNotFoundError, subprocess.TimeoutExpired):
             continue
     log.warning("No audio player found (tried aplay, ffplay, afplay)")
+

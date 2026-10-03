@@ -2,6 +2,8 @@
 OpenWebUI Integration Router — provides endpoints for OpenWebUI plugin/pipeline panel.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 from typing import Any
@@ -145,3 +147,4 @@ class OpenWebUIRouter:
 
 
 router = OpenWebUIRouter().router
+

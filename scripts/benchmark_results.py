@@ -312,9 +312,89 @@ def do_record(args) -> int:
     return 0
 
 
+# Which metrics each kind stores, in display order. `metrics` is not one
+# shape across kinds: latency/Qwen is a dict of *_ms, startup is *_s,
+# execution is *_us, and latency/served is a list of compression samples
+# rather than a dict at all. Rendering mean_ms/p95_ms for every kind aborted
+# on that list and printed a row of '?' for the other two.
+HISTORY_FIELDS = {
+    "latency": (("mean", "mean_ms"), ("p50", "p50_ms"), ("p95", "p95_ms")),
+    "startup": (("health", "time_to_health_s"), ("ready", "time_to_ready_s")),
+    "execution": (("dispatch", "dispatch_us"), ("threads", "peak_threads")),
+}
+
+
+def _scalars(value) -> dict:
+    """Flatten a record's metrics into {name: number}.
+
+    Accepts the dict most kinds store and the list some latency files hold.
+    Booleans and nested structures are dropped — the renderer wants numbers
+    it can print, not structure it would have to interpret.
+    """
+    if isinstance(value, dict):
+        items = list(value.items())
+    elif isinstance(value, list):
+        items = [(k, v) for item in value if isinstance(item, dict) for k, v in item.items()]
+    else:
+        return {}
+    return {k: v for k, v in items if isinstance(v, (int, float)) and not isinstance(v, bool)}
+
+
+def _fmt(value) -> str:
+    """Render one metric: '?' when absent, trimmed digits when floating."""
+    if value is None:
+        return "?"
+    if isinstance(value, float):
+        return f"{value:.6g}"
+    return str(value)
+
+
+def _describe(metrics) -> str:
+    """Say what the payload actually is when none of the expected keys land.
+
+    A row of '?' reads like missing data; naming the shape does not.
+    """
+    if isinstance(metrics, list):
+        return f"list({len(metrics)}) non-comparable samples"
+    if isinstance(metrics, dict):
+        keys = ", ".join(str(k) for k in list(metrics)[:4])
+        return f"metrics[{keys}]"
+    return "no metrics"
+
+
+def _kinds_with_runs() -> list[str]:
+    """Every kind directory holding at least one run, sorted.
+
+    The default was hard-coded to ['stability', 'latency'], which hid the
+    startup and execution runs on disk — 9 of the 12 stored records.
+    """
+    if not RESULTS_DIR.exists():
+        return []
+    return sorted(p.name for p in RESULTS_DIR.iterdir() if p.is_dir() and any(p.glob("*.json")))
+
+
+def _history_metrics(r: dict, kind: str) -> str:
+    """Render one run's metrics for `history`, using the keys that kind has."""
+    metrics = r.get("metrics")
+    vals = _scalars(metrics)
+    fields = HISTORY_FIELDS.get(kind, ())
+    if not fields or all(vals.get(key) is None for _, key in fields):
+        return _describe(metrics)
+    line = " ".join(f"{label}={_fmt(vals.get(key))}" for label, key in fields)
+    if kind == "startup":
+        timeout, ready = vals.get("api_starting_timeout_s"), vals.get("time_to_ready_s")
+        if isinstance(timeout, (int, float)) and isinstance(ready, (int, float)):
+            if ready > timeout:
+                line += f" [past {timeout}s timeout]"
+    return line
+
+
 def do_history(args) -> int:
-    """List stored runs."""
-    for kind in [args.kind] if args.kind else ["stability", "latency"]:
+    """List stored runs.
+
+    With no --kind, every kind that holds runs is listed.
+    """
+    for kind in [args.kind] if args.kind else _kinds_with_runs():
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -339,11 +419,7 @@ def do_history(args) -> int:
                         f"  {stamp}  {conf:<10} gate={'✓' if gate else '✗'} final={final}  {p.name}"
                     )
             else:
-                m = r.get("metrics", {})
-                print(
-                    f"  {stamp}  {model:<24} mean={m.get('mean_ms', '?'):<7} "
-                    f"p95={m.get('p95_ms', '?'):<7}  {p.name}"
-                )
+                print(f"  {stamp}  {model:<24} {_history_metrics(r, kind)}  {p.name}")
     return 0
 
 

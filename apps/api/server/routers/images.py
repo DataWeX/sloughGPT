@@ -1,5 +1,7 @@
 """Image Generation Router - text-to-image generation with style selection."""
 
+from __future__ import annotations
+
 import asyncio
 import base64
 import io
@@ -377,3 +379,4 @@ def hex_to_rgb(hex_color: str) -> tuple:
 
 
 router = ImagesRouter().router
+

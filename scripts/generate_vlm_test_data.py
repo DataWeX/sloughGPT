@@ -4,6 +4,8 @@ Generate a minimal VLM test dataset with synthetic images + captions.
 Creates datasets/vlm-demo/ with 5 colored-shape PNGs and a corpus.jsonl.
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -135,3 +137,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

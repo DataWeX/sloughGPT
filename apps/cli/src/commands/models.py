@@ -2,6 +2,8 @@
 Model commands - Model listing, export, and soul management.
 """
 
+from __future__ import annotations
+
 import json
 from pathlib import Path
 
@@ -895,3 +897,4 @@ def register(subparsers):
 
     compare_parser = subparsers.add_parser("compare", help="Compare models or benchmarks")
     compare_parser.set_defaults(func=_cmd_models_compare)
+

@@ -10,6 +10,8 @@ Usage:
     python scripts/train_multimodal.py [--epochs 50] [--batch-size 1] [--samples 100]
 """
 
+from __future__ import annotations
+
 import argparse
 import sys
 import time
@@ -435,3 +437,4 @@ if __name__ == "__main__":
     parser.add_argument("--audio-only", action="store_true", help="Train only audio (skip vision)")
     args = parser.parse_args()
     train(args)
+

@@ -50,7 +50,15 @@ class SloTransformerProvider:
         parts.append("Assistant:")
         return "\n".join(parts)
 
-    async def chat_stream(self, messages: list, max_tokens: int = 512, temperature: float = 0.7, cancel_event=None, session_id: str | None = None, **kwargs) -> AsyncIterator[str]:
+    async def chat_stream(
+        self,
+        messages: list,
+        max_tokens: int = 512,
+        temperature: float = 0.7,
+        cancel_event=None,
+        session_id: str | None = None,
+        **kwargs,
+    ) -> AsyncIterator[str]:
         prompt = self._messages_to_prompt(messages)
         input_ids = self._encode(prompt)
         if not input_ids:
@@ -61,7 +69,15 @@ class SloTransformerProvider:
         loop = asyncio.get_event_loop()
 
         def _gen():
-            return self._model.generate(inp, max_new_tokens=max_tokens, temperature=temperature, top_k=kwargs.get("top_k", 40), top_p=kwargs.get("top_p", 0.95), repetition_penalty=kwargs.get("repetition_penalty", 1.1), eos_token=self._eos)
+            return self._model.generate(
+                inp,
+                max_new_tokens=max_tokens,
+                temperature=temperature,
+                top_k=kwargs.get("top_k", 40),
+                top_p=kwargs.get("top_p", 0.95),
+                repetition_penalty=kwargs.get("repetition_penalty", 1.1),
+                eos_token=self._eos,
+            )
 
         try:
             out = await loop.run_in_executor(None, _gen)
@@ -88,7 +104,14 @@ class SloTransformerProvider:
 
     @property
     def metadata(self) -> dict:
-        return {"model_id": self._model_id_str, "vocab_size": len(self._stoi), "type": "soultransformer", "n_layer": self._model.n_layer, "n_embed": self._model.n_embed, "n_head": self._model.n_head}
+        return {
+            "model_id": self._model_id_str,
+            "vocab_size": len(self._stoi),
+            "type": "soultransformer",
+            "n_layer": self._model.n_layer,
+            "n_embed": self._model.n_embed,
+            "n_head": self._model.n_head,
+        }
 
     @classmethod
     def load_from_sou(cls, path: str, model_id_str: str = "") -> SloTransformerProvider:
@@ -112,7 +135,22 @@ class SloTransformerProvider:
         arch = infer_arch_from_state_dict(sd)
         from domain.training._internal.slonet import SloTransformer
 
-        model = SloTransformer(vocab_size=arch["vocab_size"], n_embed=arch["n_embed"], n_layer=arch["n_layer"], n_head=arch["n_head"], dropout=0.0, tie_weights=False)
+        model = SloTransformer(
+            vocab_size=arch["vocab_size"],
+            n_embed=arch["n_embed"],
+            n_layer=arch["n_layer"],
+            n_head=arch["n_head"],
+            dropout=0.0,
+            tie_weights=False,
+        )
         model.load_state_dict(sd, strict=False)
-        logger.info("Loaded SloTransformer from %s (vocab=%d, n_embed=%d, n_layer=%d, n_head=%d)", path, arch["vocab_size"], arch["n_embed"], arch["n_layer"], arch["n_head"], extra={"tag": "MODEL"})
+        logger.info(
+            "Loaded SloTransformer from %s (vocab=%d, n_embed=%d, n_layer=%d, n_head=%d)",
+            path,
+            arch["vocab_size"],
+            arch["n_embed"],
+            arch["n_layer"],
+            arch["n_head"],
+            extra={"tag": "MODEL"},
+        )
         return cls(model, stoi, itos, model_id_str=model_id_str)

@@ -15,6 +15,7 @@ from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
 from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async, notify_push
@@ -93,7 +94,7 @@ async def start_distillation(
                 details=quality,
             )
     except Exception as e:
-        from domain.infrastructure import AppError
+        from domain.infrastructure._internal.errors import AppError
 
         if isinstance(e, AppError):
             raise
@@ -144,7 +145,9 @@ async def start_distillation(
             _random.seed(42)
             np.random.seed(42)
 
-            from domain.infrastructure import get_model_registry as _get_model_registry
+            from domain.infrastructure._internal.model_registry import (
+                get_model_registry as _get_model_registry,
+            )
 
             registry = _get_model_registry()
             server = registry.get(request.teacher_model) if registry else None
@@ -156,7 +159,9 @@ async def start_distillation(
                 teacher_model = server._model_ref
                 teacher_tokenizer = getattr(server, "_tokenizer", None)
             else:
-                from domain.infrastructure import get_server_state as _get_server_state
+                from domain.infrastructure._internal.server_state import (
+                    get_server_state as _get_server_state,
+                )
 
                 provider = _get_server_state().model.get()
                 if (
@@ -257,15 +262,17 @@ async def start_distillation(
                 teacher_model, teacher_tokenizer, slonet=slonet_provider is not None
             )
 
-            from domain.training import get_training_engine
+            from domain.training._internal.distillation import (
+                DistillationConfig,
+                DistillationTrainer,
+            )
 
-            trainer = get_training_engine().build_distillation_trainer(
-                teacher_wrapper,
-                student,
+            distill_cfg = DistillationConfig(
                 temperature=request.temperature,
                 alpha=request.alpha,
                 beta=request.beta,
             )
+            trainer = DistillationTrainer(teacher_wrapper, student, distill_cfg)
 
             # Training loop
             epoch_losses = []
@@ -397,9 +404,8 @@ async def start_distillation(
                 body=f"Error: {str(e)[:100]}",
             )
 
-    from domain.training import get_training_engine
-
-    get_training_engine().executor_submit(_run_distill, job_id)
+    executor = get_training_executor()
+    executor.submit(_run_distill, job_id)
 
     return {
         "status": "queued",

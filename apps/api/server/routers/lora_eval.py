@@ -2,6 +2,8 @@
 LoRA Evaluation Router - Trigger adapter quality evaluation.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import re
@@ -215,3 +217,4 @@ class LoraEvalRouter:
 
 
 router = LoraEvalRouter().router
+

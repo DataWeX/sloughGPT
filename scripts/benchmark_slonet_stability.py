@@ -17,6 +17,8 @@ Gold Standard (pass/fail thresholds):
   - Response length variance (CV): <= 0.30
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import math
@@ -329,3 +331,4 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+

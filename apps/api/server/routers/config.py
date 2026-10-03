@@ -2,6 +2,8 @@
 Config Router - MVC View layer
 """
 
+from __future__ import annotations
+
 import logging
 
 from controllers.config import get_config_controller
@@ -66,3 +68,4 @@ class ConfigRouter:
 
 
 router = ConfigRouter().router
+

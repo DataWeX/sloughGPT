@@ -11,6 +11,8 @@ encodings and a merge-lineage decomposition, benchmarks parallel batch
 encoding against serial, and round-trips save/load.
 """
 
+from __future__ import annotations
+
 import sys
 import time
 from pathlib import Path
@@ -119,3 +121,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

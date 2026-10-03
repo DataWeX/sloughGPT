@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .slot_chain import apply_board
 
 # ── Data Models ──────────────────────────────────────────────────────────
 
@@ -174,6 +175,7 @@ class PlannerStore:
             except OSError:
                 pass
             raise
+        apply_board(self._board_file)  # one line: re-derive slot chain on every board write
 
     @staticmethod
     def _has_schema_header(lines: list[str]) -> bool:

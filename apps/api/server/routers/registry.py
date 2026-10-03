@@ -6,6 +6,8 @@ from the actual model serving layer. Now delegates to get_model_registry() so al
 registry operations reflect the real state of loaded models.
 """
 
+from __future__ import annotations
+
 import time as _time
 
 from fastapi import APIRouter, Query
@@ -142,3 +144,4 @@ class RegistryRouter:
 
 
 router = RegistryRouter().router
+

@@ -26,6 +26,8 @@ Usage:
     python scripts/measure_model.py --quick
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import math
@@ -591,3 +593,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

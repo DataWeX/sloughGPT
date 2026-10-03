@@ -2,6 +2,8 @@
 Rate Limit Router - Rate limiting status and configuration
 """
 
+from __future__ import annotations
+
 import time
 from collections import defaultdict
 
@@ -82,3 +84,4 @@ class RatelimitRouter:
 
 
 router = RatelimitRouter().router
+

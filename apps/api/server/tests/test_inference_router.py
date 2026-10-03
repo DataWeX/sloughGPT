@@ -163,6 +163,20 @@ class TestSessionCRUD:
         assert resp.status_code == 200
         assert isinstance(resp.json()["data"], list)
 
+    def test_search_sessions_shares_one_index_with_system_search(self):
+        """Extraction invariant: the legacy endpoint and the system-wide
+        search adapter must read ONE cache, not two copies of the
+        session corpus."""
+        import routers.inference as inference_mod
+
+        from domain.search.registry import get_registry
+        from domain.search.session_index import get_session_index
+
+        assert inference_mod._session_search_index is get_session_index()
+        adapter = get_registry().get("sessions")
+        assert adapter is not None
+        assert adapter._resolve() is get_session_index()
+
 
 class TestContextEndpoints:
     def test_inspect_context(self):

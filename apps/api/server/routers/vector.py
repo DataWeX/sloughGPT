@@ -2,6 +2,8 @@
 Vector Store Router - Embedding/vector operations
 """
 
+from __future__ import annotations
+
 import logging
 
 from fastapi import APIRouter, Depends
@@ -222,3 +224,4 @@ class VectorRouter:
 
 
 router = VectorRouter().router
+

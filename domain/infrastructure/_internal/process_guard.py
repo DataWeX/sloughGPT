@@ -295,41 +295,53 @@ class _ThreadWorker:
                 except Exception as e:
                     self._resp_q.put_nowait(("error", session_id, str(e)))
 
+    def _resolve_model_and_tokenizer(self):
+        """Return the active (model, tokenizer) for generation.
+
+        Thread worker supports two payloads: an injected SLO provider
+        (``self._provider``) or a direct HF/default-model load
+        (``self._hf_model``/``self._hf_tokenizer``). Both expose the same
+        numpy generate protocol.
+        """
+        if self._provider is not None:
+            return self._provider._model, self._provider._tokenizer
+        return self._hf_model, self._hf_tokenizer
+
     def _generate_fn(self, prompt: str, **kwargs) -> dict:
         import numpy as np
 
-        provider = self._provider
-        token_ids = provider._tokenizer.encode(prompt)
+        model, tokenizer = self._resolve_model_and_tokenizer()
+        token_ids = tokenizer.encode(prompt)
         input_ids = np.array([token_ids], dtype=np.int64)
-        result = provider._model.generate_numpy(
+        result = model.generate_numpy(
             input_ids,
             max_new_tokens=kwargs.get("max_new_tokens", 100),
             temperature=kwargs.get("temperature", 0.7),
             top_k=kwargs.get("top_k", 50),
             top_p=kwargs.get("top_p", 0.9),
             repetition_penalty=kwargs.get("repetition_penalty", 1.0),
-            eos_token=provider._tokenizer.eos_token_id or 0,
+            eos_token=tokenizer.eos_token_id or 0,
         )
         generated = result[0].tolist()
-        text = provider._tokenizer.decode(generated)
+        text = tokenizer.decode(generated)
         return {"text": text, "tokens_generated": len(generated), "elapsed_ms": 0}
 
     def _stream_fn(self, prompt: str, **kwargs):
         import numpy as np
 
-        provider = self._provider
-        token_ids = provider._tokenizer.encode(prompt)
+        model, tokenizer = self._resolve_model_and_tokenizer()
+        token_ids = tokenizer.encode(prompt)
         input_ids = np.array([token_ids], dtype=np.int64)
-        for tok_id in provider._model.generate_numpy_stream(
+        for tok_id in model.generate_numpy_stream(
             input_ids,
             max_new_tokens=kwargs.get("max_new_tokens", 100),
-            eos_token=provider._tokenizer.eos_token_id or 0,
+            eos_token=tokenizer.eos_token_id or 0,
             temperature=kwargs.get("temperature", 0.7),
             top_k=kwargs.get("top_k", 50),
             top_p=kwargs.get("top_p", 0.9),
             repetition_penalty=kwargs.get("repetition_penalty", 1.0),
         ):
-            yield provider._tokenizer.decode([tok_id])
+            yield tokenizer.decode([tok_id])
 
 
 _session_counter = 0
@@ -464,8 +476,8 @@ class ProcessGuard:
         with self._semaphore:
             try:
                 result = self._worker.generate(prompt, **kwargs)
-            except (TimeoutError, Exception) as e:
-                if "stall" in str(e).lower() or "timeout" in str(e).lower():
+            except Exception as e:
+                if self._is_stall(e):
                     self._recover_from_stall()
                 raise
         with self._requests_served_lock:
@@ -484,8 +496,8 @@ class ProcessGuard:
                     token = next(gen)
             except StopIteration as e:
                 return e.value if hasattr(e, "value") else {}
-            except (TimeoutError, Exception) as e:
-                if "stall" in str(e).lower() or "timeout" in str(e).lower():
+            except Exception as e:
+                if self._is_stall(e):
                     self._recover_from_stall()
                 raise
 
@@ -502,6 +514,15 @@ class ProcessGuard:
                     f"({self.max_restarts} restarts)"
                 )
             self._restart_worker_locked("stalled")
+
+    def _is_stall(self, exc: Exception) -> bool:
+        """True when the worker is wedged and should be restarted."""
+        from .model_worker import WorkerStreamStalledError
+
+        if isinstance(exc, WorkerStreamStalledError):
+            return True
+        msg = str(exc).lower()
+        return "stall" in msg or "timeout" in msg
 
     def health(self) -> dict:
         return {

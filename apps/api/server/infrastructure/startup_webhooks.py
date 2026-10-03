@@ -8,6 +8,8 @@ Usage:
     # Webhooks are triggered automatically on startup events
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 import time
@@ -211,3 +213,4 @@ def register_webhook(
     )
     get_webhook_manager().register(config)
     return config
+

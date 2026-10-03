@@ -17,6 +17,8 @@ This design works both for a static dataset (all files present at start) and for
 live‑updating scenario where new JSONL files appear while training is running.
 """
 
+from __future__ import annotations
+
 import json
 from collections.abc import Iterator
 from pathlib import Path
@@ -167,3 +169,4 @@ class LiveJSONLDataset(IterableDataset):
 
                 time.sleep(0.5)
                 continue
+

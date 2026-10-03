@@ -2,6 +2,8 @@
 Agents Router - Full CRUD for AI agent definitions with execution and orchestration.
 """
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from collections.abc import AsyncGenerator
@@ -428,3 +430,4 @@ class AgentsRouter:
 
 
 router = AgentsRouter().router
+

@@ -5,6 +5,8 @@ Uses MogDB as the storage engine with automatic JSON sync.
 Errors are stored in a capped MogDB collection and synced to JSON.
 """
 
+from __future__ import annotations
+
 import asyncio
 import hashlib
 import json
@@ -616,3 +618,4 @@ _dedup_map = _errors_instance._dedup_map
 async def clear_errors() -> dict:
     """clear_errors — async backward-compat re-export."""
     return await _errors_instance.clear_errors()
+

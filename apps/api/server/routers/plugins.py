@@ -2,6 +2,8 @@
 Plugins Router — endpoints for plugin management.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 
@@ -97,3 +99,4 @@ class PluginsRouter:
 
 
 router = PluginsRouter().router
+

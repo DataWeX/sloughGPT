@@ -13,6 +13,12 @@ from domain.training._internal.tracking import (
     log_training_metrics,
 )
 
+# Captured before anything patches builtins.__import__. The two patchers below
+# call it by name; had they called __import__ directly they would have resolved
+# to themselves and recursed until RecursionError — seen as an INTERNALERROR
+# aborting the suite when it runs in full, though each test passes alone.
+_REAL_IMPORT = __import__
+
 
 class FakeTracking:
     """Minimal fake config.tracking surface used by TrackingConfig init."""
@@ -278,7 +284,7 @@ class TestMissingBackendDeps:
         def no_mlflow(name, *a, **k):
             if name == "mlflow":
                 raise ImportError("no mlflow")
-            return __import__(name, *a, **k)
+            return _REAL_IMPORT(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_mlflow)
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
@@ -288,7 +294,7 @@ class TestMissingBackendDeps:
         def no_wandb(name, *a, **k):
             if name == "wandb":
                 raise ImportError("no wandb")
-            return __import__(name, *a, **k)
+            return _REAL_IMPORT(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_wandb)
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))

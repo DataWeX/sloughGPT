@@ -1,5 +1,7 @@
 """Shared CLI helper functions — used by commands/ modules."""
 
+from __future__ import annotations
+
 import logging
 import os
 import re
@@ -205,3 +207,4 @@ def ensure_server(
 
     # Timed out -- leave the server running (it may still be loading)
     return base_url, None
+

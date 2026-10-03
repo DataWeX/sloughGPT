@@ -26,6 +26,8 @@ Usage:
     python scripts/benchmark_compare.py --checkpoints model.soul --json
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
@@ -320,3 +322,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

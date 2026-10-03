@@ -290,7 +290,7 @@ class TestMobileSyncStatus:
 class TestMobileNotificationsRegister:
     """POST /mobile/notifications/register"""
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_registers_device(self, mock_get_svc, client):
         svc = MagicMock()
         svc.register_device.return_value = {"status": "registered"}
@@ -312,7 +312,7 @@ class TestMobileNotificationsRegister:
 class TestMobileNotificationsUnregister:
     """POST /mobile/notifications/unregister"""
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_unregisters_device(self, mock_get_svc, client):
         svc = MagicMock()
         svc.unregister_device.return_value = True
@@ -329,7 +329,7 @@ class TestMobileNotificationsUnregister:
 class TestMobileNotificationsDevices:
     """GET /mobile/notifications/devices"""
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_returns_device_list(self, mock_get_svc, client):
         svc = MagicMock()
         svc.get_devices.return_value = [{"token": "t1", "platform": "ios"}]
@@ -776,7 +776,7 @@ class TestMobileSyncOffline:
 class TestMobileNotificationsSend:
     """POST /mobile/notifications/send"""
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_sends_notification(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification_async = AsyncMock(return_value={"sent": 3})
@@ -786,7 +786,7 @@ class TestMobileNotificationsSend:
         assert resp.json()["data"]["sent"] == 3
         assert svc.send_notification_async.call_args.kwargs["topic"] is None
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_sends_with_topic_and_tokens(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification_async = AsyncMock(return_value={"sent": 1})
@@ -808,7 +808,7 @@ class TestMobileNotificationsSend:
 class TestMobileNotificationsHistory:
     """GET /mobile/notifications/history"""
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_returns_history(self, mock_get_svc, client):
         svc = MagicMock()
         svc.get_history.return_value = [{"title": "Hi", "sent_at": 1}]
@@ -817,7 +817,7 @@ class TestMobileNotificationsHistory:
         assert resp.status_code == 200
         assert len(resp.json()["data"]["history"]) == 1
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_history_limit_validation(self, mock_get_svc, client):
         resp = client.get("/mobile/notifications/history", params={"limit": 500})
         assert resp.status_code == 422
@@ -826,7 +826,7 @@ class TestMobileNotificationsHistory:
 class TestMobileNotificationsCleanup:
     """POST /mobile/notifications/cleanup"""
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_cleans_stale_devices(self, mock_get_svc, client):
         svc = MagicMock()
         svc.cleanup_stale.return_value = 4
@@ -839,7 +839,7 @@ class TestMobileNotificationsCleanup:
 class TestMobileNotifyTrainingComplete:
     """POST /mobile/notify/training-complete"""
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_notifies_with_loss(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification.return_value = {"sent": 1}
@@ -855,7 +855,7 @@ class TestMobileNotifyTrainingComplete:
         assert payload.topic == "training"
         assert "1.5000" in payload.body
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_notifies_without_loss(self, mock_get_svc, client):
         svc = MagicMock()
         svc.send_notification.return_value = {"sent": 0}

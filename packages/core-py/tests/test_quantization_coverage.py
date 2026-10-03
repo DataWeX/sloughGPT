@@ -363,45 +363,13 @@ def test_dequantize_cached():
     assert w1.shape == (2, 16)
 
 
-class _FakeTensor:
-    def __init__(self, arr):
-        self._arr = np.asarray(arr, dtype=np.float32)
-
-    def detach(self):
-        return self
-
-    def cpu(self):
-        return self
-
-    def numpy(self):
-        return self._arr
-
-
-class _FakeTorch:
-    Tensor = _FakeTensor
-
-    @staticmethod
-    def from_numpy(arr):
-        return _FakeTensor(arr)
-
-
-def test_make_torch_forward_invoked(monkeypatch):
-    monkeypatch.setitem(sys.modules, "torch", _FakeTorch())
+def test_call_delegates_to_forward_numpy():
     ql = _make_ql()
-    fwd = ql.make_torch_forward()
-    out = fwd(_FakeTensor(np.ones((2, 16))))
-    assert isinstance(out, _FakeTensor)
-    assert out.numpy().shape == (2, 2)
+    x = np.ones((2, 16), dtype=np.float32)
+    assert np.array_equal(ql(x), ql.forward_numpy(x))
 
 
-def test_call_torch_tensor(monkeypatch):
-    monkeypatch.setitem(sys.modules, "torch", _FakeTorch())
-    ql = _make_ql()
-    out = ql(_FakeTensor(np.ones((2, 16))))
-    assert isinstance(out, _FakeTensor)
-
-
-def test_call_numpy_forward_without_torch():
+def test_call_forward_numpy():
     ql = _make_ql()
     out = ql(np.ones((2, 16), dtype=np.float32))
     assert isinstance(out, np.ndarray)

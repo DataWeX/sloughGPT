@@ -2,6 +2,8 @@
 Health Schemas - Data models for health endpoints
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -36,3 +38,4 @@ class LivenessResponse(BaseModel):
 
 class ReadinessResponse(BaseModel):
     status: str
+

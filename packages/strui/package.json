@@ -33,7 +33,9 @@
     "lint": "eslint src/",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "tokens:build": "node scripts/gen-tokens.mjs",
+    "tokens:check": "node scripts/gen-tokens.mjs --check"
   },
   "dependencies": {
     "class-variance-authority": "^0.7.1",
@@ -42,7 +44,7 @@
     "zustand": "^4.3.0"
   },
   "devDependencies": {
-    "@sloughgpt/eslint-config": "workspace:*",
+    "@sloughgpt/eslint-config": "file:../eslint-config",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.10.0",

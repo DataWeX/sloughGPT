@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from schemas.common import raise_error
 
 from domain.shared import find_repo_root
+from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
 from .helpers import _finish_job, _run_async
@@ -62,7 +63,7 @@ async def train_from_feedback(
     lora_alpha = req.lora_alpha
 
     try:
-        from domain.feedback import FeedbackTrainer
+        from domain.feedback._internal.training import FeedbackTrainer
 
         trainer = FeedbackTrainer()
 
@@ -138,24 +139,22 @@ async def train_from_feedback(
 
         def run_feedback_training(job_id_: str = jid):
             try:
-                from domain.training import get_training_engine
+                from domain.training._internal.train_pipeline import SloughGPTTrainer
 
-                trainer = get_training_engine().build_trainer(
-                    {
-                        "data_path": data_path,
-                        "n_embed": n_embed,
-                        "n_layer": n_layer,
-                        "n_head": n_head,
-                        "block_size": block_size,
-                        "epochs": epochs,
-                        "batch_size": batch_size,
-                        "lr": learning_rate,
-                        "use_lora": use_lora,
-                        "lora_rank": lora_rank,
-                        "lora_alpha": lora_alpha,
-                        "checkpoint_dir": "models",
-                        "checkpoint_interval": 100,
-                    }
+                trainer = SloughGPTTrainer(
+                    data_path=data_path,
+                    n_embed=n_embed,
+                    n_layer=n_layer,
+                    n_head=n_head,
+                    block_size=block_size,
+                    epochs=epochs,
+                    batch_size=batch_size,
+                    lr=learning_rate,
+                    use_lora=use_lora,
+                    lora_rank=lora_rank,
+                    lora_alpha=lora_alpha,
+                    checkpoint_dir="models",
+                    checkpoint_interval=100,
                 )
 
                 def on_progress(info: dict) -> None:
@@ -234,9 +233,8 @@ async def train_from_feedback(
                         "Feedback training failure webhook failed: %s: %s", jid, webhook_exc
                     )
 
-        from domain.training import get_training_engine
-
-        get_training_engine().executor_submit(run_feedback_training, jid)
+        executor = get_training_executor()
+        executor.submit(run_feedback_training, jid)
 
         safe_out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in out_stem)[:120]
         return {

@@ -9,6 +9,8 @@ Usage:
     source ~/.android-sdk-env   # after first run
 """
 
+from __future__ import annotations
+
 import subprocess
 import sys
 import zipfile
@@ -173,3 +175,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

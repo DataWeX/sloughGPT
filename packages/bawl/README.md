@@ -24,11 +24,18 @@ bawl cat < data.jsonl                 # read + print text
 
 ```python
 from bawl import (
-    fetch, parse, parse_html,           # single page
-    save, load, dumps, loads,           # JSONL
-    dumps_json_array, save_json_array,  # JSON array
-    crawl, crawl_urls,                  # crawling
-    parse_sitemap,                      # sitemaps
+    fetch,
+    parse,
+    parse_html,  # single page
+    save,
+    load,
+    dumps,
+    loads,  # JSONL
+    dumps_json_array,
+    save_json_array,  # JSON array
+    crawl,
+    crawl_urls,  # crawling
+    parse_sitemap,  # sitemaps
 )
 
 # single page
@@ -39,9 +46,14 @@ print(page.title, len(page.text))
 pages = crawl("https://docs.python.org/3/", depth=2, max_pages=10, workers=8)
 
 # content dedup, include/exclude filters, live progress
-pages = crawl("https://site.com", depth=2, dedup=True,
-              include=["*.html"], exclude=["*print*"],
-              on_page=lambda p: ...)
+pages = crawl(
+    "https://site.com",
+    depth=2,
+    dedup=True,
+    include=["*.html"],
+    exclude=["*print*"],
+    on_page=lambda p: ...,
+)
 
 # fetch URL list concurrently
 pages = crawl_urls(["https://a.com", "https://b.com"], workers=5)
@@ -55,7 +67,7 @@ for url in urls[:10]:
 save_json_array(pages, path="output.json")
 
 # pipe-friendly
-save(page)                                  # → stdout JSONL
+save(page)  # → stdout JSONL
 for p in load("data.jsonl"):
     print(p.text[:200])
 ```

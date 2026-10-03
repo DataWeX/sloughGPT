@@ -4,6 +4,8 @@ Self-training loop: Model talks to itself overnight.
 GPT-2 generates → that becomes input → generate again → repeat
 """
 
+from __future__ import annotations
+
 import sys
 import time
 from pathlib import Path
@@ -92,3 +94,4 @@ self_train(
     max_new_tokens=args.max_tokens,
     forever=args.forever,
 )
+

@@ -20,9 +20,7 @@ router = APIRouter(tags=["training-builds"])
 @router.get("/training/builds")
 async def list_builds():
     """List all training builds (checkpoints + fine-tuned models + LoRA adapters)."""
-    from domain.training import get_training_engine
-
-    _engine = get_training_engine()
+    from domain.training._internal.service import load_lora_soul, load_soul
 
     _repo_root = find_repo_root(Path(__file__).resolve())
     _checkpoints_dir = _repo_root / "models" / "auto-training"
@@ -38,7 +36,7 @@ async def list_builds():
             if f.name in seen:
                 continue
             seen.add(f.name)
-            info = _engine.load_soul(f.name)
+            info = load_soul(f.name)
             if info:
                 info["build_type"] = "auto-train"
                 builds.append(info)
@@ -51,7 +49,7 @@ async def list_builds():
         if f.name in seen:
             continue
         seen.add(f.name)
-        info = _engine.load_soul(f.name)
+        info = load_soul(f.name)
         if info:
             info["build_type"] = "trained"
             builds.append(info)
@@ -61,7 +59,7 @@ async def list_builds():
         if npz.name in seen:
             continue
         seen.add(npz.name)
-        info = _engine.load_lora_soul(npz.name)
+        info = load_lora_soul(npz.name)
         if info:
             info["build_type"] = "lora"
             builds.append(info)

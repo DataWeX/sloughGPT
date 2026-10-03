@@ -8,6 +8,8 @@ Usage:
     python scripts/benchmark_ml_types.py
 """
 
+from __future__ import annotations
+
 import time
 
 
@@ -178,3 +180,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

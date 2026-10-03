@@ -5,6 +5,8 @@ Provides visual feedback for long-running operations.
 Uses raw ANSI escape codes for terminal-formatted progress bars with ETA, speed, and color.
 """
 
+from __future__ import annotations
+
 import sys
 import threading
 import time
@@ -210,3 +212,4 @@ def progress_iter(
             bar.update()
     finally:
         bar.finish()
+

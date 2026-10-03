@@ -10,7 +10,7 @@ class TestGenericCore:
     """Tests for the generic core library."""
 
     def test_site_config_creation(self):
-        from domain.testing import SiteConfig
+        from testing import SiteConfig
 
         config = SiteConfig(
             name="Test App",
@@ -20,7 +20,7 @@ class TestGenericCore:
         assert config.base_url == "http://localhost:3000"
 
     def test_page_creation(self):
-        from domain.testing import Page
+        from testing import Page
 
         page = Page(
             name="Home",
@@ -32,7 +32,7 @@ class TestGenericCore:
         assert len(page.checks) == 2
 
     def test_create_site_config(self):
-        from domain.testing import create_site_config
+        from testing import create_site_config
 
         config = create_site_config(
             name="My App",
@@ -47,14 +47,14 @@ class TestGenericCore:
         assert "home" in config.pages
 
     def test_journey_creation(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
         assert journey.config.name == "Test"
 
     def test_journey_run(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -68,7 +68,7 @@ class TestGenericCore:
         assert result.passed_count == 2
 
     def test_journey_report(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -78,14 +78,14 @@ class TestGenericCore:
         assert "Journey Test Report" in report
 
     def test_step_result(self):
-        from domain.testing import StepResult
+        from testing import StepResult
 
         result = StepResult(name="test", passed=True, detail="ok")
         assert result.passed
         assert result.name == "test"
 
     def test_journey_result_to_dict(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -100,61 +100,61 @@ class TestAssertions:
     """Tests for assertion helpers."""
 
     def test_assert_page_loads(self):
-        from domain.testing import assert_page_loads
+        from testing import assert_page_loads
 
         result = assert_page_loads("x" * 100)
         assert result.passed
 
     def test_assert_page_loads_short(self):
-        from domain.testing import assert_page_loads
+        from testing import assert_page_loads
 
         result = assert_page_loads("short")
         assert not result.passed
 
     def test_assert_body_contains(self):
-        from domain.testing import assert_body_contains
+        from testing import assert_body_contains
 
         result = assert_body_contains("Hello World", "World")
         assert result.passed
 
     def test_assert_body_contains_case_insensitive(self):
-        from domain.testing import assert_body_contains
+        from testing import assert_body_contains
 
         result = assert_body_contains("Hello World", "hello")
         assert result.passed
 
     def test_assert_no_errors(self):
-        from domain.testing import assert_no_errors
+        from testing import assert_no_errors
 
         result = assert_no_errors([], [])
         assert result.passed
 
     def test_assert_no_errors_with_errors(self):
-        from domain.testing import assert_no_errors
+        from testing import assert_no_errors
 
         result = assert_no_errors(["error1"], [])
         assert not result.passed
 
     def test_assert_element_exists(self):
-        from domain.testing import assert_element_exists
+        from testing import assert_element_exists
 
         result = assert_element_exists("button", True)
         assert result.passed
 
     def test_assert_element_not_exists(self):
-        from domain.testing import assert_element_exists
+        from testing import assert_element_exists
 
         result = assert_element_exists("button", False)
         assert not result.passed
 
     def test_assert_api_healthy(self):
-        from domain.testing import assert_api_healthy
+        from testing import assert_api_healthy
 
         result = assert_api_healthy(200)
         assert result.passed
 
     def test_assert_api_unhealthy(self):
-        from domain.testing import assert_api_healthy
+        from testing import assert_api_healthy
 
         result = assert_api_healthy(500)
         assert not result.passed
@@ -164,7 +164,7 @@ class TestStepBuilder:
     """Tests for step builder."""
 
     def test_goto_step(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -174,7 +174,7 @@ class TestStepBuilder:
         assert "training" in result.detail
 
     def test_wait_for_step(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -183,7 +183,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_check_body_step(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -192,7 +192,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_click_button_step(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -201,7 +201,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_check_api_step(self):
-        from domain.testing import Journey, SiteConfig
+        from testing import Journey, SiteConfig
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -210,7 +210,7 @@ class TestStepBuilder:
         assert result.passed
 
     def test_custom_step(self):
-        from domain.testing import Journey, SiteConfig, StepResult
+        from testing import Journey, SiteConfig, StepResult
 
         config = SiteConfig(name="Test", base_url="http://localhost:3000")
         journey = Journey(config)
@@ -228,28 +228,28 @@ class TestSloughGPTConfig:
     """Tests for sloughGPT-specific config."""
 
     def test_sloughgpt_site_config(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
+        from testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         assert SLOUGHPGPT_SITE.name == "sloughGPT"
         assert SLOUGHPGPT_SITE.base_url == "http://localhost:3000"
         assert len(SLOUGHPGPT_SITE.pages) > 0
 
     def test_sloughgpt_pages(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_PAGES
+        from testing._internal.sloughgpt import SLOUGHPGPT_PAGES
 
         assert "training" in SLOUGHPGPT_PAGES
         assert "chat" in SLOUGHPGPT_PAGES
         assert "datasets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_training_pages(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
+        from testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
 
         assert "queue" in SLOUGHPGPT_TRAINING_PAGES
         assert "runs" in SLOUGHPGPT_TRAINING_PAGES
         assert "presets" in SLOUGHPGPT_TRAINING_PAGES
 
     def test_sloughgpt_journey(self):
-        from domain.testing._internal.sloughgpt import SloughGPTJourney
+        from testing._internal.sloughgpt import SloughGPTJourney
 
         journey = SloughGPTJourney()
         assert journey.config.name == "sloughGPT"
@@ -259,24 +259,24 @@ class TestPrebuiltJourneys:
     """Tests for pre-built journey tests."""
 
     def test_page_journey(self):
-        from domain.testing._internal.journeys import PageJourney
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
+        from testing._internal.journeys import PageJourney
+        from testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         journey = PageJourney(SLOUGHPGPT_SITE)
         result = journey.test_page("training")
         assert result.passed
 
     def test_navigation_journey(self):
-        from domain.testing._internal.journeys import NavigationJourney
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
+        from testing._internal.journeys import NavigationJourney
+        from testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         journey = NavigationJourney(SLOUGHPGPT_SITE)
         result = journey.test_sidebar_navigation()
         assert result.passed
 
     def test_full_suite(self):
-        from domain.testing._internal.journeys import FullSuiteJourney
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_SITE
+        from testing._internal.journeys import FullSuiteJourney
+        from testing._internal.sloughgpt import SLOUGHPGPT_SITE
 
         suite = FullSuiteJourney(SLOUGHPGPT_SITE)
         results = suite.run_all()
@@ -287,27 +287,27 @@ class TestChromeDevTools:
     """Tests for ChromeDevTools integration."""
 
     def test_browser_creation(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
         assert browser.base_url == "http://localhost:3000"
 
     def test_browser_state(self):
-        from domain.testing._internal.chrome_devtools import BrowserState
+        from testing._internal.chrome_devtools import BrowserState
 
         state = BrowserState()
         assert state.page_id is None
         assert state.url == ""
 
     def test_browser_commands(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser()
         commands = browser.get_commands()
         assert isinstance(commands, list)
 
     def test_browser_report(self):
-        from domain.testing._internal.chrome_devtools import ChromeDevToolsBrowser
+        from testing._internal.chrome_devtools import ChromeDevToolsBrowser
 
         browser = ChromeDevToolsBrowser(base_url="http://localhost:3000")
         report = browser.report()

@@ -62,7 +62,7 @@ class TestTrainingStats:
 
 
 class TestNotificationHistory:
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_notification_history(self, mock_get_svc):
         svc = MagicMock()
         svc.get_history.return_value = [
@@ -80,7 +80,7 @@ class TestNotificationHistory:
         assert "history" in body
         assert len(body["history"]) == 2
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_notification_history_with_limit(self, mock_get_svc):
         svc = MagicMock()
         svc.get_history.return_value = [{"title": "Only", "body": "One", "sent_at": 1000}]
@@ -97,7 +97,7 @@ class TestNotificationHistory:
 
 
 class TestDeviceManagement:
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_list_devices(self, mock_get_svc):
         svc = MagicMock()
         svc.get_devices.return_value = [
@@ -113,7 +113,7 @@ class TestDeviceManagement:
         body = resp.json()["data"]
         assert len(body["devices"]) == 2
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_list_devices_with_topic_filter(self, mock_get_svc):
         svc = MagicMock()
         svc.get_devices.return_value = [{"token": "abc", "platform": "ios"}]
@@ -125,7 +125,7 @@ class TestDeviceManagement:
         assert resp.status_code == 200
         svc.get_devices.assert_called_once_with(topic="training")
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_register_device(self, mock_get_svc):
         svc = MagicMock()
         svc.register_device.return_value = {"status": "registered"}
@@ -145,7 +145,7 @@ class TestDeviceManagement:
         assert resp.status_code == 200
         svc.register_device.assert_called_once()
 
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_unregister_device(self, mock_get_svc):
         svc = MagicMock()
         svc.unregister_device.return_value = {"status": "unregistered"}
@@ -217,7 +217,7 @@ class TestAutoTrainStatus:
 
 
 class TestSendNotification:
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_send_notification(self, mock_get_svc):
         svc = MagicMock()
         svc.send_notification_async = AsyncMock(return_value={"sent": 5, "failed": 0})
@@ -241,7 +241,7 @@ class TestSendNotification:
 
 
 class TestCleanupDevices:
-    @patch("domain.mobile.get_notification_service")
+    @patch("services.mobile.get_notification_service")
     def test_cleanup_devices(self, mock_get_svc):
         svc = MagicMock()
         svc.cleanup_stale.return_value = 3

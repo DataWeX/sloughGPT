@@ -1,5 +1,7 @@
 "use strict"
 
+from __future__ import annotations
+
 """
 Consolidated SSE fallback utilities.
 
@@ -103,3 +105,4 @@ def _json_safe(val: Any) -> Any:
     if hasattr(val, "item"):
         return val.item()
     return val
+

@@ -6,6 +6,8 @@ Public API:
     ShellCommands, DaitRuntime, Resource, get_dait_runtime
 """
 
+from __future__ import annotations
+
 from domain.shell._internal.commands import (
     ShellCommands,
 )
@@ -60,3 +62,4 @@ __all__ = [
     "get_dait_runtime",
     "X86VirtualSystem",
 ]
+

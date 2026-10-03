@@ -53,18 +53,27 @@ def parse_frontmatter(path: Path) -> dict[str, str]:
     if not lines or lines[0].strip() != "---":
         return {}
     meta: dict[str, str] = {}
+    block: list[str] = []
     for line in lines[1:]:
         if line.strip() == "---":
             break
+        block.append(line)
         if ":" in line:
             key, _, val = line.partition(":")
             meta[key.strip()] = val.strip()
     try:
         import yaml
 
-        parsed = yaml.safe_load("\n".join(lines[1:])) or {}
+        # Parse only the frontmatter block: feeding the whole file to
+        # safe_load sees the closing ``---`` as a second document, throws
+        # on every note, and silently leaves the raw (still-quoted) values
+        # above — which made quoted titles never match a card title.
+        # Only YAML string values are adopted: quoting is resolved there,
+        # while non-scalar parses (dates, underscore ints, lists) keep the
+        # byte-exact raw line value verify compares against.
+        parsed = yaml.safe_load("\n".join(block)) or {}
         if isinstance(parsed, dict):
-            meta.update({str(k): "" if v is None else str(v) for k, v in parsed.items()})
+            meta.update({str(k): v for k, v in parsed.items() if isinstance(v, str)})
     except Exception:
         pass
     return meta

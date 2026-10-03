@@ -4,6 +4,8 @@ Uses MogDB as the storage engine with automatic JSON sync.
 File metadata is stored in MogDB and synced to JSON for human readability.
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
@@ -440,3 +442,4 @@ class FilesRouter:
 
 
 router = FilesRouter().router
+

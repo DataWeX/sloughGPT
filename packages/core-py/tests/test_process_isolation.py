@@ -20,6 +20,8 @@ pytestmark = pytest.mark.slow
 from typing import Any
 from unittest.mock import MagicMock
 
+from domain.infrastructure._internal.model_config import ExecutionMode
+
 # Path so spawned subprocess can import tests.helpers.fake_model
 
 _test_helpers_dir = os.path.join(os.path.dirname(__file__), "helpers")
@@ -109,7 +111,7 @@ def _fake_slo_worker_main(
 
 # ── Spawned worker mains for start() failure paths ───────────────────────
 # Pickled by reference into the child process (same mechanism as the fake
-# SloNet worker above), so they never need a real model or torch.
+# SloNet worker above), so they never need a real model.
 
 
 def _dead_worker_main(
@@ -619,6 +621,7 @@ class TestProcessGuard:
     GUARD_KWARGS = {
         "model_cls_path": "fake_model.FakeTestModel",
         "model_kwargs": {"reply": "guarded hello"},
+        "mode": ExecutionMode.SUBPROCESS,
         "worker_id": "test-guard",
         "generate_timeout": 5.0,
         "max_restarts": 2,
@@ -820,27 +823,22 @@ class TestProcessGuard:
 class TestModelServerWithGuard:
     @pytest.fixture
     def model_server_with_guard(self):
-        pytest.importorskip("torch")
-        import torch
-
         from domain.infrastructure._internal.model_server import ModelServer
         from domain.infrastructure._internal.process_guard import ProcessGuard
 
         mock_model = MagicMock()
-        mock_model.generate.return_value = torch.zeros(1, 10, dtype=torch.long)
-        mock_model.device = "cpu"
-
         mock_tokenizer = MagicMock()
         mock_tokenizer.pad_token_id = 0
         mock_tokenizer.eos_token_id = 0
+
         inputs_mock = MagicMock()
-        inputs_mock.__getitem__.return_value = torch.zeros(1, 5, dtype=torch.long)
         inputs_mock.get.return_value = None
         mock_tokenizer.return_value = inputs_mock
 
         guard = ProcessGuard(
             model_cls_path="fake_model.FakeTestModel",
             model_kwargs={"reply": "process isolated"},
+            mode=ExecutionMode.SUBPROCESS,
             worker_id="test-isolated",
             generate_timeout=5.0,
             max_restarts=1,

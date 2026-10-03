@@ -5,6 +5,8 @@ renders a prompt from the core tools domain and streams tokens through
 the default inference provider.
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 from collections.abc import AsyncIterator
@@ -161,3 +163,4 @@ class ToolsRouter:
 
 
 router = ToolsRouter().router
+
