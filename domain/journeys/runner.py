@@ -5,6 +5,7 @@ Usage:
     .venv/bin/python -m domain.journeys --flow 2-write
     .venv/bin/python -m domain.journeys --list
     .venv/bin/python -m domain.journeys --strict-errors
+    .venv/bin/python -m domain.journeys --dry-run          # step plans, no browser
 
 Env:
     SLO_WEB_URL         default http://localhost:3000 (matches scripts/dev-stack.sh)
@@ -50,6 +51,13 @@ def _http_ok(url: str, timeout: float = 5) -> bool:
             return 200 <= r.status < 300
     except Exception:
         return False
+
+
+def describe_steps(flow: Flow) -> list[str]:
+    """Step names for a flow, in order (optional steps marked)."""
+    return [
+        f"{s.name}{' (optional)' if getattr(s, 'optional', False) else ''}" for s in flow.build()
+    ]
 
 
 async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
@@ -157,6 +165,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="skip the API health gate (run web-only journeys when the LLM API is down)",
     )
+    ap.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print each journey's step plan without launching a browser",
+    )
     args = ap.parse_args(argv)
 
     if args.list:
@@ -171,6 +184,17 @@ def main(argv: list[str] | None = None) -> int:
         if not flows:
             print(f"no flows match {sorted(wanted)}")
             return 2
+
+    if args.dry_run:
+        for f in flows:
+            print(f"[{f.id}] {f.label}")
+            print(f"   url:  {f.url}")
+            print(f"   spec: {f.spec}")
+            for i, name in enumerate(describe_steps(f), 1):
+                print(f"   {i:2d}. {name}")
+            print()
+        print(f"dry-run: {len(flows)} journeys planned, no browser launched")
+        return 0
 
     if not args.web_only:
         if not _http_ok(f"{API}/health"):

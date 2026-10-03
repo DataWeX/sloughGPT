@@ -43,6 +43,18 @@ def test_flows_build_without_errors():
         assert steps, f"{flow.id} built zero steps"
 
 
+def test_describe_steps_names_and_optional_markers():
+    from domain.journeys.runner import describe_steps
+
+    for flow in FLOWS:
+        names = describe_steps(flow)
+        assert names, f"{flow.id}: describe_steps returned empty"
+        assert all(isinstance(n, str) and n for n in names), f"{flow.id}: non-string step name"
+
+    assert any("optional" in n for n in describe_steps(get_flow("12-training")))
+    assert describe_steps(get_flow("0-home"))[0] == "goto /"
+
+
 def test_list_flows_preserves_registry_order():
     assert [f.id for f in list_flows()] == [f.id for f in FLOWS]
 
