@@ -1249,7 +1249,8 @@ class TestEngineRun:
         engine.branch("t", [p])
         result = engine.wait_for(p.id, timeout=0.01)
         engine.stop()
-        assert result.status != ProcessStatus.COMPLETED
+        # None is the timeout signal — same contract wait_for_any uses.
+        assert result is None
 
     def test_wait_for_any(self):
         engine = Engine("test")

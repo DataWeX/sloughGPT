@@ -741,7 +741,8 @@ class TestProcessDependencies:
         p = engine.spawn(time.sleep, 60, name="long")
         result = engine.wait_for(p.id, timeout=0.1)
 
-        assert result.status != ProcessStatus.COMPLETED
+        # None is the timeout signal — same contract wait_for_any uses.
+        assert result is None
         engine.stop()
 
     def test_wait_for_keyerror(self):
@@ -985,7 +986,7 @@ class TestProcessGroup:
 
     def test_group_no_engine_raises(self):
         g = ProcessGroup(name="orphan")
-        with pytest.raises(RuntimeError, match="not attached"):
+        with pytest.raises(RuntimeError, match="No engine attached"):
             g.spawn(_noop)
 
     def test_group_elapsed(self):
@@ -1183,17 +1184,18 @@ class TestCancelManagerIntegration:
         engine.stop()
         assert proc.is_cancelled
 
-    def test_cancel_manager_deregister(self):
+    def test_register_cancel_stays_library_local(self):
+        """PGQ is a general-purpose library: register_cancel is a local hook
+        (ProcessMonitor tracking) and must not leak into the app's CancelManager."""
         engine = Engine("test")
         engine.pool("t")
         proc = engine.spawn(_noop, name="deregister-test", register_cancel=True)
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
-        # After completion, process should still be tracked by CancelManager
         from domain.infrastructure._internal.cancel_manager import get_cancel_manager
 
         mgr = get_cancel_manager()
-        assert mgr.get(proc.id) is not None
+        assert mgr.get(proc.id) is None
         engine.stop()
 
     def test_spawn_without_register_cancel(self):

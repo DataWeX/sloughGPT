@@ -190,7 +190,7 @@ class Process:
 
     @property
     def stream_results(self) -> list[Any]:
-        return self._stream_results
+        return list(self._stream_results)
 
     @property
     def progress(self) -> float:
@@ -521,6 +521,7 @@ class GuardPool(Pool):
             "subprocess_enabled": self.subprocess_config is not None
             and self.subprocess_config.enabled,
             "subprocess_count": self.subprocess_count,
+            "active_subprocesses": self.subprocess_count,
         }
 
 
@@ -1051,6 +1052,7 @@ class ProcessGroup:
         self.engine = engine
         self._processes: list[Process] = []
         self._done_event = threading.Event()
+        self._created = time.time()
 
     def add(self, proc: Process) -> None:
         self._processes.append(proc)
@@ -1075,7 +1077,8 @@ class ProcessGroup:
         starts = [p.started_at for p in self._processes if p.started_at]
         ends = [p.completed_at or time.time() for p in self._processes]
         if not starts:
-            return 0.0
+            # No member has run yet: the group's age is its elapsed time.
+            return time.time() - self._created
         return max(ends) - min(starts)
 
     def results(self) -> list[Any]:
@@ -1874,6 +1877,7 @@ class Engine:
             "process_count": len(self._processes),
             "pending": len(self._pending),
             "completed": len(self._completed),
+            "pools": {n: p.to_dict() for n, p in self._pools.items()},
             "status_counts": {
                 s.value: sum(1 for p in self._processes.values() if p.status == s)
                 for s in ProcessStatus
