@@ -38,12 +38,33 @@ class ToolParam:
 
 @dataclass
 class ToolSpec:
+    """Single source of truth for a capability.
+
+    ``parameters`` is the stored contract; ``params`` derives the JSON Schema
+    view from it (never stored separately — one declaration, two views).
+    """
+
     name: str
     description: str
     parameters: list[ToolParam]
     execute: Callable[..., Coroutine[Any, Any, dict[str, Any]]]
     pattern: re.Pattern | None = None
     requires_approval: bool = False
+    result: dict[str, Any] | None = None
+    auth_scope: str = "public"
+    idempotent: bool = False
+    version: str = "1"
+
+    @property
+    def params(self) -> dict[str, Any]:
+        """JSON Schema projection of ``parameters`` for model/OpenAPI callers."""
+        return {
+            "type": "object",
+            "properties": {
+                p.name: {"type": p.type, "description": p.description} for p in self.parameters
+            },
+            "required": [p.name for p in self.parameters if p.required],
+        }
 
 
 @dataclass
@@ -221,7 +242,11 @@ class ToolRegistry:
                     }
                     for p in t.parameters
                 ],
+                "params": t.params,
                 "requires_approval": t.requires_approval,
+                "auth_scope": t.auth_scope,
+                "idempotent": t.idempotent,
+                "version": t.version,
             }
             for t in self._tools.values()
         ]

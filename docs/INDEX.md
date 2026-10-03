@@ -24,6 +24,7 @@ Single source of truth for navigation. Read this first.
 | **TRAINING_REFACTOR_PLAN.md** | Consolidating training loops |
 | **process-guard-architecture.md** | Process isolation design |
 | **PRODUCER_CONSUMER_QUEUE.md** | Queue pattern |
+| **PUGQEEP.md** | PGQ: points, pools, Pipe |
 
 ## Features
 
