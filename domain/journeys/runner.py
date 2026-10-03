@@ -7,7 +7,7 @@ Usage:
     .venv/bin/python -m domain.journeys --strict-errors
 
 Env:
-    SLO_WEB_URL         default http://localhost:5175
+    SLO_WEB_URL         default http://localhost:3000 (matches scripts/dev-stack.sh)
     SLO_API_URL         default http://localhost:8000
     SLO_JOURNEY_BROWSER firefox (default) | chromium
     SLO_JOURNEY_SHOTS   screenshot dir (default ~/.cache/slog-journeys/shots/ux)
@@ -26,7 +26,7 @@ from typing import Any
 
 from domain.journeys.flows import FLOWS, Flow
 
-WEB = os.environ.get("SLO_WEB_URL", "http://localhost:5175")
+WEB = os.environ.get("SLO_WEB_URL", "http://localhost:3000")
 API = os.environ.get("SLO_API_URL", "http://localhost:8000")
 BROWSER = os.environ.get("SLO_JOURNEY_BROWSER", "firefox")
 _SHOTS_DEFAULT = os.path.join(
@@ -150,6 +150,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--list", action="store_true", help="list flow ids and exit")
     ap.add_argument("--headed", action="store_true", help="show the browser window")
     ap.add_argument("--strict-errors", action="store_true", help="fail on console/network errors")
+    ap.add_argument(
+        "--web-only",
+        action="store_true",
+        help="skip the API health gate (run web-only journeys when the LLM API is down)",
+    )
     args = ap.parse_args(argv)
 
     if args.list:
@@ -165,11 +170,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"no flows match {sorted(wanted)}")
             return 2
 
-    if not _http_ok(f"{API}/health"):
-        print(f"API not reachable at {API}/health — start uvicorn first")
-        return 2
+    if not args.web_only:
+        if not _http_ok(f"{API}/health"):
+            print(f"API not reachable at {API}/health — start uvicorn first (or pass --web-only)")
+            return 2
     if not _http_ok(f"{WEB}/"):
-        print(f"web not reachable at {WEB} — start vite first")
+        print(f"web not reachable at {WEB} — start the web dev server first")
         return 2
 
     return asyncio.run(run(flows, headed=args.headed, strict_errors=args.strict_errors))
