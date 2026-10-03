@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``testing`` package."""
+"""UI Journey Testing Library — public API."""
 
-from testing import (
+from testing._internal.testing import (
     Browser,
     Journey,
     JourneyResult,
@@ -17,17 +17,17 @@ from testing import (
 )
 
 __all__ = [
-    "StepResult",
-    "JourneyResult",
     "Page",
     "SiteConfig",
-    "Browser",
-    "Step",
+    "StepResult",
+    "JourneyResult",
     "Journey",
+    "Step",
+    "Browser",
+    "create_site_config",
     "assert_page_loads",
     "assert_body_contains",
     "assert_no_errors",
     "assert_element_exists",
     "assert_api_healthy",
-    "create_site_config",
 ]

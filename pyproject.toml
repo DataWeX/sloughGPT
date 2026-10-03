@@ -82,7 +82,7 @@ Documentation = "https://github.com/iamtowbee/sloughGPT#readme"
 Repository = "https://github.com/iamtowbee/sloughGPT"
 
 [tool.setuptools]
-package-dir = {"" = "packages/core-py", "apps" = "apps"}
+package-dir = {"" = "packages/core-py", "apps" = "apps", "domain" = "domain", "services" = "services", "testing" = "testing"}
 include-package-data = true
 
 [tool.setuptools.package-data]
@@ -91,7 +91,7 @@ apps = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 
 [tool.setuptools.packages.find]
 where = ["packages/core-py", "packages", "."]
-include = ["domains*", "utils*", "apps*", "memory*"]
+include = ["domain*", "domains*", "utils*", "apps*", "memory*", "services*", "testing*"]
 exclude = ["tests*", "apps.web*"]
 
 [tool.black]
@@ -131,7 +131,9 @@ python_functions = ["test_*"]
 asyncio_mode = "auto"
 
 [tool.coverage.run]
-source = ["packages/core-py", "domain"]
+# `services` and `testing` live at repo root like `domain`; without them the
+# code moved out of `domain/` would silently vanish from the report.
+source = ["packages/core-py", "domain", "services", "testing"]
 omit = ["*/tests/*", "*/test_*"]
 
 [tool.coverage.report]

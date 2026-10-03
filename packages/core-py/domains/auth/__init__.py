@@ -1,6 +1,6 @@
-"""Backward-compatibility shim — imports from the new ``domain.auth`` package."""
+"""Backward-compatibility shim — imports from the new ``services.auth`` package."""
 
-from domain.auth import (
+from services.auth import (
     RBAC,
     Permission,
     Role,

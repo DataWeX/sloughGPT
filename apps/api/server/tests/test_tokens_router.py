@@ -43,7 +43,7 @@ def client(app):
 
 class TestBalance:
     def test_get_balance(self, client, mock_service):
-        from domain.billing._internal.token_service import Tier, TokenAccount
+        from services.billing._internal.token_service import Tier, TokenAccount
 
         account = TokenAccount(user_id="user1", balance=5000, tier=Tier.PRO)
         mock_service.get_balance.return_value = account
@@ -73,7 +73,7 @@ class TestUsageSummary:
 
 class TestUsageHistory:
     def test_get_usage_history(self, client, mock_service):
-        from domain.billing._internal.token_service import UsageRecord
+        from services.billing._internal.token_service import UsageRecord
 
         record = UsageRecord(
             id="r1",
@@ -104,7 +104,7 @@ class TestUsageHistory:
 
 class TestTopup:
     def test_topup_success(self, client, mock_service):
-        from domain.billing._internal.token_service import Tier, TokenAccount
+        from services.billing._internal.token_service import Tier, TokenAccount
 
         account = TokenAccount(user_id="user1", balance=6000, tier=Tier.FREE)
         mock_service.add_credits.return_value = account
@@ -122,7 +122,7 @@ class TestTopup:
 
 class TestUpgrade:
     def test_upgrade_success(self, client, mock_service):
-        from domain.billing._internal.token_service import Tier, TokenAccount
+        from services.billing._internal.token_service import Tier, TokenAccount
 
         account = TokenAccount(user_id="user1", balance=5000, tier=Tier.PRO)
         mock_service.upgrade_tier.return_value = account
@@ -140,7 +140,7 @@ class TestUpgrade:
 
 class TestCheck:
     def test_check_can_afford(self, client, mock_service):
-        from domain.billing._internal.token_service import Tier, TokenAccount
+        from services.billing._internal.token_service import Tier, TokenAccount
 
         account = TokenAccount(user_id="user1", balance=10000, tier=Tier.PRO)
         mock_service.get_balance.return_value = account
@@ -158,7 +158,7 @@ class TestCheck:
         assert data["totalTokens"] == 150
 
     def test_check_cannot_afford(self, client, mock_service):
-        from domain.billing._internal.token_service import Tier, TokenAccount
+        from services.billing._internal.token_service import Tier, TokenAccount
 
         account = TokenAccount(user_id="user1", balance=10, tier=Tier.FREE)
         mock_service.get_balance.return_value = account

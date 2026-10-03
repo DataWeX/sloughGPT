@@ -1,6 +1,10 @@
-"""Backward-compatibility shim — imports from the new ``services.billing`` package."""
+"""billing — Token billing, usage tracking, credit management.
 
-from services.billing import (
+Public API:
+    get_token_billing_service, TokenBillingService, TokenAccount, UsageRecord, Tier, TIER_LIMITS, MODEL_PRICING
+"""
+
+from services.billing._internal.token_service import (
     MODEL_PRICING,
     TIER_LIMITS,
     Tier,

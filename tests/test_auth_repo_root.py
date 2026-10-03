@@ -2,8 +2,8 @@
 
 The auth store is written by ``apps.api.server.routers.auth`` (repo root =
 ``apps/api/server/routers`` + 4 parents) and read by
-``domain.auth._internal.repositories``. A hand-rolled depth of 4 parents from
-``domain/auth/_internal`` landed one directory ABOVE the repo, so
+``services.auth._internal.repositories``. A hand-rolled depth of 4 parents from
+``services/auth/_internal`` landed one directory ABOVE the repo, so
 ``UserRepository.get()`` always returned None and every workspaces/users/
 tenants endpoint that needs an identity answered 404 "User not found".
 """
@@ -13,13 +13,13 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from domain.auth._internal import repositories
+from services.auth._internal import repositories
 
 _TRUE_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_repo_root_is_the_real_repo_root() -> None:
-    # domain/auth/_internal/repositories.py -> parents[3] == repo root
+    # services/auth/_internal/repositories.py -> parents[3] == repo root
     expected = Path(repositories.__file__).resolve().parents[3]
     assert repositories._REPO_ROOT == expected, (
         f"_REPO_ROOT resolved to {repositories._REPO_ROOT}, expected {expected}"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from domain.billing._internal.token_service import (
+from services.billing._internal.token_service import (
     MODEL_PRICING,
     TIER_LIMITS,
     Tier,

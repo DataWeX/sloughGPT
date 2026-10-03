@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from infrastructure.auth import require_auth_if_enabled
 from infrastructure.exception_handlers import register_app_error_handler
 
-from domain.auth._internal.models import Role, User, UserRole
+from services.auth._internal.models import Role, User, UserRole
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 

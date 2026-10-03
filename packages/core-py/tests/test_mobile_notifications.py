@@ -1,10 +1,10 @@
-"""Tests for domain.mobile.notifications — DeviceToken, NotificationPayload,
+"""Tests for services.mobile.notifications — DeviceToken, NotificationPayload,
 PushNotificationService with MogDB persistence."""
 
 import time
 from unittest.mock import MagicMock, patch
 
-from domain.mobile._internal.notifications import (
+from services.mobile._internal.notifications import (
     DeviceToken,
     NotificationPayload,
     PushNotificationService,
@@ -721,7 +721,7 @@ class TestNotificationServiceSingleton:
         old = mod._service
         try:
             mod._service = None
-            from domain.mobile._internal.notifications import get_notification_service
+            from services.mobile._internal.notifications import get_notification_service
 
             svc1 = get_notification_service()
             svc2 = get_notification_service()

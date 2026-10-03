@@ -18,13 +18,13 @@ from __future__ import annotations
 
 import pytest
 
-from domain.testing._internal.journeys import (
+from testing._internal.journeys import (
     APIJourney,
     FullSuiteJourney,
     NavigationJourney,
     PageJourney,
 )
-from domain.testing._internal.sloughgpt import (
+from testing._internal.sloughgpt import (
     SLOUGHPGPT_API_ENDPOINTS,
     SLOUGHPGPT_PAGES,
     SLOUGHPGPT_SITE,

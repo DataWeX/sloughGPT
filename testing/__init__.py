@@ -1,6 +1,11 @@
-"""Backward-compatibility shim — imports from the new ``testing`` package."""
+"""testing — UI journey testing library.
 
-from testing import (
+Public API:
+    StepResult, JourneyResult, Page, SiteConfig, Browser, Step, Journey
+    assert_page_loads, assert_body_contains, assert_no_errors, create_site_config
+"""
+
+from testing._internal.testing import (
     Browser,
     Journey,
     JourneyResult,

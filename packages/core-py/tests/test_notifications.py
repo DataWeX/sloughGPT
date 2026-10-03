@@ -1,10 +1,10 @@
-"""Tests for domain.mobile._internal.notifications: device tokens and Expo push service."""
+"""Tests for services.mobile._internal.notifications: device tokens and Expo push service."""
 
 import time
 
 import pytest
 
-from domain.mobile._internal.notifications import (
+from services.mobile._internal.notifications import (
     DeviceToken,
     NotificationPayload,
     PushNotificationService,
@@ -293,8 +293,8 @@ class TestPersistence:
 
 class TestSingleton:
     def test_get_service_singleton(self, monkeypatch):
-        monkeypatch.setattr("domain.mobile._internal.notifications._service", None)
+        monkeypatch.setattr("services.mobile._internal.notifications._service", None)
         s1 = get_notification_service()
         s2 = get_notification_service()
         assert s1 is s2
-        monkeypatch.setattr("domain.mobile._internal.notifications._service", None)
+        monkeypatch.setattr("services.mobile._internal.notifications._service", None)

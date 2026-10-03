@@ -1,4 +1,4 @@
-"""Comprehensive tests for domain.billing.token_service — pure logic only."""
+"""Comprehensive tests for services.billing.token_service — pure logic only."""
 
 import os
 import sys
@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from domain.billing._internal.token_service import (
+from services.billing._internal.token_service import (
     MODEL_PRICING,
     TIER_LIMITS,
     Tier,
