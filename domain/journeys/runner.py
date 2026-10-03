@@ -81,8 +81,9 @@ async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
             json.dump(report, f, indent=2)
         return report
 
-    async with Avion(base_url=WEB) as a:
-        await a.start(backend)
+    a = Avion(base_url=WEB)
+    await a.start(backend)
+    try:
         page = backend.page
         page.on(
             "console",
@@ -126,6 +127,7 @@ async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
         except Exception:
             pass
 
+    finally:
         await a.stop()
 
     report = persist()
