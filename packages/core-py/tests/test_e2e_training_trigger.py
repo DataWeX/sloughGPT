@@ -8,6 +8,7 @@ Usage:
     scripts/python -m pytest tests/test_e2e_training_trigger.py -x -v -s
 """
 
+import asyncio
 import json
 import os
 import time
@@ -78,7 +79,14 @@ class TestE2ETrainingTrigger:
     async def test_navigate_to_training_and_check_ui(self, agent):
         """Navigate to training page and verify UI elements exist."""
         result = await agent.navigate("/training")
-        body = await agent.get_body_text()
+        # Poll instead of one snapshot: under machine load (load avg >7 during
+        # gate runs) the SPA can still be hydrating when the first read lands.
+        body = ""
+        for _ in range(20):
+            body = await agent.get_body_text()
+            if len(body) > 100 and "train" in body.lower():
+                break
+            await asyncio.sleep(0.5)
 
         checks = {
             "page_loaded": result.status == 200,
@@ -114,9 +122,17 @@ class TestE2ETrainingTrigger:
         await agent.navigate("/training")
         time.sleep(2)
 
+        # Retry under load: the page can still be hydrating when a fixed
+        # sleep ends. Train stays disabled without a dataset, so retries
+        # never actually start a job.
         btn = await agent.click_button("Train")
-        if not btn.found:
-            btn = await agent.click_button("Start")
+        for _ in range(10):
+            if btn.found:
+                break
+            await asyncio.sleep(1)
+            btn = await agent.click_button("Train")
+            if not btn.found:
+                btn = await agent.click_button("Start")
 
         ok("e2e_training_start_button", btn.found, f"found={btn.found}")
         assert btn.found
@@ -126,12 +142,16 @@ class TestE2ETrainingTrigger:
         await agent.navigate("/datasets")
         time.sleep(1)
 
-        import_btn = await agent.click_button("Import")
+        import_btn = await agent.click_button("Add file")
         ok("e2e_datasets_import_button", import_btn.found)
         assert import_btn.found
 
-        time.sleep(1)
-        has_dialog = await agent.element_exists("dialog")
+        has_dialog = False
+        for _ in range(20):
+            has_dialog = await agent.element_exists("dialog")
+            if has_dialog:
+                break
+            await asyncio.sleep(0.5)
         ok("e2e_datasets_import_dialog", has_dialog)
         assert has_dialog
 

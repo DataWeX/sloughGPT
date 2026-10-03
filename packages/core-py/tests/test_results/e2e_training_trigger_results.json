@@ -47,11 +47,11 @@
   {
     "test": "e2e_training_job_detail",
     "passed": true,
-    "detail": "len=67"
+    "detail": "len=306"
   },
   {
     "test": "e2e_monitoring_metrics",
     "passed": true,
-    "detail": "body_snippet=S\nConnecting\nConnecting\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n\nHealth\nSettings\nDeveloper\n\nTOOLS"
+    "detail": "body_snippet=S\nConnecting\nConnecting\nSkip to main content\nS\nSystem Health\nAuto\nExport\nRefresh\nNo model\ncalm\n9+"
   }
 ]

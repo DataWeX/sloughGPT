@@ -8,6 +8,7 @@ Usage:
     scripts/python -m pytest tests/test_computer_use_training_integration.py -x -v -s
 """
 
+import asyncio
 import json
 import os
 import time
@@ -91,16 +92,22 @@ class TestComputerUseAgentIntegration:
     async def test_agent_clicks_import_button(self, agent):
         await agent.navigate("/datasets")
         time.sleep(1)
-        result = await agent.click_button("Import")
+        result = await agent.click_button("Add file")
         ok("agent_clicks_import", result.found, f"found={result.found}")
         assert result.found
 
     async def test_agent_detects_dialog(self, agent):
         await agent.navigate("/datasets")
         time.sleep(1)
-        await agent.click_button("Import")
-        time.sleep(1)
-        exists = await agent.element_exists("dialog")
+        await agent.click_button("Add file")
+        # Dialog mounts async — poll: a fixed 1s sleep lost this race under
+        # load (gate run v2, load avg >7).
+        exists = False
+        for _ in range(20):
+            exists = await agent.element_exists("dialog")
+            if exists:
+                break
+            await asyncio.sleep(0.5)
         ok("agent_detects_dialog", exists, f"exists={exists}")
         assert exists
 
@@ -173,7 +180,7 @@ class TestDevToolsFollowerIntegration:
     async def test_follower_click_button(self, follower):
         await follower.navigate("/datasets")
         time.sleep(1)
-        record = await follower.click_button("Import")
+        record = await follower.click_button("Add file")
         ok("follower_click", record.step > 0, f"step={record.step}")
         assert record.step > 0
 
@@ -246,7 +253,9 @@ class TestCrossSystemIntegration:
     async def test_datasets_page_has_import(self, agent):
         await agent.navigate("/datasets")
         time.sleep(1)
-        has_import = await agent.element_exists("button", "Import")
+        # Page trigger is "Add file" (datasets/page.tsx:83); "Import" is the
+        # dialog's submit button — the label churned twice in one day.
+        has_import = await agent.element_exists("button", "Add file")
         ok("cross_datasets_import", has_import)
         assert has_import
 
@@ -270,7 +279,15 @@ class TestCrossSystemIntegration:
     async def test_api_requests_reach_backend(self, agent):
         await agent.navigate("/training")
         time.sleep(2)
-        api_reqs = [r for r in agent._network_requests if "localhost:8000" in r.get("url", "")]
+        # Browser-side capture can only see the first hop: direct API (:8000)
+        # or the Rust gateway (:8080, frontend repoint — cards ux-012-g/c).
+        # Either proves frontend -> backend traffic; a literal :8000-only
+        # assert went permanently red when the repoint landed.
+        api_reqs = [
+            r
+            for r in agent._network_requests
+            if "localhost:8000" in r.get("url", "") or "localhost:8080" in r.get("url", "")
+        ]
         ok("cross_api_requests", len(api_reqs) > 0, f"api_reqs={len(api_reqs)}")
         assert len(api_reqs) > 0
 
