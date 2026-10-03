@@ -275,24 +275,34 @@ class TestCometBackend:
 
 class TestMissingBackendDeps:
     def test_mlflow_missing(self, monkeypatch):
+        real_import = __import__
+
         def no_mlflow(name, *a, **k):
-            if name == "mlflow":
+            if name == "mlflow" or name.startswith("mlflow."):
                 raise ImportError("no mlflow")
-            return __import__(name, *a, **k)
+            return real_import(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_mlflow)
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
+        import html.parser
+
         assert tracker._client is None
+        assert html.parser is not None
 
     def test_wandb_missing(self, monkeypatch):
+        real_import = __import__
+
         def no_wandb(name, *a, **k):
-            if name == "wandb":
+            if name == "wandb" or name.startswith("wandb."):
                 raise ImportError("no wandb")
-            return __import__(name, *a, **k)
+            return real_import(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_wandb)
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
+        import html.parser
+
         assert tracker._client is None
+        assert html.parser is not None
 
 
 class TestCreateTracker:

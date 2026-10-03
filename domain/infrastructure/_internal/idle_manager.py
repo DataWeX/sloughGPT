@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 import time
+import weakref
 from collections.abc import Callable
-from threading import Lock, Thread
+from threading import Event, Lock, Thread
 from typing import Any
 
 from .structured_log import StructuredLogger
 
 logger = StructuredLogger("slo.infrastructure.idle_manager")
+
+# Every constructed instance is tracked (weakly) so test/session teardown can
+# stop ALL idle loops — directly-built IdleManager objects otherwise leak their
+# background thread (test_idle_manager: 58 register() vs 13 shutdown()).
+_instances: weakref.WeakSet[IdleManager] = weakref.WeakSet()
 
 
 def _get_bg_queue() -> Any:
@@ -51,9 +57,11 @@ class IdleManager:
         self._lock = Lock()
         self._thread: Thread | None = None
         self._running = False
+        self._stop_event = Event()
         self._on_unload: Callable[[str], None] | None = None
         self._on_reload: Callable[[str], None] | None = None
         self._logger = logger
+        _instances.add(self)
 
     def register(
         self,
@@ -196,13 +204,14 @@ class IdleManager:
             if self._running:
                 return
             self._running = True
+        self._stop_event.clear()
         self._thread = Thread(target=self._check_loop, daemon=True, name="idle-manager")
         self._thread.start()
 
     def _check_loop(self) -> None:
         """Background loop: check for idle models and unload them."""
         while self._running:
-            time.sleep(self._check_interval_s)
+            self._stop_event.wait(self._check_interval_s)
             now = time.time()
             with self._lock:
                 for model_id, entry in self._models.items():
@@ -230,9 +239,10 @@ class IdleManager:
                                 )
 
     def shutdown(self) -> None:
-        """Stop the background check thread."""
+        """Stop the background check thread (promptly: wakes the sleeper)."""
         with self._lock:
             self._running = False
+        self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
 
@@ -256,3 +266,16 @@ def get_idle_manager() -> IdleManager:
             if _idle_manager is None:
                 _idle_manager = IdleManager()
     return _idle_manager
+
+
+def stop_all_idle_managers() -> int:
+    """Stop every tracked instance's loop (teardown); returns count stopped.
+
+    Event-based shutdown makes each join prompt (<=2s), even for the ~45
+    orphan instances leaked by direct construction in tests.
+    """
+    stopped = 0
+    for inst in list(_instances):
+        inst.reset()
+        stopped += 1
+    return stopped

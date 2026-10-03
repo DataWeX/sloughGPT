@@ -3,6 +3,7 @@
 Shared libraries consumed by apps.
 
 - `core-py/` — Python shared domain logic (`domains` package on the import path when the repo is installed); see **`core-py/README.md`**.
+- `app-planner/` — kanban board + dev-notes store (`app_planner`; canonical `PlannerStore` in `src/app_planner/store.py`, hash-chained board ordering + `verify_chain()`).
 - `downcraft/` — generic HTTP(S) downloader: cross-session Range resume, SLZ4 (LZ4) compression, multipart, SHA-256 verify; see **`downcraft/README.md`**.
 - `sdk-py/` — Python SDK (`sloughgpt_sdk`); see **`sdk-py/sloughgpt_sdk/README.md`**.
 - `sdk-ts/typescript-sdk/` — TypeScript SDK (npm package); see **`sdk-ts/typescript-sdk/README.md`**.

@@ -11,6 +11,7 @@ Single source of truth for navigation. Read this first.
 | **PYTHON_FIRST.md** | How we write code — import → call → result |
 | **PRODUCT_ENGINEERING.md** | What we build and why |
 | **ROADMAP.md** | What's done, what's next |
+| **AGENT_SYNC.md** | Cross-session work sync — read first, update when you push |
 | **AGENTS.md** | Rules for AI agents (root) |
 
 ## Architecture
@@ -60,6 +61,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **TESTING.md** | Test guide |
+| **Site Doctor** (in TESTING.md) | Live-site monitor — read-only journey/http/SSE probes, `/doctor` API + page |
 | **USER_PERSONA.md** | Who we build for |
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |
