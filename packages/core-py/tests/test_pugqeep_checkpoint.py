@@ -144,11 +144,11 @@ class TestLoadFromPoints:
 
     def test_load_from_points_file(self):
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
-        from domain.infrastructure._internal.pugqeep.model_tree import (
+        from domain.infrastructure._internal.pugqeep.point import Point
+        from domain.infrastructure._internal.pugqeep.tree import (
             decompress_tree,
             load_from_points,
         )
-        from domain.infrastructure._internal.pugqeep.point import Point
 
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="test", storage_dir=Path(tmpdir))
@@ -174,8 +174,8 @@ class TestLoadFromPoints:
 
     def test_load_from_points_directory(self):
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
-        from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
         from domain.infrastructure._internal.pugqeep.point import Point
+        from domain.infrastructure._internal.pugqeep.tree import load_from_points
 
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="test", storage_dir=Path(tmpdir))
@@ -196,18 +196,18 @@ class TestLoadFromPoints:
             assert tree.is_loaded
 
     def test_load_from_points_not_found(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import load_from_points
+        from domain.infrastructure._internal.pugqeep.tree import load_from_points
 
         with pytest.raises(FileNotFoundError):
             load_from_points("/nonexistent/path")
 
     def test_load_from_points_multiple_weights(self):
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
-        from domain.infrastructure._internal.pugqeep.model_tree import (
+        from domain.infrastructure._internal.pugqeep.point import Point
+        from domain.infrastructure._internal.pugqeep.tree import (
             decompress_tree,
             load_from_points,
         )
-        from domain.infrastructure._internal.pugqeep.point import Point
 
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="multi", storage_dir=Path(tmpdir))
@@ -229,11 +229,11 @@ class TestLoadFromPoints:
 
     def test_load_from_points_preserves_shapes(self):
         from domain.infrastructure._internal.pugqeep.library import PointLibrary
-        from domain.infrastructure._internal.pugqeep.model_tree import (
+        from domain.infrastructure._internal.pugqeep.point import Point
+        from domain.infrastructure._internal.pugqeep.tree import (
             decompress_tree,
             load_from_points,
         )
-        from domain.infrastructure._internal.pugqeep.point import Point
 
         with tempfile.TemporaryDirectory() as tmpdir:
             lib = PointLibrary(name="shape", storage_dir=Path(tmpdir))
@@ -371,7 +371,8 @@ class TestDecompressTree:
     """Test decompress_tree extracts all weights from ModelTree."""
 
     def test_decompress_all_weights(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree, decompress_tree
+        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test", n_clusters=8)
         weights = {
@@ -395,7 +396,8 @@ class TestDecompressTree:
             )
 
     def test_decompress_preserves_shapes(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree, decompress_tree
+        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("test", n_clusters=4)
         weights = {
@@ -409,14 +411,16 @@ class TestDecompressTree:
             assert arr.shape == weights[name].shape
 
     def test_decompress_empty_tree(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree, decompress_tree
+        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("empty", n_clusters=4)
         decompressed = decompress_tree(tree)
         assert len(decompressed) == 0
 
     def test_decompress_single_weight(self):
-        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree, decompress_tree
+        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         tree = ModelTree("single", n_clusters=4)
         weights = {"only.weight": np.random.randn(8, 8).astype(np.float32)}
@@ -428,7 +432,8 @@ class TestDecompressTree:
 
     def test_decompress_many_clusters_better_accuracy(self):
         from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
-        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree, decompress_tree
+        from domain.infrastructure._internal.pugqeep.model_tree import ModelTree
+        from domain.infrastructure._internal.pugqeep.tree import decompress_tree
 
         orig = np.random.randn(64, 32).astype(np.float32)
 
