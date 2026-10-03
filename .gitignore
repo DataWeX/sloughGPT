@@ -261,3 +261,36 @@ y
 .dev-notes/*.md
 # Hoplite platform metadata (per-thread sandbox artifacts)
 .hoplite/
+
+# --- Session scratch and local artifacts (triaged 2026-10-03) ---
+# Nested git worktrees registered via `git worktree add`. Never stage them:
+# they would land in the index as gitlinks (mode 160000), not as files.
+.wt-*/
+
+# Home-directory scratch files accidentally created at repo root
+/100M
+/urls.txt
+
+# Agent trajectory output (regenerated per run)
+/arken_output/
+/avion_output/
+
+# Rotating audit logs — audit.log.N does not match the *.log rule above
+audit.log.*
+
+# Ad-hoc journal/board backups. The tracked legacy backups stay tracked;
+# these are one-off copies taken by sync scripts.
+.dev-notes/*.bak-*
+.kanban/*.bak-*
+
+# Pytest sharding chunks and Turborepo local cache
+.pytest-chunks/
+.turbo/
+
+# Generated model artifacts under core-py (root models/ is covered above)
+packages/core-py/models/
+
+# Local diagnostic harnesses — not part of the shipped app or the Cypress suite
+apps/web/public/bootshot.html
+apps/web/cypress/e2e/_diag.cy.ts
+apps/web/cypress/fixtures/diag-dialog.json
