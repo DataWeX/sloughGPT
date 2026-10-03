@@ -29,12 +29,12 @@ import sys
 import time
 
 # Add packages to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "arken", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "packages", "avion", "src"))
 
 
 async def run_journeys(base_url: str, journeys: list[str] | None = None):
     """Run page-presence journeys using Arken + Playwright."""
-    from arken import Arken
+    from avion import Arken
 
     pages = {
         "chat": "/chat",
@@ -73,7 +73,7 @@ async def run_journeys(base_url: str, journeys: list[str] | None = None):
 
 async def run_with_api(base_url: str, journeys: list[str] | None = None):
     """Check API endpoints directly, no browser."""
-    from arken.backends.api import ApiBackend
+    from avion.backends.api import ApiBackend
 
     backend = ApiBackend(base_url=base_url)
     await backend.start()
