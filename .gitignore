@@ -65,6 +65,14 @@ checkpoints/
 # Compiled model cache (SLNC weights, 2.5GB+)
 packages/models/
 
+# Build artifacts / installers — too big to keep in the tree (one 45MB APK
+# checked out across every worktree costs ~934MB). Build outputs, not source.
+*.apk
+*.aab
+*.ipa
+*.xap
+index.android.bundle
+
 # Jupyter Notebook
 .ipynb_checkpoints
 sloughgpt_colab.executed.ipynb
