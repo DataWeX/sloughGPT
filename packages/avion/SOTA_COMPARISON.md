@@ -1,13 +1,15 @@
 # Arken vs Top Agent Architectures — Student Study Notes
 
-> Renamed: `packages/voyager` → `packages/arken` (brand Arken).
-> V1 scope: minimal autoclicker (find, click, type). `packages/voyager/`
-> is now a thin re-export shim. Old AI/vision/backends modules removed.
+> Renamed twice: `packages/voyager` → `packages/arken` → **`packages/avion`**
+> (canonical package name `avion`). `packages/arken/` and `packages/voyager/`
+> are now thin re-export shims; `tests/test_naming.py` fails if any import
+> uses the retired names. Written at the V1 autoclicker stage (find, click,
+> type) — sections below are annotated where the code has since moved on.
 
 Goal: learn how the best computer-use agents work, then match the most
-basic functioning version in our Voyager. No code changes yet, just comparison.
+basic functioning version of that loop.
 
-Our Voyager lives in `packages/voyager/src/voyager/`.
+Our code lives in `packages/avion/src/avion/`.
 Key files: `ai/agent.py`, `ai/models.py`, `ai/learning.py`, `core/session.py`.
 
 ---
@@ -74,7 +76,10 @@ learner with three parts:
 2. Skill library — stores working code skills, reuses them.
 3. Iterative prompting — refines actions with environment feedback + self-verify.
 
-We have none of these three. Worth borrowing for phase 2.
+Two of these three now exist in-tree: a **skill library** (`ai/skills.py`
+— distill a trajectory, dedup by hash, rank by replay success rate) and an
+**automatic curriculum** (`ai/curriculum.py`). The remaining borrow is
+iterative prompting with environment feedback + self-verify.
 
 ### F. Plan-and-execute vs reactive
 
@@ -101,10 +106,13 @@ We have none of these three. Worth borrowing for phase 2.
 | Transcript persist                      | none                                              | Trajectory in memory, no JSONL resume                              |
 | Tool schema docs                        | none                                              | No per-tool description/examples for model                         |
 | Verifier                                | none                                              | DONE/FAIL self-reported, no ground-truth check                     |
-| Skill library                           | none                                              | No reusable skill files                                            |
+| Skill library                           | `ai/skills.py:SkillLibrary`                     | JSON skills: distill trajectory → dedup by hash, `find()` ranked by keyword **then** replay success rate, versioned schema (skip-loudly on newer files), atomic save |
 | Safety                                  | none                                              | No sandbox, allowlist, or confirm gate                             |
 
-Tests: 201 passing, 14 skipped. Solid base, mocks only.
+Tests: `python3 -m pytest packages/avion/tests` — all green. The only
+skip is the missing-dep probe, which runs only when `websockets` is
+absent. The CDP suite drives a real Chromium over the DevTools protocol;
+everything else is mocked.
 
 ---
 
@@ -119,7 +127,7 @@ Tests: 201 passing, 14 skipped. Solid base, mocks only.
 | Verifier checks ground truth (tool result, page state)         | Reward hardcoded (click=+0.1, done=+1)                               | Replace with real check: element found, URL, text present        |
 | JSONL transcript, resume after crash                           | In-memory Trajectory                                                 | Append each Step to JSONL before reply                           |
 | Sandbox + allowlist + confirm                                  | Direct backend calls                                                 | Add confirm hook + domain allowlist, even if permissive at first |
-| Skill reuse                                                    | ExperienceBuffer list                                                | Later: save successful Trajectory as named skill file            |
+| Skill reuse                                                     | `ai/skills.py:SkillLibrary` — distill → save → replay through `Agent` via `EchoModel` | Ranked retrieval by keyword match, success rate breaks ties        |
 
 ---
 
@@ -139,8 +147,9 @@ Tests: 201 passing, 14 skipped. Solid base, mocks only.
 5. **One transcript file** ✅ — `output_dir/<task>.jsonl`, one line per
    Step, flushed before the next model call.
 
-Explicitly later (not MVP): real LLM backend, skill library + curriculum
-(Voyager-paper style), network sandbox, audio/keyframe observation.
+Explicitly later (not MVP): real LLM backend, network sandbox,
+audio/keyframe observation. The skill library (`ai/skills.py`) and
+curriculum (`ai/curriculum.py`) that this list used to defer now exist.
 
 ---
 

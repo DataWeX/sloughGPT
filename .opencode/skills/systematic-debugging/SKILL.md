@@ -1,6 +1,6 @@
 ---
 name: systematic-debugging
-description: Use when encountering any bug, test failure, or unexpected behavior in sloughGPT, before proposing fixes. Covers the full stack: Next.js frontend, FastAPI backend, SloNet core, and cross-component integration.
+description: Use when encountering any bug, test failure, or unexpected behavior in sloughGPT, before proposing fixes. Covers the whole stack, namely Next.js frontend, FastAPI backend, SloNet core, and cross-component integration.
 ---
 
 # Systematic Debugging — sloughGPT
