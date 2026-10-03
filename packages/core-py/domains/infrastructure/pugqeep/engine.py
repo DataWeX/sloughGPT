@@ -33,7 +33,6 @@ import socket
 import sys
 import threading
 import time
-import uuid
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -105,7 +104,10 @@ class Process:
     fn: Callable[..., Any]
     args: tuple = ()
     kwargs: dict = field(default_factory=dict)
-    id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    # 48 bits of os.urandom, same 12-lowercase-hex shape as uuid.uuid4().hex[:12]
+    # but one syscall instead of a UUID object build: 0.90 us vs 2.54 us, and ids
+    # are never parsed back (grep uuid.UUID( in this package: none).
+    id: str = field(default_factory=lambda: os.urandom(6).hex())
     name: str = ""
     status: ProcessStatus = ProcessStatus.CREATED
     result: Any = None
@@ -273,7 +275,8 @@ class Stem:
     fails them so that capacity returns.
     """
 
-    id: str = field(default_factory=lambda: uuid.uuid4().hex[:12])
+    # Same 48-bit os.urandom shape as Process.id -- see that field for the why.
+    id: str = field(default_factory=lambda: os.urandom(6).hex())
     pool_id: str = ""
     processes: list[Process] = field(default_factory=list)
     status: StemStatus = StemStatus.CREATED
@@ -1459,12 +1462,17 @@ class Engine:
         if self._spawn_queue is not None:
             self._spawn_queue.put(proc, priority=priority)
 
-        logger.debug(
-            "Engine[%s]: spawned process %s (%s) -> pending",
-            self.name,
-            proc.id,
-            proc.name or fn.__name__,
-        )
+        # Guarded twice: at INFO the message is never emitted, and the arguments
+        # are evaluated eagerly at the call site either way -- so an unguarded
+        # fn.__name__ made Engine.spawn(functools.partial(f, 3)) raise AttributeError
+        # while logging was disabled entirely.
+        if logger.isEnabledFor(logging.DEBUG):
+            logger.debug(
+                "Engine[%s]: spawned process %s (%s) -> pending",
+                self.name,
+                proc.id,
+                proc.name or getattr(fn, "__name__", type(fn).__name__),
+            )
         return proc
 
     def pool(

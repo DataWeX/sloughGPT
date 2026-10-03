@@ -7,6 +7,9 @@ they are data-side and not this module's concern.
 
 from __future__ import annotations
 
+import functools
+import logging
+import re
 import threading
 import time
 
@@ -23,7 +26,7 @@ from domains.infrastructure.pugqeep import (
     ProcessQueue,
 )
 from domains.infrastructure.pugqeep.config import EngineConfig
-from domains.infrastructure.pugqeep.engine import Engine, Pool, Process
+from domains.infrastructure.pugqeep.engine import Engine, Pool, Process, Stem
 
 
 class _Stub:
@@ -409,3 +412,77 @@ class TestStandalonePoolDoor:
         finally:
             pool._pipe.open()
             pool.shutdown()
+
+
+# ── identity on the spawn path ───────────────────────────────────────────────
+
+
+def _side_effect(value=None):
+    return value
+
+
+class _CallableWithoutName:
+    """A callable object: no ``__name__`` attribute, unlike a function."""
+
+    def __call__(self):
+        return 42
+
+
+class TestSpawnIdentity:
+    """Identity and callability on the admission path.
+
+    Found while profiling spawn cost: the id generator and the debug log line
+    both sit inside ``Engine.spawn``, so both are charged to every admission
+    -- and both were wrong rather than merely slow.
+    """
+
+    @staticmethod
+    def _engine(capacity: int = 10_000) -> Engine:
+        return Engine(config=EngineConfig(name="identity", queue_size=capacity))
+
+    @pytest.mark.parametrize(
+        "factory",
+        [
+            pytest.param(lambda: functools.partial(_side_effect, 3), id="functools.partial"),
+            pytest.param(lambda: _CallableWithoutName(), id="callable-instance"),
+            pytest.param(lambda: _side_effect, id="plain-function"),
+        ],
+    )
+    def test_spawn_accepts_any_callable(self, factory):
+        """``fn.__name__`` was read eagerly inside ``logger.debug``, so spawning
+        a partial raised AttributeError at INFO -- where the message is never
+        emitted and the name never needed reading in the first place."""
+        engine = self._engine()
+        try:
+            proc = engine.spawn(factory())
+            assert proc.id
+        finally:
+            engine.stop()
+
+    def test_spawn_accepts_a_partial_while_debug_is_enabled(self):
+        """The same argument still resolves when the message really is logged."""
+        logger = logging.getLogger("slo.pugqeep.engine")
+        previous = logger.level
+        logger.setLevel(logging.DEBUG)
+        try:
+            engine = self._engine()
+            try:
+                assert engine.spawn(functools.partial(_side_effect, 1)).id
+            finally:
+                engine.stop()
+        finally:
+            logger.setLevel(previous)
+
+    def test_process_id_is_twelve_lowercase_hex(self):
+        """Id generation changed from uuid4 to os.urandom; the shape and the
+        uniqueness callers key on must not move with it."""
+        engine = self._engine()
+        try:
+            ids = [engine.spawn(_side_effect, name=str(i)).id for i in range(500)]
+        finally:
+            engine.stop()
+        assert all(re.fullmatch(r"[0-9a-f]{12}", pid) for pid in ids)
+        assert len(set(ids)) == len(ids)
+
+    def test_stem_id_matches_process_id_shape(self):
+        assert re.fullmatch(r"[0-9a-f]{12}", Stem(pool_id="pool").id)

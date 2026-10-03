@@ -23,6 +23,8 @@ Options::
 from __future__ import annotations
 
 import argparse
+import contextlib
+import gc
 import json
 import sys
 import threading
@@ -46,6 +48,11 @@ CAPACITY_SPAWN = 100_000
 BOUND_CAPACITY = 64
 BOUND_WORKERS = 8
 REGRESSION_TOLERANCE = 0.25
+# Timed passes are reported as the BEST of REPEATS, never a single pass: a
+# single timed pass on a loaded box measured spawn at 46.7 us where min-of-7
+# gives 13.4 us, and that error went straight into the --ci regression gate.
+REPEATS = 5
+WARMUP = 512
 
 
 def _noop() -> None:
@@ -62,40 +69,95 @@ class _Stub:
         self.is_done = False
 
 
+@contextlib.contextmanager
+def _collector_out():
+    """Take the garbage collector out of the timed window.
+
+    One ``Engine.spawn`` allocates ~11 objects (two ``threading.Event``, a
+    kwargs dict, seven lists), so gen-0 collections fire every ~60 spawns and
+    drop 60-100 us spikes into the measurement: banded spawn cost spread 3.3x
+    with the collector running and 1.3x with it held. The gate wants the cost
+    of the code, not the collector's schedule -- a 12% regression is smaller
+    than a single collection, so leaving GC in would bury every signal this
+    benchmark exists to catch.
+    """
+    gc.collect()
+    gc.disable()
+    try:
+        yield
+    finally:
+        gc.enable()
+
+
 # ── admission overhead ───────────────────────────────────────────────────────
 
 
-def bench_admit_release(iters: int = N_ADMIT) -> dict:
-    """Raw door cost: admit one process, release it, repeat."""
+def _drain(engine: Engine) -> None:
+    """Return every admitted slot so the next timed pass starts at zero usage."""
+    for proc in engine._processes.values():
+        engine._pipe.release(proc)
+    engine._processes.clear()
+    engine._pending.clear()
+
+
+def bench_admit_release(iters: int = N_ADMIT, repeats: int = REPEATS) -> dict:
+    """Raw door cost: admit one process, release it, repeat.
+
+    Best of ``repeats`` passes -- the number feeds ``--ci``, so a single pass
+    would gate against scheduler noise rather than against the code.
+    """
     pipe = Pipe("bench", capacity=1024)
     stub = _Stub("s")
+    best = float("inf")
 
-    start = time.perf_counter()
-    for _ in range(iters):
+    for _ in range(repeats):
         pipe.admit(stub)
-        pipe.release(stub)
-    elapsed = time.perf_counter() - start
+        pipe.release(stub)  # warm
+        with _collector_out():
+            start = time.perf_counter()
+            for _ in range(iters):
+                pipe.admit(stub)
+                pipe.release(stub)
+            elapsed = time.perf_counter() - start
+        best = min(best, elapsed / iters * 1e9)
 
     return {
         "cycles": iters,
-        "ns_per_cycle": round(elapsed / iters * 1e9, 1),
+        "repeats": repeats,
+        "ns_per_cycle": round(best, 1),
         "leftover_usage": pipe.usage(),
     }
 
 
-def bench_spawn(count: int = N_SPAWN) -> dict:
-    """``Engine.spawn`` with the door in its path, never contested."""
+def bench_spawn(count: int = N_SPAWN, repeats: int = REPEATS) -> dict:
+    """``Engine.spawn`` with the door in its path, never contested.
+
+    Best of ``repeats`` passes, collector held off (see ``_collector_out``).
+    Containers and the pipe are drained between passes so pass 5 measures the
+    same state as pass 1 -- otherwise the pipe would fill across passes and
+    start blocking, which measures backpressure instead of spawn.
+    """
     engine = Engine(config=EngineConfig(name="bench", queue_size=CAPACITY_SPAWN))
     try:
-        start = time.perf_counter()
-        for i in range(count):
-            engine.spawn(_noop, name=f"p{i}")
-        elapsed = time.perf_counter() - start
+        best = float("inf")
+        for _ in range(repeats):
+            for i in range(WARMUP):
+                engine.spawn(_noop, name=f"w{i}")
+            _drain(engine)
+
+            with _collector_out():
+                start = time.perf_counter()
+                for i in range(count):
+                    engine.spawn(_noop, name=f"p{i}")
+                elapsed = time.perf_counter() - start
+            best = min(best, elapsed / count * 1e9)
+            _drain(engine)
 
         return {
             "spawns": count,
-            "ns_per_spawn": round(elapsed / count * 1e9, 1),
-            "spawns_per_s": round(count / elapsed, 1),
+            "repeats": repeats,
+            "ns_per_spawn": round(best, 1),
+            "spawns_per_s": round(1e9 / best, 1),
             "usage": engine._pipe.usage(),
         }
     finally:
@@ -255,9 +317,11 @@ def _print(metrics: dict) -> None:
     bd = metrics["bound"]
     bp = metrics["backpressure"]
 
-    print("PGQ pipe benchmark")
+    print(f"PGQ pipe benchmark   (best of {ar['repeats']} passes, gc held off)")
     print(f"  admit+release      {ar['ns_per_cycle']:>9.1f} ns/cycle  ({ar['cycles']:,} cycles)")
-    print(f"  Engine.spawn       {sp['ns_per_spawn']:>9.1f} ns/spawn   ({sp['spawns']:,} spawns)")
+    print(
+        f"  Engine.spawn       {sp['ns_per_spawn']:>9.1f} ns/spawn   ({sp['spawns']:,} spawns/pass)"
+    )
     print(f"  spawn throughput   {sp['spawns_per_s']:>9,.0f} /s")
     print()
     verdict = "HELD" if bd["bound_held"] else "BREACHED"
