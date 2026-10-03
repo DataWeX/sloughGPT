@@ -11,6 +11,7 @@ Requirements:
 """
 
 import json
+import os
 import time
 import urllib.request
 from pathlib import Path
@@ -18,7 +19,9 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Page, sync_playwright
 
-BASE = "http://localhost:3000"
+# Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
+# stale :3000 default). Override with SLO_WEB_URL for non-standard setups.
+BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = "http://localhost:8000"
 RESULTS = []
 
