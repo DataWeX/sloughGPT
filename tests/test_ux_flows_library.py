@@ -92,6 +92,23 @@ def test_flow_is_api_gated_classification():
     assert sum(1 for f in FLOWS if flow_is_api_gated(f)) == 10
 
 
+def test_report_to_json_round_trip_sorted():
+    import json as _json
+
+    from domain.journeys.runner import report_to_json
+
+    report = {
+        "passed": 1,
+        "failed": 1,
+        "console_error_count": 33,
+        "network_error_count": 0,
+        "flows": [{"task": "0-home", "status": "passed"}],
+    }
+    out = report_to_json(report)
+    assert _json.loads(out) == report
+    assert out.index('"failed"') < out.index('"passed"'), "keys must be sorted"
+
+
 def test_list_flows_preserves_registry_order():
     assert [f.id for f in list_flows()] == [f.id for f in FLOWS]
 

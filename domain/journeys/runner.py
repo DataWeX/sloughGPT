@@ -6,6 +6,7 @@ Usage:
     .venv/bin/python -m domain.journeys --list
     .venv/bin/python -m domain.journeys --strict-errors
     .venv/bin/python -m domain.journeys --dry-run          # step plans, no browser
+    .venv/bin/python -m domain.journeys --json             # machine-readable report
 
 Env:
     SLO_WEB_URL         default http://localhost:3000 (matches scripts/dev-stack.sh)
@@ -90,7 +91,12 @@ def render_summary(report: dict[str, Any], report_path: str = "") -> str:
     return "\n".join(rows)
 
 
-async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
+def report_to_json(report: dict[str, Any]) -> str:
+    """Stable machine-readable report (sorted keys) for CI piping."""
+    return json.dumps(report, indent=2, sort_keys=True)
+
+
+async def run(flows: list[Flow], headed: bool, strict_errors: bool, json_output: bool = False) -> int:
     from avion import Avion
     from avion.backends.playwright import PlaywrightBackend
     from avion.core.task import Task
@@ -169,7 +175,10 @@ async def run(flows: list[Flow], headed: bool, strict_errors: bool) -> int:
         await a.stop()
 
     report = persist()
-    print(render_summary(report, REPORT), flush=True)
+    if json_output:
+        print(report_to_json(report))
+    else:
+        print(render_summary(report, REPORT), flush=True)
 
     failed = report["failed"]
     if strict_errors and (console_errors or network_errors):
@@ -193,6 +202,11 @@ def main(argv: list[str] | None = None) -> int:
         "--dry-run",
         action="store_true",
         help="print each journey's step plan without launching a browser",
+    )
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the report as JSON to stdout instead of the ASCII gauge",
     )
     args = ap.parse_args(argv)
 
@@ -235,4 +249,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"web not reachable at {WEB} — start the web dev server first")
         return 2
 
-    return asyncio.run(run(flows, headed=args.headed, strict_errors=args.strict_errors))
+    return asyncio.run(
+        run(flows, headed=args.headed, strict_errors=args.strict_errors, json_output=args.json)
+    )
