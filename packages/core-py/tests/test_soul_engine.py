@@ -76,9 +76,9 @@ class TestGenerationContext:
     def test_defaults(self):
         ctx = GenerationContext(prompt="hi", prompt_tokens=np.array([[1]]))
         assert ctx.system_prompt == ""
-        assert ctx.temperature == 0.8
+        assert ctx.temperature == 0.7
         assert ctx.top_k == 40
-        assert ctx.top_p == 0.9
+        assert ctx.top_p == 0.85
         assert ctx.max_tokens == 2048
         assert ctx.stop_tokens == []
         assert ctx.reasoning_depth == "balanced"
@@ -373,9 +373,9 @@ class TestGetGenerationParams:
 
     def test_defaults(self, engine):
         params = engine._get_generation_params(self._ctx())
-        assert params["temperature"] == 0.8
+        assert params["temperature"] == 0.7
         assert params["top_k"] == 40
-        assert params["top_p"] == 0.9
+        assert params["top_p"] == 0.85
         assert params["max_tokens"] == 2048
         assert params["repetition_penalty"] == 1.2
 
@@ -389,16 +389,16 @@ class TestGetGenerationParams:
 
     def test_deep_reasoning_lowers_temp(self, engine):
         params = engine._get_generation_params(self._ctx(reasoning_depth="deep"))
-        assert params["temperature"] == pytest.approx(0.5)
+        assert params["temperature"] == pytest.approx(0.4)
 
     def test_creative_reasoning_raises_temp(self, engine):
         params = engine._get_generation_params(self._ctx(reasoning_depth="creative"))
-        assert params["temperature"] == pytest.approx(1.1)
+        assert params["temperature"] == pytest.approx(1.0)
 
     def test_warmth_raises_temp(self, engine):
         engine._soul.personality.warmth = 0.9
         params = engine._get_generation_params(self._ctx())
-        assert params["temperature"] == pytest.approx(0.9)
+        assert params["temperature"] == pytest.approx(0.8)
 
     def test_warmth_temp_capped(self, engine):
         engine._soul.personality.warmth = 0.9

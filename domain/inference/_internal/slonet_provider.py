@@ -1533,7 +1533,7 @@ class SloNetChatProvider:
         self,
         messages: list[dict[str, str]],
         max_tokens: int = 512,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         **kwargs,
     ) -> str:
         """Blocking chat — returns complete response.

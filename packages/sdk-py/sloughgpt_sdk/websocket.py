@@ -140,7 +140,7 @@ class WebSocketClient:
         self,
         prompt: str,
         max_new_tokens: int = 100,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         model: str | None = None,
         **kwargs: Any,
     ) -> None:

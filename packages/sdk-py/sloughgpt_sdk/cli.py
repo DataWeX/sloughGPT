@@ -49,7 +49,7 @@ def main():
     parser.add_argument(
         "--max-tokens", "-t", type=int, default=100, help="Maximum tokens to generate"
     )
-    parser.add_argument("--temperature", "-T", type=float, default=0.8, help="Sampling temperature")
+    parser.add_argument("--temperature", "-T", type=float, default=0.7, help="Sampling temperature")
     parser.add_argument("--json", "-j", action="store_true", help="Output as JSON")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
 

@@ -69,7 +69,7 @@ class VisionProcessor:
             try:
                 msg = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": img_data}}]}]
                 text = ""
-                async for token in vision.chat_stream(msg, max_tokens=30, temperature=0.8):
+                async for token in vision.chat_stream(msg, max_tokens=30, temperature=0.7):
                     text += token
                 if text.strip():
                     return text.strip()

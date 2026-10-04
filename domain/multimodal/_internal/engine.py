@@ -156,7 +156,7 @@ class MultimodalEngine:
         return images
 
     async def chat_stream(
-        self, messages: list, max_tokens: int = 512, temperature: float = 0.8, **kwargs
+        self, messages: list, max_tokens: int = 512, temperature: float = 0.7, **kwargs
     ):
         """Stream caption for the first image found in messages."""
         images = self._extract_images(messages)
@@ -183,7 +183,7 @@ class MultimodalEngine:
             yield f"[error: {e}]"
 
     async def chat(
-        self, messages: list, max_tokens: int = 512, temperature: float = 0.8, **kwargs
+        self, messages: list, max_tokens: int = 512, temperature: float = 0.7, **kwargs
     ) -> str:
         chunks = []
         async for chunk in self.chat_stream(messages, max_tokens, temperature, **kwargs):
@@ -772,7 +772,7 @@ class MultimodalEngine:
         return MultimodalOutput(text=text, confidence=conf)
 
     def generate_vqa(
-        self, image_np: np.ndarray, question: str, max_len: int = 32, temperature: float = 0.8
+        self, image_np: np.ndarray, question: str, max_len: int = 32, temperature: float = 0.7
     ) -> MultimodalOutput:
         """Generate an answer for a question about an image.
 

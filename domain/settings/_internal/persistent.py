@@ -22,10 +22,10 @@ DEFAULT_SETTINGS_PATH = Path.home() / ".config" / "sloughgpt" / "settings.json"
 class GenerationSettings:
     """Text generation parameters."""
 
-    temperature: float = 0.8
-    top_p: float = 0.95
-    top_k: int = 50
-    repetition_penalty: float = 1.1
+    temperature: float = 0.7
+    top_p: float = 0.85
+    top_k: int = 40
+    repetition_penalty: float = 1.15
     max_new_tokens: int = 256
     max_context_length: int = 2048
 

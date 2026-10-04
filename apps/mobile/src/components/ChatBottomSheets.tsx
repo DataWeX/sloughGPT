@@ -762,7 +762,7 @@ function ChatSettingsContent() {
         borderRadius={10}
         alignItems="center"
         backgroundColor={colors.primaryAlpha(0.08)}
-        onPress={() => update({temperature: 0.8, maxTokens: 256, topP: 0.9, topK: 50})}
+        onPress={() => update({temperature: 0.7, maxTokens: 256, topP: 0.85, topK: 40})}
         pressStyle={{opacity: 0.7, scale: 0.98}}>
         <Text fontSize={13} fontWeight="600" color={colors.primary}>Reset to Defaults</Text>
       </YStack>

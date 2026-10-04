@@ -317,8 +317,8 @@ class NativeEngine:
         messages: list[dict[str, str]],
         max_tokens: int = 128,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
+        top_p: float = 0.85,
+        top_k: int = 40,
         system: str = "",
     ) -> str:
         if not self._loaded:
@@ -379,8 +379,8 @@ class NativeEngine:
         messages: list[dict[str, str]],
         max_tokens: int = 128,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
+        top_p: float = 0.85,
+        top_k: int = 40,
         system: str = "",
     ) -> Generator[str, None, None]:
         if not self._loaded:

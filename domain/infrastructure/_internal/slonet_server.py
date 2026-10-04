@@ -505,9 +505,9 @@ class SloNetServer:
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         cancel_event: threading.Event | None = None,
         session_id: str | None = None,
     ) -> str:

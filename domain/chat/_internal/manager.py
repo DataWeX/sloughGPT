@@ -178,7 +178,7 @@ class ChatManager:
         messages: list[dict[str, str]],
         model: str = "gpt2",
         system_prompt: str = "",
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         max_tokens: int = 256,
         session_id: str = "default",
         user_id: str = "default",

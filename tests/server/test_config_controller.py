@@ -32,7 +32,7 @@ class TestGetGenerationConfig:
         assert r2["temperature"] != 999
 
     def test_default_temperature(self, ctrl):
-        assert ctrl.get_generation_config()["temperature"] == 0.8
+        assert ctrl.get_generation_config()["temperature"] == 0.7
 
     def test_has_full_known_key_set(self, ctrl):
         result = ctrl.get_generation_config()
@@ -48,9 +48,9 @@ class TestGetGenerationConfig:
 
     def test_defaults_values(self, ctrl):
         result = ctrl.get_generation_config()
-        assert result["top_p"] == 0.9
-        assert result["top_k"] == 50
-        assert result["repetition_penalty"] == 1.2
+        assert result["top_p"] == 0.85
+        assert result["top_k"] == 40
+        assert result["repetition_penalty"] == 1.15
         assert result["max_new_tokens"] == 200
         assert result["max_context_length"] == 1024
 
@@ -153,7 +153,7 @@ class TestConfigShape:
         a = ConfigController()
         b = ConfigController()
         a.update_generation_config(temperature=0.2)
-        assert b.get_generation_config()["temperature"] == 0.8
+        assert b.get_generation_config()["temperature"] == 0.7
 
     def test_repeated_update_cumulative(self, ctrl):
         ctrl.update_generation_config(temperature=0.4)

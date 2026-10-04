@@ -92,10 +92,10 @@ def _soul_profile_hash(soul_dict: dict) -> str:
 @dataclass
 class GenerationParams:
     temperature: float = 0.7
-    top_p: float = 0.9
+    top_p: float = 0.85
     top_k: int = 40
     max_tokens: int = 2048
-    repeat_penalty: float = 1.1
+    repeat_penalty: float = 1.15
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.0
     stop: list[str] = field(default_factory=list)

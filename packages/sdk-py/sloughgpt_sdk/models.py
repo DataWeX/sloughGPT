@@ -13,11 +13,11 @@ class GenerateRequest:
 
     prompt: str
     max_new_tokens: int | None = 100
-    temperature: float | None = 0.8
-    top_k: int | None = 50
-    top_p: float | None = 0.9
+    temperature: float | None = 0.7
+    top_k: int | None = 40
+    top_p: float | None = 0.85
     do_sample: bool = True
-    repetition_penalty: float | None = 1.0
+    repetition_penalty: float | None = 1.15
     num_beams: int = 1
     early_stopping: bool = False
     personality: str | None = None
@@ -83,10 +83,10 @@ class ChatRequest:
 
     messages: list[ChatMessage]
     model: str | None = "gpt2"
-    temperature: float | None = 0.8
+    temperature: float | None = 0.7
     max_new_tokens: int | None = 100
-    top_p: float | None = 0.9
-    top_k: int | None = 50
+    top_p: float | None = 0.85
+    top_k: int | None = 40
     stream: bool = False
 
     def to_dict(self) -> dict[str, Any]:
@@ -113,7 +113,7 @@ class BatchRequest:
 
     prompts: list[str]
     max_new_tokens: int | None = 100
-    temperature: float | None = 0.8
+    temperature: float | None = 0.7
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for API request."""

@@ -27,10 +27,10 @@ class GetMetaWeightsRequest(BaseModel):
 
 
 class MetaWeightResponse(BaseModel):
-    temperature: float = 0.8
-    repetition_penalty: float = 1.0
-    top_p: float = 0.9
-    top_k: int = 50
+    temperature: float = 0.7
+    repetition_penalty: float = 1.15
+    top_p: float = 0.85
+    top_k: int = 40
     style_bias: float = 0.0
     confidence_boost: float = 0.0
     based_on_samples: int = 0
