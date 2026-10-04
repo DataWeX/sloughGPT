@@ -1,1 +1,0 @@
-function e(e,t,n,r=t){return Number.isFinite(e)?Math.min(Math.max(e,t),n):r}export{e as t};

@@ -1,1 +1,0 @@
-import{r as e}from"./rolldown-runtime-hePW80VL.js";import{t}from"./react-Cvdyeg_0.js";import{Nr as n}from"./index-Ck7b__zA.js";var r=e(t()),i=`force-dynamic`;function a(){let e=n();return(0,r.useEffect)(()=>{e.replace(`/developer`)},[e]),null}export{a as default,i as dynamic};

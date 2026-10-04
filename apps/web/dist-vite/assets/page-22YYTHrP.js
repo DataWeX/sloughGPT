@@ -1,1 +1,0 @@
-import{Ar as e}from"./index-Ck7b__zA.js";function t(){e(`/workspace/settings`)}export{t as default};

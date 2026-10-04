@@ -1,1 +1,0 @@
-import{Kt as e,Vt as t}from"./index-Ck7b__zA.js";import{a as n,o as r,s as i}from"./cache-BURAf9pT.js";function a(){return i(`models`,()=>e.list(),{staleTime:1e4})}function o(){let t=n();return r(t=>e.load(t),{onSuccess:()=>t(`models`)})}function s(){return i(`souls`,()=>t.list(),{staleTime:3e4})}export{a as n,s as r,o as t};
