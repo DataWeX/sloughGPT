@@ -127,6 +127,9 @@ def _cuda_available() -> bool:
     CuPy CUDA runtime is importable. No torch import.
     """
     try:
+        import cupy as cp
+
+        cp.cuda.runtime.getDeviceCount()
         return True
     except Exception:
         return False
