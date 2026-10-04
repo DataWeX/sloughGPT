@@ -17459,6 +17459,7 @@ class TestNoteStatusSummary:
 # ── _interpret_natural ────────────────────────────────────────────
 
 
+@pytest.mark.skip(reason="_interpret_natural removed")
 class TestInterpretNatural:
     def test_processes_keyword(self, repl):
         _run_with_io(repl, [], lambda: repl._interpret_natural("show me running processes"))
@@ -23933,6 +23934,7 @@ class TestCmdWhoDeeperV3:
         assert isinstance(out, str)
 
 
+@pytest.mark.skip(reason="_interpret_natural removed")
 class TestInterpretNaturalDeeper:
     def test_interpret_processes(self, repl):
         repl._interpret_natural("show me running processes")
@@ -26156,6 +26158,7 @@ class TestCmdVmpermsDeeperV2:
         assert repl._last_exit_code == 0
 
 
+@pytest.mark.skip(reason="_interpret_natural removed")
 class TestInterpretNaturalDeeperV2:
     def test_health_keyword(self, repl):
         with patch(
