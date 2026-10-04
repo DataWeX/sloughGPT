@@ -52,6 +52,42 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `344168b4f`)
 
+- **2026-10-04 · `fix/main-gate-green` lands — main's default test gate goes
+  green (7 root-cause buckets).** Card `cbd2ffc3`, commit `ddd3b3d49` → landed
+  as `70b162449` (rebased onto `81fd4d554`, moodboard-only delta, no overlap).
+  Baseline on `c92adc47b`: **11 failed + 5 errors (16 red) in `tests/` → 3147
+  passed / 13 skipped / 0 failed / 0 errors, three consecutive runs**;
+  `apps/api/server/tests` **6 collection errors → 1223 passed** (the directory
+  was dormant, off-`testpaths`, and never ran anywhere). Root causes, not
+  counts: the contract gate was red because `routers/doctor.py` reached into
+  `domain.core._internal.doctor{,.report}` (retargeted to the public facade;
+  `default_report_path` joined the lazy map + `__all__`); `test_inference_generate`
+  ×6 patched `domain.models._internal.provider.get_provider` while the router
+  binds `get_provider` from `domain.models` **at import** — an inert mock — and
+  the bare test app registered no exception handlers, so `raise_error()`
+  propagated instead of returning 503; `test_cli_chat` ×5 imported `CLILogger`
+  from `domain.logging._internal`, which never re-exports it; `test_feedback_domain`
+  ×2 hit `_compute_gradients`' `engine is None → {}` guard (now driven by a stub
+  engine, with a genuine sign invariant replacing a tautological assertion);
+  `test_rag` ×1 was a **real product bug** — fusion applied `dense_weight=0.7`
+  to a channel `ProductionRAG` disables by default, capping `combined_score` at
+  0.3 so `HallucinationDetector.detect`'s `min_score=0.5` gate could never pass
+  (grounding was structurally impossible, confidence always 0) → weights now
+  renormalised over active channels; the `apps/api/server/tests` ×6 was a
+  `tests` package-name collision → canonical `apps.api.server.tests` path
+  (already used by `tests/server/test_server_api.py`). **Benchmarks:**
+  `benchmark_bm25` A/B vs `c92adc47b` — recall@k 0.9833, MRR 1.0, reranked MRR
+  1.0 **byte-identical**, latency within noise. Follow-ups filed: `b83a5788`
+  (online LoRA is a silent no-op — the engine is never attached, yet stats
+  count phantom updates) and `d2dda007` (meta-weights **replace** request
+  sampling params — `get_adjustment` never receives them, so it cannot blend).
+  **Gotcha:** the root repo's `app_planner` `.pth` has no `compute_chains`, so
+  board writes made from the root copy leave that branch's board unchained
+  (pre-existing there — base `f27654e54` predates the chain work); run board
+  commands with `PYTHONPATH=<worktree>/packages/app-planner/src` from a
+  chain-aware copy, and never issue two `board add` calls concurrently — the
+  second silently clobbers the first.
+
 - **2026-10-04 · `feat/landing-7-cards` lands — the infra-review follow-ups,
   surgical cherry-pick onto main.** Cards `223001e4` `d1f544fb` `ad9ef322`
   `b753cad5` `8349d901` `65d9e7ee` `832efdda` (+ campaign `d083e732`), 8
