@@ -127,7 +127,7 @@ def create_scheduler(
     if warmup_steps == 0 and total_steps and total_steps > 1000:
         # Default to 5% of total steps for warmup, minimum 100 steps
         warmup_steps = max(100, int(total_steps * 0.05))
-        logger.info(f"Auto warmup_steps={warmup_steps} (5% of total_steps={total_steps})")
+        logger.info("Auto warmup_steps=%s (5%% of total_steps=%s)", warmup_steps, total_steps)
 
     return soul_create_scheduler(
         optimizer,
