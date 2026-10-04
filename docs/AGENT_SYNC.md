@@ -433,3 +433,13 @@ git push -u origin feat/<name>   # push your own branch when done
 - **`next lint` no longer exists in this Next version** (parses `lint` as a
   directory) — pre-existing repo breakage; the lint gate is root
   `node_modules/.bin/eslint <changed files>` run directly.
+- **`note update`/`note new` auto-run `_auto_sync` → `store.sync()`** — one
+  note edit triggers full notes↔board reconcile **plus** the chain reseal, so
+  expect a WHOLE-file `board.jsonl` diff (canonical re-order + `chain_hash`
+  cascade on dozens of cards) and cards moving to match note statuses. It is
+  not a clobber — diff per-card `column` fields before reacting. Two traps:
+  sync is non-idempotent (it flips cards `1f24a4f7`/`243016c3` every run —
+  revert unintended foreign flips before committing: `git checkout` the
+  board, then `move_card(<full-uuid>, <col>)` + `compute_chains()`), and
+  `move_card` matches the id **exactly** (an 8-hex prefix returns `False`
+  silently; resolve the full uuid first).
