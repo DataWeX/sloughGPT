@@ -1,4 +1,4 @@
-import { useAuthStore } from '../auth'
+import { useAuthStore } from '../web/lib/auth'
 import { _corrId, _trackCorrId } from './corr-id'
 
 interface AuthFetchOptions extends RequestInit {
