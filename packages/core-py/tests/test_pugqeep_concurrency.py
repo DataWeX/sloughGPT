@@ -171,6 +171,82 @@ def test_concurrent_spawn_and_iterators_never_raise():
 
 
 # ════════════════════════════════════════════════════════════════
+# Pool capacity
+# ════════════════════════════════════════════════════════════════
+
+
+def test_concurrent_branch_never_exceeds_max_stems():
+    """branch() must hold max_stems even though it releases _lock to admit.
+
+    The lock is deliberately dropped around the blocking admit(), so the
+    capacity check and the registration cannot share a critical section.
+    Without a reservation two threads pass the check together, both register,
+    and a Pool built for 4 stems ends up running more -- the one guarantee
+    this package is supposed to make.
+
+    The barrier matters: spawned separately, each caller spends its first
+    microseconds in engine.spawn() and arrives after earlier callers have
+    already registered, so the check passes cleanly and the race never
+    shows. Releasing them together lands every caller in branch() before any
+    one of them has reached the registration.
+    """
+    engine = Engine("race")
+    pool = engine.pool("t", max_stems=4, pool_workers=2)
+    max_stems = pool.max_stems
+    attempts = 12
+
+    # Spawn first, outside the race: only branch() is under test.
+    procs = [engine.spawn(_sleep, 30.0) for _ in range(attempts)]
+    gate = threading.Barrier(attempts, timeout=15)
+    tallied = {"ok": 0, "full": 0}
+    tally = threading.Lock()
+    failures: list[BaseException] = []
+
+    def attempt(p):
+        # 30s sleep: no stem retires mid-test, so capacity freed by _execute
+        # finishing cannot let extra branches legitimately succeed and mask
+        # the race.
+        try:
+            gate.wait()
+            pool.branch([p])
+            with tally:
+                tallied["ok"] += 1
+        except RuntimeError:
+            with tally:
+                tallied["full"] += 1
+        except Exception as e:  # pragma: no cover - barrier/infra trouble
+            failures.append(e)
+
+    threads = [threading.Thread(target=attempt, args=(p,)) for p in procs]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+    stuck = [t for t in threads if t.is_alive()]
+
+    try:
+        assert not failures, failures
+        assert not stuck, f"{len(stuck)} branch() call(s) wedged"
+        # Behavioral checks first: they name the actual violation, and they
+        # hold for any implementation. An unfixed Pool reports "5 stems
+        # admitted on a max_stems=4 pool" here rather than tripping over the
+        # bookkeeping field below.
+        assert tallied["ok"] <= max_stems, (
+            f"{tallied['ok']} stems admitted on a max_stems={max_stems} pool"
+        )
+        assert len(pool._stems) <= max_stems, (
+            f"{len(pool._stems)} live stems on a max_stems={max_stems} pool"
+        )
+        # Then the accounting the fix itself relies on.
+        assert len(pool._stems) + pool._reserved <= max_stems, (
+            f"{len(pool._stems)} stems + {pool._reserved} reserved exceeds max_stems={max_stems}"
+        )
+        assert pool._reserved == 0, "a reservation was never given back"
+    finally:
+        engine.stop()
+
+
+# ════════════════════════════════════════════════════════════════
 # _completed drain
 # ════════════════════════════════════════════════════════════════
 

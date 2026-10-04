@@ -343,6 +343,12 @@ class Pool:
         self.status = PoolStatus.IDLE
         self.max_stems = max_stems
         self._stems: dict[str, Stem] = {}
+        # Slots promised but not yet registered. branch() has to drop _lock
+        # across the blocking admit() below, so the capacity check and the
+        # registration cannot share one critical section -- and two threads
+        # passing the check concurrently would both fit and break max_stems.
+        # Counting the promise here keeps the bound true across that window.
+        self._reserved: int = 0
         self._pool = ThreadPoolExecutor(
             max_workers=pool_workers,
             thread_name_prefix=f"pool-{name}",
@@ -358,8 +364,9 @@ class Pool:
 
     def branch(self, processes: list[Process]) -> Stem:
         with self._lock:
-            if len(self._stems) >= self.max_stems:
+            if len(self._stems) + self._reserved >= self.max_stems:
                 raise RuntimeError(f"Pool '{self.name}' at max stems ({self.max_stems})")
+            self._reserved += 1
 
         # Admit BEFORE any state change: a blocked put must not leave a
         # half-built stem behind it. Work already admitted (the Engine.spawn
@@ -377,11 +384,22 @@ class Pool:
         except BaseException:
             for proc in admitted:
                 self._pipe.release(proc)
+            with self._lock:
+                self._reserved -= 1
             raise
 
-        stem = Stem(pool_id=self.name, processes=processes)
-        self._stems[stem.id] = stem
-        self.status = PoolStatus.BRANCHING
+        try:
+            stem = Stem(pool_id=self.name, processes=processes)
+            with self._lock:
+                self._stems[stem.id] = stem
+                self.status = PoolStatus.BRANCHING
+        finally:
+            # The slot is accounted for either way: committed here, or simply
+            # released if minting the Stem failed. Never double-released --
+            # the rollback above has already given this call's reservation
+            # back before it could reach this block.
+            with self._lock:
+                self._reserved -= 1
 
         for proc in processes:
             proc.ready()
@@ -1997,10 +2015,13 @@ class Engine:
     def dispatch_batch(self, max_count: int = None) -> int:
         if max_count is None:
             max_count = self._dispatch_batch_size
-        if not self._pending:
-            return 0
-        batch = self._pending[:max_count]
-        self._pending = self._pending[max_count:]
+        # Slice and reassign in one step: two callers running this concurrently
+        # would otherwise both read the same head and dispatch it twice.
+        with self._lock:
+            if not self._pending:
+                return 0
+            batch = self._pending[:max_count]
+            self._pending = self._pending[max_count:]
         dispatched = 0
         for proc in batch:
             self._dispatch_process(proc)
