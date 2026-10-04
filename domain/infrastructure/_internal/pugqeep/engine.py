@@ -35,6 +35,8 @@ from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
+from multiprocessing.reduction import ForkingPickler
+from pickle import PicklingError
 from typing import Any, Optional
 
 from ..cancel_manager import OpType, get_cancel_manager
@@ -554,10 +556,133 @@ class EngineMetrics:
             self._peak_memory_bytes = 0
 
 
+_FORKSERVER_PRELOAD: list[str] = ["__main__", __name__]
+
+
+def _preflight_picklable(fn, args, kwargs, config) -> None:
+    """Hard-fail before allocating anything if the payload can't cross.
+
+    forkserver/spawn rebuild the child from pickled state, so a closure or
+    lambda would die mid-start with an opaque pickle error after the pipe
+    and process objects already exist. fork pickles nothing (explicit
+    legacy escape hatch) and skips this check.
+
+    The user payload is pickled with ForkingPickler, matching what
+    p.start() will send.
+    """
+    if (config.start_method or "forkserver") == "fork":
+        return
+    try:
+        ForkingPickler.dumps((fn, args, kwargs, config))
+    except Exception as exc:
+        raise PicklingError(
+            f"start_method={config.start_method!r} requires a picklable target; "
+            f"{fn!r} cannot be pickled ({exc.__class__.__name__}: {exc}). "
+            f"Define the function at module level or use start_method='fork'."
+        ) from exc
+
+
+def _ensure_forkserver_preload(fn) -> None:
+    """Fold the engine and target module into the forkserver preload list.
+
+    The forkserver captures its preload list only when it launches, so this
+    is effective before the first forkserver child and a cheap no-op after.
+    Measured: without preload every child re-imports the pugqeep chain
+    (~1s each); with it steady spawn cost matches fork. '__main__' stays so
+    the server-side path fixup gives children their init_main early return.
+    """
+    from multiprocessing import forkserver as _forkserver_mod
+
+    name = getattr(fn, "__module__", None)
+    if isinstance(name, str) and name not in _FORKSERVER_PRELOAD:
+        _FORKSERVER_PRELOAD.append(name)
+    _forkserver_mod.set_forkserver_preload(list(_FORKSERVER_PRELOAD))
+
+
+def _subprocess_worker(child_w, fn, args, kwargs, config, capture) -> None:
+    """Run one Process target inside the child; stream status over child_w.
+
+    Module-level and picklable so forkserver/spawn can rebuild it in a
+    fresh interpreter; previously a closure inside start() died at pickle
+    time with 'Can't get local object'.
+    """
+    import io
+    import os
+    import sys
+
+    stdout_capture = None
+    stderr_capture = None
+
+    if capture:
+        stdout_capture = io.StringIO()
+        stderr_capture = io.StringIO()
+        sys.stdout = stdout_capture
+        sys.stderr = stderr_capture
+
+    try:
+        if config.memory_limit_mb is not None:
+            try:
+                import resource
+
+                limit_bytes = config.memory_limit_mb * 1024 * 1024
+                resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
+            except (ImportError, ValueError, OSError):
+                pass
+
+        if config.cpu_affinity is not None:
+            try:
+                os.sched_setaffinity(0, config.cpu_affinity)
+            except (AttributeError, OSError):
+                pass
+
+        if config.cwd is not None:
+            try:
+                os.chdir(config.cwd)
+            except (OSError, FileNotFoundError):
+                pass
+
+        if config.env is not None:
+            try:
+                os.environ.update(config.env)
+            except (TypeError, OSError):
+                pass
+
+        try:
+            child_w.send(_MSG_READY)
+        except Exception:
+            logger.warning("Failed to send READY message to parent pipe")
+
+        result = fn(*args, **kwargs)
+
+        try:
+            child_w.send(("ok", result))
+        except Exception:
+            logger.debug("Failed to send result to parent", exc_info=True)
+    except Exception as e:
+        try:
+            child_w.send(("error", str(e)))
+        except Exception:
+            logger.debug("Failed to send error to parent", exc_info=True)
+    finally:
+        if capture:
+            try:
+                child_w.send(("stdout", stdout_capture.getvalue() if stdout_capture else ""))
+                child_w.send(("stderr", stderr_capture.getvalue() if stderr_capture else ""))
+            except Exception:
+                logger.warning("Failed to send captured output to parent pipe")
+        try:
+            child_w.close()
+        except Exception:
+            logger.warning("Failed to close child pipe")
+
+
 class SubprocessProcess:
     """Wraps a Process in an isolated OS subprocess.
 
     Runs a Process.fn in a subprocess with:
+    - Start via forkserver by default: the child is a fresh interpreter
+      with no inherited threads, which kills the fork-into-multithreaded-
+      parent deadlock class (fork stays as the explicit escape hatch)
     - Memory limits via resource.setrlimit
     - CPU affinity
     - Working directory (cwd)
@@ -583,88 +708,28 @@ class SubprocessProcess:
         self._stderr: str | None = None
 
     def start(self) -> None:
-        import os
+        start_method = self.config.start_method or "forkserver"
+        _preflight_picklable(self.proc.fn, self.proc.args, self.proc.kwargs, self.config)
+        if start_method == "forkserver":
+            _ensure_forkserver_preload(self.proc.fn)
 
         parent_r, child_w = multiprocessing.Pipe(duplex=False)
         self._start_time = time.monotonic()
         capture = self.config.capture_output
 
-        def _worker():
-            import io
-            import sys
-
-            stdout_capture = None
-            stderr_capture = None
-
-            if capture:
-                stdout_capture = io.StringIO()
-                stderr_capture = io.StringIO()
-                sys.stdout = stdout_capture
-                sys.stderr = stderr_capture
-
-            try:
-                if self.config.memory_limit_mb is not None:
-                    try:
-                        import resource
-
-                        limit_bytes = self.config.memory_limit_mb * 1024 * 1024
-                        resource.setrlimit(resource.RLIMIT_AS, (limit_bytes, limit_bytes))
-                    except (ImportError, ValueError, OSError):
-                        pass
-
-                if self.config.cpu_affinity is not None:
-                    try:
-                        os.sched_setaffinity(0, self.config.cpu_affinity)
-                    except (AttributeError, OSError):
-                        pass
-
-                if self.config.cwd is not None:
-                    try:
-                        os.chdir(self.config.cwd)
-                    except (OSError, FileNotFoundError):
-                        pass
-
-                if self.config.env is not None:
-                    try:
-                        os.environ.update(self.config.env)
-                    except (TypeError, OSError):
-                        pass
-
-                try:
-                    child_w.send(_MSG_READY)
-                except Exception:
-                    logger.warning("Failed to send READY message to parent pipe")
-
-                result = self.proc.fn(*self.proc.args, **self.proc.kwargs)
-
-                try:
-                    child_w.send(("ok", result))
-                except Exception:
-                    logger.debug("Failed to send result to parent", exc_info=True)
-            except Exception as e:
-                try:
-                    child_w.send(("error", str(e)))
-                except Exception:
-                    logger.debug("Failed to send error to parent", exc_info=True)
-            finally:
-                if capture:
-                    try:
-                        child_w.send(
-                            ("stdout", stdout_capture.getvalue() if stdout_capture else "")
-                        )
-                        child_w.send(
-                            ("stderr", stderr_capture.getvalue() if stderr_capture else "")
-                        )
-                    except Exception:
-                        logger.warning("Failed to send captured output to parent pipe")
-                try:
-                    child_w.close()
-                except Exception:
-                    logger.warning("Failed to close child pipe")
-
-        start_method = self.config.start_method or "fork"
         ctx = multiprocessing.get_context(start_method)
-        self._process = ctx.Process(target=_worker, daemon=True)
+        self._process = ctx.Process(
+            target=_subprocess_worker,
+            args=(
+                child_w,
+                self.proc.fn,
+                self.proc.args,
+                self.proc.kwargs,
+                self.config,
+                capture,
+            ),
+            daemon=True,
+        )
         self._process.start()
         self.proc._pid = self._process.pid
         self.proc.running()

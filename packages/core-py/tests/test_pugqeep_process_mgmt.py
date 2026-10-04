@@ -2,8 +2,10 @@
 
 import os
 import signal
+import sys
 import threading
 import time
+from pickle import PicklingError
 
 import pytest
 
@@ -55,6 +57,40 @@ def _slow_fail(secs):
 
 def _identity(x):
     return x
+
+
+_L2_FRESH_CHILD_MARKER: str | None = None
+
+
+def _fresh_child_probe() -> str | None:
+    """Return the parent-only marker that separates fork from a fresh child.
+
+    A forkserver/spawn child re-imports this module fresh -> None; a fork
+    child inherits the parent's memory -> the marker value.
+    """
+    return _L2_FRESH_CHILD_MARKER
+
+
+def _sub_cwd():
+    return os.getcwd()
+
+
+def _sub_print_something():
+    print("hello stdout")
+    print("hello stderr", flush=True)
+    return "done"
+
+
+def _sub_get_env(key):
+    return os.environ.get(key, "not_set")
+
+
+def _sub_add(a, b):
+    return a + b
+
+
+def _sub_ok():
+    return "ok"
 
 
 # ── Config ───────────────────────────────────────────────────────
@@ -217,6 +253,59 @@ class TestSubprocessProcess:
             time.sleep(0.05)
 
         assert proc.status == ProcessStatus.COMPLETED
+
+    def test_forkserver_runs_target_in_fresh_child(self):
+        mod = sys.modules[__name__]
+        mod._L2_FRESH_CHILD_MARKER = "set-by-parent"
+        try:
+            proc = Process(fn=_fresh_child_probe, name="fresh")
+            config = SubprocessConfig(enabled=True, start_method="forkserver")
+            sub = SubprocessProcess(proc, config)
+
+            sub.start()
+            sub.monitor()
+
+            deadline = time.time() + 20
+            while not proc.is_done and time.time() < deadline:
+                time.sleep(0.05)
+
+            assert proc.status == ProcessStatus.COMPLETED
+            # Fresh child re-imports this module: the parent-only marker
+            # must be unset. A fork child would inherit it from memory.
+            assert proc.result is None
+        finally:
+            mod._L2_FRESH_CHILD_MARKER = None
+
+    def test_unpicklable_target_hard_fails_cleanly(self):
+        proc = Process(fn=lambda: 7, name="lambda")
+        config = SubprocessConfig(enabled=True, start_method="forkserver")
+        sub = SubprocessProcess(proc, config)
+
+        with pytest.raises(PicklingError, match="picklable"):
+            sub.start()
+
+        # Hard fail = nothing half-started, lifecycle untouched
+        assert sub._process is None
+        assert proc.status == ProcessStatus.CREATED
+
+    def test_fork_still_accepts_closure(self):
+        # fork is the explicit escape hatch: no pickling, closures fine.
+        def _closure():
+            return "fork-ok"
+
+        proc = Process(fn=_closure, name="closure")
+        config = SubprocessConfig(enabled=True, start_method="fork")
+        sub = SubprocessProcess(proc, config)
+
+        sub.start()
+        sub.monitor()
+
+        deadline = time.time() + 5
+        while not proc.is_done and time.time() < deadline:
+            time.sleep(0.05)
+
+        assert proc.status == ProcessStatus.COMPLETED
+        assert proc.result == "fork-ok"
 
 
 # ── GuardTree ────────────────────────────────────────────────────
@@ -1856,7 +1945,7 @@ class TestConfigEdgeCases:
     def test_subprocess_config_defaults(self):
         cfg = SubprocessConfig()
         assert cfg.enabled is True
-        assert cfg.start_method == "fork"
+        assert cfg.start_method == "forkserver"
         assert cfg.terminate_grace == 3.0
 
     def test_restart_policy_defaults(self):
@@ -2127,10 +2216,7 @@ class TestSubprocessCwdAndCapture:
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
-        def get_cwd():
-            return os.getcwd()
-
-        p = engine.spawn(get_cwd, name="getcwd", subprocess=True, tree="t")
+        p = engine.spawn(_sub_cwd, name="getcwd", subprocess=True, tree="t")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -2144,11 +2230,7 @@ class TestSubprocessCwdAndCapture:
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
-        def get_cwd():
-
-            return os.getcwd()
-
-        p = engine.spawn(get_cwd, name="getcwd", subprocess=True, tree="t")
+        p = engine.spawn(_sub_cwd, name="getcwd", subprocess=True, tree="t")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -2162,12 +2244,7 @@ class TestSubprocessCwdAndCapture:
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
-        def print_something():
-            print("hello stdout")
-            print("hello stderr", flush=True)
-            return "done"
-
-        p = engine.spawn(print_something, name="capture", subprocess=True, tree="t")
+        p = engine.spawn(_sub_print_something, name="capture", subprocess=True, tree="t")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -2181,11 +2258,7 @@ class TestSubprocessCwdAndCapture:
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
-        def get_env(key):
-
-            return os.environ.get(key, "not_set")
-
-        p = engine.spawn(get_env, "MY_TEST_VAR", name="envtest", subprocess=True, tree="t")
+        p = engine.spawn(_sub_get_env, "MY_TEST_VAR", name="envtest", subprocess=True, tree="t")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -2199,10 +2272,7 @@ class TestSubprocessCwdAndCapture:
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
-        def add(a, b):
-            return a + b
-
-        p = engine.run_subprocess(add, 2, 3, name="add")
+        p = engine.run_subprocess(_sub_add, 2, 3, name="add")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()
@@ -2216,7 +2286,7 @@ class TestSubprocessCwdAndCapture:
         engine = Engine(config=cfg)
         engine.tree("t", guarded=True)
 
-        p = engine.spawn(lambda: "ok", name="health", subprocess=True, tree="t")
+        p = engine.spawn(_sub_ok, name="health", subprocess=True, tree="t")
         engine.run_background(poll_interval=0.01)
         engine.wait(timeout=5)
         engine.stop()

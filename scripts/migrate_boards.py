@@ -42,8 +42,8 @@ NEW_FIELDS = [
 STATUS_TO_COLUMN = {
     "done": "done",
     "completed": "done",
-    "wip": "in_progress",
-    "in_progress": "in_progress",
+    "wip": "wip",
+    "in_progress": "wip",
     "review": "review",
     "todo": "todo",
     "open": "todo",
@@ -115,7 +115,7 @@ def migrate(board_dir: Path, dry_run: bool = False) -> dict:
 
     columns = [
         {"name": "todo", "wip_limit": 0, "order": 0},
-        {"name": "in_progress", "wip_limit": 3, "order": 1},
+        {"name": "wip", "wip_limit": 3, "order": 1},
         {"name": "review", "wip_limit": 0, "order": 2},
         {"name": "done", "wip_limit": 0, "order": 3},
     ]

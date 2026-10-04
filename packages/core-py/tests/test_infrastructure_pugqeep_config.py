@@ -60,7 +60,7 @@ class TestSubprocessConfig:
         assert c.enabled is True
         assert c.python_exe == "python3"
         assert c.max_workers == 4
-        assert c.start_method == "fork"
+        assert c.start_method == "forkserver"
         assert c.terminate_grace == 3.0
 
 

@@ -138,7 +138,7 @@ def test_every_status_has_a_column():
 def test_status_to_column_mapping():
     expected = {
         "done": "done",
-        "wip": "in_progress",
+        "wip": "wip",
         "review": "review",
         "todo": "todo",
         "open": "todo",
@@ -150,6 +150,6 @@ def test_status_to_column_mapping():
 
 
 def test_column_to_status_mapping():
-    expected = {"todo": "open", "in_progress": "wip", "review": "review", "done": "done"}
+    expected = {"todo": "open", "wip": "wip", "review": "review", "done": "done"}
     for col, status in expected.items():
         assert config.COLUMN_TO_STATUS[col] == status

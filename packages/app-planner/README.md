@@ -40,7 +40,7 @@ app-planner search "keyword"
 
 # Kanban
 app-planner board                          # ASCII board, grouped by column
-app-planner add "Ship v2.0" --column in_progress --tags release
+app-planner add "Ship v2.0" --column wip --tags release
 app-planner move <card-id> done
 
 # Sync notes to board explicitly
@@ -116,13 +116,13 @@ Resolution order, first match wins:
 | Note status | Board column |
 |-------------|--------------|
 | `open`      | `todo`       |
-| `wip`       | `in_progress`|
+| `wip`       | `wip`        |
 | `review`    | `review`     |
 | `done`      | `done`       |
 | `blocked`   | `todo`       |
 
 Mapping lives in `app_planner.config.STATUS_TO_COLUMN` / `COLUMN_TO_STATUS`.
-Board columns define the inverse: `todo -> open`, `in_progress -> wip`,
+Board columns define the inverse: `todo -> open`, `wip -> wip`,
 `review -> review`, `done -> done`. Moving a card in the GUI updates the
 matching note's status and vice versa.
 
