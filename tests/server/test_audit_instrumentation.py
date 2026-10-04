@@ -111,7 +111,7 @@ class TestModelAudit:
         assert resp.status_code == 200
 
     @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_quantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
         provider = MagicMock()
@@ -136,7 +136,7 @@ class TestModelAudit:
         }
 
     @patch("domain.infrastructure._internal.quantization.walk_slo_linears", return_value={})
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_dequantize_model_logs_event(
         self, mock_logger, mock_provider, mock_walk, models_client
