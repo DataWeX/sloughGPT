@@ -4,7 +4,29 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~10:15 — `feat/wip-column-rename` **lands on
+**Last update**: 2026-10-04 ~16:45 — `fix/board-column-validation` **lands on
+main** (fast-forward `67c406ee2`, card `46f0fac4` → done): the column name is
+validated at the **core**, not at the CLI. `PlannerStore.validate_column()` is
+now the single source of truth and every write path funnels through it —
+`add_card`, `move_card`, and `update_card(column=)` — so a retired or
+misspelled spelling (`in_progress`, `in-progress`, `TODO`) can no longer enter
+the board; that gap is exactly how stale spellings had leaked in (only
+`_board_move` ever checked). `column_names()` stops at the schema header with
+a substring pre-filter, so the hot path keeps its throughput: **58µs** on a
+1.23 MB / 1052-card board vs 36.1 ms for a full `load_board()` = **0.1% of an
+add**. CLI `_board_add`/`_board_move` catch `ValueError` for the friendly
+`Invalid column: X. Valid: …` message and the duplicated check in
+`_board_move` is gone. Gates: app-planner **194** (+9), ruff clean; benchmark
+no regression — faster than unmodified main in 3 of 4 paired runs while the
+box sat at load 10–12 (the swing is contention, not the code). Board half on
+root branch `86fb9a300`: 3 hyphenated `in-progress` orphans → `in_progress`
+and the card → done, 957 cards / 959 lines preserved, 0 invalid columns left;
+`verify_board` still reports only the pre-existing `todo:78` break
+(2026-10-04T06:36Z, identical at HEAD — not introduced here, journal is
+append-only so it is reported rather than rewritten). Blast radius checked:
+`PlannerStore` has no caller outside app-planner, and the GUI runs on
+`KanbanStore`, which already guards its own `move_card`.
+Earlier ~10:15: `feat/wip-column-rename` **lands on
 main** (fast-forward `3f8465164`, card `ffaea823` → done): the kanban column
 is **`wip`, never `in_progress`** — `config` maps both directions, the default
 column schemas in Python **and** TS, 4 test files, package README + planner
