@@ -1,4 +1,4 @@
-"""Mole — the always-on, no-AI watcher over the site-doctor seams.
+"""Mole — the always-on, no-AI monitor over the probe seams.
 
 Thin timing layer on the existing doctor routines: cadence, findings
 fingerprint (delta dedupe), append-only journal, and change-only events.
