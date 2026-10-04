@@ -22,7 +22,8 @@ export function redirectsPlugin(): Plugin {
       server.middlewares.use((req, res, next) => {
         try {
           const pathname = (req.url || '/').split('?')[0] || '/'
-          // Leave /api/* to apiRoutesPlugin (no overlap with REDIRECTS keys)
+          // Leave /api/* to the dev proxy (vite.config server.proxy → FastAPI;
+          // no overlap with REDIRECTS keys)
           if (pathname.startsWith('/api/')) return next()
           if (applyRedirect(pathname, res)) return
           next()

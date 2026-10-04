@@ -84,6 +84,9 @@ class RouteSpec:
     method: str | None = None
     summary: str = ""
     tags: tuple[str, ...] = ()
+    # Explicit success status for this crossing (e.g. 201 for creates).
+    # None keeps FastAPI's default 200 — existing projections are unaffected.
+    status_code: int | None = None
 
 
 @dataclass(frozen=True)
@@ -348,11 +351,17 @@ def _build_endpoint(
         return read_endpoint
 
     model = _request_model(spec)
+    # A contract with no *required* parameter does not demand a body: a
+    # descriptor-projected DELETE/POST carries its identity in the path (or
+    # nothing at all), and bodyless writes must not 422. Body(...) stays for
+    # any contract that declares a required field — existing projections are
+    # byte-identical (they all declare required params or are reads).
+    body: Any = Body(...) if any(p.required for p in spec.parameters) else Body(None)
     if authed:
 
         async def write_endpoint(
             request: Request,
-            payload: Any = Body(...),
+            payload: Any = body,
             auth_user: dict | None = Depends(require_auth_if_enabled),
         ) -> dict[str, Any]:
             return await _dispatch(payload, request)
@@ -361,7 +370,7 @@ def _build_endpoint(
 
         async def write_endpoint(  # noqa: F811 — scoped twin, public variant
             request: Request,
-            payload: Any = Body(...),
+            payload: Any = body,
         ) -> dict[str, Any]:
             return await _dispatch(payload, request)
 
@@ -473,6 +482,7 @@ def create_router(
             description=spec.description,
             operation_id=operation_id,
             tags=list(route_spec.tags) if route_spec.tags else None,
+            status_code=route_spec.status_code,
             responses={
                 422: {"description": "Contract violation (missing or mistyped parameter)"},
             },

@@ -348,7 +348,7 @@ describe('URL resolution (scoped same-origin routes)', () => {
     expect(mockFetch.mock.calls[0][0]).toBe('http://127.0.0.1:9/docstore/kv/foo')
   })
 
-  it('keeps /api/planner/* same-origin (Vite apiRoutesPlugin serves it)', async () => {
+  it('keeps /api/planner/* same-origin (dev proxy + gateway relay serve it)', async () => {
     mockFetch.mockResolvedValue(mockOk())
     await apiGet('/api/planner/tasks')
     expect(mockFetch.mock.calls[0][0]).toBe('/api/planner/tasks')

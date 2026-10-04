@@ -274,6 +274,56 @@ def test_action_projects_to_post_only():
     assert client.post("/t", json={"text": "x"}).status_code == 200
 
 
+# ── transport parity knobs: bodyless writes and explicit success status ──
+
+
+def test_write_with_no_declared_parameter_accepts_a_bodyless_request():
+    """A path-identity write (DELETE …/{id}) carries no body — must not 422.
+
+    The shared http-client sends DELETE without a body (asserted in
+    apps/web/lib/http-client.test.ts: "calls fetch with DELETE and no
+    body"), so a contract that declares no required parameter must accept
+    the request as-is instead of demanding ``Body(...)``.
+    """
+    async def _identify(request) -> dict:
+        return {"id": request.path_params["id"], "ok": True}
+
+    registry = ContractRegistry()
+    router = create_router(
+        _spec("t.bodyless", execute=_identify),
+        RouteSpec(path="/thing/{id}", method="DELETE"),
+        _identify,
+        prefix="/t",
+        registry=registry,
+    )
+    client = TestClient(_app_for(router, auth_user={"sub": "u"}))
+    # no JSON body at all — exactly what apiDelete() sends
+    resp = client.delete("/t/thing/abc")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {"id": "abc", "ok": True}
+    # an optional body still round-trips when a caller does send one
+    assert client.post("/t/thing/abc", json={}).status_code == 405
+
+
+def test_route_spec_status_code_sets_the_success_status():
+    """RouteSpec(status_code=201) makes creates answer 201, not the 200 default."""
+    registry = ContractRegistry()
+    router = create_router(
+        _write_spec("t.created"),
+        RouteSpec(path="", status_code=201),
+        _write_echo,
+        prefix="/t",
+        registry=registry,
+    )
+    client = TestClient(_app_for(router, auth_user={"sub": "u"}))
+    resp = client.post("/t", json={"text": "x"})
+    assert resp.status_code == 201
+    assert resp.json()["status"] == "success"
+    # default stays 200 when no status is stated
+    app2, _ = _serve(_write_spec("t.default200"), RouteSpec(path=""), _write_echo, auth_user={"sub": "u"})
+    assert TestClient(app2).post("/t", json={"text": "x"}).status_code == 200
+
+
 # ── error classification (one story for every projected route) ─────────
 
 
@@ -489,15 +539,16 @@ def test_pilot_is_documented_in_openapi():
 
 
 def test_pilot_registry_entry_is_actually_served():
-    """The registry's claim must match the router's route table (not a paper one)."""
-    from routers.contracts import router as contracts_router
+    """The registry's claim must match the assembled app's route table (not a paper one)."""
+    from fastapi import FastAPI
+    from routers import get_all_routers
 
-    served = {
-        (route.path, method)
-        for route in contracts_router.routes
-        for method in route.methods
-        if method != "HEAD"
-    }
+    # Assemble the boot router set exactly like check_contract --runtime does;
+    # _iter_served_routes recurses FastAPI's nested _IncludedRouter wrappers.
+    app = FastAPI()
+    for router in get_all_routers():
+        app.include_router(router)
+    served = set(check_contract._iter_served_routes(app.routes))
     assert ("/contracts", "GET") in served
     claimed = {(e["path"], e["method"]) for e in REGISTRY.routes()}
     assert claimed <= served, f"registry claims routes no router serves: {claimed - served}"

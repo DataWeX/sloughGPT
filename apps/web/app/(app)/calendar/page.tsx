@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, Button, Badge } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { apiGet } from '@/lib/http-client'
 
 interface CalendarEvent {
   id: string
@@ -93,8 +94,11 @@ export default function CalendarPage() {
     setLoading(true)
     try {
       const dateStr = formatDate(currentDate)
-      const res = await fetch(`/api/calendar/events?date=${dateStr}`)
-      const data = await res.json()
+      // http-client unwraps the {status, data} envelope — raw fetch() would
+      // read data.events off the envelope and silently render an empty day.
+      const data = await apiGet<{ events: CalendarEvent[] }>(
+        `/api/calendar/events?date=${dateStr}`,
+      )
       setEvents(data.events || [])
     } catch (err) {
       console.error('Failed to fetch events:', err)

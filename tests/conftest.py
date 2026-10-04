@@ -13,6 +13,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 for _p in (
     _REPO_ROOT / "packages" / "core-py",
     _REPO_ROOT / "packages" / "sdk-py",
+    _REPO_ROOT / "packages" / "app-planner" / "src",
     _REPO_ROOT / "apps" / "api" / "server",
     _REPO_ROOT / "apps" / "cli" / "src",
 ):

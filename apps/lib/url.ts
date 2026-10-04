@@ -4,11 +4,11 @@ export function _isDocstoreUrl(url: string): boolean {
   return url.includes('/docstore/')
 }
 
-// Vite's apiRoutesPlugin serves the planner/calendar route handlers
-// (apps/web/app/api/**/route.ts) on the WEB origin in dev. Prefixing these
-// with PUBLIC_API_URL sends them to FastAPI, which has no such routes and
-// answers 404 — keep them same-origin. Must match API_SCOPES in
-// apps/web/vite/api-routes.ts (isScopedApiPath).
+// The planner/calendar handlers live in the Python backend now
+// (apps/api/server/routers/planner.py + calendar.py). Same-origin in dev via
+// vite's server.proxy (vite.config.ts), same-origin in prod via the gateway —
+// prefixing these with PUBLIC_API_URL would only matter for absolute bases, so
+// keep them relative. Must match /api/(planner|calendar) below.
 const SAME_ORIGIN_RE = /^\/api\/(planner|calendar)(\/|$)/
 
 /** Resolve a request path against PUBLIC_API_URL, preserving scoped same-origin API routes. */
