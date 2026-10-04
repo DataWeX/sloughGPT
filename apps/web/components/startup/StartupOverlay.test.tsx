@@ -94,7 +94,7 @@ describe('StartupOverlay', () => {
       value: { ...window.location, reload },
       writable: true,
     })
-    render(<StartupOverlay />)
+    const { container } = render(<StartupOverlay />)
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getByRole('heading')).toHaveTextContent('Connecting')
 
@@ -104,6 +104,11 @@ describe('StartupOverlay', () => {
     expect(screen.getByRole('alert')).toBeTruthy()
     expect(screen.getByRole('heading')).toHaveTextContent('Still connecting')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    // De-stacked stuck variant: a "no response" screen must not also claim
+    // progress, so the shimmer bar and the stage dots stay out of it.
+    expect(screen.queryByRole('progressbar', { name: 'Startup progress' })).toBeNull()
+    expect(container.querySelector('[role="group"]')).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('no response')
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(reload).toHaveBeenCalledTimes(1)

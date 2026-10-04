@@ -147,13 +147,52 @@ export function StartupOverlay() {
     .filter((h: HookStatus) => h.status === 'running')
     .slice(0, 3)
 
+  const overlayClassName = cn(
+    'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a] transition-opacity duration-500',
+    fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100',
+  )
+
+  // "Stuck" is its own variant, not an extra row bolted onto the startup UI.
+  // A no-response screen must not also claim progress, so the bar, the detail
+  // row and the stage dots stay out of it: logo -> status -> one action.
+  if (stuck) {
+    return (
+      <div className={overlayClassName}>
+        <div className="mb-6">
+          <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
+        </div>
+
+        <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-5">Still connecting</h2>
+
+        <div role="alert" className="flex flex-wrap items-center justify-center gap-3">
+          <p className="text-[11px] text-[#febc2e] text-center">
+            No response from the server yet — check that the backend is running
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              logStateEvent('overlay_retry', {
+                kind: 'overlay',
+                message: 'overlay_retry reload requested',
+                data: { stage: startupStage },
+              })
+              window.location.reload()
+            }}
+            className="px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
+          >
+            Retry
+          </button>
+        </div>
+
+        <span className="sr-only" role="status">
+          Still connecting — no response from the server
+        </span>
+      </div>
+    )
+  }
+
   return (
-    <div
-      className={cn(
-        'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a] transition-opacity duration-500',
-        fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100',
-      )}
-    >
+    <div className={overlayClassName}>
       {/* Logo */}
       <div className="mb-8">
         <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
@@ -161,7 +200,7 @@ export function StartupOverlay() {
 
       {/* Stage label */}
       <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-6">
-        {stuck ? 'Still connecting' : STAGE_LABELS[startupStage] || 'Starting up'}
+        {STAGE_LABELS[startupStage] || 'Starting up'}
       </h2>
 
       {/* Progress bar */}
@@ -194,28 +233,8 @@ export function StartupOverlay() {
         {startupElapsed > 0 && <span className="font-mono">{startupElapsed.toFixed(1)}s</span>}
       </div>
 
-      {/* Stuck-connecting recovery */}
-      {stuck && (
-        <div role="alert" className="flex flex-col items-center gap-2 mb-4">
-          <p className="text-[11px] text-[#febc2e]">
-            No response from the server yet — check that the backend is running
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              logStateEvent('overlay_retry', {
-                kind: 'overlay',
-                message: 'overlay_retry reload requested',
-                data: { stage: startupStage },
-              })
-              window.location.reload()
-            }}
-            className="px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
-          >
-            Retry
-          </button>
-        </div>
-      )}
+      {/* Stuck-connecting recovery lives in its own variant above — a
+          "no response" screen renders status + action only. */}
 
       {/* Active hooks */}
       {activeHooks.length > 0 && (
