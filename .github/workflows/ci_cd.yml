@@ -30,7 +30,10 @@ jobs:
           cache-dependency-path: |
             apps/api/server/requirements.txt
             pyproject.toml
-      - run: pip install ruff mypy
+      # Pinned to the shared toolchain's version (conda env = ruff 0.16.8).
+      # CI was installing latest, whose import-sorting rules flagged 11 I001s
+      # that pass locally -- one toolchain, one verdict (card ca647de2).
+      - run: pip install ruff==0.16.8 mypy
       - name: Ruff lint
         run: ruff check packages/core-py/ apps/api/server/ --exclude '__pycache__'
       - name: Ruff format check
@@ -55,6 +58,8 @@ jobs:
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests pillow
           python -m pip install pytest pytest-cov pytest-asyncio pytest-xdist
+          # test_vfs_addon.py imports lz4 at module scope -> collection error
+          python -m pip install lz4
 
       - name: Run core-py tests
         run: |
@@ -88,14 +93,23 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
           python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests pillow
-          python -m pip install pytest pytest-asyncio
+          # pytest-cov was missing here (every other python job has it): the
+          # --cov flags made pytest exit 4 before collecting a single test.
+          python -m pip install pytest pytest-cov pytest-asyncio
           # apps/api/server imports mogdb (training/webhooks.py); install it so
           # the server test suite can collect.
           python -m pip install -e packages/mogdb
 
       - name: Run server tests
         working-directory: apps/api/server
-        run: python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=30 -q --tb=short
+        env:
+          # apps/api/server FIRST so `tests` resolves to the server test
+          # package -- repo-root tests/ shadows it otherwise (the standing
+          # test_support collection errors). Root + shared packages follow.
+          PYTHONPATH: ${{ github.workspace }}/apps/api/server:${{ github.workspace }}:${{ github.workspace }}/packages/core-py:${{ github.workspace }}/packages/downcraft
+        # --cov=src pointed at a directory that does not exist; the server
+        # code lives in these packages.
+        run: python -m pytest tests/ --cov=infrastructure --cov=routers --cov=controllers --cov-report=term-missing --cov-fail-under=30 -q --tb=short
 
   # ─── Contract gate (descriptor → projection → registration) ────
   # Blocking: router manifest freshness, descriptor validation, and the
@@ -183,7 +197,7 @@ jobs:
       - name: Install + lint + typecheck + test
         working-directory: packages/strui
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run lint
           npx tsc --noEmit
           npx vitest run
@@ -202,9 +216,9 @@ jobs:
             apps/web/package-lock.json
             packages/strui/package-lock.json
 
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: packages/strui
       - name: Ensure @sloughgpt/strui symlink
         run: |
@@ -259,7 +273,7 @@ jobs:
       - name: Install + lint + typecheck + build + test
         working-directory: packages/sdk-ts/typescript-sdk
         run: |
-          npm ci
+          npm ci --ignore-scripts
           npm run ci
 
   # ─── Docker build + push ────────────────────────────────────────
