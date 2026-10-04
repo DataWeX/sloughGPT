@@ -52,6 +52,36 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `344168b4f`)
 
+- **2026-10-04 · `fix/meta-weights-request-params` lands — requested sampling
+  params are honoured again.** Card `d2dda007` → done, commit `806073e15`
+  (onto `a189d78eb`). Contract chosen by the user: **feedback nudges only the
+  parameters the caller left at their default; an explicitly-set parameter
+  passes through verbatim.** Before this, `_apply_meta_weights` returned
+  `get_adjustment()`'s absolute values, and `get_adjustment()` never receives
+  the request — so with an empty feedback DB *every* request answered with
+  0.7/0.85/40/1.15 whatever was asked, while `GenerateRequest` still validated
+  the field (`ge=0.0, le=2.0`) and telemetry logged the request value the
+  provider never received. Changes: `MetaWeightManager.neutral_weights`
+  exposes the baseline so callers derive a *delta* (empty store ⇒ exactly zero
+  change rather than a silent default swap); `_apply_meta_weights` gains
+  `explicit` (pydantic `model_fields_set`; the WebSocket derives it from keys
+  present in the frame) — **5 call sites, not the 4 the card claimed** (chat
+  `:2971` was the fifth); the 5s cache now stores the **nudge**, never the
+  merged result, because the nudge depends only on message+user while the merge
+  depends on that request's explicit set (caching merged output would leak one
+  request's explicit set into another's); the 4 `capture()` sites record
+  `gen_params["temperature"]`. Tests: dropped the `_apply_meta_weights`
+  passthrough patch (real code now passes explicit params through — strictly
+  stronger), added nudge-applies-at-default and telemetry-records-sent-value,
+  plus an autouse nudge-cache clear. **Benchmark** `scripts/benchmark_meta_weights.py`
+  (new): cache HIT p50 1.64µs vs cache MISS p50 39.15µs (23.9×) — the merge
+  cannot surface end-to-end. Gates: `tests/` 3156 passed / 0 failed,
+  `apps/api/server/tests` 1223 / 0. **Found while verifying, proved NOT mine on
+  pristine `a189d78eb` → card `37325860`:** the hygiene ratchet's
+  `from __future__ import annotations` stringifies dataclass annotations, so
+  `assert f.type is float` can never pass (3), plus 5 stale meta-weights
+  *router* tests where `docs/routers.md:594-596` sides with the impl.
+
 - **2026-10-04 · `fix/main-gate-green` lands — main's default test gate goes
   green (7 root-cause buckets).** Card `cbd2ffc3`, commit `ddd3b3d49` → landed
   as `70b162449` (rebased onto `81fd4d554`, moodboard-only delta, no overlap).
