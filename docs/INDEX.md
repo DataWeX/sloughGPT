@@ -15,16 +15,17 @@ Single source of truth for navigation. Read this first.
 
 ## Architecture
 
-| Doc                               | Purpose                      |
-| --------------------------------- | ---------------------------- |
-| **STRUCTURE.md**                  | Repo layout                  |
-| **RAG_ARCHITECTURE.md**           | RAG system design            |
-| **RAG_PATTERNS.md**               | RAG implementation patterns  |
-| **TRAINING_REFACTOR_PLAN.md**     | Consolidating training loops |
-| **DOMAIN_CONSOLIDATION.md**       | CCGT four + core-py merge    |
-| **process-guard-architecture.md** | Process isolation design     |
-| **PRODUCER_CONSUMER_QUEUE.md**    | Queue pattern                |
-| **PUGQEEP.md**                    | PGQ: points, pools, Pipe     |
+| Doc                               | Purpose                       |
+| --------------------------------- | ----------------------------- |
+| **STRUCTURE.md**                  | Repo layout                   |
+| **RAG_ARCHITECTURE.md**           | RAG system design             |
+| **RAG_PATTERNS.md**               | RAG implementation patterns   |
+| **TRAINING_REFACTOR_PLAN.md**     | Consolidating training loops  |
+| **DOMAIN_CONSOLIDATION.md**       | CCGT four + core-py merge     |
+| **process-guard-architecture.md** | Process isolation design      |
+| **PRODUCER_CONSUMER_QUEUE.md**    | Queue pattern                 |
+| **PUGQEEP.md**                    | PGQ: points, pools, Pipe      |
+| **TRANSPORT_PROJECTIONS.md**      | Capability → contract → route |
 
 ## Features
 
