@@ -62,6 +62,18 @@ class MetaWeightManager:
         self._embed_model = None
         self._embedder = None
 
+    @property
+    def neutral_weights(self) -> MetaWeights:
+        """Neutral baseline the feedback signal is measured against.
+
+        `get_adjustment()` returns ABSOLUTE weights (this baseline plus the
+        learned boosts, already clamped). A caller wanting the *nudge* --
+        how far feedback moved things from neutral -- subtracts this, so an
+        empty feedback database contributes exactly zero change instead of
+        silently swapping one default for another.
+        """
+        return self._default_weights
+
     def _get_embedder(self):
         """Lazy load embedding model (sentence-transformers)."""
         if self._embed_model is None:

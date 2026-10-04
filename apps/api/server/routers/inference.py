@@ -8,7 +8,7 @@ import json
 import logging
 import threading
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Collection
 from pathlib import Path
 from typing import Any
 
@@ -442,77 +442,97 @@ def _apply_meta_weights(
     repetition_penalty: float,
     user_message: str,
     user_id: str = "default",
+    explicit: Collection[str] = (),
 ) -> dict:
     """Apply feedback-driven meta-weight adjustments to generation parameters.
 
-    Looks up similar past messages in the feedback database and adjusts
-    temperature, top_p, top_k, and repetition_penalty accordingly.
-    Results are cached for 5 seconds to avoid repeated similarity searches.
+    Looks up similar past messages in the feedback database and derives a
+    *nudge* -- the distance from the neutral baseline -- for temperature,
+    top_p, top_k and repetition_penalty. Nudges are cached for 5 seconds to
+    avoid repeated similarity searches.
 
-    Returns a dict of adjusted parameters to pass to the provider.
+    `explicit` names the parameters the caller actually sent (pydantic request
+    models pass `model_fields_set`). Those pass through verbatim: a
+    server-side heuristic may only move parameters the caller left at their
+    default, because an explicitly-set value is user intent and outranks a
+    derived one.
+
+    Returns a dict of parameters to pass to the provider.
     """
     import time
 
+    requested = {
+        "temperature": temperature,
+        "top_p": top_p,
+        "top_k": top_k,
+        "repetition_penalty": repetition_penalty,
+    }
     cache_key = f"{user_id}:{hash(user_message)}"
     now = time.monotonic()
 
+    # The cache holds the NUDGE, never the merged result. The nudge depends
+    # only on the message and user, while the merge depends on which fields
+    # THIS request set explicitly -- caching merged output would leak one
+    # request's explicit set into another's.
+    nudge: dict[str, float] | None = None
     with _META_WEIGHT_CACHE_LOCK:
-        if cache_key in _META_WEIGHT_CACHE:
-            cached_time, cached_params = _META_WEIGHT_CACHE[cache_key]
-            if now - cached_time < _META_WEIGHT_CACHE_TTL:
-                return cached_params
+        cached = _META_WEIGHT_CACHE.get(cache_key)
+        if cached is not None and now - cached[0] < _META_WEIGHT_CACHE_TTL:
+            nudge = cached[1]
 
-    try:
-        from domain.feedback import get_meta_weight_manager
+    if nudge is None:
+        try:
+            from domain.feedback import get_meta_weight_manager
 
-        manager = get_meta_weight_manager()
-        adj = manager.get_adjustment(
-            user_message=user_message,
-            k=5,
-            user_id=user_id,
-        )
-        result = {
-            "temperature": adj.temperature,
-            "top_p": adj.top_p,
-            "top_k": adj.top_k,
-            "repetition_penalty": adj.repetition_penalty,
-        }
-        if adj.temperature > 1.2 or adj.top_k < 10:
-            logger.warning(
-                "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
-                adj.temperature,
-                adj.top_k,
-                user_id,
-                extra={
-                    "tag": "INF",
-                    "context": {
-                        "temperature": adj.temperature,
-                        "top_k": adj.top_k,
-                        "user_id": user_id,
-                    },
-                },
+            manager = get_meta_weight_manager()
+            adj = manager.get_adjustment(
+                user_message=user_message,
+                k=5,
+                user_id=user_id,
             )
-        with _META_WEIGHT_CACHE_LOCK:
-            _META_WEIGHT_CACHE[cache_key] = (now, result)
-            if len(_META_WEIGHT_CACHE) > 1000:
-                logger.info(
-                    "Meta-weight cache overflow, clearing %d entries", len(_META_WEIGHT_CACHE)
+            neutral = manager.neutral_weights
+            nudge = {
+                "temperature": adj.temperature - neutral.temperature,
+                "top_p": adj.top_p - neutral.top_p,
+                "top_k": adj.top_k - neutral.top_k,
+                "repetition_penalty": adj.repetition_penalty - neutral.repetition_penalty,
+            }
+            if adj.temperature > 1.2 or adj.top_k < 10:
+                logger.warning(
+                    "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
+                    adj.temperature,
+                    adj.top_k,
+                    user_id,
+                    extra={
+                        "tag": "INF",
+                        "context": {
+                            "temperature": adj.temperature,
+                            "top_k": adj.top_k,
+                            "user_id": user_id,
+                        },
+                    },
                 )
-                safe_audit_log(
-                    "inference.meta_weight_cache_clear",
-                    resource="meta_weight_cache",
-                    detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}",
-                )
-                _META_WEIGHT_CACHE.clear()
-        return result
-    except Exception as e:
-        logger.debug("Meta-weight adjustment failed: %s", e)
-        return {
-            "temperature": temperature,
-            "top_p": top_p,
-            "top_k": top_k,
-            "repetition_penalty": repetition_penalty,
-        }
+            with _META_WEIGHT_CACHE_LOCK:
+                _META_WEIGHT_CACHE[cache_key] = (now, nudge)
+                if len(_META_WEIGHT_CACHE) > 1000:
+                    logger.info(
+                        "Meta-weight cache overflow, clearing %d entries",
+                        len(_META_WEIGHT_CACHE),
+                    )
+                    safe_audit_log(
+                        "inference.meta_weight_cache_clear",
+                        resource="meta_weight_cache",
+                        detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}",
+                    )
+                    _META_WEIGHT_CACHE.clear()
+        except Exception as e:
+            logger.debug("Meta-weight adjustment failed: %s", e)
+            nudge = {}  # no signal -- the request's own values stand
+
+    return {
+        param: value if param in explicit else value + nudge.get(param, 0)
+        for param, value in requested.items()
+    }
 
 
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
@@ -1233,6 +1253,7 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
+                explicit=req.model_fields_set,
             )
 
             import state as _gen_state
@@ -1284,7 +1305,7 @@ class InferenceRouter:
                     model=actual_model,
                     tokens_generated=tokens,
                     elapsed_ms=(time.monotonic() - _t0) * 1000,
-                    temperature=req.temperature,
+                    temperature=gen_params["temperature"],
                 )
             except Exception as e:
                 logger.warning("Failed to capture conversation: %s", e)
@@ -1392,6 +1413,7 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
+                explicit=req.model_fields_set,
             )
 
             _coalescer = get_coalescer()
@@ -1528,7 +1550,7 @@ class InferenceRouter:
                     model=_stream_state.model_type or req.model,
                     tokens_generated=token_count,
                     elapsed_ms=elapsed,
-                    temperature=req.temperature,
+                    temperature=gen_params["temperature"],
                 )
             except Exception as e:
                 logger.warning("Failed to capture conversation: %s", e)
@@ -1695,12 +1717,20 @@ class InferenceRouter:
                 continue
 
             provider_messages = [{"role": "user", "content": prompt}]
+            # A WebSocket frame carries no pydantic model, so a parameter is
+            # "explicit" exactly when the client included it in the frame.
+            _ws_explicit = {
+                k
+                for k in ("temperature", "top_p", "top_k", "repetition_penalty")
+                if k in msg
+            }
             gen_params = _apply_meta_weights(
                 temperature=temperature,
                 top_p=top_p,
                 top_k=top_k,
                 repetition_penalty=repetition_penalty,
                 user_message=prompt,
+                explicit=_ws_explicit,
             )
 
             collected: list[str] = []
@@ -1748,7 +1778,7 @@ class InferenceRouter:
                         full_text,
                         model=actual_model,
                         tokens_generated=token_count,
-                        temperature=temperature,
+                        temperature=gen_params["temperature"],
                     )
                 except Exception as e:
                     logger.warning("Failed to capture conversation: %s", e)
@@ -2371,6 +2401,7 @@ class InferenceRouter:
                         repetition_penalty=req.repetition_penalty,
                         user_message=user_msg or "",
                         user_id=req.user_id or "default",
+                        explicit=req.model_fields_set,
                     )
 
                     import state as _cs_state
@@ -2975,6 +3006,7 @@ class InferenceRouter:
                 repetition_penalty=req.repetition_penalty,
                 user_message=user_msg,
                 user_id=req.user_id or "default",
+                explicit=req.model_fields_set,
             )
             # Enforce context window budget before delegating to domain
             messages = _trim_messages_to_budget(
@@ -3016,7 +3048,7 @@ class InferenceRouter:
                 result.text,
                 model=_chat_state.model_type or req.model,
                 tokens_generated=_count_tokens(result.text, _chat_state),
-                temperature=req.temperature,
+                temperature=gen_params["temperature"],
                 meta={"session_id": req.session_id or "default"},
             )
         except Exception as e:
