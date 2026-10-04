@@ -4,10 +4,13 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~04:45 — `feat/mole-watcher` lands (card `e0c80774`,
-cherry-pick `e9fb80cec`, see Landed): **Mole** phase 1 — the always-on, no-AI
-watcher over the doctor probes (cadence, identity-set delta dedupe, JSONL
-journal, load-context). Canonical 4-tree gate ≈ main baseline (833/839 nodeids
+**Last update**: 2026-10-04 ~05:05 — naming consolidated (card `43ca5222`):
+**Mole is the one app** — never "doctor"/"watcher" as names; docs realigned
+(TESTING/INDEX/FEATURES), legacy `/doctor` paths grandfathered until the
+unified `mole` CLI. Earlier ~04:45: `feat/mole-watcher` lands (card `e0c80774`,
+cherry-pick `e9fb80cec`, see Landed): Mole phase 1 — always-on, no-AI
+monitoring (cadence, identity-set delta dedupe, JSONL journal, load-context).
+Canonical 4-tree gate ≈ main baseline (833/839 nodeids
 identical; the 6 extras pass standalone → shared-`/tmp` test-isolation defect,
 card `6369c03e`). Earlier the same night: `feat/avion-transcript-batching`
 landed (card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit
@@ -45,11 +48,11 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `e9fb80cec`)
 
-- **2026-10-04 · `feat/mole-watcher` lands — Mole phase 1: the always-on, no-AI
-  watcher.** Card `e0c80774`, cherry-pick of `1b1ce40c6`: new
+- **2026-10-04 · `feat/mole-watcher` lands — Mole phase 1: always-on, no-AI
+  monitoring.** Card `e0c80774`, cherry-pick of `1b1ce40c6`: new
   `domain/core/_internal/mole/` — `run_watch` probes on a cadence over the
-  existing `run_doctor`/`PROBES` (doctor itself untouched; a new doctor probe
-  is picked up next tick). Findings are fingerprinted by **identity set**
+  existing `run_doctor`/`PROBES` (probe registry untouched; a newly
+  registered probe is picked up next tick). Findings are fingerprinted by **identity set**
   `(source, check, severity, component)` — jittering payload counters (p95,
   health score, frame sizes) never re-alert (a content-hash re-alerted on every
   tick in the live smoke — caught before landing); every tick journaled to

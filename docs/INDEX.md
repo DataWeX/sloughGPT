@@ -63,8 +63,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **TESTING.md** | Test guide |
-| **Site Doctor** (in TESTING.md) | Live-site monitor — read-only journey/http/SSE probes, `/doctor` API + page |
-| **Mole** (in TESTING.md) | Always-on watcher — doctor probes on a cadence, identity-set delta dedupe, JSONL journal, no AI |
+| **Mole** (in TESTING.md) | The one monitoring app — watches the running stack, heals by proposing fixes (suggest-only); legacy `/doctor` surface |
 | **USER_PERSONA.md** | Who we build for |
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |

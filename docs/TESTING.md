@@ -251,12 +251,15 @@ describe('YourComponent', () => {
 })
 ```
 
-## Site Doctor (runtime monitor — not `scripts/test-doctor.py`)
+## Mole (the one monitoring app — not `scripts/test-doctor.py`)
 
 `scripts/test-doctor.py` diagnoses the **test suite** (why a pytest run
-failed). The **site doctor** diagnoses the **live site**: a read-only
-monitor that probes the running stack and triages what it finds. Phase A
-is report-only — it never remediates.
+failed). **Mole** is the one monitoring app: it watches the running stack
+(read-only probes, triage) and heals like a doctor — by diagnosing and
+**proposing** fixes, suggest-only (it never applies anything on its own).
+There is nothing else to name: legacy module paths
+(`domain/core/_internal/doctor`, the `/doctor` URLs) are implementation
+detail under the grandfather rule until the unified `mole` CLI lands.
 
 - **What it probes:** API health/errors (`/health*`, `/errors/*`),
   `/health/stream` cadence + payload size (flags >256 KB frames and >8s
@@ -281,22 +284,22 @@ is report-only — it never remediates.
 **Report path:** `${SLO_DOCTOR_REPORT:-~/.cache/slog-doctor/findings-report.json}`
 (JSON, `schema_version: 1`, findings ranked worst-first).
 
-### Mole (always-on watcher)
+### Always-on monitoring: cadence + journal
 
-**Mole** adds *time* to the doctor contract: the same read-only probes on a
-cadence, every tick journaled, an event only when the findings' *identity
-set* changes — identity = source + check + severity + component. Payload
-counters (p95, health score, frame sizes) jitter every sweep and are hashed
-away, so the same finding never alerts twice. No AI anywhere; suggest-only —
-Mole never applies anything. Placement: `domain/core/_internal/mole/`
-(thin layer over `run_doctor` / `DoctorReport` / `PROBES` — a new doctor
-probe is picked up on the next tick).
+Mole runs the same read-only probes on a cadence: every tick journaled, an
+event only when the findings' *identity set* changes — identity = source +
+check + severity + component. Payload counters (p95, health score, frame
+sizes) jitter every sweep and are hashed away, so the same finding never
+alerts twice. No AI anywhere; suggest-only — Mole never applies anything.
+Placement: `domain/core/_internal/mole/` (thin layer over `run_doctor` /
+`DoctorReport` / `PROBES` — a newly registered probe is picked up on the
+next tick).
 
 ```bash
 # Watch at 30s cadence, one event line per change, journal every tick:
 .venv/bin/python -m domain.core._internal.mole
 # --interval S · --max-ticks N · --skip http|sse|journey · --journal PATH
-# --strict (info → nonzero, mirrors doctor) · --quiet (journal only)
+# --strict (info → nonzero, same rule as the report run) · --quiet (journal only)
 # --json (change events as one JSON object each)
 ```
 
@@ -304,12 +307,12 @@ probe is picked up on the next tick).
 one JSON line per tick: `ts`, `tick`, `context` (loadavg + cpu_count — the
 machine state the finding was taken on), `fingerprint`, `changed`,
 `overall`, `exit`, `summary`. A failing tick is journaled with `error` and
-contained — a watcher never dies mid-watch.
+contained — the loop never dies mid-run.
 
-**Exit codes:** doctor's (`0` ok/info · `1` warn · `2` critical), `2` for a
+**Exit codes:** `0` ok/info · `1` warn · `2` critical; `2` also for a
 watch-error tick, `130` on Ctrl-C.
 
-### Surfaced: `/doctor` API + `/doctor` page
+### App surface (legacy `/doctor` paths)
 
 | Endpoint | Data | Notes |
 |----------|------|-------|
@@ -323,8 +326,8 @@ counts + report age, a live component strip (inference / engines-system from
 behind a disclosure.
 
 ```bash
-# Router + doctor package tests
-.venv/bin/python -m pytest tests/server/test_doctor_router.py packages/core-py/tests/test_doctor.py -q
+# Router + probe/report + Mole monitoring tests
+.venv/bin/python -m pytest tests/server/test_doctor_router.py packages/core-py/tests/test_doctor.py packages/core-py/tests/test_mole.py -q
 # Page + component tests (worktree: add --config /tmp/opencode/vitest-worktree.config.ts)
 node_modules/.bin/vitest run "app/(app)/doctor/page.test.tsx" components/doctor/
 ```

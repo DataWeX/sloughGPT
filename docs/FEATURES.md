@@ -302,10 +302,11 @@ journey suite cannot drift apart.
 `scripts/run_ux_flows.py` is the legacy runner; this library is the
 spec-linked successor.
 
-## Site Doctor UI + API
+## Mole — app surface (legacy `/doctor` paths)
 
-The read-only site doctor (probes in `domain/core/_internal/doctor/`,
-documented in `TESTING.md` → *Site Doctor*) surfaced in the app.
+The read-only **Mole** monitoring app (probes in `domain/core/_internal/doctor/`,
+documented in `TESTING.md` → *Mole*) surfaced in the app; the `/doctor`
+routes, page, and nav label are grandfathered legacy paths.
 
 | Piece | Where | Notes |
 |-------|-------|-------|
