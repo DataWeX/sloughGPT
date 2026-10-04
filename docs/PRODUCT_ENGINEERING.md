@@ -151,6 +151,12 @@ Frontend: collections page (single page)
 
 ### Bad examples (fix these)
 
+> **Status 2026-09-29:** Voice/tokenizer/token_tree/kb bypasses are fixed (facade
+> or engine imports). `training/router.py` now delegates everything to
+> `TrainingEngine` (0 `_internal`, see Router Playbook below). Remaining: the
+> engines' own internals — `self_train`/`lora_eval` counts are inside
+> concurrent WIP files.
+
 **Voice** — 3 routers, domain bypassed:
 
 ```
@@ -185,6 +191,68 @@ Should be:
 TrainingEngine → wraps DatasetManager + TrainingPipeline + ModelManager from domain.training
 Single /training router with sub-paths for each feature
 ```
+
+---
+
+## Router Playbook
+
+How to build a Python API router in this repo. FastAPI's `@router.get` /
+`@router.post` decorators are the right idiom — the rules are about what lives
+in the handler, not the decorator. Endpoint inventory: [`routers.md`](routers.md).
+Before adding a capability at all, the contract-first pattern in
+[`TRANSPORT_PROJECTIONS.md`](TRANSPORT_PROJECTIONS.md) applies (descriptor →
+projected route, not a new endpoint project). Philosophy:
+[`PYTHON_FIRST.md`](PYTHON_FIRST.md) §4 "Web router is just plumbing".
+
+**1. One package per feature.** `apps/api/server/<feature>/{router.py, schemas.py, ...}`
+— reference: `apps/api/server/training/`.
+
+**2. Handler = HTTP only.** Parse/validate → call the engine → envelope.
+Zero business logic, zero `_internal` imports (`grep -c _internal` must be 0):
+
+```python
+from schemas.common import raise_error, safe_audit_log, success_response
+from domain.training import get_training_engine   # facade; function-local, lazy
+
+
+@router.delete("/training/checkpoints/{name}")
+async def training_delete_checkpoint(name: str):
+    engine = get_training_engine()
+    if not engine.is_valid_checkpoint_name(name):
+        raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
+    deleted = await engine.delete_checkpoint(name)
+    if deleted:
+        safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
+    return success_response(data={"deleted": deleted, "name": name})
+```
+
+**3. One engine per feature** (rule above). Engines may import `_internal` —
+they own the domain. Routers never do.
+
+**4. Error classification.**
+- Request problem (bad input, missing resource) → `raise_error(msg, "E_*", status_code=...)`
+  at the edge; no exception machinery.
+- Unexpected exception → let it bubble to the endpoint, then
+  `classify_and_raise(e, source="feature.op")`.
+- Expected domain failure → engine returns an envelope with
+  `metadata.code = "E_*"`; router passes it through.
+
+**5. Envelopes + audit.** Always `success_response(data=...)` from
+`schemas.common`; durable side effects get `safe_audit_log(...)`.
+
+**6. Async.** `async def` endpoints; blocking work runs via the training
+executor or an engine-managed thread — never block the event loop.
+
+**7. Registration.** Add to `get_all_routers()` in
+`apps/api/server/routers/__init__.py` (health/status register pre-lifespan).
+
+**8. Tests patch the facade.** Patch `domain.<feature>.get_x` / the engine
+method — the symbol the router actually looks up — never router-module
+symbols: renaming a router import breaks `mock.patch("training.router.x")`
+fixtures with `AttributeError` at setup (see `test_training_recovery_router.py`).
+
+**Checklist:** `grep -c _internal <router>` = 0 → registered → ruff → router's
+tests green.
 
 ---
 

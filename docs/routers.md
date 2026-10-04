@@ -1,5 +1,11 @@
 # API Routers Documentation
 
+> Building or changing a router? Follow the **Router Playbook** in
+> [PRODUCT_ENGINEERING.md](PRODUCT_ENGINEERING.md#router-playbook). This file
+> is the endpoint map only. Adding a capability rather than a handler? Read
+> [TRANSPORT_PROJECTIONS.md](TRANSPORT_PROJECTIONS.md) — routes are projections
+> of a declared contract, not endpoint projects.
+
 All routes are served by the FastAPI application under the base URL (e.g. `http://localhost:8000`). Every public endpoint uses `classify_and_raise(e, source="router.method")` for structured error responses.
 
 ## Health Router (`/health`)
@@ -662,6 +668,18 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/world/neural`       | Process through neural pipeline. |
 | `POST` | `/world/tick`         | Run a simulation tick.           |
 | `GET`  | `/world/stats`        | World rendering statistics.      |
+
+## Contracts Router (`/contracts`)
+
+Pilot of the descriptor → projection mechanism ([TRANSPORT_PROJECTIONS.md](TRANSPORT_PROJECTIONS.md)):
+this route is emitted by `create_router()` from the `contracts.list` descriptor in
+`routers/contracts.py`, not hand-written — verb, auth scope, validation and OpenAPI
+metadata all derive from that one descriptor. The response lists descriptor-registered
+crossings only; grandfathered routers stay invisible here until migrated.
+
+| Method | Path         | Description                                            |
+| ------ | ------------ | ------------------------------------------------------ |
+| `GET`  | `/contracts` | Contract inventory: name, version, auth scope, params. |
 
 ## OpenAPI Specification
 

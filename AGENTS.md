@@ -56,6 +56,41 @@
 - **Agent sync** (`docs/AGENT_SYNC.md`) — read it first: what has landed across sessions, what is in flight, how to push your own changes; update it when you push.
 - **Product docs** (`docs/PRODUCT_ENGINEERING.md`) are the source of truth for what to build. Reference before creating new features, routers, or pages. User flows in `docs/UX_FLOWS.md`, persona in `docs/USER_PERSONA.md`.
 
+## Execution Philosophy (sync core, async seam)
+
+**The host is async; the core is sync; the seam between them is explicit.**
+
+```
+uvicorn event loop (async)
+   └─ boundary: await asyncio.to_thread(...)  /  Pool.submit(...)
+        └─ Engine + Pool (sync)               ← blocking work lives here
+             └─ ThreadPoolExecutor / fork     ← real parallelism
+```
+
+- **`Engine`, `Pool`, `TaskQueue` are synchronous by design.** They block, and
+  that is correct: the work they run is synchronous regardless, so the
+  parallelism comes from `ThreadPoolExecutor`/`fork`, not from `await`.
+- **The seam is async and always explicit.** One-off blocking calls go through
+  `await asyncio.to_thread(...)`; sustained background work is handed to a
+  `Pool` (see the comment in `apps/api/server/infrastructure/startup.py` —
+  "sync hooks run in its ThreadPoolExecutor so they never starve the uvicorn
+  event loop"). Sync work never runs inline on the loop.
+- **Never make the core async to fix a starvation bug.** Starvation is a
+  boundary defect. `async def` on the engine would wrap the same thread in
+  `await` and drag the event loop into a library that must stay runnable from
+  scripts, CLI, and tests with no loop. Fix the seam, not the core.
+- **PGQ must stay event-loop-free.** No `asyncio` import in `pugqeep/` — it has
+  to run standalone, and the async host is a _consumer_ of it, not a dependency.
+
+### Build from scratch, import last
+
+Execution, process management, and task management exist so we own these
+primitives rather than importing them. `multiprocessing` is already gone from
+PGQ (own `os.fork()` wrapper + framed socketpair channel). The one remaining
+stdlib collaborator in that stack is `concurrent.futures.ThreadPoolExecutor`
+for Pool workers. Before adding an external dependency to this layer, ask
+whether PGQ should own it instead — and record the answer in the kanban card.
+
 ## Core Infrastructure Sync Rule
 
 **http-client.ts is the single source of truth for all API communication.**
@@ -67,3 +102,13 @@ When backend endpoints, response envelopes, or error formats change:
 3. **Never bypass http-client with raw `fetch()`** — all API calls must go through `apiGet`, `apiPost`, `apiPut`, `apiDelete`, `apiPatch`, or the `request()` function.
 
 This ensures consistent error handling, retries, caching, circuit breaking, and interceptors across the entire frontend. Bypassing http-client breaks these guarantees and creates silent bugs.
+
+## Endpoint & Transport Rule (core-first, descriptor-projected)
+
+**Endpoints are projections of contracts — not hand-built conveyor belts for the processes under them.**
+
+1. **Boundary test before any endpoint** — same process → function call; different process → transport crossing. Naming the boundary is part of SOP step 4 (expert review); a new endpoint is discussed (kanban card) before code. No endpoint-per-feature by default — that is the belt we are retiring.
+2. **Declare the contract once, per module** — a `ToolSpec`-shaped descriptor `{name, params (JSON Schema), result, auth_scope, idempotent, version}` is the single source of truth. `ToolSpec` (`domain/agents/_internal/tools.py`) now carries exactly this: `parameters` is stored, `params` derives the JSON Schema from it (never stored twice), and `result`/`auth_scope`/`idempotent`/`version` are defaulted fields. HTTP routes, SSE frames, CLI subcommands, agent tool-calls, and typed TS client helpers are _projections_ of that descriptor. **`create_router(spec, route, handler)` emits the HTTP half** (`apps/api/server/infrastructure/contract.py`): verb (idempotent → GET, action → POST), auth, request validation, envelope and OpenAPI metadata are all derived from the descriptor, and boot registration reads the generated `routers/_manifest.py` (`scripts/gen_router_manifest.py --check` in CI) instead of a central list. Registering a capability = one registry entry, never an endpoint project.
+3. **No god-endpoints either** — reject both N hand-written feature routers AND a single generic `POST /tools/{name}` switchyard; projected routes keep HTTP semantics, per-route auth scopes, and route-level observability. Modules self-register at boot (microkernel/plugin registration) — no central switchyard list of features in the app.
+4. **Two tool tiers over one contract** — (a) **internal/model-facing tooling**: cognition/agent function-calling, `tools=[...]` model calls, the `domain/tools` everyday-tools engine (it renders model prompts — it is agent tooling, not site tooling), and the inference UI's tool list — the model sees and offers these; (b) **external utility tooling**: general site helpers and system utilities (e.g. Site Doctor: system checks + site-error fixes for dev/site-manager workflows) — tooling of the app itself, registered as contracts in the execution layer and callable by CLI, health/event stream, and operator surfaces, **never** entering the chat/agent tool registry, the `domain/tools` engine, the inference UI, or any logic the model reasons over. One descriptor contract, two views; the tiers never cross.
+5. **Existing routers are grandfathered** — no retroactive purge; migrate only when a router is next touched.

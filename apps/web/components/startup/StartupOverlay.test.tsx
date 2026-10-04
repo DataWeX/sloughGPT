@@ -13,6 +13,8 @@ vi.mock('@/lib/state-events', () => ({
   logStateEvent: vi.fn(),
 }))
 
+import { useBannerStore } from '@/lib/banner-store'
+import { logStateEvent } from '@/lib/state-events'
 import { StartupOverlay } from './StartupOverlay'
 
 function status(overrides: Record<string, unknown> = {}) {
@@ -35,6 +37,7 @@ afterEach(() => {
   cleanup()
   vi.clearAllMocks()
   vi.useRealTimers()
+  useBannerStore.getState().clearBanners()
 })
 
 describe('StartupOverlay', () => {
@@ -113,5 +116,94 @@ describe('StartupOverlay', () => {
       vi.advanceTimersByTime(8_000)
     })
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('force-dismisses a stalled known stage and raises the degraded banner', () => {
+    useLiveStatusMock.mockReturnValue(status({ startupStage: 'init', connected: true }))
+    render(<StartupOverlay />)
+    expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toBeTruthy()
+
+    act(() => {
+      vi.advanceTimersByTime(20_000)
+    })
+    // Banner raised the moment we give up; the overlay is mid-fade.
+    const banners = useBannerStore.getState().banners
+    expect(banners).toHaveLength(1)
+    expect(banners[0].key).toBe('startup-degraded')
+    expect(banners[0].tone).toBe('warning')
+    expect(banners[0].action?.label).toBe('Retry')
+    expect(logStateEvent).toHaveBeenCalledWith('overlay_timeout', expect.anything())
+    expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toBeTruthy()
+
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(screen.queryByRole('progressbar', { name: 'Startup progress' })).toBeNull()
+    // No stuck UI for a known stage — the stall bound is the exit that fired.
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('keeps the overlay up while the boot is still progressing', () => {
+    useLiveStatusMock.mockReturnValue(status({ startupStage: 'init', connected: true }))
+    const { rerender } = render(<StartupOverlay />)
+
+    act(() => {
+      vi.advanceTimersByTime(15_000)
+    })
+    expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toBeTruthy()
+
+    useLiveStatusMock.mockReturnValue(status({ startupStage: 'critical', connected: true }))
+    rerender(<StartupOverlay />)
+    act(() => {
+      vi.advanceTimersByTime(15_000)
+    })
+    // 30s elapsed > the 20s bound, but the stage change restarted the clock.
+    expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toBeTruthy()
+    expect(useBannerStore.getState().banners).toHaveLength(0)
+
+    useLiveStatusMock.mockReturnValue(
+      status({ startupStage: 'critical', startupModelProgress: 0.5, connected: true }),
+    )
+    rerender(<StartupOverlay />)
+    act(() => {
+      vi.advanceTimersByTime(15_000)
+    })
+    expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toBeTruthy()
+    expect(useBannerStore.getState().banners).toHaveLength(0)
+
+    // Ready arrives → the happy path dismisses with no banner.
+    useLiveStatusMock.mockReturnValue(status({ startupStage: 'ready', connected: true }))
+    rerender(<StartupOverlay />)
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(screen.queryByRole('progressbar', { name: 'Startup progress' })).toBeNull()
+    expect(useBannerStore.getState().banners).toHaveLength(0)
+    expect(logStateEvent).toHaveBeenCalledWith('overlay_hidden', expect.anything())
+    expect(logStateEvent).not.toHaveBeenCalledWith('overlay_timeout', expect.anything())
+  })
+
+  it('gives up at the stall bound when the stage never becomes known', () => {
+    useLiveStatusMock.mockReturnValue(status())
+    render(<StartupOverlay />)
+
+    act(() => {
+      vi.advanceTimersByTime(8_000)
+    })
+    // The existing stuck UI still fires first.
+    expect(screen.getByRole('alert')).toBeTruthy()
+
+    act(() => {
+      vi.advanceTimersByTime(12_000)
+    })
+    const banners = useBannerStore.getState().banners
+    expect(banners).toHaveLength(1)
+    expect(banners[0].key).toBe('startup-degraded')
+
+    act(() => {
+      vi.advanceTimersByTime(600)
+    })
+    expect(screen.queryByRole('alert')).toBeNull()
+    expect(screen.queryByRole('progressbar', { name: 'Startup progress' })).toBeNull()
   })
 })

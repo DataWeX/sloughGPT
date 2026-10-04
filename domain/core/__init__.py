@@ -90,6 +90,7 @@ __all__ = [
     "SelfIdentity",
     "run_doctor",
     "DoctorReport",
+    "default_report_path",
 ]
 
 
@@ -135,6 +136,7 @@ def __getattr__(name):
         # Site doctor (Phase A: report-only probes)
         "run_doctor": "domain.core._internal.doctor",
         "DoctorReport": "domain.core._internal.doctor",
+        "default_report_path": "domain.core._internal.doctor.report",
     }
     if name in _lazy:
         mod = _importlib.import_module(_lazy[name])

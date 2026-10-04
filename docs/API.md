@@ -160,7 +160,7 @@ client-side registry state.
 
 ## Endpoint Coverage
 
-The backend exposes **617 routes across 56 routers** (`apps/api/server/routers`).
+The backend exposes **607 routes across 58 routers** (`apps/api/server/routers`).
 The SDK covers the primary consumer-facing surface; the complete server-side route
 list is documented in [`docs/routers.md`](routers.md).
 
