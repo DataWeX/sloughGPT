@@ -26,7 +26,7 @@ class TestGenerationContext:
         assert ctx.emotional_context == {}
         assert ctx.soul_overrides == {}
         assert ctx.reasoning_chain == []
-        assert ctx.repetition_penalty == 1.2
+        assert ctx.repetition_penalty == 1.15
         assert ctx.frequency_penalty == 0.0
         assert ctx.presence_penalty == 0.0
 
