@@ -5,7 +5,7 @@ what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
 **Last update**: 2026-10-04 ~05:30 — `feat/landing-7-cards` lands (7
-infra-review cards + campaign `d083e732`, cherry-picks `880ab0d35..175a297d2`,
+infra-review cards + campaign `d083e732`, cherry-picks `2127abb6e..344168b4f`,
 see Landed): startup finalizers + MogDB history + webhook facade + profiler
 feed + test hygiene — tests/server **1942/1/0 vs main's 5-failed baseline**.
 Earlier ~05:05: naming consolidated (card `43ca5222`):
@@ -50,12 +50,12 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `175a297d2`)
+## Landed on main (origin/main = `344168b4f`)
 
 - **2026-10-04 · `feat/landing-7-cards` lands — the infra-review follow-ups,
   surgical cherry-pick onto main.** Cards `223001e4` `d1f544fb` `ad9ef322`
   `b753cad5` `8349d901` `65d9e7ee` `832efdda` (+ campaign `d083e732`), 8
-  commits `880ab0d35..175a297d2`: boot finalizers ⑨⑪⑫⑬ (history deadlock
+  commits `2127abb6e..344168b4f`: boot finalizers ⑨⑪⑫⑬ (history deadlock
   fixed; gzip at the seam — 4 MB stall 269.6 → 4.5 ms), startup history →
   MogDB (12 records migrated, JSON kept `.bak`), `startup_webhooks` →
   stateless facade over `WebhookStore` (shape-oracle pinned), profiler feed ⑩
