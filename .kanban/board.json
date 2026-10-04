@@ -7,7 +7,7 @@
       "order": 0
     },
     {
-      "name": "in_progress",
+      "name": "wip",
       "wip_limit": 3,
       "order": 1
     },

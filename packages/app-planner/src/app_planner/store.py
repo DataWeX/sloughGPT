@@ -132,7 +132,7 @@ class Board:
     columns: list[dict[str, Any]] = field(
         default_factory=lambda: [
             {"name": "todo", "wip_limit": 5, "order": 0},
-            {"name": "in_progress", "wip_limit": 3, "order": 1},
+            {"name": "wip", "wip_limit": 3, "order": 1},
             {"name": "review", "wip_limit": 2, "order": 2},
             {"name": "done", "wip_limit": 0, "order": 3},
         ]

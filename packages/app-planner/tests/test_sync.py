@@ -54,7 +54,7 @@ def test_sync_derives_column_from_status(store):
     store.create_note("D", status="open")
     store.sync()
     columns = {c.title: c.column for c in store.list_cards()}
-    assert columns == {"A": "done", "B": "in_progress", "C": "review", "D": "todo"}
+    assert columns == {"A": "done", "B": "wip", "C": "review", "D": "todo"}
 
 
 def test_sync_card_carries_tags_and_body(store):
@@ -79,7 +79,7 @@ def test_sync_propagates_assignee(store):
 def test_sync_moves_card_when_status_changes(store):
     note = store.create_note("Rotating task", status="wip")
     store.sync()
-    assert store.list_cards()[0].column == "in_progress"
+    assert store.list_cards()[0].column == "wip"
     store.update_note(note.id, status="done")
     added, updated, total = store.sync()
     assert added == 0

@@ -10,7 +10,7 @@ import { CardEditor } from './CardEditor'
 
 const DEFAULT_COLUMNS = [
   { name: 'todo', label: 'To Do', wip_limit: 5, order: 0 },
-  { name: 'in_progress', label: 'In Progress', wip_limit: 3, order: 1 },
+  { name: 'wip', label: 'In Progress', wip_limit: 3, order: 1 },
   { name: 'review', label: 'Review', wip_limit: 2, order: 2 },
   { name: 'done', label: 'Done', wip_limit: 0, order: 3 },
 ]
@@ -357,7 +357,7 @@ function CreateCardDialog({
                 className="w-full mt-1 rounded-lg border border-[hsl(40,20%,80%)] bg-[hsl(40,30%,95%)] px-3 py-2 text-sm text-[hsl(40,20%,20%)]"
               >
                 <option value="todo">To Do</option>
-                <option value="in_progress">In Progress</option>
+                <option value="wip">In Progress</option>
                 <option value="review">Review</option>
                 <option value="done">Done</option>
               </select>

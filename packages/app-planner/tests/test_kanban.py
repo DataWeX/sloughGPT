@@ -131,7 +131,7 @@ class TestPlannerStore:
         assert stats["byColumn"]["done"] == 1
 
     def test_archive_done(self, store):
-        store.add_card("Keep", column="in_progress")
+        store.add_card("Keep", column="wip")
         store.add_card("Done one", column="done")
         archived = store.archive_done()
         assert archived == 1
@@ -192,7 +192,7 @@ class TestCLI:
             tmp_path,
             "Ship v2",
             "--column",
-            "in_progress",
+            "wip",
             "--priority",
             "high",
             "--tags",
@@ -207,7 +207,7 @@ class TestCLI:
         assert len(cards) == 1
         card = cards[0]
         assert card.title == "Ship v2"
-        assert card.column == "in_progress"
+        assert card.column == "wip"
         assert card.priority == "high"
         assert card.tags == ["kernel", "os"]
         assert "release the kraken" in card.description
