@@ -1,5 +1,6 @@
 """Tests for pugqeep process management — subprocess, monitor, config, signal handling."""
 
+import ast
 import os
 import signal
 import threading
@@ -217,6 +218,88 @@ class TestSubprocessProcess:
             time.sleep(0.05)
 
         assert proc.status == ProcessStatus.COMPLETED
+
+    def test_child_path_never_imports_or_logs(self):
+        # ── fork safety ─────────────────────────────────────────────
+        # os.fork() keeps only the calling thread: a lock another parent
+        # thread held at that instant is held forever in the child, so any
+        # child code taking one never returns. That is card 075 — a fork
+        # deadlock that froze the whole core-py group at ~51% for hours.
+        #
+        # `_subprocess_worker` documents "no imports and no logging" against
+        # exactly this, but a docstring is enforced by nothing.
+        #
+        # Checked structurally rather than by provoking a hang. The obvious
+        # version — hold handler locks in the parent, require the child to
+        # finish — has no teeth: `logging.Handler.acquire()` re-enters cleanly
+        # after fork (measured: a child logging call returns in 0.00s against
+        # a held handler lock, while a plain RLock held by a non-surviving
+        # thread does block it). That test cannot fail, and a test that cannot
+        # fail advertises coverage this invariant does not have.
+        import sys
+        from pathlib import Path
+
+        source = Path(sys.modules[SubprocessProcess.__module__].__file__).read_text(
+            encoding="utf-8"
+        )
+        tree = ast.parse(source)
+        funcs = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+
+        # Both halves must exist, or the walk below finds nothing to inspect
+        # and passes on an empty set.
+        assert {"_child_main", "_subprocess_worker"} <= funcs, (
+            "the child entry points moved or were renamed — update this guard "
+            "so it keeps watching the code that runs after fork()"
+        )
+
+        # Module-level `X = logging.getLogger(...)` bindings (`logger` today).
+        log_names = set()
+        for node in tree.body:
+            if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Call):
+                continue
+            func = node.value.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "getLogger"
+                and isinstance(func.value, ast.Name)
+                and func.value.id == "logging"
+            ):
+                log_names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        assert log_names, (
+            "no module-level logging.getLogger binding found — logging calls "
+            "would slip past this guard unnoticed"
+        )
+
+        log_methods = {"debug", "info", "warning", "error", "critical", "exception", "log"}
+        sources = log_names | {"logging"}
+        violations: list[str] = []
+
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name not in {"_child_main", "_subprocess_worker"}:
+                continue
+            for sub in ast.walk(node):
+                if isinstance(sub, (ast.Import, ast.ImportFrom)):
+                    violations.append(f"{node.name}:{sub.lineno} import")
+                    continue
+                if not isinstance(sub, ast.Call):
+                    continue
+                called = sub.func
+                if (
+                    isinstance(called, ast.Attribute)
+                    and called.attr in log_methods
+                    and isinstance(called.value, ast.Name)
+                    and called.value.id in sources
+                ):
+                    violations.append(f"{node.name}:{sub.lineno} {called.value.id}.{called.attr}()")
+
+        assert not violations, (
+            "the forked child path must not import or log: after os.fork() only "
+            "the calling thread survives, so a lock those calls need may be held "
+            "by a thread that is gone and the child never returns — which is how "
+            "card 075 froze the suite. Offenders: " + "; ".join(violations)
+        )
 
 
 # ── GuardPool ────────────────────────────────────────────────────
