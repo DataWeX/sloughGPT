@@ -74,10 +74,22 @@ impl Default for GatewayConfig {
             python_core_url: std::env::var("MAN_CORE_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:8000".into()),
             static_dir: std::env::var("MAN_STATIC_DIR")
-                .unwrap_or_else(|_| "apps/web/.next/static".into()),
+                .unwrap_or_else(|_| default_static_dir().into()),
             listen_addr: SocketAddr::from(([0, 0, 0, 0], port)),
             policy: PathPolicy::from_env(),
         }
+    }
+}
+
+/// Default document root when `MAN_STATIC_DIR` is unset: the Vite build is
+/// canonical (`npm run build:vite` → `apps/web/dist-vite`); a Next asset dir
+/// is only kept for checkouts that never built with Vite. An explicit
+/// `MAN_STATIC_DIR` always wins.
+fn default_static_dir() -> &'static str {
+    if std::path::Path::new("apps/web/dist-vite").is_dir() {
+        "apps/web/dist-vite"
+    } else {
+        "apps/web/.next/static"
     }
 }
 
@@ -175,33 +187,14 @@ async fn main() {
         }
     });
 
-    let mut app = Router::new()
-        // Health & info (gateway-owned — the only endpoints understood here)
-        .route("/health", get(health_check))
-        .route("/health/detailed", get(detailed_health))
-        // Everything else: generic byte-relay to the sidecar.
-        // No per-endpoint handlers — the edge never parses bodies.
-        .fallback(proxy_http);
-
-    if std::path::Path::new(&config.static_dir).is_dir() {
-        info!("serving static files from {}", config.static_dir);
-        app = app.nest_service("/static", ServeDir::new(&config.static_dir));
-    } else {
-        info!(
-            "static dir {} absent — skipping /static (frontend serves itself)",
-            config.static_dir
-        );
-    }
-
-    let app = app
+    let app = build_router(state)
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)
                 .allow_methods(Any)
                 .allow_headers(Any),
         )
-        .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .layer(TraceLayer::new_for_http());
 
     let listener = tokio::net::TcpListener::bind(config.listen_addr)
         .await
@@ -217,6 +210,100 @@ async fn main() {
     }
 
     axum::serve(listener, app).await.expect("Server failed");
+}
+
+/// Assemble the edge: gateway-owned health routes first, then the site's
+/// document root when a build exists, and a byte-relay to the sidecar for
+/// everything else. Extracted from `main` so tests can drive the same router.
+fn build_router(state: AppState) -> Router {
+    let mut app = Router::new()
+        // Health & info (gateway-owned — the only endpoints understood here)
+        .route("/health", get(health_check))
+        .route("/health/detailed", get(detailed_health));
+
+    let static_root = state.config.static_dir.clone();
+    let static_path = std::path::Path::new(&static_root);
+    if static_path.join("index.html").is_file() {
+        // Document root: the whole site is static files, so the shell paints
+        // without any Node process and with no dependency on the sidecar.
+        // A miss falls through to `serve_document`, which routes by request
+        // *kind* (navigation vs data) — see `wants_document`.
+        info!(
+            "serving site document root from {static_root} (SPA + API on one origin)"
+        );
+        let spa = Router::new()
+            .fallback(serve_document)
+            .with_state(state.clone());
+        app = app.fallback_service(ServeDir::new(&static_root).fallback(spa));
+    } else if static_path.is_dir() {
+        // Legacy assets-only mode (a Next build's /_next/static): keep the
+        // old nesting, relay everything else — no document root to serve.
+        info!("serving static assets from {static_root} at /static");
+        app = app
+            .nest_service("/static", ServeDir::new(&static_root))
+            .fallback(proxy_http);
+    } else {
+        info!(
+            "static dir {static_root} absent — no site files (frontend serves itself)"
+        );
+        app = app.fallback(proxy_http);
+    }
+    app.with_state(state)
+}
+
+/// The one place a human *navigates* to API surface in a browser: the docs.
+/// Path contract, not a heuristic — everything else routes by request kind.
+const API_DOC_PATHS: [&str; 3] = ["/docs", "/redoc", "/openapi.json"];
+
+fn is_api_doc_path(path: &str) -> bool {
+    API_DOC_PATHS.iter().any(|p| path == *p
+        || path.strip_prefix(*p).map_or(false, |rest| rest.starts_with('/')))
+}
+
+/// True when the client is asking for the SPA shell rather than data.
+///
+/// The SPA and the Python API own the same top-level names (`/training`,
+/// `/models`, `/chat` — 600+ API paths at the root), so *path* can never
+/// decide: a prefix table would shadow one side for every other client.
+/// Request kind can: navigations send `Accept: text/html`, while the app's
+/// own traffic (fetch/XHR/SSE) sends `*/*`, `application/json` or
+/// `text/event-stream` and must always reach Python.
+fn wants_document(headers: &HeaderMap, path: &str) -> bool {
+    if is_api_doc_path(path) {
+        return false;
+    }
+    headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map_or(false, |accept| accept.contains("text/html"))
+}
+
+/// Serve the SPA shell, else relay to the sidecar.
+async fn serve_document(State(state): State<AppState>, req: Request) -> Response {
+    if wants_document(req.headers(), req.uri().path()) {
+        if let Some(resp) = serve_index(&state).await {
+            return resp;
+        }
+        // index.html vanished at runtime — fall through rather than 404 a
+        // navigation that the sidecar might still answer.
+    }
+    match proxy_http(State(state), req).await {
+        Ok(resp) => resp,
+        Err(err) => err.into_response(),
+    }
+}
+
+/// `index.html` with no-cache: the document is the build's entry point and
+/// must never outlive the assets it names (hashed filenames do the caching).
+async fn serve_index(state: &AppState) -> Option<Response> {
+    let path = std::path::Path::new(&state.config.static_dir).join("index.html");
+    let bytes = tokio::fs::read(path).await.ok()?;
+    Response::builder()
+        .header(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8")
+        .header(axum::http::header::CACHE_CONTROL, "no-cache")
+        .body(Body::from(bytes))
+        .ok()
+        .map(IntoResponse::into_response)
 }
 
 // ── Health Handlers ─────────────────────────────────────────────────────────
@@ -442,6 +529,8 @@ async fn relay_response(
 mod tests {
     use super::*;
 
+    use tower::ServiceExt;
+
     #[test]
     fn parses_bare_health_object() {
         let v = serde_json::json!({
@@ -477,4 +566,150 @@ mod tests {
         assert!(!loaded);
         assert_eq!(name, "unknown");
     }
+
+    // ── Static document root (SPA + API on one origin) ──────────────────────
+
+    fn temp_site(files: &[(&str, &str)]) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!("slo-gw-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).expect("temp dir");
+        for (name, content) in files {
+            std::fs::write(dir.join(name), content).expect("temp file");
+        }
+        dir
+    }
+
+    fn test_state(dir: &std::path::Path) -> AppState {
+        AppState {
+            config: GatewayConfig {
+                // Nothing listens on :9, so a relay attempt fails fast (502)
+                // — exactly how these tests tell "proxied" from "served".
+                python_core_url: "http://127.0.0.1:9".into(),
+                static_dir: dir.to_string_lossy().into(),
+                listen_addr: "127.0.0.1:0".parse().unwrap(),
+                policy: PathPolicy::from_env(),
+            },
+            http: Client::builder()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .expect("client"),
+            core_status: Arc::new(RwLock::new(CoreStatus::default())),
+        }
+    }
+
+    fn get(path: &str, accept: &str) -> Request {
+        Request::builder()
+            .uri(path)
+            .header(axum::http::header::ACCEPT, accept)
+            .body(Body::empty())
+            .expect("request")
+    }
+
+    async fn body_text(resp: Response) -> String {
+        let bytes = to_bytes(resp.into_body(), 1024 * 1024).await.expect("body");
+        String::from_utf8_lossy(&bytes).into_owned()
+    }
+
+    #[tokio::test]
+    async fn navigation_gets_the_spa_shell_without_the_sidecar() {
+        let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/training", "text/html,application/xhtml+xml")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert_eq!(
+            resp.headers().get(axum::http::header::CONTENT_TYPE).map(|v| v.to_str().unwrap()),
+            Some("text/html; charset=utf-8")
+        );
+        assert!(body_text(resp).await.contains("SPA-SHELL"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn data_requests_relay_to_the_sidecar_never_the_shell() {
+        let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/models", "application/json")).await.unwrap();
+        // Sidecar absent → the relay must be attempted (502), not shadowed by HTML.
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        assert!(!body_text(resp).await.contains("SPA-SHELL"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn sse_requests_relay_to_the_sidecar() {
+        let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/health/stream", "text/event-stream")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn static_assets_served_from_document_root() {
+        let dir = temp_site(&[
+            ("index.html", "<html>SPA-SHELL</html>"),
+            ("app.css", "body{}"),
+        ]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/app.css", "*/*")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(axum::http::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok()).unwrap_or("").to_string();
+        assert!(ct.contains("text/css"), "got content-type {ct}");
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn health_stays_gateway_owned_even_with_a_document_root() {
+        let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/health", "text/html")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        assert!(body_text(resp).await.contains("\"gateway\""));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn browser_docs_stay_on_the_sidecar() {
+        let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/docs", "text/html")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn assets_only_dir_keeps_legacy_relay_behaviour() {
+        // No index.html → not a document root: navigations relay like before.
+        let dir = temp_site(&[("chunk.js", "1")]);
+        let app = build_router(test_state(&dir));
+        let resp = app.oneshot(get("/training", "text/html")).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_GATEWAY);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn request_kind_decides_document_vs_api() {
+        let mut headers = HeaderMap::new();
+        headers.insert(axum::http::header::ACCEPT, "text/html,application/xhtml+xml,image/webp".parse().unwrap());
+        assert!(wants_document(&headers, "/training"));
+
+        headers.insert(axum::http::header::ACCEPT, "*/*".parse().unwrap());
+        assert!(!wants_document(&headers, "/training"), "fetch must reach Python");
+
+        headers.insert(axum::http::header::ACCEPT, "application/json".parse().unwrap());
+        assert!(!wants_document(&headers, "/models"));
+
+        headers.insert(axum::http::header::ACCEPT, "text/event-stream".parse().unwrap());
+        assert!(!wants_document(&headers, "/health/stream"));
+
+        let empty = HeaderMap::new();
+        assert!(!wants_document(&empty, "/training"), "no Accept → API");
+
+        let mut html = HeaderMap::new();
+        html.insert(axum::http::header::ACCEPT, "text/html".parse().unwrap());
+        for path in ["/docs", "/docs/", "/redoc", "/openapi.json"] {
+            assert!(!wants_document(&html, path), "{path} is API surface");
+        }
+    }
+
 }

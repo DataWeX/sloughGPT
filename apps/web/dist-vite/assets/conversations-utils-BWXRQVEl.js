@@ -1,0 +1,2 @@
+import{s as e}from"./time-format-CZIjYXOt.js";function t(t){return e(t)}function n(e,t=80){return e.length>t?e.slice(0,t)+`…`:e}function r(e,t=60){if(!e)return`Empty conversation`;let r=e.split(`
+`)[0];return n(r,t)}export{n,r,t};

@@ -1,0 +1,1 @@
+import{t as e}from"./jsx-runtime-NZYk81nU.js";import{t}from"./cn-DDkBVHd9.js";var n=e();function r({children:e,className:r}){return(0,n.jsx)(`span`,{className:t(`text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-1.5 block`,r),children:e})}export{r as t};

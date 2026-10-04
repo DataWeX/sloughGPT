@@ -187,6 +187,17 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- `.wt-static` on `feat/static-hosting` (card `d484f48a`): the gateway serves
+  `apps/web/dist-vite` as its **document root** — file hit → asset, browser
+  navigation (`Accept: text/html`) → `index.html` (SPA), data request →
+  byte-relay; `/docs`, `/redoc`, `/openapi.json` stay proxied (path contract).
+  Routing is by request *kind*, not path prefix, because SPA and API share the
+  same top-level names. `npm run build:vite` builds **same-origin** (empty
+  `NEXT_PUBLIC_API_URL`; `??` not `||` in `lib/config.ts` — a `||` fallback
+  would silently restore a second origin). `main.py --web` retired: no Node is
+  spawned. **Still open:** the 11 `app/api/**` handlers (9 planner, 1 calendar,
+  1 nextauth) have no host in a static build — classification on the card
+  before anything is ported or deleted.
 - Root-repo session on `feat/pipe-bounded-execution`; ~40 `feat/*` worktrees
   active — `git branch -vv` + the kanban board name the owners.
 - The 683 baseline failures are known drift → card `56b49cf1` (drift baseline).

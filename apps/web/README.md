@@ -58,10 +58,22 @@ Before pushing changes, run the same checks as CI: **`npm ci && npm run ci`** (f
 
 ### Build for Production
 
+The production site is a **static build served by the gateway** — one origin
+for shell, API and SSE (no Node runtime in the serving path, no CORS):
+
 ```bash
-npm run build
-npm run start   # serves the production build (default port 3000)
+npm run build:vite     # → dist-vite/ , built same-origin (empty API base)
 ```
+
+With `MAN_STATIC_DIR` defaulting to `apps/web/dist-vite` when it exists, the
+gateway serves it as its **document root**: file hit → asset, browser
+navigation (`Accept: text/html`) → `index.html` (SPA owns the routes), data
+request (`application/json` / `*/*` / `text/event-stream`) → byte-relay to the
+sidecar. The shell therefore loads even while the API is down. Restart the
+gateway to pick up a fresh build.
+
+`npm run build` + `npm run start` (Next) remain for the legacy/e2e path
+(`npm run build:vite` is the canonical one).
 
 ### Docker image
 
