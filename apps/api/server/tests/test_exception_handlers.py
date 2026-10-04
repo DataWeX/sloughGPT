@@ -4,7 +4,8 @@ import logging
 
 import pytest
 from pydantic import BaseModel
-from tests.test_support import get_test_client
+
+from apps.api.server.tests.test_support import get_test_client
 
 client = get_test_client()
 

@@ -12,11 +12,16 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client():
     from fastapi import FastAPI
+    from infrastructure.exception_handlers import register_all_handlers
 
     from apps.api.server.routers.inference import router
 
     _app = FastAPI()
     _app.include_router(router)
+    # A bare FastAPI() installs no handlers, so raise_error() would
+    # propagate out of TestClient instead of becoming the documented 503.
+    # Register the same handlers production puts on the real app.
+    register_all_handlers(_app)
     return TestClient(_app)
 
 
@@ -49,7 +54,10 @@ def mock_provider():
     )
     provider.model_id = "test-model"
     with (
-        patch("domain.models._internal.provider.get_provider", return_value=provider),
+        # The router binds get_provider from domain.models at import time
+        # (routers/inference.py:45), so only that consumer binding can be
+        # intercepted — patching domain.models._internal.* is inert here.
+        patch("apps.api.server.routers.inference.get_provider", return_value=provider),
         patch("state.model", MagicMock()),
     ):
         yield provider
@@ -61,7 +69,12 @@ class TestGenerateEndpoint:
     def test_generate_returns_text(self, client, mock_provider):
         """Should return generated text with model info."""
         response = client.post(
-            "/inference/generate", json={"prompt": "Hello", "max_new_tokens": 10}
+            "/inference/generate",
+            # Explicit rather than relying on GenerateRequest.model's default,
+            # which has already been changed once under this test (gpt2 →
+            # qwen2.5-0.5b-instruct); actual_model honours state.model_type
+            # first, so the request field is what we assert against.
+            json={"prompt": "Hello", "max_new_tokens": 10, "model": "gpt2"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -71,17 +84,32 @@ class TestGenerateEndpoint:
 
     def test_generate_passes_params(self, client, mock_provider):
         """Should pass generation params to provider."""
-        client.post(
-            "/inference/generate",
-            json={
-                "prompt": "Hi",
-                "max_new_tokens": 50,
-                "temperature": 0.5,
-                "top_p": 0.8,
-                "top_k": 20,
-                "repetition_penalty": 1.1,
-            },
-        )
+
+        def _passthrough(**kwargs):
+            # _apply_meta_weights substitutes feedback-derived values for the
+            # requested ones (it never receives them, so it cannot blend).
+            # This test covers raw pass-through, so neutralise that layer
+            # rather than assert the feedback database's opinion.
+            return {
+                k: kwargs[k]
+                for k in ("temperature", "top_p", "top_k", "repetition_penalty")
+            }
+
+        with patch(
+            "apps.api.server.routers.inference._apply_meta_weights",
+            side_effect=_passthrough,
+        ):
+            client.post(
+                "/inference/generate",
+                json={
+                    "prompt": "Hi",
+                    "max_new_tokens": 50,
+                    "temperature": 0.5,
+                    "top_p": 0.8,
+                    "top_k": 20,
+                    "repetition_penalty": 1.1,
+                },
+            )
         mock_provider.chat.assert_called_once()
         kwargs = mock_provider.chat.call_args[1]
         assert kwargs["max_tokens"] == 50
@@ -92,7 +120,12 @@ class TestGenerateEndpoint:
 
     def test_generate_no_provider_returns_503(self, client):
         """Should return 503 when no provider is available."""
-        with patch("apps.api.server.routers.inference.get_provider", return_value=None):
+        # Satisfy the readiness gate first — it otherwise short-circuits
+        # with E_MODEL_LOADING before the no-provider branch is reached.
+        with (
+            patch("state.model", MagicMock()),
+            patch("apps.api.server.routers.inference.get_provider", return_value=None),
+        ):
             response = client.post("/inference/generate", json={"prompt": "Hello"})
         assert response.status_code == 503
 

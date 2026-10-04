@@ -689,6 +689,37 @@ class TestLoRAConfig:
         assert config.target_modules == ["attn.c_attn", "attn.c_proj", "mlp.c_fc", "mlp.c_proj"]
 
 
+class _StubEngine:
+    """Minimal stand-in for the inference engine.
+
+    ``_compute_gradients`` returns ``{}`` when ``engine is None`` — it
+    backprops through the real model — so gradient tests need an engine.
+    This supplies a char-level encoder and a fixed logits head, enough to
+    drive the real cross-entropy path without loading model weights.
+    """
+
+    class _Text:
+        @staticmethod
+        def encode(text: str) -> list[int]:
+            return [ord(c) % 16 for c in text]
+
+    text = _Text()
+    vocab = 16
+
+    def forward(self, input_ids):
+        seq = int(input_ids.shape[1])
+        logits = MagicMock()
+        logits.data = np.zeros((1, seq, self.vocab), dtype=np.float32)
+        return logits, None
+
+
+class _ExplodingEngine(_StubEngine):
+    """Engine whose forward pass always fails, forcing the fallback branch."""
+
+    def forward(self, input_ids):
+        raise RuntimeError("boom")
+
+
 class TestOnlineLoRAUpdater:
     def test_initialization(self):
         updater = OnlineLoRAUpdater()
@@ -725,22 +756,22 @@ class TestOnlineLoRAUpdater:
         assert mock_start.call_count == 1
 
     def test_compute_gradients_all_positive(self):
-        updater = OnlineLoRAUpdater(learning_rate=0.01)
+        updater = OnlineLoRAUpdater(learning_rate=0.01, engine=_StubEngine())
         updater.initialize(model_dim=768)
         feedback_batch = [
             {"prompt": "hi", "response": "hello", "rating": "thumbs_up", "quality_score": 1.0},
             {"prompt": "hey", "response": "howdy", "rating": "thumbs_up", "quality_score": 1.0},
         ]
         grads = updater._compute_gradients(feedback_batch)
+        # The real path accumulates into W_a only (W_b has no gradient term
+        # here — it is populated solely by the pseudo-gradient fallback).
+        # Note the accumulator seeds from np.zeros_like(grad), so its rank
+        # tracks the per-item logit slice rather than a bare vocab vector.
         assert "W_a" in grads
-        assert "W_b" in grads
-        # Positive reinforcement → positive scale → grad mean should tend positive
-        assert (
-            np.mean(grads["W_a"]) >= -0.02 or np.mean(grads["W_a"]) <= 0.02
-        )  # random, just check shape
+        assert np.isfinite(grads["W_a"]).all()
 
     def test_compute_gradients_all_negative(self):
-        updater = OnlineLoRAUpdater(learning_rate=0.01)
+        updater = OnlineLoRAUpdater(learning_rate=0.01, engine=_StubEngine())
         updater.initialize(model_dim=768)
         feedback_batch = [
             {"prompt": "hi", "response": "bad", "rating": "thumbs_down", "quality_score": 0.0},
@@ -748,6 +779,35 @@ class TestOnlineLoRAUpdater:
         ]
         grads = updater._compute_gradients(feedback_batch)
         assert "W_a" in grads
+        assert np.isfinite(grads["W_a"]).all()
+
+    def test_gradient_sign_follows_rating(self):
+        """Identical inputs with opposite ratings yield opposite gradients.
+
+        The positive branch scales by +lr/2 and the negative branch by
+        -lr/2 over the very same forward pass, so the two results must be
+        exact negatives — the actual reinforcement/suppression invariant.
+        """
+        item = {"prompt": "hi", "response": "hello", "quality_score": 1.0}
+        up = OnlineLoRAUpdater(learning_rate=0.01, engine=_StubEngine())
+        up.initialize(model_dim=768)
+        down = OnlineLoRAUpdater(learning_rate=0.01, engine=_StubEngine())
+        down.initialize(model_dim=768)
+
+        g_up = up._compute_gradients([{**item, "rating": "thumbs_up"}])
+        g_down = down._compute_gradients([{**item, "rating": "thumbs_down"}])
+        assert "W_a" in g_up and "W_a" in g_down
+        np.testing.assert_allclose(g_up["W_a"], -g_down["W_a"])
+
+    def test_compute_gradients_fallback_populates_all_weights(self):
+        """A failing forward pass falls back to pseudo-gradients for every weight."""
+        updater = OnlineLoRAUpdater(learning_rate=0.01, engine=_ExplodingEngine())
+        updater.initialize(model_dim=768)
+        grads = updater._compute_gradients(
+            [{"prompt": "hi", "response": "hello", "rating": "thumbs_up"}]
+        )
+        assert "W_a" in grads
+        assert "W_b" in grads
 
     def test_apply_gradients(self):
         updater = OnlineLoRAUpdater(learning_rate=0.01)
