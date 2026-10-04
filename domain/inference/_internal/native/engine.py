@@ -548,9 +548,9 @@ class NativeTransformerProvider:
         self,
         messages,
         max_tokens=512,
-        temperature=0.8,
-        top_p=0.9,
-        top_k=50,
+        temperature=0.7,
+        top_p=0.85,
+        top_k=40,
         cancel_event=None,
         session_id=None,
         **kwargs,
@@ -577,7 +577,7 @@ class NativeTransformerProvider:
         except Exception as e:
             logger.warning("Native C generation error: %s", e, extra={"tag": "MODEL"})
 
-    async def chat(self, messages, max_tokens=512, temperature=0.8, **kwargs):
+    async def chat(self, messages, max_tokens=512, temperature=0.7, **kwargs):
         import asyncio
 
         loop = asyncio.get_event_loop()
