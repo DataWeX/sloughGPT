@@ -4,8 +4,14 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-03 ~07:45 — `fix/journey-test-gates` landed on user
-sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`, see Landed).
+**Last update**: 2026-10-04 ~01:20 — `feat/avion-transcript-batching` landed
+(card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit transcript
+flush, benchmark green at baseline (quiet window, load 1.6). Earlier the same
+night: `fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
+Landed) — the boot overlay can no longer hang forever; firefox ux-flows
+benchmark **13/13**. Earlier 2026-10-03: `fix/journey-test-gates`
+landed on user sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`,
+see Landed).
 Earlier the same day: the **avion stack** — cards `13f50db7` journeys takeover
 + `e26dc68c` drivers + `24676ff2` event logger + `553da7a7` agent loop, see
 Landed — and downcraft compression (card `19cd41dc`); journey suites repointed
@@ -32,7 +38,34 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `175d7db8c`)
+## Landed on main (origin/main = `371025464`)
+
+- **2026-10-04 · `feat/avion-transcript-batching` lands — transcript writes are
+  group-committed.** Card `68ea8b9d`, cherry-pick of `fb7859ced`:
+  `AgentConfig.transcript_flush_steps` batches JSONL transcript writes — write
+  every step, `flush()` every N (default 1000). **Benchmark (2k steps/scenario,
+  quiet window load 1.6, conda)**: group-commit **20,806 steps/s (48.1 µs/step)
+  ≈ bare loop (20,621 / 48.5 µs) and +34.4% over per-step flush (15,481 /
+  64.6 µs)**; bare and per-step both match the recorded baseline (21.7k/15.7k →
+  −5% / −1.4%); callbacks free (21,881); screenshot 19,576. Gates: avion suite
+  green (1 isolated load-flake, passes alone) + ruff clean. An earlier run at
+  load ~4 showed every row ~2× depressed — record loadavg with any benchmark
+  number or the comparison is meaningless.
+
+- **2026-10-04 · `fix/boot-overlay-stall` lands — "boot overlay never
+  dismissed" is fixed.** Card `cb089b43`, cherry-pick of `d897399e7` (only the
+  overlay commit lands — its branch is stacked on `feat/avion-transcript-batching`,
+  which awaits its quiet-window benchmark, see In flight). `StartupOverlay`
+  gains a progress-based stall watchdog: `STALL_TIMEOUT_MS = 20_000`, keyed on
+  `stage:modelProgress` (mere health ticks don't reset it) → `overlay_timeout`
+  event, 600 ms fade, unmount + key-deduped global banner (`startup-degraded`,
+  warning, Retry = reload via `useBannerStore`); the ready-path fast exit and
+  the 8 s stuck-UI path are unchanged. **Validation**: overlay suite 10/10 (+
+  banner/GlobalBanner 16/16), tsc + eslint clean, full web suite **841 files /
+  8068 tests green**, firefox ux-flows benchmark **13/13** (baseline was 5/13
+  with 8× `boot overlay never dismissed`; now 42 console errors / 0 network) —
+  run a worktree stack with `vite --port 3000` + `SLO_WEB_URL=http://localhost:3000`,
+  see the CORS gotcha.
 
 - **2026-10-03 · `fix/journey-test-gates` landed (user sign-off).** merge
   `e081ea9f4` (46 files) + stabilization `175d7db8c`: conda-first
@@ -153,3 +186,15 @@ git push -u origin feat/<name>   # push your own branch when done
 - Never nudge a running pytest with SIGUSR1/SIGALRM (unregistered → death);
   diagnose with `-o faulthandler_timeout=150`, unblock exit by reaping
   futex-stuck pool children (`kill -9` children of the pytest PID).
+- **Vite 8 dev ignores `define` → for a worktree web server on main's config,
+  only origin `:3000` is CORS-safe.** main's `vite.config.ts` never loads
+  `.env.local` and its `define` doesn't fire in the Vite 8 dev pipeline (the
+  root branch works around it with `inlinePublicEnv` → edge gateway `:8080`,
+  `ACAO: *`), so a worktree instance computes base `http://localhost:8000`;
+  FastAPI's allowlist (`SLO_CORS_ORIGINS`, default `3000,8000`) then rejects
+  `:5175` — measured: 5487 console errors, chat textarea stuck disabled,
+  ux-flows collapse to 6/13. Fix: `vite --port 3000` +
+  `SLO_WEB_URL=http://localhost:3000` → 13/13.
+- **`next lint` no longer exists in this Next version** (parses `lint` as a
+  directory) — pre-existing repo breakage; the lint gate is root
+  `node_modules/.bin/eslint <changed files>` run directly.

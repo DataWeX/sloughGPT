@@ -51,6 +51,13 @@ class AgentConfig:
     action_delay_ms: float = 200
     screenshot_on_each_step: bool = True
     save_trajectories: bool = True
+    # Transcript flush policy: 1 = flush every step (crash-durable per step,
+    # the benchmark's "durability cost"); N>1 = group-commit — flush every N
+    # written steps so a fast loop pays one write(2) per N steps instead of
+    # one per step. A crash loses at most the pending batch; the run's
+    # close() in finally always flushes the remainder, so every completed
+    # run's transcript is complete and parseable.
+    transcript_flush_steps: int = 1
     retry_on_failure: bool = True
     max_retries: int = 2
     viewport_width: int = 1280
@@ -262,6 +269,7 @@ class Agent:
 
         transcript_path = ""
         transcript = None
+        pending_flush = 0  # transcript writes since last flush (group-commit)
         try:
             if self._config.save_trajectories:
                 transcript_path, transcript = self._open_transcript(task)
@@ -377,7 +385,10 @@ class Agent:
                             )
                             + "\n"
                         )
-                        transcript.flush()
+                        pending_flush += 1
+                        if pending_flush >= max(1, self._config.transcript_flush_steps):
+                            transcript.flush()
+                            pending_flush = 0
                     except Exception:
                         # A failing log path must not take the run down
                         # (Tier-1 containment): count it, keep going.

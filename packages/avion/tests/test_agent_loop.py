@@ -170,6 +170,60 @@ class TestTranscriptSafety:
         assert result.transcript_path == ""
         assert os.listdir(agent._config.output_dir) == []  # dir exists, nothing in it
 
+    def test_default_flush_is_per_step_crash_durable(self):
+        # Default policy keeps the old guarantee: a written step is on disk
+        # before the step's callbacks run — a crash loses nothing.
+        cfg = _config()
+        agent = Agent(model=EchoModel([Action(ActionType.DONE)]), config=cfg)
+        run(agent.start(backend=AgentBackend()))
+        path = os.path.join(cfg.output_dir, "durable_task.jsonl")
+        seen: list[int] = []
+
+        def probe(_step):
+            with open(path) as fh:  # separate handle: the OS view, unbuffered
+                seen.append(len(fh.read()))
+
+        agent.on_step(probe)
+        result = run(agent.run("durable task"))
+        run(agent.stop())
+        assert result.transcript_failures == 0
+        assert seen and seen[0] > 0
+
+    def test_group_commit_holds_writes_until_the_flush_boundary(self):
+        # flush_steps=1000 vs 3 written steps: nothing crosses the kernel
+        # boundary during the run (one write(2) per N steps is the point),
+        # and close() in finally flushes the remainder — a completed run's
+        # transcript is always complete; a crash loses at most the batch.
+        cfg = _config(transcript_flush_steps=1000)
+        agent = Agent(
+            model=EchoModel(
+                [
+                    Action(ActionType.KEYBOARD_TYPE, {"text": "a"}),
+                    Action(ActionType.KEYBOARD_TYPE, {"text": "b"}),
+                    Action(ActionType.DONE),
+                ]
+            ),
+            config=cfg,
+        )
+        run(agent.start(backend=AgentBackend()))
+        path = os.path.join(cfg.output_dir, "probe_task.jsonl")
+        seen: list[int] = []
+
+        def probe(_step):
+            with open(path) as fh:
+                seen.append(len(fh.read()))
+
+        agent.on_step(probe)
+        result = run(agent.run("probe task"))
+        run(agent.stop())
+        assert result.transcript_failures == 0
+        # Probes run after each step's transcript write — all saw 0 bytes
+        # on disk: the lines were still sitting in the writer's buffer.
+        assert seen == [0, 0, 0]
+        with open(result.transcript_path) as fh:
+            lines = [json.loads(line) for line in fh]
+        assert len(lines) == 3
+
     def test_transcript_write_failure_is_counted_not_fatal(self, monkeypatch):
         class BrokenWriter:
             def write(self, *_args):

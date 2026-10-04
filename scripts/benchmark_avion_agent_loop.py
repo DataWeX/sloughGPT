@@ -8,6 +8,8 @@ i.e. loop overhead only — no browser, no model inference):
 2. **+ JSONL transcript** — per-step write + flush (durability cost);
 3. **+ 3 callbacks** — observer fan-out with failure containment;
 4. **+ screenshot every step** — perception capture + base64 per step.
+5. **+ JSONL transcript (group-commit)** — same records, flush every 1000
+   steps: isolates serialization cost from the per-step syscall.
 
 Every scenario runs the tightened loop: each await is bounded by
 ``min(step_timeout, remaining deadline)``, which is the cost driver this
@@ -57,7 +59,15 @@ class BareBackend:
         return b"\x89PNG-fake-frame"
 
 
-def _run_scenario(label: str, steps: int, *, transcript: bool, callbacks: int, shots: bool) -> None:
+def _run_scenario(
+    label: str,
+    steps: int,
+    *,
+    transcript: bool,
+    callbacks: int,
+    shots: bool,
+    transcript_flush: int = 1,
+) -> None:
     async def scenario() -> None:
         cfg = AgentConfig(
             max_steps=steps,
@@ -65,6 +75,7 @@ def _run_scenario(label: str, steps: int, *, transcript: bool, callbacks: int, s
             no_progress_limit=0,  # identical WAITs every step
             screenshot_on_each_step=shots,
             save_trajectories=transcript,
+            transcript_flush_steps=transcript_flush,
             output_dir=tempfile.mkdtemp(prefix="avion_loop_bench_") if transcript else "",
         )
         agent = Agent(model=WaitModel(), config=cfg)
@@ -95,6 +106,14 @@ def main() -> int:
     _run_scenario("+ JSONL transcript (write+flush/step)", args.steps, transcript=True, callbacks=0, shots=False)
     _run_scenario("+ 3 on_step callbacks", args.steps, transcript=False, callbacks=3, shots=False)
     _run_scenario("+ screenshot every step", args.steps, transcript=False, callbacks=0, shots=True)
+    _run_scenario(
+        "+ JSONL transcript (group-commit, flush/1000)",
+        args.steps,
+        transcript=True,
+        callbacks=0,
+        shots=False,
+        transcript_flush=1000,
+    )
     return 0
 
 
