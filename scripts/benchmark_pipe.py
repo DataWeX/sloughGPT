@@ -434,18 +434,32 @@ def main() -> int:
     if args.ci and BASELINE_FILE.exists() and not args.update:
         baseline = json.loads(BASELINE_FILE.read_text())
         base_ns = baseline.get("spawn", {}).get("ns_per_spawn")
+        base_admit = baseline.get("admit_release", {}).get("ns_per_cycle")
         now_ns = metrics["spawn"]["ns_per_spawn"]
-        if base_ns:
-            limit = base_ns * (1 + REGRESSION_TOLERANCE)
-            if now_ns > limit:
+        now_admit = metrics["admit_release"]["ns_per_cycle"]
+
+        # Gate the RATIO, not raw nanoseconds. Both benches run in the same
+        # process, on the same clock (CPU time), with the collector held off,
+        # so whatever this box costs per unit of work cancels out. Measured
+        # across load 6 and load 19: raw spawn swung 2.06x (13695 -> 28277 ns)
+        # while spawn/admit moved only 1.10x (5.666 -> 6.258). Gating the raw
+        # number let the load average decide pass or fail, and the advisory
+        # below never fired because it needed load > 28.3 -- the baseline
+        # itself had been captured at load 18.9.
+        if base_ns and base_admit and now_admit:
+            base_ratio = base_ns / base_admit
+            now_ratio = now_ns / now_admit
+            limit = base_ratio * (1 + REGRESSION_TOLERANCE)
+            if now_ratio > limit:
                 detail = (
-                    f"spawn cost {now_ns:.1f} ns > {limit:.1f} ns "
-                    f"(baseline {base_ns:.1f}, +{REGRESSION_TOLERANCE:.0%} budget)"
+                    f"spawn/admit {now_ratio:.3f} > {limit:.3f} "
+                    f"(baseline ratio {base_ratio:.3f} from {base_ns:.1f}/"
+                    f"{base_admit:.1f} ns, +{REGRESSION_TOLERANCE:.0%} budget)"
                 )
-                # CPU time still drifts with contention: enough page faults and
-                # cache pressure and the same code bills more. Failing here
-                # would teach the next reader to ignore this gate, so only
-                # compare when the box is about as busy as it was at baseline.
+                # The ratio absorbs steady contention, not a pathological
+                # moment: if the box is far busier than it was at baseline the
+                # sample can still be off. Failing here would teach the next
+                # reader to ignore this gate, so stay advisory in that case.
                 base_load = baseline.get("load1", 0.0)
                 now_load = metrics.get("load1", 0.0)
                 if base_load and now_load > max(base_load * 1.5, base_load + 2.0):
