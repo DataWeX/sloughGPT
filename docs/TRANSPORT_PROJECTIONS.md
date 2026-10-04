@@ -97,14 +97,14 @@ Registering a capability is a **registry entry, never an endpoint project**.
 
 ## Where it stands
 
-| Piece                                         | State                                                                       |
-| --------------------------------------------- | --------------------------------------------------------------------------- |
-| Descriptor (`ToolSpec` + derived `params`)    | ✅ contract half exists                                                     |
-| `ToolRegistry` (agent-facing projection)      | ✅ reads the descriptor                                                     |
-| `build_router(spec)` route emission           | ❌ the transport half does not exist                                        |
-| Boot-time self-registration                   | ❌ `routers/__init__.py` `_router_names` is still a central switchyard list |
-| CI contract check (descriptor + OpenAPI diff) | ❌ only doc/code parity exists                                              |
-| TS projection of the contract                 | ❌ `http-client.ts` hand-writes every endpoint                              |
+| Piece                                          | State                                                                                                                           |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Descriptor (`ToolSpec` + derived `params`)     | ✅ contract half exists                                                                                                         |
+| `ToolRegistry` (agent-facing projection)       | ✅ reads the descriptor                                                                                                         |
+| `create_router(spec, route, handler)` emission | ✅ `infrastructure/contract.py` — verb, 422 validation, envelope, auth scope and `x-contract` all derived from the descriptor   |
+| Boot-time registration                         | ✅ generated `routers/_manifest.py` (`scripts/gen_router_manifest.py --check`) — mount order preserved, deferred imports intact |
+| CI contract check (descriptor + OpenAPI diff)  | ❌ only doc/code parity exists                                                                                                  |
+| TS projection of the contract                  | ❌ `http-client.ts` hand-writes every endpoint                                                                                  |
 
 Grandfather note: `get_all_routers()`'s deferred-import list exists for a real
 reason (90 s → 8 s cold start) — self-registration must preserve lazy loading,

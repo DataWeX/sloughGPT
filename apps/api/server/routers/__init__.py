@@ -2,6 +2,11 @@
 API Routers Package
 Modular API endpoints organized by feature.
 
+Which routers exist, and the order they mount in, lives in the generated
+``_manifest.py`` (``scripts/gen_router_manifest.py``) rather than a
+hand-maintained list here — see that script's docstring for why order is
+load-bearing. This package only decides *how* they are loaded.
+
 All router imports are deferred to ``get_all_routers()`` to avoid pulling in
 heavy dependencies (JAX, sentence-transformers, PyTorch) at module-load time.
 This cuts API cold-start from ~100s to ~8s.
@@ -12,6 +17,8 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter
+
+from ._manifest import ROUTER_MODULES
 
 logger = logging.getLogger("slo.routers")
 
@@ -46,66 +53,15 @@ def get_all_routers() -> list[APIRouter]:
     if _cached_routers is not None:
         return _cached_routers
 
-    # Note: "health" and "status" are registered directly in main.py
-    # pre-lifespan (needed during model load). Do NOT list them here.
-    _router_names = [
-        "auth",
-        "models",
-        "inference",
-        "feedback",
-        "kb",
-        "agents",
-        "system",
-        "souls",
-        "config",
-        "settings",
-        "security",
-        "datasets",
-        "ratelimit",
-        "workflow",
-        "experiments",
-        "benchmark",
-        "user_adapters",
-        "vector",
-        "registry",
-        "chat",
-        "session",
-        "meta_weights",
-        "lora_eval",
-        "companion",
-        "multimodal",
-        "tokenizer",
-        "learner",
-        "self_train",
-        "token_tree",
-        "errors",
-        "mobile",
-        "images",
-        "files",
-        "voice",
-        "infer",
-        "vm",
-        "memory",
-        "docstore",
-        "shell",
-        "world_render",
-        "tokens",
-        "profiles",
-        "users",
-        "tenants",
-        "workspaces",
-        "search",
-        "openwebui",
-        "cloud_training",
-        "plugins",
-        "tools",
-        "model_stack",
-        "phoneme",
-        "collections",
-    ]
-
+    # "health", "status", "consciousness" and "dashboard" are registered
+    # directly in main.py pre-lifespan (they must answer while the model is
+    # still loading), so the manifest excludes them — and the generator
+    # verifies that exclusion against main.py on every run.
+    #
+    # Failures stay per-router: one broken module cannot prevent the rest
+    # from registering.
     _cached_routers = []
-    for name in _router_names:
+    for name in ROUTER_MODULES:
         r = _try_import_router(name)
         if r is not None:
             _cached_routers.append(r)

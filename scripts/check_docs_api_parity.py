@@ -100,22 +100,18 @@ SECTION_ALIASES = {
 #   2. module-style: router = APIRouter(prefix="/x"); @router.get("/y")
 #   3. app-level:    @app.get("/y") in main.py
 ROUTE_RE = re.compile(
-    r'@(?P<chain>\w+(?:\.\w+)*)\.(?P<method>get|post|put|delete|patch|head|options)'
+    r"@(?P<chain>\w+(?:\.\w+)*)\.(?P<method>get|post|put|delete|patch|head|options)"
     r'\(\s*(?P<q>["\'])(?P<path>[^"\']*)(?P=q)',
     re.MULTILINE,
 )
 ADD_ROUTE_RE = re.compile(r"(?P<recv>\w+)\.add_api_route\(")
 # path may be positional or path="<x>" (keyword form) — anchored to the call's
 # own "(" so a non-literal first arg can't match some later quoted string.
-ADD_ROUTE_PATH_RE = re.compile(
-    r"^.*?\(\s*(?:path\s*=\s*)?(?P<q>[\"'])(?P<path>[^\"']*)(?P=q)"
-)
+ADD_ROUTE_PATH_RE = re.compile(r"^.*?\(\s*(?:path\s*=\s*)?(?P<q>[\"'])(?P<path>[^\"']*)(?P=q)")
 ADD_ROUTE_METHODS_RE = re.compile(r"methods\s*=\s*\[(?P<ms>[^\]]*)\]")
 # endpoint sits right after the path: positional (add_api_route("/x", self.h, ...))
 # or keyword (add_api_route(path="/x", endpoint=self.h, ...))
-ADD_ROUTE_ENDPOINT_RE = re.compile(
-    r"\s*,\s*(?:endpoint\s*\=\s*)?(?P<e>[A-Za-z_]\w*(?:\.\w+)*)"
-)
+ADD_ROUTE_ENDPOINT_RE = re.compile(r"\s*,\s*(?:endpoint\s*\=\s*)?(?P<e>[A-Za-z_]\w*(?:\.\w+)*)")
 FULL_ROW_RE = re.compile(
     r"^\|\s*`(?P<m>GET|POST|PUT|DELETE|PATCH)`\s*\|\s*`(?P<p>[^`]+)`"
     r"\s*\|\s*(?P<d>.*?)\s*\|\s*$"
@@ -137,6 +133,8 @@ def _endpoint_doc(text: str, endpoint: str) -> str:
     if not m:
         return ""
     return re.sub(r"\s+", " ", m.group("d")).strip()
+
+
 APICONFIG_RE = re.compile(
     r"(?P<var>\w+)\s*=\s*APIRouter\((?P<args>.*?)\)\s*(?:\n|$)",
     re.DOTALL,
@@ -206,7 +204,7 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
     positions = list(ADD_ROUTE_RE.finditer(text))
     for i, m in enumerate(positions):
         end = positions[i + 1].start() if i + 1 < len(positions) else len(text)
-        chunk = text[m.start():end]
+        chunk = text[m.start() : end]
         pm = ADD_ROUTE_PATH_RE.search(chunk)
         if not pm:
             out.append(Route(router_stem, "?", "<dynamic>", dynamic=True))
@@ -224,7 +222,7 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
         key = m.group("chain").rsplit(".", 1)[-1]
         if key not in prefixes and key not in {"app", "router"} and not key.endswith("router"):
             continue  # decorator on an unrelated object
-        dm = re.search(r"def\s+(?P<n>\w+)\s*\(", text[m.end():])
+        dm = re.search(r"def\s+(?P<n>\w+)\s*\(", text[m.end() :])
         desc = _endpoint_doc(text, dm.group("n")) if dm else ""
         out.append(
             Route(
@@ -243,9 +241,7 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
 
 
 def collect_code(findings: Findings) -> None:
-    router_files = sorted(
-        p for p in ROUTERS_DIR.glob("*.py") if p.name != "__init__.py"
-    )
+    router_files = sorted(p for p in ROUTERS_DIR.glob("*.py") if not p.name.startswith("_"))
     findings.routers_on_disk = [p.stem for p in router_files]
     for p in router_files:
         _scan_file(p, p.stem, findings.routes)
@@ -263,8 +259,7 @@ def collect_docs(findings: Findings) -> None:
     text = ROUTERS_MD.read_text(encoding="utf-8", errors="replace")
     findings.doc_sections = [m.group("title").strip() for m in DOC_SECTION_RE.finditer(text)]
     findings.doc_claims = [
-        (m.group("method"), m.group("path").strip())
-        for m in DOC_ROW_RE.finditer(text)
+        (m.group("method"), m.group("path").strip()) for m in DOC_ROW_RE.finditer(text)
     ]
     api = API_MD.read_text(encoding="utf-8", errors="replace")
     m = API_COUNT_RE.search(api)
@@ -310,7 +305,7 @@ def _internal_stats(path: Path) -> tuple[list[int], set[str]]:
 
 
 def _py_files(directory: Path) -> list[Path]:
-    return [p for p in sorted(directory.glob("*.py")) if p.name != "__init__.py"]
+    return [p for p in sorted(directory.glob("*.py")) if not p.name.startswith("_")]
 
 
 def collect_architecture(findings: Findings) -> None:
@@ -355,8 +350,7 @@ def collect_architecture(findings: Findings) -> None:
         try:
             tree = ast.parse(text)
             c_defs += sum(
-                1 for n in ast.walk(tree)
-                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+                1 for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
             )
         except SyntaxError:
             findings.arch_missing.append(f"{p.name}: unparseable")
@@ -394,7 +388,8 @@ def collect_architecture(findings: Findings) -> None:
 def _mounted_routers() -> set[str] | None:
     """Router stems whose routes are actually served at runtime.
 
-    Parses the ``_router_names`` mount table from routers/__init__.py plus the
+    Reads the generated mount table ``routers/_manifest.py`` (plus the legacy
+    inline ``_router_names`` table, for a checkout predating it) and the
     routers registered directly in main.py pre-lifespan. Unmounted-by-design
     files (e.g. api_keys) still scan into findings, but duplicate paths there
     never reach the app, so they must not fail the collision gate.
@@ -402,23 +397,26 @@ def _mounted_routers() -> set[str] | None:
     ``None`` = mount table unreadable; callers then treat every stem as
     mounted so the gate errs toward flagging.
     """
-    try:
-        text = (ROUTERS_DIR / "__init__.py").read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return None
-    m = re.search(r"_router_names\s*=\s*\[(.*?)\]", text, re.DOTALL)
-    if not m:
-        return None
-    names = set(re.findall(r"[\"']([^\"']+)[\"']", m.group(1)))
-    names |= {"main", "health", "status"}  # registered directly in main.py
-    return names
+    for path, pattern in (
+        (ROUTERS_DIR / "_manifest.py", r"ROUTER_MODULES[^=]*=\s*\((.*?)\)"),
+        (ROUTERS_DIR / "__init__.py", r"_router_names\s*=\s*\[(.*?)\]"),
+    ):
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        m = re.search(pattern, text, re.DOTALL)
+        if not m:
+            continue
+        names = set(re.findall(r"[\"']([^\"']+)[\"']", m.group(1)))
+        names |= {"main", "health", "status"}  # registered directly in main.py
+        return names
+    return None
 
 
 def diff(findings: Findings) -> None:
     code_keys = {(r.method, r.path) for r in findings.routes if not r.dynamic}
-    findings.doc_not_in_code = [
-        (m, p) for m, p in findings.doc_claims if (m, p) not in code_keys
-    ]
+    findings.doc_not_in_code = [(m, p) for m, p in findings.doc_claims if (m, p) not in code_keys]
 
     # which routers have any doc section at all (explicit aliases first,
     # then normalized title<->stem match so new sections need no alias edit)
@@ -429,7 +427,8 @@ def diff(findings: Findings) -> None:
         if stem:
             section_stems.add(stem)
     findings.code_not_documented = [
-        s for s in findings.routers_on_disk
+        s
+        for s in findings.routers_on_disk
         if s not in section_stems
         # main.py-registered routers are documented in Health/Status sections
         and s not in {"health", "status"}
@@ -580,7 +579,7 @@ def _render_routers_md(findings: Findings) -> str:
 
     prefix_by_stem: dict[str, str] = {}
     for pf in sorted(ROUTERS_DIR.glob("*.py")):
-        if pf.name == "__init__.py":
+        if pf.name.startswith("_"):
             continue
         pm = PREFIX_RE.search(pf.read_text(encoding="utf-8", errors="replace"))
         prefix_by_stem[pf.stem] = pm.group(1) if pm else ""
@@ -697,24 +696,31 @@ def main() -> int:
         print(_render_markdown(findings, actual_routes, actual_routers))
         return 1 if gaps else 0
 
-    print(f"code:      {actual_routers} router files, {actual_routes} literal routes "
-          f"({len(findings.dynamic_routes)} dynamic)")
+    print(
+        f"code:      {actual_routers} router files, {actual_routes} literal routes "
+        f"({len(findings.dynamic_routes)} dynamic)"
+    )
     if findings.api_md_counts:
         r, k = findings.api_md_counts
-        print(f"docs/API.md claims:      {r} routes across {k} routers "
-              f"-> {'STALE' if (r, k) != (actual_routes, actual_routers) else 'ok'}")
-    print(f"docs/routers.md:         {len(findings.doc_sections)} sections, "
-          f"{len(findings.doc_claims)} endpoint rows")
-    print(f"routers w/o doc section: {len(findings.code_not_documented)} "
-          f"{findings.code_not_documented}")
+        print(
+            f"docs/API.md claims:      {r} routes across {k} routers "
+            f"-> {'STALE' if (r, k) != (actual_routes, actual_routers) else 'ok'}"
+        )
+    print(
+        f"docs/routers.md:         {len(findings.doc_sections)} sections, "
+        f"{len(findings.doc_claims)} endpoint rows"
+    )
+    print(
+        f"routers w/o doc section: {len(findings.code_not_documented)} "
+        f"{findings.code_not_documented}"
+    )
     print(f"doc rows not in code:    {len(findings.doc_not_in_code)}")
     for m, p in findings.doc_not_in_code[:10]:
         print(f"   {m:6} {p}")
     if len(findings.doc_not_in_code) > 10:
         print(f"   ... +{len(findings.doc_not_in_code) - 10} more")
     total_undoc = sum(findings.undocumented.values())
-    print(f"code routes w/o doc row: {total_undoc} across "
-          f"{len(findings.undocumented)} routers")
+    print(f"code routes w/o doc row: {total_undoc} across {len(findings.undocumented)} routers")
     for name, n in sorted(findings.undocumented.items(), key=lambda kv: -kv[1])[:8]:
         print(f"   {name}: {n}")
     print(f"routers w/o tests:       {len(findings.untested)} {findings.untested}")
@@ -725,9 +731,11 @@ def main() -> int:
         print(f"   ... +{len(findings.collisions) - 10} more")
     if findings.dynamic_routes:
         print(f"dynamic (skipped):       {findings.dynamic_routes}")
-    print(f"architecture contract:    {len(findings.arch_claims)} claims, "
-          f"{len(findings.arch_mismatch)} mismatched, "
-          f"{len(findings.arch_missing)} unresolved")
+    print(
+        f"architecture contract:    {len(findings.arch_claims)} claims, "
+        f"{len(findings.arch_mismatch)} mismatched, "
+        f"{len(findings.arch_missing)} unresolved"
+    )
     for row in findings.arch_mismatch:
         print(f"   ALARM  {row}")
     for row in findings.arch_missing:
