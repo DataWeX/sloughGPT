@@ -185,7 +185,7 @@ class TestGenerateStream:
         "sys.modules",
         {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
     )
-    @patch("domain.models._internal.provider.get_provider", return_value=None)
+    @patch("apps.api.server.routers.inference.get_provider", return_value=None)
     def test_generate_stream_no_provider(self, mock_get_provider, client):
         resp = client.post("/inference/generate/stream", json={"prompt": "Hi"})
         assert resp.status_code == 200

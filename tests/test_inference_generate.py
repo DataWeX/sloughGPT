@@ -92,7 +92,7 @@ class TestGenerateEndpoint:
 
     def test_generate_no_provider_returns_503(self, client):
         """Should return 503 when no provider is available."""
-        with patch("domain.models._internal.provider.get_provider", return_value=None):
+        with patch("apps.api.server.routers.inference.get_provider", return_value=None):
             response = client.post("/inference/generate", json={"prompt": "Hello"})
         assert response.status_code == 503
 
