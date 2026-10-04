@@ -376,6 +376,24 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
+  (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
+  fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
+  `pointer-events-none` (its own controls — Retry, Show timing — opt back in
+  with `pointer-events-auto`): the shell stays visible **and clickable** for the
+  whole boot. The stuck (8 s) and stall (20 s) watchdog screens and the
+  key-deduped banner were NOT demoted — they live in the overlay/banner exactly
+  as before; only the layer's modality changed. Verified live: dead-core
+  walkthrough on `:8082` (t=0.46 s hit-test passes through the overlay to
+  `sl-app-content`; t=10.5 s "Still connecting" + Retry `pointer-events:auto`;
+  t=21.5 s overlay gone + `GlobalBanner` "Backend not responding") and healthy
+  `:8080` (overlay dismissed via ready path, `origins=[localhost:8080]`,
+  0 failed requests, 0 console errors). Gates: `StartupOverlay.test.tsx` 11/11
+  (incl. pass-through contract), full web suite 8075/8075 @ 841 files, tsc +
+  eslint clean. **Deploy = `npm run build:vite` from a checkout ≥ this commit,
+  copy `dist-vite/` to the repo root; `ServeDir` reads from disk, no gateway
+  restart needed.** From `.wt-orb`/`fix/startup-overlay-busy`.
+
 - **Landed on main (`d949eb509`, card `d484f48a`) and deployed on :8080** — the
   gateway serves the repo root's `apps/web/dist-vite` as its document root;
   rebuild with `npm run build:vite`, then restart `slough-gateway`. From
