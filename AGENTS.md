@@ -64,6 +64,41 @@
 - Sync is bidirectional: note status ↔ card column.
 - **Product docs** (`docs/PRODUCT_ENGINEERING.md`) are the source of truth for what to build. Reference before creating new features, routers, or pages. User flows in `docs/UX_FLOWS.md`, persona in `docs/USER_PERSONA.md`.
 
+## Execution Philosophy (sync core, async seam)
+
+**The host is async; the core is sync; the seam between them is explicit.**
+
+```
+uvicorn event loop (async)
+   └─ boundary: await asyncio.to_thread(...)  /  Pool.submit(...)
+        └─ Engine + Pool (sync)               ← blocking work lives here
+             └─ ThreadPoolExecutor / fork     ← real parallelism
+```
+
+- **`Engine`, `Pool`, `TaskQueue` are synchronous by design.** They block, and
+  that is correct: the work they run is synchronous regardless, so the
+  parallelism comes from `ThreadPoolExecutor`/`fork`, not from `await`.
+- **The seam is async and always explicit.** One-off blocking calls go through
+  `await asyncio.to_thread(...)`; sustained background work is handed to a
+  `Pool` (see the comment in `apps/api/server/infrastructure/startup.py` —
+  "sync hooks run in its ThreadPoolExecutor so they never starve the uvicorn
+  event loop"). Sync work never runs inline on the loop.
+- **Never make the core async to fix a starvation bug.** Starvation is a
+  boundary defect. `async def` on the engine would wrap the same thread in
+  `await` and drag the event loop into a library that must stay runnable from
+  scripts, CLI, and tests with no loop. Fix the seam, not the core.
+- **PGQ must stay event-loop-free.** No `asyncio` import in `pugqeep/` — it has
+  to run standalone, and the async host is a _consumer_ of it, not a dependency.
+
+### Build from scratch, import last
+
+Execution, process management, and task management exist so we own these
+primitives rather than importing them. `multiprocessing` is already gone from
+PGQ (own `os.fork()` wrapper + framed socketpair channel). The one remaining
+stdlib collaborator in that stack is `concurrent.futures.ThreadPoolExecutor`
+for Pool workers. Before adding an external dependency to this layer, ask
+whether PGQ should own it instead — and record the answer in the kanban card.
+
 ## Core Infrastructure Sync Rule
 
 **http-client.ts is the single source of truth for all API communication.**

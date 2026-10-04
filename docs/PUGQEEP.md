@@ -293,6 +293,12 @@ PENDING → RUNNING → COMPLETED
 
 Process dispatch with Pools and Stems.
 
+`Engine`, `Pool`, and `TaskQueue` are **synchronous by design** — the parallelism
+comes from `ThreadPoolExecutor`/`fork`, never from `await`. Async hosts reach
+them across an explicit seam (`asyncio.to_thread` / `Pool.submit`); see
+_Execution Philosophy_ in `AGENTS.md`. PGQ itself imports no `asyncio`, so it
+runs standalone from scripts, CLI, and tests.
+
 ```python
 from domains.infrastructure.pugqeep import Engine
 
