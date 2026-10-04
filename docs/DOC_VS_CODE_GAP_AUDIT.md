@@ -131,17 +131,24 @@ is the `_internal` row, where the code is _worse_ than the doc claims.
 # Contract parsed by scripts/check_docs_api_parity.py. If measured code
 # disagrees with any value below, that script exits 1 (alarm). Update this
 # block in the SAME change that moves the code.
+#
+# 2026-10-04 sync: controllers_* were still at their pre-scope values (2/9/3)
+# from before controllers/ was ever counted — the prose table below had
+# already been truth-uped, this machine block had not. That one staleness
+# accounted for all 6 architecture alarms. Values now match measured code and
+# act as a DOWNWARD ratchet: card b22e878a (proxy controllers through engines)
+# should lower them as it lands, and later drift shows up as an alarm again.
 routers_internal_files=11
 routers_internal_stmts=36
 routers_internal_in_scope_files=8
 controllers_files=5
-controllers_lines=3215
+controllers_lines=3223
 controllers_defs=105
-controllers_internal_files=2
-controllers_internal_stmts=9
-controllers_internal_modules=3
-combined_internal_files=13
-combined_internal_stmts=45
+controllers_internal_files=4
+controllers_internal_stmts=31
+controllers_internal_modules=14
+combined_internal_files=15
+combined_internal_stmts=67
 -->
 
 | Category                                         | Count / 57                               | Note                                                                                                                                                             |
@@ -149,10 +156,10 @@ combined_internal_stmts=45
 | reaches core directly, 0 `_internal`             | 37                                       |                                                                                                                                                                  |
 | reaches core via `controllers/`                  | +1 (`feedback`)                          | `controllers/feedback.py` holds 6 domain imports                                                                                                                 |
 | imports `domain.*_internal.*`                    | **11** routers / **36** statements       | 8 routers in scope; `shell`/`vm`/`world_render` sit in a concurrent-refactor zone                                                                                |
-| **`controllers/` imports `domain.*_internal.*`** | **4 files / 30 statements / 13 modules** | `models.py` 12, `datasets.py` 8, `feedback.py` 5, `health.py` 5, `config.py` 0 — **counted here for the first time; the original audit only scanned `routers/`** |
+| **`controllers/` imports `domain.*_internal.*`** | **4 files / 31 statements / 14 modules** | `models.py` 12, `datasets.py` 8, `health.py` 6, `feedback.py` 5, `config.py` 0 — **counted here for the first time; the original audit only scanned `routers/`** |
 | never touches core                               | 6                                        | `images`, `docstore`, `api_keys`, `security`, `ratelimit`, `config` — all infra/security                                                                         |
 
-**Combined: 66 `_internal` import statements across 15 files.** Worst targets:
+**Combined: 67 `_internal` import statements across 15 files.** Worst targets:
 `domain.models._internal.provider` ×9, `domain.training._internal.cache_tags` ×7,
 `domain.infrastructure._internal.artifact_registry` ×2.
 

@@ -921,6 +921,18 @@ Defined in `apps/api/server/routers/profiles.py` — 5 endpoints.
 | `GET`  | `/profiles/recommend`    | Auto-detect and recommend the best profile for this hardware. |
 | `GET`  | `/profiles/{profile_id}` | Get a single profile by ID.                                   |
 
+## Search Router (`/search`)
+
+Defined in `apps/api/server/routers/search.py` — 1 endpoint.
+
+System-wide general search across every store registered in `domain.search`.
+Query semantics (matching, ranking, limits, visibility) live in the core; this
+module is transport only: auth, parameter validation, envelope.
+
+| Method | Path      | Description                                               |
+| ------ | --------- | --------------------------------------------------------- |
+| `GET`  | `/search` | System-wide general search across every registered store. |
+
 ## Settings Router (`/settings`)
 
 Defined in `apps/api/server/routers/settings.py` — 41 endpoints.
