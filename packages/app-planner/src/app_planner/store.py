@@ -19,16 +19,19 @@ Usage::
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import heapq
 import json
 import os
+import random
 import tempfile
+import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from . import config
 
@@ -157,6 +160,50 @@ def chain_hash_for(card: Card, prev_hash: str) -> str:
 # ── Store ────────────────────────────────────────────────────────────────
 
 
+# ── Optimistic concurrency (OCC) ─────────────────────────────────────────
+# Lost-update guard for the shared JSONL files. Every write funnel reads the
+# file, rebuilds full content, and replaces it atomically — without a
+# generation check, a writer holding a stale snapshot erases whatever landed
+# in between (the "vanishing card" bug, 2026-10-04). Protocol:
+#
+#   1. read once -> content AND its sha256 token come from THAT read
+#   2. build the new content from it
+#   3. commit: non-blocking flock (barrier) -> revalidate token adjacent to
+#      os.replace -> mismatch/busy raises BoardWriteConflict
+#   4. funnel catches, backs off, re-reads, rebuilds (bounded, loud failure)
+#
+# Reads never lock; the flock covers only the microsecond validate+replace
+# and auto-releases if the holder dies. Retry budget: exponential backoff
+# with per-call jitter — linear/no-jitter herding exhausted 10 attempts in
+# 4/40 hammer runs under box load spikes (2026-10-04 evidence). POSIX-only.
+
+_OCC_ATTEMPTS = 30
+_OCC_BACKOFF_S = 0.005       # first retry delay; doubles per attempt
+_OCC_BACKOFF_CAP_S = 0.1     # per-sleep ceiling (worst total ≈ 3s, then LOUD)
+
+
+class BoardWriteConflict(RuntimeError):
+    """File generation changed between read and commit (or barrier busy)."""
+
+
+def _token_of(raw: str) -> str:
+    """Generation token for text just read (empty/missing file == ABSENT)."""
+    if not raw:
+        return "ABSENT"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _current_token(path: Path) -> str:
+    """Generation token of the file right now — the validation side."""
+    try:
+        data = path.read_bytes()
+    except FileNotFoundError:
+        return "ABSENT"
+    if not data:
+        return "ABSENT"
+    return hashlib.sha256(data).hexdigest()
+
+
 class PlannerStore:
     """Unified JSONL store for board cards and notes."""
 
@@ -188,19 +235,72 @@ class PlannerStore:
             ensure_ascii=False,
         )
 
-    def _atomic_write(self, text: str) -> None:
-        """Write the board atomically (temp file + rename) to avoid torn writes."""
-        fd, tmp = tempfile.mkstemp(dir=self._board_dir, prefix=".board-", suffix=".tmp")
+    # ── OCC write path ──────────────────────────────────────────────────
+
+    @staticmethod
+    def _lockfile_for(path: Path) -> Path:
+        """Stable lockfile next to the protected file — never the data file
+        itself (os.replace swaps inodes; a lock on the old inode would lie)."""
+        return path.parent / ".commit.lock"
+
+    def _validate_token(self, path: Path, expect: str) -> bool:
+        """OCC validation seam (tests patch this): unchanged since *expect*?"""
+        return _current_token(path) == expect
+
+    def _commit(self, path: Path, text: str, expect: str) -> None:
+        """Guarded commit: non-blocking flock -> revalidate token -> atomic
+        replace. Raises BoardWriteConflict for the caller's _occ retry loop."""
+        fd = os.open(self._lockfile_for(path), os.O_CREAT | os.O_RDWR, 0o644)
         try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(text)
-            os.replace(tmp, self._board_file)
-        except BaseException:
             try:
-                os.remove(tmp)
-            except OSError:
-                pass
-            raise
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as exc:
+                raise BoardWriteConflict(f"{path.name}: commit barrier busy") from exc
+            if not self._validate_token(path, expect):
+                raise BoardWriteConflict(f"{path.name}: changed since read")
+            fd2, tmp = tempfile.mkstemp(dir=path.parent, prefix=".tmp-", suffix=".tmp")
+            try:
+                with os.fdopen(fd2, "w", encoding="utf-8") as f:
+                    f.write(text)
+                os.replace(tmp, path)
+            except BaseException:
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+                raise
+        finally:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+
+    def _atomic_write(self, text: str, expect: str | None = None) -> None:
+        """Atomic board write (temp + rename, no torn files). *expect* is the
+        generation token of the read *text* was built from; None validates
+        against a token taken at commit (content not derived from the file,
+        so there is nothing to rebuild — conflict stays fatal/loud)."""
+        token = expect if expect is not None else _current_token(self._board_file)
+        self._commit(self._board_file, text, token)
+
+    def _occ(self, fn: Callable[[], Any]) -> Any:
+        """OCC runner: on BoardWriteConflict, back off and re-run *fn* so it
+        re-reads and rebuilds. Backoff is exponential with per-call jitter so
+        concurrent retryers desynchronize instead of herding (herding burned
+        the whole budget in load spikes). Exhaustion raises — loudly."""
+        last: BoardWriteConflict | None = None
+        rng = random.Random()  # per-call + OS-seeded: distinct across forks
+        for attempt in range(1, _OCC_ATTEMPTS + 1):
+            try:
+                return fn()
+            except BoardWriteConflict as exc:
+                last = exc
+                if attempt < _OCC_ATTEMPTS:
+                    delay = min(_OCC_BACKOFF_CAP_S, _OCC_BACKOFF_S * 2 ** (attempt - 1))
+                    time.sleep(delay * rng.uniform(0.5, 1.5))
+        raise BoardWriteConflict(
+            f"unresolved after {_OCC_ATTEMPTS} OCC attempts: {last}"
+        ) from last
 
     @staticmethod
     def _has_schema_header(lines: list[str]) -> bool:
@@ -220,49 +320,73 @@ class PlannerStore:
         unparsable lines — is preserved byte-for-byte. Writes happen only when
         the file actually changed, atomically.
 
+        OCC: read + generation token come from one snapshot; on conflict the
+        read/rebuild re-runs (replacements are idempotent by id), so a
+        concurrent write landing between our read and our replace can never
+        be erased. A concurrent change to the same card line is last-writer-
+        wins (semantic conflict, not a lost update).
+
         Returns:
             Number of lines matched and replaced.
         """
         if not self._board_file.exists():
             return 0
-        old_text = self._board_file.read_text()
-        out: list[str] = []
-        matched = 0
-        for raw in old_text.splitlines():
-            stripped = raw.strip()
-            if not stripped:
-                continue
-            try:
-                obj = json.loads(stripped)
-            except json.JSONDecodeError:
+
+        def attempt() -> int:
+            old_text = self._board_file.read_text(encoding="utf-8")
+            token = _token_of(old_text)
+            out: list[str] = []
+            matched = 0
+            for raw in old_text.splitlines():
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                try:
+                    obj = json.loads(stripped)
+                except json.JSONDecodeError:
+                    out.append(raw)
+                    continue
+                if isinstance(obj, dict) and obj.get("id") in replacements:
+                    new_line = replacements[obj["id"]]
+                    matched += 1
+                    if new_line is not None:
+                        out.append(new_line)
+                    continue
                 out.append(raw)
-                continue
-            if isinstance(obj, dict) and obj.get("id") in replacements:
-                new_line = replacements[obj["id"]]
-                matched += 1
-                if new_line is not None:
-                    out.append(new_line)
-                continue
-            out.append(raw)
-        new_text = "\n".join(out) + "\n" if out else ""
-        if new_text != old_text:
-            self._atomic_write(new_text)
-        return matched
+            new_text = "\n".join(out) + "\n" if out else ""
+            if new_text != old_text:
+                self._atomic_write(new_text, expect=token)
+            return matched
+
+        return self._occ(attempt)
 
     def _append_card(self, card: Card) -> None:
         """Append a single card line, adding the schema header only if missing.
 
         Existing lines (including old note-schema cards) are preserved
         byte-for-byte, so add operations produce a one-line diff.
+
+        OCC: this "append" is a full rebuild from a read snapshot — without
+        the generation check, two concurrent adds erase each other's line
+        (the original vanishing-card bug). Rebuild re-runs on conflict.
         """
-        existing = self._board_file.read_text().splitlines() if self._board_file.exists() else []
-        body = [raw for raw in existing if raw.strip()]
-        out = list(body)
-        if not self._has_schema_header(body):
-            board = self.load_board()
-            out.insert(0, self._schema_line(board.name, board.columns))
-        out.append(self._card_line(card))
-        self._atomic_write("\n".join(out) + "\n")
+
+        def attempt() -> None:
+            raw = (
+                self._board_file.read_text(encoding="utf-8")
+                if self._board_file.exists()
+                else ""
+            )
+            token = _token_of(raw)
+            body = [line for line in raw.splitlines() if line.strip()]
+            out = list(body)
+            if not self._has_schema_header(body):
+                board = self.load_board()
+                out.insert(0, self._schema_line(board.name, board.columns))
+            out.append(self._card_line(card))
+            self._atomic_write("\n".join(out) + "\n", expect=token)
+
+        self._occ(attempt)
 
     def _read_board_lines(self) -> list[dict[str, Any]]:
         if not self._board_file.exists():
@@ -283,7 +407,8 @@ class PlannerStore:
         lines.append(self._schema_line(board.name, board.columns))
         for card in board.cards:
             lines.append(self._card_line(card))
-        self._atomic_write("\n".join(lines) + "\n" if lines else "")
+        expect = _current_token(self._board_file)
+        self._atomic_write("\n".join(lines) + "\n" if lines else "", expect=expect)
 
     def load_board(self) -> Board:
         lines = self._read_board_lines()
@@ -439,23 +564,34 @@ class PlannerStore:
 
     # ── Notes ───────────────────────────────────────────────────────────
 
-    def _read_notes(self) -> list[Note]:
-        if not self._notes_file.exists():
-            return []
+    def _read_notes_with_token(self) -> tuple[list[Note], str]:
+        """Read the journal AND its generation token from ONE snapshot (OCC)."""
+        raw = (
+            self._notes_file.read_text(encoding="utf-8")
+            if self._notes_file.exists()
+            else ""
+        )
         notes: list[Note] = []
-        for raw in self._notes_file.read_text().splitlines():
-            raw = raw.strip()
-            if not raw:
+        for line in raw.splitlines():
+            stripped = line.strip()
+            if not stripped:
                 continue
             try:
-                notes.append(Note.from_dict(json.loads(raw)))
+                notes.append(Note.from_dict(json.loads(stripped)))
             except json.JSONDecodeError:
                 continue
-        return notes
+        return notes, _token_of(raw)
 
-    def _write_notes(self, notes: list[Note]) -> None:
+    def _read_notes(self) -> list[Note]:
+        return self._read_notes_with_token()[0]
+
+    def _write_notes(self, notes: list[Note], expect: str | None = None) -> None:
+        """Atomic + guarded notes write (was a bare write_text — the notes
+        journal had BOTH lost-update and torn-file exposure)."""
         lines = [json.dumps(n.to_dict(), ensure_ascii=False) for n in notes]
-        self._notes_file.write_text("\n".join(lines) + "\n" if lines else "")
+        text = "\n".join(lines) + "\n" if lines else ""
+        token = expect if expect is not None else _current_token(self._notes_file)
+        self._commit(self._notes_file, text, token)
 
     def list_notes(
         self,
@@ -499,32 +635,44 @@ class PlannerStore:
             created_at=now,
             updated_at=now,
         )
-        notes = self._read_notes()
-        notes.append(note)
-        self._write_notes(notes)
-        return note
+
+        def attempt() -> Note:
+            notes, token = self._read_notes_with_token()
+            notes.append(note)
+            self._write_notes(notes, expect=token)
+            return note
+
+        return self._occ(attempt)
 
     def update_note(self, note_id: str, **kwargs: Any) -> Note | None:
-        notes = self._read_notes()
-        for i, note in enumerate(notes):
-            if note.id == note_id:
-                for key, value in kwargs.items():
-                    if hasattr(note, key):
-                        setattr(note, key, value)
-                note.updated_at = datetime.now(UTC).isoformat()
-                notes[i] = note
-                self._write_notes(notes)
-                return note
-        return None
+
+        def attempt() -> Note | None:
+            notes, token = self._read_notes_with_token()
+            for i, note in enumerate(notes):
+                if note.id == note_id:
+                    for key, value in kwargs.items():
+                        if hasattr(note, key):
+                            setattr(note, key, value)
+                    note.updated_at = datetime.now(UTC).isoformat()
+                    notes[i] = note
+                    self._write_notes(notes, expect=token)
+                    return note
+            return None
+
+        return self._occ(attempt)
 
     def delete_note(self, note_id: str) -> bool:
-        notes = self._read_notes()
-        original_len = len(notes)
-        notes = [n for n in notes if n.id != note_id]
-        if len(notes) < original_len:
-            self._write_notes(notes)
-            return True
-        return False
+
+        def attempt() -> bool:
+            notes, token = self._read_notes_with_token()
+            original_len = len(notes)
+            notes = [n for n in notes if n.id != note_id]
+            if len(notes) < original_len:
+                self._write_notes(notes, expect=token)
+                return True
+            return False
+
+        return self._occ(attempt)
 
     def search_notes(self, query: str) -> list[Note]:
         q = query.lower()
@@ -591,32 +739,37 @@ class PlannerStore:
         """
         if not self._board_file.exists():
             return
-        old_text = self._board_file.read_text()
-        id_set = {c.id for c in ordered}
-        card_lines = [self._card_line(c) for c in ordered]
-        out: list[str] = []
-        emitted = False
-        for raw in old_text.splitlines():
-            stripped = raw.strip()
-            if not stripped:
-                continue
-            try:
-                obj = json.loads(stripped)
-            except json.JSONDecodeError:
+
+        def attempt() -> None:
+            old_text = self._board_file.read_text(encoding="utf-8")
+            token = _token_of(old_text)
+            id_set = {c.id for c in ordered}
+            card_lines = [self._card_line(c) for c in ordered]
+            out: list[str] = []
+            emitted = False
+            for raw in old_text.splitlines():
+                stripped = raw.strip()
+                if not stripped:
+                    continue
+                try:
+                    obj = json.loads(stripped)
+                except json.JSONDecodeError:
+                    out.append(raw)
+                    continue
+                cid = obj.get("id") if isinstance(obj, dict) else None
+                if isinstance(cid, str) and cid in id_set:
+                    if not emitted:
+                        out.extend(card_lines)
+                        emitted = True
+                    continue
                 out.append(raw)
-                continue
-            cid = obj.get("id") if isinstance(obj, dict) else None
-            if isinstance(cid, str) and cid in id_set:
-                if not emitted:
-                    out.extend(card_lines)
-                    emitted = True
-                continue
-            out.append(raw)
-        if not emitted:
-            out.extend(card_lines)
-        new_text = "\n".join(out) + "\n" if out else ""
-        if new_text != old_text:
-            self._atomic_write(new_text)
+            if not emitted:
+                out.extend(card_lines)
+            new_text = "\n".join(out) + "\n" if out else ""
+            if new_text != old_text:
+                self._atomic_write(new_text, expect=token)
+
+        self._occ(attempt)
 
     def compute_chains(self) -> list[str]:
         """Assign the canonical hash chain to every card; reorder the file.
