@@ -26,6 +26,7 @@ Exit codes: 0 = parity, 1 = gaps found, 2 = parse/setup error.
 from __future__ import annotations
 
 import argparse
+import ast
 import json
 import re
 import sys
@@ -84,6 +85,7 @@ SECTION_ALIASES = {
     "Security": "security",
     "Rate Limit": "ratelimit",
     "World Render": "world_render",
+    "Contracts": "contracts",
 }
 
 # Router registration comes in three styles across the codebase:
@@ -114,6 +116,30 @@ DOC_ROW_RE = re.compile(
 )
 DOC_SECTION_RE = re.compile(r"^## (?P<title>.+?)(?:\s+Router.*)?$", re.MULTILINE)
 API_COUNT_RE = re.compile(r"\*\*(?P<routes>\d+)\s+routes\s+across\s+(?P<routers>\d+)\s+routers\*\*")
+
+
+def _call_name(func: ast.AST) -> str:
+    if isinstance(func, ast.Name):
+        return func.id
+    if isinstance(func, ast.Attribute):
+        return func.attr
+    return ""
+
+
+def _kw_str(call: ast.Call, name: str, default: str | None = None) -> str | None:
+    for kw in call.keywords:
+        if kw.arg == name and isinstance(kw.value, ast.Constant):
+            return kw.value.value if isinstance(kw.value.value, str) else default
+    return default
+
+
+def _kw_bool(call: ast.Call, name: str, default: bool) -> bool:
+    for kw in call.keywords:
+        if kw.arg == name and isinstance(kw.value, ast.Constant) and isinstance(
+            kw.value.value, bool
+        ):
+            return kw.value.value
+    return default
 
 
 @dataclass
@@ -185,10 +211,53 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
     ):
         out.append(Route(router_stem, m.group("method").upper(), "<dynamic>", dynamic=True))
 
+    # style 4: descriptor projection — create_router(spec, RouteSpec(...), ...)
+    # emits the route from a ToolSpec, and the verb may be *derived* from the
+    # descriptor's idempotency (True → GET, False → POST). Regex can't see a
+    # computed verb, so this pass uses the AST — mirroring
+    # infrastructure.contract.derive_method. Without it every projected route
+    # would be invisible to parity, and the doc rows would look phantom.
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        tree = None
+    if tree is None:
+        return
+
+    idempotent: dict[str, bool] = {}
+    for node in tree.body:  # module-level `SPEC = ToolSpec(... idempotent=...)`
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
+            if _call_name(node.value.func) == "ToolSpec":
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        idempotent[target.id] = _kw_bool(node.value, "idempotent", default=False)
+
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and _call_name(node.func) == "create_router"):
+            continue
+        spec = node.args[0].id if node.args and isinstance(node.args[0], ast.Name) else ""
+        prefix = _kw_str(node, "prefix", default="") or ""
+        default_method = "GET" if idempotent.get(spec, False) else "POST"
+        for arg in node.args[1:]:
+            if not (isinstance(arg, ast.Call) and _call_name(arg.func) == "RouteSpec"):
+                continue
+            path = _kw_str(arg, "path", default=None)
+            if path is None and arg.args and isinstance(arg.args[0], ast.Constant):
+                path = arg.args[0].value if isinstance(arg.args[0].value, str) else None
+            if path is None:
+                out.append(Route(router_stem, "?", "<dynamic>", dynamic=True))
+                continue
+            method = (_kw_str(arg, "method", default=None) or default_method).upper()
+            out.append(Route(router_stem, method, _join(prefix, path)))
+
 
 def collect_code(findings: Findings) -> None:
     router_files = sorted(
-        p for p in ROUTERS_DIR.glob("*.py") if p.name != "__init__.py"
+        p
+        for p in ROUTERS_DIR.glob("*.py")
+        # `_`-prefixed modules are private plumbing (the generated boot
+        # manifest, not a router) — they carry no routes of their own.
+        if p.name != "__init__.py" and not p.name.startswith("_")
     )
     findings.routers_on_disk = [p.stem for p in router_files]
     for p in router_files:

@@ -669,6 +669,18 @@ Semantic endpoints return `404` for unknown tokens; `embedding` returns `422` wh
 | `POST` | `/world/tick`         | Run a simulation tick.           |
 | `GET`  | `/world/stats`        | World rendering statistics.      |
 
+## Contracts Router (`/contracts`)
+
+Pilot of the descriptor → projection mechanism ([TRANSPORT_PROJECTIONS.md](TRANSPORT_PROJECTIONS.md)):
+this route is emitted by `create_router()` from the `contracts.list` descriptor in
+`routers/contracts.py`, not hand-written — verb, auth scope, validation and OpenAPI
+metadata all derive from that one descriptor. The response lists descriptor-registered
+crossings only; grandfathered routers stay invisible here until migrated.
+
+| Method | Path         | Description                                            |
+| ------ | ------------ | ------------------------------------------------------ |
+| `GET`  | `/contracts` | Contract inventory: name, version, auth scope, params. |
+
 ## OpenAPI Specification
 
 FastAPI automatically provides the OpenAPI spec at `/openapi.json`:

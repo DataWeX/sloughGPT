@@ -97,6 +97,41 @@ jobs:
         working-directory: apps/api/server
         run: python -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=30 -q --tb=short
 
+  # ─── Contract gate (descriptor → projection → registration) ────
+  # Blocking: router manifest freshness, descriptor validation, and the
+  # registry's claim matching the routes FastAPI actually serves.
+  # Report-only (printed, exit 0): route-baseline drift and hand-written
+  # route duplicates, until the grandfathered backlog clears.
+  contract-gate:
+    name: Contract gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/api/server/requirements.txt
+
+      # Stdlib-only checks run first: they need no install at all.
+      - name: Router manifest is fresh (generated, not hand-edited)
+        run: python scripts/gen_router_manifest.py --check
+
+      - name: Descriptor contract check (static)
+        run: python scripts/check_contract.py --static
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+          python -m pip install transformers fastapi uvicorn pydantic httpx numpy scipy psutil peft python-multipart requests pillow
+          python -m pip install -e packages/mogdb
+
+      - name: Projection matches the served route table (runtime)
+        env:
+          PYTHONPATH: .:apps/api/server:packages/core-py:packages/downcraft
+        run: python scripts/check_contract.py --runtime
+
   # ─── Root-level Python tests (tests/) ───────────────────────────
   test-root:
     runs-on: ubuntu-latest

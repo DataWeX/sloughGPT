@@ -34,7 +34,7 @@ stored, `params` derives the JSON Schema view — one declaration, two views,
 never stored twice.
 
 **2. Projections — adapters that emit the transport.** Real routes, generated
-rather than hand-written: a module declares its descriptor, a `build_router(spec)`
+rather than hand-written: a module declares its descriptor, a `create_router(spec, route, handler)`
 helper emits the fragment — `GET /tools/doctor/report` for reads,
 `POST /tools/doctor/check` for actions — with proper verbs, status codes,
 `success_response` envelopes and `classify_and_raise` errors, all from the one
@@ -44,7 +44,7 @@ everywhere else:
 
 | Projection          | Consumer                                                   | Status here                                 |
 | ------------------- | ---------------------------------------------------------- | ------------------------------------------- |
-| HTTP route fragment | web / mobile / SDK clients                                 | ❌ `build_router(spec)` not implemented     |
+| HTTP route fragment | web / mobile / SDK clients                                 | ✅ `create_router(spec, route, handler)`   |
 | SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                 |
 | CLI subcommand      | `cli.py` shell                                             | ❌ not projected                            |
 | Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly |
@@ -70,12 +70,15 @@ agent) = adapters, web/CLI/agents = clients of one contract.**
    `auth_scope`, `idempotent`, `version`.
 3. **Self-register at boot** — one registry entry; no edit to any central
    feature list.
-4. **Emit the projections** — route fragment (via `build_router`), SSE frame,
+4. **Emit the projections** — route fragment (via `create_router`), SSE frame,
    CLI subcommand, TS helper. Auth scope and version come from the descriptor,
    so there is _one_ auth decision and _one_ versioning story.
-5. **Contract gate** — descriptor schema check + contract test + OpenAPI diff
-   in CI (`scripts/check_docs_api_parity.py` is the existing parity hook to
-   extend).
+5. **Contract gate** — `scripts/check_contract.py` validates the descriptors and
+   cross-checks the registry against the routes FastAPI serves (blocking), and
+   diffs the route inventory against a committed baseline (report-only until
+   the grandfathered backlog clears); `scripts/gen_router_manifest.py --check`
+   keeps the boot manifest honest. Both run as the `contract-gate` CI job.
+   `scripts/check_docs_api_parity.py` remains the doc/code parity hook.
 
 Registering a capability is a **registry entry, never an endpoint project**.
 
@@ -101,10 +104,10 @@ Registering a capability is a **registry entry, never an endpoint project**.
 | --------------------------------------------- | --------------------------------------------------------------------------- |
 | Descriptor (`ToolSpec` + derived `params`)    | ✅ contract half exists                                                     |
 | `ToolRegistry` (agent-facing projection)      | ✅ reads the descriptor                                                     |
-| `build_router(spec)` route emission           | ❌ the transport half does not exist                                        |
-| Boot-time self-registration                   | ❌ `routers/__init__.py` `_router_names` is still a central switchyard list |
-| CI contract check (descriptor + OpenAPI diff) | ❌ only doc/code parity exists                                              |
-| TS projection of the contract                 | ❌ `http-client.ts` hand-writes every endpoint                              |
+| `create_router(spec, route, handler)` emission | ✅ `infrastructure/contract.py` — pilot: `GET /contracts`                      |
+| Boot-time self-registration                   | ✅ generated `routers/_manifest.py` + `scripts/gen_router_manifest.py --check`  |
+| CI contract check (descriptor + OpenAPI diff) | ✅ descriptor/registry blocking, route-baseline diff report-only (parity script still reports the doc backlog) |
+| TS projection of the contract                 | ❌ `http-client.ts` hand-writes every endpoint                                  |
 
 Grandfather note: `get_all_routers()`'s deferred-import list exists for a real
 reason (90 s → 8 s cold start) — self-registration must preserve lazy loading,

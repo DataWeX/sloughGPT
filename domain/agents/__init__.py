@@ -3,7 +3,7 @@
 Public API:
     SecurityConfig, SecurityBoundary, ToolCapability, ToolDefinition
     ToolExecutionContext, ToolRunner, AgentConfig, Agent
-    get_agent, get_runner, get_agent_system, get_tool_registry
+    ToolSpec, ToolParam, get_agent, get_runner, get_agent_system, get_tool_registry
 """
 
 
@@ -32,7 +32,7 @@ from domain.agents._internal.agents import (
     get_runner,
 )
 from domain.agents._internal.system import get_agent_system
-from domain.agents._internal.tools import get_tool_registry
+from domain.agents._internal.tools import ToolParam, ToolSpec, get_tool_registry
 
 _LAZY_IMPORTS = {
     "MultiAgentOrchestrator": ("._internal.multi", "MultiAgentOrchestrator"),
@@ -63,6 +63,8 @@ __all__ = [
     "get_runner",
     "get_agent_system",
     "get_tool_registry",
+    "ToolSpec",
+    "ToolParam",
     "MultiAgentOrchestrator",
     "get_agent_run_store",
 ]
