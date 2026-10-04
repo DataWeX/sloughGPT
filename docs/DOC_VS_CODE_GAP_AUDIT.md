@@ -46,22 +46,30 @@ measured code disagrees with any value, the script exits 1.
 # disagrees with any value below, that script exits 1 (alarm). Update this
 # block in the SAME change that moves the code.
 #
-# 2026-10-04 baseline, measured on main at c92adc47b. Once in sync these act
+# 2026-10-04 baseline, measured on main at c92adc47b; re-measured when main
+# advanced to 2d4a7118d. The routers_* values fell 1->0 files, 2->0 stmts
+# there because doctor.py moved onto the domain.core facade
+# (domain.core._internal.doctor.* -> domain.core.*), which is the conformance
+# work this ratchet exists to record. Before lowering a value, confirm the
+# cause by diff and check the facade still re-exports the names (domain.core
+# exports run_doctor and default_report_path from _internal) — a drop traced
+# to a real facading change is the ratchet working, not measurement drift.
+# Once in sync these act
 # as a DOWNWARD ratchet: the router/controller conformance work (card
 # b22e878a) lowers them as it lands, and any climb shows up as an alarm.
 # Check independently of the route-doc truth-up (G1) with:
 #   scripts/check_docs_api_parity.py --architecture-only
-routers_internal_files=1
-routers_internal_stmts=2
-routers_internal_in_scope_files=1
+routers_internal_files=0
+routers_internal_stmts=0
+routers_internal_in_scope_files=0
 controllers_files=5
 controllers_lines=2844
 controllers_defs=93
 controllers_internal_files=4
 controllers_internal_stmts=30
 controllers_internal_modules=13
-combined_internal_files=5
-combined_internal_stmts=32
+combined_internal_files=4
+combined_internal_stmts=30
 -->
 
 ## Gaps → cards
