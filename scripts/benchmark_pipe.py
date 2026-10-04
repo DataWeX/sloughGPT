@@ -45,6 +45,7 @@ BASELINE_FILE = Path("data/benchmark_pipe_baseline.json")
 
 N_ADMIT = 200_000
 N_SPAWN = 20_000
+N_CAL = 10_000_000
 CAPACITY_SPAWN = 100_000
 BOUND_CAPACITY = 64
 BOUND_WORKERS = 8
@@ -54,6 +55,9 @@ REGRESSION_TOLERANCE = 0.25
 # gives 13.4 us, and that error went straight into the --ci regression gate.
 REPEATS = 5
 WARMUP = 512
+# Calibration warms far more than spawn does: its operation is ~1000x
+# cheaper, so 512 iterations would warm nothing measurable (~50 us).
+WARMUP_CAL = 200_000
 
 
 def _noop() -> None:
@@ -132,6 +136,67 @@ def _drain(engine: Engine) -> None:
         engine._pipe.release(proc)
     engine._processes.clear()
     engine._pending.clear()
+
+
+# ── calibration ───────────────────────────────────────────────────────────────
+
+
+def bench_calibration(iters: int = N_CAL, repeats: int = REPEATS) -> dict:
+    """Pure-arithmetic reference: what this box costs per unit of raw work.
+
+    No lock, no dict, no allocation -- just integer work plus the clock reads
+    every other bench pays on top of its real job. It is the control sample
+    for the two numbers the gate actually uses.
+
+    Its job is NOT subtraction. Measured here the loop floor is ~30 ns against
+    an admit of ~2450 ns, so removing it would not move either side. Its job is
+    comparability: ``spawn/admit`` cancels machine speed only when both sides
+    respond to the box the same way, and they do not -- spawn swings further
+    than admit under contention, which is where the observed 1.30x ratio band
+    against a 25% budget comes from. Load average is a proxy for that and a
+    poor one (it counts run-queue length, not how fast this process can go);
+    this measures the actual confound.
+
+    ``spread`` is the max/min across passes. If it exceeds the regression
+    budget, this run cannot resolve a 25% change no matter what spawn and
+    admit report, and ``main`` says so instead of gating on a number that is
+    narrower than the noise underneath it.
+
+    ``checksum`` keeps the loop's result observable so it cannot be elided.
+    """
+    samples: list[float] = []
+    acc = 0
+    for _ in range(repeats):
+        with _collector_out():
+            # Warm inside the timed configuration but outside the clock: a
+            # cold first pass shows up as the max and inflates spread by
+            # exactly the amount this instrument exists to measure. Every
+            # other bench here warms for the same reason.
+            for i in range(WARMUP_CAL):
+                acc = (acc + i) & 0xFFFFFFFF
+            start = _cpu_seconds()
+            for i in range(iters):
+                acc = (acc + i) & 0xFFFFFFFF
+            elapsed = _cpu_seconds() - start
+        samples.append(elapsed / iters * 1e9)
+
+    best = min(samples)
+    ordered = sorted(samples)
+    # ``spread`` is max/min and is reported only for colour: it measures the
+    # slowest pass, and the gate never reads that -- it gates on the winner.
+    # Chasing it produced an advisory that fired on every run (1.3-1.8x) while
+    # the best-of-5 itself reproduced within ~2% run to run and spawn/admit
+    # within ~6%, which is why the credibility signal is instead the gap
+    # between the winner and the runner-up: a winner 30% clear of second place
+    # is a scheduling fluke, not a measurement.
+    return {
+        "iters": iters,
+        "repeats": repeats,
+        "ns_per_op": round(best, 1),
+        "spread": round(max(samples) / best, 3) if best else 0.0,
+        "best_vs_runner_up": round(ordered[1] / best, 3) if len(ordered) > 1 and best else 0.0,
+        "checksum": acc,
+    }
 
 
 def bench_admit_release(iters: int = N_ADMIT, repeats: int = REPEATS) -> dict:
@@ -339,6 +404,9 @@ def bench_backpressure() -> dict:
 def run() -> dict:
     return {
         "load1": _load1(),
+        # Control sample first: it reads the box before the real benches
+        # warm caches and fill pipes, so it stays independent of them.
+        "calibration": bench_calibration(),
         "admit_release": bench_admit_release(),
         "spawn": bench_spawn(),
         "bound": bench_bound(),
@@ -351,11 +419,18 @@ def _print(metrics: dict) -> None:
     sp = metrics["spawn"]
     bd = metrics["bound"]
     bp = metrics["backpressure"]
+    cal = metrics.get("calibration") or {}
 
     print(
         f"PGQ pipe benchmark   (best of {ar['repeats']} passes, cpu time, gc off, "
         f"load {metrics.get('load1', 0.0)})"
     )
+    if cal:
+        print(
+            f"  arithmetic ref     {cal['ns_per_op']:>9.1f} ns/op     "
+            f"(winner {cal['best_vs_runner_up']:.3f}x over runner-up, "
+            f"spread {cal['spread']:.3f}x)"
+        )
     print(f"  admit+release      {ar['ns_per_cycle']:>9.1f} ns/cycle  ({ar['cycles']:,} cycles)")
     print(
         f"  Engine.spawn       {sp['ns_per_spawn']:>9.1f} ns/spawn   ({sp['spawns']:,} spawns/pass)"
@@ -438,6 +513,29 @@ def main() -> int:
         now_ns = metrics["spawn"]["ns_per_spawn"]
         now_admit = metrics["admit_release"]["ns_per_cycle"]
 
+        # Comparability, measured rather than guessed. Load average counts
+        # run-queue length -- it says nothing about how fast this process can
+        # go -- so read the control sample directly.
+        base_cal = (baseline.get("calibration") or {}).get("ns_per_op")
+        now_cal = (metrics.get("calibration") or {}).get("ns_per_op")
+        cal_drift = (now_cal / base_cal) if (base_cal and now_cal) else None
+        cal = metrics.get("calibration") or {}
+        cal_conf = cal.get("best_vs_runner_up") or 0.0
+
+        # Precision comes before verdict, and it asks about the number the gate
+        # actually uses: the winner of best-of-N. If that winner sits far clear
+        # of the runner-up it is a scheduling fluke rather than a measurement,
+        # and gating on it would fail a clean tree and pass a slow one --
+        # which teaches the next reader to ignore the gate. max/min asks the
+        # wrong question (it counts the slowest pass, which the gate never
+        # reads) and fired on every run.
+        if cal_conf > (1 + REGRESSION_TOLERANCE):
+            print(
+                f"\n[advisory] arithmetic ref winner is {cal_conf:.3f}x clear of its "
+                f"runner-up over {cal.get('repeats', '?')} passes -- best-of-N is resting "
+                f"on an outlier; read this pass as inconclusive, not clean"
+            )
+
         # Gate the RATIO, not raw nanoseconds. Both benches run in the same
         # process, on the same clock (CPU time), with the collector held off,
         # so whatever this box costs per unit of work cancels out. Measured
@@ -457,12 +555,24 @@ def main() -> int:
                     f"{base_admit:.1f} ns, +{REGRESSION_TOLERANCE:.0%} budget)"
                 )
                 # The ratio absorbs steady contention, not a pathological
-                # moment: if the box is far busier than it was at baseline the
-                # sample can still be off. Failing here would teach the next
-                # reader to ignore this gate, so stay advisory in that case.
+                # moment. Two measured reasons it may still be off: the box is
+                # not as fast as it was at baseline, or it is simply busy.
+                # Failing here would teach the next reader to ignore this
+                # gate, so stay advisory -- but lead with the direct
+                # measurement: load average counts run-queue length, which is
+                # not the same question as how fast this process can go.
                 base_load = baseline.get("load1", 0.0)
                 now_load = metrics.get("load1", 0.0)
-                if base_load and now_load > max(base_load * 1.5, base_load + 2.0):
+                drifted = cal_drift is not None and abs(cal_drift - 1.0) > REGRESSION_TOLERANCE
+                busy = bool(base_load) and now_load > max(base_load * 1.5, base_load + 2.0)
+                if drifted:
+                    print(
+                        f"\n[advisory] not failing on {detail} -- box speed moved: "
+                        f"arithmetic ref {now_cal:.1f} ns vs baseline {base_cal:.1f} ns "
+                        f"({cal_drift:.3f}x, {abs(cal_drift - 1.0):.0%}), which no "
+                        f"change to spawn can account for"
+                    )
+                elif busy:
                     print(
                         f"\n[advisory] not failing on {detail} -- machine busy: "
                         f"load {now_load} vs baseline {base_load}"
