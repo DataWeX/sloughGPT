@@ -1371,11 +1371,20 @@ class Engine:
         self._processes: dict[str, Process] = {}
         self._pending: list[Process] = []
         self._running = False
-        self._lock = threading.Lock()
+        # Reentrant: the snapshot helpers below take _lock, and they are called
+        # from inside methods that already hold it (run() reports under lock).
+        # A plain Lock would deadlock on that second acquire -- the guard has to
+        # be re-enterable by the thread that already owns it, and only it.
+        self._lock = threading.RLock()
         self._routing: dict[str, str] = {}
         self._default_pool: str | None = None
         self._on_complete: list[Callable[[Process], None]] = []
         self._completed: list[Process] = []
+        # Ids already handed to _completed. That list doubles as the queue
+        # get_completed() drains, so membership in it cannot also mean
+        # "already reported" -- the drain would reset that memory and run()
+        # would append every finished process again on its next pass.
+        self._recorded: set[str] = set()
         self._dispatch_batch_size: int = 8
         self._round_robin_idx: int = 0
         self._scheduling_policy: SchedulingPolicy = SchedulingPolicy.ROUND_ROBIN
@@ -1412,6 +1421,34 @@ class Engine:
             raise TypeError("policy must be a SchedulingPolicy")
         self._scheduling_policy = policy
 
+    # -- locked snapshots ---------------------------------------------------
+    # _processes, _pending and _pools are shared between spawning threads, the
+    # dispatch loop and every observer (health/list_processes/summary). Reading
+    # them live raises "dictionary changed size during iteration" the instant a
+    # spawn lands mid-loop, so no compound read of these walks the live
+    # container any more -- it goes through a snapshot taken under _lock.
+    # Scalar probes (len, .get) are single CPython operations and stay lock-free.
+
+    def _procs(self) -> list[Process]:
+        with self._lock:
+            return list(self._processes.values())
+
+    def _proc_map(self) -> dict[str, Process]:
+        with self._lock:
+            return dict(self._processes)
+
+    def _pend(self) -> list[Process]:
+        with self._lock:
+            return list(self._pending)
+
+    def _pools_list(self) -> list[Pool]:
+        with self._lock:
+            return list(self._pools.values())
+
+    def _pool_map(self) -> dict[str, Pool]:
+        with self._lock:
+            return dict(self._pools)
+
     def spawn(
         self,
         fn: Callable[..., Any],
@@ -1441,22 +1478,26 @@ class Engine:
             proc._pool_name = pool
         if depends_on:
             proc.depends_on = list(depends_on)
-            for dep_id in depends_on:
-                self._dependents.setdefault(dep_id, []).append(proc.id)
+            with self._lock:
+                for dep_id in depends_on:
+                    self._dependents.setdefault(dep_id, []).append(proc.id)
 
         # Check cache for hit
         if self._cache is not None:
             hit, cached = self._cache.get(fn, args, kwargs)
             if hit:
                 proc.complete(cached)
-                self._processes[proc.id] = proc
-                self._completed.append(proc)
+                with self._lock:
+                    self._processes[proc.id] = proc
+                    self._recorded.add(proc.id)
+                    self._completed.append(proc)
                 self._metrics.record_complete(proc)
                 return proc
 
-        self._processes[proc.id] = proc
-        self._pending.append(proc)
-        self._all_done_event.clear()
+        with self._lock:
+            self._processes[proc.id] = proc
+            self._pending.append(proc)
+            self._all_done_event.clear()
         self._metrics.record_spawn()
 
         if register_cancel and self._monitor:
@@ -1532,12 +1573,13 @@ class Engine:
 
     def dispatch(self) -> int:
         self._pipe.open()
-        if not self._pending:
+        pending = self._pend()
+        if not pending:
             return 0
 
         dispatchable: list[Process] = []
         held: list[Process] = []
-        for proc in self._pending:
+        for proc in pending:
             if proc.depends_on and not self._deps_met(proc):
                 held.append(proc)
             else:
@@ -1560,7 +1602,7 @@ class Engine:
                 ungrouped.append(proc)
 
         if ungrouped:
-            pool_names = list(self._pools.keys())
+            pool_names = list(self._pool_map())
             if pool_names:
                 for proc in ungrouped:
                     pool_name = pool_names[self._round_robin_idx % len(pool_names)]
@@ -1594,7 +1636,15 @@ class Engine:
                     for p in batch:
                         p.fail(str(e))
 
-        self._pending = held
+        # Merge, never replace. `held` is built from the snapshot taken on
+        # entry, so assigning it back wholesale deleted every process that
+        # spawn() appended while we were classifying: it stayed registered in
+        # _processes but left _pending for good, nothing would dispatch it and
+        # wait_for() ran out its timeout. Anything not in that snapshot is a
+        # spawn that arrived mid-dispatch and has to survive.
+        snapshot_ids = {p.id for p in pending}
+        with self._lock:
+            self._pending = held + [p for p in self._pending if p.id not in snapshot_ids]
         self._metrics.record_dispatch(dispatched)
         return dispatched
 
@@ -1612,11 +1662,19 @@ class Engine:
                     logger.info("Engine[%s]: dispatched %d processes", self.name, dispatched)
 
             with self._lock:
-                active = sum(t.active_stems for t in self._pools.values())
+                active = sum(t.active_stems for t in self._pools_list())
 
-            for proc in list(self._processes.values()):
-                if proc.is_done and proc not in self._completed:
-                    self._completed.append(proc)
+            for proc in self._procs():
+                with self._lock:
+                    # Test-and-append is one step. Split in two, both a second
+                    # run loop and spawn()'s cache-hit path find the slot empty
+                    # and record the same process twice. Callbacks stay outside
+                    # the lock: they are caller-supplied and may re-enter.
+                    fresh = proc.is_done and proc.id not in self._recorded
+                    if fresh:
+                        self._recorded.add(proc.id)
+                        self._completed.append(proc)
+                if fresh:
                     if proc.status == ProcessStatus.COMPLETED:
                         self._metrics.record_complete(proc)
                     elif proc.status == ProcessStatus.FAILED:
@@ -1635,21 +1693,17 @@ class Engine:
                             "active_stems": active,
                             "completed": len(self._completed),
                             "running": sum(
-                                1
-                                for p in self._processes.values()
-                                if p.status == ProcessStatus.RUNNING
+                                1 for p in self._procs() if p.status == ProcessStatus.RUNNING
                             ),
                             "failed": sum(
-                                1
-                                for p in self._processes.values()
-                                if p.status == ProcessStatus.FAILED
+                                1 for p in self._procs() if p.status == ProcessStatus.FAILED
                             ),
                         }
                     )
                 except Exception as e:
                     logger.error("Engine[%s]: on_progress callback error: %s", self.name, e)
 
-            if not self._pending and all(p.is_done for p in self._processes.values()):
+            if not self._pending and all(p.is_done for p in self._procs()):
                 self._all_done_event.set()
 
             time.sleep(poll_interval)
@@ -1675,17 +1729,20 @@ class Engine:
         return thread
 
     def wait(self, timeout: float | None = None) -> None:
-        if not self._pending and all(p.is_done for p in self._processes.values()):
+        if not self._pending and all(p.is_done for p in self._procs()):
             return
         self._all_done_event.wait(timeout=timeout)
 
     def wait_all(self, timeout: float | None = None) -> list[Process]:
         self.wait(timeout=timeout)
-        return [p for p in self._processes.values() if p.is_done]
+        return [p for p in self._procs() if p.is_done]
 
     def get_completed(self) -> list[Process]:
-        done = list(self._completed)
-        self._completed.clear()
+        # Drain in one step. Copy-then-clear leaves a window where a run loop
+        # appends a process, we hand it back, and then clear it anyway.
+        with self._lock:
+            done = self._completed[:]
+            self._completed.clear()
         return done
 
     def stop(self) -> None:
@@ -1695,13 +1752,13 @@ class Engine:
         # than backpressure. run()/dispatch() re-arm it.
         self._pipe.close()
         self.stop_workers()
-        for proc in self._processes.values():
+        for proc in self._procs():
             if not proc.is_done:
                 proc.cancel()
                 self._metrics.record_cancel()
         if self._monitor:
             self._monitor.stop()
-        for pool in self._pools.values():
+        for pool in self._pools_list():
             pool.shutdown()
 
     def get_process(self, proc_id: str) -> Process | None:
@@ -1711,10 +1768,10 @@ class Engine:
         return self._pools.get(name)
 
     def list_pools(self) -> list[str]:
-        return list(self._pools.keys())
+        return list(self._pool_map())
 
     def list_processes(self, status: ProcessStatus | None = None) -> list[Process]:
-        procs = list(self._processes.values())
+        procs = self._procs()
         if status:
             procs = [p for p in procs if p.status == status]
         return procs
@@ -1782,7 +1839,7 @@ class Engine:
 
     def cancel_pool(self, pool_name: str) -> int:
         count = 0
-        for proc in self._processes.values():
+        for proc in self._procs():
             if proc._pool_name == pool_name and not proc.is_done:
                 proc.cancel()
                 self._metrics.record_cancel()
@@ -1818,9 +1875,16 @@ class Engine:
                     _wrapped.__name__ = f"chain_{base_fn.__name__}"
                     return _wrapped
 
-                p = self.spawn(_make_wrapped(fn, args, kwargs), name=step_name, pool=pool)
-                p.depends_on = [prev_id]
-                self._dependents.setdefault(prev_id, []).append(p.id)
+                # depends_on goes through spawn(), not on afterwards: spawn()
+                # queues the process immediately, so setting it after the call
+                # leaves a window where dispatch() sees no dependency and runs
+                # this step before its predecessor.
+                p = self.spawn(
+                    _make_wrapped(fn, args, kwargs),
+                    name=step_name,
+                    pool=pool,
+                    depends_on=[prev_id],
+                )
             procs.append(p)
             prev_id = p.id
         return procs
@@ -1877,10 +1941,9 @@ class Engine:
             "process_count": len(self._processes),
             "pending": len(self._pending),
             "completed": len(self._completed),
-            "pools": {n: p.to_dict() for n, p in self._pools.items()},
+            "pools": {n: p.to_dict() for n, p in self._pool_map().items()},
             "status_counts": {
-                s.value: sum(1 for p in self._processes.values() if p.status == s)
-                for s in ProcessStatus
+                s.value: sum(1 for p in self._procs() if p.status == s) for s in ProcessStatus
             },
             "monitor": self._monitor.stats() if self._monitor else None,
             "metrics": self._metrics.snapshot(),
@@ -1904,10 +1967,10 @@ class Engine:
         return {
             "name": self.name,
             "running": self._running,
-            "pools": {n: t.to_dict() for n, t in self._pools.items()},
+            "pools": {n: t.to_dict() for n, t in self._pool_map().items()},
             "processes": len(self._processes),
             "pending": len(self._pending),
-            "active_stems": sum(t.active_stems for t in self._pools.values()),
+            "active_stems": sum(t.active_stems for t in self._pools_list()),
             "routing": dict(self._routing),
             "monitor": self._monitor.stats() if self._monitor else None,
             "metrics": self._metrics.snapshot(),
@@ -1920,12 +1983,13 @@ class Engine:
             self._processes.clear()
             self._pending.clear()
             self._completed.clear()
+            self._recorded.clear()
             self._dependents.clear()
             self._all_done_event.set()
 
     def summary(self) -> str:
         counts = {}
-        for p in self._processes.values():
+        for p in self._procs():
             counts[p.status.value] = counts.get(p.status.value, 0) + 1
         parts = [f"{k}={v}" for k, v in sorted(counts.items())]
         return f"Engine '{self.name}': processes={len(self._processes)} ({', '.join(parts) if parts else 'none'})"
@@ -1946,7 +2010,7 @@ class Engine:
 
     def cancel_all(self, status: ProcessStatus = None) -> int:
         count = 0
-        for proc in list(self._processes.values()):
+        for proc in self._procs():
             if proc.is_done:
                 continue
             if status is not None and proc.status != status:
@@ -1958,7 +2022,7 @@ class Engine:
     def dependency_graph(self) -> dict:
         nodes = []
         edges = []
-        for proc in self._processes.values():
+        for proc in self._procs():
             nodes.append(proc.id)
             for dep_id in proc.depends_on:
                 edges.append({"from": dep_id, "to": proc.id})
@@ -1969,7 +2033,7 @@ class Engine:
             return []
         # Build adjacency and find longest path via DFS
         dep_of: dict[str, list[str]] = {}
-        for proc in self._processes.values():
+        for proc in self._procs():
             for dep_id in proc.depends_on:
                 dep_of.setdefault(dep_id, []).append(proc.id)
 
@@ -1995,9 +2059,9 @@ class Engine:
         all_children = set()
         for children in dep_of.values():
             all_children.update(children)
-        roots = [p.id for p in self._processes.values() if p.id not in all_children]
+        roots = [p.id for p in self._procs() if p.id not in all_children]
         if not roots:
-            roots = list(self._processes.keys())
+            roots = list(self._proc_map().keys())
 
         best_path = []
         for root in roots:
@@ -2007,7 +2071,7 @@ class Engine:
         return best_path
 
     def orphan_processes(self) -> list[Process]:
-        return [p for p in self._processes.values() if p.depends_on and not self._deps_met(p)]
+        return [p for p in self._procs() if p.depends_on and not self._deps_met(p)]
 
     def spawn_batch(self, items: list) -> list[Process]:
         procs = []
@@ -2024,7 +2088,7 @@ class Engine:
 
         state = {
             "name": self.name,
-            "processes": {pid: p.to_dict() for pid, p in self._processes.items()},
+            "processes": {pid: p.to_dict() for pid, p in self._proc_map().items()},
             "metrics": self._metrics.snapshot(),
         }
         with open(path, "w") as f:

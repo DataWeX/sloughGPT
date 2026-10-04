@@ -408,7 +408,16 @@ Accuracy:  ~80-95% (varies by pattern)
 
 - `PointLibrary` uses `threading.RLock` for all mutations
 - `ProducerConsumerQueue` uses `queue.PriorityQueue` (thread-safe)
-- `Engine._processes` and `Engine._pools` use `threading.Lock`
+- `Engine` guards `_processes`, `_pending`, `_pools`, `_dependents` and
+  `_completed` with one `threading.RLock`. Every compound operation — looping,
+  test-and-append, draining, read-modify-write — holds it or goes through a
+  locked snapshot helper (`_procs()`, `_pend()`, `_pool_map()`); scalar probes
+  (`len`, `.get`) are single CPython operations and stay lock-free. Walking a
+  live container while another thread spawns raises `RuntimeError: dictionary
+changed size during iteration`, and `dispatch()` therefore _merges_ into
+  `_pending` rather than replacing it — a wholesale replace drops any spawn
+  landing mid-classification from the queue for good, leaving a process that is
+  registered, never dispatched, and waited on until `wait_for()` times out.
 - `TaskQueue` operations are atomic (single-threaded dispatch)
 
 ## Integration with CancelManager
