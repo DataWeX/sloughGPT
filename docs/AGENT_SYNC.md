@@ -4,10 +4,12 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~00:30 — `fix/boot-overlay-stall` landed (card
-`cb089b43`, cherry-pick `8acb530be`, see Landed): the boot overlay can no longer
-hang forever — progress-based stall watchdog + degraded banner; firefox
-ux-flows benchmark **13/13**. Earlier 2026-10-03: `fix/journey-test-gates`
+**Last update**: 2026-10-04 ~01:20 — `feat/avion-transcript-batching` landed
+(card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit transcript
+flush, benchmark green at baseline (quiet window, load 1.6). Earlier the same
+night: `fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
+Landed) — the boot overlay can no longer hang forever; firefox ux-flows
+benchmark **13/13**. Earlier 2026-10-03: `fix/journey-test-gates`
 landed on user sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`,
 see Landed).
 Earlier the same day: the **avion stack** — cards `13f50db7` journeys takeover
@@ -36,7 +38,19 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `8acb530be`)
+## Landed on main (origin/main = `371025464`)
+
+- **2026-10-04 · `feat/avion-transcript-batching` lands — transcript writes are
+  group-committed.** Card `68ea8b9d`, cherry-pick of `fb7859ced`:
+  `AgentConfig.transcript_flush_steps` batches JSONL transcript writes — write
+  every step, `flush()` every N (default 1000). **Benchmark (2k steps/scenario,
+  quiet window load 1.6, conda)**: group-commit **20,806 steps/s (48.1 µs/step)
+  ≈ bare loop (20,621 / 48.5 µs) and +34.4% over per-step flush (15,481 /
+  64.6 µs)**; bare and per-step both match the recorded baseline (21.7k/15.7k →
+  −5% / −1.4%); callbacks free (21,881); screenshot 19,576. Gates: avion suite
+  green (1 isolated load-flake, passes alone) + ruff clean. An earlier run at
+  load ~4 showed every row ~2× depressed — record loadavg with any benchmark
+  number or the comparison is meaningless.
 
 - **2026-10-04 · `fix/boot-overlay-stall` lands — "boot overlay never
   dismissed" is fixed.** Card `cb089b43`, cherry-pick of `d897399e7` (only the
@@ -142,10 +156,6 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
-- `feat/avion-transcript-batching` (card `68ea8b9d`, pushed): group-commit
-  transcript flush — its benchmark row is +13.1% vs per-step flush, but that
-  run was at load ~4 (absolutes load-depressed: 10.8k bare vs the recorded
-  21.7k @ load <3.5) — re-run in a quiet window before landing.
 - Root-repo session on `feat/pipe-bounded-execution`; ~40 `feat/*` worktrees
   active — `git branch -vv` + the kanban board name the owners.
 - The 683 baseline failures are known drift → card `56b49cf1` (drift baseline).
