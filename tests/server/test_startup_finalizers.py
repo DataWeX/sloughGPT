@@ -8,11 +8,16 @@ Covers kanban card 223001e4 (infra review 9/11/12 follow-ups):
 2. ``StartupOrchestrator._finalize_startup`` is the single wiring point for
    the three boot finalizers that each previously had a start-side call and
    zero end-side callers: history commit, terminal summary, webhook event.
+3. Card d1f544fb: persistence swapped from a JSON file to a MogDB store —
+   records survive restart, the legacy JSON migrates once (original kept as
+   ``.bak``), and a missing mogdb degrades to in-memory-only instead of
+   failing boot.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 import threading
 from pathlib import Path
@@ -34,9 +39,10 @@ def _seed_records(history: StartupHistory, count: int = 3) -> None:
         history.finish_startup(success=True)
 
 
-def test_optimization_suggestions_does_not_deadlock(tmp_path) -> None:
+def test_optimization_suggestions_does_not_deadlock(tmp_path, monkeypatch) -> None:
     """9-P0: nested acquisition of the history lock must not hang."""
-    history = StartupHistory(persist_path=tmp_path / "history.json")
+    monkeypatch.setenv("SLO_STARTUP_HISTORY_PATH", str(tmp_path / "no_legacy.json"))
+    history = StartupHistory(db_path=tmp_path / "history_mogdb")
     _seed_records(history, count=3)  # >= 2 records to pass the guard at line 387
 
     results: list = []
@@ -57,18 +63,65 @@ def test_optimization_suggestions_does_not_deadlock(tmp_path) -> None:
     assert isinstance(results[0], list)
 
 
-def test_history_record_is_committed_and_persisted(tmp_path) -> None:
-    """9-P1/P3: a finished startup must land in records and on disk atomically."""
-    path = tmp_path / "history.json"
-    history = StartupHistory(persist_path=path)
+def test_history_record_is_committed_and_persisted(tmp_path, monkeypatch) -> None:
+    """d1f544fb: a finished startup must land in records and in the store."""
+    monkeypatch.setenv("SLO_STARTUP_HISTORY_PATH", str(tmp_path / "no_legacy.json"))
+    db = tmp_path / "history_mogdb"
+    history = StartupHistory(db_path=db)
     _seed_records(history, count=1)
 
     assert len(history.get_records()) == 1
-    assert path.exists(), "finish_startup must persist the record"
-    assert not path.with_suffix(".json.tmp").exists(), "temp file must be consumed"
+    assert db.exists() and any(db.iterdir()), "finish_startup must persist to the store"
     # A second instance sees the committed record
-    reloaded = StartupHistory(persist_path=path)
+    reloaded = StartupHistory(db_path=db)
     assert len(reloaded.get_records()) == 1
+
+
+def test_legacy_json_migrates_once_then_backs_up(tmp_path, monkeypatch) -> None:
+    """d1f544fb: legacy records import once; the original survives as .bak."""
+    legacy = tmp_path / "startup_history.json"
+    legacy.write_text(
+        json.dumps(
+            [
+                {
+                    "timestamp": 111.0,
+                    "total_duration": 9.9,
+                    "stage_durations": {"critical": 3.0},
+                    "hook_durations": {},
+                    "model_load_duration": 0,
+                    "success": True,
+                    "error": None,
+                }
+            ]
+        )
+    )
+    monkeypatch.setenv("SLO_STARTUP_HISTORY_PATH", str(legacy))
+    db = tmp_path / "history_mogdb"
+
+    first = StartupHistory(db_path=db)
+    assert any(r["timestamp"] == 111.0 for r in first.get_records(50))
+    backup = legacy.parent / (legacy.name + ".bak")
+    assert backup.exists(), "original must be preserved as .bak, never deleted"
+    assert not legacy.exists()
+
+    # Idempotent: a second boot does not duplicate the migrated record
+    second = StartupHistory(db_path=db)
+    assert sum(1 for r in second.get_records(50) if r["timestamp"] == 111.0) == 1
+
+
+def test_degrades_to_memory_without_mogdb(tmp_path, monkeypatch) -> None:
+    """d1f544fb: no mogdb => in-memory only, one warning, boot never fails."""
+    import infrastructure.startup_history as sh
+
+    def _unavailable():
+        raise ImportError("mogdb deliberately unavailable")
+
+    monkeypatch.setattr(sh, "_import_mogdb", _unavailable)
+    history = StartupHistory(db_path=tmp_path / "history_mogdb")
+    _seed_records(history, count=1)
+
+    assert len(history.get_records()) == 1  # memory path still works
+    assert not (tmp_path / "history_mogdb").exists()  # nothing persisted, no crash
 
 
 def _make_orchestrator():

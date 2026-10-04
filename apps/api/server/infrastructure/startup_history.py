@@ -1,5 +1,11 @@
 """Startup history tracking — stores recent startup times for performance monitoring.
 
+Records persist to a MogDB collection (``data/startup_history_mogdb``), one
+document per boot, following the feedback-controller store pattern. If mogdb
+is unavailable the store degrades to in-memory only — observability must
+never fail boot. The retired JSON-file store (SLO_STARTUP_HISTORY_PATH) is
+migrated once and its original kept as a ``.bak``.
+
 Usage (called by StagedLoader, not by hand):
     from infrastructure.startup_history import get_startup_history
 
@@ -18,6 +24,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sys
 import threading
 import time
 from collections import deque
@@ -27,12 +34,34 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Default persistence path
-DEFAULT_HISTORY_PATH = Path(
-    os.environ.get(
-        "SLO_STARTUP_HISTORY_PATH", str(Path.home() / ".slogpt" / "startup_history.json")
+
+def legacy_history_path() -> Path:
+    """Where the retired JSON-file store wrote records (migration source).
+
+    ``SLO_STARTUP_HISTORY_PATH`` is read at migration time, not import time.
+    """
+    return Path(
+        os.environ.get(
+            "SLO_STARTUP_HISTORY_PATH", str(Path.home() / ".slogpt" / "startup_history.json")
+        )
     )
-)
+
+
+def _import_mogdb():
+    """Import mogdb, adding packages/mogdb/src to sys.path for this session.
+
+    The server bootstrap does not put packages/mogdb/src on sys.path and the
+    shared env does not install mogdb — the CLI db group uses this same
+    self-serve path insert (apps/cli/src/groups/db.py).
+    """
+    from domain.shared import find_repo_root
+
+    src = find_repo_root(Path(__file__).resolve()) / "packages" / "mogdb" / "src"
+    if str(src) not in sys.path:
+        sys.path.insert(0, str(src))
+    from mogdb import MogDB
+
+    return MogDB
 
 
 @dataclass
@@ -62,21 +91,32 @@ class StartupRecord:
 class StartupHistory:
     """Stores recent startup records for performance monitoring.
 
-    Keeps the last 50 startup records in memory. Calculates averages,
-    percentiles, and comparisons for monitoring dashboards.
+    Keeps the last 50 startup records in memory, durable across restarts via
+    the MogDB store when available. Calculates averages, percentiles, and
+    comparisons for monitoring dashboards.
     """
 
-    def __init__(self, max_records: int = 50, persist_path: Path | None = None) -> None:
+    def __init__(self, max_records: int = 50, db_path: Path | None = None) -> None:
         # RLock, not Lock: get_optimization_suggestions holds the lock while
         # calling get_stage_stats(), which acquires it again. A plain Lock
         # self-deadlocks here — and because health.startup_history is an async
         # handler, that freeze took down the whole uvicorn event loop.
         self._lock = threading.RLock()
         self._records: deque[StartupRecord] = deque(maxlen=max_records)
+        self._max_records = max_records
         self._current_startup: StartupRecord | None = None
         self._current_start_time: float = 0.0
-        self._persist_path = persist_path or DEFAULT_HISTORY_PATH
-        self._load_from_disk()
+        self._db_path = db_path or self._default_db_path()
+        self._store: Any = None  # MogDB collection; None = degraded in-memory mode
+        self._open_store()
+        self._migrate_legacy_json()
+        self._load_from_store()
+
+    @staticmethod
+    def _default_db_path() -> Path:
+        from domain.shared import find_repo_root
+
+        return find_repo_root(Path(__file__).resolve()) / "data" / "startup_history_mogdb"
 
     def start_startup(self) -> None:
         """Mark the beginning of a startup."""
@@ -132,52 +172,109 @@ class StartupHistory:
         except Exception:
             logger.debug("startup history metrics replay failed", exc_info=True)
 
-        self._save_to_disk()
+        self._persist_record(record)
         return record
 
-    def _save_to_disk(self) -> None:
-        """Persist startup records to disk (atomically).
+    def _open_store(self) -> None:
+        """Open the MogDB record store (``data/startup_history_mogdb``).
 
-        Write-to-temp + os.replace: a crash mid-write must never truncate the
-        history file — the old file survives intact until the new one is fully
-        on disk.
+        Degraded mode: any failure — mogdb import, path, open — leaves
+        ``self._store`` as None and history runs in-memory only, with one
+        warning. Startup observability must never fail boot (the WebhookStore
+        degraded-mode precedent).
         """
         try:
-            self._persist_path.parent.mkdir(parents=True, exist_ok=True)
-            records = [r.to_dict() for r in self._records]
-            tmp_path = self._persist_path.with_suffix(self._persist_path.suffix + ".tmp")
-            with open(tmp_path, "w") as f:
-                json.dump(records, f, indent=2)
-            os.replace(tmp_path, self._persist_path)
-        except Exception as e:
-            logger.warning("Failed to save startup history: %s", e)
+            MogDB = _import_mogdb()
+            self._store = MogDB(str(self._db_path)).collection("startup_records")
+            self._store.create_sorted_index("timestamp")
+        except Exception:
+            self._store = None
+            logger.warning(
+                "startup history degraded to in-memory only (MogDB unavailable at %s)",
+                self._db_path,
+                exc_info=True,
+            )
 
-    def _load_from_disk(self) -> None:
-        """Load startup records from disk."""
+    def _persist_record(self, record: StartupRecord) -> None:
+        """Append a finished record to the store and prune to max_records."""
+        if self._store is None:
+            return
         try:
-            if self._persist_path.exists():
-                with open(self._persist_path) as f:
-                    records = json.load(f)
-                for record_data in records:
-                    record = StartupRecord(
-                        timestamp=record_data.get("timestamp", 0),
-                        total_duration=record_data.get("total_duration", 0),
-                        stage_durations=record_data.get("stage_durations", {}),
-                        hook_durations=record_data.get("hook_durations", {}),
-                        model_load_duration=record_data.get("model_load_duration", 0),
-                        success=record_data.get("success", True),
-                        error=record_data.get("error"),
+            self._store.insert_one(record.to_dict())
+            excess = self._store.count() - self._max_records
+            if excess > 0:
+                oldest = self._store.find(sort=[("timestamp", 1)], limit=excess)
+                self._store.delete_many({"_id": {"$in": [d["_id"] for d in oldest]}})
+        except Exception:
+            logger.warning("failed to persist startup record", exc_info=True)
+
+    def _load_from_store(self) -> None:
+        """Load the newest max_records from the store into memory."""
+        if self._store is None:
+            return
+        try:
+            docs = self._store.find(sort=[("timestamp", -1)], limit=self._max_records)
+            for data in reversed(docs):
+                self._records.append(
+                    StartupRecord(
+                        timestamp=data.get("timestamp", 0),
+                        total_duration=data.get("total_duration", 0),
+                        stage_durations=data.get("stage_durations", {}),
+                        hook_durations=data.get("hook_durations", {}),
+                        model_load_duration=data.get("model_load_duration", 0),
+                        success=data.get("success", True),
+                        error=data.get("error"),
                     )
-                    self._records.append(record)
-                logger.info("Loaded %d startup records from disk", len(self._records))
-        except Exception as e:
-            logger.warning("Failed to load startup history: %s", e)
+                )
+            if docs:
+                logger.info("Loaded %d startup records from MogDB", len(docs))
+        except Exception:
+            logger.warning("failed to load startup history from MogDB", exc_info=True)
+
+    def _migrate_legacy_json(self) -> None:
+        """One-time import of the retired JSON-file history, kept as ``.bak``.
+
+        The old store rewrote SLO_STARTUP_HISTORY_PATH on every finish. On the
+        first boot with a healthy store: import its records (skipping
+        timestamps the store already has), then rename the original to .bak —
+        never delete user data. A failed rename just re-runs next boot; the
+        dedupe keeps it idempotent.
+        """
+        if self._store is None:
+            return
+        legacy = legacy_history_path()
+        if not legacy.exists():
+            return
+        try:
+            with open(legacy) as f:
+                records = json.load(f)
+            if not isinstance(records, list):
+                raise ValueError(f"unexpected legacy format: {type(records).__name__}")
+            imported = 0
+            for data in records:
+                if self._store.find_one({"timestamp": data.get("timestamp", -1)}) is None:
+                    self._store.insert_one(data)
+                    imported += 1
+            backup = legacy.parent / (legacy.name + ".bak")
+            legacy.rename(backup)
+            logger.info(
+                "migrated %d legacy startup records from %s (original kept at %s)",
+                imported,
+                legacy,
+                backup,
+            )
+        except Exception:
+            logger.warning("legacy startup history migration failed", exc_info=True)
 
     def clear_history(self) -> None:
-        """Clear all startup records."""
+        """Clear all startup records (memory and store)."""
         with self._lock:
             self._records.clear()
-        self._save_to_disk()
+        if self._store is not None:
+            try:
+                self._store.delete_many({})
+            except Exception:
+                logger.warning("failed to clear startup history store", exc_info=True)
 
     def export_history(self) -> list[dict]:
         """Export all startup records."""
