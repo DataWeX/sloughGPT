@@ -302,7 +302,7 @@ class TestUnreadCount:
 class TestIngestFrontendLogs:
     """POST /errors/logs/ingest"""
 
-    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
+    @patch("apps.api.server.routers.errors.get_server_buffer")
     def test_ingests_single_log(self, mock_get_buf, client):
         resp = client.post(
             "/errors/logs/ingest",
@@ -313,7 +313,7 @@ class TestIngestFrontendLogs:
         assert resp.status_code == 200
         assert resp.json()["data"]["ingested"] == 1
 
-    @patch("domain.infrastructure._internal.output_buffer.get_server_buffer")
+    @patch("apps.api.server.routers.errors.get_server_buffer")
     def test_ingests_multiple_logs(self, mock_get_buf, client):
         resp = client.post(
             "/errors/logs/ingest",

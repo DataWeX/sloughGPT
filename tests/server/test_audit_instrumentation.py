@@ -156,7 +156,7 @@ class TestModelAudit:
         assert kwargs["detail"] == "model_type=slonet"
         assert kwargs["extra"] == {"layers_reset": 0}
 
-    @patch("domain.models._internal.provider.get_provider", return_value=None)
+    @patch("domain.models.get_provider", return_value=None)
     @patch("domain.slolib._internal.gpu.get_accelerator")
     @patch("infrastructure.auth.get_audit_logger")
     def test_set_precision_logs_event(self, mock_logger, mock_acc, mock_provider, models_client):
