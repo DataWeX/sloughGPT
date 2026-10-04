@@ -16,7 +16,7 @@ from domain.core._internal.doctor.models import Finding
 from domain.core._internal.doctor.report import default_report_path
 from domain.infrastructure._internal.health_flow import Severity
 
-_KNOWN_PROBES = ("http", "sse", "journey")
+_KNOWN_PROBES = ("gates", "benchmarks", "http", "sse", "journey")
 _TOP_FINDINGS = 5
 
 

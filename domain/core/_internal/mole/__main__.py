@@ -14,7 +14,7 @@ import sys
 
 from domain.core._internal.mole import default_journal_path, run_watch
 
-_KNOWN_PROBES = ("http", "sse", "journey")
+_KNOWN_PROBES = ("gates", "benchmarks", "http", "sse", "journey")
 
 
 def _event_line(line: dict) -> str:
