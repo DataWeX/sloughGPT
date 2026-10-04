@@ -35,13 +35,30 @@ from fastapi import APIRouter, Body, Depends
 from pydantic import BaseModel, create_model
 from schemas.common import classify_and_raise, success_response
 
-from domain.agents._internal.tools import ToolSpec
+from domain.agents import ToolSpec
 from infrastructure.auth import require_auth_if_enabled
 
 logger = logging.getLogger("slo.contract")
 
 _READ = "GET"
 _WRITE = "POST"
+
+# Side effect of building a projection: every route create_router emits writes
+# its own contract here. This is how a capability *registers* itself — by being
+# projected, never by being added to a hand-maintained list. `GET /contracts`
+# (routers/contracts.py) reads this back.
+_CONTRACTS: dict[str, dict[str, Any]] = {}
+
+
+def get_contracts() -> list[dict[str, Any]]:
+    """Every descriptor-projected HTTP contract registered so far, sorted."""
+    return [_CONTRACTS[key] for key in sorted(_CONTRACTS)]
+
+
+def clear_contracts() -> None:
+    """Empty the registry (tests only — a fresh process starts empty anyway)."""
+    _CONTRACTS.clear()
+
 
 # JSON Schema type -> python type used to build the request model.
 _JSON_TO_PY: dict[str, Any] = {
@@ -219,4 +236,19 @@ def create_router(
         openapi_extra=openapi_extra,
         summary=spec.description or spec.name,
     )
+
+    # Register the projection. Keyed by "VERB path" so re-projecting the same
+    # contract replaces its entry rather than duplicating it.
+    full = (prefix.rstrip("/") + path) if prefix else path
+    _CONTRACTS[f"{verb} {full}"] = {
+        "method": verb,
+        "path": full,
+        "name": spec.name,
+        "version": spec.version,
+        "auth_scope": spec.auth_scope,
+        "idempotent": spec.idempotent,
+        "params": spec.params,
+        "result": spec.result,
+        "description": spec.description,
+    }
     return router

@@ -1055,6 +1055,21 @@ Defined in `apps/api/server/routers/workspaces.py` — 29 endpoints.
 | `GET`    | `/workspaces/{workspace_id}/stats`             |                                                                       |
 | `GET`    | `/workspaces/{workspace_id}/usage`             | Detailed usage metrics for a workspace.                               |
 
+## Contracts Router (`/contracts`)
+
+Defined in `apps/api/server/routers/contracts.py` — 1 endpoint.
+
+A **descriptor-projected** router: verb, request validation, response envelope,
+auth scope and the `x-contract` OpenAPI marker are all derived by
+`create_router(spec, route, handler)` from a single `ToolSpec` declaration —
+nothing in this route is hand-written. It returns the contracts registered at
+boot, so it documents the projection system by executing it. Pattern details in
+[`TRANSPORT_PROJECTIONS.md`](TRANSPORT_PROJECTIONS.md).
+
+| Method | Path         | Description                                                       |
+| ------ | ------------ | ----------------------------------------------------------------- |
+| `GET`  | `/contracts` | List every descriptor-projected HTTP contract registered at boot. |
+
 ## OpenAPI Specification
 
 | Method | Path            | Description                      |

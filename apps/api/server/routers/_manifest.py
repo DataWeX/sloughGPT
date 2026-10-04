@@ -70,4 +70,5 @@ ROUTER_MODULES: tuple[str, ...] = (
     "model_stack",
     "phoneme",
     "collections",
+    "contracts",
 )

@@ -184,6 +184,40 @@ def _join(prefix: str, path: str) -> str:
     return (prefix.rstrip("/") + "/" + path.lstrip("/")) if prefix else "/" + path.lstrip("/")
 
 
+def _spec_fields(node: ast.AST) -> tuple[bool | None, str]:
+    """``(idempotent, description)`` literals read off a ``ToolSpec(...)`` expr.
+
+    Mirrors ``infrastructure.contract.resolve_method``: the verb is derived from
+    ``idempotent``, so the gate has to derive it the same way or it will
+    disagree with what FastAPI actually serves. Returns ``idempotent=None`` when
+    it cannot be resolved statically — the caller marks the route dynamic
+    instead of guessing.
+    """
+    idem: bool | None = None
+    desc = ""
+    if not isinstance(node, ast.Call):
+        return None, ""
+    func = node.func
+    tail = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+    if tail != "ToolSpec":
+        return None, ""
+    seen = False
+    for kw in node.keywords:
+        if kw.arg == "idempotent":
+            seen = True
+            if isinstance(kw.value, ast.Constant) and isinstance(kw.value.value, bool):
+                idem = kw.value.value
+        elif kw.arg == "description" and isinstance(kw.value, ast.Constant):
+            desc = kw.value.value if isinstance(kw.value.value, str) else ""
+    if not seen:
+        idem = False  # ToolSpec dataclass default
+    return idem, desc
+
+
+def _literal_str(node: ast.AST) -> str | None:
+    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
+
+
 def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
     """Extract routes from one file in any of the three registration styles."""
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -232,6 +266,50 @@ def _scan_file(path: Path, router_stem: str, out: list[Route]) -> None:
                 desc=desc,
             )
         )
+
+    # style 4: descriptor-projected fragments — create_router(spec, route, h).
+    # Both the path and the verb are derived from the descriptor at build time,
+    # so resolve them exactly the way resolve_method() does. Anything that
+    # cannot be resolved statically becomes dynamic (counted, not diffed) rather
+    # than guessed — a wrong verb here would fork the gate from what FastAPI
+    # actually serves.
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        tree = None
+    if tree is not None:
+        specs: dict[str, tuple[bool | None, str]] = {}
+        for node in tree.body:
+            if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                idem, sdesc = _spec_fields(node.value)
+                if idem is not None:
+                    for t in targets:
+                        if isinstance(t, ast.Name):
+                            specs[t.id] = (idem, sdesc)
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "create_router"
+            ):
+                continue
+            idem, desc = _spec_fields(node.args[0]) if len(node.args) >= 1 else (None, "")
+            if idem is None and len(node.args) >= 1 and isinstance(node.args[0], ast.Name):
+                idem, desc = specs.get(node.args[0].id, (None, desc))
+            route = _literal_str(node.args[1]) if len(node.args) >= 2 else None
+            if route is None or idem is None:
+                out.append(Route(router_stem, "?", "<dynamic>", dynamic=True))
+                continue
+            prefix, override = "", None
+            for kw in node.keywords:
+                if kw.arg == "prefix":
+                    prefix = _literal_str(kw.value) or ""
+                elif kw.arg == "method":
+                    override = _literal_str(kw.value)
+            # resolve_method(): an explicit method= override wins
+            method = (override or ("GET" if idem else "POST")).upper()
+            out.append(Route(router_stem, method, _join(prefix, route.strip("/")), desc=desc))
 
     # dynamic decorator paths — counted, not diffed
     for m in re.finditer(
