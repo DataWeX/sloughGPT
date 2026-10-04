@@ -134,6 +134,20 @@ class TestTailOutput:
 class TestExecutor:
     """GET /system/executor"""
 
+    @pytest.fixture(autouse=True)
+    def _uninitialized_executor(self):
+        """Force the uninitialized precondition.
+
+        These tests were order-dependent: ambient ``_instance`` state left
+        by earlier files made the job-lookup tests see an initialized
+        executor (404 instead of 503). Every test now establishes its own
+        precondition, with the original state restored afterwards.
+        """
+        old = executor_mod._instance
+        executor_mod._instance = None
+        yield
+        executor_mod._instance = old
+
     def test_returns_uninitialized_when_not_setup(self, client):
         old = executor_mod._instance
         try:
