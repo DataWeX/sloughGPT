@@ -112,8 +112,8 @@ def format_chat(messages: list[dict[str, str]], model_type: str, system: str = "
 def sample_token(
     logits: np.ndarray,
     temperature: float = 1.0,
-    top_p: float = 0.9,
-    top_k: int = 50,
+    top_p: float = 0.85,
+    top_k: int = 40,
     rng: np.random.Generator | None = None,
 ) -> int:
     if temperature <= 0.01:
