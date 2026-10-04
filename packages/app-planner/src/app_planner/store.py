@@ -195,14 +195,23 @@ class PlannerStore:
         unparsable lines — is preserved byte-for-byte. Writes happen only when
         the file actually changed, atomically.
 
+        At most ONE line is rewritten per id: the first one encountered. The
+        callers (``move_card``/``update_card``/``block_card``/``delete_card``)
+        all select their target via ``load_board()``, which returns the first
+        card line for a given id — so the write must land on that same line.
+        Matching *every* line carrying the id makes a duplicate-id group
+        collapse into N copies of one card, destroying the siblings. The board
+        currently carries 13 such groups; see the dedupe card.
+
         Returns:
-            Number of lines matched and replaced.
+            Number of ids resolved to a line (at most ``len(replacements)``).
         """
         if not self._board_file.exists():
             return 0
         old_text = self._board_file.read_text()
         out: list[str] = []
         matched = 0
+        seen: set[Any] = set()
         for raw in old_text.splitlines():
             stripped = raw.strip()
             if not stripped:
@@ -212,8 +221,14 @@ class PlannerStore:
             except json.JSONDecodeError:
                 out.append(raw)
                 continue
-            if isinstance(obj, dict) and obj.get("id") in replacements:
-                new_line = replacements[obj["id"]]
+            if not isinstance(obj, dict):
+                out.append(raw)
+                continue
+            card_id = obj.get("id")
+            # First-match only: keep the write on the line load_board() read.
+            if card_id in replacements and card_id not in seen:
+                seen.add(card_id)
+                new_line = replacements[card_id]
                 matched += 1
                 if new_line is not None:
                     out.append(new_line)

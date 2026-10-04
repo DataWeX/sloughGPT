@@ -214,6 +214,92 @@ class TestSurgicalBoardUpdates:
         assert json.loads(after[0]) == {"id": "n1", "title": "One", "body": "b1", "priority": "med"}
 
 
+class TestDuplicateIds:
+    """A targeted write must touch ONE line per id, never the whole group.
+
+    The live board carries 13 ids with 2-4 lines each (identical titles; 4
+    groups have diverged notes/assignee, 3 of those also conflict on column).
+    move/update/delete pick their target through load_board(), which returns
+    the FIRST line for an id — so the rewrite must land on that same line.
+    Rewriting every matching line collapsed the group into N copies of one
+    card, destroying the siblings' column and notes payload.
+
+    Seeded without a schema header on purpose: apply_board() is a documented
+    quiet no-op on headerless boards, so sibling lines stay byte-stable and
+    these assertions can be exact.
+    """
+
+    @staticmethod
+    def _seed_dupes(board_file) -> list[str]:
+        """Three lines sharing one id, distinguishable only by column."""
+        board_file.write_text(
+            json.dumps({"id": "dup", "title": "Alpha", "column": "todo"})
+            + "\n"
+            + json.dumps({"id": "dup", "title": "Alpha", "column": "in_progress"})
+            + "\n"
+            + json.dumps({"id": "dup", "title": "Alpha", "column": "done"})
+            + "\n"
+        )
+        return board_file.read_text().splitlines()
+
+    @staticmethod
+    def _columns(board_file) -> list[str]:
+        return [
+            json.loads(raw)["column"]
+            for raw in board_file.read_text().splitlines()
+            if raw.strip() and json.loads(raw).get("title")
+        ]
+
+    def test_move_rewrites_only_first_line_of_group(self, store):
+        board_file = store._board_file
+        before = self._seed_dupes(board_file)
+
+        store.move_card("dup", "review")
+
+        after = board_file.read_text().splitlines()
+        assert len(after) == 3, "duplicate-id group must not collapse"
+        assert self._columns(board_file) == ["review", "in_progress", "done"]
+        # siblings byte-identical — the write landed only on the line
+        # load_board() selected
+        assert after[1] == before[1]
+        assert after[2] == before[2]
+
+    def test_update_rewrites_only_first_line_of_group(self, store):
+        board_file = store._board_file
+        before = self._seed_dupes(board_file)
+
+        store.update_card("dup", assignee="session")
+
+        after = board_file.read_text().splitlines()
+        assert len(after) == 3
+        assert json.loads(after[0])["assignee"] == "session"
+        assert after[1] == before[1]
+        assert after[2] == before[2]
+
+    def test_delete_removes_only_first_line_of_group(self, store):
+        board_file = store._board_file
+        before = self._seed_dupes(board_file)
+
+        assert store.delete_card("dup") is True
+
+        after = board_file.read_text().splitlines()
+        assert len(after) == 2, "delete must remove one line, not the group"
+        # the two surviving siblings are byte-identical to what preceded them
+        assert after == before[1:]
+        assert self._columns(board_file) == ["in_progress", "done"]
+
+    def test_repeat_move_is_stable_across_the_group(self, store):
+        """Moving twice must not walk through (or flatten) the siblings."""
+        board_file = store._board_file
+        self._seed_dupes(board_file)
+
+        store.move_card("dup", "review")
+        store.move_card("dup", "done")
+
+        assert self._columns(board_file) == ["done", "in_progress", "done"]
+        assert len(board_file.read_text().splitlines()) == 3
+
+
 # ── CLI tests ────────────────────────────────────────────────────────────
 
 
