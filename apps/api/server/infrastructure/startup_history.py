@@ -1,14 +1,13 @@
 """Startup history tracking — stores recent startup times for performance monitoring.
 
-Usage:
+Usage (called by StagedLoader, not by hand):
     from infrastructure.startup_history import get_startup_history
 
     history = get_startup_history()
-    history.record_startup(
-        total_duration=45.2,
-        stage_durations={"critical": 5.1, "ready": 40.1},
-        hook_durations={"db_pool": 0.5, "model_load": 40.0},
-    )
+    history.start_startup()
+    history.record_stage("critical", 5.1)
+    history.record_hook("db_pool", 0.5)
+    record = history.finish_startup(success=True)
 
     stats = history.get_stats()
     print(f"Average startup: {stats['avg_duration']}s")
@@ -68,7 +67,11 @@ class StartupHistory:
     """
 
     def __init__(self, max_records: int = 50, persist_path: Path | None = None) -> None:
-        self._lock = threading.Lock()
+        # RLock, not Lock: get_optimization_suggestions holds the lock while
+        # calling get_stage_stats(), which acquires it again. A plain Lock
+        # self-deadlocks here — and because health.startup_history is an async
+        # handler, that freeze took down the whole uvicorn event loop.
+        self._lock = threading.RLock()
         self._records: deque[StartupRecord] = deque(maxlen=max_records)
         self._current_startup: StartupRecord | None = None
         self._current_start_time: float = 0.0
@@ -113,11 +116,13 @@ class StartupHistory:
             self._records.append(record)
             self._current_startup = None
 
-        # Record to Prometheus metrics
+        # Record to Prometheus metrics. Observability must never fail the
+        # caller, but the import is the one that exists — `get_metrics` did
+        # not, so this block raised ImportError every single time (silently).
         try:
-            from domain.infrastructure.metrics import get_metrics
+            from domain.infrastructure.metrics import get_metrics_collector
 
-            metrics = get_metrics()
+            metrics = get_metrics_collector()
             for stage, dur in record.stage_durations.items():
                 metrics.record_startup_stage_duration(stage, dur)
             for hook, dur in record.hook_durations.items():
@@ -125,18 +130,25 @@ class StartupHistory:
             if not record.success:
                 metrics.increment_startup_failure_count()
         except Exception:
-            pass
+            logger.debug("startup history metrics replay failed", exc_info=True)
 
         self._save_to_disk()
         return record
 
     def _save_to_disk(self) -> None:
-        """Persist startup records to disk."""
+        """Persist startup records to disk (atomically).
+
+        Write-to-temp + os.replace: a crash mid-write must never truncate the
+        history file — the old file survives intact until the new one is fully
+        on disk.
+        """
         try:
             self._persist_path.parent.mkdir(parents=True, exist_ok=True)
             records = [r.to_dict() for r in self._records]
-            with open(self._persist_path, "w") as f:
+            tmp_path = self._persist_path.with_suffix(self._persist_path.suffix + ".tmp")
+            with open(tmp_path, "w") as f:
                 json.dump(records, f, indent=2)
+            os.replace(tmp_path, self._persist_path)
         except Exception as e:
             logger.warning("Failed to save startup history: %s", e)
 
