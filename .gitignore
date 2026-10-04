@@ -293,6 +293,7 @@ audit.log.*
 
 # Pytest sharding chunks and Turborepo local cache
 .pytest-chunks/
+.pytest-libs/
 .turbo/
 
 # Generated model artifacts under core-py (root models/ is covered above)
