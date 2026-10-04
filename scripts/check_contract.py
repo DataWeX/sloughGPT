@@ -252,6 +252,86 @@ def _inventory_from_routers(routers_list) -> list[list[str]]:
     return inventory
 
 
+def _openapi_operations(app) -> dict[str, dict[str, dict]]:
+    """Per-operation contract facts, read back out of the app's OpenAPI doc.
+
+    Path + method alone cannot see a renamed query param, a newly required
+    field or a dropped response code — these facts can. This is the "review
+    the OpenAPI diff like code" half of the contract gate; it is report-only,
+    because the grandfathered backlog changes shape constantly.
+    """
+    doc = app.openapi()
+    ops: dict[str, dict[str, dict]] = {}
+    for path, methods in doc.get("paths", {}).items():
+        for method, op in methods.items():
+            if not isinstance(op, dict):
+                continue  # $ref stubs / non-operation entries
+            params = sorted(
+                (
+                    {
+                        "name": p.get("name"),
+                        "in": p.get("in"),
+                        "required": bool(p.get("required", False)),
+                        "type": (p.get("schema") or {}).get("type"),
+                    }
+                    for p in op.get("parameters", [])
+                ),
+                key=lambda d: (str(d["in"]), str(d["name"])),
+            )
+            body = None
+            content = (op.get("requestBody") or {}).get("content") or {}
+            if content:
+                ctype = sorted(content)[0]  # deterministic: one body per op
+                schema = content[ctype].get("schema") or {}
+                ref = schema.get("$ref")
+                body = {
+                    "content_type": ctype,
+                    # named model -> its name (stable); inline -> the shape
+                    "schema": ref.rsplit("/", 1)[-1] if ref else schema,
+                }
+            ops.setdefault(path, {})[method.upper()] = {
+                "operationId": op.get("operationId"),
+                "params": params,
+                "body": body,
+                "responses": sorted((op.get("responses") or {}).keys()),
+            }
+    return ops
+
+
+def _diff_operations(current: dict, previous: dict) -> list[str]:
+    """Human-readable contract drift between two OpenAPI fact sets.
+
+    Each line is one reviewable change: ``+ added``, ``- removed`` or
+    ``~ changed`` with the exact field delta. Sorted for stable output.
+    """
+    changes: list[str] = []
+    cur_paths, prev_paths = set(current), set(previous)
+    for path in sorted(prev_paths - cur_paths):
+        changes.append(f"- {path} removed")
+    for path in sorted(cur_paths - prev_paths):
+        changes.append(f"+ {path} added")
+    for path in sorted(cur_paths & prev_paths):
+        cur_methods, prev_methods = current[path], previous[path]
+        for method in sorted(set(prev_methods) - set(cur_methods)):
+            changes.append(f"- {method} {path} removed")
+        for method in sorted(set(cur_methods) - set(prev_methods)):
+            changes.append(f"+ {method} {path} added")
+        for method in sorted(set(cur_methods) & set(prev_methods)):
+            after, before = cur_methods[method], prev_methods[method]
+            if after == before:
+                continue
+            detail: list[str] = []
+            for field in ("operationId", "body"):
+                if after.get(field) != before.get(field):
+                    detail.append(f"{field}: {before.get(field)!r} -> {after.get(field)!r}")
+            if after.get("params") != before.get("params"):
+                detail.append(f"params: {before.get('params')} -> {after.get('params')}")
+            if after.get("responses") != before.get("responses"):
+                detail.append(f"responses: {before.get('responses')} -> {after.get('responses')}")
+            changes.append(f"~ {method} {path} — " + "; ".join(detail))
+    return changes
+
+
 def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> int:
     """Import the boot router set; verify registry ↔ served routes, diff baseline."""
     print("── runtime contract checks (imports the boot router set)")
@@ -276,6 +356,10 @@ def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> 
         app.include_router(router)
     served = set(_iter_served_routes(app.routes))
 
+    # Contract facts (params / body / responses) cost one openapi() pass, so
+    # only build them when a baseline will actually be written or compared.
+    operations = _openapi_operations(app) if (write_baseline or baseline.is_file()) else None
+
     failures = [
         f"{entry['name']}: registry claims {entry['method']} {entry['path']} "
         f"but FastAPI serves no such route"
@@ -286,6 +370,7 @@ def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> 
     print(
         f"   routers: {len(routers_list)} · routes: {len(inventory)} · "
         f"descriptor crossings: {len(entries)}"
+        + (f" · operations: {len(operations)}" if operations is not None else "")
     )
     for entry in entries:
         print(f"   ✓ {entry['method']:6} {entry['path']:30} {entry['name']}")
@@ -326,19 +411,23 @@ def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> 
             json.dumps(
                 {
                     "note": (
-                        "Route baseline for scripts/check_contract.py — report-only drift "
-                        "signal, regenerated with --write-baseline."
+                        "Route + OpenAPI baseline for scripts/check_contract.py — "
+                        "report-only drift signal, regenerated with --write-baseline."
                     ),
                     "routers": len(routers_list),
                     "count": len(inventory),
                     "routes": inventory,
+                    "operations": operations or {},
                 },
                 indent=1,
             )
             + "\n",
             encoding="utf-8",
         )
-        print(f"   wrote baseline {baseline.relative_to(ROOT)} ({len(inventory)} routes)")
+        print(
+            f"   wrote baseline {baseline.relative_to(ROOT)} "
+            f"({len(inventory)} routes, {len(operations or {})} operations)"
+        )
     elif baseline.is_file():
         stored = json.loads(baseline.read_text(encoding="utf-8"))
         if stored.get("routers") not in (None, len(routers_list)):
@@ -360,6 +449,26 @@ def run_runtime(baseline: Path, write_baseline: bool, artifact: Path | None) -> 
                     print(f"      - {method:6} {path}")
             else:
                 print(f"   ✓ route inventory matches baseline ({len(previous)} routes)")
+
+            # Contract-level drift: same path+method can still have changed
+            # shape. Report-only, like the route diff above.
+            stored_ops = stored.get("operations")
+            if operations is None:
+                pass  # nothing to compare (no baseline ops were requested)
+            elif not isinstance(stored_ops, dict) or not stored_ops:
+                print(
+                    "   ⚠ baseline carries no OpenAPI operations — regenerate with --write-baseline"
+                )
+            else:
+                op_changes = _diff_operations(operations, stored_ops)
+                if op_changes:
+                    print(f"   ⚠ OpenAPI contract drift vs {baseline.name} (report-only):")
+                    for line in op_changes[:12]:
+                        print(f"      {line}")
+                    if len(op_changes) > 12:
+                        print(f"      … +{len(op_changes) - 12} more")
+                else:
+                    print(f"   ✓ OpenAPI operations match baseline ({len(stored_ops)} operations)")
     else:
         print(f"   ⚠ no baseline at {baseline.name} — run with --write-baseline")
 

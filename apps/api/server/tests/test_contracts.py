@@ -8,6 +8,7 @@ that replaced the hand-edited router list.
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -370,6 +371,88 @@ def test_importing_the_routers_package_stays_lazy():
         [sys.executable, "-c", code], capture_output=True, text=True, env=env, check=True
     )
     assert out.stdout.strip() == "[]", f"router modules imported eagerly: {out.stdout.strip()}"
+
+
+# ── OpenAPI drift report (path+method is not the whole contract) ───────
+
+
+def _facts_for(app: FastAPI) -> dict:
+    return check_contract._openapi_operations(app)
+
+
+def test_openapi_facts_capture_params_body_and_responses():
+    facts = _facts_for(_pilot_app())
+    op = facts["/contracts"]["GET"]
+    assert op["operationId"] == "contracts.list.get"
+    assert "200" in op["responses"] and "422" in op["responses"]
+    assert op["body"] is None  # GET has no request body
+    by_name = {p["name"]: p for p in op["params"]}
+    assert by_name["prefix"]["in"] == "query"
+    assert {"name", "in", "required", "type"} == set(by_name["prefix"])
+
+
+def test_openapi_diff_flags_shape_change_at_an_unchanged_path():
+    """Same path, same verb, different contract — the signal a route diff misses."""
+    before = {
+        "/thing": {
+            "GET": {
+                "operationId": "thing_get",
+                "params": [{"name": "q", "in": "query", "required": False, "type": "string"}],
+                "body": None,
+                "responses": ["200"],
+            }
+        }
+    }
+    after = {
+        "/thing": {
+            "GET": {
+                "operationId": "thing_get",
+                "params": [{"name": "q", "in": "query", "required": True, "type": "integer"}],
+                "body": None,
+                "responses": ["200", "401"],
+            }
+        }
+    }
+    changes = check_contract._diff_operations(after, before)
+    assert changes == [
+        "~ GET /thing — params: "
+        "[{'name': 'q', 'in': 'query', 'required': False, 'type': 'string'}] -> "
+        "[{'name': 'q', 'in': 'query', 'required': True, 'type': 'integer'}]; "
+        "responses: ['200'] -> ['200', '401']"
+    ]
+
+
+def test_openapi_diff_reports_added_and_removed_operations():
+    old = {"/gone": {"GET": {"operationId": "g", "params": [], "body": None, "responses": ["200"]}}}
+    new = {
+        "/fresh": {"POST": {"operationId": "f", "params": [], "body": None, "responses": ["200"]}}
+    }
+    assert check_contract._diff_operations(new, old) == [
+        "- /gone removed",
+        "+ /fresh added",
+    ]
+    # a verb swapped on an existing path reads as remove + add
+    swapped = {
+        "/gone": {"DELETE": {"operationId": "g", "params": [], "body": None, "responses": ["200"]}}
+    }
+    assert check_contract._diff_operations(swapped, old) == [
+        "- GET /gone removed",
+        "+ DELETE /gone added",
+    ]
+
+
+def test_openapi_diff_is_quiet_when_nothing_changed():
+    facts = _facts_for(_pilot_app())
+    assert check_contract._diff_operations(facts, facts) == []
+
+
+def test_committed_baseline_carries_openapi_operations():
+    """The baseline must ship contract facts, else the drift report is vacuous."""
+    stored = json.loads((ROOT / "apps" / "api" / "server" / "contract-baseline.json").read_text())
+    op = stored["operations"]["/contracts"]["GET"]
+    assert op["operationId"] == "contracts.list.get"
+    assert "200" in op["responses"]
+    assert any(p["name"] == "prefix" for p in op["params"])
 
 
 # ── the pilot crossing: GET /contracts ─────────────────────────────────
