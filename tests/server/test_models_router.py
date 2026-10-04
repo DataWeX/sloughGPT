@@ -533,7 +533,7 @@ class TestQuantize:
         assert resp.status_code == 400
         assert "mode must be symmetric or asymmetric" in resp.json()["error"]
 
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.models.get_provider")
     def test_requires_loaded_model(self, mock_provider, client):
         mock_provider.return_value = None
         resp = client.post("/models/quantize", json={"bits": 8, "mode": "symmetric"})
@@ -544,7 +544,7 @@ class TestQuantize:
 class TestDequantize:
     """POST /models/dequantize"""
 
-    @patch("domain.models._internal.provider.get_provider")
+    @patch("domain.models.get_provider")
     def test_requires_loaded_model(self, mock_provider, client):
         mock_provider.return_value = None
         resp = client.post("/models/dequantize")
