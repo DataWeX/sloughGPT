@@ -82,6 +82,16 @@ def test_render_summary_gauge():
     assert all(ord(c) < 128 for c in out), "summary must be plain ASCII"
 
 
+def test_flow_is_api_gated_classification():
+    from domain.journeys.runner import flow_is_api_gated
+
+    web_only = {"0-home", "7-talk", "12-training"}
+    for flow in FLOWS:
+        expected = flow.id not in web_only
+        assert flow_is_api_gated(flow) is expected, f"{flow.id} misclassified"
+    assert sum(1 for f in FLOWS if flow_is_api_gated(f)) == 10
+
+
 def test_list_flows_preserves_registry_order():
     assert [f.id for f in list_flows()] == [f.id for f in FLOWS]
 

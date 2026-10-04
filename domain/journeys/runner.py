@@ -60,6 +60,11 @@ def describe_steps(flow: Flow) -> list[str]:
     ]
 
 
+def flow_is_api_gated(flow: Flow) -> bool:
+    """True if the flow sends a prompt (needs the LLM API to reply)."""
+    return any(s.name.startswith("send") for s in flow.build())
+
+
 def render_summary(report: dict[str, Any], report_path: str = "") -> str:
     """Plain-ASCII terminal summary ('gauge') for a journey run."""
     flows = report.get("flows", [])
@@ -205,14 +210,21 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
     if args.dry_run:
+        api_gated = 0
         for f in flows:
-            print(f"[{f.id}] {f.label}")
+            gated = flow_is_api_gated(f)
+            api_gated += 1 if gated else 0
+            tag = "[api] " if gated else "[web] "
+            print(f"{tag}[{f.id}] {f.label}")
             print(f"   url:  {f.url}")
             print(f"   spec: {f.spec}")
             for i, name in enumerate(describe_steps(f), 1):
                 print(f"   {i:2d}. {name}")
             print()
-        print(f"dry-run: {len(flows)} journeys planned, no browser launched")
+        print(
+            f"dry-run: {len(flows)} journeys planned "
+            f"({api_gated} api-gated, {len(flows) - api_gated} web-only), no browser launched"
+        )
         return 0
 
     if not args.web_only:
