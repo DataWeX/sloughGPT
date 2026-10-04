@@ -4,10 +4,15 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~01:20 — `feat/avion-transcript-batching` landed
-(card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit transcript
-flush, benchmark green at baseline (quiet window, load 1.6). Earlier the same
-night: `fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
+**Last update**: 2026-10-04 ~04:45 — `feat/mole-watcher` lands (card `e0c80774`,
+cherry-pick `e9fb80cec`, see Landed): **Mole** phase 1 — the always-on, no-AI
+watcher over the doctor probes (cadence, identity-set delta dedupe, JSONL
+journal, load-context). Canonical 4-tree gate ≈ main baseline (833/839 nodeids
+identical; the 6 extras pass standalone → shared-`/tmp` test-isolation defect,
+card `6369c03e`). Earlier the same night: `feat/avion-transcript-batching`
+landed (card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit
+transcript flush, benchmark green at baseline (quiet window, load 1.6); and
+`fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
 Landed) — the boot overlay can no longer hang forever; firefox ux-flows
 benchmark **13/13**. Earlier 2026-10-03: `fix/journey-test-gates`
 landed on user sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`,
@@ -38,7 +43,30 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `371025464`)
+## Landed on main (origin/main = `e9fb80cec`)
+
+- **2026-10-04 · `feat/mole-watcher` lands — Mole phase 1: the always-on, no-AI
+  watcher.** Card `e0c80774`, cherry-pick of `1b1ce40c6`: new
+  `domain/core/_internal/mole/` — `run_watch` probes on a cadence over the
+  existing `run_doctor`/`PROBES` (doctor itself untouched; a new doctor probe
+  is picked up next tick). Findings are fingerprinted by **identity set**
+  `(source, check, severity, component)` — jittering payload counters (p95,
+  health score, frame sizes) never re-alert (a content-hash re-alerted on every
+  tick in the live smoke — caught before landing); every tick journaled to
+  `$SLO_MOLE_JOURNAL` JSONL with `context` (loadavg + cpu_count — context,
+  never a finding); events fire only on change; a failed tick is journaled and
+  contained (a watcher never dies mid-watch). CLI
+  `python -m domain.core._internal.mole` (`--interval/--max-ticks/--skip/
+  --journal/--strict/--quiet/--json`); suggest-only, never applies. Docs:
+  TESTING.md section + INDEX row (FEATURES deferred until it has an app
+  surface). **Gates:** mole 6 + doctor 41 + router 9 green, ruff clean, CLI
+  smoke (tick 1 baseline / tick 2 silent on the live stack; 4.8 ms per-tick
+  overhead @1000 findings), canonical 4-tree suite **642 failed / 197 errors
+  vs main baseline 838 — 833 nodeids identical; all 6 extras pass standalone**
+  (shared-state flakes — root cause card `6369c03e`: `db_path.parent^3` escapes
+  `tmp_path` into shared `/tmp/pytest-of-mana`, a 22-entry cross-session journal
+  with a timeline-matched first write; their baseline has 5 unique flakes of
+  its own).
 
 - **2026-10-04 · `feat/avion-transcript-batching` lands — transcript writes are
   group-committed.** Card `68ea8b9d`, cherry-pick of `fb7859ced`:
