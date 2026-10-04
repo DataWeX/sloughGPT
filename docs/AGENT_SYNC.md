@@ -276,7 +276,10 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
-- `.wt-static` on `feat/static-hosting` (card `d484f48a`): the gateway serves
+- **Landed on main (`d949eb509`, card `d484f48a`) and deployed on :8080** — the
+  gateway serves the repo root's `apps/web/dist-vite` as its document root;
+  rebuild with `npm run build:vite`, then restart `slough-gateway`. From
+  `.wt-static`/`feat/static-hosting`. Detail:
   `apps/web/dist-vite` as its **document root** — file hit → asset, browser
   navigation (`Accept: text/html`) → `index.html` (SPA), data request →
   byte-relay; `/docs`, `/redoc`, `/openapi.json` stay proxied (path contract).
