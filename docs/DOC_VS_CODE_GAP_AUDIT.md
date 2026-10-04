@@ -35,6 +35,35 @@ and `/operations/cancel-all` have **zero** route hits anywhere under
 | `routers.md` endpoint rows | 398 rows / 42 sections          | **120** rows match no code route                                  | drift   |
 | Frontend pages             | 85+ (`PROD_ENG`)                | **109** `page.tsx`                                                | stale   |
 
+### Machine contract (`parity-claims`)
+
+The prose table above rots silently. The block below is the machine-readable
+form of the same idea, parsed by `scripts/check_docs_api_parity.py`: if
+measured code disagrees with any value, the script exits 1.
+
+<!-- parity-claims:v1
+# Contract parsed by scripts/check_docs_api_parity.py. If measured code
+# disagrees with any value below, that script exits 1 (alarm). Update this
+# block in the SAME change that moves the code.
+#
+# 2026-10-04 baseline, measured on main at c92adc47b. Once in sync these act
+# as a DOWNWARD ratchet: the router/controller conformance work (card
+# b22e878a) lowers them as it lands, and any climb shows up as an alarm.
+# Check independently of the route-doc truth-up (G1) with:
+#   scripts/check_docs_api_parity.py --architecture-only
+routers_internal_files=1
+routers_internal_stmts=2
+routers_internal_in_scope_files=1
+controllers_files=5
+controllers_lines=2844
+controllers_defs=93
+controllers_internal_files=4
+controllers_internal_stmts=30
+controllers_internal_modules=13
+combined_internal_files=5
+combined_internal_stmts=32
+-->
+
 ## Gaps → cards
 
 ### G1 — API docs truth-up (card `34b396b7`)
