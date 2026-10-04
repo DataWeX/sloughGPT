@@ -4,9 +4,10 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~09:10 — `feat/pugqeep-forkserver` gate run #4
-green: 621F ≤ baseline 683F, playwright-class E 0, 0 timeouts, no hang —
-user-approved, landing to main (see In flight). Earlier ~05:30: `feat/landing-7-cards` lands (7
+**Last update**: 2026-10-04 ~10:05 — `feat/pugqeep-forkserver` **lands on
+main** (merge `d996f8ebc`; cards `df5affc7`+`e69915c1` → done, notes → done):
+gate run #4 green 621F ≤ baseline 683F, playwright-class E 0, 0 timeouts, no
+hang; post-merge targeted re-run = identical F-set, E 0 (see Landed). Earlier ~05:30: `feat/landing-7-cards` lands (7
 infra-review cards + campaign `d083e732`, cherry-picks `2127abb6e..344168b4f`,
 see Landed): startup finalizers + MogDB history + webhook facade + profiler
 feed + test hygiene — tests/server **1942/1/0 vs main's 5-failed baseline**.
@@ -53,6 +54,74 @@ git push -u origin feat/<name>   # push your own branch when done
   new docs.
 
 ## Landed on main (origin/main = `344168b4f`)
+
+- **2026-10-04 · `feat/pugqeep-forkserver` lands — fork→forkserver kills the
+  fork-into-multithreaded class.** Cards `df5affc7` + `e69915c1` → done,
+  notes → done; merge `d996f8ebc` (`.wt-l2` worktree):
+  `SubprocessProcess` default `fork` → `forkserver` — the fresh child kills
+  the fork-into-multithreaded-pytest deadlock class (gate run7: 60
+  futex-stuck children). Module-level `_subprocess_worker` replaces the
+  unpicklable `_worker` closure; pre-flight pickle check hard-fails
+  (`PicklingError` before any allocation — closures/lambdas can't cross);
+  `fork` stays as the explicit escape hatch; forkserver preload
+  `[__main__, engine, target-module]` (steady spawn ~16 ms vs ~523 ms/child
+  without — `scripts/benchmark_pugqeep_spawn.py`). Extended this session with
+  card `a0ba949b`/`e69915c1`: **`VectorBE`'s bare `mp.Pool` (second fork site
+  of the same class) → `mp.get_context("forkserver")` + `SLO_VECTOR_START_METHOD`
+  escape** — it was the 88% gate wedge (isolated repro: parent `do_wait`,
+  futex-dead workers; benchmark: one-time ~1.4 s cold start, steady state at
+  parity — `scripts/benchmark_vector_backend_pool.py`); plus the
+  `test_linux_cmds.py` `host`-fixture cwd leak fixed (bare `os.chdir` →
+  `monkeypatch.chdir`; both gate runs sat in `test_time_no_args0` until exit —
+  hygiene test `TestHostFixtureCwdHygiene` guards it) plus the same class in
+  `test_shell_repl_more.py`: 3 bare `repl._cmd_cd("" / "~")` tests leaked
+  `$HOME` from idx ~27600 (run #3 saw pytest cwd=`/home/mana` live) →
+  `monkeypatch.chdir` + file-end `TestCwdHygiene`, and the shm
+  `resource_tracker` warning spam carded as `ccad389e` (pre-existing, both
+  start methods). **Gate run #3** (05:23→06:40, 77 min, no hang):
+  597F/175E vs baseline 683F/0E — vector/linux_cmds/timeout classes all
+  **0**; every one of the 175 E is the journeys family from
+  `ModuleNotFoundError: playwright` (PYTHONNOUSERSITE hides user-site
+  playwright; baseline chunks ran venv without -s) → run #4 carries
+  `/tmp/opencode/pyshim` (playwright+greenlet+pyee symlinks on PYTHONPATH,
+  no install). **Gate run #4** (07:05→08:34, 89 min, `gate exit=1`, no
+  hang, **0 timeout blocks**): **621F/41902P/2E vs baseline 683F/0E** —
+  vector/timeout/linux_cmds classes **0**; playwright-class **E 0**
+  (`test_user_journeys` 103/103, `test_computer_use` 21/21; node-id diff
+  removed 141 of run #3's E node-for-node). The 2 residual E = a
+  pre-existing missing `route` fixture (identical ERRORs in run #3;
+  `ROUTES`/`ALL_ROUTES` constants orphaned, zero `parametrize` in the
+  file) → fixed post-gate with `@pytest.mark.parametrize`, E=0 verified
+  by targeted re-run. The new `TestCwdHygiene` guard caught a 4th cd
+  leaker (`test_pwd_after_cd` bare cd into `tmp_path`, leaving cwd in an
+  empty dir → `test_tui_repl::test_dot` found no cwd dotfiles; run #3's
+  cd-`$HOME` leak had masked it) → `monkeypatch.chdir` pin, both GREEN
+  targeted; `test_phoneme_cli` 8F also disappeared (they had run against
+  the leaked tmp cwd). `comprehensive_training_journeys` F = the deferred
+  `:3000` hardcode class (card `e47e19ee` — `BASE = localhost:3000`,
+  server died mid-file in run #4 after its first 9 tests passed; fully
+  down post-gate, so its 19 parametrized routes join the same class) →
+  post-gate tree ≤640F, still under baseline. Caution: the live root
+  journal was externally reverted to HEAD mid-run (08:27, a session on
+  `feat/create-router-projection` is still writing it) — run #3/#4
+  evidence therefore lives in the WORKTREE journal only; `planner sync`
+  is also non-idempotent (flips 2 foreign cards per call — do not run).
+  Latency benchmark +414.9% vs baseline = contention artifact
+  (load 19.6, 71 foreign pytest procs; live `:8000` serves root code, not
+  this branch) — re-run when quiet. **Reconcile before
+  merging**: this edits main's multiprocessing engine
+  (`domain/infrastructure/_internal/pugqeep/engine.py`), while the root-repo
+  session — now on `fix/startup-finalizers` at `ae237996e`, **225 commits
+  ahead of main** — has already replaced that whole paradigm: `18c720be5`
+  (owned `os.fork()` + framed socketpair channel, multiprocessing gone from
+  their PGQ) + `d2454c84d` (single Pipe admission door) + `c4ecb6ff8`, all
+  on `packages/core-py/domains/infrastructure/pugqeep/engine.py`. Root
+  `AGENTS.md` on that branch now states the rewrite as fact ("Build from
+  scratch, import last"). Different paths ⇒ textual merge is clean, but the
+  two designs collide semantically on `SubprocessProcess.start`. This branch landed
+  2026-10-04 with user sign-off — `SubprocessProcess.start` on main is the
+  survivor; reconcile when their branch arrives. Benchmark names do NOT collide
+  (theirs `scripts/benchmark_pipe.py`).
 
 - **2026-10-04 · `fix/meta-weights-request-params` lands — requested sampling
   params are honoured again.** Card `d2dda007` → done, commit `806073e15`
@@ -278,71 +347,6 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
-- **`feat/pugqeep-forkserver`** (L2 card `df5affc7`, `.wt-l2` worktree):
-  `SubprocessProcess` default `fork` → `forkserver` — the fresh child kills
-  the fork-into-multithreaded-pytest deadlock class (gate run7: 60
-  futex-stuck children). Module-level `_subprocess_worker` replaces the
-  unpicklable `_worker` closure; pre-flight pickle check hard-fails
-  (`PicklingError` before any allocation — closures/lambdas can't cross);
-  `fork` stays as the explicit escape hatch; forkserver preload
-  `[__main__, engine, target-module]` (steady spawn ~16 ms vs ~523 ms/child
-  without — `scripts/benchmark_pugqeep_spawn.py`). Extended this session with
-  card `a0ba949b`/`e69915c1`: **`VectorBE`'s bare `mp.Pool` (second fork site
-  of the same class) → `mp.get_context("forkserver")` + `SLO_VECTOR_START_METHOD`
-  escape** — it was the 88% gate wedge (isolated repro: parent `do_wait`,
-  futex-dead workers; benchmark: one-time ~1.4 s cold start, steady state at
-  parity — `scripts/benchmark_vector_backend_pool.py`); plus the
-  `test_linux_cmds.py` `host`-fixture cwd leak fixed (bare `os.chdir` →
-  `monkeypatch.chdir`; both gate runs sat in `test_time_no_args0` until exit —
-  hygiene test `TestHostFixtureCwdHygiene` guards it) plus the same class in
-  `test_shell_repl_more.py`: 3 bare `repl._cmd_cd("" / "~")` tests leaked
-  `$HOME` from idx ~27600 (run #3 saw pytest cwd=`/home/mana` live) →
-  `monkeypatch.chdir` + file-end `TestCwdHygiene`, and the shm
-  `resource_tracker` warning spam carded as `ccad389e` (pre-existing, both
-  start methods). **Gate run #3** (05:23→06:40, 77 min, no hang):
-  597F/175E vs baseline 683F/0E — vector/linux_cmds/timeout classes all
-  **0**; every one of the 175 E is the journeys family from
-  `ModuleNotFoundError: playwright` (PYTHONNOUSERSITE hides user-site
-  playwright; baseline chunks ran venv without -s) → run #4 carries
-  `/tmp/opencode/pyshim` (playwright+greenlet+pyee symlinks on PYTHONPATH,
-  no install). **Gate run #4** (07:05→08:34, 89 min, `gate exit=1`, no
-  hang, **0 timeout blocks**): **621F/41902P/2E vs baseline 683F/0E** —
-  vector/timeout/linux_cmds classes **0**; playwright-class **E 0**
-  (`test_user_journeys` 103/103, `test_computer_use` 21/21; node-id diff
-  removed 141 of run #3's E node-for-node). The 2 residual E = a
-  pre-existing missing `route` fixture (identical ERRORs in run #3;
-  `ROUTES`/`ALL_ROUTES` constants orphaned, zero `parametrize` in the
-  file) → fixed post-gate with `@pytest.mark.parametrize`, E=0 verified
-  by targeted re-run. The new `TestCwdHygiene` guard caught a 4th cd
-  leaker (`test_pwd_after_cd` bare cd into `tmp_path`, leaving cwd in an
-  empty dir → `test_tui_repl::test_dot` found no cwd dotfiles; run #3's
-  cd-`$HOME` leak had masked it) → `monkeypatch.chdir` pin, both GREEN
-  targeted; `test_phoneme_cli` 8F also disappeared (they had run against
-  the leaked tmp cwd). `comprehensive_training_journeys` F = the deferred
-  `:3000` hardcode class (card `e47e19ee` — `BASE = localhost:3000`,
-  server died mid-file in run #4 after its first 9 tests passed; fully
-  down post-gate, so its 19 parametrized routes join the same class) →
-  post-gate tree ≤640F, still under baseline. Caution: the live root
-  journal was externally reverted to HEAD mid-run (08:27, a session on
-  `feat/create-router-projection` is still writing it) — run #3/#4
-  evidence therefore lives in the WORKTREE journal only; `planner sync`
-  is also non-idempotent (flips 2 foreign cards per call — do not run).
-  Latency benchmark +414.9% vs baseline = contention artifact
-  (load 19.6, 71 foreign pytest procs; live `:8000` serves root code, not
-  this branch) — re-run when quiet. **Reconcile before
-  merging**: this edits main's multiprocessing engine
-  (`domain/infrastructure/_internal/pugqeep/engine.py`), while the root-repo
-  session — now on `fix/startup-finalizers` at `ae237996e`, **225 commits
-  ahead of main** — has already replaced that whole paradigm: `18c720be5`
-  (owned `os.fork()` + framed socketpair channel, multiprocessing gone from
-  their PGQ) + `d2454c84d` (single Pipe admission door) + `c4ecb6ff8`, all
-  on `packages/core-py/domains/infrastructure/pugqeep/engine.py`. Root
-  `AGENTS.md` on that branch now states the rewrite as fact ("Build from
-  scratch, import last"). Different paths ⇒ textual merge is clean, but the
-  two designs collide semantically on `SubprocessProcess.start`. This branch landed
-  2026-10-04 with user sign-off — `SubprocessProcess.start` on main is the
-  survivor; reconcile when their branch arrives. Benchmark names do NOT collide
-  (theirs `scripts/benchmark_pipe.py`).
 - **Landed on main (`d949eb509`, card `d484f48a`) and deployed on :8080** — the
   gateway serves the repo root's `apps/web/dist-vite` as its document root;
   rebuild with `npm run build:vite`, then restart `slough-gateway`. From
