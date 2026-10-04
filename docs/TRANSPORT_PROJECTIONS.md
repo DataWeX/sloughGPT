@@ -93,7 +93,7 @@ Registering a capability is a **registry entry, never an endpoint project**.
   per file (today: `schemas/common.py` imported by 58 routers).
 - **Two tool tiers, one contract, never cross** — internal/model-facing
   tooling (function-calling, `domain/tools`, the inference UI's tool list) vs
-  external utility tooling (Site Doctor and other app-internal helpers). Both
+  external utility tooling (Mole and other app-internal helpers). Both
   are descriptors; only the first is visible to the model.
 - **Grandfathered, not purged** — the 57 existing routers migrate only when
   next touched (Router Playbook rule 5).
