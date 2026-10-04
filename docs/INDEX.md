@@ -32,6 +32,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **FEATURES.md** | Feature list |
+| **moodboards/widgets.html** | Mood board #1 — widgets (visual ideation, open in browser) |
 | **NAVIGATION_AND_SOULS.md** | Soul/personality system |
 | **SHELL.md** | CLI shell |
 | **VM_CONSOLE.md** | VM console |
@@ -63,7 +64,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **TESTING.md** | Test guide |
-| **Site Doctor** (in TESTING.md) | Live-site monitor — read-only journey/http/SSE probes, `/doctor` API + page |
+| **Mole** (in TESTING.md) | The one monitoring app — watches the running stack, heals by proposing fixes (suggest-only); legacy `/doctor` surface |
 | **USER_PERSONA.md** | Who we build for |
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |

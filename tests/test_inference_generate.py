@@ -12,11 +12,16 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client():
     from fastapi import FastAPI
+    from infrastructure.exception_handlers import register_all_handlers
 
     from apps.api.server.routers.inference import router
 
     _app = FastAPI()
     _app.include_router(router)
+    # A bare FastAPI() installs no handlers, so raise_error() would
+    # propagate out of TestClient instead of becoming the documented 503.
+    # Register the same handlers production puts on the real app.
+    register_all_handlers(_app)
     return TestClient(_app)
 
 
@@ -49,10 +54,27 @@ def mock_provider():
     )
     provider.model_id = "test-model"
     with (
-        patch("domain.models._internal.provider.get_provider", return_value=provider),
+        # The router binds get_provider from domain.models at import time
+        # (routers/inference.py:45), so only that consumer binding can be
+        # intercepted — patching domain.models._internal.* is inert here.
+        patch("apps.api.server.routers.inference.get_provider", return_value=provider),
         patch("state.model", MagicMock()),
     ):
         yield provider
+
+
+@pytest.fixture(autouse=True)
+def _clear_meta_weight_cache():
+    """The router caches meta-weight nudges for 5s keyed by message hash.
+
+    Without clearing between tests, one test's nudged params leak into the
+    next test that happens to reuse the same prompt.
+    """
+    from apps.api.server.routers.inference import _META_WEIGHT_CACHE
+
+    _META_WEIGHT_CACHE.clear()
+    yield
+    _META_WEIGHT_CACHE.clear()
 
 
 class TestGenerateEndpoint:
@@ -61,7 +83,12 @@ class TestGenerateEndpoint:
     def test_generate_returns_text(self, client, mock_provider):
         """Should return generated text with model info."""
         response = client.post(
-            "/inference/generate", json={"prompt": "Hello", "max_new_tokens": 10}
+            "/inference/generate",
+            # Explicit rather than relying on GenerateRequest.model's default,
+            # which has already been changed once under this test (gpt2 →
+            # qwen2.5-0.5b-instruct); actual_model honours state.model_type
+            # first, so the request field is what we assert against.
+            json={"prompt": "Hello", "max_new_tokens": 10, "model": "gpt2"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -70,7 +97,12 @@ class TestGenerateEndpoint:
         assert data["tokens_generated"] > 0
 
     def test_generate_passes_params(self, client, mock_provider):
-        """Should pass generation params to provider."""
+        """Should pass generation params to provider.
+
+        All four sampling params are sent explicitly, so meta-weight nudges
+        must leave them alone. The real `_apply_meta_weights` runs here — no
+        patch: passing these through untouched is the production contract.
+        """
         client.post(
             "/inference/generate",
             json={
@@ -90,9 +122,58 @@ class TestGenerateEndpoint:
         assert kwargs["top_k"] == 20
         assert kwargs["repetition_penalty"] == 1.1
 
+    def test_generate_nudges_params_left_at_default(self, client, mock_provider):
+        """Feedback may only move params the caller left at their default."""
+        from domain.feedback import MetaWeights
+
+        with patch("domain.feedback.get_meta_weight_manager") as manager:
+            manager.return_value.get_adjustment.return_value = MetaWeights(
+                temperature=0.77
+            )
+            manager.return_value.neutral_weights = MetaWeights()
+            client.post(
+                "/inference/generate",
+                json={"prompt": "Nudge me", "max_new_tokens": 5},
+            )
+        kwargs = mock_provider.chat.call_args[1]
+        # temperature was left at default -> the feedback nudge applies.
+        # approx: the value is derived as 0.7 + (0.77 - 0.7), which is not
+        # bit-identical to 0.77 under IEEE-754.
+        assert kwargs["temperature"] == pytest.approx(0.77)
+        # params carrying no feedback signal stay at the request default
+        assert kwargs["top_p"] == pytest.approx(0.85)
+        assert kwargs["top_k"] == 40
+        assert kwargs["repetition_penalty"] == pytest.approx(1.15)
+
+    def test_generate_telemetry_records_sent_temperature(self, client, mock_provider):
+        """Telemetry must record what the provider actually received."""
+        from domain.feedback import MetaWeights
+
+        with (
+            patch("domain.feedback.get_meta_weight_manager") as manager,
+            patch("apps.api.server.routers.inference.capture") as capture_mock,
+        ):
+            manager.return_value.get_adjustment.return_value = MetaWeights(
+                temperature=1.05
+            )
+            manager.return_value.neutral_weights = MetaWeights()
+            client.post(
+                "/inference/generate",
+                json={"prompt": "Telemetry", "max_new_tokens": 5},
+            )
+        # the provider saw the nudged value...
+        assert mock_provider.chat.call_args[1]["temperature"] == pytest.approx(1.05)
+        # ...and telemetry reports that same value, not the request default
+        assert capture_mock.call_args.kwargs["temperature"] == pytest.approx(1.05)
+
     def test_generate_no_provider_returns_503(self, client):
         """Should return 503 when no provider is available."""
-        with patch("domain.models._internal.provider.get_provider", return_value=None):
+        # Satisfy the readiness gate first — it otherwise short-circuits
+        # with E_MODEL_LOADING before the no-provider branch is reached.
+        with (
+            patch("state.model", MagicMock()),
+            patch("apps.api.server.routers.inference.get_provider", return_value=None),
+        ):
             response = client.post("/inference/generate", json={"prompt": "Hello"})
         assert response.status_code == 503
 

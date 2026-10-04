@@ -11,7 +11,8 @@ from controllers.feedback import (
     reset_feedback_controller,
     set_feedback_controller,
 )
-from tests.test_support import get_test_client
+
+from apps.api.server.tests.test_support import get_test_client
 
 
 @pytest.fixture(autouse=True)

@@ -12,6 +12,7 @@ from schemas.common import raise_error
 from .webhooks import (
     TRAINING_EVENTS,
     get_webhook_store,
+    known_webhook_events,
 )
 
 logger = logging.getLogger("slo")
@@ -37,7 +38,7 @@ async def list_webhooks():
             }
             for w in webhooks
         ],
-        "available_events": TRAINING_EVENTS,
+        "available_events": known_webhook_events(),
     }
 
 
@@ -55,10 +56,11 @@ async def register_webhook(
         raise_error("Invalid events format. Must be JSON array.", "E_BAD_REQUEST", status_code=400)
     if not url.startswith(("http://", "https://")):
         raise_error("URL must start with http:// or https://", "E_BAD_REQUEST", status_code=400)
-    invalid_events = [e for e in events_list if e not in TRAINING_EVENTS]
+    known_events = known_webhook_events()
+    invalid_events = [e for e in events_list if e not in known_events]
     if invalid_events:
         raise_error(
-            f"Invalid events: {invalid_events}. Available: {TRAINING_EVENTS}",
+            f"Invalid events: {invalid_events}. Available: {known_events}",
             "E_BAD_REQUEST",
             status_code=400,
         )

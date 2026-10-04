@@ -4,10 +4,22 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~01:20 — `feat/avion-transcript-batching` landed
-(card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit transcript
-flush, benchmark green at baseline (quiet window, load 1.6). Earlier the same
-night: `fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
+**Last update**: 2026-10-04 ~05:30 — `feat/landing-7-cards` lands (7
+infra-review cards + campaign `d083e732`, cherry-picks `2127abb6e..344168b4f`,
+see Landed): startup finalizers + MogDB history + webhook facade + profiler
+feed + test hygiene — tests/server **1942/1/0 vs main's 5-failed baseline**.
+Earlier ~05:05: naming consolidated (card `43ca5222`):
+**Mole is the one app** — never "doctor"/"watcher" as names; docs realigned
+(TESTING/INDEX/FEATURES), legacy `/doctor` paths grandfathered until the
+unified `mole` CLI. Earlier ~04:45: `feat/mole-watcher` lands (card `e0c80774`,
+cherry-pick `e9fb80cec`, see Landed): Mole phase 1 — always-on, no-AI
+monitoring (cadence, identity-set delta dedupe, JSONL journal, load-context).
+Canonical 4-tree gate ≈ main baseline (833/839 nodeids
+identical; the 6 extras pass standalone → shared-`/tmp` test-isolation defect,
+card `6369c03e`). Earlier the same night: `feat/avion-transcript-batching`
+landed (card `68ea8b9d`, cherry-pick `371025464`, see Landed): group-commit
+transcript flush, benchmark green at baseline (quiet window, load 1.6); and
+`fix/boot-overlay-stall` (card `cb089b43`, cherry-pick `8acb530be`, see
 Landed) — the boot overlay can no longer hang forever; firefox ux-flows
 benchmark **13/13**. Earlier 2026-10-03: `fix/journey-test-gates`
 landed on user sign-off (merge `e081ea9f4` + test stabilization `175d7db8c`,
@@ -38,7 +50,115 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `371025464`)
+## Landed on main (origin/main = `344168b4f`)
+
+- **2026-10-04 · `fix/meta-weights-request-params` lands — requested sampling
+  params are honoured again.** Card `d2dda007` → done, commit `806073e15`
+  (onto `a189d78eb`). Contract chosen by the user: **feedback nudges only the
+  parameters the caller left at their default; an explicitly-set parameter
+  passes through verbatim.** Before this, `_apply_meta_weights` returned
+  `get_adjustment()`'s absolute values, and `get_adjustment()` never receives
+  the request — so with an empty feedback DB *every* request answered with
+  0.7/0.85/40/1.15 whatever was asked, while `GenerateRequest` still validated
+  the field (`ge=0.0, le=2.0`) and telemetry logged the request value the
+  provider never received. Changes: `MetaWeightManager.neutral_weights`
+  exposes the baseline so callers derive a *delta* (empty store ⇒ exactly zero
+  change rather than a silent default swap); `_apply_meta_weights` gains
+  `explicit` (pydantic `model_fields_set`; the WebSocket derives it from keys
+  present in the frame) — **5 call sites, not the 4 the card claimed** (chat
+  `:2971` was the fifth); the 5s cache now stores the **nudge**, never the
+  merged result, because the nudge depends only on message+user while the merge
+  depends on that request's explicit set (caching merged output would leak one
+  request's explicit set into another's); the 4 `capture()` sites record
+  `gen_params["temperature"]`. Tests: dropped the `_apply_meta_weights`
+  passthrough patch (real code now passes explicit params through — strictly
+  stronger), added nudge-applies-at-default and telemetry-records-sent-value,
+  plus an autouse nudge-cache clear. **Benchmark** `scripts/benchmark_meta_weights.py`
+  (new): cache HIT p50 1.64µs vs cache MISS p50 39.15µs (23.9×) — the merge
+  cannot surface end-to-end. Gates: `tests/` 3156 passed / 0 failed,
+  `apps/api/server/tests` 1223 / 0. **Found while verifying, proved NOT mine on
+  pristine `a189d78eb` → card `37325860`:** the hygiene ratchet's
+  `from __future__ import annotations` stringifies dataclass annotations, so
+  `assert f.type is float` can never pass (3), plus 5 stale meta-weights
+  *router* tests where `docs/routers.md:594-596` sides with the impl.
+
+- **2026-10-04 · `fix/main-gate-green` lands — main's default test gate goes
+  green (7 root-cause buckets).** Card `cbd2ffc3`, commit `ddd3b3d49` → landed
+  as `70b162449` (rebased onto `81fd4d554`, moodboard-only delta, no overlap).
+  Baseline on `c92adc47b`: **11 failed + 5 errors (16 red) in `tests/` → 3147
+  passed / 13 skipped / 0 failed / 0 errors, three consecutive runs**;
+  `apps/api/server/tests` **6 collection errors → 1223 passed** (the directory
+  was dormant, off-`testpaths`, and never ran anywhere). Root causes, not
+  counts: the contract gate was red because `routers/doctor.py` reached into
+  `domain.core._internal.doctor{,.report}` (retargeted to the public facade;
+  `default_report_path` joined the lazy map + `__all__`); `test_inference_generate`
+  ×6 patched `domain.models._internal.provider.get_provider` while the router
+  binds `get_provider` from `domain.models` **at import** — an inert mock — and
+  the bare test app registered no exception handlers, so `raise_error()`
+  propagated instead of returning 503; `test_cli_chat` ×5 imported `CLILogger`
+  from `domain.logging._internal`, which never re-exports it; `test_feedback_domain`
+  ×2 hit `_compute_gradients`' `engine is None → {}` guard (now driven by a stub
+  engine, with a genuine sign invariant replacing a tautological assertion);
+  `test_rag` ×1 was a **real product bug** — fusion applied `dense_weight=0.7`
+  to a channel `ProductionRAG` disables by default, capping `combined_score` at
+  0.3 so `HallucinationDetector.detect`'s `min_score=0.5` gate could never pass
+  (grounding was structurally impossible, confidence always 0) → weights now
+  renormalised over active channels; the `apps/api/server/tests` ×6 was a
+  `tests` package-name collision → canonical `apps.api.server.tests` path
+  (already used by `tests/server/test_server_api.py`). **Benchmarks:**
+  `benchmark_bm25` A/B vs `c92adc47b` — recall@k 0.9833, MRR 1.0, reranked MRR
+  1.0 **byte-identical**, latency within noise. Follow-ups filed: `b83a5788`
+  (online LoRA is a silent no-op — the engine is never attached, yet stats
+  count phantom updates) and `d2dda007` (meta-weights **replace** request
+  sampling params — `get_adjustment` never receives them, so it cannot blend).
+  **Gotcha:** the root repo's `app_planner` `.pth` has no `compute_chains`, so
+  board writes made from the root copy leave that branch's board unchained
+  (pre-existing there — base `f27654e54` predates the chain work); run board
+  commands with `PYTHONPATH=<worktree>/packages/app-planner/src` from a
+  chain-aware copy, and never issue two `board add` calls concurrently — the
+  second silently clobbers the first.
+
+- **2026-10-04 · `feat/landing-7-cards` lands — the infra-review follow-ups,
+  surgical cherry-pick onto main.** Cards `223001e4` `d1f544fb` `ad9ef322`
+  `b753cad5` `8349d901` `65d9e7ee` `832efdda` (+ campaign `d083e732`), 8
+  commits `2127abb6e..344168b4f`: boot finalizers ⑨⑪⑫⑬ (history deadlock
+  fixed; gzip at the seam — 4 MB stall 269.6 → 4.5 ms), startup history →
+  MogDB (12 records migrated, JSON kept `.bak`), `startup_webhooks` →
+  stateless facade over `WebhookStore` (shape-oracle pinned), profiler feed ⑩
+  (per-hook timings, non-mutating `get_summary`, module-level `profile_hook`),
+  test hygiene (stale patch targets at consumer read points + TestExecutor
+  precondition fixture). Lineage fork `f27654e54`, so every pick was resolved
+  against main's newer machinery: **main's REST contract, public module paths,
+  and plain `WebhookStore.register()` win; only my `+` lines land** (one of my
+  new tests adapted JSON-body → query-param POSTs). **Gates:** tests/server
+  **1942 passed / 1 skipped / 0 failed vs main's 5-failed baseline** (+37 new);
+  root `tests/` 13f/5e byte-identical to main's baseline (pre-existing); ruff
+  clean; compression benchmark ~60×. Gotcha: `apps/api/server/tests` glob has 6
+  order-dependent `tests.test_support` collection errors — pre-existing on
+  main (A/B proven), off testpaths.
+
+- **2026-10-04 · `feat/mole-watcher` lands — Mole phase 1: always-on, no-AI
+  monitoring.** Card `e0c80774`, cherry-pick of `1b1ce40c6`: new
+  `domain/core/_internal/mole/` — `run_watch` probes on a cadence over the
+  existing `run_doctor`/`PROBES` (probe registry untouched; a newly
+  registered probe is picked up next tick). Findings are fingerprinted by **identity set**
+  `(source, check, severity, component)` — jittering payload counters (p95,
+  health score, frame sizes) never re-alert (a content-hash re-alerted on every
+  tick in the live smoke — caught before landing); every tick journaled to
+  `$SLO_MOLE_JOURNAL` JSONL with `context` (loadavg + cpu_count — context,
+  never a finding); events fire only on change; a failed tick is journaled and
+  contained (the loop never dies mid-run). CLI
+  `python -m domain.core._internal.mole` (`--interval/--max-ticks/--skip/
+  --journal/--strict/--quiet/--json`); suggest-only, never applies. Docs:
+  TESTING.md section + INDEX row (FEATURES deferred until it has an app
+  surface). **Gates:** mole 6 + doctor 41 + router 9 green, ruff clean, CLI
+  smoke (tick 1 baseline / tick 2 silent on the live stack; 4.8 ms per-tick
+  overhead @1000 findings), canonical 4-tree suite **642 failed / 197 errors
+  vs main baseline 838 — 833 nodeids identical; all 6 extras pass standalone**
+  (shared-state flakes — root cause card `6369c03e`: `db_path.parent^3` escapes
+  `tmp_path` into shared `/tmp/pytest-of-mana`, a 22-entry cross-session journal
+  with a timeline-matched first write; their baseline has 5 unique flakes of
+  its own).
 
 - **2026-10-04 · `feat/avion-transcript-batching` lands — transcript writes are
   group-committed.** Card `68ea8b9d`, cherry-pick of `fb7859ced`:
@@ -156,6 +276,20 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **Landed on main (`d949eb509`, card `d484f48a`) and deployed on :8080** — the
+  gateway serves the repo root's `apps/web/dist-vite` as its document root;
+  rebuild with `npm run build:vite`, then restart `slough-gateway`. From
+  `.wt-static`/`feat/static-hosting`. Detail:
+  `apps/web/dist-vite` as its **document root** — file hit → asset, browser
+  navigation (`Accept: text/html`) → `index.html` (SPA), data request →
+  byte-relay; `/docs`, `/redoc`, `/openapi.json` stay proxied (path contract).
+  Routing is by request *kind*, not path prefix, because SPA and API share the
+  same top-level names. `npm run build:vite` builds **same-origin** (empty
+  `NEXT_PUBLIC_API_URL`; `??` not `||` in `lib/config.ts` — a `||` fallback
+  would silently restore a second origin). `main.py --web` retired: no Node is
+  spawned. **Still open:** the 11 `app/api/**` handlers (9 planner, 1 calendar,
+  1 nextauth) have no host in a static build — classification on the card
+  before anything is ported or deleted.
 - Root-repo session on `feat/pipe-bounded-execution`; ~40 `feat/*` worktrees
   active — `git branch -vv` + the kanban board name the owners.
 - The 683 baseline failures are known drift → card `56b49cf1` (drift baseline).

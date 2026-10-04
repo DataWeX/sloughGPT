@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Moodboard #1 — Widgets · sloughGPT</title>
+<style>
+  :root {
+    --primary: 192 170 244;   --primary-foreground: 25 22 36;
+    --accent: 240 176 130;    --accent-foreground: 25 22 36;
+    --background: 17 15 24;
+    --card: 28 25 38;
+    --border: 52 46 72;
+    --foreground: 238 234 248;
+    --muted: 38 34 52;
+    --muted-foreground: 150 140 172;
+    --success: 72 192 140;
+    --warning: 236 168 60;
+    --destructive: 235 100 110;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: rgb(var(--background)); color: rgb(var(--foreground));
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.55; font-size: 15px;
+  }
+  a { color: rgb(var(--primary)); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 40px 28px 72px; }
+
+  /* ---------- header ---------- */
+  header.board { border-bottom: 1px solid rgb(var(--border)); padding-bottom: 28px; margin-bottom: 36px; }
+  .kicker { font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: rgb(var(--accent)); font-weight: 600; }
+  h1 { font-size: 34px; margin: 8px 0 6px; letter-spacing: -0.02em; }
+  .sub { color: rgb(var(--muted-foreground)); max-width: 760px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+  .chip {
+    font-size: 12px; padding: 4px 11px; border-radius: 999px;
+    border: 1px solid rgb(var(--border)); background: rgb(var(--card));
+    color: rgb(var(--muted-foreground));
+  }
+  .chip.hot { border-color: rgb(var(--primary) / .55); color: rgb(var(--primary)); }
+  .chip.stage { border-color: rgb(var(--accent) / .5); color: rgb(var(--accent)); font-weight: 600; letter-spacing: .06em; }
+
+  /* ---------- sections ---------- */
+  section { margin: 44px 0 0; }
+  h2 {
+    font-size: 13px; letter-spacing: .16em; text-transform: uppercase;
+    color: rgb(var(--muted-foreground)); margin: 0 0 18px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  h2::after { content: ""; flex: 1; height: 1px; background: rgb(var(--border)); }
+  h3 { font-size: 17px; margin: 0 0 8px; letter-spacing: -0.01em; }
+
+  /* ---------- idea ---------- */
+  .idea-card {
+    background: linear-gradient(145deg, rgb(var(--card)), rgb(var(--muted) / .45));
+    border: 1px solid rgb(var(--border)); border-radius: 16px; padding: 26px 28px;
+  }
+  .idea-card p { margin: 0; font-size: 17px; max-width: 900px; }
+  .anatomy { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+  .anatomy .chip { font-size: 13px; padding: 7px 14px; background: rgb(var(--muted)); color: rgb(var(--foreground)); }
+  .anatomy .chip b { color: rgb(var(--accent)); font-weight: 600; }
+
+  /* ---------- masonry ---------- */
+  .masonry { columns: 3; column-gap: 16px; }
+  @media (max-width: 1080px) { .masonry { columns: 2; } }
+  @media (max-width: 720px)  { .masonry { columns: 1; } }
+
+  .ev {
+    break-inside: avoid; margin-bottom: 16px;
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border));
+    border-radius: 14px; padding: 16px 18px;
+  }
+  .ev-path {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px;
+    color: rgb(var(--primary)); background: rgb(var(--muted)); border: 1px solid rgb(var(--border));
+    padding: 3px 9px; border-radius: 7px; display: inline-block; margin-bottom: 10px;
+    word-break: break-all;
+  }
+  .ev p { margin: 0 0 10px; color: rgb(var(--foreground)); font-size: 14px; }
+  .ev p .why { color: rgb(var(--muted-foreground)); }
+  pre {
+    margin: 0; background: rgb(var(--background) / .75); border: 1px solid rgb(var(--border));
+    border-radius: 9px; padding: 11px 13px; overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5;
+    color: rgb(var(--muted-foreground));
+  }
+  pre code { color: rgb(var(--foreground) / .92); }
+  .ev .tag { display: inline-block; font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgb(var(--accent)); margin-top: 9px; }
+
+  /* ---------- references ---------- */
+  .refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .ref {
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border)); border-radius: 14px;
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .ref .shot { width: 100%; aspect-ratio: 1200 / 630; object-fit: cover; display: block;
+    background: rgb(var(--muted)); border-bottom: 1px solid rgb(var(--border)); }
+  .ref .noimg {
+    aspect-ratio: 1200 / 630; display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(135deg, rgb(var(--muted)), rgb(var(--background)));
+    border-bottom: 1px solid rgb(var(--border));
+    color: rgb(var(--primary) / .7); font-size: 34px; font-weight: 700; letter-spacing: .05em;
+  }
+  .ref .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 7px; flex: 1; }
+  .ref .theme { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--accent)); font-weight: 600; }
+  .ref h3 { font-size: 15px; margin: 0; }
+  .ref p { margin: 0; font-size: 13px; color: rgb(var(--muted-foreground)); flex: 1; }
+  .ref .go { font-size: 12.5px; margin-top: 4px; word-break: break-all; }
+
+  /* ---------- mocks ---------- */
+  .mocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; }
+  .mock {
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border));
+    border-radius: 16px; padding: 18px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .mock > header { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .mock > header .proj { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+    color: rgb(var(--accent)); font-weight: 600; }
+  .synth { font-size: 12.5px; color: rgb(var(--muted-foreground)); }
+  .synth b { color: rgb(var(--foreground)); font-weight: 600; }
+
+  .stagebox {
+    background: rgb(var(--background) / .8); border: 1px solid rgb(var(--border));
+    border-radius: 12px; padding: 16px; min-height: 150px;
+  }
+
+  /* shared widget atoms (token-only) */
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+  .dot.ok    { background: rgb(var(--success)); box-shadow: 0 0 0 0 rgb(var(--success) / .6); animation: pulse 2s infinite; }
+  .dot.idle  { background: rgb(var(--muted-foreground)); }
+  .dot.bad   { background: rgb(var(--destructive)); }
+  @keyframes pulse {
+    0%   { box-shadow: 0 0 0 0 rgb(var(--success) / .55); }
+    70%  { box-shadow: 0 0 0 7px rgb(var(--success) / 0); }
+    100% { box-shadow: 0 0 0 0 rgb(var(--success) / 0); }
+  }
+  .btn {
+    font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+    border: 1px solid rgb(var(--primary) / .5); background: rgb(var(--primary));
+    color: rgb(var(--primary-foreground)); border-radius: 8px; padding: 5px 12px;
+  }
+  .btn.ghost { background: transparent; color: rgb(var(--primary)); }
+  .btn.mini { font-size: 11.5px; padding: 4px 10px; }
+  .label { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: rgb(var(--muted-foreground)); }
+  .value { font-size: 20px; font-weight: 700; color: rgb(var(--foreground)); font-variant-numeric: tabular-nums; }
+  .trend { font-size: 12px; font-weight: 600; }
+  .trend.good { color: rgb(var(--success)); }
+  .trend.warn { color: rgb(var(--warning)); }
+
+  /* Variant A — grid tiles */
+  .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { background: rgb(var(--card)); border: 1px solid rgb(var(--border)); border-radius: 10px; padding: 11px 12px; }
+  .tile .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px; }
+  .bar { height: 6px; background: rgb(var(--muted)); border-radius: 999px; overflow: hidden; margin-top: 9px; }
+  .bar > i { display: block; height: 100%; background: rgb(var(--primary)); border-radius: 999px; }
+  .tile .act { margin-top: 10px; display: flex; gap: 6px; }
+
+  /* Variant B — float dock */
+  .floatwrap { position: relative; min-height: 170px; }
+  .dock {
+    position: absolute; right: 6px; bottom: 6px;
+    display: flex; align-items: center; gap: 9px;
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border) );
+    border-radius: 999px; padding: 8px 10px 8px 13px;
+    box-shadow: 0 8px 26px rgb(var(--background) / .8); font-size: 13px;
+  }
+  .dock .txt { color: rgb(var(--foreground)); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .dock .txt b { color: rgb(var(--accent)); }
+  .floatpanel {
+    position: absolute; right: 6px; bottom: 56px; width: calc(100% - 12px);
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border)); border-radius: 13px;
+    box-shadow: 0 14px 40px rgb(var(--background) / .85); overflow: hidden;
+  }
+  .floatpanel .fr { display: flex; align-items: center; gap: 10px; padding: 10px 13px; border-bottom: 1px solid rgb(var(--border)); font-size: 13px; }
+  .floatpanel .fr:last-child { border-bottom: 0; }
+  .floatpanel .fr .meta { margin-left: auto; color: rgb(var(--muted-foreground)); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .floatpanel .fr .bar { flex: 1; margin-top: 0; }
+
+  /* Variant C — rail */
+  .rail { display: flex; flex-direction: column; gap: 9px; }
+  .rail .w { background: rgb(var(--card)); border: 1px solid rgb(var(--border)); border-radius: 10px; padding: 10px 12px; }
+  .rail .mood { display: flex; align-items: center; gap: 9px; font-size: 13px; }
+  .rail .mood .ico { width: 24px; height: 24px; border-radius: 7px; background: rgb(var(--primary) / .18);
+    color: rgb(var(--primary)); display: flex; align-items: center; justify-content: center; font-size: 13px; flex: none; }
+  .rail .ticker { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .rail .ticker .when { margin-left: auto; color: rgb(var(--muted-foreground)); font-size: 12px; }
+  .rail .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+
+  /* state strips */
+  .states { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .st { background: rgb(var(--muted) / .55); border: 1px solid rgb(var(--border)); border-radius: 9px; padding: 9px 10px; }
+  .st .label { font-size: 9.5px; margin-bottom: 6px; display: block; }
+  .st .txt { font-size: 11.5px; color: rgb(var(--muted-foreground)); }
+  .skel { height: 8px; border-radius: 999px; background: rgb(var(--border)); margin-bottom: 6px;
+    animation: shimmer 1.4s ease-in-out infinite; }
+  .skel.w60 { width: 60%; } .skel.w40 { width: 40%; } .skel.w80 { width: 80%; }
+  @keyframes shimmer { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+  .st .err { color: rgb(var(--destructive)); font-size: 11.5px; display: flex; align-items: center; gap: 6px; }
+
+  /* ---------- questions & options ---------- */
+  .qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+  .q {
+    background: rgb(var(--card)); border: 1px solid rgb(var(--border));
+    border-left: 3px solid rgb(var(--primary)); border-radius: 11px; padding: 14px 17px;
+  }
+  .q b { color: rgb(var(--foreground)); }
+  .q p { margin: 6px 0 0; font-size: 13.5px; color: rgb(var(--muted-foreground)); }
+  .opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+  .opt {
+    background: rgb(var(--card)); border: 1px dashed rgb(var(--border)); border-radius: 12px;
+    padding: 15px 17px; font-size: 13.5px;
+  }
+  .opt b { display: block; color: rgb(var(--accent)); font-size: 12px; letter-spacing: .1em;
+    text-transform: uppercase; margin-bottom: 6px; }
+  .opt span { color: rgb(var(--muted-foreground)); }
+
+  footer.board { margin-top: 52px; padding-top: 20px; border-top: 1px solid rgb(var(--border));
+    color: rgb(var(--muted-foreground)); font-size: 12.5px; display: flex; flex-wrap: wrap; gap: 8px 22px; }
+  footer.board code { color: rgb(var(--primary)); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="board">
+    <div class="kicker">Moodboard #1 · dev-time ideation</div>
+    <h1>Widgets — live state you can act on at a glance</h1>
+    <p class="sub">What could we build if every long-running thing in sloughGPT — training runs, token
+    burn, journeys, consciousness — had a small persistent face with exactly one action?</p>
+    <div class="chips">
+      <span class="chip">2026-10-04</span>
+      <span class="chip hot">idea: widgets (from “think of widgets”)</span>
+      <span class="chip">kanban <code>a9bc8648</code></span>
+      <span class="chip stage">1 MINE · 8 evidence</span>
+      <span class="chip stage">2 FETCH · 10 refs, 4 visuals</span>
+      <span class="chip stage">3 MOCK · 3 variants</span>
+      <span class="chip stage">4 ASSEMBLE</span>
+    </div>
+  </header>
+
+  <!-- ============ THE IDEA ============ -->
+  <section>
+    <h2>The idea</h2>
+    <div class="idea-card">
+      <p><b>Widget = a live state slice + one glanceable action.</b> It is not a page, not a banner
+      (transient), not a toast (confirmation) — it is the <i>missing persistent layer</i>: something small
+      that keeps watching a running process and lets you jump into it without opening the dashboard.
+      Token-themed, and loading / empty / error are part of the widget, not an afterthought.</p>
+      <div class="anatomy">
+        <span class="chip"><b>1.</b> live state slice (poll or SSE)</span>
+        <span class="chip"><b>2.</b> exactly one glanceable action</span>
+        <span class="chip"><b>3.</b> loading · empty · error built in</span>
+        <span class="chip"><b>4.</b> Noir Violet tokens only</span>
+        <span class="chip"><b>5.</b> one source → many surfaces</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EVIDENCE ============ -->
+  <section>
+    <h2>Evidence from our code — what a widget can build on <span style="font-weight:400;text-transform:none;letter-spacing:0">(stage 1 · mine)</span></h2>
+    <div class="masonry">
+
+      <article class="ev">
+        <span class="ev-path">apps/web/components/ActivityTicker.tsx</span>
+        <p>Our best existing widget shape, already built: <b>one line — dot + count + last event +
+        time — that expands into the full list.</b> <span class="why">Glanceable → detailed without a page
+        navigation; flash-on-change is the “breathing”.</span></p>
+        <pre><code>/**
+ * Compact live ticker showing error activity.
+ * Single line: dot + count + last error + time.
+ * Expand into full list.
+ */
+const [flash, setFlash] = useState(false)   // flash on new errors</code></pre>
+        <span class="tag">lineage · glance → expand</span>
+      </article>
+
+      <article class="ev">
+        <span class="ev-path">packages/strui/src/components/ui/stat-card.tsx</span>
+        <p>The widget primitive already exists in the design system — <b>a StatCard with a first-class
+        <code>loading</code> skeleton.</b> <span class="why">(There are two: <code>ui/</code> with loading,
+        <code>composed/</code> without — consolidation candidate.)</span></p>
+        <pre><code>interface StatCardProps {
+  label: string
+  value: string | number | ReactNode
+  trend?: { value: number; positive?: boolean }
+  loading?: boolean        // ← skeleton is part of the contract
+}
+if (loading) {
+  return &lt;div className="... bg-muted animate-pulse" /&gt;
+}</code></pre>
+        <span class="tag">primitive · strui</span>
+      </article>
+
+      <article class="ev">
+        <span class="ev-path">apps/web/components/consciousness/ConsciousnessSidebarWidget.tsx</span>
+        <p>The sidebar-lineage widget: polling hook, expand panel, click-outside to dismiss —
+        <b>the interaction kit every widget needs.</b></p>
+        <pre><code>const enabled = status?.enabled ?? false
+const level   = status?.level ?? 0
+// expand/collapse panel + click-outside listener
+// data: useConsciousnessStatus() — poll</code></pre>
+        <span class="tag">lineage · sidebar cluster</span>
+      </article>
+
+      <article class="ev">
+        <span class="ev-path">apps/lib/sse.ts:27</span>
+        <p>Live feeds are already a generator — widgets that show <i>running</i> state can subscribe
+        instead of polling.</p>
+        <pre><code>export async function* streamSSE(
+  url: string, opts?: StreamSSEOptions
+): AsyncGenerator&lt;SSEEvent&gt;
+
+// consumers today: system-controller,
+// generate-controller, tools-controller</code></pre>
+        <span class="tag">plumbing · stream vs poll</span>
+      </article>
+
+      <article class="ev">
+        <span class="ev-path">apps/web/lib/banner-store.ts + GlobalBanner</span>
+        <p>The layer split exists but is incomplete: <b>banners = journey blockers, toasts = transient
+        confirmations</b> (AGENTS rule). Widgets are the third, missing leg — <b>persistent glanceable
+        state with an action.</b></p>
+        <pre><code>One global banner — app-wide alerts via useBannerStore
++ &lt;GlobalBanner /&gt;. Toasts for transient confirmations;
+banners for journey blockers with actions.
+                ← widgets: persistent, per-process</code></pre>
+        <span class="tag">gap · the missing layer</span>
+      </article>
+
+      <article class="ev">
+        <span class="ev-path">docs/design/DESIGN_SYSTEM.md</span>
+        <p>The system already names the vocabulary widgets must reuse — no invented patterns allowed.</p>
+        <pre><code>- KpiGrid → StatCard for any single-number callout.
+- Live/streaming state is a StatusDot
+  (tone="success" pulse showLabel) — the visual
+  "breathing" of live data — placed on a slim strip.</code></pre>
+        <span class="tag">vocabulary · StatusDot, StatCard</span>
+      </article>
+
+      <article class="ev">
+        <span class="ev-path">kanban card 43ca5222 — Mole (surface/theme)</span>
+        <p>Prior art ruling: <b>“no widget in the web section.”</b> <span class="why">So the sanctioned
+        widget surface is the float layer / side rail — not a new section inside a page. Mock B/C lean
+        on exactly this.</span></p>
+        <pre><code>card 43ca5222 (Mole): surface + theme work,
+NO widget in web section  →  float is the allowed layer</code></pre>
+        <span class="tag">decision · float allowed</span>
+      </article>
+
+      <article class="ev">
+        <span class="ev-path">domain/agents/_internal/tools.py — ToolSpec</span>
+        <p>Our own “one descriptor, many projections” precedent: a widget could be a descriptor
+        <b>{state source, glanceable action, states}</b> projected to grid / float / rail / mobile tile.</p>
+        <pre><code>{name, params (JSON Schema), result, auth_scope,
+ idempotent, version}
+→ HTTP routes, SSE frames, CLI subcommands, typed
+  TS helpers are PROJECTIONS of that descriptor</code></pre>
+        <span class="tag">pattern · descriptor → surfaces</span>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============ REFERENCES ============ -->
+  <section>
+    <h2>External references — how others solved it <span style="font-weight:400;text-transform:none;letter-spacing:0">(stage 2 · fetch, all cited)</span></h2>
+    <div class="refs">
+
+      <article class="ref">
+        <img class="shot" src="assets/apple-hig-widgets.jpg" alt="Apple HIG Widgets">
+        <div class="body">
+          <span class="theme">definition</span>
+          <h3>Apple HIG — Widgets</h3>
+          <p>The canonical definition: widgets display <b>timely, glanceable content and offer specific
+          functionality</b> — matches our “state + one action” anatomy.</p>
+          <a class="go" href="https://developer.apple.com/design/human-interface-guidelines/widgets">developer.apple.com/design/human-interface-guidelines/widgets</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <img class="shot" src="assets/carbon-empty-states.png" alt="Carbon Design System — Empty states">
+        <div class="body">
+          <span class="theme">states</span>
+          <h3>Carbon Design System — Empty states (IBM)</h3>
+          <p>Empty state is a first-class building block: never leave a widget blank — explain why it is
+          empty and what to do next.</p>
+          <a class="go" href="https://www.carbondesignsystem.com/building-blocks/core/patterns/empty-states">carbondesignsystem.com/…/empty-states</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <img class="shot" src="assets/epoch-dashboard.png" alt="Epoch AI trends dashboard">
+        <div class="body">
+          <span class="theme">content · numbers</span>
+          <h3>Epoch AI — Trends dashboard</h3>
+          <p>How to lay out a dense strip of key figures so each number is scannable in one glance —
+          directly transferable to training/token tiles.</p>
+          <a class="go" href="https://epoch.ai/latest/announcing-trends-dashboard">epoch.ai/latest/announcing-trends-dashboard</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <img class="shot" src="assets/assistant-ui.png" alt="assistant-ui examples">
+        <div class="body">
+          <span class="theme">patterns · production</span>
+          <h3>assistant-ui — Examples</h3>
+          <p>Production copilot/widget patterns in React: how live assistants embed into surrounding UI
+          without owning the page.</p>
+          <a class="go" href="https://www.assistant-ui.com/examples">assistant-ui.com/examples</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <div class="noimg">UX</div>
+        <div class="body">
+          <span class="theme">placement</span>
+          <h3>Where should AI sit in your UI?</h3>
+          <p>The floating corner widget is the familiar entry point — argues for and against the float;
+          informs Variant B placement.</p>
+          <a class="go" href="https://uxdesign.cc/where-should-ai-sit-in-your-ui-1710a258390e">uxdesign.cc/where-should-ai-sit-in-your-ui-1710a258390e</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <div class="noimg">AI</div>
+        <div class="body">
+          <span class="theme">placement · taxonomy</span>
+          <h3>Where Should AI Agents Live in Your UI?</h3>
+          <p>Taxonomy of agent surfaces (floating chat, sidebar, dedicated pane) — our grid/float/rail
+          variants map onto this spectrum.</p>
+          <a class="go" href="https://medium.com/@claus.nisslmueller/where-should-ai-agents-live-in-your-ui-cd27965a577a">medium.com/@claus.nisslmueller/…</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <div class="noimg">N</div>
+        <div class="body">
+          <span class="theme">states</span>
+          <h3>NN/g — Designing Empty States in Complex Applications</h3>
+          <p>Empty ≠ blank: purpose, guidance, and a path forward — the bar for our widget’s empty
+          state.</p>
+          <a class="go" href="https://www.nngroup.com/articles/empty-state-interface-design/">nngroup.com/articles/empty-state-interface-design/</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <div class="noimg">P</div>
+        <div class="body">
+          <span class="theme">states</span>
+          <h3>Pencil &amp; Paper — Empty State UX Examples</h3>
+          <p>Concrete empty-state examples + best practices (inventory first, never a dead end) for the
+          state strip.</p>
+          <a class="go" href="https://www.pencilandpaper.io/articles/empty-states">pencilandpaper.io/articles/empty-states</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <div class="noimg">ML</div>
+        <div class="body">
+          <span class="theme">content · training</span>
+          <h3>DataRobot — Training Dashboard</h3>
+          <p>What a training widget must surface: train/test loss, accuracy, learning rate over epochs —
+          our run tile’s content checklist.</p>
+          <a class="go" href="https://docs.datarobot.com/en/docs/classic-ui/modeling/analyze-models/evaluate/training-dash.html">docs.datarobot.com/…/training-dash.html</a>
+        </div>
+      </article>
+
+      <article class="ref">
+        <div class="noimg">●</div>
+        <div class="body">
+          <span class="theme">progress widgets</span>
+          <h3>WWDC25 — Live Activities &amp; interactive widgets</h3>
+          <p>Widgets that update live and accept an action in place — the interaction model behind
+          Variant B’s dock.</p>
+          <a class="go" href="https://developer.apple.com/videos/play/wwdc2025/278/">developer.apple.com/videos/play/wwdc2025/278/</a>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============ MOCKS ============ -->
+  <section>
+    <h2>Mock variants <span style="font-weight:400;text-transform:none;letter-spacing:0">(stage 3 · mock — tokens only, every variant shows loading · empty · error)</span></h2>
+    <div class="mocks">
+
+      <!-- Variant A -->
+      <article class="mock">
+        <header>
+          <h3>Variant A · The grid</h3>
+          <span class="proj">projection: dashboard</span>
+        </header>
+        <div class="stagebox">
+          <div class="tiles">
+            <div class="tile">
+              <span class="label">Training run · slough-7b</span>
+              <div class="row"><span class="value">epoch 3/5</span><span class="trend good">loss 1.42 ↓</span></div>
+              <div class="bar"><i style="width:62%"></i></div>
+              <div class="act"><button class="btn mini">Open run</button></div>
+            </div>
+            <div class="tile">
+              <span class="label">Token budget</span>
+              <div class="row"><span class="value">1.2M</span><span class="trend warn">+12% pace</span></div>
+              <div class="bar"><i style="width:58%; background:rgb(var(--warning))"></i></div>
+              <div class="row"><span class="txt label" style="text-transform:none">of 2.0M · resets Fri</span></div>
+            </div>
+            <div class="tile">
+              <span class="label">Journeys</span>
+              <div class="row"><span class="value">4/7</span><span class="dot ok"></span></div>
+              <div class="bar"><i style="width:57%; background:rgb(var(--success))"></i></div>
+            </div>
+            <div class="tile">
+              <span class="label">Inference queue</span>
+              <div class="row"><span class="value">3 jobs</span><span class="trend good">~42s</span></div>
+              <div class="bar"><i style="width:30%"></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="states">
+          <div class="st"><span class="label">loading</span><div class="skel w60"></div><div class="skel w40"></div></div>
+          <div class="st"><span class="label">empty</span><div class="txt">No runs yet — <b style="color:rgb(var(--primary))">launch one →</b></div></div>
+          <div class="st"><span class="label">error</span><div class="err"><span class="dot bad"></span>stream lost · <b>retry</b></div></div>
+        </div>
+        <p class="synth">Synthesis: <b>StatCard + StatusDot</b> (strui, DESIGN_SYSTEM) ×
+        <b>DataRobot / Epoch</b> content density × <b>Carbon</b> empty states. Evidence:
+        <code>ui/stat-card.tsx</code>, <code>sse.ts</code>.</p>
+      </article>
+
+      <!-- Variant B -->
+      <article class="mock">
+        <header>
+          <h3>Variant B · Ambient float</h3>
+          <span class="proj">projection: float layer</span>
+        </header>
+        <div class="stagebox">
+          <div class="floatwrap">
+            <div class="floatpanel">
+              <div class="fr"><span class="dot ok"></span> slough-7b <div class="bar"><i style="width:62%"></i></div><span class="meta">62%</span></div>
+              <div class="fr"><span class="dot idle"></span> tokens <div class="bar"><i style="width:58%; background:rgb(var(--warning))"></i></div><span class="meta">1.2M</span></div>
+              <div class="fr"><span class="dot ok"></span> journey “onboarding” ready<span class="meta">2m</span>
+                <button class="btn ghost mini">Open</button></div>
+            </div>
+            <div class="dock">
+              <span class="dot ok"></span>
+              <span class="txt">Training · <b>epoch 3/5</b> · loss 1.42</span>
+              <button class="btn ghost mini">▲</button>
+            </div>
+          </div>
+        </div>
+        <div class="states">
+          <div class="st"><span class="label">loading</span><div class="skel w80"></div><div class="skel w60"></div></div>
+          <div class="st"><span class="label">empty</span><div class="txt">All quiet — nothing running. <b style="color:rgb(var(--primary))">Start something →</b></div></div>
+          <div class="st"><span class="label">error</span><div class="err"><span class="dot bad"></span>backend unreachable · <b>retry</b></div></div>
+        </div>
+        <p class="synth">Synthesis: <b>ActivityTicker</b> line+expand × <b>ConsciousnessSidebarWidget</b>
+        panel behavior × <b>“Where should AI sit” / WWDC Live Activities</b>. Respects card
+        <b>43ca5222</b>: float, not a web section.</p>
+      </article>
+
+      <!-- Variant C -->
+      <article class="mock">
+        <header>
+          <h3>Variant C · Rail cluster</h3>
+          <span class="proj">projection: sidebar rail</span>
+        </header>
+        <div class="stagebox">
+          <div class="rail">
+            <div class="w">
+              <div class="mood"><span class="ico">◉</span> Consciousness · <b>Level 4</b> — focused
+                <span class="dot ok" style="margin-left:auto"></span></div>
+            </div>
+            <div class="w">
+              <div class="ticker"><span class="dot bad"></span> 2 errors since boot
+                <span class="when">3m ago · expand ▾</span></div>
+            </div>
+            <div class="w">
+              <span class="label">one glanceable action</span>
+              <div class="acts" style="margin-top:7px">
+                <button class="btn mini">Resume run</button>
+                <button class="btn ghost mini">New journey</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="states">
+          <div class="st"><span class="label">loading</span><div class="skel w80"></div><div class="skel w40"></div></div>
+          <div class="st"><span class="label">empty</span><div class="txt">Feed is empty — clean boot ✓</div></div>
+          <div class="st"><span class="label">error</span><div class="err"><span class="dot bad"></span>poll timeout · <b>retry</b></div></div>
+        </div>
+        <p class="synth">Synthesis: <b>ConsciousnessSidebarWidget + ActivityTicker</b> (our lineages) ×
+        <b>Apple HIG</b> glanceability × <b>assistant-ui</b> embedding patterns. Evidence:
+        <code>useConsciousnessStatus</code>.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- ============ QUESTIONS ============ -->
+  <section>
+    <h2>Open questions — react to these</h2>
+    <div class="qgrid">
+      <div class="q"><b>1 · One descriptor, many projections?</b>
+        <p>Build widgets as a <code>{state source, action, states}</code> descriptor projected to grid /
+        float / rail (ToolSpec pattern) — or hand-build one surface first and generalize later?</p></div>
+      <div class="q"><b>2 · Poll or stream, per widget?</b>
+        <p><code>useConsciousnessStatus</code> polls; <code>streamSSE</code> exists for live feeds. Who
+        owns reconnect/backoff — widget, sse-client, or http-client layer?</p></div>
+      <div class="q"><b>3 · Which 2–3 ship first?</b>
+        <p>Ready contracts: training run, token budget, consciousness mood, journey status, inference
+        queue. Which three earn their place?</p></div>
+      <div class="q"><b>4 · Mole interplay?</b>
+        <p>Card <code>43ca5222</code> said “no widget in the web section” — Variant B (float) needs an
+        explicit product OK, or it repeats a ruling we already made.</p></div>
+      <div class="q"><b>5 · Confirm the three-layer split</b>
+        <p>banner = blockers · toast = transient · <b>widget = persistent glanceable</b>. Worth writing
+        into DESIGN_SYSTEM so future PRs stop inventing a fourth pattern.</p></div>
+    </div>
+  </section>
+
+  <!-- ============ OPTIONS ============ -->
+  <section>
+    <h2>Next-step options</h2>
+    <div class="opts">
+      <div class="opt"><b>Option A · Flow first</b><span>Product-designer drafts the widget user flow
+        into <code>docs/UX_FLOWS.md</code>; you review before any build.</span></div>
+      <div class="opt"><b>Option B · Spike</b><span>Branch <code>feat/widgets</code>: a tiny widget
+        registry + 2 widgets (training run, consciousness mood) behind existing pages. Needs your go.</span></div>
+      <div class="opt"><b>Option C · Iterate mocks</b><span>Point at what to change (placement, content,
+        which variant) — mocks re-render before anything is built.</span></div>
+      <div class="opt"><b>Option D · Shelve</b><span>Card to review; board stays for later — nothing
+        built, zero cost.</span></div>
+    </div>
+  </section>
+
+  <footer class="board">
+    <span>generated by the <b>moodboard skill</b> (mine → fetch → mock → assemble)</span>
+    <span>8 evidence · 10 references (4 visual) · 3 mock variants</span>
+    <span>card <code>a9bc8648</code> · 2026-10-04</span>
+    <span>tokens: Noir Violet dark · no hardcoded hues · no new deps</span>
+  </footer>
+
+</div>
+</body>
+</html>

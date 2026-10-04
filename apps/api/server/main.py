@@ -511,7 +511,6 @@ def _start_watchdog() -> None:
 # ── Entry point ─────────────────────────────────────────────────────
 if __name__ == "__main__":
     import argparse
-    import atexit
     import signal
     import subprocess
 
@@ -547,7 +546,8 @@ if __name__ == "__main__":
         "--web",
         action="store_true",
         default=cfg.enable_web,
-        help="Serve web frontend alongside API",
+        help="(deprecated) the site is served statically by the gateway — "
+        "this flag no longer spawns a Node server",
     )
     parser.add_argument(
         "--daemon",
@@ -673,36 +673,15 @@ if __name__ == "__main__":
         extra={"context": {"port": bind_port, "reload": args.reload}, "tag": "START"},
     )
 
-    # Optional web frontend
-    web_proc = None
+    # Web frontend — retired from this process. The site is now a static
+    # build (`npm run build:vite` → apps/web/dist-vite) served by the gateway
+    # as its document root (MAN_STATIC_DIR), so the API no longer spawns Node
+    # at all. Dev still runs `vite dev` (slough-web.service).
     if args.web:
-        web_root = _REPO_ROOT / "apps" / "web"
-        standalone_dir = web_root / ".next" / "standalone"
-        from domain.shared import find_available_port as _find_available_port
-
-        web_port = _find_available_port(host="", start_port=3000)
-        web_env = {**os.environ, "PORT": str(web_port)}
-
-        if standalone_dir.is_dir() and (standalone_dir / "server.js").is_file():
-            web_proc = subprocess.Popen(
-                ["node", "server.js"],
-                cwd=str(standalone_dir),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
-        else:
-            web_proc = subprocess.Popen(
-                ["npm", "run", "dev"],
-                cwd=str(web_root),
-                env=web_env,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-            )
-
-    if web_proc:
-        atexit.register(
-            lambda p=web_proc: (p.terminate(), p.wait(timeout=5)) if p.poll() is None else None
+        logger.warning(
+            "--web is retired: build the site with 'npm run build:vite' in "
+            "apps/web and let the gateway serve it (no Node spawned)",
+            extra={"context": {"port": bind_port}, "tag": "START"},
         )
 
     uvicorn_kw: dict = {

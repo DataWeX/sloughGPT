@@ -4,14 +4,15 @@ Complete reference for all environment variables used in SloughGPT.
 
 ## Quick Reference
 
-| Variable         | Required | Default       | Description                        |
-| ---------------- | -------- | ------------- | ---------------------------------- |
-| `SLO_API_KEY`    | Yes      | -             | API key for authentication         |
-| `SLO_JWT_SECRET` | Yes      | -             | Secret for JWT token signing       |
-| `SLO_ENV`        | No       | `development` | Environment mode                   |
-| `SLO_HOST`       | No       | `0.0.0.0`     | Server host                        |
-| `SLO_PORT`       | No       | `8000`        | Server port                        |
-| `SLO_RELOAD`     | No       | `false`       | Enable auto-reload on file changes |
+| Variable                   | Required | Default                          | Description                                          |
+| -------------------------- | -------- | -------------------------------- | ---------------------------------------------------- |
+| `SLO_API_KEY`              | Yes      | -                                | API key for authentication                           |
+| `SLO_JWT_SECRET`           | Yes      | -                                | Secret for JWT token signing                         |
+| `SLO_ENV`                  | No       | `development`                    | Environment mode                                     |
+| `SLO_HOST`                 | No       | `0.0.0.0`                        | Server host                                          |
+| `SLO_PORT`                 | No       | `8000`                           | Server port                                          |
+| `SLO_RELOAD`               | No       | `false`                          | Enable auto-reload on file changes                   |
+| `SLO_STARTUP_HISTORY_PATH` | No       | `~/.slogpt/startup_history.json` | Retired startup-history JSON (migration source only) |
 
 **Legacy names:** older docs and images used a typo (`SLAUGHGPT_*`). The server still accepts `SLAUGHGPT_API_KEY`, `SLAUGHGPT_JWT_SECRET`, and `SLAUGHGPT_API_KEYS` if the `SLO_*` counterparts are unset. Prefer `SLO_*` for new deployments.
 
@@ -168,6 +169,14 @@ SLO_ENABLE_PROCESS_GUARD=true  # Default: true
 
 Related knobs: `SLO_GUARD_MAX_RESTARTS` (default `3`), `SLO_GUARD_RESTART_DELAY`
 (seconds), `SLO_GUARD_MEMORY_LIMIT_MB`, `SLO_PROCESS_GUARD_CONCURRENT`.
+
+### SLO_STARTUP_HISTORY_PATH
+
+Path of the **retired** JSON-file startup-history store (default
+`~/.slogpt/startup_history.json`). Startup history now persists to the MogDB
+store at `data/startup_history_mogdb`; this variable is read once at boot — if
+the legacy file exists, its records are imported and the original is kept as
+`.bak` (never deleted). Leave unset to use the default location.
 
 ---
 

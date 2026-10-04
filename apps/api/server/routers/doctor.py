@@ -41,7 +41,7 @@ LIGHT_WINDOW_S = 6.0
 
 def default_report_path() -> str:
     """Resolve the report path through the doctor package (``$SLO_DOCTOR_REPORT``)."""
-    from domain.core._internal.doctor.report import default_report_path as _default
+    from domain.core import default_report_path as _default
 
     return _default()
 
@@ -96,7 +96,7 @@ class DoctorRouter:
         The browser journey sweep is never invoked here — ``run_sweep=False``
         keeps the journey probe on its read-the-file path.
         """
-        from domain.core._internal.doctor import run_doctor as _run_doctor
+        from domain.core import run_doctor as _run_doctor
 
         report = await asyncio.to_thread(
             _run_doctor,
