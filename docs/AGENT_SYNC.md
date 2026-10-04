@@ -58,7 +58,7 @@ git push -u origin feat/<name>   # push your own branch when done
   tick in the live smoke — caught before landing); every tick journaled to
   `$SLO_MOLE_JOURNAL` JSONL with `context` (loadavg + cpu_count — context,
   never a finding); events fire only on change; a failed tick is journaled and
-  contained (a watcher never dies mid-watch). CLI
+  contained (the loop never dies mid-run). CLI
   `python -m domain.core._internal.mole` (`--interval/--max-ticks/--skip/
   --journal/--strict/--quiet/--json`); suggest-only, never applies. Docs:
   TESTING.md section + INDEX row (FEATURES deferred until it has an app
