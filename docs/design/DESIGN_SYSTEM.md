@@ -110,11 +110,19 @@ Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool t
 
 ### Font Families
 
-| Role | Font | Fallback |
-|------|------|----------|
-| Body | Rubik (`--font-rubik`) | system-ui, sans-serif |
-| Numeric | Lato (`--font-lato`) | system-ui, sans-serif |
-| Code | JetBrains Mono (`--font-jetbrains-mono`) | ui-monospace, monospace |
+Two families ship: **Outfit** (body, headings, numerals) and **JetBrains Mono** (code). No third family is loaded in the app.
+
+| Role | Font | CSS variable | Fallback |
+|------|------|--------------|----------|
+| Body / headings (`font-sans`) | Outfit — `public/fonts/outfit-latin.woff2` | `--font-rubik` — **legacy name; the family is Outfit** | system-ui, sans-serif |
+| Numeric (`font-numeric`, `tabular-nums`) | Outfit — same face as body; there is no separate numeral font | `--font-rubik` | system-ui, sans-serif |
+| Code (`font-mono`) | JetBrains Mono — `public/fonts/jetbrains-latin.woff2` | `--font-jetbrains-mono` | ui-monospace, monospace |
+
+- Outfit is loaded with `next/font/local` in `apps/web/app/layout.tsx`; JetBrains Mono also has a raw `@font-face` in `globals.css`.
+- **`--font-rubik` is a rename TODO, not a font.** The variable resolves to Outfit. Do not rename it in passing — consumers are `layout.tsx`, `globals.css`, `tailwind.config.js`, `magazine/page.tsx`, and `vite/index-metadata.test.ts`. Until the rename lands, read it as "the body font".
+- **Lato was never loaded.** No `--font-lato`, no Lato file, no `@font-face` — the old Numeric row was doc drift, not the system.
+- `apps/web/lib/fonts.ts` lists a body-font switcher (Inter / Outfit / Space Grotesk / Plus Jakarta) but ships no font files for it; Outfit is the only body face in use.
+- Mobile maps the same two families through `apps/mobile/tamagui.config.ts` — see **Mobile (React Native / Tamagui)** below.
 
 ### Type Scale
 
@@ -171,6 +179,8 @@ Each theme also shifts `--secondary`, `--muted`, and `--border` with warm/cool t
 | `rounded-sm` | `2px` | Subtle rounding |
 | `rounded-lg` | `10px` | Modals, large panels |
 | `rounded-xl` | `14px` | Feature cards |
+| `rounded-2xl` | `16px` | Chat composer card, floating input surfaces |
+| `rounded-full` | `9999px` | Send/mic buttons, avatars, status dots — never on cards |
 
 ## Shadows
 
@@ -297,6 +307,47 @@ Rules for new surfaces adopting the primitive:
 </div>
 ```
 
+### Chat Composer / Chat Screen
+
+Codified from the archived references `docs/design/references/chat-composer-reference-1.png` and `-2.png`. The composer is one floating card with **two rows**: message field on top, controls underneath.
+
+```text
+┌────────────────────────────────────────┐
+│  message input                         │   row 1 — Body type, status dot top-right
+│                                        │
+│  [ + ]             Model [v]      [ ^ ]│   row 2 — controls on their own line
+└────────────────────────────────────────┘
+```
+
+| Part | Rule |
+|------|------|
+| Shell | One card: `rounded-2xl border border-border/50 bg-card px-4 py-3 shadow-sm`. On focus: `focus-within:border-primary/40 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/10`. Reference impl: `features/chat/components/input/ChatInputRow.tsx`. |
+| Row 1 — field | Multiline message input in Body type, placeholder `text-muted-foreground`. Grows to a max height, scrolls internally. |
+| Row 2 — controls | A separate row **below** the field — controls never sit inline beside the first line of typed text. |
+| `+` affordance | Bottom-**left**: `h-9 w-9` ghost icon button (`hover:bg-muted`), `aria-label` naming the action. |
+| Model picker | Bottom-**right**, immediately left of send: text button in Label/Caption type, `text-muted-foreground` → foreground on hover, chevron, shows the active model. |
+| Send button | Bottom-**right**: circular `h-9 w-9 rounded-full bg-primary`, `aria-label="Send message"`. Streaming → Stop in the same circle (`bg-destructive`). Empty → mic/neutral state. Fixed footprint in every state — no layout shift. |
+| Gutter | Stays inside the page gutter (`px-4 sm:px-6`) and the `max-w-4xl` thread column; the thread gets bottom padding ≥ composer height + safe-area so the last message is never covered. |
+| Hint strip (optional) | Below row 2, Badge type (`text-[10px] text-muted-foreground/40`), `aria-hidden` — kbd hints, token count. |
+
+**Message-list type roles**
+
+| Element | Role |
+|---------|------|
+| Message text | Body (`text-sm`; RN 15/22) |
+| Timestamps, model/meta lines, queued count | Caption (`text-xs text-muted-foreground`; RN 12/16) |
+| Role labels, mode chips | Label (`text-xs font-medium uppercase tracking-wider`) |
+| Status badges, match counters | Badge (`text-[10px]`) |
+
+**Empty / error / offline rows**
+
+- **Empty thread** → centered empty state: icon + context + one next action, composer still active below. Never a blank screen.
+- **Error** → inline banner row between header and thread: dot + message + Retry + dismiss (web `SystemBanner`; mobile ChatScreen error row). Blocking errors are never toast-only.
+- **Offline** → thin status strip (`ConnectionStatusBar` / `SystemBanner`) with a Caption-type queued count and Retry. Sends queue locally; the composer stays usable.
+- **Streaming** → send morphs to Stop inside the same fixed-size circle; the field does not resize.
+
+Existing implementations: web `apps/web/features/chat/components/input/` (`ChatInputRow`, `ChatInputField`, `ChatInputAccessories`, `ChatSendButton`), mobile `apps/mobile/src/components/ChatInput.tsx`.
+
 ## Interactive States
 
 ### Hover
@@ -334,6 +385,93 @@ className="opacity-40 pointer-events-none"
 - Respect `prefers-reduced-motion` — no animations for users who request it
 - No bouncing, no spinning (except loading spinners), no flashy effects
 
+## Mobile (React Native / Tamagui)
+
+`apps/mobile` runs the same locked system through Tamagui. This section is the mapping, not a second system — every value below already exists on web; nothing here is invented.
+
+### Font Mapping
+
+| Role | Mobile | Where |
+|------|--------|-------|
+| Body / headings | Outfit | `apps/mobile/tamagui.config.ts` → `fonts.body`, `fonts.heading` |
+| Code | JetBrains Mono (`JetBrainsMono-Regular`) | `fonts.mono` |
+| Weights | 400 / 500 / 600 / 700 | weight maps in `tamagui.config.ts` |
+
+Same two families as web, no others. No platform-switched font, no newly bundled family.
+
+### Type Scale (RN)
+
+Web class → RN `fontSize` / `lineHeight` (px):
+
+| Role | Web class | RN fontSize / lineHeight | Weight |
+|------|-----------|--------------------------|--------|
+| Page title | `text-2xl md:text-3xl` | 24 / 30 | 600 |
+| Section title | `text-base` | 16 / 22 | 500 |
+| Body | `text-sm` | 15 / 22 | 400 |
+| Caption | `text-xs` | 12 / 16 | 400 |
+| Label | `text-xs font-medium uppercase tracking-wider` | 12 / 16, uppercase, tracking ≥ 0.5 | 500 |
+| Badge | `text-[10px] font-medium` | 11 / 15 | 500 |
+
+- Body is 15/22 on mobile (1px over web `text-sm`, reading distance) — what `MessageBubble` and `ChatInput` already ship.
+- The five chat files carry **ten distinct `fontSize` literals (9–24) for six roles**. Each maps to a row above: 9–10 → Badge, 11 → Caption/Badge, 12–13 → Caption, 14–15 → Body, 16 → Section title, 18/20 → icon glyphs only (never body text), 24 → Page title.
+
+### Spacing Grid
+
+All spacing is a multiple of 4 (px): **4 · 8 · 12 · 16 · 20 · 24 · 32** — 48 only for full-bleed empty states. `2` is the one half-step, for hairline gaps and dots.
+
+| Context | Value |
+|---------|-------|
+| Icon-to-label micro gap | 4 |
+| Inline gap, tight stack | 8 |
+| Card / composer internal padding | 12–16 |
+| Screen gutter, between sections | 16 |
+| Sheet padding, empty-state gutter | 20–32 |
+
+`MessageBubble`'s local `S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20}` is already this grid; the shared scale adds 24 and 32. Off-grid literals (`paddingVertical: 7`, `paddingHorizontal: 14`, `marginHorizontal: 6`) are drift.
+
+### Radius
+
+| Token | Value | Web class | Use |
+|-------|-------|-----------|-----|
+| `xs` | 2 | `rounded-sm` | Hairlines, subtle rounding |
+| `sm` | 6 | `rounded` (`--radius`) | Inputs, chips |
+| `md` | 10 | `rounded-lg` | Buttons, list tiles, icon buttons |
+| `lg` | 14 | `rounded-xl` | Cards, sheets |
+| `xl` | 16 | `rounded-2xl` | Chat composer, floating panels |
+| `full` | 9999 | `rounded-full` | Send/mic buttons, avatars, dots — never cards |
+
+`MessageBubble`'s local `R = {sm: 6, md: 10, lg: 16, xl: 20, full: 9999}` predates this table: 6/10 land on `sm`/`md`, 16 maps to `xl`, 20 is off-scale. The five chat files use **sixteen distinct radius literals (2–28 plus 999/9999)** — all of them collapse into this table.
+
+### Color Pipeline
+
+- **Source of truth:** `packages/strui/tokens/palette.json` — the same values as the CSS variables in **Color Tokens** above. Regenerate the web and mobile outputs with `node packages/strui/scripts/gen-tokens.mjs` (`--check` audits without writing); never hand-edit a generated file.
+- Mobile reaches the palette through `useColors()` (`src/theme/colors.ts`, backed by `palette.generated.ts`) and the theme overrides in `tamagui.config.ts`. Where the generator has not landed yet, those are hand-maintained mirrors of the same values — divergence from `palette.json` is a bug either way.
+- A palette change edits `palette.json` and regenerates: web and mobile move together in one change.
+- Components never inline a hex: Tamagui theme tokens (`$background`, `$color`, `$color10`) or `useColors()` — the mobile form of Non-Negotiable #1.
+
+### No Magic Numbers
+
+**Hard rule: no raw spacing, radius, or type numbers in components.** Every such value comes from the central scales module — `apps/mobile/src/theme/scales.ts` (created in the implementation phase):
+
+```tsx
+// scales.ts — MessageBubble.tsx's local constants, promoted to one shared module
+export const S = {xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32} as const // 4pt grid
+export const R = {xs: 2, sm: 6, md: 10, lg: 14, xl: 16, full: 9999} as const // radius
+
+export const T = { // type styles
+  page: {fontSize: 24, lineHeight: 30, fontWeight: '600'},
+  section: {fontSize: 16, lineHeight: 22, fontWeight: '500'},
+  body: {fontSize: 15, lineHeight: 22},
+  caption: {fontSize: 12, lineHeight: 16},
+  label: {fontSize: 12, lineHeight: 16, letterSpacing: 0.6},
+  badge: {fontSize: 11, lineHeight: 15, fontWeight: '500'},
+} as const
+```
+
+- Literal exceptions: icon/glyph sizes (14/16/18/20) and 1–2px hairlines/borders. Nothing else.
+- Colors are exempt from `scales.ts` — they come from theme tokens or `useColors()` only.
+- The five chat files (`ChatScreen`, `ChatInput`, `ChatModeBar`, `SidebarDrawer`, `ChatDrawer`) are the first migration targets; `MessageBubble` already follows the pattern locally.
+
 ## Forbidden Patterns
 
 | Never | Use Instead |
@@ -347,7 +485,7 @@ className="opacity-40 pointer-events-none"
 | Inline `style={{}}` | Tailwind classes |
 | `console.log` in production | Remove before commit |
 | Custom color variables | Use existing tokens |
-| New font families | Use Rubik, Lato, or JetBrains Mono |
+| New font families | Use Outfit or JetBrains Mono |
 | `rounded-full` on cards | Use `rounded` or `rounded-lg` |
 | Animations without motion check | Add `motion-reduce:` variants |
 | Stock Tailwind palette (`text-green-500`, `bg-red-400`, `border-blue-500`, `text-indigo-600`) | Semantic tokens (`text-success`, `bg-destructive`, `border-border`, `text-primary`) |
@@ -359,6 +497,8 @@ className="opacity-40 pointer-events-none"
 | Live/status conveyed as raw text + `bg-green-400` dot | `StatusDot` (`tone="success" pulse`) |
 | Secondary controls stacked as cards | `FoldSection` (collapsible) |
 | A row/stack of more than two flat cards with no hierarchy | `SectionHeader`, `KpiGrid`, or rethink the layout |
+| Chat composer controls inline beside the text field | Two-row composer (**Chat Composer / Chat Screen**) |
+| Raw spacing/radius/fontSize literals in RN components (`paddingVertical: 7`, `borderRadius: 9`, `fontSize: 13`) | Scales from `src/theme/scales.ts` (**Mobile (React Native / Tamagui)** section) |
 
 ## AI Agent Rules
 
