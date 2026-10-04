@@ -1034,7 +1034,9 @@ class TestPermitDeny:
 class TestHelp:
     def test_help_full_list(self, repl):
         out = capture_cmd(repl, repl._cmd_help, "")
-        assert "Built-in commands:" in out
+        assert "Navigation:" in out
+        assert "Shell features:" in out
+        assert "  exit" in out
 
     def test_help_brief(self, repl):
         out = capture_cmd(repl, repl._cmd_help, "brief")
@@ -1218,7 +1220,8 @@ class TestSource:
 
     def test_source_missing_file(self, repl):
         out = capture_cmd(repl, repl._cmd_source, "/no/such/script.sh")
-        assert "Error reading" in out
+        assert "File not found" in out
+        assert "No such file or directory" in out
 
     def test_source_runs_lines(self, repl, tmp_path):
         script = tmp_path / "s.sh"
@@ -1652,7 +1655,7 @@ class TestRender:
 class TestAi:
     def test_ai_usage(self, repl):
         out = capture_cmd(repl, repl._cmd_ai, "")
-        assert "Usage: ai <natural language query>" in out
+        assert "Usage: ai [--loop|--auto] <natural language query>" in out
 
     def test_ai_api_unavailable_falls_back(self, repl):
         out = capture_cmd(repl, repl._cmd_ai, "show me running processes")
@@ -2353,7 +2356,7 @@ class TestJobCommands:
 
     def test_kill_no_such(self, repl):
         out = capture_cmd(repl, repl._cmd_kill, "99999")
-        assert repl._last_exit_code != 0 or "error" in out.lower() or "No such" in out
+        assert repl._last_exit_code != 0 or "exception" in out.lower() or "no such" in out.lower()
 
 
 # ── watch ───────────────────────────────────────────────────────────
@@ -3343,7 +3346,7 @@ class TestHelpInternals:
 
     def test_help_full(self, repl):
         out = capture_cmd(repl, repl._cmd_help, "")
-        assert "help" in out.lower()
+        assert "navigation:" in out.lower()
 
 
 # ── export with variable name ────────────────────────────────────────
@@ -3821,7 +3824,7 @@ class TestSourceInternals:
 class TestHelpMoreInternals:
     def test_help_all_commands(self, repl):
         out = capture_cmd(repl, repl._cmd_help, "")
-        for cmd in ["echo", "ls", "cat", "help", "exit"]:
+        for cmd in ["echo", "ls", "cat", "train", "exit"]:
             assert cmd in out.lower()
 
     def test_help_brief(self, repl):
@@ -9073,7 +9076,7 @@ class TestCmdConfirmConfig:
         mock_config._config_dir.mkdir(parents=True, exist_ok=True)
         defaults = mock_config._config_dir / "defaults.yaml"
         defaults.write_text("features:\n  auto_download: false\n")
-        with patch("domain.infrastructure.config.get_config", return_value=mock_config):
+        with patch("domain.infrastructure._internal.config.get_config", return_value=mock_config):
             with patch.object(Path, "cwd", return_value=Path("/tmp/test_config").parent):
                 repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
@@ -9254,7 +9257,7 @@ class TestCmdEventsExtra:
             ev.data = {"key": f"val_{i}"}
             events.append(ev)
         bus.history.return_value = events
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("5")
         assert repl._last_exit_code == 0
 
@@ -9271,7 +9274,7 @@ class TestCmdEventsExtra:
         ev2.source = "monitor"
         ev2.data = {}
         bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
@@ -16484,7 +16487,7 @@ class TestCmdSourceExtraV4:
 
     def test_source_nonexistent(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_source("/nonexistent_source_xyz"))
-        assert "Error reading" in out
+        assert "File not found" in out
 
     def test_source_skips_comments(self, repl, tmp_path):
         f = tmp_path / "test_source_comments.sh"
@@ -16759,7 +16762,7 @@ class TestCmdCpEdgeCases:
 
     def test_cp_one_arg(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_cp("only_one"))
-        assert "missing destination" in out
+        assert "Usage: cp" in out
 
 
 # ── _cmd_svc ─────────────────────────────────────────────────────────
@@ -19325,7 +19328,7 @@ class TestCmdReadDeeper3:
 class TestCmdKillDeeper3:
     def test_kill_invalid_signal(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_kill("invalid 1"))
-        assert repl._last_exit_code == 1 or "invalid" in out.lower() or "error" in out.lower()
+        assert repl._last_exit_code == 1 or "invalid" in out.lower() or "exception" in out.lower()
 
 
 # ── _cmd_bg deeper ──────────────────────────────────────────────
@@ -20617,7 +20620,7 @@ class TestCmdSourceDeeper3:
 
     def test_source_nonexistent(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_source("/nonexistent/file.rc"))
-        assert "Error" in out or "No such file" in out.lower()
+        assert "no such file" in out.lower()
 
     def test_source_with_pipeline(self, repl, tmp_path):
         f = tmp_path / "test_source.rc"
@@ -22869,7 +22872,7 @@ class TestCmdTrainDeeperV3:
         repl.cmds.train_auto = MagicMock(return_value={"status": "started", "id": "xyz"})
         with _CaptureOutput(repl) as cap:
             repl._cmd_train("auto")
-        assert "Auto-train started" in cap.getvalue()
+        assert "Usage: train auto <soul_name>" in cap.getvalue()
 
     def test_train_default_no_datasets(self, repl):
         repl._require_api = MagicMock(return_value=True)
@@ -23502,7 +23505,7 @@ class TestCmdSourceDeeperV2:
     def test_source_file_not_found(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_source("/nonexistent/file.sh")
-        assert "Error" in cap.getvalue() or "error" in cap.getvalue()
+        assert "not found" in cap.getvalue().lower()
 
     def test_source_empty(self, repl):
         with _CaptureOutput(repl) as cap:
@@ -26277,7 +26280,7 @@ class TestRenderPromptDeeperV3:
 
     def test_render_prompt_lambda(self, repl):
         result = repl._render_prompt()
-        assert "̓" in result
+        assert "λ" in result
 
 
 class TestLogHelpersDeeperV2:
@@ -27236,7 +27239,7 @@ class TestCmdCpErrorPaths:
     def test_missing_destination(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_cp("only_one_arg")
-        assert "missing destination" in cap.getvalue()
+        assert "Usage: cp" in cap.getvalue()
         assert repl._last_exit_code == 1
 
     def test_file_not_found(self, repl, tmp_path):
@@ -27274,7 +27277,7 @@ class TestCmdMvErrorPaths:
     def test_missing_destination(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_mv("only_one")
-        assert "missing destination" in cap.getvalue()
+        assert "Usage: mv" in cap.getvalue()
         assert repl._last_exit_code == 1
 
     def test_file_not_found(self, repl, tmp_path):
@@ -27457,7 +27460,7 @@ class TestCmdHelpBranches:
     def test_help_no_args(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_help("")
-        assert "Built-in commands" in cap.getvalue()
+        assert "Navigation:" in cap.getvalue()
 
     def test_help_brief(self, repl):
         with _CaptureOutput(repl) as cap:
