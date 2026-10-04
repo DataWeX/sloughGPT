@@ -281,3 +281,61 @@ class TestCLI:
         code, out = _run(tmp_path)
         assert code == 0
         assert "usage:" in out
+
+
+# ── Column vocabulary ──────────────────────────────────────────────────────
+
+
+class TestColumnValidation:
+    """The column name is a primary key: every write path must reject retired
+    or misspelled spellings (in_progress, in-progress, TODO) so the board
+    can never drift away from its schema header again."""
+
+    def test_add_rejects_retired_spelling(self, store):
+        with pytest.raises(ValueError, match="Invalid column: in_progress"):
+            store.add_card("Legacy", column="in_progress")
+
+    def test_add_rejects_case_drift(self, store):
+        with pytest.raises(ValueError, match="Invalid column: TODO"):
+            store.add_card("Shouty", column="TODO")
+
+    def test_add_accepts_canonical_wip(self, store):
+        card = store.add_card("Real work", column="wip")
+        assert card.column == "wip"
+
+    def test_rejected_add_writes_nothing(self, store):
+        with pytest.raises(ValueError):
+            store.add_card("Ghost", column="in_progress")
+        assert store.load_board().cards == []
+
+    def test_move_rejects_unknown_column_and_leaves_card(self, store):
+        card = store.add_card("Mover", column="todo")
+        with pytest.raises(ValueError, match="Invalid column: in-progress"):
+            store.move_card(card.id, "in-progress")
+        assert store.get_card(card.id).column == "todo"
+
+    def test_update_column_rejects_unknown_and_leaves_card(self, store):
+        card = store.add_card("Updater", column="todo")
+        with pytest.raises(ValueError, match="Invalid column: in_progress"):
+            store.update_card(card.id, column="in_progress")
+        assert store.get_card(card.id).column == "todo"
+
+    def test_valid_move_still_works(self, store):
+        card = store.add_card("Mover", column="todo")
+        assert store.move_card(card.id, "review") is True
+        assert store.get_card(card.id).column == "review"
+
+    def test_cli_add_rejects_unknown_column(self, tmp_path):
+        code, _ = _add(tmp_path, "Nope", "--column", "in_progress")
+        assert code == 1
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        assert store.load_board().cards == []
+
+    def test_cli_move_rejects_unknown_column(self, tmp_path):
+        code, _ = _add(tmp_path, "Mover")
+        assert code == 0
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        card = store.load_board().cards[0]
+        code, _ = _run(tmp_path, "board", "move", card.id, "in_progress")
+        assert code == 1
+        assert store.get_card(card.id).column == "todo"

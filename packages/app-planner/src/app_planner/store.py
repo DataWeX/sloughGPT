@@ -421,6 +421,42 @@ class PlannerStore:
                 board.cards.append(Card.from_dict(obj))
         return board
 
+    def column_names(self) -> list[str]:
+        """The board's column vocabulary, read from its schema header.
+
+        Stops at the first ``planner/1`` header line (normally line 1) and
+        skips other lines with a cheap substring test, so ``add_card`` — the
+        hot path measured by ``scripts/benchmark_board_write.py`` — never
+        pays a full-board decode just to check a spelling. A board with no
+        header falls back to the defaults ``_append_card`` would insert.
+        """
+        if self._board_file.exists():
+            with self._board_file.open(encoding="utf-8") as fh:
+                for raw in fh:
+                    if '"schema"' not in raw:
+                        continue
+                    try:
+                        obj = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    if obj.get("schema") == "planner/1" and obj.get("columns"):
+                        return [c.get("name") for c in obj["columns"]]
+        return [c["name"] for c in Board().columns]
+
+    def validate_column(self, column: str) -> str:
+        """Return *column* when it names a real board column, else raise.
+
+        The single source of truth for the column vocabulary: every write
+        path (CLI add/move, ``update_card``, sync) funnels through here, so a
+        retired or misspelled spelling — ``in_progress``, ``in-progress``,
+        ``TODO`` — can never enter the board again. Reads are untouched:
+        listing a stale column still filters, it just cannot be written.
+        """
+        valid = self.column_names()
+        if column not in valid:
+            raise ValueError(f"Invalid column: {column}. Valid: {', '.join(valid)}")
+        return column
+
     def save_board(self, board: Board) -> None:
         self._write_board(board)
 
@@ -443,6 +479,7 @@ class PlannerStore:
         gh: str = "",
         card_type: str = "",
     ) -> Card:
+        self.validate_column(column)
         now = datetime.now(UTC).isoformat()
         card = Card(
             id=str(uuid.uuid4()),
@@ -463,6 +500,8 @@ class PlannerStore:
         return card
 
     def update_card(self, card_id: str, **kwargs: Any) -> Card | None:
+        if "column" in kwargs:
+            self.validate_column(kwargs["column"])
         board = self.load_board()
         for card in board.cards:
             if card.id == card_id:
@@ -478,6 +517,7 @@ class PlannerStore:
         return self._surgical_rewrite({card_id: None}) > 0
 
     def move_card(self, card_id: str, to_column: str) -> bool:
+        self.validate_column(to_column)
         board = self.load_board()
         for card in board.cards:
             if card.id == card_id:
