@@ -447,9 +447,23 @@ class Pool:
                     stem.complete()
                 with self._lock:
                     self._stems.pop(stem.id, None)
-                if not self._stems:
-                    self.status = PoolStatus.IDLE
+                    if self._idle_locked():
+                        self.status = PoolStatus.IDLE
         return proc.result
+
+    def _idle_locked(self) -> bool:
+        """True when the pool has nothing in flight. Call with ``_lock`` held.
+
+        Idle means *no work anywhere*, not merely "no stem registered": a
+        ``branch()`` holding a reservation sits between its blocking admit and
+        its registration, so ``_stems`` alone reads empty while work is
+        arriving. Testing only ``_stems`` flips the pool to IDLE only for it
+        to go BRANCHING again microseconds later. Extracted as a predicate
+        because the flap cannot be provoked reliably from outside -- the
+        blocked branch unblocks within ``_RETRY_INTERVAL`` of anything
+        retiring -- and a race-based test would pass for the wrong reason.
+        """
+        return not self._stems and not self._reserved
 
     def wait_stem(self, stem: Stem, timeout: float | None = None) -> Stem:
         stem._done_event.wait(timeout=timeout)

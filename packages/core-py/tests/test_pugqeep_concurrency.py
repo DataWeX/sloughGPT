@@ -246,6 +246,41 @@ def test_concurrent_branch_never_exceeds_max_stems():
         engine.stop()
 
 
+def test_pool_idle_predicate_counts_reservation_as_in_flight():
+    """IDLE means *nothing in flight* -- and a reservation is in flight.
+
+    _execute decided IDLE from ``_stems`` alone. A branch() parked between
+    its blocking admit() and its registration is counted in ``_reserved`` but
+    absent from ``_stems``, so the last retiring stem marked the pool IDLE
+    while work was arriving, only for it to go BRANCHING microseconds later.
+
+    The flap is deliberately pinned on the predicate rather than provoked:
+    the blocked branch unblocks within ``_RETRY_INTERVAL`` (50 ms) of
+    anything retiring, so an end-to-end reproduction is a race that would
+    pass for the wrong reason on a fast machine.
+    """
+    engine = Engine("idle")
+    pool = engine.pool("t", max_stems=4, pool_workers=1)
+    try:
+        with pool._lock:
+            assert pool._idle_locked() is True, "an empty pool has nothing in flight"
+
+            # A branch has crossed the capacity check and is inside the
+            # blocking admit(): reserved, but not yet registered.
+            pool._reserved = 1
+            assert pool._idle_locked() is False, (
+                "a reservation is work in flight; the pool is not idle"
+            )
+
+            pool._reserved = 0
+            pool._stems["stem-x"] = object()
+            assert pool._idle_locked() is False, "a registered stem is not idle"
+    finally:
+        with pool._lock:
+            pool._reserved = 0
+        engine.stop()
+
+
 # ════════════════════════════════════════════════════════════════
 # _completed drain
 # ════════════════════════════════════════════════════════════════

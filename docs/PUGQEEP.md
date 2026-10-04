@@ -418,6 +418,16 @@ changed size during iteration`, and `dispatch()` therefore _merges_ into
   `_pending` rather than replacing it — a wholesale replace drops any spawn
   landing mid-classification from the queue for good, leaving a process that is
   registered, never dispatched, and waited on until `wait_for()` times out.
+- `Pool` guards `_stems` but **drops its lock across the blocking `admit()`** —
+  holding it through a blocking put would serialise every other operation on
+  the pool. That splits the capacity check from the registration, so two
+  `branch()` calls racing could both pass the check and both register,
+  overshooting `max_stems`. `branch()` reserves a slot for that window instead:
+  the bound `len(_stems) + _reserved <= max_stems` holds at every instant, and
+  the reservation is released on commit or on any failure path. The same
+  reservation decides liveness — `_idle_locked()` counts a reserved-but-
+  unregistered branch as work in flight, so the pool does not report `IDLE`
+  while a `branch()` is still arriving.
 - `TaskQueue` operations are atomic (single-threaded dispatch)
 
 ## Integration with CancelManager
