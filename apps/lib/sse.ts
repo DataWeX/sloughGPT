@@ -1,6 +1,6 @@
-import { logger } from '../dev-log'
-import { useAuthStore } from '../auth'
-import { consumeSSEChunk, consumeSSEDrain } from '../sse-client'
+import { logger } from '../web/lib/dev-log'
+import { useAuthStore } from '../web/lib/auth'
+import { consumeSSEChunk, consumeSSEDrain } from '../web/lib/sse-client'
 import { _corrId, _trackCorrId } from './corr-id'
 import { _resolveUrl } from './url'
 

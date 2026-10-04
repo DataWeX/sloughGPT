@@ -2,7 +2,8 @@
 // http — public surface of the split http-client
 // ═══════════════════════════════════════════════════════════════════════════
 //
-// This barrel is the ONLY thing re-exported by ../http-client.ts (the facade).
+// This barrel is the ONLY thing re-exported by apps/web/lib/http-client.ts
+// (the facade).
 // The export set below is kept byte-equivalent to the pre-split http-client:
 // internal helpers (_resolveUrl, _corrId, state singletons, …) stay private
 // to this directory on purpose.
