@@ -43,8 +43,8 @@
       "prettier --write"
     ],
     "*.py": [
-      ".venv/bin/ruff check --fix",
-      ".venv/bin/ruff format"
+      "/home/mana/miniconda3/envs/sloughgpt/bin/ruff check --fix",
+      "/home/mana/miniconda3/envs/sloughgpt/bin/ruff format"
     ],
     "*.{json,md}": [
       "prettier --write"
