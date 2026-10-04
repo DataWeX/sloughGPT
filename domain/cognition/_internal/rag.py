@@ -243,8 +243,9 @@ class HybridRetriever:
         """
         logger.debug("Retrieving for query (len=%d), top_k=%d", len(query), top_k)
 
-        # Get results from both methods (dense skipped when disabled —
-        # fusion below then reduces to the sparse term, unchanged math).
+        # Get results from both methods. With dense disabled the fusion
+        # below must renormalise over the sparse channel alone — see the
+        # weight handling where combined scores are calculated.
         dense_results = self._dense_search(query, top_k * 2) if self.use_dense else []
         sparse_results = self._sparse_search(query, top_k * 2)
 
@@ -271,10 +272,19 @@ class HybridRetriever:
                 combined_scores[doc_id] = {"dense": 0, "sparse": 0}
             combined_scores[doc_id]["sparse"] = score / max_sparse
 
-        # Calculate combined scores
+        # Calculate combined scores. Weights are renormalised over the
+        # channels actually in play: a disabled channel contributes a
+        # constant 0, so applying its full weight anyway would cap every
+        # score at (1 - its weight) — sparse-only retrieval would top out
+        # at 0.3 and no result could ever clear a min_score >= 0.5
+        # (HallucinationDetector.detect's gate), making grounding
+        # structurally impossible. Renormalising keeps combined_score a
+        # calibrated 0..1 confidence regardless of which channels run.
+        w_dense = self.dense_weight if self.use_dense else 0.0
+        w_total = (w_dense + self.sparse_weight) or 1.0
         results = []
         for doc_id, scores in combined_scores.items():
-            combined = self.dense_weight * scores["dense"] + self.sparse_weight * scores["sparse"]
+            combined = (w_dense * scores["dense"] + self.sparse_weight * scores["sparse"]) / w_total
             results.append(
                 RetrievalResult(
                     chunk=self.chunks[doc_id],

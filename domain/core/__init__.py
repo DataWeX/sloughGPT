@@ -91,6 +91,7 @@ __all__ = [
     "default_report_path",
     "run_doctor",
     "DoctorReport",
+    "default_report_path",
 ]
 
 
