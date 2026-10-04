@@ -9,6 +9,7 @@ vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => {
     const h = mockHealthState()
     if (h === 'offline') return { connectionStatus: 'offline', health: null, healthLegacy: 'offline', lastUpdate: null, failureCount: 1, connected: false, live: false }
+    if (h === 'error') return { connectionStatus: 'error', health: null, healthLegacy: null, lastUpdate: null, failureCount: 6, connected: false, live: false }
     if (h === null) return { connectionStatus: 'connecting', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0, connected: false, live: false }
     return { connectionStatus: 'connected', health: h, healthLegacy: h, lastUpdate: Date.now(), failureCount: 0, connected: true, live: true }
   },
@@ -141,6 +142,14 @@ describe('StatusBar', () => {
     mockHealthState.mockReturnValue('offline')
     render(<StatusBar />)
     expect(screen.getByText(/Offline/)).toBeDefined()
+  })
+
+  it('shows the recoverable not-responding status when reload protection engaged', () => {
+    mockHealthState.mockReturnValue('error')
+    render(<StatusBar />)
+    // 'error' must not fall through to the healthy branch ("No model").
+    expect(screen.getByText(/Not responding — retrying/)).toBeDefined()
+    expect(screen.queryByText('No model')).toBeNull()
   })
 
   it('does not re-fetch soul on health-only ticks', async () => {
