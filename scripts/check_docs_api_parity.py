@@ -135,8 +135,10 @@ def _kw_str(call: ast.Call, name: str, default: str | None = None) -> str | None
 
 def _kw_bool(call: ast.Call, name: str, default: bool) -> bool:
     for kw in call.keywords:
-        if kw.arg == name and isinstance(kw.value, ast.Constant) and isinstance(
-            kw.value.value, bool
+        if (
+            kw.arg == name
+            and isinstance(kw.value, ast.Constant)
+            and isinstance(kw.value.value, bool)
         ):
             return kw.value.value
     return default
