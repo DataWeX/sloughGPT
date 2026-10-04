@@ -234,7 +234,32 @@ fn build_router(state: AppState) -> Router {
         let spa = Router::new()
             .fallback(serve_document)
             .with_state(state.clone());
-        app = app.fallback_service(ServeDir::new(&static_root).fallback(spa));
+        // Method gate: tower-http's ServeDir answers 405 to anything that
+        // isn't GET/HEAD *without consulting its fallback*, so every mutating
+        // API call (POST/PUT/DELETE/PATCH) would die at the static layer.
+        // Reads get the static treatment; writes bypass it and relay.
+        use tower::{service_fn, Service as _};
+        let serve_dir = ServeDir::new(&static_root).fallback(spa);
+        let gate_state = state.clone();
+        app = app.fallback_service(service_fn(move |req: Request| {
+            let mut serve_dir = serve_dir.clone();
+            let st = gate_state.clone();
+            async move {
+                let is_read =
+                    matches!(*req.method(), axum::http::Method::GET | axum::http::Method::HEAD);
+                let resp = if is_read {
+                    match serve_dir.call(req).await {
+                        // ServeDir's body is its own type — erase it into the
+                        // axum body the rest of this service returns.
+                        Ok(r) => r.map(axum::body::Body::new),
+                        Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+                    }
+                } else {
+                    relay(st, req).await
+                };
+                Ok::<_, std::convert::Infallible>(resp)
+            }
+        }));
     } else if static_path.is_dir() {
         // Legacy assets-only mode (a Next build's /_next/static): keep the
         // old nesting, relay everything else — no document root to serve.
@@ -287,6 +312,13 @@ async fn serve_document(State(state): State<AppState>, req: Request) -> Response
         // index.html vanished at runtime — fall through rather than 404 a
         // navigation that the sidecar might still answer.
     }
+    relay(state, req).await
+}
+
+/// Byte-relay with the gateway error envelope — the data half of every miss
+/// (also the sole path for POST/PUT/DELETE/PATCH, which never see the static
+/// layer; see the method gate in `build_router`).
+async fn relay(state: AppState, req: Request) -> Response {
     match proxy_http(State(state), req).await {
         Ok(resp) => resp,
         Err(err) => err.into_response(),
@@ -710,6 +742,36 @@ mod tests {
         for path in ["/docs", "/docs/", "/redoc", "/openapi.json"] {
             assert!(!wants_document(&html, path), "{path} is API surface");
         }
+    }
+
+
+    #[tokio::test]
+    async fn writes_relay_through_the_document_root() {
+        // Regression guard: ServeDir 405s non-GET/HEAD without consulting its
+        // fallback — POST/PUT/DELETE/PATCH must bypass it (live symptom was
+        // POST /errors/logs/ingest -> 405 through the gateway vs 422 direct).
+        let dir = temp_site(&[("index.html", "<html>SPA-SHELL</html>")]);
+        let app = build_router(test_state(&dir));
+        for (method, path) in [
+            ("POST", "/errors/logs/ingest"),
+            ("PUT", "/models/load"),
+            ("DELETE", "/memory/kv/x"),
+            ("PATCH", "/settings/profile"),
+        ] {
+            let req = Request::builder()
+                .uri(path)
+                .method(method)
+                .header(axum::http::header::CONTENT_TYPE, "application/json")
+                .body(Body::from("{}"))
+                .expect("request");
+            let resp = app.clone().oneshot(req).await.expect("call");
+            assert_eq!(
+                resp.status(),
+                StatusCode::BAD_GATEWAY,
+                "{method} {path} must relay (dead sidecar -> 502), not die at ServeDir"
+            );
+        }
+        std::fs::remove_dir_all(&dir).ok();
     }
 
 }
