@@ -276,6 +276,7 @@ class StagedLoader:
 
     async def _run_hook(self, stage: Stage, name: str, hook: Callable, timeout: float) -> None:
         """Run a single hook with timeout and error isolation."""
+        from infrastructure.startup_profiler import get_profiler
         from infrastructure.startup_terminal import get_terminal_viz
 
         viz = get_terminal_viz()
@@ -287,7 +288,10 @@ class StagedLoader:
             info.start_time = time.monotonic()
 
         try:
-            await asyncio.wait_for(hook(), timeout=timeout)
+            # Profile only the hook await itself: wrapping the handlers below
+            # would let their swallowed exceptions report success=True.
+            with get_profiler().profile_hook(name):
+                await asyncio.wait_for(hook(), timeout=timeout)
             if info:
                 info.status = HookStatus.OK
                 info.end_time = time.monotonic()
