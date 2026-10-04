@@ -39,6 +39,8 @@ class Webhook:
     is_active: bool = True
     description: str = ""
     headers: dict[str, str] = field(default_factory=dict)
+    timeout: float = 10.0  # Per-webhook HTTP timeout (seconds)
+    retry_count: int = 3  # Delivery attempts inside deliver() per outcome
 
 
 @dataclass
@@ -57,6 +59,7 @@ class WebhookDelivery:
     attempt_count: int = 0
     next_retry_at: datetime | None = None
     dead_letter: bool = False
+    duration_ms: float = 0.0  # Wall-clock time of the delivery outcome (incl. backoff)
 
 
 class WebhookStore:
@@ -106,6 +109,8 @@ class WebhookStore:
             is_active=bool(doc.get("is_active", True)),
             created_at=parse_iso(doc["created_at"]) or datetime.now(UTC),
             headers=doc.get("headers") or {},
+            timeout=float(doc.get("timeout", 10.0)),
+            retry_count=int(doc.get("retry_count", 3)),
         )
 
     @property
@@ -137,6 +142,8 @@ class WebhookStore:
         secret: str | None = None,
         description: str = "",
         headers: dict[str, str] | None = None,
+        timeout: float = 10.0,
+        retry_count: int = 3,
     ) -> tuple[str, bool]:
         """Register a webhook idempotently.
 
@@ -182,6 +189,8 @@ class WebhookStore:
                     "is_active": True,
                     "created_at": now,
                     "headers": headers or {},
+                    "timeout": timeout,
+                    "retry_count": retry_count,
                 }
             )
 
@@ -242,12 +251,16 @@ class WebhookStore:
         webhook_id: str,
         event: str,
         payload: dict[str, Any],
-        timeout: float = 10.0,
-        retries: int = 3,
+        timeout: float | None = None,
+        retries: int | None = None,
         base_attempt_count: int = 0,
     ) -> WebhookDelivery:
         """Deliver a webhook event to the endpoint."""
         webhook = self.get(webhook_id)
+        # Per-webhook knobs: explicit caller args win, otherwise the registered
+        # webhook's config (legacy defaults: 10s timeout, 3 attempts).
+        timeout = timeout if timeout is not None else (webhook.timeout if webhook else 10.0)
+        retries = retries if retries is not None else (webhook.retry_count if webhook else 3)
         delivery = WebhookDelivery(
             id=hashlib.sha256(f"{webhook_id}{time.time()}".encode()).hexdigest()[:16],
             webhook_id=webhook_id,
@@ -290,6 +303,7 @@ class WebhookStore:
 
         # Deliver with retries
         last_error = None
+        started = time.perf_counter()
         for attempt in range(retries):
             delivery.attempt_count = base_attempt_count + attempt + 1
             try:
@@ -339,6 +353,7 @@ class WebhookStore:
                 delay = min(self._retry_base_delay * (2**attempt), self._max_retry_delay)
                 await asyncio.sleep(delay)
 
+        delivery.duration_ms = round((time.perf_counter() - started) * 1000, 2)
         if not delivery.success:
             delivery.error = last_error
             # Queue for background retry if we haven't exhausted all retries
@@ -576,14 +591,30 @@ TRAINING_EVENTS = [
 ]
 
 
-async def notify_training_event(
+def known_webhook_events() -> list[str]:
+    """Every event string the engine accepts: training + startup.
+
+    One registry, two domains (training/ and infrastructure/startup_webhooks).
+    The REST ``available_events`` view and the emit gate both read this list.
+    """
+    from infrastructure.startup_webhooks import WebhookEvent
+
+    return [*TRAINING_EVENTS, *(e.value for e in WebhookEvent)]
+
+
+async def notify_event(
     event: str,
     payload: dict[str, Any],
     sync: bool = False,
 ) -> list[WebhookDelivery]:
-    """Send notification to all matching webhooks."""
-    if event not in TRAINING_EVENTS:
-        logger.warning("Unknown training event: %s", event, extra={"tag": "TRAIN"})
+    """Send a notification to all webhooks registered for *event*.
+
+    Fire-and-forget by default (``sync=False``): each delivery runs as a
+    background task with the webhook's own timeout/retry knobs, so a slow
+    endpoint never blocks the caller — the boot path relies on this.
+    """
+    if event not in known_webhook_events():
+        logger.warning("Unknown webhook event: %s", event, extra={"tag": "TRAIN"})
         return []
 
     store = get_webhook_store()
@@ -600,11 +631,22 @@ async def notify_training_event(
     deliveries = []
     for webhook in matching_webhooks:
         if sync:
-            # Synchronous delivery
-            delivery = await store.deliver(webhook.id, event, payload, retries=1)
+            # Synchronous delivery — single attempt, caller waits (historical
+            # contract: test endpoints must not block on retry backoff).
+            delivery = await store.deliver(
+                webhook.id, event, payload, timeout=webhook.timeout, retries=1
+            )
         else:
-            # Fire and forget in background
-            asyncio.create_task(store.deliver(webhook.id, event, payload))
+            # Fire and forget in background, honoring the webhook's knobs.
+            asyncio.create_task(
+                store.deliver(
+                    webhook.id,
+                    event,
+                    payload,
+                    timeout=webhook.timeout,
+                    retries=webhook.retry_count,
+                )
+            )
             delivery = WebhookDelivery(
                 id="pending",
                 webhook_id=webhook.id,
@@ -614,3 +656,15 @@ async def notify_training_event(
         deliveries.append(delivery)
 
     return deliveries
+
+
+async def notify_training_event(
+    event: str,
+    payload: dict[str, Any],
+    sync: bool = False,
+) -> list[WebhookDelivery]:
+    """Send a training-event notification (delegates to :func:`notify_event`).
+
+    Kept as the historical entry point; accepts any known webhook event.
+    """
+    return await notify_event(event, payload, sync)
