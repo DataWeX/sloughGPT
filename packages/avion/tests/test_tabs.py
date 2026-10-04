@@ -2,7 +2,7 @@
 
 import asyncio
 
-from arken.tabs import TabManager, TabState
+from avion.tabs import TabManager, TabState
 
 
 def run(coro):

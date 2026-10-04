@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from arken.ai.models import Action, Step, Trajectory
+from avion.ai.models import Action, Step, Trajectory
 
 
 @dataclass

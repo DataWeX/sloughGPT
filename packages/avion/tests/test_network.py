@@ -3,7 +3,7 @@
 import asyncio
 import time
 
-from arken.network import (
+from avion.network import (
     MockPriority,
     MockResponse,
     MockRule,

@@ -84,7 +84,7 @@ class Verifier:
                 if find is None:
                     failed.append("no finder for element_present")
                     continue
-                from arken.events.replay import parse_locator
+                from avion.events.replay import parse_locator
 
                 locator = parse_locator(check.value)
                 if locator is None:

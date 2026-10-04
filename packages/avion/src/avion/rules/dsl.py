@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from arken.rules.engine import Rule, RuleAction
+from avion.rules.engine import Rule, RuleAction
 
 
 def _when(spec: dict[str, Any]):

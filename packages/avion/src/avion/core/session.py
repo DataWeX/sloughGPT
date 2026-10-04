@@ -16,16 +16,16 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from arken.core.element import Backend, Element, ElementFinder, ElementLocator
-from arken.core.navigator import Navigator
-from arken.core.reporter import Reporter
-from arken.core.task import Task, TaskResult, TaskStatus
-from arken.events.models import EventType
-from arken.events.recorder import EventRecorder
-from arken.interact.primitives import Keyboard, Mouse
-from arken.logging.structured import StructuredLogger
-from arken.rules.engine import Rule, RuleEngine
-from arken.waits.smart import SmartWaiter, WaitConfig
+from avion.core.element import Backend, Element, ElementFinder, ElementLocator
+from avion.core.navigator import Navigator
+from avion.core.reporter import Reporter
+from avion.core.task import Task, TaskResult, TaskStatus
+from avion.events.models import EventType
+from avion.events.recorder import EventRecorder
+from avion.interact.primitives import Keyboard, Mouse
+from avion.logging.structured import StructuredLogger
+from avion.rules.engine import Rule, RuleEngine
+from avion.waits.smart import SmartWaiter, WaitConfig
 
 
 @dataclass
@@ -69,7 +69,7 @@ class Arken:
         """
         if backend is None:
             if self.config.backend == "playwright":
-                from arken.backends.playwright import PlaywrightBackend
+                from avion.backends.playwright import PlaywrightBackend
 
                 backend = PlaywrightBackend(headless=self.config.headless)
             else:
@@ -81,7 +81,10 @@ class Arken:
         self._mouse = Mouse(self._backend)  # type: ignore[arg-type]
         self._keyboard = Keyboard(self._backend)  # type: ignore[arg-type]
         self._recorder.record(EventType.SESSION_STARTED, name="session_start")
-        self._logger.info("Arken session started (backend=%s)", self._backend.name)
+        # StructuredLogger.info(message, **fields) — not stdlib %-args.
+        # ef58a0c9c passed a positional %s arg while the suite was
+        # uncollectable, so nothing caught the TypeError.
+        self._logger.info("Arken session started", backend=self._backend.name)
 
     async def stop(self) -> None:
         """Shut down the backend."""

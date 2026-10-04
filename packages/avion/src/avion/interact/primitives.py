@@ -6,7 +6,7 @@ blocks for computer-use style automation.
 
 Usage::
 
-    from arken.interact import Mouse, Keyboard, Coordinate
+    from avion.interact import Mouse, Keyboard, Coordinate
 
     mouse = Mouse(backend)
     await mouse.move_to(Coordinate(500, 300))

@@ -1,7 +1,7 @@
 """Debug tests — capture, step, diff."""
 
 import pytest
-from arken.debug import PageSnapshot, TimeTravel
+from avion.debug import PageSnapshot, TimeTravel
 
 
 class TestSnapshots:

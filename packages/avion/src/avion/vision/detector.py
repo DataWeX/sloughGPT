@@ -28,7 +28,7 @@ class MatchMethod(Enum):
 class VisualMatch:
     """A region found in a screenshot."""
 
-    bbox: Any  # BoundingBox from arken.interact.primitives
+    bbox: Any  # BoundingBox from avion.interact.primitives
     confidence: float = 1.0
     method: MatchMethod = MatchMethod.HASH
     label: str = ""
@@ -105,7 +105,7 @@ class ImageAnalyzer:
         if Image is None:
             return []
         try:
-            from arken.interact.primitives import BoundingBox
+            from avion.interact.primitives import BoundingBox
 
             img = Image.open(io.BytesIO(data))
             words = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
@@ -143,7 +143,7 @@ class ImageAnalyzer:
         if Image is None:
             return []
         try:
-            from arken.interact.primitives import BoundingBox
+            from avion.interact.primitives import BoundingBox
 
             img = np.array(Image.open(io.BytesIO(screenshot)).convert("L"))
             tpl = np.array(Image.open(io.BytesIO(template)).convert("L"))

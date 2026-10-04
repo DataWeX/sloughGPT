@@ -1,6 +1,6 @@
 """Network package — request mocking for tests."""
 
-from arken.network.mocker import (
+from avion.network.mocker import (
     MockPriority,
     MockResponse,
     MockRule,

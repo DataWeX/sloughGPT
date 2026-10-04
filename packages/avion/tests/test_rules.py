@@ -2,7 +2,7 @@
 
 import asyncio
 
-from arken.rules import Rule, RuleAction, RuleEngine, rules_from_dict
+from avion.rules import Rule, RuleAction, RuleEngine, rules_from_dict
 
 
 def run(coro):

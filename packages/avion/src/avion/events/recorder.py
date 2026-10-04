@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
-from arken.events.models import Event, EventType
+from avion.events.models import Event, EventType
 
 
 class EventRecorder:

@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from arken.core.element import (
+from avion.core.element import (
     Element,
     ElementLocator,
     SelectorStrategy,
@@ -133,7 +133,7 @@ class PlaywrightBackend:
         import json as _json
 
         async def handler(route) -> None:
-            from arken.network.mocker import NetworkRequest
+            from avion.network.mocker import NetworkRequest
 
             req = route.request
             resp = await self._mocker.intercept(

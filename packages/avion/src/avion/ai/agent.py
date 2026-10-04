@@ -12,8 +12,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
-from arken.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
-from arken.ai.models import (
+from avion.ai.learning import Experience, ExperienceBuffer, FeedbackLoop
+from avion.ai.models import (
     Action,
     ActionType,
     EchoModel,
@@ -22,13 +22,14 @@ from arken.ai.models import (
     VisionModel,
     validate_action,
 )
-from arken.ai.verifier import Verifier
-from arken.interact.primitives import (
+from avion.ai.tools import ToolExecutor, ToolRegistry, normalize_result
+from avion.ai.verifier import Verifier
+from avion.interact.primitives import (
     Coordinate,
     Keyboard,
     Mouse,
 )
-from arken.vision.detector import ImageAnalyzer, MatchMethod, VisualMatch
+from avion.vision.detector import ImageAnalyzer, MatchMethod, VisualMatch
 
 
 @dataclass
@@ -101,12 +102,16 @@ class Agent:
         base_url: str = "http://localhost:3000",
         api_url: str = "http://localhost:8000",
         headless: bool = True,
+        tools: ToolRegistry | None = None,
+        executor: ToolExecutor | None = None,
     ):
         self._model = model or EchoModel()
         self._config = config or AgentConfig()
         self._base_url = base_url
         self._api_url = api_url
         self._headless = headless
+        self._tools = tools
+        self._executor = executor
 
         self._backend = None
         self._mouse: Mouse | None = None
@@ -158,7 +163,7 @@ class Agent:
                      Defaults to a headless PlaywrightBackend.
         """
         if backend is None:
-            from arken.backends.playwright import PlaywrightBackend
+            from avion.backends.playwright import PlaywrightBackend
 
             backend = PlaywrightBackend(headless=self._headless)
         self._backend = backend
@@ -429,6 +434,29 @@ class Agent:
                 await self._backend.navigate(url)
                 self._current_url = url
                 result["observation"] = f"Navigated to {url}"
+
+            elif at == ActionType.TOOL_CALL:
+                name = str(params.get("tool", ""))
+                spec = self._tools.get(name) if self._tools is not None else None
+                if spec is None:
+                    result["observation"] = f"Unknown tool: {name}"
+                    result["reward"] = -0.1
+                elif spec.requires_approval:
+                    result["observation"] = f"Tool '{name}' needs approval"
+                    result["reward"] = 0.0
+                elif self._executor is None:
+                    result["observation"] = f"No executor for tool '{name}'"
+                    result["reward"] = 0.0
+                else:
+                    try:
+                        raw = await self._executor.run(name, params.get("args") or {})
+                    except Exception as e:
+                        result["observation"] = f"error: {e}"
+                        result["reward"] = -0.5
+                    else:
+                        text, ok = normalize_result(raw)
+                        result["observation"] = text
+                        result["reward"] = 0.5 if ok else -0.5
 
             elif at == ActionType.DONE:
                 result["observation"] = "Task completed"
