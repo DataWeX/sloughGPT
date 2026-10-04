@@ -267,6 +267,10 @@ detail under the grandfather rule until the unified `mole` CLI lands.
 - **Placement:** wiring lives in `domain/core/_internal/doctor/` (the
   "body of the system" — system-level ops); probes are seams onto the
   core components.
+- **Surface strategy:** ambient/float — no web section or widget; silently
+  journaled ticks, change-only events, and a floating presence only
+  if/when a web surface is explicitly approved. Gets things done, then
+  stays out of your hair.
 
 ```bash
 # Full summary (~15s, no browser):                        exit 0/1/2
