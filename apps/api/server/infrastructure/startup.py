@@ -528,6 +528,16 @@ class StartupOrchestrator:
         except Exception:
             logger.warning("finish_history finalizer failed", exc_info=True)
 
+        # 10: close the startup profile — the top-level totals (total_hooks /
+        # total_success / total_failure) are only computed by finish(), which
+        # otherwise had zero callers, so health.startup_profile served zeros.
+        try:
+            from infrastructure.startup_profiler import get_profiler
+
+            get_profiler().finish()
+        except Exception:
+            logger.warning("profiler finish finalizer failed", exc_info=True)
+
         # 11: print the terminal summary ("✓ Ready in X.Xs (N hooks)")
         try:
             from infrastructure.startup_terminal import get_terminal_viz

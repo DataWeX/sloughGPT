@@ -100,7 +100,6 @@ class StartupProfiler:
     def __init__(self) -> None:
         self._profile = StartupProfile(timestamp=time.time())
         self._current_stage: StageProfile | None = None
-        self._current_hook: HookMetrics | None = None
 
     def start_stage(self, stage_name: str) -> None:
         """Begin profiling a new stage."""
@@ -128,13 +127,13 @@ class StartupProfiler:
     def profile_hook(self, hook_name: str) -> Generator[HookMetrics, None, None]:
         """Context manager to profile a hook."""
         hook = HookMetrics(name=hook_name, start_time=time.perf_counter())
-        self._current_hook = hook
 
         try:
             yield hook
         except Exception as e:
             hook.success = False
-            hook.error = str(e)
+            # Bare TimeoutError stringifies to "" — keep the class name.
+            hook.error = str(e) or type(e).__name__
             raise
         finally:
             hook.end_time = time.perf_counter()
@@ -142,8 +141,6 @@ class StartupProfiler:
 
             if self._current_stage:
                 self._current_stage.hooks.append(hook)
-
-            self._current_hook = None
 
             if hook.success:
                 logger.debug("Hook %s completed in %.1fms", hook_name, hook.duration_ms)
@@ -179,24 +176,37 @@ class StartupProfiler:
         return self._profile
 
     def get_summary(self) -> dict:
-        """Get a human-readable summary of the startup profile."""
-        profile = self.finish()
-        summary = {
-            "total_ms": round(profile.total_duration_ms, 1),
-            "total_hooks": profile.total_hooks,
-            "stages": [],
-        }
+        """Get a human-readable summary of the startup profile.
 
-        for stage in profile.stages:
-            stage_summary = {
-                "name": stage.name,
-                "ms": round(stage.total_duration_ms, 1),
-                "hooks": stage.hook_count,
-                "slowest": stage.slowest_hook,
-            }
-            summary["stages"].append(stage_summary)
+        Non-mutating: safe to call while a stage is still running (the
+        ``health.startup_profile`` endpoint hits it mid-boot). The previous
+        implementation called ``finish()``, which closed the *open* stage —
+        so any health call during boot silently dropped in-flight hook
+        timings. An open stage derives its totals from the hooks recorded
+        so far instead.
+        """
+        stages: list[dict] = []
+        total_ms = 0.0
+        total_hooks = 0
+        for stage in self._profile.stages:
+            hooks = stage.hooks
+            ms = stage.total_duration_ms or sum(h.duration_ms for h in hooks)
+            count = stage.hook_count or len(hooks)
+            slowest = stage.slowest_hook or (
+                max(hooks, key=lambda h: h.duration_ms).name if hooks else ""
+            )
+            total_ms += ms
+            total_hooks += count
+            stages.append(
+                {
+                    "name": stage.name,
+                    "ms": round(ms, 1),
+                    "hooks": count,
+                    "slowest": slowest,
+                }
+            )
 
-        return summary
+        return {"total_ms": round(total_ms, 1), "total_hooks": total_hooks, "stages": stages}
 
 
 _global_profiler: StartupProfiler | None = None
@@ -215,3 +225,13 @@ def reset_profiler() -> StartupProfiler:
     global _global_profiler
     _global_profiler = StartupProfiler()
     return _global_profiler
+
+
+def profile_hook(hook_name: str) -> Generator[HookMetrics, None, None]:
+    """Profile a hook on the global profiler (module-level convenience).
+
+    Matches the usage documented at the top of this module:
+    ``with profile_hook("db_pool") as hook: ...`` — previously the import
+    failed because only the bound method existed.
+    """
+    return get_profiler().profile_hook(hook_name)
