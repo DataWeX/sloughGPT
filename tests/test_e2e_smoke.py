@@ -50,7 +50,7 @@ def model_loaded(client):
     deadline = time.time() + 20
     while time.time() < deadline:
         resp = client.get("/health")
-        data = resp.json()
+        data = resp.json().get("data", {})
         if data.get("model_loaded"):
             return True
         time.sleep(1)
@@ -61,12 +61,13 @@ class TestHealth:
     def test_health_returns_200(self, client):
         resp = client.get("/health")
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "healthy"
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert payload["data"]["status"] == "healthy"
 
     def test_health_fields(self, client):
         resp = client.get("/health")
-        data = resp.json()
+        data = resp.json()["data"]
         for field in ("model_loaded", "model_type", "inference_count"):
             assert field in data, f"Missing field: {field}"
 
@@ -78,14 +79,15 @@ class TestSouls:
     def test_list_souls(self, client):
         resp = client.get("/souls")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "souls" in data
-        assert isinstance(data["souls"], list)
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert isinstance(payload["data"], list)
+        assert "current_soul" in payload["meta"]
 
     def test_current_soul(self, client):
         resp = client.get("/souls/current")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert isinstance(data, dict)
         assert "name" in data or "soul" in data
 
@@ -94,30 +96,29 @@ class TestModels:
     def test_list_models(self, client):
         resp = client.get("/models")
         assert resp.status_code == 200
-        models = resp.json()
+        models = resp.json()["data"]
         assert isinstance(models, list)
 
     def test_models_hf(self, client):
         resp = client.get("/models/hf")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "models" in data
-        assert isinstance(data["models"], list)
+        models = resp.json()["data"]
+        assert isinstance(models, list)
 
 
 class TestChatSessions:
     def test_sessions_list(self, client):
         resp = client.get("/chat/sessions")
         assert resp.status_code == 200
-        data = resp.json()
-        assert "sessions" in data
-        assert isinstance(data["sessions"], list)
+        sessions = resp.json()["data"]
+        assert isinstance(sessions, list)
 
     def test_create_session(self, client):
         resp = client.post("/chat/sessions", json={"session_id": "e2e-test-session"})
         assert resp.status_code == 200
-        data = resp.json()
-        assert data["status"] == "created"
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert payload["data"]["session_id"] == "e2e-test-session"
 
 
 class TestChatGenerate:
@@ -196,11 +197,13 @@ class TestTokenizer:
 
 class TestAutoTrain:
     def test_list_checkpoints(self, client):
-        resp = client.get("/auto-train/checkpoints")
+        # /auto-train/checkpoints was retired; the live route is
+        # /training/checkpoints and returns the standard envelope.
+        resp = client.get("/training/checkpoints")
         assert resp.status_code == 200
-        data = resp.json()
-        checkpoints = data.get("checkpoints") or data.get("data", [])
-        assert isinstance(checkpoints, list)
+        payload = resp.json()
+        assert payload["status"] == "success"
+        assert isinstance(payload["data"], list)
 
 
 class TestWorkflow:
