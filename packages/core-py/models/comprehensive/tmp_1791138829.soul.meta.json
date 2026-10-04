@@ -4,12 +4,12 @@
   "tagline": "",
   "description": "",
   "created_by": "SloughGPT Training Pipeline",
-  "born_at": "2026-10-04T18:33:47.842108Z",
+  "born_at": "2026-10-04T18:33:49.755378Z",
   "lineage": "sloughgpt",
   "base_model": "sloughgpt",
-  "training_dataset": "/tmp/tmp4xxanlpw.txt",
+  "training_dataset": "/tmp/tmp7mufw_xu.txt",
   "epochs_trained": 0,
-  "final_train_loss": 5.968901634216309,
+  "final_train_loss": 6.348451614379883,
   "final_val_loss": null,
   "dataset_signature": "",
   "personality": {
@@ -80,7 +80,7 @@
     "soul"
   ],
   "certifications": [],
-  "integrity_hash": "0010296fdf826ca9",
+  "integrity_hash": "42ebf1591cc36db2",
   "metadata": {
     "stoi": {
       " ": 0,
@@ -188,7 +188,7 @@
       "max_seq_len": 2048,
       "intermediate_size": 128
     },
-    "training_duration_s": 0.6,
+    "training_duration_s": 0.7,
     "avg_quality": 3.6,
     "training_state": {
       "step": 2,
@@ -197,7 +197,7 @@
       "accumulation_step": 0,
       "optimizer": {
         "hyperparameters": {
-          "lr": 0.0002,
+          "lr": 0.00019999999999999998,
           "b1": 0.9,
           "b2": 0.999,
           "eps": 1e-08,
@@ -211,9 +211,9 @@
       "scheduler": {
         "last_epoch": 2,
         "base_lrs": [
-          0.0002
+          0.00019999999999999998
         ],
-        "initial_lr": 0.0002
+        "initial_lr": 0.00019999999999999998
       }
     }
   }

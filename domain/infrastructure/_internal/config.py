@@ -35,9 +35,9 @@ class ModelConfig(BaseModel):
     device: str = "auto"
     max_length: int = 1024
     temperature: float = 0.7
-    top_p: float = 0.9
-    top_k: int = 50
-    repetition_penalty: float = 1.1
+    top_p: float = 0.85
+    top_k: int = 40
+    repetition_penalty: float = 1.15
     max_new_tokens: int = 200
     use_slonet: bool = False
     autoload: bool = True

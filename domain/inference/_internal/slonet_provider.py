@@ -1582,10 +1582,10 @@ class SloNetChatProvider:
         self,
         messages,
         max_tokens=512,
-        temperature=0.8,
+        temperature=0.7,
         top_k=None,
         top_p=None,
-        repetition_penalty=1.0,
+        repetition_penalty=1.15,
         session_id=None,
     ):
         """Synchronous generate with KV cache — called from chat() via to_thread."""

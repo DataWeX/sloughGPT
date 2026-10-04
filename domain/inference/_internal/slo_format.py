@@ -879,7 +879,7 @@ def generate_sample_dialogue(
         idx = np.array([[stoi.get(c, 0) for c in prompt]], dtype=np.int64)
         try:
             if hasattr(model, "generate"):
-                output = model.generate(idx, max_new_tokens=max_tokens, temperature=0.8)
+                output = model.generate(idx, max_new_tokens=max_tokens, temperature=0.7)
             elif hasattr(model, "forward"):
                 output = model.forward(idx)
             else:
