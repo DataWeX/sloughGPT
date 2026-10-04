@@ -285,17 +285,24 @@ except Exception as exc:
     logger.warning("AuthMiddleware skipped: %s", exc, extra={"op": "infra.startup"})
 
 # CORS must be outermost — added after all other middleware so it wraps them.
+# Two rules: an explicit origin list (LAN IPs, deployed domains) plus a
+# PROGRAMMATIC loopback rule — any localhost/127.0.0.1/[::1] origin on ANY
+# port. The list used to be ports-only (3000, 5173, 5175, 8000), so a fresh
+# dev port (5174) silently failed every fetch and SSE with
+# "No Access-Control-Allow-Origin" — the browser then reported a running
+# backend as dead. One regex, no per-port maintenance.
+# Set SLO_CORS_LOCAL_ORIGIN_REGEX= (empty) to disable the loopback rule.
+_CORS_LOCAL_ORIGIN_REGEX = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=os.environ.get(
-        # Vite dev servers (5173 default, 5175 our journey port) must be
-        # allowed or the browser frontend gets "Disallowed CORS origin" →
-        # NetworkError on every fetch.
         "SLO_CORS_ORIGINS",
         "http://localhost:3000,http://localhost:5173,http://localhost:5175,"
         "http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5175,"
         "http://localhost:8000",
     ).split(","),
+    allow_origin_regex=os.environ.get("SLO_CORS_LOCAL_ORIGIN_REGEX", _CORS_LOCAL_ORIGIN_REGEX),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

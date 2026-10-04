@@ -181,7 +181,7 @@ export function StartupOverlay() {
               })
               window.location.reload()
             }}
-            className="min-w-[6.5rem] px-5 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
+            className="px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
           >
             Retry
           </button>
