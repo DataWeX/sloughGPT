@@ -4,7 +4,14 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~10:05 — `feat/pugqeep-forkserver` **lands on
+**Last update**: 2026-10-04 ~10:15 — `feat/wip-column-rename` **lands on
+main** (fast-forward `3f8465164`, card `ffaea823` → done): the kanban column
+is **`wip`, never `in_progress`** — `config` maps both directions, the default
+column schemas in Python **and** TS, 4 test files, package README + planner
+specs, and 31 board rows re-keyed (3 `in-progress` orphans folded in) with the
+card hash chain re-sealed because `chain_hash_for()` hashes `column`.
+Gates: app-planner **185**, web planner **89**, tsc/ruff clean, chain `[]`.
+Hard cutover — no compat alias. Earlier ~10:05: `feat/pugqeep-forkserver` **lands on
 main** (merge `d996f8ebc`; cards `df5affc7`+`e69915c1` → done, notes → done):
 gate run #4 green 621F ≤ baseline 683F, playwright-class E 0, 0 timeouts, no
 hang; post-merge targeted re-run = identical F-set, E 0 (see Landed). Earlier ~05:30: `feat/landing-7-cards` lands (7
@@ -55,6 +62,28 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `344168b4f`)
 
+- **2026-10-04 · `feat/wip-column-rename` lands — the kanban column is `wip`,
+  never `in_progress` (hard cutover).** Card `ffaea823` → done; ff `3f8465164`
+  (`.wt-wip` worktree). The column name is a **primary key** joining card data,
+  `config.STATUS_TO_COLUMN`/`COLUMN_TO_STATUS`, the default schemas in Python
+  *and* TS (`store.py`, `kanban.py`, `apps/web` planner helpers/BuffetEngine/
+  types) and every card's `chain_hash` payload — all moved in one pass; 4 test
+  files, the package README and the planner specs follow. `migrate_boards.py`
+  / `migrate_planner.py` keep `in_progress` only as a **legacy source key**
+  mapping onto `wip` (a re-run must not resurrect it); `wip` beats `doing`
+  everywhere (110 note entries use `wip`, **zero** use `doing`, and the web GUI
+  already emitted `wip`). Data migrated byte-surgically — **952 card rows
+  preserved**, 31 renames incl. the 3 `in-progress` orphans — then re-sealed
+  with `compute_chains()` (the same call `sync()` makes by design) because
+  `chain_hash_for()` hashes `column`: 29 → 0 violations, and pristine main was
+  already 3-red (`[-1, 911, 912]`). Gates: app-planner **185 passed**, web
+  planner **89 passed**, tsc clean, ruff clean, 0 eslint errors, `board stats`
+  → `wip: 30`. **Gotchas:** (1) `.kanban/slot_history.jsonl` (root branch)
+  keys slots as `column:pos` *inside* `node_hash()` — an append-only ledger,
+  never rewrite its keys; (2) `board add` does **not** validate `--column`, so
+  a stale session can reintroduce `in_progress`; (3) the long-lived
+  `feat/create-router-projection` branch still carries `in_progress` and will
+  conflict on `config.py` when it merges main.
 - **2026-10-04 · `feat/pugqeep-forkserver` lands — fork→forkserver kills the
   fork-into-multithreaded class.** Cards `df5affc7` + `e69915c1` → done,
   notes → done; merge `d996f8ebc` (`.wt-l2` worktree):
