@@ -134,7 +134,7 @@ describe('StartupOverlay', () => {
     // Banner raised the moment we give up; the overlay is mid-fade.
     const banners = useBannerStore.getState().banners
     expect(banners).toHaveLength(1)
-    expect(banners[0].key).toBe('startup-degraded')
+    expect(banners[0].key).toBe('backend-connection')
     expect(banners[0].tone).toBe('warning')
     expect(banners[0].action?.label).toBe('Retry')
     expect(logStateEvent).toHaveBeenCalledWith('overlay_timeout', expect.anything())
@@ -203,7 +203,7 @@ describe('StartupOverlay', () => {
     })
     const banners = useBannerStore.getState().banners
     expect(banners).toHaveLength(1)
-    expect(banners[0].key).toBe('startup-degraded')
+    expect(banners[0].key).toBe('backend-connection')
 
     act(() => {
       vi.advanceTimersByTime(600)

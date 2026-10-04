@@ -21,6 +21,23 @@ describe('banner-store', () => {
     expect(banners[0].title).toBe('v2')
   })
 
+  it('keeps at most one banner — newest wins regardless of key', () => {
+    useBannerStore.getState().showBanner({ tone: 'info', title: 'a', key: 'x' })
+    useBannerStore.getState().showBanner({ tone: 'warning', title: 'b', key: 'y' })
+    const banners = useBannerStore.getState().banners
+    expect(banners).toHaveLength(1)
+    expect(banners[0].title).toBe('b')
+  })
+
+  it('dismissing a superseded banner leaves the current one showing', () => {
+    const first = useBannerStore.getState().showBanner({ tone: 'info', title: 'a' })
+    useBannerStore.getState().showBanner({ tone: 'warning', title: 'b' })
+    useBannerStore.getState().dismissBanner(first)
+    const banners = useBannerStore.getState().banners
+    expect(banners).toHaveLength(1)
+    expect(banners[0].title).toBe('b')
+  })
+
   it('clears all banners', () => {
     useBannerStore.getState().showBanner({ tone: 'info', title: 'a' })
     useBannerStore.getState().showBanner({ tone: 'info', title: 'b' })

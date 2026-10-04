@@ -99,7 +99,7 @@ export function StartupOverlay() {
         data: { progress_key: progressKey, timeout_ms: STALL_TIMEOUT_MS },
       })
       useBannerStore.getState().showBanner({
-        key: 'startup-degraded',
+        key: 'backend-connection',
         tone: 'warning',
         title: 'Backend not responding',
         message: 'The server did not respond in time — the app is running in degraded mode.',
@@ -162,10 +162,13 @@ export function StartupOverlay() {
           <ManMark className="h-12 w-12 rounded-2xl text-lg font-bold shadow-lg shadow-primary/20" />
         </div>
 
-        <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-5">Still connecting</h2>
+        <h2 className="text-[14px] font-medium text-[#c7c7cc] mb-3">Still connecting</h2>
 
-        <div role="alert" className="flex flex-wrap items-center justify-center gap-3">
-          <p className="text-[11px] text-[#febc2e] text-center">
+        {/* Centred column with a readable measure: the warning wraps to two
+            lines under the status instead of stretching edge-to-edge with the
+            action pinned to the far side of the screen. */}
+        <div role="alert" className="flex flex-col items-center gap-4">
+          <p className="max-w-[20rem] text-[11px] leading-relaxed text-[#febc2e]/70 text-center">
             No response from the server yet — check that the backend is running
           </p>
           <button
@@ -178,7 +181,7 @@ export function StartupOverlay() {
               })
               window.location.reload()
             }}
-            className="px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
+            className="min-w-[6.5rem] px-5 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
           >
             Retry
           </button>
@@ -210,13 +213,13 @@ export function StartupOverlay() {
         aria-valuemin={0}
         aria-valuemax={100}
         {...(isIndeterminate ? {} : { 'aria-valuenow': progressPct })}
-        className="w-48 h-1 rounded-full bg-[#1c1c1e] overflow-hidden mb-3"
+        className="w-48 h-1 rounded-full bg-[#0a7aff]/20 overflow-hidden mb-3"
       >
         {isIndeterminate ? (
-          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-gradient-to-r from-[#0a7aff] to-[#5856d6]" />
+          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-[#0a7aff]" />
         ) : (
           <div
-            className="h-full rounded-full bg-gradient-to-r from-[#0a7aff] to-[#5856d6] transition-all duration-300 ease-out"
+            className="h-full rounded-full bg-[#0a7aff] transition-all duration-300 ease-out"
             style={{ width: `${progressPct}%` }}
           />
         )}
