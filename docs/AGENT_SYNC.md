@@ -4,7 +4,25 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~16:45 — `fix/board-column-validation` **lands on
+**Last update**: 2026-10-04 ~19:20 — `fix/core-py-feedback-suite` **lands on
+main** (fast-forward `ce02af883`, card `37325860` → done): the 8 pre-existing
+feedback-suite failures are fixed, and **both clusters were test-vs-impl
+drift, not code bugs** — no production code changed. Cluster 1:
+`meta_weights.py:8` / `model_health.py:14` carry the `from __future__ import
+annotations` ratchet, so dataclasses record `f.type` as the *string*
+`"float"` and `assert f.type is float` could never hold; the tests now
+resolve with `typing.get_type_hints()` (repo-wide grep: no other file uses
+the f.type-identity pattern). Cluster 2: `k` defaults to **5** — schema,
+web controller (`k = 5`) and `meta-weights-controller.test.ts` all agree, the
+test's `10` was stale — and the router registers `/meta-weights/ping|get|stats`,
+exactly what `docs/routers.md` documents. Gates: the 2 files **153 passed**,
+ruff clean. Two findings for other cards: (a) the 3 health failures that
+surface next to them are pre-existing on pristine main *and* order-dependent
+(8 when run alone → 3 with siblings) → card `5473eb90`; (b) core-py's
+documented `-n auto` gate (`docs/TESTING.md:10`) cannot run here —
+**pytest-xdist is not installed** (install needs user approval), and the
+suite is 42,568 tests, so serial runs exceed 30 min.
+Earlier ~16:45: `fix/board-column-validation` **lands on
 main** (fast-forward `67c406ee2`, card `46f0fac4` → done): the column name is
 validated at the **core**, not at the CLI. `PlannerStore.validate_column()` is
 now the single source of truth and every write path funnels through it —
