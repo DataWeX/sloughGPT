@@ -62,6 +62,14 @@ interface SRInstance {
 const SILENCE_TIMEOUT_MS = 2000
 const AUTO_RESUME_DELAY_MS = 400
 const INTERRUPT_CHECK_MS = 100
+/**
+ * `micLevel` state is a UI-only, quantized signal (0.1 buckets) — emit it at
+ * most ~8x/s. The per-frame value lives on `micLevelRef`, which visuals sample
+ * on their own rAF loop, so React never re-renders the voice overlay at
+ * audio-frame rate.
+ */
+const MIC_LEVEL_EMIT_MS = 120
+const MIC_LEVEL_BUCKETS = 10
 
 // ── Voice Settings ────────────────────────────────────────────────────
 
@@ -182,6 +190,9 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   const abortControllerRef = useRef<AbortController | null>(null)
   const speakingRef = useRef(false)
   const audioMonitorRef = useRef(createAudioLevelMonitor())
+  /** Per-frame mic level (0–1) — read imperatively by visuals, never rendered from. */
+  const micLevelRef = useRef(0)
+  const lastMicLevelEmitRef = useRef(0)
   const micStreamRef = useRef<MediaStream | null>(null)
   const interruptCheckRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const settingsRef = useRef(settings)
@@ -238,7 +249,14 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       micStreamRef.current = stream
-      audioMonitorRef.current.onLevel = (level) => setMicLevel(level)
+      audioMonitorRef.current.onLevel = (level) => {
+        micLevelRef.current = level
+        const now = Date.now()
+        if (now - lastMicLevelEmitRef.current < MIC_LEVEL_EMIT_MS) return
+        lastMicLevelEmitRef.current = now
+        const bucketed = Math.round(level * MIC_LEVEL_BUCKETS) / MIC_LEVEL_BUCKETS
+        setMicLevel((prev) => (prev === bucketed ? prev : bucketed))
+      }
       audioMonitorRef.current.start(stream)
     } catch {
       // Mic not available — visual-only mode
@@ -248,6 +266,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   const stopMic = useCallback(() => {
     audioMonitorRef.current.stop()
     audioMonitorRef.current.onLevel = null
+    micLevelRef.current = 0
     setMicLevel(0)
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop())
@@ -589,6 +608,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
     errorMessage,
     conversation,
     micLevel,
+    micLevelRef,
     settings,
     availableVoices,
     updateSettings,

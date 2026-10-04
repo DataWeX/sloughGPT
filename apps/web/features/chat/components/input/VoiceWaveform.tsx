@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { cn } from '@sloughgpt/strui'
 
 interface VoiceWaveformProps {
@@ -84,80 +84,167 @@ export function VoiceWaveform({
   )
 }
 
+export type VoiceVisualState = 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
+
 /**
- * Circular pulsing orb for voice states.
- * Wraps children with animated rings based on state.
+ * Single source of truth for state -> color. The header status dot and the
+ * orb ring both read this map, so the two surfaces can never drift apart.
+ */
+export const VOICE_STATE_TONE: Record<
+  VoiceVisualState,
+  { dot: string; border: string; fill: string; pulse: boolean }
+> = {
+  idle: {
+    dot: 'bg-muted-foreground/30',
+    border: 'border-muted-foreground/20',
+    fill: 'color-mix(in srgb, rgb(var(--muted)) 75%, transparent)',
+    pulse: false,
+  },
+  listening: {
+    dot: 'bg-primary',
+    border: 'border-primary',
+    fill: 'color-mix(in srgb, rgb(var(--primary)) 16%, transparent)',
+    pulse: true,
+  },
+  processing: {
+    dot: 'bg-warning',
+    border: 'border-warning',
+    fill: 'color-mix(in srgb, rgb(var(--warning)) 16%, transparent)',
+    pulse: true,
+  },
+  speaking: {
+    dot: 'bg-success',
+    border: 'border-success',
+    fill: 'color-mix(in srgb, rgb(var(--success)) 16%, transparent)',
+    pulse: true,
+  },
+  error: {
+    dot: 'bg-destructive',
+    border: 'border-destructive',
+    fill: 'color-mix(in srgb, rgb(var(--destructive)) 16%, transparent)',
+    pulse: true,
+  },
+}
+
+export function voiceStateTone(state: VoiceVisualState) {
+  return VOICE_STATE_TONE[state] ?? VOICE_STATE_TONE.idle
+}
+
+/**
+ * Hero orb — the single presentation surface for the voice state machine.
+ * Wraps children (the mic toggle) with state rings driven by CSS variables.
  */
 export function VoiceOrb({
   state,
   micLevel,
+  levelRef,
   children,
 }: {
-  state: 'idle' | 'listening' | 'processing' | 'speaking' | 'error'
-  micLevel: number
+  state: VoiceVisualState
+  /** Throttled level (0–1) from useVoiceChat — fallback when no `levelRef`. */
+  micLevel?: number
+  /** Per-frame level ref: sampled on the orb's own rAF loop, so the React tree is never re-rendered at audio rate. */
+  levelRef?: React.RefObject<number | null>
   children: React.ReactNode
 }) {
+  const orbRef = useRef<HTMLDivElement>(null)
+  const tone = voiceStateTone(state)
   const isListening = state === 'listening'
   const isSpeaking = state === 'speaking'
   const isProcessing = state === 'processing'
 
-  // Scale the orb based on mic level when listening
-  const orbScale = isListening ? 1 + micLevel * 0.4 : 1
-  const orbColor = isListening
-    ? 'border-primary'
-    : isSpeaking
-      ? 'border-success'
-      : isProcessing
-        ? 'border-warning'
-        : state === 'error'
-          ? 'border-destructive'
-          : 'border-muted-foreground/20'
+  // Per-frame level -> `--mic-level` written imperatively. CSS consumes the
+  // variable for every scale/opacity; React only paints on discrete state changes.
+  useEffect(() => {
+    const el = orbRef.current
+    if (!el || !levelRef) return
+    let raf = 0
+    const tick = () => {
+      el.style.setProperty('--mic-level', String(levelRef.current ?? 0))
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [levelRef])
+
+  const level = 'var(--mic-level, 0)'
+  const motion = 'var(--voice-motion, 1)'
 
   return (
-    <div className="relative">
-      {/* Outer rings */}
+    <div className="voice-orb relative" data-state={state}>
+      {/* Listening corona — scale/opacity read --mic-level straight from the DOM */}
       {isListening && (
         <>
-          <div
-            className="absolute inset-0 rounded-full border-2 border-primary/20 transition-transform duration-200"
-            style={{ transform: `scale(${orbScale * 1.6})`, opacity: 0.2 + micLevel * 0.3 }}
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full border-2 border-primary/25"
+            style={{ transform: `scale(calc(1.25 + ${level} * 0.55 * ${motion}))`, opacity: `calc(0.25 + ${level} * 0.4)` }}
           />
-          <div
-            className="absolute inset-0 rounded-full border border-primary/10 transition-transform duration-300"
-            style={{ transform: `scale(${orbScale * 1.3})`, opacity: 0.15 }}
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full border border-primary/15"
+            style={{ transform: `scale(calc(1.1 + ${level} * 0.28 * ${motion}))`, opacity: 0.2 }}
+          />
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full bg-primary/10 blur-xl"
+            style={{ transform: `scale(calc(1 + ${level} * 0.6 * ${motion}))`, opacity: `calc(0.25 + ${level} * 0.45)` }}
           />
         </>
       )}
 
       {isSpeaking && (
         <>
-          <div
-            className="absolute inset-0 rounded-full border-2 border-success/20 animate-ping"
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full border-2 border-success/25 animate-ping"
             style={{ animationDuration: '1.5s' }}
           />
-          <div
-            className="absolute inset-0 rounded-full border border-success/10 animate-ping"
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 rounded-full border border-success/15 animate-ping"
             style={{ animationDuration: '2s', animationDelay: '0.3s' }}
           />
         </>
       )}
 
       {isProcessing && (
-        <div
-          className="absolute inset-0 rounded-full border-2 border-warning/20 animate-spin"
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full border-2 border-warning/30 animate-spin"
           style={{ animationDuration: '3s' }}
         />
       )}
 
-      {/* Main orb */}
+      {/* Main orb — one hero element, tone from the shared state map */}
       <div
+        ref={orbRef}
         className={cn(
-          'relative z-10 w-24 h-24 rounded-full flex items-center justify-center border-2',
-          orbColor,
-          'transition-all duration-200 shadow-lg',
+          'relative z-10 w-44 h-44 rounded-full flex items-center justify-center border-2 shadow-xl transition-colors duration-300',
+          tone.border,
         )}
-        style={{ transform: `scale(${orbScale})` }}
+        style={
+          {
+            '--mic-level': micLevel ?? 0,
+            transform: `scale(calc(1 + ${level} * 0.22 * ${motion}))`,
+          } as React.CSSProperties
+        }
       >
+        {/* Base wash + directional glows; intensity follows the mic level */}
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{ background: tone.fill, opacity: `calc(0.7 + ${level} * 0.3)` }}
+        />
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 rounded-full pointer-events-none"
+          style={{
+            background:
+              'radial-gradient(circle at 34% 28%, color-mix(in srgb, rgb(var(--primary)) 45%, transparent), transparent 58%), radial-gradient(circle at 72% 78%, color-mix(in srgb, rgb(var(--accent)) 32%, transparent), transparent 55%)',
+            opacity: `calc(0.45 + ${level} * 0.55)`,
+          }}
+        />
         {children}
       </div>
     </div>

@@ -1428,3 +1428,17 @@ html.light .token.important,
 html.light .token.variable {
   color: #8a6a20;
 }
+
+/* Voice hero orb — reduced motion: keep every state legible, drop the movement.
+   --voice-motion collapses the level-driven scale to a static base so the orb
+   still reads as listening/speaking without anything travelling on screen. */
+@media (prefers-reduced-motion: reduce) {
+  .voice-orb,
+  .voice-orb * {
+    animation: none;
+    transition: none;
+  }
+  .voice-orb {
+    --voice-motion: 0;
+  }
+}
