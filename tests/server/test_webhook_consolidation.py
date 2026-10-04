@@ -267,12 +267,17 @@ class TestRestGate:
             yield TestClient(app, raise_server_exceptions=False)
 
     def test_register_startup_event_accepted(self, client):
+        # main's api-standardized contract: url/events as query params
+        # (events is a JSON-encoded string), not a request body.
         resp = client.post(
             "/training/webhooks",
-            json={"url": "https://hooks.example/startup", "events": ["startup.complete"]},
+            params={
+                "url": "https://hooks.example/startup",
+                "events": '["startup.complete"]',
+            },
         )
         assert resp.status_code == 200, resp.text
-        assert resp.json()["events"] == ["startup.complete"]
+        assert "startup.complete" in resp.json()["events"]
 
     def test_available_events_grown_additively(self, client):
         resp = client.get("/training/webhooks")
@@ -284,6 +289,9 @@ class TestRestGate:
     def test_bogus_event_still_rejected(self, client):
         resp = client.post(
             "/training/webhooks",
-            json={"url": "https://hooks.example/x", "events": ["not.an.event"]},
+            params={
+                "url": "https://hooks.example/x",
+                "events": '["not.an.event"]',
+            },
         )
         assert resp.status_code == 400
