@@ -199,7 +199,10 @@ Single /training router with sub-paths for each feature
 How to build a Python API router in this repo. FastAPI's `@router.get` /
 `@router.post` decorators are the right idiom — the rules are about what lives
 in the handler, not the decorator. Endpoint inventory: [`routers.md`](routers.md).
-Philosophy: [`PYTHON_FIRST.md`](PYTHON_FIRST.md) §4 "Web router is just plumbing".
+Before adding a capability at all, the contract-first pattern in
+[`TRANSPORT_PROJECTIONS.md`](TRANSPORT_PROJECTIONS.md) applies (descriptor →
+projected route, not a new endpoint project). Philosophy:
+[`PYTHON_FIRST.md`](PYTHON_FIRST.md) §4 "Web router is just plumbing".
 
 **1. One package per feature.** `apps/api/server/<feature>/{router.py, schemas.py, ...}`
 — reference: `apps/api/server/training/`.

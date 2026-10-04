@@ -2,7 +2,9 @@
 
 > Building or changing a router? Follow the **Router Playbook** in
 > [PRODUCT_ENGINEERING.md](PRODUCT_ENGINEERING.md#router-playbook). This file
-> is the endpoint map only.
+> is the endpoint map only. Adding a capability rather than a handler? Read
+> [TRANSPORT_PROJECTIONS.md](TRANSPORT_PROJECTIONS.md) — routes are projections
+> of a declared contract, not endpoint projects.
 
 All routes are served by the FastAPI application under the base URL (e.g. `http://localhost:8000`). Every public endpoint uses `classify_and_raise(e, source="router.method")` for structured error responses.
 

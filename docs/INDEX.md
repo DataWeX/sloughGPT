@@ -25,6 +25,7 @@ Single source of truth for navigation. Read this first.
 | **process-guard-architecture.md** | Process isolation design |
 | **PRODUCER_CONSUMER_QUEUE.md** | Queue pattern |
 | **PUGQEEP.md** | PGQ: points, pools, Pipe |
+| **TRANSPORT_PROJECTIONS.md** | Capability → contract → route |
 
 ## Features
 
