@@ -29,9 +29,11 @@ class FakeHost(LinuxCommandsMixin):
 
 
 @pytest.fixture
-def host(tmp_path):
+def host(tmp_path, monkeypatch):
     h = FakeHost()
-    os.chdir(tmp_path)
+    # monkeypatch (not bare os.chdir): restores the session cwd at teardown —
+    # a bare chdir leaked this test's tmp_path into every later test (run-8).
+    monkeypatch.chdir(tmp_path)
     return h
 
 
@@ -935,3 +937,19 @@ class TestTime:
         host._last_exit_code = 0
         host._cmd_time("")
         assert host._last_exit_code == 1
+
+
+# Captured at collection time — before any fixture can chdir.
+_INITIAL_CWD = Path.cwd()
+
+
+class TestHostFixtureCwdHygiene:
+    def test_cwd_not_leaked_after_host_tests(self):
+        """The host fixture must restore cwd after every test.
+
+        A bare `os.chdir(tmp_path)` in the host fixture leaked the last host
+        test's tmp dir into every subsequent test in the session (gate runs
+        #1–#2 evidence: cwd stuck at `<run>/test_time_no_args0` from
+        mid-session until exit) — `monkeypatch.chdir` restores it at teardown.
+        """
+        assert Path.cwd() == _INITIAL_CWD

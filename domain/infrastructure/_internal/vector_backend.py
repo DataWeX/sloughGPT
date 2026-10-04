@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 import multiprocessing as mp
 import multiprocessing.shared_memory as shm
+import os
+import sys
 import time
 from typing import Any
 
@@ -21,6 +23,20 @@ from .compute_backend import ComputeBackend, register_backend
 logger = logging.getLogger(__name__)
 
 _N_PROC = min(8, mp.cpu_count() or 4)
+
+
+def _pool_start_method() -> str:
+    """Start method for the worker pool: `forkserver` by default.
+
+    The bare default context (`fork` on py3.12) deadlocks forked workers when
+    the parent process is multithreaded (e.g. an OpenBLAS threadpool) — the
+    fork-into-multithreaded class this repo's pugqeep engine also removed.
+    `SLO_VECTOR_START_METHOD=fork` is the explicit escape hatch, mirroring
+    pugqeep's `config.start_method`.
+    """
+    if sys.platform == "win32":
+        return "spawn"
+    return os.environ.get("SLO_VECTOR_START_METHOD") or "forkserver"
 
 
 # ── Worker functions (module-level for pickling) ─────────────────────────
@@ -106,7 +122,7 @@ class VectorBE(ComputeBackend):
     def __init__(self, weights: dict[str, np.ndarray], arch: ArchConfig):
         self._arch = arch
         self._n_proc = _N_PROC
-        self._pool = mp.Pool(_N_PROC)
+        self._pool = mp.get_context(_pool_start_method()).Pool(_N_PROC)
 
         # Put all weights into shared memory
         self._shm_blocks: dict[str, shm.SharedMemory] = {}
