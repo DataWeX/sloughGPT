@@ -56,7 +56,9 @@ class TestGetProviderSettings:
         assert "api_key" not in data
 
     def test_get_reflects_persisted_values(self, isolated_settings, clean_registry):
-        isolated_settings.update("providers", enabled=True, api_url="https://api.openai.com/v1", model="gpt-4o")
+        isolated_settings.update(
+            "providers", enabled=True, api_url="https://api.openai.com/v1", model="gpt-4o"
+        )
         resp = TestClient(_build_app()).get("/settings/providers/api")
         data = resp.json()["data"]
         assert data["enabled"] is True

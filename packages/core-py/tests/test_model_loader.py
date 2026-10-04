@@ -186,9 +186,7 @@ class TestModelLoaderSlncLoad:
         def _raise(model_id):
             raise OSError("boom")
 
-        monkeypatch.setattr(
-            "domain.infrastructure._internal.model_resolver.get_model_dir", _raise
-        )
+        monkeypatch.setattr("domain.infrastructure._internal.model_resolver.get_model_dir", _raise)
         loader = ModelLoader(models_dir=tmp_path)
         result = loader.load("gpt2")
         assert not result.success

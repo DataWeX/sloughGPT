@@ -709,8 +709,7 @@ class KBRouter:
             return "\n".join((page.extract_text() or "") for page in reader.pages)
         except ImportError:
             raise_error(
-                "PDF support needs PyMuPDF or PyPDF2 installed — "
-                "or upload a .txt/.md file instead",
+                "PDF support needs PyMuPDF or PyPDF2 installed — or upload a .txt/.md file instead",
                 "E_BAD_REQUEST",
                 status_code=400,
             )

@@ -262,8 +262,10 @@ class TestLoadIntoModel:
         params = {}
         for name in param_names:
             p = MagicMock()
-            p.data = np.zeros((4,), dtype=np.float32) if name.endswith(".bias") else np.zeros(
-                (4, 4), dtype=np.float32
+            p.data = (
+                np.zeros((4,), dtype=np.float32)
+                if name.endswith(".bias")
+                else np.zeros((4, 4), dtype=np.float32)
             )
             params[name] = p
         model._named_parameters.return_value = params.items()
