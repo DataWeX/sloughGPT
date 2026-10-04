@@ -64,6 +64,7 @@ Single source of truth for navigation. Read this first.
 |-----|---------|
 | **TESTING.md** | Test guide |
 | **Site Doctor** (in TESTING.md) | Live-site monitor — read-only journey/http/SSE probes, `/doctor` API + page |
+| **Mole** (in TESTING.md) | Always-on watcher — doctor probes on a cadence, identity-set delta dedupe, JSONL journal, no AI |
 | **USER_PERSONA.md** | Who we build for |
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |

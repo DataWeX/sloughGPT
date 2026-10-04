@@ -281,6 +281,34 @@ is report-only — it never remediates.
 **Report path:** `${SLO_DOCTOR_REPORT:-~/.cache/slog-doctor/findings-report.json}`
 (JSON, `schema_version: 1`, findings ranked worst-first).
 
+### Mole (always-on watcher)
+
+**Mole** adds *time* to the doctor contract: the same read-only probes on a
+cadence, every tick journaled, an event only when the findings' *identity
+set* changes — identity = source + check + severity + component. Payload
+counters (p95, health score, frame sizes) jitter every sweep and are hashed
+away, so the same finding never alerts twice. No AI anywhere; suggest-only —
+Mole never applies anything. Placement: `domain/core/_internal/mole/`
+(thin layer over `run_doctor` / `DoctorReport` / `PROBES` — a new doctor
+probe is picked up on the next tick).
+
+```bash
+# Watch at 30s cadence, one event line per change, journal every tick:
+.venv/bin/python -m domain.core._internal.mole
+# --interval S · --max-ticks N · --skip http|sse|journey · --journal PATH
+# --strict (info → nonzero, mirrors doctor) · --quiet (journal only)
+# --json (change events as one JSON object each)
+```
+
+**Journal:** `${SLO_MOLE_JOURNAL:-~/.cache/slog-doctor/mole-journal.jsonl}` —
+one JSON line per tick: `ts`, `tick`, `context` (loadavg + cpu_count — the
+machine state the finding was taken on), `fingerprint`, `changed`,
+`overall`, `exit`, `summary`. A failing tick is journaled with `error` and
+contained — a watcher never dies mid-watch.
+
+**Exit codes:** doctor's (`0` ok/info · `1` warn · `2` critical), `2` for a
+watch-error tick, `130` on Ctrl-C.
+
 ### Surfaced: `/doctor` API + `/doctor` page
 
 | Endpoint | Data | Notes |
