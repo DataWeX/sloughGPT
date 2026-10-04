@@ -147,9 +147,14 @@ export function StartupOverlay() {
     .filter((h: HookStatus) => h.status === 'running')
     .slice(0, 3)
 
+  // Ambient, not modal: the layer is translucent and click-through, so the
+  // shell underneath stays visible AND interactive for the whole boot — the
+  // overlay informs, it does not gate. Its own controls opt back in with
+  // pointer-events-auto (Retry / Show timing); the ready path still fades it
+  // away so it never lingers over a booted app.
   const overlayClassName = cn(
-    'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a] transition-opacity duration-500',
-    fadeOut ? 'opacity-0 pointer-events-none' : 'opacity-100',
+    'fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-[#0a0a0a]/80 backdrop-blur-sm transition-opacity duration-500 pointer-events-none',
+    fadeOut ? 'opacity-0' : 'opacity-100',
   )
 
   // "Stuck" is its own variant, not an extra row bolted onto the startup UI.
@@ -181,7 +186,7 @@ export function StartupOverlay() {
               })
               window.location.reload()
             }}
-            className="px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
+            className="pointer-events-auto px-4 py-1.5 rounded-full bg-[#0a7aff] text-white text-[12px] font-medium transition-all duration-200 hover:bg-[#0a7aff]/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0a7aff] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0a0a]"
           >
             Retry
           </button>
@@ -256,7 +261,7 @@ export function StartupOverlay() {
         <button
           type="button"
           onClick={() => setShowDetails(!showDetails)}
-          className="text-[9px] text-[#636366] hover:text-[#8e8e93] transition-colors mb-4"
+          className="pointer-events-auto text-[9px] text-[#636366] hover:text-[#8e8e93] transition-colors mb-4"
         >
           {showDetails ? 'Hide details' : 'Show timing'}
         </button>

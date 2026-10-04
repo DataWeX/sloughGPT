@@ -211,4 +211,30 @@ describe('StartupOverlay', () => {
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.queryByRole('progressbar', { name: 'Startup progress' })).toBeNull()
   })
+
+  it('is an ambient click-through layer — the shell underneath stays usable', () => {
+    useLiveStatusMock.mockReturnValue(
+      status({
+        startupHooks: { db_pool: { name: 'db_pool', status: 'ok', duration_seconds: 0.4 } },
+      }),
+    )
+    const { container } = render(<StartupOverlay />)
+
+    // The layer informs but does not gate: translucent, pass-through, up.
+    const layer = container.firstChild as HTMLElement
+    expect(layer.className).toContain('pointer-events-none')
+    expect(layer.className).toContain('bg-[#0a0a0a]/80')
+    expect(layer.className).not.toContain('opacity-0')
+
+    // The overlay's own controls opt back in — pass-through never eats them.
+    expect(screen.getByRole('button', { name: 'Show timing' }).className).toContain(
+      'pointer-events-auto',
+    )
+    act(() => {
+      vi.advanceTimersByTime(8_000)
+    })
+    expect(screen.getByRole('button', { name: 'Retry' }).className).toContain(
+      'pointer-events-auto',
+    )
+  })
 })
