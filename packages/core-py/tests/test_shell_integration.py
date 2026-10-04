@@ -120,7 +120,12 @@ class TestApiCommands:
 class TestLocalCommands:
     def test_help_shows_builtins(self, repl):
         out = _capture(repl, "help")
-        assert "health" in out
+        # Help is organised into colour-coded sections and lists neither
+        # `health` (an ext command) nor `help` itself — assert real builtins.
+        assert "Navigation:" in out
+        assert "  cd" in out
+        assert "  pwd" in out
+        assert "  exit" in out
 
     def test_echo_works(self, repl):
         out = _capture(repl, "echo hello world")
