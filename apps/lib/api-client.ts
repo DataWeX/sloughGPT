@@ -1,4 +1,4 @@
-import { PUBLIC_API_URL } from '../config'
+import { PUBLIC_API_URL } from '../web/lib/config'
 import { apiGet, apiPost, apiPut, apiDelete, apiPatch } from './verbs'
 
 interface ApiClientConfig {

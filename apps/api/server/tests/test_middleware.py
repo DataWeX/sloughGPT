@@ -399,8 +399,9 @@ class TestSingleOwner4xxLogging:
         """Starlette body-parse 400 carries __cause__ type as `cause` context."""
         import asyncio
 
-        import tests.test_support  # noqa: F401  (registers feature routers on `main.app`)
         from main import app
+
+        import apps.api.server.tests.test_support  # noqa: F401  (registers feature routers on `main.app`)
 
         received = []
         calls = 0
