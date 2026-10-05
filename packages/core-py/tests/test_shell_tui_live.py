@@ -15,6 +15,7 @@ import pty
 import select
 import signal
 import struct
+import sys
 import termios
 import time
 
@@ -317,6 +318,21 @@ class _TuiSession:
             os.environ["TERM"] = "xterm-256color"
             with open(self.err_path, "w") as errf:
                 os.dup2(errf.fileno(), 2)
+            # pty.fork() rebinds fds 0/1/2 only. The child still inherits the
+            # *parent's* Python-level sys.stdout/sys.stderr, and under pytest's
+            # fd-capture those are EncodedFile objects bound to the capture temp
+            # file, not to fd 1. graphics.py writes every frame through
+            # sys.stdout, so frames land in pytest's capture buffer instead of
+            # the pty and _Screen never sees them (42/43 tests fail). Rebind the
+            # Python streams onto the fds pty.fork() just arranged, and stderr
+            # onto the dup2'd err file so tracebacks reach err_path.
+            # buffering=1 (line) matches the tty semantics the interpreter gives
+            # its own sys.stdout; the default would be 8192-byte block buffering
+            # and frames would sit unflushed until wait_until() times out.
+            sys.stdout = open(1, "w", encoding="utf-8", errors="replace",
+                              closefd=False, buffering=1)
+            sys.stderr = open(2, "w", encoding="utf-8", errors="replace",
+                              closefd=False, buffering=1)
             winsz = struct.pack("HHHH", self.rows, self.cols, 0, 0)
             fcntl.ioctl(1, termios.TIOCSWINSZ, winsz)
 
