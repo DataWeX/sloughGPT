@@ -19,6 +19,7 @@ import { GlobalBanner } from '@/components/GlobalBanner'
 import { useGlobalShortcuts } from '@/hooks/useGlobalShortcuts'
 import { useConsciousnessShortcuts } from '@/hooks/useConsciousnessShortcuts'
 import { useToastStore } from '@/lib/toast-store'
+import { useBannerStore } from '@/lib/banner-store'
 import { KeyboardShortcutsDialog } from '@/components/KeyboardShortcutsDialog'
 import { DebugOverlay } from '@/components/DebugOverlay'
 import { WhatsNewDialog } from '@/components/WhatsNewDialog'
@@ -119,17 +120,28 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
 
   const closeMobileNav = () => setMobileNavOpen(false)
 
+  // Backend health lives on ONE banner surface (GlobalBanner + useBannerStore).
+  // The restarting notice shares the boot-stall key 'backend-connection' so the
+  // two states replace each other instead of stacking two rows for one failure.
+  // Cleanup dismisses it the moment the status leaves 'reloading' — a reconnect
+  // clears the banner on its own.
+  useEffect(() => {
+    if (apiStatus !== 'reloading') return
+    const id = useBannerStore.getState().showBanner({
+      key: 'backend-connection',
+      tone: 'warning',
+      title: 'Backend restarting',
+      message: 'reconnecting…',
+    })
+    return () => useBannerStore.getState().dismissBanner(id)
+  }, [apiStatus])
+
   return (
     <div className="sl-app-shell">
-      {/* Global banner system — one banner surface for all pages */}
+      {/* Global banner system — one banner surface for all pages. The backend
+          "restarting" notice is raised through the store (see effect above), so
+          it never stacks a second row beside the boot-stall banner. */}
       <GlobalBanner />
-      {/* Restarting banner */}
-      {apiStatus === 'reloading' && (
-        <div className="sl-app-banner">
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-warning animate-pulse" />
-          Backend restarting — reconnecting…
-        </div>
-      )}
 
       {/* Mobile header — full-width top bar on < lg */}
       <header className="sl-app-mobile-header">

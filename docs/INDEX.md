@@ -32,6 +32,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **FEATURES.md** | Feature list |
+| **moodboards/widgets.html** | Mood board #1 — widgets (visual ideation, open in browser) |
 | **NAVIGATION_AND_SOULS.md** | Soul/personality system |
 | **SHELL.md** | CLI shell |
 | **VM_CONSOLE.md** | VM console |

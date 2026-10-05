@@ -128,7 +128,7 @@ export interface HashTree {
 
 export const COLUMN_LABELS: Record<string, string> = {
   todo: 'To Do',
-  in_progress: 'In Progress',
+  wip: 'In Progress',
   review: 'Review',
   done: 'Done',
 }

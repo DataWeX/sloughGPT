@@ -25,7 +25,7 @@ BACKENDS = ("file", "mogdb")
 
 STATUS_TO_COLUMN = {
     "done": "done",
-    "wip": "in_progress",
+    "wip": "wip",
     "review": "review",
     "todo": "todo",
     "open": "todo",
@@ -36,7 +36,7 @@ STATUS_TO_COLUMN = {
 
 COLUMN_TO_STATUS = {
     "todo": "open",
-    "in_progress": "wip",
+    "wip": "wip",
     "review": "review",
     "done": "done",
 }

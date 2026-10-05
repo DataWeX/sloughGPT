@@ -1,4 +1,4 @@
-import { PUBLIC_API_URL } from '../config'
+import { PUBLIC_API_URL } from '../web/lib/config'
 
 export function _isDocstoreUrl(url: string): boolean {
   return url.includes('/docstore/')

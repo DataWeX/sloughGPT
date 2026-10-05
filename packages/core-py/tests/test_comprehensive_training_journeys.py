@@ -378,6 +378,7 @@ class TestTrainingSubsystems:
         ("/training/model-card", "model card"),
     ]
 
+    @pytest.mark.parametrize(("route", "name"), ROUTES)
     def test_subsystem_pages_load(self, page, collector, route, name):
         body = go(page, route, collector)
         dt = record_devtools(
@@ -650,6 +651,7 @@ class TestCrossPageNavigation:
         "/auto-train",
     ]
 
+    @pytest.mark.parametrize("route", ALL_ROUTES)
     @retry_on_failure()
     def test_all_routes_load_without_crash(self, page, collector, route):
         body = go(page, route, collector)

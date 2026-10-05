@@ -59,10 +59,16 @@ export const SystemStatusCard = memo(function SystemStatusCard({ liveHealth, det
             reconnecting
           </span>
         )}
-        {(connectionStatus === 'offline' || connectionStatus === 'reloading') && (
+        {(connectionStatus === 'offline' ||
+          connectionStatus === 'reloading' ||
+          connectionStatus === 'error') && (
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
-            {connectionStatus === 'reloading' ? 'reloading' : 'offline'}
+            {connectionStatus === 'reloading'
+              ? 'reloading'
+              : connectionStatus === 'error'
+                ? 'unreachable'
+                : 'offline'}
           </span>
         )}
       </div>

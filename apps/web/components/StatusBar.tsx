@@ -90,6 +90,7 @@ export function StatusBar() {
   const score = health?.health_score
   const dotColor = connectionStatus === 'connecting' ? 'bg-muted-foreground/50' :
     connectionStatus === 'offline' ? 'bg-destructive' :
+    connectionStatus === 'error' ? 'bg-destructive' :
     connectionStatus === 'reloading' ? 'bg-destructive animate-pulse' :
     score != null && score < 50 ? 'bg-destructive' :
     score != null && score < 80 ? 'bg-warning' :
@@ -98,6 +99,13 @@ export function StatusBar() {
   let statusText: string
   if (connectionStatus === 'connecting' && health === null) {
     statusText = 'Connecting...'
+  } else if (connectionStatus === 'error') {
+    // 'error' = reload protection engaged (3 reloads in the window). It is a
+    // live, recoverable state — the fallback poll keeps running and the first
+    // successful health response clears it — so it must not fall through to
+    // the healthy branch and print "No model".
+    const elapsed = lastOffline ? formatDuration((now - lastOffline) / 1000) : ''
+    statusText = `Not responding — retrying${elapsed ? ` (${elapsed})` : ''}`
   } else if (connectionStatus === 'offline') {
     const elapsed = lastOffline ? formatDuration((now - lastOffline) / 1000) : ''
     const failInfo = getFailureSummary(recentFailures)

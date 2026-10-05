@@ -1,19 +1,19 @@
 """Startup terminal visualization — prints boot progress to the console.
 
-Usage:
-    from infrastructure.startup_terminal import get_terminal_viz, terminal_hook
+Usage (driven by StagedLoader / startup.py):
+    from infrastructure.startup_terminal import get_terminal_viz
 
     viz = get_terminal_viz()
     viz.start()
-    with terminal_hook("db_pool") as hook:
-        await init_db_pool()
+    viz.set_stage("CRITICAL")
+    viz.add_hook("db_pool", "CRITICAL")
+    viz.update_hook("db_pool", "ok", 12.3)
+    viz.finish(success=True)
 """
 
 import logging
 import sys
 import time
-from collections.abc import Generator
-from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TextIO
 
@@ -70,7 +70,6 @@ class StartupTerminalViz:
         self._lines: list[HookLine] = []
         self._stage_name: str = "INIT"
         self._start_time: float = 0.0
-        self._printed_count: int = 0
 
     def _write(self, text: str) -> None:
         if self._enabled:
@@ -79,14 +78,6 @@ class StartupTerminalViz:
                 self._stream.flush()
             except Exception:
                 pass
-
-    def _move_up(self, n: int) -> None:
-        if n > 0 and self._enabled:
-            self._write(f"\033[{n}A")
-
-    def _clear_line(self) -> None:
-        if self._enabled:
-            self._write("\033[2K\r")
 
     def start(self) -> None:
         """Start the terminal visualization."""
@@ -107,7 +98,6 @@ class StartupTerminalViz:
             f"{COLORS['bold']}[{label}]{COLORS['reset']} "
             f"{COLORS['dim']}({elapsed:.1f}s){COLORS['reset']}\n"
         )
-        self._printed_count += 1
 
     def add_hook(self, name: str, stage: str) -> None:
         """Register a hook for display."""
@@ -123,7 +113,6 @@ class StartupTerminalViz:
                 break
 
         symbol = STATUS_SYMBOLS.get(status, "  ?")
-        time.monotonic() - self._start_time if self._start_time else 0
 
         if status == "ok":
             color = COLORS["green"]
@@ -139,7 +128,6 @@ class StartupTerminalViz:
             f"  {symbol} {color}{name}{COLORS['reset']}"
             f"{COLORS['dim']}{duration_str}{COLORS['reset']}\n"
         )
-        self._printed_count += 1
 
     def finish(self, success: bool = True) -> None:
         """Print the final summary."""
@@ -175,18 +163,3 @@ def get_terminal_viz() -> StartupTerminalViz:
     if _global_viz is None:
         _global_viz = StartupTerminalViz()
     return _global_viz
-
-
-@contextmanager
-def terminal_hook(name: str) -> Generator[None, None, None]:
-    """Context manager that updates terminal viz for a hook."""
-    viz = get_terminal_viz()
-    start = time.perf_counter()
-    try:
-        yield
-        duration_ms = (time.perf_counter() - start) * 1000
-        viz.update_hook(name, "ok", duration_ms)
-    except Exception:
-        duration_ms = (time.perf_counter() - start) * 1000
-        viz.update_hook(name, "error", duration_ms)
-        raise

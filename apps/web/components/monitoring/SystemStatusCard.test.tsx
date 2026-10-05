@@ -68,6 +68,11 @@ describe('SystemStatusCard', () => {
     expect(screen.getByText('offline')).toBeDefined()
   })
 
+  it('shows unreachable status when reload protection engaged', () => {
+    renderCard(base, null, 'error')
+    expect(screen.getByText('unreachable')).toBeDefined()
+  })
+
   it('falls back to detailed health when snapshot is absent', () => {
     renderCard(null, { status: 'healthy', model_loaded: true, model_type: 'qwen', num_parameters: 500000000, inference: { inference_count: 3 } })
     expect(screen.getByText('qwen · 500M')).toBeDefined()
