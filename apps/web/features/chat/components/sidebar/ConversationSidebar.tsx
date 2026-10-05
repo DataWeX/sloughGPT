@@ -221,7 +221,7 @@ function SidebarContent({
           {!isDrawer && onToggleCollapse && (
             <button
               onClick={onToggleCollapse}
-              className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+              className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors shrink-0"
               aria-label="Collapse sidebar"
               title="Collapse"
             >
@@ -231,7 +231,7 @@ function SidebarContent({
           <span className="text-xs font-medium text-foreground">Conversations</span>
           {unreadCount > 0 && (
             <>
-              <span className="h-4 min-w-[16px] flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[9px] font-bold px-1">
+              <span className="h-4 min-w-4 flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-medium px-1">
                 {unreadCount}
               </span>
               <button
@@ -247,7 +247,7 @@ function SidebarContent({
             <button
               onClick={() => setSortOpen(!sortOpen)}
               className={cn(
-                "h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 transition-colors",
+                "h-6 w-6 flex items-center justify-center rounded hover:bg-muted/60 transition-colors",
                 sortMode !== 'updated' ? "text-primary" : "text-muted-foreground/60"
               )}
               aria-label="Sort conversations"
@@ -258,7 +258,7 @@ function SidebarContent({
             {sortOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
-                <div className="absolute left-0 top-full mt-1 z-50 bg-background border border-border/60 rounded-lg shadow-lg py-1 min-w-[140px]">
+                <div className="absolute left-0 top-full mt-1 z-50 bg-background border border-border/60 rounded-lg shadow-lg py-1 min-w-36">
                   {([
                     { value: 'updated', label: 'Last updated' },
                     { value: 'name', label: 'Name' },
@@ -294,7 +294,7 @@ function SidebarContent({
           {isDrawer && onClose && (
             <button
               onClick={onClose}
-              className="flex items-center justify-center h-6 w-6 rounded-md hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center justify-center h-6 w-6 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Close sidebar"
             >
               <IconX className="h-4 w-4" />
@@ -311,7 +311,7 @@ function SidebarContent({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search conversations…"
-            className="w-full h-8 rounded-md bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
+            className="w-full h-8 rounded bg-muted/50 pl-7 pr-2 text-xs outline-none placeholder:text-muted-foreground/40 focus:bg-muted/80 focus:ring-2 focus:ring-primary/30 transition-colors"
             aria-label="Search conversations"
           />
         </div>
@@ -320,14 +320,14 @@ function SidebarContent({
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-6 px-3 gap-2">
             <IconChat className="h-5 w-5 text-muted-foreground/30" />
-            <p className="text-[11px] text-muted-foreground/60 text-center leading-relaxed">
+            <p className="text-xs text-muted-foreground/60 text-center leading-relaxed">
               No conversations yet
             </p>
             <Button
               variant="ghost"
               size="sm"
               onClick={() => { onNewChat(); onClose?.() }}
-              className="text-[11px] h-6 px-2 gap-1 text-primary hover:text-primary/80"
+              className="text-xs h-6 px-2 gap-1 text-primary hover:text-primary/80"
             >
               <IconPlus className="h-4 w-4" />
               Start chatting
@@ -459,7 +459,7 @@ function SidebarContent({
                     setArchivedLoading(false)
                   }
                 }}
-                className="flex items-center gap-2 w-full px-2 py-1 text-left group"
+                className="flex items-center gap-2 w-full px-2 py-1 text-left group rounded transition-colors hover:bg-muted/40"
                 aria-expanded={archivedExpanded}
               >
                 <IconFolder className={cn("h-4 w-4 transition-colors", archivedExpanded ? "text-primary" : "text-muted-foreground/60")} />
@@ -474,9 +474,9 @@ function SidebarContent({
               {archivedExpanded && (
                 <div className="space-y-0.5 mt-1">
                   {archivedLoading ? (
-                    <div className="text-[11px] text-muted-foreground/50 px-2 py-2">Loading…</div>
+                    <div className="text-xs text-muted-foreground/50 px-2 py-2">Loading…</div>
                   ) : archivedConversations.length === 0 ? (
-                    <div className="text-[11px] text-muted-foreground/50 px-2 py-2">No archived conversations</div>
+                    <div className="text-xs text-muted-foreground/50 px-2 py-2">No archived conversations</div>
                   ) : (
                     archivedConversations.map(c => (
                       <ConvRow
