@@ -59,50 +59,60 @@ describe('TerminalPanel', () => {
   })
 
   it('renders output lines', () => {
-    mockUseShell.mockReturnValue(createMockShell({
-      state: {
-        lines: [
-          { index: 0, text: 'hello' },
-          { index: 1, text: 'world' },
-        ],
-        isRunning: false,
-        exitCode: 0,
-        error: null,
-      },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        state: {
+          lines: [
+            { index: 0, text: 'hello' },
+            { index: 1, text: 'world' },
+          ],
+          isRunning: false,
+          exitCode: 0,
+          error: null,
+        },
+      }),
+    )
     render(<TerminalPanel />)
     expect(screen.getByText('hello')).toBeDefined()
     expect(screen.getByText('world')).toBeDefined()
   })
 
   it('renders running indicator when isRunning', () => {
-    mockUseShell.mockReturnValue(createMockShell({
-      state: { lines: [], isRunning: true, exitCode: null, error: null },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        state: { lines: [], isRunning: true, exitCode: null, error: null },
+      }),
+    )
     render(<TerminalPanel />)
     expect(screen.getByTestId('shell-running')).toBeDefined()
   })
 
   it('renders error message', () => {
-    mockUseShell.mockReturnValue(createMockShell({
-      state: { lines: [], isRunning: false, exitCode: 1, error: 'Command failed' },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        state: { lines: [], isRunning: false, exitCode: 1, error: 'Command failed' },
+      }),
+    )
     render(<TerminalPanel />)
     expect(screen.getByTestId('shell-error')).toHaveTextContent('Command failed')
   })
 
   it('renders exit code badge on success', () => {
-    mockUseShell.mockReturnValue(createMockShell({
-      state: { lines: [], isRunning: false, exitCode: 0, error: null },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        state: { lines: [], isRunning: false, exitCode: 0, error: null },
+      }),
+    )
     render(<TerminalPanel />)
     expect(screen.getByTestId('shell-exit-code')).toHaveTextContent('exit 0')
   })
 
   it('renders exit code badge on failure', () => {
-    mockUseShell.mockReturnValue(createMockShell({
-      state: { lines: [], isRunning: false, exitCode: 1, error: null },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        state: { lines: [], isRunning: false, exitCode: 1, error: null },
+      }),
+    )
     render(<TerminalPanel />)
     expect(screen.getByTestId('shell-exit-code')).toHaveTextContent('exit 1')
   })
@@ -133,10 +143,12 @@ describe('TerminalPanel', () => {
 
   it('does not submit while running', () => {
     const execute = vi.fn()
-    mockUseShell.mockReturnValue(createMockShell({
-      execute,
-      state: { lines: [], isRunning: true, exitCode: null, error: null },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        execute,
+        state: { lines: [], isRunning: true, exitCode: null, error: null },
+      }),
+    )
     render(<TerminalPanel />)
 
     const input = screen.getByTestId('shell-input')
@@ -159,9 +171,11 @@ describe('TerminalPanel', () => {
   })
 
   it('disables input while running', () => {
-    mockUseShell.mockReturnValue(createMockShell({
-      state: { lines: [], isRunning: true, exitCode: null, error: null },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        state: { lines: [], isRunning: true, exitCode: null, error: null },
+      }),
+    )
     render(<TerminalPanel />)
 
     const input = screen.getByTestId('shell-input')
@@ -223,9 +237,11 @@ describe('TerminalPanel', () => {
 
   it('caps visible lines to maxVisibleLines', () => {
     const lines = Array.from({ length: 20 }, (_, i) => ({ index: i, text: `line${i}` }))
-    mockUseShell.mockReturnValue(createMockShell({
-      state: { lines, isRunning: false, exitCode: 0, error: null },
-    }))
+    mockUseShell.mockReturnValue(
+      createMockShell({
+        state: { lines, isRunning: false, exitCode: 0, error: null },
+      }),
+    )
     render(<TerminalPanel maxVisibleLines={5} />)
 
     // Should only show last 5 lines
@@ -233,5 +249,92 @@ describe('TerminalPanel', () => {
     expect(screen.getByText('line19')).toBeDefined()
     expect(screen.queryByText('line0')).toBeNull()
     expect(screen.queryByText('line14')).toBeNull()
+  })
+
+  describe('ANSI rendering', () => {
+    const ESC = '\u001b'
+
+    it('renders coloured output as styled spans', () => {
+      mockUseShell.mockReturnValue(
+        createMockShell({
+          state: {
+            lines: [
+              { index: 0, text: `${ESC}[33mWRN${ESC}[0m ok` },
+              { index: 1, text: 'plain line' },
+            ],
+            isRunning: false,
+            exitCode: 0,
+            error: null,
+          },
+        }),
+      )
+      render(<TerminalPanel />)
+
+      // The badge picks up the warning token...
+      expect(screen.getByText('WRN').className).toContain('text-warning')
+      // ...and an untouched line still lands on the default colour.
+      expect(screen.getByText('plain line').className).toContain('text-foreground')
+    })
+
+    it('never leaks raw escape codes into the DOM', () => {
+      mockUseShell.mockReturnValue(
+        createMockShell({
+          state: {
+            lines: [
+              { index: 0, text: `${ESC}[36mhelp header${ESC}[0m` },
+              { index: 1, text: `${ESC}[2J${ESC}[H${ESC}[?25lcleared` },
+            ],
+            isRunning: false,
+            exitCode: 0,
+            error: null,
+          },
+        }),
+      )
+      render(<TerminalPanel />)
+
+      const output = screen.getByTestId('shell-output')
+      expect(output.textContent).not.toContain(ESC)
+      expect(output.textContent).toBe('help headercleared')
+    })
+
+    it('still flags errors whose line begins with an escape', () => {
+      mockUseShell.mockReturnValue(
+        createMockShell({
+          state: {
+            lines: [{ index: 0, text: `${ESC}[2mError: boom${ESC}[0m` }],
+            isRunning: false,
+            exitCode: 1,
+            error: null,
+          },
+        }),
+      )
+      render(<TerminalPanel />)
+
+      // Scoped to the container on purpose: a fully-styled line is a div and a
+      // span with identical text, so getByText would match both.
+      const line = screen.getByTestId('shell-output').firstElementChild as HTMLElement
+
+      // The leading escape must not defeat the "Error" prefix check.
+      expect(line.className).toContain('text-destructive')
+      expect(line.textContent).toBe('Error: boom')
+      expect(line.textContent).not.toContain(ESC)
+    })
+
+    it('renders plain lines without a wrapper span', () => {
+      mockUseShell.mockReturnValue(
+        createMockShell({
+          state: {
+            lines: [{ index: 0, text: 'hello' }],
+            isRunning: false,
+            exitCode: 0,
+            error: null,
+          },
+        }),
+      )
+      render(<TerminalPanel />)
+
+      // Exactly one match means no extra nested span was introduced.
+      expect(screen.getByText('hello').tagName).toBe('DIV')
+    })
   })
 })

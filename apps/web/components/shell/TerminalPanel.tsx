@@ -1,13 +1,50 @@
 'use client'
 
-import { useState, useRef, useEffect, type KeyboardEvent } from 'react'
+import { useState, useRef, useEffect, Fragment, type KeyboardEvent } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { useShell, type ShellLine } from '@/hooks/useShell'
+import { parseAnsi, type AnsiSegment } from '@/lib/ansi'
 
 export interface TerminalPanelProps {
   className?: string
   placeholder?: string
   maxVisibleLines?: number
+}
+
+/**
+ * Per-line parse cache.
+ *
+ * Streaming re-renders on every appended line, and parsing is ~30us per styled
+ * line — re-parsing the whole buffer each render is O(n^2) across a stream
+ * (measured: 30ms per render at the 1000-line cap, past the 16ms frame budget).
+ *
+ * `capLines` spreads the existing line objects into each new array, so a given
+ * ShellLine keeps its identity across renders and can be parsed exactly once.
+ * WeakMap keys are released when capLines drops the line, so this cannot grow
+ * without bound.
+ */
+const lineCache = new WeakMap<ShellLine, { segments: AnsiSegment[]; isError: boolean }>()
+
+interface LineView {
+  segments: AnsiSegment[]
+  isError: boolean
+}
+
+function analyzeLine(line: ShellLine): LineView {
+  const hit = lineCache.get(line)
+  if (hit) return hit
+
+  // One tokenize pass yields both the styled segments and the visible text, so
+  // the error check does not re-walk the string.
+  const segments = parseAnsi(line.text)
+  const visible = segments.map((s) => s.text).join('')
+  // The REPL returns SGR colour codes; match on the visible text so a leading
+  // escape never defeats the error check.
+  const isError = visible.startsWith('Error') || visible.startsWith('error')
+
+  const value: LineView = { segments, isError }
+  lineCache.set(line, value)
+  return value
 }
 
 /**
@@ -161,19 +198,36 @@ export function TerminalPanel({
         {visibleLines.length === 0 && !state.isRunning && placeholder && (
           <div className="text-muted-foreground italic">{placeholder}</div>
         )}
-        {visibleLines.map((line: ShellLine) => (
-          <div
-            key={line.index}
-            className={cn(
-              'whitespace-pre-wrap break-all',
-              line.text.startsWith('Error') || line.text.startsWith('error')
-                ? 'text-destructive'
-                : 'text-foreground',
-            )}
-          >
-            {line.text}
-          </div>
-        ))}
+        {visibleLines.map((line: ShellLine) => {
+          const { segments, isError } = analyzeLine(line)
+          // Unstyled lines render as bare text (no wrapper element) so they
+          // stay byte-identical to what the tests — and screen readers — expect.
+          const bare = segments.length === 1 && segments[0].className === ''
+
+          return (
+            <div
+              key={line.index}
+              className={cn(
+                'whitespace-pre-wrap break-all',
+                isError ? 'text-destructive' : 'text-foreground',
+              )}
+            >
+              {bare
+                ? segments[0].text
+                : segments.map((segment, i) =>
+                    segment.className ? (
+                      <span key={i} className={segment.className}>
+                        {segment.text}
+                      </span>
+                    ) : (
+                      // Fragment, not span: an unstyled run must not add a DOM
+                      // node, or getByText would match both it and the parent.
+                      <Fragment key={i}>{segment.text}</Fragment>
+                    ),
+                  )}
+            </div>
+          )
+        })}
         {state.isRunning && (
           <div className="flex items-center gap-2 text-warning" data-testid="shell-running">
             <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
