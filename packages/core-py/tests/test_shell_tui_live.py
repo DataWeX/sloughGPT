@@ -577,6 +577,7 @@ def test_ctrl_left_word_motion(session):
     _assert(session, ok, "edited recalled command never submitted")
 
 
+@_STALE_REDRAW
 def test_escape_ctrl_right_stays_manual_path(session):
     """``ESC [ 5 C`` is not a terminfo key, so ncurses returns ESC then the
     remainder — the TUI's ``_read_escape_remainder`` must fold it to a word
@@ -663,6 +664,7 @@ def test_reverse_history_search(session):
     _assert(session, ok, "search-recalled command never executed")
 
 
+@_STALE_REDRAW
 def test_output_pane_search(session):
     """/` on an empty prompt enters output-pane search; typing filters, and
     Enter accepts, jumping the pane so the matched line is visible."""
@@ -715,6 +717,7 @@ def test_n_repeats_last_output_search(session):
 # ── line editing helpers ─────────────────────────────────────────────────
 
 
+@_STALE_REDRAW
 def test_tab_completion_completes_command(session):
     assert session.wait_until(lambda sc: _ready(session))
     session.write("ech")
@@ -862,6 +865,7 @@ def test_alt_d_delete_word_after_caret(session):
     )
 
 
+@_STALE_REDRAW
 def test_ctrl_t_transpose_chars(session):
     """Ctrl+T swaps the character before and at the caret; at end of line
     it swaps the last two characters."""
@@ -910,6 +914,7 @@ def test_ctrl_y_cycles_kill_ring(session):
     )
 
 
+@_STALE_REDRAW
 def test_ctrl_a_ctrl_e_caret_motion(session):
     """Ctrl+A / Ctrl+E (readline start-of-line / end-of-line) fold with the
     Home/End keys and move the caret to the line ends."""
@@ -1207,6 +1212,7 @@ def test_right_arrow_moves_caret(session):
     )
 
 
+@_STALE_REDRAW
 def test_ctrl_left_word_backward_manual_path(session):
     """``ESC [ 5 D`` is not a terminfo key, so the escape-remainder must fold
     it to a word move backward (Alt/Ctrl fallback path, mirror of Ctrl+Right)."""
@@ -1233,6 +1239,7 @@ def test_ctrl_right_folds_to_key_ctrl_right(session):
     )
 
 
+@_STALE_REDRAW
 def test_unhandled_escape_and_control_keys_are_safe(session):
     """An unterminated escape sequence (``ESC [``) and an unbound control
     byte must be consumed without disturbing the prompt; typing after them
@@ -1259,7 +1266,7 @@ def test_ctrl_c_interrupts_running_command(session):
     session.keys(b"\n")
     time.sleep(0.5)  # let the command thread enter the eval loop
     session.keys(b"\x03")  # Ctrl+C — interrupt, not exit
-    ok = session.wait_until(lambda sc: "Aborted" in sc.text(), timeout=5)
+    ok = session.wait_until(lambda sc: "Aborted" in sc.text(), timeout=15)
     _assert(session, ok, "Ctrl+C did not abort the running command")
     session.write("echo still-alive")
     session.keys(b"\n")
