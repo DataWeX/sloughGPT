@@ -20,8 +20,15 @@ from routers.vm import router as vm_router  # noqa: E402
 
 
 def _app() -> FastAPI:
+    # Sibling router tests register this too; without it the AppError that
+    # /vm/run and the training-job routes raise propagates out of TestClient
+    # instead of becoming the 404 production returns (main.py registers the
+    # full handler set).
+    from infrastructure.exception_handlers import register_app_error_handler
+
     app = FastAPI()
     app.include_router(vm_router)
+    register_app_error_handler(app)
     return app
 
 
@@ -30,7 +37,7 @@ class TestListBuiltins:
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
         assert resp.status_code == 200
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         assert isinstance(programs, list)
         assert len(programs) >= 10
         names = [p["name"] for p in programs]
@@ -40,7 +47,7 @@ class TestListBuiltins:
     def test_builtins_have_required_fields(self):
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         for p in programs:
             assert "name" in p
             assert "description" in p
@@ -49,14 +56,14 @@ class TestListBuiltins:
     def test_builtins_unique_names(self):
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         names = [p["name"] for p in programs]
         assert len(names) == len(set(names))
 
     def test_builtins_hello_is_hello_world(self):
         client = TestClient(_app())
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         hello = next(p for p in programs if p["name"] == "hello")
         assert "mov" in hello["code"].lower() or "int" in hello["code"].lower()
 
@@ -66,7 +73,7 @@ class TestVMInfo:
         client = TestClient(_app())
         resp = client.get("/vm/info")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["isa"] == "x86-32"
         assert "registers" in data
         assert "features" in data
@@ -74,22 +81,22 @@ class TestVMInfo:
     def test_info_isa(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert resp.json()["isa"] == "x86-32"
+        assert resp.json()["data"]["isa"] == "x86-32"
 
     def test_info_registers_is_dict(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert isinstance(resp.json()["registers"], dict)
+        assert isinstance(resp.json()["data"]["registers"], dict)
 
     def test_info_features_is_list(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert isinstance(resp.json()["features"], list)
+        assert isinstance(resp.json()["data"]["features"], list)
 
     def test_info_has_eax(self):
         client = TestClient(_app())
         resp = client.get("/vm/info")
-        assert "EAX" in resp.json()["registers"]
+        assert "EAX" in resp.json()["data"]["registers"]
 
 
 class TestVMRun:

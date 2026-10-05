@@ -14,6 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 # ---------------------------------------------------------------------------
 # Path setup
 # ---------------------------------------------------------------------------
@@ -40,7 +42,7 @@ def _make_store(**overrides):
         ],
         "get_stats": lambda: {"total_adapters": 2, "total_feedback": 15},
         "get_adapter": lambda uid: SimpleNamespace(feedback_count=10) if uid == "u1" else None,
-        "update_adapter": lambda uid, rating: None,
+        "update_adapter": lambda uid, feedback_signal=None: None,
         "reset_user_adapter": lambda uid: None,
         "merge_all": lambda: None,
         "aggregate_best_adapters": lambda **kw: {
@@ -58,16 +60,46 @@ def _make_store(**overrides):
 
 
 def _app():
+    # Without this handler the AppError that _get_store raises (503 when the
+    # per-user LoRA store is unavailable) escapes as an unhandled 500 —
+    # main.py registers the full handler set, and sibling router tests do too.
+    from infrastructure.exception_handlers import register_app_error_handler
+
     app = FastAPI()
     app.include_router(router)
+    register_app_error_handler(app)
     return app
 
 
 # ---------------------------------------------------------------------------
-# Tests — patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora' (lazy import in handler)
+# Tests — patch at 'domain.feedback.get_per_user_lora'
 # ---------------------------------------------------------------------------
+#
+# The handler runs `from domain.feedback import get_per_user_lora` inside
+# _get_store(), so it resolves the PACKAGE attribute on every call.
+# domain/feedback/__init__.py:27 is an *eager* re-export
+#   from domain.feedback._internal.per_user_lora import get_per_user_lora
+# which binds the name once at package-import time. Patching the _internal
+# module therefore never reaches the name the router reads, and these tests
+# were silently exercising the real store (live rows such as user_id
+# 'default' instead of the fake's u1/u2).
 
-MOCK_TARGET = "domain.feedback._internal.per_user_lora.get_per_user_lora"
+MOCK_TARGET = "domain.feedback.get_per_user_lora"
+
+
+@pytest.fixture(autouse=True)
+def _clear_list_cache():
+    """Drop the router's module-level 15s response cache between tests.
+
+    list_adapters() short-circuits on `_list_cache` BEFORE it calls
+    _get_store(), so a warm cache both replays the previous test's payload
+    and defeats the ImportError patch in test_import_error_returns_503.
+    """
+    import routers.user_adapters as ua
+
+    ua._list_cache = None
+    yield
+    ua._list_cache = None
 
 
 class TestListAdapters:
