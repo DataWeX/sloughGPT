@@ -534,21 +534,45 @@ HLT`,
 
 export default function VMPage() {
   const [vmMode, setVmMode] = useState<'assembly' | 'browser'>('assembly')
-  const [source, setSource] = useState(DEFAULT_PROGRAMS.hello)
+  const [source, setSourceRaw] = useState(DEFAULT_PROGRAMS.hello)
   const [result, setResult] = useState<VMRunResult | null>(null)
   const [running, setRunning] = useState(false)
-  const [maxSteps, setMaxSteps] = useState(DEFAULT_MAX_STEPS)
+  const [maxSteps, setMaxStepsRaw] = useState(DEFAULT_MAX_STEPS)
   const [debug, setDebug] = useState(false)
   const [keyboardInput, setKeyboardInput] = useState('')
-  const [role, setRole] = useState('user')
+  const [role, setRoleRaw] = useState('user')
   const [hydrated, setHydrated] = useState(false)
   const [showRef, setShowRef] = useState(false)
   const [copied, setCopied] = useState(false)
   const [trainingJob, setTrainingJob] = useState<VMTrainingJob | null>(null)
-  const [trainConfig, setTrainConfig] = useState<TrainConfig>(DEFAULT_TRAIN_CONFIG)
+  const [trainConfig, setTrainConfigRaw] = useState<TrainConfig>(DEFAULT_TRAIN_CONFIG)
   const [datasetNames, setDatasetNames] = useState<string[]>([])
   const [customDataset, setCustomDataset] = useState(false)
   const [launchedJob, setLaunchedJob] = useState<number | null>(null)
+
+  // loadState() hydrates from chatDB asynchronously. Edits made before it
+  // completes must not be clobbered by it: the user-facing setters below mark
+  // the field as touched, and loadState skips touched fields.
+  const sourceTouched = useRef(false)
+  const stepsTouched = useRef(false)
+  const roleTouched = useRef(false)
+  const trainTouched = useRef(false)
+  const setSource = useCallback<React.Dispatch<React.SetStateAction<string>>>((v) => {
+    sourceTouched.current = true
+    setSourceRaw(v)
+  }, [])
+  const setMaxSteps = useCallback<React.Dispatch<React.SetStateAction<number>>>((v) => {
+    stepsTouched.current = true
+    setMaxStepsRaw(v)
+  }, [])
+  const setRole = useCallback<React.Dispatch<React.SetStateAction<string>>>((v) => {
+    roleTouched.current = true
+    setRoleRaw(v)
+  }, [])
+  const setTrainConfig = useCallback<React.Dispatch<React.SetStateAction<TrainConfig>>>((v) => {
+    trainTouched.current = true
+    setTrainConfigRaw(v)
+  }, [])
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const trainingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -657,7 +681,7 @@ export default function VMPage() {
       const hash = window.location.hash
       if (hash.startsWith('#code=')) {
         const decoded = atob(hash.slice(6))
-        setSource(decoded)
+        setSourceRaw(decoded)
         sourceLoaded = true
       }
     } catch {
@@ -665,22 +689,24 @@ export default function VMPage() {
     }
 
     const loadState = async () => {
-      if (!sourceLoaded) {
+      if (!sourceLoaded && !sourceTouched.current) {
         const saved = await chatDB.getKV<string>('vm-source')
-        if (saved) setSource(saved)
+        if (saved) setSourceRaw(saved)
       }
       const [role, maxSteps, trainConfigData] = await Promise.all([
         loadRole(),
         loadMaxSteps(),
         loadTrainConfig(),
       ])
-      setRole(role)
-      setMaxSteps(maxSteps)
-      setTrainConfig(trainConfigData)
+      if (!roleTouched.current) setRoleRaw(role)
+      if (!stepsTouched.current) setMaxStepsRaw(maxSteps)
+      if (!trainTouched.current) setTrainConfigRaw(trainConfigData)
       setHydrated(true)
     }
 
-    loadState()
+    // A rejected KV read must not leave the page stuck on the loading
+    // skeleton (hydrated gates both rendering and the save effects).
+    loadState().catch(() => setHydrated(true))
   }, [])
 
   // Save source to chatDB on change
@@ -747,7 +773,7 @@ export default function VMPage() {
     const res = await handleRun(false, src)
     const eax = res?.registers.find((r) => r.name === 'EAX')?.value
     setLaunchedJob(eax != null && eax >= 1 ? eax : null)
-  }, [trainConfig, handleRun])
+  }, [trainConfig, handleRun, setSource])
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {

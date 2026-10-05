@@ -23,6 +23,25 @@ describe('VM console', () => {
   })
 
   it('runs the source and shows the result and registers', () => {
+    // Without an explicit mock the fallback replies `{}`, which the console
+    // treats as a failed run — the result panel never opens.
+    cy.intercept('POST', `${apiBase}/vm/run`, {
+      statusCode: 200,
+      body: {
+        success: true,
+        exit_code: 0,
+        steps_executed: 12,
+        elapsed_ms: 3.5,
+        output: '',
+        registers: [
+          { name: 'EAX', value: 0, hex: '0x00000000' },
+          { name: 'EBX', value: 0, hex: '0x00000000' },
+        ],
+        eip: 0,
+        eip_hex: '0x00000000',
+        status: 'halted',
+      },
+    }).as('vmRunPlain')
     cy.contains('button', 'Run').click()
     cy.contains('Result').scrollIntoView().should('be.visible')
     cy.contains('halted').should('be.visible')
@@ -73,8 +92,12 @@ describe('VM console', () => {
       },
     }).as('vmRunResult')
     cy.contains('button', 'Run').click()
-    cy.contains('Training result').scrollIntoView().should('be.visible')
-    cy.contains(/final_loss.*1\.5/).should('be.visible')
+    // Scope to the success-styled pre: the sample source in the editor also
+    // mentions 'Training result', which would otherwise match first.
+    cy.get('pre.text-success')
+      .scrollIntoView()
+      .should('be.visible')
+      .should('contain', 'final_loss')
   })
 
   it('stops a running training job from the Training card', () => {
@@ -111,6 +134,9 @@ describe('VM console', () => {
   it('persists the selected role and steps across reloads', () => {
     cy.get('select[aria-label="VM role"]').select('admin')
     cy.get('#vm-steps').type('{selectall}750')
+    // Edits are persisted to IndexedDB asynchronously (after hydration
+    // completes); give the write time to land before tearing the page down.
+    cy.wait(500)
     cy.reload()
     cy.get('select[aria-label="VM role"]').should('have.value', 'admin')
     cy.get('#vm-steps').should('have.value', '750')

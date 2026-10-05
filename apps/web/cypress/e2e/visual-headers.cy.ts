@@ -87,7 +87,10 @@ describe('Visual — Header responsive breakpoints', () => {
 
   it('header at desktop (1280px)', () => {
     cy.viewport(1280, 800)
+    // At desktop width the mobile nav collapses to zero height and matches
+    // first in DOM order — skip hidden candidates.
     cy.get('[class*="sl-page-header"], [class*="app-route-header"], header, nav')
+      .filter(':visible')
       .first()
       .screenshot('headers/responsive-desktop')
   })
