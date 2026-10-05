@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, Query
-from infrastructure.auth import require_auth_if_enabled
+from infrastructure.auth import audit_user, require_auth_if_enabled
 from pydantic import BaseModel, Field
 from schemas.common import endpoint, raise_error, success_response
 
@@ -42,10 +42,10 @@ class CheckRequest(BaseModel):
 
 @router.get("/balance")
 @endpoint("tokens.balance")
-async def get_balance(auth_user: dict = Depends(require_auth_if_enabled)):
+async def get_balance(auth_user: dict | None = Depends(require_auth_if_enabled)):
     try:
         service = get_token_billing_service()
-        account = service.get_balance(auth_user["id"])
+        account = service.get_balance(audit_user(auth_user))
         return success_response(data=account.to_dict())
     except Exception as e:
         logger.error("Failed to get balance: %s", e, extra={"tag": "TOKENS"})
@@ -54,10 +54,10 @@ async def get_balance(auth_user: dict = Depends(require_auth_if_enabled)):
 
 @router.get("/usage/summary")
 @endpoint("tokens.usage_summary")
-async def get_usage_summary(auth_user: dict = Depends(require_auth_if_enabled)):
+async def get_usage_summary(auth_user: dict | None = Depends(require_auth_if_enabled)):
     try:
         service = get_token_billing_service()
-        return success_response(data=service.get_usage_summary(auth_user["id"]))
+        return success_response(data=service.get_usage_summary(audit_user(auth_user)))
     except Exception as e:
         logger.error("Failed to get usage summary: %s", e, extra={"tag": "TOKENS"})
         raise_error(str(e), "E_TOKENS_USAGE", status_code=500)
@@ -68,11 +68,11 @@ async def get_usage_summary(auth_user: dict = Depends(require_auth_if_enabled)):
 async def get_usage_history(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
-    auth_user: dict = Depends(require_auth_if_enabled),
+    auth_user: dict | None = Depends(require_auth_if_enabled),
 ):
     try:
         service = get_token_billing_service()
-        records = service.get_usage_history(auth_user["id"], limit=limit, offset=offset)
+        records = service.get_usage_history(audit_user(auth_user), limit=limit, offset=offset)
         return success_response(data={"records": [r.to_dict() for r in records]})
     except Exception as e:
         logger.error("Failed to get usage history: %s", e, extra={"tag": "TOKENS"})
@@ -81,10 +81,12 @@ async def get_usage_history(
 
 @router.post("/topup")
 @endpoint("tokens.topup")
-async def topup_credits(request: TopUpRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+async def topup_credits(
+    request: TopUpRequest, auth_user: dict | None = Depends(require_auth_if_enabled)
+):
     try:
         service = get_token_billing_service()
-        account = service.add_credits(auth_user["id"], request.amount)
+        account = service.add_credits(audit_user(auth_user), request.amount)
         return success_response(data=account.to_dict(), message=f"Added {request.amount} credits")
     except Exception as e:
         logger.error("Failed to topup credits: %s", e, extra={"tag": "TOKENS"})
@@ -93,7 +95,9 @@ async def topup_credits(request: TopUpRequest, auth_user: dict = Depends(require
 
 @router.post("/upgrade")
 @endpoint("tokens.upgrade")
-async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+async def upgrade_tier(
+    request: UpgradeRequest, auth_user: dict | None = Depends(require_auth_if_enabled)
+):
     try:
         tier = Tier(request.tier)
     except ValueError:
@@ -105,7 +109,7 @@ async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(requir
 
     try:
         service = get_token_billing_service()
-        account = service.upgrade_tier(auth_user["id"], tier)
+        account = service.upgrade_tier(audit_user(auth_user), tier)
         return success_response(data=account.to_dict(), message=f"Upgraded to {tier.value}")
     except Exception as e:
         logger.error("Failed to upgrade tier: %s", e, extra={"tag": "TOKENS"})
@@ -114,10 +118,12 @@ async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(requir
 
 @router.post("/check")
 @endpoint("tokens.check")
-async def check_tokens(request: CheckRequest, auth_user: dict = Depends(require_auth_if_enabled)):
+async def check_tokens(
+    request: CheckRequest, auth_user: dict | None = Depends(require_auth_if_enabled)
+):
     try:
         service = get_token_billing_service()
-        account = service.get_balance(auth_user["id"])
+        account = service.get_balance(audit_user(auth_user))
         total_tokens = request.input_tokens + request.output_tokens
         can_afford = account.can_afford(total_tokens)
         return success_response(
