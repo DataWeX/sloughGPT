@@ -616,6 +616,7 @@ class LoRAEvaluator:
             Path to the exported .soul file
         """
         from domain.inference import (
+            SOUL_PROVENANCE_DISTILLATION,
             BehavioralTraits,
             CognitiveSignature,
             EmotionalRange,
@@ -715,7 +716,7 @@ class LoRAEvaluator:
             },
         )
 
-        save_soul(net, output_sou)
+        save_soul(net, output_sou, record=SOUL_PROVENANCE_DISTILLATION)
         logger.info("Exported .soul checkpoint: %s", output_sou, extra={"tag": "INFRA"})
         return output_sou
 

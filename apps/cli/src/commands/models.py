@@ -35,11 +35,36 @@ def cmd_models(args):
     log.section("Soul Files (.soul)")
     soul_files = local_soul_candidate_paths(models_dir)
     if soul_files:
+        # Identity comes from the file, not the filename: several checkpoints
+        # share a stem (one holds a 16:07 run at loss 4.10, its legacy-spelled
+        # sibling a 16:38 run at 3.97) and differ by ~1KB of size, so Name and
+        # Size alone cannot tell them apart.
+        from domain.inference import classify_soul  # lazy: costs ~0.3s to import
+
         rows = []
         for f in soul_files:
-            size = f.stat().st_size
-            rows.append([f.name, format_size(size)])
-        log.table(["Name", "Size"], rows)
+            ident = classify_soul(str(f))
+            loss = ident.final_train_loss
+            born = ident.born_at
+            rows.append(
+                [
+                    f.name,
+                    format_size(f.stat().st_size),
+                    ident.format,
+                    (ident.integrity_hash or "-")[:10],
+                    "-" if loss is None else f"{loss:.4f}",
+                    born[11:19] if born else "-",
+                    # Declared at write time by save_soul(record=...), so every
+                    # checkpoint written before that field existed reads "-".
+                    # That is the honest answer: unknown, never inferred.
+                    ident.provenance or "-",
+                ]
+            )
+        log.table(
+            ["Name", "Size", "Format", "Hash", "Loss", "Born", "Provenance"],
+            rows,
+            align=["l", "r", "l", "l", "r", "l", "l"],
+        )
     else:
         log.info("No soul files found")
 
@@ -91,6 +116,26 @@ def _cmd_models_info(args):
         return
 
     log.header(f"Model: {model_path}")
+
+    # Identity BEFORE the expensive load: what a file is comes from its header
+    # and sidecar, not its weights — so this block still renders when
+    # import_from_sou below throws, which is exactly when you need it.
+    from domain.inference import classify_soul  # lazy: ~0.3s to import
+
+    ident = classify_soul(str(model_path))
+    log.key_value("Format", ident.format or "unknown")
+    log.key_value("Tier", ident.tier or "unknown")
+    log.key_value("Provenance", ident.provenance or "unknown")
+    log.key_value("Hash", ident.integrity_hash or "unknown")
+    if ident.born_at:
+        log.key_value("Born", ident.born_at)
+    if ident.final_train_loss is not None:
+        log.key_value("Loss", f"{ident.final_train_loss:.4f}")
+    if len(ident.variants) > 1:
+        others = ", ".join(Path(v.path).name for v in ident.variants if v.path != ident.resolved)
+        log.info(
+            f"{len(ident.variants)} different checkpoints share this name — also on disk: {others}"
+        )
 
     try:
         net = import_from_sou(str(model_path))
@@ -897,4 +942,3 @@ def register(subparsers):
 
     compare_parser = subparsers.add_parser("compare", help="Compare models or benchmarks")
     compare_parser.set_defaults(func=_cmd_models_compare)
-

@@ -34,6 +34,7 @@ from domain.core._internal.prompt_builder import (
     PromptBuilder,
 )
 from domain.inference import (
+    SOUL_PROVENANCE_EXPORT,
     SloProfile,
     load_soul,
     save_soul,
@@ -710,7 +711,13 @@ class SloEngine:
         # Canonicalize once, up front: save_soul and the sidecar then agree on
         # the name without either re-deriving it independently.
         output_path = soul_path(output_path)
-        save_soul(self._model, output_path, soul_profile=self._soul, weights_only=False)
+        save_soul(
+            self._model,
+            output_path,
+            soul_profile=self._soul,
+            weights_only=False,
+            record=SOUL_PROVENANCE_EXPORT,
+        )
 
         import json
 

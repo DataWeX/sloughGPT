@@ -208,6 +208,15 @@ class SloProfile:
     tags: list[str] = field(default_factory=list)
     certifications: list[str] = field(default_factory=list)
     integrity_hash: str = ""
+    tier: str = ""
+    """Container tier this file was WRITTEN as — ``simple``/``canonical``/
+    ``interchange``/``runtime``. Declared at save time from the suffix, never
+    guessed later: see :data:`SOUL_TIER_POLICY`."""
+    provenance: str = ""
+    """Where the artifact came from — the ``record=`` argument to
+    :func:`save_soul`. Write time is the only moment this is knowable; reading
+    it back later would mean guessing, so files predating the field read
+    ``""`` and stay unknown rather than being inferred."""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
@@ -245,13 +254,22 @@ class SloProfile:
             "tags": self.tags,
             "certifications": self.certifications,
             "integrity_hash": self.integrity_hash,
+            "tier": self.tier,
+            "provenance": self.provenance,
             "metadata": self.metadata,
         }
         return d
 
     def compute_hash(self) -> str:
+        # tier and provenance are DECLARED, not derived: tier follows the
+        # suffix the writer chose, provenance is a caller-supplied `record=`
+        # string. Hashing either would let an argument move the file's
+        # identity — identical weights saved as "training" and "export" would
+        # hash apart and stop matching as the same checkpoint. Excluding them
+        # also keeps every hash this field ever produced stable.
+        payload = {k: v for k, v in self.to_dict().items() if k not in ("tier", "provenance")}
         data = json.dumps(
-            _soul_json_sanitize(self.to_dict()),
+            _soul_json_sanitize(payload),
             sort_keys=True,
             default=str,
             allow_nan=False,
@@ -594,6 +612,41 @@ _SLO_SUFFIX = ".slo"
 # is the READ axis (always a probe candidate).
 SOUL_SUFFIXES: tuple[str, ...] = (_SOUL_SUFFIX, _SOU_ALIAS, _SLO_SUFFIX)
 
+# Container tier per suffix — the DECLARED tier axis, kept apart from the
+# read axis above on purpose. SOUL_SUFFIXES answers "may the reader probe this
+# name?"; this answers "what kind of artifact is it?", and the two need not
+# agree: .slnc is a tier the reader never probes as a soul spelling, because
+# it is mmap runtime with no soul identity at all.
+#
+# Tiers are declared, never inferred from content — deriving them would make
+# the tier depend on parsing choices and flip the moment a reader changed.
+# Read side falls back to this table ONLY when a file predates the `tier`
+# field in its own sidecar; a written value always wins.
+SOUL_TIER_POLICY: dict[str, str] = {
+    _SOU_ALIAS: "simple",
+    _SOUL_SUFFIX: "canonical",
+    _SLO_SUFFIX: "interchange",
+    ".slnc": "runtime",
+}
+
+# Declared provenance vocabulary — the write-side counterpart of the tier
+# table. Producers NAME one of these rather than passing any string, because
+# provenance is stamped into the header and sidecar at write time and is never
+# corrected afterwards: a typo there becomes permanent identity metadata. The
+# contract is enforced by save_soul, not by convention.
+#
+# Extending it means adding to this tuple — the same rule SOUL_SUFFIXES
+# follows, so neither axis grows a second, private list of spellings.
+SOUL_PROVENANCE_TRAINING = "training"
+SOUL_PROVENANCE_EXPORT = "export"
+SOUL_PROVENANCE_DISTILLATION = "distillation"
+
+SOUL_PROVENANCE: tuple[str, ...] = (
+    SOUL_PROVENANCE_TRAINING,
+    SOUL_PROVENANCE_EXPORT,
+    SOUL_PROVENANCE_DISTILLATION,
+)
+
 # Extensions that name some other format. Handing one to soul_path is a type
 # error, not a path to guess around: we refuse rather than write soul bytes
 # under a foreign name (or silently swap the extension).
@@ -686,13 +739,21 @@ def soul_meta_path(path: str) -> str:
 def soul_read_candidates(path: str) -> list[str]:
     """Ordered probe list for reading *path* — never raises.
 
-    Canonical name first, then the legacy spelling that may exist beside it:
+    The spelling the caller NAMED comes first, then its sibling:
 
     - bare stem       -> ``<stem>.soul``, ``<stem>.slo``
-    - ``.soul``       -> canonical, ``<given>.soul`` (legacy double-append)
-    - ``.soul.soul``  -> canonical, as given
-    - ``.slo``        -> as given, ``<stem>.soul`` (interchange first: the
-      caller named it explicitly, and it is a real file in its own right)
+    - ``.soul``       -> as given (canonical), ``<given>.soul`` (legacy)
+    - ``.soul.soul``  -> as given, canonical
+    - ``.sou``        -> as given, ``<stem>.soul`` (a different model, never ours)
+    - ``.slo``        -> as given, ``<stem>.soul`` (interchange — a real file
+      in its own right, not a spelling to normalize away)
+
+    "As given first" is not cosmetic. Two spellings can be genuinely
+    DIFFERENT checkpoints: one stem in ``models/`` holds a 16:07 run at loss
+    4.10 and a 16:38 run at loss 3.97. Probing the canonical name first would
+    hand back the file the caller did not name, and nothing downstream —
+    magic check, parse, finder globs — would catch it, because both files are
+    valid SOUL containers.
     """
     directory, basename = os.path.split(path)
 
@@ -703,18 +764,18 @@ def soul_read_candidates(path: str) -> list[str]:
     if basename.endswith(_SOU_ALIAS):
         # `.sou` names a DIFFERENT model (tiny sliney-trained / GPT-y), not a
         # spelling of `.soul` — so probe as given FIRST, exactly like `.slo`.
-        # Both files parse as valid SOUL containers, so probing `.soul` first
-        # would hand back OUR model when the caller asked for theirs and
-        # nothing downstream (magic check, parse, finder globs) would catch it.
         stem = basename[: -len(_SOU_ALIAS)]
         return _dedupe([path, os.path.join(directory, stem + _SOUL_SUFFIX)])
 
     canonical = os.path.join(directory, _collapse_soul_stem(basename) + _SOUL_SUFFIX)
 
     if basename.endswith(_SOUL_SUFFIX):
-        # Explicitly soul-named: canonical first, then as given unless that
-        # is already the canonical spelling.
-        second = path if path != canonical else canonical + _SOUL_SUFFIX
+        if path != canonical:
+            # Explicitly named the LEGACY double-append spelling. Honour it —
+            # canonical-first would silently swap in the neighbour checkpoint.
+            return _dedupe([path, canonical])
+        # Canonical as given: fall back to the legacy file that may sit beside it.
+        second = canonical + _SOUL_SUFFIX
     else:
         second = os.path.join(directory, _collapse_soul_stem(basename) + _SLO_SUFFIX)
 
@@ -739,11 +800,336 @@ def is_soul_file(path: str) -> bool:
         return False
 
 
+@dataclass(frozen=True)
+class SoulVariant:
+    """One concrete file competing for a name.
+
+    Two of these under a single checkpoint name means the name does not
+    identify anything — which is the whole reason classification exists.
+    """
+
+    path: str
+    """Where this variant actually lives on disk, as named."""
+    integrity_hash: str
+    """Content hash from its own sidecar. ``""`` when there is none."""
+    size: int
+    mtime: float
+
+
+@dataclass(frozen=True)
+class SoulIdentity:
+    """What a model file actually is, derived from its own bytes.
+
+    Filenames do not identify checkpoints. ``journey_select_trained.soul`` and
+    ``journey_select_trained.soul.soul`` are two DIFFERENT models — different
+    bytes, different training runs — yet both sidecars declare
+    ``name=sloughgpt``, ``version=1.0.0``, ``base_model=sloughgpt`` and an
+    empty description. Everything that *looks* like an identity is boilerplate.
+
+    The one field that separates them is ``integrity_hash``: content-derived,
+    written at save time, and — before this type existed — never read by
+    anything.
+    """
+
+    path: str
+    """Canonical spelling of the input — ``soul_path`` applied."""
+    resolved: str | None
+    """The file a reader would actually return, or None if nothing is on disk."""
+    spelling: str
+    """How the input was spelled: ``canonical``, ``legacy-double``,
+    ``bare``, ``alias``, ``interchange``, ``foreign``, or ``empty``."""
+    format: str
+    """Evidence-based container type: ``soul`` when the magic bytes match,
+    ``not-soul`` when the name is soul-ish (``.soul``/``.sou``/``.slo``) but
+    the header is not a SOUL container, else the extension. Empty when there
+    is no file to inspect."""
+    exists: bool
+    size: int
+    mtime: float
+    integrity_hash: str
+    """Content hash from the sidecar — the real unique key. ``""`` if absent."""
+    born_at: str
+    final_train_loss: float | None
+    tier: str
+    """Declared container tier (``simple``/``canonical``/``interchange``/
+    ``runtime``), falling back to :data:`SOUL_TIER_POLICY` for files written
+    before the field existed. ``""`` when there is nothing to classify."""
+    provenance: str
+    """Declared ``record=`` provenance. ``""`` means unknown — a file that
+    predates the field is reported unknown, never inferred from its name."""
+    siblings: tuple[str, ...]
+    """Other spellings that also exist on disk beside :attr:`resolved`."""
+    variants: tuple[SoulVariant, ...]
+    """Every spelling that exists on disk, each with its own hash — the
+    answer to "how many distinct checkpoints are competing for this name?"."""
+    shadowed: bool
+    """A sibling spelling exists AND holds different content — two distinct
+    checkpoints sharing one stem. The sibling cannot be reached by the
+    canonical name alone; it must be named in its own (legacy) spelling,
+    which is exactly the guesswork a filename should not demand of anyone."""
+    orphan_legacy: bool
+    """Only the legacy spelling exists; the canonical name is absent."""
+
+
+# A sidecar is not just identity. It also carries ``metadata.training_state``
+# — the optimizer and scheduler state training resumes from, read by
+# `train_pipeline` and pinned by its tests — and in a real checkpoint that
+# blob runs to 40MB inside a 69MB sidecar. Parsing all of it to read a
+# handful of fields costs 3.4s per file: 82s to classify one models/
+# directory, and 17.9s to serve GET /training/checkpoints. Above this size,
+# take the head instead.
+_FULL_PARSE_LIMIT = 4 * 1024 * 1024
+_HEAD_BYTES = 256 * 1024
+
+
+def read_sidecar(path: str) -> dict:
+    """Sidecar for an EXISTING file, looked up as that file is actually named.
+
+    ``soul_meta_path`` canonicalizes, which is what a writer wants but is
+    wrong here: a legacy ``x.soul.soul`` carries its own
+    ``x.soul.soul.meta.json``, and canonicalizing first would quietly hand
+    back the sidecar of the DIFFERENT checkpoint sitting at ``x.soul`` —
+    making two distinct models compare as identical. As-named first, with the
+    canonical spelling as fallback for legacy files written before sidecars
+    tracked the name.
+
+    Everything the checkpoint declares about itself comes back EXCEPT
+    ``metadata.training_state`` — resume state that identity, loss and config
+    readers never want, and one that can outweigh the model it sits beside.
+    Dropping it always, rather than only when the file is large, keeps the
+    result independent of file size; a caller should not have to know how big
+    a sidecar is to know what it gets back.
+    """
+    for candidate in (path + ".meta.json", _canonical_sidecar(path)):
+        if not candidate:
+            continue
+        loaded = _load_sidecar(candidate)
+        if loaded is not None:
+            metadata = loaded.get("metadata")
+            if isinstance(metadata, dict):
+                metadata.pop("training_state", None)
+            return loaded
+    return {}
+
+
+def _load_sidecar(candidate: str) -> dict | None:
+    """Parse *candidate*, or None when it is unreadable or not an object."""
+    try:
+        if os.path.getsize(candidate) > _FULL_PARSE_LIMIT:
+            loaded = _read_sidecar_head(candidate)
+        else:
+            with open(candidate, encoding="utf-8") as handle:
+                loaded = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    return loaded if isinstance(loaded, dict) else None
+
+
+def _read_sidecar_head(candidate: str) -> dict:
+    """A sidecar without its training blob, read from a file too large to parse.
+
+    ``metadata.training_state`` is the last key inside ``metadata`` and the
+    only one that can be enormous, so everything ahead of it is ordinary
+    JSON: closing the open objects at the comma before it parses ~2KB of
+    sidecar for the price of a 256KB read rather than a 69MB one — measured
+    3.4s down to sub-millisecond.
+
+    Depth is not assumed — ``}}`` then ``}`` — so a layout that nests the
+    blob elsewhere still closes legally. If neither yields an
+    ``integrity_hash``, the layout is not the one this understands: pay for
+    the full parse rather than report a real hash as absent.
+    """
+    with open(candidate, encoding="utf-8") as handle:
+        head = handle.read(_HEAD_BYTES)
+    marker = head.find('"training_state"')
+    if marker != -1:
+        split = head.rfind(",", 0, marker)
+        if split != -1:
+            for closing in ("}}", "}"):
+                try:
+                    loaded = json.loads(head[:split] + closing)
+                except ValueError:
+                    continue
+                if isinstance(loaded, dict) and loaded.get("integrity_hash"):
+                    return loaded
+    with open(candidate, encoding="utf-8") as handle:
+        loaded = json.load(handle)
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _canonical_sidecar(path: str) -> str | None:
+    """Canonical sidecar for *path*, or None when the grammar refuses it.
+
+    Foreign suffixes raise out of :func:`soul_path`; classification must keep
+    going and report what the file is rather than die on what it isn't.
+    """
+    try:
+        return soul_meta_path(path)
+    except ValueError:
+        return None
+
+
+def _fingerprint(path: str, meta: dict) -> str:
+    """Strongest cheap identity signal available for *path*.
+
+    Prefers the content hash; falls back to size when a checkpoint has no
+    sidecar, so a mismatch is still detectable rather than assumed away.
+    """
+    digest = str(meta.get("integrity_hash") or "")
+    if digest:
+        return f"hash:{digest}"
+    try:
+        return f"size:{os.path.getsize(path)}"
+    except OSError:
+        return "size:?"
+
+
+def classify_soul(path: str) -> SoulIdentity:
+    """Derive what *path* actually is — never raises.
+
+    Probes every spelling :func:`soul_read_candidates` allows, so the caller
+    learns not just what would load but what else is hiding behind that name:
+
+    - ``shadowed``      two spellings exist and DIFFER — one stem holding two
+      checkpoints. The sibling cannot be reached by the canonical name alone,
+      which is how a 5.7MB checkpoint with the better loss sat invisible
+      behind its own name
+    - ``orphan_legacy`` only the legacy spelling exists, so the canonical
+      name alone would raise ``FileNotFoundError``
+
+    :attr:`integrity_hash` always describes the file a reader would actually
+    return, not the spelling you asked for. For a shadowed pair both inputs
+    therefore report the SAME hash — the distinction lives in
+    :attr:`variants`, which lists every competing file with its own.
+
+    Foreign suffixes (``.pt``, ``.gguf``, ...) are reported rather than
+    refused: classifying a file is exactly the operation you reach for when
+    you do not know what it is, so raising there would be self-defeating.
+
+    Args:
+        path: any spelling the grammar accepts, plus foreign ones.
+
+    Returns:
+        A :class:`SoulIdentity`. ``resolved`` is None when nothing is on disk,
+        and every flag is False in that case.
+    """
+    try:
+        canonical = soul_path(path)
+    except ValueError:
+        canonical = path
+
+    basename = os.path.basename(path)
+    if not basename:
+        spelling = "empty"
+    elif basename.endswith(_SLO_SUFFIX):
+        spelling = "interchange"
+    elif basename.endswith(_SOUL_SUFFIX + _SOUL_SUFFIX):
+        spelling = "legacy-double"
+    elif basename.endswith(_SOUL_SUFFIX):
+        spelling = "canonical"
+    elif basename.endswith(_SOU_ALIAS):
+        spelling = "alias"
+    elif os.path.basename(canonical).endswith(_SOUL_SUFFIX):
+        spelling = "bare"
+    else:
+        spelling = "foreign"
+
+    if spelling == "foreign":
+        # Not a soul spelling at all. Running it through the grammar would
+        # invent "model.safetensors.soul" candidates that cannot exist and
+        # report a file that IS on disk as missing — classifying is exactly
+        # the operation you reach for when you don't know what you're holding.
+        candidates = [path]
+    else:
+        try:
+            candidates = soul_read_candidates(path)
+        except ValueError:
+            candidates = [path]
+
+    existing = [c for c in candidates if os.path.isfile(c)]
+    resolved = existing[0] if existing else None
+    siblings = tuple(existing[1:])
+
+    metas = {candidate: read_sidecar(candidate) for candidate in existing}
+
+    fmt = ""
+    if resolved:
+        if is_soul_file(resolved):
+            fmt = "soul"
+        elif resolved.endswith((_SOUL_SUFFIX, _SLO_SUFFIX, _SOU_ALIAS)):
+            # The name claims soul and the header disagrees — a mislabeled
+            # or truncated artifact, worth naming rather than rounding up.
+            fmt = "not-soul"
+        else:
+            fmt = os.path.splitext(resolved)[1].lstrip(".").lower() or "unknown"
+
+    chosen_meta = metas.get(resolved, {}) if resolved else {}
+    shadowed = bool(resolved) and any(
+        _fingerprint(sib, metas[sib]) != _fingerprint(resolved, chosen_meta) for sib in siblings
+    )
+
+    loss_raw = chosen_meta.get("final_train_loss")
+    try:
+        loss: float | None = float(loss_raw) if loss_raw is not None else None
+    except (TypeError, ValueError):
+        loss = None
+
+    # tier: what the file DECLARES, else the suffix policy as a display
+    # fallback for artifacts written before the field existed. The fallback is
+    # withheld when the name claims soul but the header disagrees — that file
+    # is mislabeled, and stamping it "canonical" would launder the claim.
+    # provenance is never inferred: absent simply means unknown.
+    tier = str(chosen_meta.get("tier") or "")
+    if not tier and resolved and fmt != "not-soul":
+        tier = SOUL_TIER_POLICY.get(os.path.splitext(resolved)[1].lower(), "")
+    provenance = str(chosen_meta.get("provenance") or "")
+
+    variants: list[SoulVariant] = []
+    size = 0
+    mtime = 0.0
+    for candidate in existing:
+        try:
+            st = os.stat(candidate)
+            vsize, vmtime = st.st_size, st.st_mtime
+        except OSError:
+            vsize, vmtime = 0, 0.0
+        variants.append(
+            SoulVariant(
+                path=candidate,
+                integrity_hash=str(metas[candidate].get("integrity_hash") or ""),
+                size=vsize,
+                mtime=vmtime,
+            )
+        )
+        if candidate == resolved:
+            size, mtime = vsize, vmtime
+
+    return SoulIdentity(
+        path=canonical,
+        resolved=resolved,
+        spelling=spelling,
+        format=fmt,
+        exists=resolved is not None,
+        size=size,
+        mtime=mtime,
+        integrity_hash=str(chosen_meta.get("integrity_hash") or ""),
+        born_at=str(chosen_meta.get("born_at") or ""),
+        final_train_loss=loss,
+        tier=tier,
+        provenance=provenance,
+        siblings=siblings,
+        variants=tuple(variants),
+        shadowed=shadowed,
+        orphan_legacy=bool(resolved) and not os.path.isfile(canonical),
+    )
+
+
 def save_soul(
     model,
     output_path: str,
     soul_profile: SloProfile | None = None,
     weights_only: bool = False,
+    record: str = "",
 ) -> str:
     """Export model to .soul format (binary: header + config + JSON weights).
 
@@ -756,6 +1142,12 @@ def save_soul(
             on the one canonical name.
         soul_profile: optional SloProfile with personality/identity metadata
         weights_only: if True, skip writing weight data (header + config only)
+        record: provenance — what produced this artifact. Must be one of
+            :data:`SOUL_PROVENANCE` (``training`` / ``export`` /
+            ``distillation``); anything else raises ``ValueError`` rather than
+            being written into the file's permanent identity. Written onto the
+            profile, so it reaches the header and the sidecar in one step;
+            empty leaves any provenance already on *soul_profile* alone.
 
     Returns:
         the CANONICAL path written (for chaining) — callers must use this
@@ -779,6 +1171,26 @@ def save_soul(
         soul_profile.metadata = dict(model.metadata)
     if not soul_profile.lineage and hasattr(model, "lineage"):
         soul_profile.lineage = model.lineage
+
+    # Both fields are declared HERE because this is the only moment they are
+    # knowable: soul_path() has already canonicalized output_path, so the tier
+    # is simply the suffix about to be written, and provenance exists nowhere
+    # but the caller's record argument. Reading either back later and guessing
+    # would defeat the point of declaring them.
+    tier = SOUL_TIER_POLICY.get(Path(output_path).suffix)
+    if tier is not None:
+        soul_profile.tier = tier
+    if record:
+        # Enforced here, at the boundary, because the value is stamped into
+        # the header and sidecar and never rewritten: a typo would become
+        # permanent identity metadata no reader could correct.
+        if record not in SOUL_PROVENANCE:
+            raise ValueError(
+                f"{record!r} is not a declared provenance. Valid values: "
+                f"{', '.join(SOUL_PROVENANCE)}. Add a new one to "
+                f"SOUL_PROVENANCE rather than passing a free string."
+            )
+        soul_profile.provenance = record
 
     soul_profile.integrity_hash = soul_profile.compute_hash()
     config_json = json.dumps(
@@ -931,6 +1343,34 @@ def load_soul(sou_path: str):
                 ", ".join(candidates),
                 extra={"tag": "INF"},
             )
+        # Canonical-first picks a SPELLING, not a checkpoint. When both
+        # spellings exist as genuinely different files, the loser is
+        # unreachable by any input — and it may be the better model (a 5.7MB
+        # checkpoint with the lower loss sat invisible behind its own name).
+        # Resolve silently is not an option here: say which one won and which
+        # one is now unreachable.
+        if any(c != candidate and os.path.isfile(c) for c in candidates):
+            identity = classify_soul(sou_path)
+            if identity.shadowed:
+                others = [
+                    f"{v.path} (hash {v.integrity_hash})"
+                    for v in identity.variants
+                    if v.path != identity.resolved
+                ]
+                # Not an error: both are reachable, but only by knowing the
+                # second spelling. Say so — silently returning one of two
+                # different models is the failure mode worth logging.
+                logger.warning(
+                    "load_soul: %s is one of %d DIFFERENT checkpoints sharing "
+                    "this name; loaded %s (hash %s). Also on disk, reachable "
+                    "only by its own spelling: %s",
+                    sou_path,
+                    len(identity.variants),
+                    identity.resolved,
+                    identity.integrity_hash,
+                    "; ".join(others),
+                    extra={"tag": "INF"},
+                )
         return result
     if last_err is not None:
         # A plain-text .slo profile can open with the four bytes "SOUL", so it
@@ -1148,7 +1588,16 @@ __all__ = [
     "soul_meta_path",
     "soul_read_candidates",
     "is_soul_file",
+    "classify_soul",
+    "SoulIdentity",
+    "SoulVariant",
     "SOUL_SUFFIXES",
+    "SOUL_TIER_POLICY",
+    "SOUL_PROVENANCE",
+    "SOUL_PROVENANCE_TRAINING",
+    "SOUL_PROVENANCE_EXPORT",
+    "SOUL_PROVENANCE_DISTILLATION",
+    "read_sidecar",
     "SOU_MAGIC",
     "SOU_VERSION",
     "SOU_VERSION_V3",

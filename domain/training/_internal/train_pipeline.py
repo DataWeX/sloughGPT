@@ -2214,7 +2214,10 @@ class SloughGPTTrainer:
         # The old one-level `endswith(".soul")` collapse left x.soul.soul
         # untouched (strip one, append one) and let .sou through unexamined.
         from domain.inference import create_soul_profile, save_soul, soul_path
-        from domain.inference._internal.slo_format import PersonalityCore
+        from domain.inference._internal.slo_format import (
+            SOUL_PROVENANCE_TRAINING,
+            PersonalityCore,
+        )
 
         # Honest metadata: only claim a loss that was actually observed. A save
         # before any training step has neither a train loss nor an eval loss,
@@ -2293,7 +2296,15 @@ class SloughGPTTrainer:
         )
 
         output_path = soul_path(path)
-        save_soul(self.model, output_path, soul_profile=soul)
+        # Declared provenance: everything this trainer writes is a training
+        # product, and write time is the only moment the answer is knowable —
+        # a reader cannot reconstruct who produced a file from its bytes.
+        save_soul(
+            self.model,
+            output_path,
+            soul_profile=soul,
+            record=SOUL_PROVENANCE_TRAINING,
+        )
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})
 

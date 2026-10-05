@@ -39,6 +39,15 @@ export interface Checkpoint {
   tagline?: string
   description?: string
   born_at?: string
+  /** Content-derived unique key from the sidecar. Two checkpoints can share
+   *  a name and differ only here — this is the field that separates them. */
+  integrity_hash?: string
+  /** Declared container tier (simple/canonical/interchange/runtime); falls
+   *  back to the suffix policy for files written before the field existed. */
+  tier?: string
+  /** Declared provenance (training/export/distillation) from
+   *  save_soul(record=...). Absent means unknown — never inferred. */
+  provenance?: string
   epochs_trained?: number
   final_train_loss?: number
   final_val_loss?: number

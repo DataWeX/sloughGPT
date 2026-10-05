@@ -9,6 +9,7 @@ from unittest.mock import patch
 import pytest
 
 from domain.training._internal.checkpoints import (
+    TRAINED_DIR,
     _load_soul_from_path,
     checkpoint_info,
     delete_checkpoint,
@@ -16,6 +17,7 @@ from domain.training._internal.checkpoints import (
     export_all_metrics,
     find_checkpoint,
     get_all_checkpoint_data,
+    is_trained_checkpoint,
     list_checkpoints,
     load_lora_soul,
     load_soul,
@@ -36,6 +38,39 @@ def _make_soul_with_meta(path: Path, meta: dict):
     path.write_text("x" * 5000)
     meta_path = path.with_suffix(path.suffix + ".meta.json")
     meta_path.write_text(json.dumps(meta))
+
+
+@pytest.fixture(autouse=True)
+def _isolated_ckpt_dirs(tmp_path, monkeypatch):
+    """Send every checkpoint dir to tmp_path instead of the real repo tree.
+
+    These helpers used to write 5KB fixtures straight into
+    ``models/auto-training/`` — a directory that also holds real checkpoints
+    (multi-hundred-KB ``*.soul`` plus their ``.points.json``) — and
+    ``_reset_dirs()`` only ever called ``mkdir``, so nothing was ever
+    removed. Debris accumulated across runs and leaked into production
+    listings. ``find_checkpoint`` returns files from whatever these constants
+    say, so redirecting them is enough to isolate the whole module.
+    """
+    import sys
+
+    import domain.training._internal.checkpoints as ckpt_mod
+
+    test_mod = sys.modules[__name__]
+    mapping = {
+        "CHECKPOINTS_DIR": tmp_path / "checkpoints",
+        "TURBO_DIR": tmp_path / "turbo",
+        "LORA_DIR": tmp_path / "lora",
+        "TRAINED_DIR": tmp_path / "models",
+    }
+    for name, path in mapping.items():
+        path.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(ckpt_mod, name, path)
+        # This module imported three of these by name; patch them too so the
+        # assertions below write and read the same tmp dirs the code does.
+        if name in vars(test_mod):
+            monkeypatch.setattr(test_mod, name, path)
+    return mapping
 
 
 # ── find_checkpoint ─────────────────────────────────────────────────────────
@@ -71,9 +106,55 @@ class TestFindCheckpoint:
         assert result is None
 
     def test_no_path_traversal(self):
+        # The lookup is SANITIZED, not rejected: the input collapses to its
+        # basename, so a traversal request resolves inside the checkpoint
+        # dirs or not at all.
+        #
+        # Asserting `is None` here (the previous version) was backwards: this
+        # test creates evil.soul first, so sanitization FINDS it and the old
+        # assertion failed — while a build with the basename stripping removed
+        # would resolve ../../../etc/evil.soul, miss, and pass. The old check
+        # was satisfied exactly when the protection was gone.
         _make_soul_file(CHECKPOINTS_DIR / "evil.soul")
+
         result = find_checkpoint("../../../etc/evil.soul")
-        assert result is None
+
+        assert result is not None
+        assert result.resolve() == (CHECKPOINTS_DIR / "evil.soul").resolve()
+
+    def test_traversal_never_escapes_the_checkpoint_dirs(self):
+        # A file reachable only by stepping OUT of the checkpoint dirs must
+        # never come back, whatever the input spelling.
+        outside = CHECKPOINTS_DIR.parent / "escapee.soul"
+        outside.write_text("x" * 100)
+        try:
+            for spelling in ("../escapee.soul", "../../models/escapee.soul"):
+                result = find_checkpoint(spelling)
+                if result is not None:
+                    assert result.resolve() != outside.resolve()
+                    assert str(result.resolve()).startswith(str(CHECKPOINTS_DIR.resolve()))
+        finally:
+            outside.unlink(missing_ok=True)
+
+    def test_finds_legacy_sibling_from_canonical_name(self):
+        # A file that exists ONLY at the double-appended spelling. Asking for
+        # the canonical name used to come back not-found here, while
+        # domain.inference.load_soul read it without complaint — two owners,
+        # two answers to "where is this checkpoint?".
+        _make_soul_file(CHECKPOINTS_DIR / "orphan.soul.soul")
+        result = find_checkpoint("orphan.soul")
+        assert result is not None
+        assert result.name == "orphan.soul.soul"
+
+    def test_named_spelling_wins_over_canonical(self):
+        # Both spellings can hold DIFFERENT checkpoints. The name the caller
+        # gave is the file it asked for — canonical-first would silently swap
+        # in the neighbour, and nothing downstream would catch it.
+        _make_soul_file(CHECKPOINTS_DIR / "shadow.soul")
+        _make_soul_file(CHECKPOINTS_DIR / "shadow.soul.soul")
+
+        assert find_checkpoint("shadow.soul.soul").name == "shadow.soul.soul"
+        assert find_checkpoint("shadow.soul").name == "shadow.soul"
 
 
 # ── load_soul ───────────────────────────────────────────────────────────────
@@ -128,6 +209,46 @@ class TestLoadSoul:
         _make_soul_with_meta(CHECKPOINTS_DIR / "test.soul", meta)
         result = load_soul("test")
         assert result["soul"] == "unknown"
+
+    def test_load_finds_legacy_sibling_from_canonical_name(self):
+        # The live failure this fixed: checkpoint_info() serves this path, so a
+        # canonical name for a file parked at x.soul.soul returned 404
+        # "Checkpoint not found" for a checkpoint sitting right there.
+        _make_soul_with_meta(CHECKPOINTS_DIR / "orphan.soul.soul", {"soul_name": "orphan-soul"})
+        result = load_soul("orphan.soul")
+        assert result is not None
+        assert result["name"] == "orphan.soul.soul"
+
+    def test_load_prefers_the_named_spelling(self):
+        # Two different checkpoints, one stem. Reading either spelling must
+        # yield its own row, not the neighbour's.
+        _make_soul_with_meta(CHECKPOINTS_DIR / "shadow.soul", {"soul_name": "first-soul"})
+        _make_soul_with_meta(CHECKPOINTS_DIR / "shadow.soul.soul", {"soul_name": "second-soul"})
+
+        assert load_soul("shadow.soul")["name"] == "shadow.soul"
+        assert load_soul("shadow.soul.soul")["name"] == "shadow.soul.soul"
+
+    def test_row_carries_the_declared_identity_axes(self):
+        meta = {
+            "soul_name": "axis-soul",
+            "provenance": "training",
+            "tier": "canonical",
+        }
+        _make_soul_with_meta(CHECKPOINTS_DIR / "axis.soul", meta)
+
+        row = load_soul("axis")
+        assert row["provenance"] == "training"
+        assert row["tier"] == "canonical"
+
+    def test_row_falls_back_for_tier_but_never_invents_provenance(self):
+        # A checkpoint written before either field existed: tier is answerable
+        # from the container's spelling, provenance is not answerable at all —
+        # so one back-fills and the other stays empty rather than guessed.
+        _make_soul_with_meta(CHECKPOINTS_DIR / "old.soul", {"soul_name": "old-soul"})
+
+        row = load_soul("old")
+        assert row["tier"] == "canonical"
+        assert row["provenance"] == ""
 
 
 # ── load_lora_soul ──────────────────────────────────────────────────────────
@@ -233,3 +354,69 @@ class TestAsyncFunctions:
         assert "exported_at" in result
         assert "total_checkpoints" in result
         assert "checkpoints" in result
+
+
+class TestTrainedCheckpointSpelling:
+    """The legacy double-append spelling is a first-class final job save.
+
+    ``is_trained_checkpoint`` replaced three hand-written
+    ``endswith("_trained.soul")`` checks in the scan, in ``delete_checkpoint``
+    and in ``download_checkpoint_path``. All three rejected
+    ``<stem>_trained.soul.soul``, so four real checkpoints (~100MB) were
+    invisible, undeletable and undownloadable — while ``load_soul`` read them
+    happily. The disagreement between "can read it" and "can see it" was the
+    bug.
+    """
+
+    def test_both_spellings_are_final_saves(self):
+        assert is_trained_checkpoint("journey_select_trained.soul")
+        assert is_trained_checkpoint("journey_select_trained.soul.soul")
+
+    @pytest.mark.parametrize(
+        "name",
+        [
+            "bench_shakespeare.soul",  # real file in models/, but not a job save
+            "model.soul",
+            "tmp_1791172994.soul",
+            "journey_select.soul",  # stem lacks the marker
+        ],
+    )
+    def test_non_saves_are_rejected(self, name):
+        # models/ holds benchmarks and ad-hoc exports too; widening this
+        # predicate carelessly would make every stray file listable and
+        # therefore deletable.
+        assert not is_trained_checkpoint(name)
+
+    @pytest.mark.asyncio
+    async def test_legacy_spelling_appears_in_the_scan(self):
+        _make_soul_file(TRAINED_DIR / "legacy_trained.soul.soul")
+
+        rows = await list_checkpoints()
+
+        assert "legacy_trained.soul.soul" in {r["name"] for r in rows}
+
+    @pytest.mark.asyncio
+    async def test_models_root_still_excludes_non_saves(self):
+        _make_soul_file(TRAINED_DIR / "bench_shakespeare.soul")
+
+        rows = await list_checkpoints()
+
+        assert "bench_shakespeare.soul" not in {r["name"] for r in rows}
+
+    @pytest.mark.asyncio
+    async def test_legacy_spelling_can_be_downloaded(self):
+        _make_soul_file(TRAINED_DIR / "legacy_trained.soul.soul")
+
+        found = await download_checkpoint_path("legacy_trained.soul.soul")
+
+        assert found is not None
+        assert found.endswith("legacy_trained.soul.soul")
+
+    @pytest.mark.asyncio
+    async def test_legacy_spelling_can_be_deleted(self):
+        _make_soul_file(TRAINED_DIR / "legacy_trained.soul.soul")
+
+        deleted = await delete_checkpoint("legacy_trained.soul.soul")
+
+        assert "legacy_trained.soul.soul" in deleted
+        assert not (TRAINED_DIR / "legacy_trained.soul.soul").exists()

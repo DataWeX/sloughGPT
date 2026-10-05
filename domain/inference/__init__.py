@@ -7,11 +7,17 @@ Public API:
     GenerationParams, ContextParams, SouParser, create_soul_profile
     save_soul, load_soul, write_v3_sou, generate_sample_dialogue
     soul_path, soul_meta_path, soul_read_candidates, is_soul_file
+    classify_soul, SoulIdentity, SoulVariant
+    SOUL_PROVENANCE, SOUL_PROVENANCE_{TRAINING,EXPORT,DISTILLATION}
     train_embedder, SloTextEmbedder
     create_vector_store, get_slo_manager, PDFVLMProcessor, _ngram_embed
 """
 
 from domain.inference._internal.slo_format import (
+    SOUL_PROVENANCE,
+    SOUL_PROVENANCE_DISTILLATION,
+    SOUL_PROVENANCE_EXPORT,
+    SOUL_PROVENANCE_TRAINING,
     BehavioralTraits,
     CognitiveSignature,
     ContextParams,
@@ -19,7 +25,10 @@ from domain.inference._internal.slo_format import (
     GenerationParams,
     PersonalityCore,
     SloProfile,
+    SoulIdentity,
+    SoulVariant,
     SouParser,
+    classify_soul,
     create_soul_profile,
     generate_sample_dialogue,
     is_soul_file,
@@ -63,6 +72,13 @@ __all__ = [
     "soul_meta_path",
     "soul_read_candidates",
     "is_soul_file",
+    "classify_soul",
+    "SoulIdentity",
+    "SoulVariant",
+    "SOUL_PROVENANCE",
+    "SOUL_PROVENANCE_TRAINING",
+    "SOUL_PROVENANCE_EXPORT",
+    "SOUL_PROVENANCE_DISTILLATION",
     "write_v3_sou",
     "generate_sample_dialogue",
     "train_embedder",

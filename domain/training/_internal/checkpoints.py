@@ -11,6 +11,11 @@ import time
 from pathlib import Path
 from typing import Any
 
+from domain.inference._internal.slo_format import (
+    SOUL_TIER_POLICY,
+    read_sidecar,
+    soul_read_candidates,
+)
 from domain.shared import is_valid_iso, repair_iso
 
 from .helpers import (
@@ -25,6 +30,48 @@ TRAINED_DIR = REPO_ROOT / "models"
 
 logger = logging.getLogger("slo.training")
 
+# The two spellings a final job save may legitimately carry. The legacy
+# double-append is not hypothetical — four such checkpoints (~100MB) sit in
+# models/ right now.
+TRAINED_SUFFIXES = ("_trained.soul", "_trained.soul.soul")
+
+
+def is_trained_checkpoint(name: str) -> bool:
+    """True when *name* is a final job save, under either legal spelling.
+
+    ``models/`` holds far more than final saves (benchmarks, ad-hoc exports,
+    native runs), so list, delete and download all narrow it to ``*_trained``.
+    That decision used to be three separate ``endswith("_trained.soul")``
+    checks, and every one of them rejected ``<stem>_trained.soul.soul`` —
+    leaving four checkpoints invisible to the list, refused by download and
+    undeletable, even though :func:`domain.inference.load_soul` reads them
+    without complaint. One predicate owns the decision now.
+
+    Args:
+        name: bare file name; directory components are not inspected.
+
+    Returns:
+        Whether this is a final job save.
+    """
+    return name.endswith(TRAINED_SUFFIXES)
+
+
+def _probe_paths(base: Path, name: str) -> list[Path]:
+    """Every file *name* could mean inside *base*, in probe order.
+
+    The ordering — the spelling the caller NAMED first, then its sibling —
+    belongs to :func:`domain.inference._internal.slo_format.soul_read_candidates`,
+    the single owner of .soul filename grammar. This only walks that list
+    across one root, so callers keep their root-major search order.
+
+    Before this, ``find_checkpoint`` and ``load_soul`` each hand-appended
+    ``.soul``/``.slo`` themselves and never probed the legacy double-append
+    sibling: a canonical name for a file that exists only at ``x.soul.soul``
+    came back not-found while ``domain.inference.load_soul`` read it fine.
+    Two owners, two answers.
+    """
+    return [Path(c) for c in soul_read_candidates(str(base / name))]
+
 
 def find_checkpoint(name: str) -> Path | None:
     # Callers hand back either a bare file name or the job record's
@@ -34,24 +81,20 @@ def find_checkpoint(name: str) -> Path | None:
     name = Path(name).name
     if not name:
         return None
-    if name.endswith((".soul", ".slo")):
-        for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
-            candidate = (base / name).resolve()
-            if candidate.exists() and str(candidate).startswith(str(base.resolve())):
-                return candidate
-        return None
-    for ext in (".soul", ".slo"):
-        for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
-            candidate = (base / (name + ext)).resolve()
-            if candidate.exists() and str(candidate).startswith(str(base.resolve())):
-                return candidate
+    for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
+        root = str(base.resolve())
+        for candidate in _probe_paths(base, name):
+            # resolve() first: a symlink, or a `..` that lands outside the
+            # root, fails the prefix check instead of being handed back.
+            resolved = candidate.resolve()
+            if resolved.exists() and str(resolved).startswith(root):
+                return resolved
     return None
 
 
 def load_soul(name: str) -> dict | None:
     for d in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
-        for ext in (".soul", ".slo"):
-            fp = d / name if name.endswith((ext,)) else d / (name + ext)
+        for fp in _probe_paths(d, name):
             if not fp.exists():
                 continue
             try:
@@ -71,13 +114,11 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
             st = fp.stat()
         size_mb = round(st.st_size / (1024 * 1024), 2)
 
-        meta = None
-        meta_file = fp.with_suffix(fp.suffix + ".meta.json")
-        if meta_file.exists():
-            try:
-                meta = json.loads(meta_file.read_text(encoding="utf-8"))
-            except Exception:
-                meta = None
+        # The shared sidecar reader, not a bare json.load. The difference is
+        # 12.2s over one models/ directory: `metadata.training_state` (resume
+        # state, read by train_pipeline and nowhere in this row) reaches 40MB,
+        # and every checkpoint row was paying to parse it.
+        meta = read_sidecar(str(fp)) or None
 
         if meta is None and fp.suffix == ".soul":
             meta = read_slo_json_header(fp)
@@ -111,9 +152,23 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
             soul = raw_soul.replace("-soul", "")
             if fp.suffix == ".soul" and (soul == fp.stem or soul == fp.name):
                 soul = "unknown"
+            # The two declared identity axes. Both are stamped by save_soul at
+            # write time — the only moment they are knowable — so an absent
+            # value means the file predates the field and is reported unknown.
+            # tier alone falls back to the suffix policy, because container
+            # tier really is a property of the spelling; provenance never
+            # falls back, since no name can tell you who produced a file.
+            provenance = str(meta.get("provenance") or "")
+            tier = str(meta.get("tier") or "") or SOUL_TIER_POLICY.get(fp.suffix, "")
             row = {
                 "name": fp.name,
                 "soul": soul,
+                # Content-derived unique key. Every sidecar already carries it;
+                # nothing read it until now, which is why two DIFFERENT
+                # checkpoints could share one name and look identical in a list.
+                "integrity_hash": str(meta.get("integrity_hash") or ""),
+                "tier": tier,
+                "provenance": provenance,
                 "loss": m.get("avg_loss") or meta.get("final_train_loss"),
                 "steps": m.get("steps", 0),
                 "epochs": m.get("step") or meta.get("epochs_trained", 0),
@@ -213,8 +268,11 @@ def _scan_all_checkpoints() -> list[dict]:
             checkpoints.append(info)
 
     # Final job saves (models/<stem>_trained.soul) — what job records and the
-    # results card hand back for "Load for chat".
-    for f in sorted(TRAINED_DIR.glob("*_trained.soul"), key=_stat_key, reverse=True):
+    # results card hand back for "Load for chat". The predicate rather than a
+    # literal "*_trained.soul" glob: the legacy double-append spelling must not
+    # be silently skipped.
+    trained_saves = [p for p in TRAINED_DIR.glob("*.soul") if is_trained_checkpoint(p.name)]
+    for f in sorted(trained_saves, key=_stat_key, reverse=True):
         if f.name in seen:
             continue
         seen.add(f.name)
@@ -267,7 +325,7 @@ async def delete_checkpoint(name: str) -> list[str]:
                 for candidate in candidates:
                     # models/ root holds more than final saves — only ever
                     # delete what the scan lists from it.
-                    if base is TRAINED_DIR and not candidate.name.endswith("_trained.soul"):
+                    if base is TRAINED_DIR and not is_trained_checkpoint(candidate.name):
                         continue
                     resolved = candidate.resolve()
                     if resolved.exists() and str(resolved).startswith(str(base.resolve())):
@@ -380,7 +438,7 @@ async def download_checkpoint_path(name: str) -> str | None:
     def _find():
         for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, TRAINED_DIR):
             fp = (d / name).resolve()
-            if d is TRAINED_DIR and not fp.name.endswith("_trained.soul"):
+            if d is TRAINED_DIR and not is_trained_checkpoint(fp.name):
                 continue
             if (
                 fp.exists()

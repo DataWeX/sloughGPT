@@ -76,19 +76,31 @@ def local_soul_candidate_paths(
     if default.exists():
         out.append(default)
 
-    _junk = re.compile(r"^(tmp_|_test|test_|probe[_-]|bench_|dl_test|nometa|list_test|evil|tiny|dated)", re.I)
+    _junk = re.compile(
+        r"^(tmp_|_test|test_|probe[_-]|bench_|dl_test|nometa|list_test|evil|tiny|dated)", re.I
+    )
 
     def _valid(p: Path) -> bool:
-        return not _junk.match(p.stem) and Path(f"{p}.meta.json").exists()
+        if not Path(f"{p}.meta.json").exists():
+            return False
+        if not _junk.match(p.stem):
+            return True
+        # A junk-looking NAME is only a guess, so let the file overrule it.
+        # This is not theoretical: the prefix heuristic was hiding 89MB of
+        # trained checkpoints, because `tiny.soul` (5KB debris) and
+        # `tinyshakespeare_trained` (44MB) are indistinguishable by spelling —
+        # as are `probe-test_trained`, `probe-test_1789943801` and
+        # `bench_shakespeare`. Content settles it; the name cannot.
+        from domain.inference import classify_soul  # lazy: costs ~0.3s to import
+
+        return classify_soul(str(p)).format != "not-soul"
 
     if models_dir.is_dir():
         dirs = [models_dir]
         dirs.extend(sorted(p for p in models_dir.iterdir() if p.is_dir()))
         candidates = []
         for d in dirs:
-            candidates.extend(
-                p for p in d.glob("*.soul") if p != default and _valid(p)
-            )
+            candidates.extend(p for p in d.glob("*.soul") if p != default and _valid(p))
         candidates.sort(key=lambda p: p.stat().st_mtime, reverse=True)
         out.extend(candidates)
     return out
@@ -207,4 +219,3 @@ def ensure_server(
 
     # Timed out -- leave the server running (it may still be loading)
     return base_url, None
-
