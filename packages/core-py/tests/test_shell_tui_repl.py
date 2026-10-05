@@ -1281,7 +1281,7 @@ def test_run_wraps_main_and_restores_io():
 
     with (
         patch.object(curses, "wrapper", side_effect=_fake_wrapper),
-        patch("domain.logging.cli_logger.set_cli_terminal") as sct,
+        patch("domain.logging._internal.cli_logger.set_cli_terminal") as sct,
     ):
         tui.run()
     assert tui._running is False
@@ -1558,7 +1558,7 @@ def test_run_handles_cli_logger_import_error():
 
     with (
         patch.object(curses, "wrapper", side_effect=_fake_wrapper),
-        patch.dict(sys.modules, {"domain.logging.cli_logger": None}),
+        patch.dict(sys.modules, {"domain.logging._internal.cli_logger": None}),
     ):
         tui.run()
     assert tui._running is False
