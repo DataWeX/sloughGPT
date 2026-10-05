@@ -216,6 +216,25 @@ These are loud, but easy to miss for exactly that reason: if the file is
 sites that pass `create=True` are skipped — that is an intentional mock of a
 name which does not exist yet, not a broken target.
 
+A third class, **suspects**, is advisory and never sets the exit code. Condition
+(2) above is a _direct_ import, so it under-reports: a test may import router A
+while router B — one hop away — is the module that reads the un-patched path.
+`--mock-drift` therefore follows the test's imports through a static
+module → module import graph out to **two hops**:
+
+```text
+  Suspects  reader reachable within 2 imports — verify, not verdicts
+  ✖ domain.infrastructure._internal.model_registry.get_model_registry
+      read via domain.infrastructure.model_registry
+      controllers.models
+      tests/test_training_distill.py
+```
+
+These are leads, not verdicts: reaching a module by import is weaker than using
+it at runtime, so the exit code stays `0` while confirmed and unresolvable still
+exit `1`. The point is that without this hop the latent count reads as "all
+clear" while a second router is quietly on live state.
+
 ## Test Coverage
 
 ### Current Status

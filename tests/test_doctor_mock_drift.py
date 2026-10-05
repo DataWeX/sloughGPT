@@ -229,3 +229,73 @@ def test_unresolvable_accepts_a_real_target(tool, tmp_path):
     )
     tgt = "domain.feedback._internal.model_health.get_health_monitor"
     assert tool._md_unresolvable({tgt: {f}}) == []
+
+
+# ── Suspects (reader reachable within 2 imports) ───────────────────────
+
+
+def test_direct_imports_reads_both_forms(tool, tmp_path):
+    f = tmp_path / "t.py"
+    f.write_text("from routers.kb import router\nimport os\n\nif True:\n    from a.b import c\n")
+    imps = tool._md_direct_imports(f)
+    assert {"routers.kb", "os", "a.b"} <= imps
+
+
+def test_reachable_follows_edges_within_depth(tool):
+    graph = {"a": {"b"}, "b": {"c"}, "c": {"d"}, "d": set()}
+    assert tool._md_reachable({"a"}, graph, 1) == {"a", "b"}
+    assert tool._md_reachable({"a"}, graph, 2) == {"a", "b", "c"}
+    assert "d" not in tool._md_reachable({"a"}, graph, 2)
+
+
+def test_reachable_tolerates_unknown_modules(tool):
+    assert tool._md_reachable({"requests"}, {"requests": set()}, 2) == {"requests"}
+
+
+def test_import_graph_pins_the_split_coverage_edge(tool):
+    """routers/inference.py imports get_provider from domain.models at module
+    level (line 45) — that edge is what makes the _internal patch dead there."""
+    graph = tool._md_import_graph()
+    assert "routers.inference" in graph
+    assert "domain.models" in graph["routers.inference"]
+
+
+def test_suspects_are_reported_but_never_block(tool, monkeypatch, capsys):
+    """Import reach is weaker than runtime use, so a 2-hop hit must be
+    printed as a suspect and must NOT flip the exit code."""
+    target = "domain.x._internal.y.thing"
+    monkeypatch.setattr(tool, "_md_targets", lambda: {target: {_REPO / "tests/test_absent.py"}})
+    monkeypatch.setattr(tool, "_md_readers", lambda: {"thing": {"domain.x": {"routers.subject"}}})
+    monkeypatch.setattr(tool, "_md_reaches", lambda t, r, a: False)
+    monkeypatch.setattr(tool, "_md_unresolvable", lambda t: [])
+    # no direct import (latent), but reachable in exactly 2 hops
+    monkeypatch.setattr(
+        tool,
+        "_md_import_graph",
+        lambda: {"routers.subject": {"routers.mid"}, "routers.mid": {"routers.leaf"}},
+    )
+    monkeypatch.setattr(tool, "_md_direct_imports", lambda p: {"routers.subject"})
+
+    rc = tool.cmd_mock_drift()
+    out = capsys.readouterr().out
+    assert "Suspects" in out
+    assert target in out
+    assert "routers.subject" in out
+    assert rc == 0, f"suspects must not block, got rc={rc}"
+
+
+def test_suspects_absent_when_reader_not_reachable(tool, monkeypatch, capsys):
+    target = "domain.x._internal.y.thing"
+    monkeypatch.setattr(tool, "_md_targets", lambda: {target: {_REPO / "tests/test_absent.py"}})
+    monkeypatch.setattr(tool, "_md_readers", lambda: {"thing": {"domain.x": {"routers.far_away"}}})
+    monkeypatch.setattr(tool, "_md_reaches", lambda t, r, a: False)
+    monkeypatch.setattr(tool, "_md_unresolvable", lambda t: [])
+    monkeypatch.setattr(tool, "_md_import_graph", lambda: {"routers.subject": set()})
+    monkeypatch.setattr(tool, "_md_direct_imports", lambda p: {"routers.subject"})
+
+    out = ""
+    rc = tool.cmd_mock_drift()
+    out = capsys.readouterr().out
+    assert "Suspects" not in out
+    assert "latent" in out
+    assert rc == 0

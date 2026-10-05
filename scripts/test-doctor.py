@@ -751,6 +751,66 @@ def _md_unresolvable(
     return out
 
 
+def _md_import_graph() -> dict[str, set[str]]:
+    """module -> repo modules it imports (static scan of production files).
+
+    Used to follow a test's imports past the first hop: a test may import
+    router A, which imports router B, and B is the module that reads the
+    un-patched path. Direct-import matching alone cannot see that.
+    """
+    graph: dict[str, set[str]] = {}
+    for root_s in _MOCK_DRIFT_PROD_ROOTS:
+        root = REPO_ROOT / root_s
+        if not root.exists():
+            continue
+        for f in root.rglob("*.py"):
+            if "/tests/" in str(f):
+                continue
+            mod = _md_path_module(f)
+            if not mod:
+                continue
+            try:
+                txt = f.read_text(errors="ignore")
+            except OSError:
+                continue
+            deps: set[str] = set()
+            for m in _MD_ANY_IMPORT_RE.finditer(txt):
+                imp = m.group(1) or m.group(2) or ""
+                if imp:
+                    deps.add(imp)
+            graph[mod] = deps
+    return graph
+
+
+def _md_direct_imports(path: Path) -> set[str]:
+    try:
+        txt = path.read_text(errors="ignore")
+    except OSError:
+        return set()
+    out: set[str] = set()
+    for m in _MD_ANY_IMPORT_RE.finditer(txt):
+        imp = m.group(1) or m.group(2) or ""
+        if imp:
+            out.add(imp)
+    return out
+
+
+def _md_reachable(start: set[str], graph: dict[str, set[str]], depth: int) -> set[str]:
+    seen = set(start)
+    frontier = set(start)
+    for _ in range(depth):
+        nxt = set()
+        for mod in frontier:
+            for dep in graph.get(mod, ()):
+                if dep not in seen:
+                    seen.add(dep)
+                    nxt.add(dep)
+        if not nxt:
+            break
+        frontier = nxt
+    return seen
+
+
 def cmd_mock_drift(verbose: bool = False) -> int:
     _p(f"\n  {_b}{_c}Mock drift{_r}\n")
     _p(f"  {_dim('patch() targets that production no longer reads')}\n")
@@ -760,7 +820,8 @@ def cmd_mock_drift(verbose: bool = False) -> int:
     readers = _md_readers()
 
     confirmed: list[tuple[str, str, list[str]]] = []
-    latent: list[tuple[str, str]] = []
+    # (target, reader_mod, qualifying reader file-modules, patching tests)
+    latent: list[tuple[str, str, set[str], set[Path]]] = []
     ok = 0
 
     for target, tfiles in sorted(targets.items()):
@@ -798,7 +859,24 @@ def cmd_mock_drift(verbose: bool = False) -> int:
             if hits:
                 confirmed.append((target, reader_mod, hits))
             else:
-                latent.append((target, reader_mod))
+                latent.append((target, reader_mod, qualifying, set(tfiles)))
+
+    # Third class — ADVISORY. The reader is not imported directly by the test,
+    # but is reachable within two imports (test -> router A -> router B, where
+    # B reads the un-patched path). Import reach is weaker evidence than
+    # runtime use, so these are leads, not verdicts: they never set the exit
+    # code. Without this hop, the latent count reads as "all clear" when a
+    # second router is quietly using live state.
+    suspects: list[tuple[str, str, list[str], list[str]]] = []
+    if latent:
+        graph = _md_import_graph()
+        for target, reader_mod, qualifying, tfiles in latent:
+            reach: set[str] = set()
+            for tf in tfiles:
+                reach |= _md_reachable(_md_direct_imports(tf), graph, 2)
+            hit = qualifying & reach
+            if hit:
+                suspects.append((target, reader_mod, sorted(hit), sorted(_rel(t) for t in tfiles)))
 
     for target, reader_mod, hits in confirmed:
         _line(_no, f"{_red(target)}")
@@ -812,11 +890,15 @@ def cmd_mock_drift(verbose: bool = False) -> int:
         _line(
             _no,
             _red(
-                f"{len(confirmed)} confirmed  ({ok} targets follow the patch, {len(latent)} latent)"
+                f"{len(confirmed)} confirmed  ({ok} targets follow the patch, "
+                f"{len(latent)} latent, {len(suspects)} suspect)"
             ),
         )
     else:
-        _line(_ok, _green(f"no drift  ({ok} targets follow the patch)"))
+        _line(
+            _ok,
+            _green(f"no drift  ({ok} targets follow the patch, {len(suspects)} suspect)"),
+        )
 
     # Second class: the target itself cannot be resolved, so patch() raises
     # and the test errors at setup. Loud — unless the file is deselected.
@@ -830,10 +912,27 @@ def cmd_mock_drift(verbose: bool = False) -> int:
             for f in files[:2]:
                 _p(f"      {_dim(f)}")
 
+    if suspects:
+        _p()
+        _p(
+            f"  {_b}{_y}Suspects{_r}  "
+            f"{_dim('reader reachable within 2 imports — verify, not verdicts')}"
+        )
+        for target, reader_mod, hits, files in suspects:
+            _line(_no, f"{_y}{target}{_r}")
+            _p(f"      read via {_b}{reader_mod}{_r}")
+            for h in hits[:2]:
+                _p(f"      {_dim(h)}")
+            for f in files[:1]:
+                _p(f"      {_dim(f)}")
+
     if latent:
-        _p(f"  {_dim(f'{len(latent)} latent — reader exists but no test exercises it')}")
+        _p(
+            f"  {_dim(f'{len(latent)} latent — reader exists but no test imports it')}"
+            + (f"{_dim(f', {len(suspects)} of them reachable within 2 hops')}" if suspects else "")
+        )
         if verbose:
-            for target, reader_mod in latent:
+            for target, reader_mod, _q, _t in latent:
                 _p(f"    {_dim(f'{target}  (via {reader_mod})')}")
 
     _p()
