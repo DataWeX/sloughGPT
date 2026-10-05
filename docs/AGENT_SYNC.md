@@ -4,7 +4,30 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-05 ~08:15 — `fix/journey-server-skip` **lands on
+**Last update**: 2026-10-05 ~12:55 — `fix/vector-shm-tracker` **lands on
+main** (fast-forward, card `ccad389e` → done): VectorBE's `/psm_*`
+resource-tracker warning spam is fixed at the **topology** level —
+`VectorBE.__init__` now calls `resource_tracker.getfd()` before starting the
+pool, giving the fork arm the same shared-daemon wiring forkserver
+(`forkserver.py:92`) and spawn (`spawn.py:119`) children already get.
+Root cause: `SharedMemory` registers *attaches* as well as creates
+(gh-82344); fork workers forked before the parent first touched the tracker
+inherited `_fd=None` → a private tracker daemon per worker → exit cleanup
+re-unlinked every attached segment (118 warning lines from one
+matmul+softmax+rmsnorm probe). Sharing the creator's daemon makes attach
+REGISTERs idempotent against the creator's claims, so the create/unlink
+pairing alone governs cleanup. An earlier attach-site `unregister()` fix was
+proven *wrong* by topology evidence — in the shared topology it clobbers the
+creator's claims (8 KeyErrors, one per segment). Verified: **0
+`resource_tracker` lines in fork / forkserver / spawn arms**, no `/dev/shm`
+leaks, `test_vector_backend.py` **24/24 in default and fork-env runs**; the
+suite's 2 env-hatch blind spots fixed (defaults test + `vector_be` fixture
+now `delenv` `SLO_VECTOR_START_METHOD` — the fixture pin also guards the
+documented live-fork-in-suite deadlock). Follow-up on the card:
+`scripts/benchmark_vector_backend_pool.py` (the finder-session script the
+card references) still does not exist.
+
+Earlier ~08:15: `fix/journey-server-skip` **lands on
 main** (fast-forward, card `b9f12ad2` → done): the serverless gate block in
 `packages/core-py/tests/test_user_journeys.py` +
 `test_computer_use_training_integration.py` is now **124 skipped in 12s,
