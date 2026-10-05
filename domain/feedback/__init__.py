@@ -9,6 +9,8 @@ Public API:
     get_health_monitor, get_message_feedback, HFDPOTrainer
 """
 
+from __future__ import annotations
+
 from domain.feedback._internal.database import (
     Feedback,
     FeedbackDB,

@@ -25,6 +25,8 @@ Usage:
     engine.run(poll_interval=0.5)  # continuous loop
 """
 
+from __future__ import annotations
+
 import logging
 import multiprocessing
 import threading
@@ -37,7 +39,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from multiprocessing.reduction import ForkingPickler
 from pickle import PicklingError
-from typing import Any, Optional
+from typing import Any
 
 from ..cancel_manager import OpType, get_cancel_manager
 from .config import RestartPolicy
@@ -122,7 +124,7 @@ class Process:
     _restart_count: int = field(default=0, repr=False)
     _pid: int | None = field(default=None, repr=False)
     _last_heartbeat: float | None = field(default=None, repr=False)
-    _restart_policy: Optional["RestartPolicy"] = field(default=None, repr=False)
+    _restart_policy: RestartPolicy | None = field(default=None, repr=False)
     _stream_results: list[Any] = field(default_factory=list, repr=False)
     _progress: float = field(default=0.0, repr=False)
     _progress_message: str = field(default="", repr=False)
@@ -884,7 +886,7 @@ class SubprocessProcess:
 class ProcessGroup:
     """Batch operations on a set of processes."""
 
-    def __init__(self, name: str, engine: "Engine" = None):
+    def __init__(self, name: str, engine: Engine = None):
         self.name = name
         self.engine = engine
         self._processes: list[Process] = []

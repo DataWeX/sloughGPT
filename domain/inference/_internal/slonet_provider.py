@@ -22,6 +22,8 @@ Features:
 - Per-request metadata (timing, token count, model info)
 """
 
+from __future__ import annotations
+
 import threading
 import time
 from collections.abc import AsyncIterator
@@ -527,7 +529,7 @@ class SloNetChatProvider:
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
-    ) -> "SloNetChatProvider":
+    ) -> SloNetChatProvider:
         """Create provider from .slnc file (mmap, zero-copy).
 
         Args:
@@ -863,7 +865,7 @@ class SloNetChatProvider:
         free_quantized_originals: bool = False,
         release_mmap_pages: bool = True,
         trim_allocator_after_load: bool = True,
-    ) -> "SloNetChatProvider":
+    ) -> SloNetChatProvider:
         """Create a provider whose model weights load lazily on first use.
 
         Reads only the .slnc header (config + tensor table) to build full
@@ -962,7 +964,7 @@ class SloNetChatProvider:
         soul_path: str,
         model_id: str = "sloughgpt",
         kv_max_sessions: int = 64,
-    ) -> "SloNetChatProvider":
+    ) -> SloNetChatProvider:
         """Create provider from a .soul checkpoint trained natively by SloNet.
 
         Unlike from_slnc() which converts HuggingFace weights, this loads
@@ -1326,7 +1328,11 @@ class SloNetChatProvider:
     def _tokenizer_from_embedded(emb: dict):
         """Rebuild a char/token-tree tokenizer from SLNC-embedded metadata."""
         tok = emb.get("tokenizer")
-        if isinstance(tok, dict) and tok.get("type") == "token_tree" and isinstance(tok.get("tree"), dict):
+        if (
+            isinstance(tok, dict)
+            and tok.get("type") == "token_tree"
+            and isinstance(tok.get("tree"), dict)
+        ):
             from domain.training._internal.token_tree import TokenTree
 
             return _TreeTokenizer(TokenTree.from_dict(tok["tree"]))

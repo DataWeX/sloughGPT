@@ -6,6 +6,8 @@ Public API:
     ToolSpec, ToolParam, get_agent, get_runner, get_agent_system, get_tool_registry
 """
 
+from __future__ import annotations
+
 
 def __getattr__(name):
     _lazy = {

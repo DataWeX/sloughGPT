@@ -1,6 +1,7 @@
 """Code-hygiene ratchet — the 2026-10-04 cleanup sweep, encoded as tests.
 
-Origin: kanban card 0d4ad67b. Every pattern below was at ZERO true
+Origin: kanban card 0d4ad67b (re-created as 7d5e5a7c after the board
+clobber it was filed to investigate). Every pattern below was at ZERO true
 violations when this file was written, so the bar is zero forever: new
 violations fail, and the fix is either real code or a reviewed allowlist
 entry with a reason — never silence.
@@ -14,10 +15,13 @@ Enforced here (things ruff does NOT catch):
   4. print() in domain library code — stdout-channel work (TUI renderers,
      CLI tools, protocol handshakes, stderr bootstrap warnings, ``__main__``
      demo entry points) is exempt; new library prints are not
+  5. ``from __future__ import annotations`` in domain/ — scope (a), card
+     7d5e5a7c: PEP 563 across the tree, so the convention cannot erode
+     again (root cause was convention-by-example with zero enforcement)
 
 Deliberately NOT enforced (open / owned elsewhere):
-  - ``from __future__ import annotations`` — scope decision open on card
-    0d4ad67b (860-file debt across two trees); do not "fix" piecemeal
+  - ``from __future__ import annotations`` OUTSIDE domain/ (tests, scripts,
+    packages) — scope (b) remains open on card 7d5e5a7c if wanted
   - F401 unused imports — owned by ruff (pyproject [tool.ruff.lint])
 """
 
@@ -40,6 +44,10 @@ SKIP_DIRS = frozenset({
 SCAN_ROOTS = ("domain", "packages", "apps", "scripts")
 PY = (".py",)
 MARKER_EXTS = (".py", ".ts", ".tsx")
+
+# Scope (a) of card 7d5e5a7c: future-import enforced in the domain trees
+# (packages/core-py/domains no longer exists on main — kept for safety).
+FUTURE_ROOTS = ("domain", "packages/core-py/domains")
 
 LOGGER_FSTRING = re.compile(r"(?:logger|logging)\.(?:info|warning|error|debug)\(f['\"]")
 BARE_EXCEPT = re.compile(r"except\s*:")
@@ -189,3 +197,31 @@ def test_print_only_in_exempted_stdout_channels():
                 f"or get a channel exemption reviewed into PRINT_ALLOWLIST"
             )
     assert not violations, "library prints without an exemption:\n" + fmt(violations)
+
+
+def test_domain_files_carry_future_annotations():
+    """Scope (a), card 7d5e5a7c: every domain/ file carries PEP 563.
+
+    Root cause this pins: convention-by-example with zero enforcement let
+    the import decay across half the tree. Any new or edited domain file
+    without it fails here.
+    """
+    missing, broken = [], []
+    for path in iter_files(PY, roots=FUTURE_ROOTS):
+        rel = path.relative_to(ROOT).as_posix()
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError) as exc:
+            broken.append(f"{rel}: {exc}")
+            continue
+        if not any(
+            isinstance(n, ast.ImportFrom)
+            and n.module == "__future__"
+            and any(a.name == "annotations" for a in n.names)
+            for n in tree.body
+        ):
+            missing.append(rel)
+    assert not broken, "unparseable domain files:\n" + fmt(broken)
+    assert not missing, (
+        "domain files missing `from __future__ import annotations`:\n" + fmt(missing)
+    )

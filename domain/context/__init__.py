@@ -5,6 +5,8 @@ Public API:
     ConsciousnessManager, get_trait_config, reset_trait_config
 """
 
+from __future__ import annotations
+
 from domain.context._internal.managers import (
     ConsciousnessManager,
     MemoryManager,
