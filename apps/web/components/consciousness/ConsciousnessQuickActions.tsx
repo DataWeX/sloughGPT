@@ -84,7 +84,7 @@ export function ConsciousnessQuickActions() {
       <button
         ref={buttonRef}
         onClick={handleToggle}
-        className="fixed bottom-6 right-6 z-[9999] h-12 w-12 rounded-full bg-violet-600 text-white shadow-lg transition-all hover:bg-violet-700 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
+        className="fixed bottom-6 right-6 z-[45] h-12 w-12 rounded-full bg-violet-600 text-white shadow-lg transition-all hover:bg-violet-700 hover:shadow-xl hover:scale-110 active:scale-95 flex items-center justify-center"
         aria-label={t('consciousness_quick_actions.toggle')}
       >
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
@@ -95,7 +95,7 @@ export function ConsciousnessQuickActions() {
       {open && (
         <div
           ref={panelRef}
-          className="fixed bottom-20 right-6 z-[9999] w-72 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden transition-all"
+          className="fixed bottom-20 right-6 z-[45] w-72 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden transition-all"
           style={{ animation: 'consciousness-quick-fadein 0.15s ease-out' }}
         >
           <div className="px-4 py-3 border-b border-zinc-700 flex items-center justify-between">

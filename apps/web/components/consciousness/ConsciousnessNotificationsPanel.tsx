@@ -94,7 +94,7 @@ export function ConsciousnessNotificationsPanel() {
       {open && (
         <div
           ref={panelRef}
-          className="absolute right-0 top-full mt-2 z-[9999] w-80 max-h-96 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden transition-all"
+          className="absolute right-0 top-full mt-2 z-[45] w-80 max-h-96 rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl overflow-hidden transition-all"
           style={{ animation: 'consciousness-notif-fadein 0.15s ease-out' }}
         >
           <div className="px-4 py-3 border-b border-zinc-700 flex items-center justify-between">
