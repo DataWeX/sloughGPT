@@ -78,7 +78,7 @@ function ConfettiBurst({ active }: { active: boolean }) {
             animationDelay: `${p.delay}ms`,
             animationDuration: '400ms',
             opacity: 0.7,
-            color: `hsl(${i * 45}, 70%, 55%)`,
+            color: `var(--chart-${(i % 5) + 1})`,
           }}
         >
           {p.char}
@@ -381,7 +381,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
             key={emoji}
             onClick={() => handleToggleReaction(emoji)}
             className={cn(
-              "inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full border transition-colors",
+              "inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full border transition-colors",
               users.includes('user') ? "bg-primary/15 border-primary/30 text-primary" : "bg-muted/50 border-border/30 text-muted-foreground hover:bg-muted/80"
             )}
           >
