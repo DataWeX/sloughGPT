@@ -58,10 +58,10 @@ class FakeBackend:
         el = self._elements.get(locator.describe())
         return [el] if el else []
 
-    async def click(self, element: Element) -> None:
+    async def click(self, element: Element, *, force: bool = False) -> None:
         self.clicked.append(element.locator.describe())
 
-    async def fill(self, element: Element, value: str) -> None:
+    async def fill(self, element: Element, value: str, *, force: bool = False) -> None:
         self.filled[element.locator.describe()] = value
 
     async def select_option(self, element: Element, value: str) -> None:

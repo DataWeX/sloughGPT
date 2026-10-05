@@ -10,6 +10,8 @@ Usage::
 (Formerly voyager → arken; ``Arken``/``ArkenConfig`` remain as aliases.)
 """
 
+from __future__ import annotations
+
 from avion.ai.agent import Agent, AgentConfig, AgentResult
 from avion.ai.models import Action, ActionType, validate_action
 from avion.core.element import (
@@ -18,9 +20,14 @@ from avion.core.element import (
     ElementFinder,
     ElementLocator,
     ElementNotFoundError,
+    PageControls,
 )
 from avion.core.navigator import NavigationEntry, Navigator
 from avion.core.session import Arken, ArkenConfig
+
+# Canonical names (arken shim re-exports these).
+Avion = Arken
+AvionConfig = ArkenConfig
 from avion.interact.primitives import (
     BoundingBox,
     Coordinate,
@@ -30,12 +37,7 @@ from avion.interact.primitives import (
     Mouse,
     MouseButton,
 )
-
-# Back-compat: the package was renamed arken -> avion. These aliases keep
-# ``from avion import Avion`` working and are required by the packages/arken
-# shim, which does ``from avion import Avion, AvionConfig``.
-Avion = Arken
-AvionConfig = ArkenConfig
+from avion.sync import SyncRunner, get_default_runner
 
 __all__ = [
     "Action",
@@ -61,5 +63,8 @@ __all__ = [
     "MouseButton",
     "NavigationEntry",
     "Navigator",
+    "PageControls",
+    "SyncRunner",
+    "get_default_runner",
     "validate_action",
 ]

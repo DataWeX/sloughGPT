@@ -20,6 +20,8 @@ from avion.core.element import Backend, Element, ElementFinder, ElementLocator
 from avion.core.navigator import Navigator
 from avion.core.reporter import Reporter
 from avion.core.task import Task, TaskResult, TaskStatus
+from avion.events.journal import EventJournal
+from avion.events.logger import EventLogger
 from avion.events.models import EventType
 from avion.events.recorder import EventRecorder
 from avion.interact.primitives import Keyboard, Mouse
@@ -36,6 +38,9 @@ class ArkenConfig:
     backend: str = "playwright"
     headless: bool = True
     screenshot_on_error: bool = True
+    # Durable event journal (append-only JSONL). None = in-memory logger;
+    # set a path to make the journal the source of truth for this session.
+    journal_path: str | None = None
 
 
 class Arken:
@@ -48,8 +53,14 @@ class Arken:
         self._finder: ElementFinder | None = None
         self._mouse: Mouse | None = None
         self._keyboard: Keyboard | None = None
-        self._recorder = EventRecorder(session_name="arken_session")
-        self._logger = StructuredLogger("arken")
+        self._event_logger = EventLogger(
+            journal=EventJournal(self.config.journal_path) if self.config.journal_path else None
+        )
+        # Both views share ONE logger: one journal, one seq space. No
+        # StdlibSink here — the StructuredLogger already emits the stdlib
+        # line, so attaching one would double every message.
+        self._recorder = EventRecorder(session_name="arken_session", logger=self._event_logger)
+        self._logger = StructuredLogger("arken", logger=self._event_logger)
         self._reporter = Reporter("Arken Report")
         self._rule_engine = RuleEngine()
 
@@ -81,10 +92,7 @@ class Arken:
         self._mouse = Mouse(self._backend)  # type: ignore[arg-type]
         self._keyboard = Keyboard(self._backend)  # type: ignore[arg-type]
         self._recorder.record(EventType.SESSION_STARTED, name="session_start")
-        # StructuredLogger.info(message, **fields) — not stdlib %-args.
-        # ef58a0c9c passed a positional %s arg while the suite was
-        # uncollectable, so nothing caught the TypeError.
-        self._logger.info("Arken session started", backend=self._backend.name)
+        self._logger.info(f"Arken session started (backend={self._backend.name})")
 
     async def stop(self) -> None:
         """Shut down the backend."""
@@ -93,6 +101,7 @@ class Arken:
         if self._backend:
             await self._backend.stop()
             self._backend = None
+        self._event_logger.close()
 
     @property
     def mouse(self) -> Mouse:
@@ -103,12 +112,33 @@ class Arken:
         return self._keyboard
 
     @property
+    def backend(self) -> Backend | None:
+        """The live backend, for callers that need page controls.
+
+        The core session API (goto/find/click/fill) covers most work; page
+        controls beyond it — ``wait_for_function``, ``set_viewport_size``,
+        ``focus``, ``press_element``, force fill — live on the backend. See
+        :class:`avion.core.element.PageControls`.
+        """
+        return self._backend
+
+    @property
     def recorder(self) -> EventRecorder:
         return self._recorder
 
     @property
     def logger(self) -> StructuredLogger:
         return self._logger
+
+    @property
+    def event_logger(self) -> EventLogger:
+        """The journal-first event logger both views write through.
+
+        Register delivery targets here::
+
+            arken.event_logger.register_sink(StdlibSink("avion"))
+        """
+        return self._event_logger
 
     def set_context(self, **kwargs: str) -> None:
         """Attach logging context (e.g. run id)."""
@@ -161,10 +191,10 @@ class Arken:
         )
         return el
 
-    async def click(self, element: Element) -> None:
-        """Click an element."""
+    async def click(self, element: Element, *, force: bool = False) -> None:
+        """Click an element. force skips Playwright actionability checks."""
         start = time.perf_counter()
-        await self._backend.click(element)
+        await self._backend.click(element, force=force)
         self._recorder.record(
             EventType.CLICK,
             name=element.locator.describe(),
@@ -178,10 +208,10 @@ class Arken:
         el = await self.find(ElementLocator.text(text))
         await self.click(el)
 
-    async def fill(self, locator: ElementLocator, value: str) -> None:
+    async def fill(self, locator: ElementLocator, value: str, *, force: bool = False) -> None:
         """Find a form field and fill it with text."""
         el = await self.find(locator)
-        await self._backend.fill(el, value)
+        await self._backend.fill(el, value, force=force)
         self._recorder.record(EventType.FILL, name=locator.describe(), data={"value": value})
 
     async def select(self, locator: ElementLocator, value: str) -> None:
@@ -260,7 +290,14 @@ class Arken:
         self._logger.task_end(task.name, success)
 
         if not success and self.config.screenshot_on_error and self._backend:
-            await self.screenshot()
+            try:
+                await self.screenshot()
+            except Exception as exc:
+                # Failure diagnostics are best-effort — never let a stuck
+                # compositor/font wait mask the original task result.
+                self._logger.warning(
+                    "failure screenshot skipped", error=str(exc)[:200], task=task.name
+                )
         return result
 
     def save_results(self, output_dir: str = "arken_output") -> None:

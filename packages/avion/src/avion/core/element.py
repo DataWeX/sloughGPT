@@ -177,9 +177,9 @@ class Backend(Protocol):
 
     async def find_elements(self, locator: ElementLocator) -> list[Element]: ...
 
-    async def click(self, element: Element) -> None: ...
+    async def click(self, element: Element, *, force: bool = False) -> None: ...
 
-    async def fill(self, element: Element, value: str) -> None: ...
+    async def fill(self, element: Element, value: str, *, force: bool = False) -> None: ...
 
     async def select_option(self, element: Element, value: str) -> None: ...
 
@@ -202,6 +202,44 @@ class Backend(Protocol):
     async def evaluate(self, expression: str) -> Any: ...
 
     async def get_accessibility_tree(self) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class PageControls(Protocol):
+    """Optional page-control capabilities beyond the core Backend.
+
+    Callers must probe with ``isinstance(backend, PageControls)`` before
+    using them — CLI/API backends have no page, and other browser backends
+    may not implement every control, so these are opt-in rather than part of
+    the core :class:`Backend` contract (same convention as ``tab_*`` and
+    ``mouse_*`` living on concrete backends).
+
+    Playwright implements all of them today; CDP and friends can adopt them
+    incrementally without breaking the core Protocol.
+    """
+
+    async def navigate(
+        self, url: str, *, wait_until: str = "domcontentloaded", timeout: float | None = None
+    ) -> None:
+        """Navigate with an explicit ``wait_until``/``timeout`` (core Backend
+        only guarantees ``navigate(url)``)."""
+        ...
+
+    async def wait_for_function(self, expression: str, timeout: float = 10.0) -> bool:
+        """Poll a JS predicate until truthy. Returns False on timeout."""
+        ...
+
+    async def set_viewport_size(self, width: int, height: int) -> None:
+        """Resize the page viewport (responsive screenshots)."""
+        ...
+
+    async def focus(self, element: Element) -> None:
+        """Move keyboard focus to an element."""
+        ...
+
+    async def press_element(self, element: Element, key: str) -> None:
+        """Focus an element and press a key on it (Playwright ``press``)."""
+        ...
 
 
 class ElementFinder:

@@ -91,12 +91,15 @@ class AppiumBackend:
             return []
         return [Element(raw=el, locator=locator, backend=self.name) for el in raw]
 
-    async def click(self, element: Element) -> None:
+    async def click(self, element: Element, *, force: bool = False) -> None:
+        """force is accepted for Backend parity but is a no-op on mobile:
+        the Appium driver has no separate actionability gate to bypass."""
         import asyncio
 
         await asyncio.to_thread(element.raw.click)
 
-    async def fill(self, element: Element, value: str) -> None:
+    async def fill(self, element: Element, value: str, *, force: bool = False) -> None:
+        """force accepted for Backend parity; no-op (see click)."""
         import asyncio
 
         await asyncio.to_thread(element.raw.clear)

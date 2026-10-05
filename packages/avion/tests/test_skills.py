@@ -1,12 +1,15 @@
 """Skills tests — distill, persist, find, replay through Agent."""
 
 import asyncio
+import json
 import os
 import tempfile
+from pathlib import Path
 
+import pytest
 from avion.ai import Agent, AgentConfig
 from avion.ai.models import Action, ActionType, Step, Trajectory
-from avion.ai.skills import Skill, SkillLibrary
+from avion.ai.skills import SCHEMA_VERSION, Skill, SkillLibrary, skill_filename
 from test_autoclicker import FakeBackend
 
 
@@ -130,3 +133,178 @@ class TestReplay:
             assert skill.uses == 1
         finally:
             run(agent.stop())
+
+
+# ── invariants ──────────────────────────────────────────────────────────
+
+
+class TestSuccessRate:
+    def test_unproven_is_none(self):
+        assert Skill(name="s").success_rate is None
+
+    def test_record_replay(self):
+        skill = Skill(name="s")
+        skill.record_replay(True)
+        skill.record_replay(True)
+        skill.record_replay(False)
+        assert skill.success_rate == pytest.approx(2 / 3)
+
+    def test_all_failures_rate_zero(self):
+        skill = Skill(name="s")
+        skill.record_replay(False)
+        assert skill.success_rate == 0.0
+
+    def test_replay_start_marks_use_not_outcome(self):
+        skill = Skill(name="s", actions=[Action(ActionType.DONE)])
+        skill.to_echo_model()
+        assert skill.uses == 1
+        assert skill.success_rate is None  # no outcome recorded yet
+
+
+class TestFindRanksBySuccess:
+    def test_success_rate_breaks_keyword_ties(self):
+        lib = SkillLibrary()
+        lib.add(Skill(name="chat_proven", description="chat page"))
+        lib.add(Skill(name="chat_failing", description="chat page"))
+        lib.get("chat_proven").record_replay(True)
+        lib.get("chat_failing").record_replay(False)
+        assert [s.name for s in lib.find("chat page")] == [
+            "chat_proven",
+            "chat_failing",
+        ]
+
+    def test_unproven_sits_between_proven_and_failing(self):
+        lib = SkillLibrary()
+        for name in ("proven", "fresh", "failing"):
+            lib.add(Skill(name=name, description="chat page"))
+        lib.get("proven").record_replay(True)
+        lib.get("failing").record_replay(False)
+        assert [s.name for s in lib.find("chat")] == [
+            "proven",
+            "fresh",
+            "failing",
+        ]
+
+    def test_relevance_still_beats_success_rate(self):
+        lib = SkillLibrary()
+        lib.add(Skill(name="chat", description="chat page"))  # matches both words
+        lib.add(Skill(name="other", description="chat"))  # matches one, proven
+        lib.get("other").record_replay(True)
+        assert lib.find("chat page")[0].name == "chat"
+
+
+class TestTrajectoryDedup:
+    def test_same_trajectory_twice_returns_existing(self):
+        lib = SkillLibrary()
+        first = lib.add_from_trajectory(trajectory(), "first_name")
+        second = lib.add_from_trajectory(trajectory(), "second_name")
+        assert second is first
+        assert len(lib) == 1
+
+    def test_different_task_is_a_different_skill(self):
+        lib = SkillLibrary()
+        lib.add_from_trajectory(trajectory(), "a")
+        other = trajectory()
+        other.task = "a different task"
+        second = lib.add_from_trajectory(other, "b")
+        assert second is not lib.get("a")
+        assert len(lib) == 2
+
+    def test_skip_waits_changes_the_hash(self):
+        lib = SkillLibrary()
+        kept = lib.add_from_trajectory(trajectory(), "a")
+        lib.clear()
+        skipped = lib.add_from_trajectory(trajectory(), "a", skip_waits=False)
+        assert kept.source_hash != skipped.source_hash
+        assert len(lib) == 1  # each variant dedups against itself only
+
+    def test_hash_is_set_and_stable(self):
+        lib = SkillLibrary()
+        first = lib.add_from_trajectory(trajectory(), "a")
+        assert first.source_hash and len(first.source_hash) == 16
+        lib.clear()
+        again = lib.add_from_trajectory(trajectory(), "b")
+        assert again.source_hash == first.source_hash
+
+
+class TestSchemaVersion:
+    def test_save_writes_current_version(self):
+        with tempfile.TemporaryDirectory() as d:
+            lib = SkillLibrary(d)
+            lib.add_from_trajectory(trajectory(), "s")
+            lib.save()
+            data = json.loads(Path(d, "s.json").read_text())
+        assert data["schema_version"] == SCHEMA_VERSION
+
+    def test_versionless_v0_file_migrates(self):
+        skill = Skill.from_dict({"name": "legacy", "actions": []})
+        assert skill.successes == 0
+        assert skill.failures == 0
+        assert skill.source_hash == ""
+
+    def test_newer_version_is_rejected(self):
+        with pytest.raises(ValueError, match="newer than this build"):
+            Skill.from_dict({"schema_version": SCHEMA_VERSION + 1, "name": "x"})
+
+    def test_bad_version_type_is_rejected(self):
+        with pytest.raises(ValueError, match="must be an int"):
+            Skill.from_dict({"schema_version": "two", "name": "x"})
+
+    def test_corrupt_file_is_skipped_loudly(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "broken.json").write_text("{not json")
+            lib = SkillLibrary(d)
+            assert lib.load() == 0
+            assert [e["file"] for e in lib.load_errors] == ["broken.json"]
+            assert lib.load_errors[0]["reason"]
+
+    def test_too_new_file_is_skipped_loudly(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "future.json").write_text(
+                json.dumps({"schema_version": SCHEMA_VERSION + 1, "name": "x"})
+            )
+            lib = SkillLibrary(d)
+            assert lib.load() == 0
+            assert "newer" in lib.load_errors[0]["reason"]
+            assert lib.get("x") is None
+
+    def test_load_errors_reset_between_loads(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "broken.json").write_text("{not json")
+            lib = SkillLibrary(d)
+            lib.load()
+            assert lib.load_errors
+            empty = tempfile.mkdtemp()
+            lib.load(empty)
+            assert lib.load_errors == []
+
+
+class TestAtomicSave:
+    def test_no_temp_files_left_behind(self):
+        with tempfile.TemporaryDirectory() as d:
+            lib = SkillLibrary(d)
+            lib.add_from_trajectory(trajectory(), "s")
+            lib.save()
+            assert not list(Path(d).glob("*.tmp"))
+            assert Path(d, "s.json").exists()
+
+    def test_resave_replaces_in_place(self):
+        with tempfile.TemporaryDirectory() as d:
+            lib = SkillLibrary(d)
+            lib.add_from_trajectory(trajectory(), "s")
+            lib.save()
+            lib.get("s").description = "updated"
+            lib.save()
+            lib2 = SkillLibrary(d)
+            assert lib2.load() == 1
+            assert lib2.get("s").description == "updated"
+            assert not list(Path(d).glob("*.tmp"))
+
+    def test_hostile_name_cannot_escape_the_directory(self):
+        with tempfile.TemporaryDirectory() as d:
+            lib = SkillLibrary(d)
+            lib.add(Skill(name="../escape"))
+            lib.save()
+            files = [p.name for p in Path(d).iterdir()]
+            assert files == ["escape.json"]
+            assert skill_filename("../escape") == "escape.json"

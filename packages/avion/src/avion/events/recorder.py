@@ -1,4 +1,9 @@
-"""Event recorder — append-only log with filtering, export, listeners."""
+"""Event recorder — view over an EventLogger's journal.
+
+The journal is the source of truth; this object is the in-memory view:
+fast filtering, listeners, JSON export. It never writes independently of
+the logger — ``record()`` goes journal-first through ``EventLogger.log``.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,7 @@ import json
 from pathlib import Path
 from typing import Any, Callable
 
+from avion.events.logger import EventLogger
 from avion.events.models import Event, EventType
 
 
@@ -19,13 +25,27 @@ class EventRecorder:
         rec.record(EventType.CLICK, name="text='Start'")
         failures = rec.failed()
         rec.save("arken_output/events.json")
+
+    When constructed with a journal-backed logger, the view is seeded
+    from the journal, so reopening a session shows its prior history.
+    ``clear()`` clears the *view* only — journal history is never
+    truncated (append-only is the journal's invariant, not this class').
     """
 
-    def __init__(self, session_name: str = "arken_session"):
+    def __init__(
+        self,
+        session_name: str = "arken_session",
+        *,
+        logger: EventLogger | None = None,
+    ):
         self.session_name = session_name
-        self._events: list[Event] = []
+        self._logger = logger if logger is not None else EventLogger()
+        self._events: list[Event] = list(self._logger.events())
         self._listeners: list[Callable[[Event], None]] = []
-        self._seq = 0
+
+    @property
+    def logger(self) -> EventLogger:
+        return self._logger
 
     def __len__(self) -> int:
         return len(self._events)
@@ -44,8 +64,7 @@ class EventRecorder:
         duration_ms: float = 0.0,
         screenshot: bytes | None = None,
     ) -> Event:
-        """Append an event and notify listeners."""
-        self._seq += 1
+        """Persist an event through the logger, then notify listeners."""
         payload = dict(data or {})
         if screenshot is not None:
             payload["screenshot"] = screenshot
@@ -56,8 +75,8 @@ class EventRecorder:
             success=success,
             error=error,
             duration_ms=duration_ms,
-            seq=self._seq,
         )
+        self._logger.log(event)  # assigns seq (journal-first when durable)
         self._events.append(event)
         for listener in self._listeners:
             try:
@@ -96,10 +115,15 @@ class EventRecorder:
         }
 
     def save(self, path: str) -> None:
-        """Export events as JSON (screenshots stored as presence flags)."""
+        """Export the view as JSON (screenshots stored as presence flags).
+
+        This is a *derived artifact* — overwriting it is fine. The journal
+        remains the durable record; this never touches it.
+        """
         Path(path).parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w") as f:
             json.dump(self.to_dict(), f, indent=2, default=str)
 
     def clear(self) -> None:
+        """Clear the in-memory view only; the journal keeps its history."""
         self._events.clear()
