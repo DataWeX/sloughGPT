@@ -24,9 +24,9 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: packages/strui
       - name: Ensure @sloughgpt/strui symlink
         run: |
@@ -50,7 +50,7 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
       - run: npm run test:lib
         working-directory: apps/web
@@ -67,9 +67,9 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
-      - run: npm ci --omit=peer
+      - run: npm ci --omit=peer --ignore-scripts
         working-directory: packages/strui
       - run: npm run build
         working-directory: apps/web
@@ -89,9 +89,9 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
-      - run: npm ci --omit=peer
+      - run: npm ci --omit=peer --ignore-scripts
         working-directory: packages/strui
       - run: npm run build
         working-directory: apps/web
