@@ -43,10 +43,13 @@ def _wait_for_api(timeout: int = 60) -> bool:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_servers_ready():
-    assert _wait_for_api(timeout=90), (
-        f"API at {API} not ready after 90s. "
-        "Start the server with: FORCE_COLOR=1 ./sloughgpt serve --web"
-    )
+    # Capability gate: skip cleanly when the API is absent instead of
+    # erroring every item (repo-wide convention; card 6e826226).
+    if not _wait_for_api(timeout=5):
+        pytest.skip(
+            "API server not running — start with "
+            "FORCE_COLOR=1 ./sloughgpt serve --web"
+        )
     time.sleep(3)
 
 

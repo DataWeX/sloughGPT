@@ -20,11 +20,22 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 import urllib.request
 from pathlib import Path
 
 import pytest
+
+# File-local source bootstrap: under --import-mode=importlib the two `tests/`
+# packages collide on the `tests.*` module name (cwd's repo-root tests/ wins),
+# so packages/core-py/tests/conftest.py never executes its avion insert in
+# root-ini-style runs — add avion from source right here (same idiom as that
+# conftest; shared-workspace rule: no new installs).
+_avion_src = str(Path(__file__).resolve().parents[2] / "avion" / "src")
+if _avion_src not in sys.path:
+    sys.path.insert(0, _avion_src)
+
 from avion import Arken, ElementLocator, PageControls, SyncRunner
 
 # Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
@@ -97,11 +108,17 @@ def _api_has_model() -> bool:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_servers_ready():
-    """Block until both API and web server are ready before any test runs."""
-    assert _wait_for_api(timeout=90), (
-        f"API at {API} not ready after 90s. "
-        "Start the server with: FORCE_COLOR=1 ./sloughgpt serve --web"
-    )
+    """Block until both API and web server are ready before any test runs.
+
+    Skips (not errors) when the API is absent — server-dependent tests use
+    the repo-wide capability-gate convention (card 6e826226); a quick probe
+    keeps serverless gate runs from burning the old 90s wait.
+    """
+    if not _wait_for_api(timeout=5):
+        pytest.skip(
+            "API server not running — start with "
+            "FORCE_COLOR=1 ./sloughgpt serve --web"
+        )
     # Give the web server a moment to compile after API is up
     time.sleep(3)
 
