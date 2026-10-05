@@ -229,6 +229,31 @@ def _board_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _board_verify(args: argparse.Namespace) -> int:
+    """Chain integrity report (stdout, report-style).
+
+    Exit codes: 0 = sealed and intact, 1 = sealed but broken (tamper or a
+    crash between the mutation write and its reseal), 2 = unsealed legacy
+    board (nothing to verify — chain fields absent by design).
+    """
+    store = _get_store(args)
+    cards = store.load_board().cards
+    if not any(card.chain_hash for card in cards):
+        print(f"unsealed (legacy): {len(cards)} card(s), no chain_hash — nothing to verify")
+        return 2
+    broken = store.verify_chain()
+    if broken:
+        by_index = {card.chain_index: card for card in cards}
+        print(f"BROKEN: {len(broken)} entry/entries fail chain verification")
+        for index in broken:
+            card = by_index.get(index)
+            label = f"{card.id[:8]} {card.title[:50]}" if card else "unchained"
+            print(f"  chain_index {index}: {label}")
+        return 1
+    print(f"sealed: {len(cards)} card(s), chain intact")
+    return 0
+
+
 # ── Sync ─────────────────────────────────────────────────────────────────
 
 
@@ -364,6 +389,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     board_sub.add_parser("tags", help="List tags")
     board_sub.add_parser("stats", help="Show stats")
+    board_sub.add_parser(
+        "verify",
+        help="Verify the card hash chain: exit 0 intact, 1 broken, 2 unsealed legacy",
+    )
 
     # Sync
     sync_p = sub.add_parser("sync", help="Sync notes to board")
@@ -433,6 +462,7 @@ def main(argv: list[str] | None = None) -> int:
         ("board", "rm"): _board_delete,
         ("board", "tags"): _board_tags,
         ("board", "stats"): _board_stats,
+        ("board", "verify"): _board_verify,
         ("kanban", "show"): _board_show,
         ("kanban", "ls"): _board_show,
         ("kanban", "add"): _board_add,
@@ -441,6 +471,7 @@ def main(argv: list[str] | None = None) -> int:
         ("kanban", "rm"): _board_delete,
         ("kanban", "tags"): _board_tags,
         ("kanban", "stats"): _board_stats,
+        ("kanban", "verify"): _board_verify,
         ("sync", None): _sync,
         ("verify", None): _verify,
         ("gui", None): _gui,

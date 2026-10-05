@@ -157,6 +157,28 @@ def chain_hash_for(card: Card, prev_hash: str) -> str:
     return hashlib.sha256((prev_hash + "\x00" + blob).encode()).hexdigest()
 
 
+# Serialized key of chain_hash by _card_line (sort_keys=True) — the marker
+# for "is this board sealed?" that needs no JSON parse (add path is hot).
+_SEALED_MARKER = '"chain_hash": "'
+
+
+def _sealed_in(raw: str) -> bool:
+    """True when board-file text *raw* holds at least one non-empty chain_hash.
+
+    A sealed board carries chain fields on (at least) one card; a legacy
+    board has the key absent or empty everywhere and must stay unsealed —
+    no store mutation ever introduces chain fields where they did not exist
+    (retirement rule, card a8e408dc).
+    """
+    start = raw.find(_SEALED_MARKER)
+    while start != -1:
+        value = start + len(_SEALED_MARKER)
+        if raw[value : value + 1] != '"':  # non-empty value → sealed
+            return True
+        start = raw.find(_SEALED_MARKER, value)
+    return False
+
+
 # ── Store ────────────────────────────────────────────────────────────────
 
 
@@ -326,17 +348,31 @@ class PlannerStore:
         be erased. A concurrent change to the same card line is last-writer-
         wins (semantic conflict, not a lost update).
 
+        RESEAL (chain seal): when the pre-write snapshot shows a sealed
+        board (any non-empty chain_hash), a changed write is followed by
+        ``compute_chains()`` — a second, independent OCC write. The
+        two-write window is safe by construction: the reseal re-reads
+        current state (``load_board``) and commits under its own generation
+        token, so it seals whatever actually landed; a crash in between
+        leaves a stale chain that ``verify_chain()`` / ``board verify``
+        flag — detected, never silent. Unsealed legacy boards get no reseal.
+
         Returns:
             Number of lines matched and replaced.
         """
         if not self._board_file.exists():
             return 0
 
+        sealed = False
+        changed = False
+
         def attempt() -> int:
+            nonlocal sealed, changed
             old_text = self._board_file.read_text(encoding="utf-8")
             token = _token_of(old_text)
             out: list[str] = []
             matched = 0
+            sealed = False
             for raw in old_text.splitlines():
                 stripped = raw.strip()
                 if not stripped:
@@ -346,19 +382,26 @@ class PlannerStore:
                 except json.JSONDecodeError:
                     out.append(raw)
                     continue
-                if isinstance(obj, dict) and obj.get("id") in replacements:
-                    new_line = replacements[obj["id"]]
-                    matched += 1
-                    if new_line is not None:
-                        out.append(new_line)
-                    continue
+                if isinstance(obj, dict):
+                    if obj.get("chain_hash"):
+                        sealed = True
+                    if obj.get("id") in replacements:
+                        new_line = replacements[obj["id"]]
+                        matched += 1
+                        if new_line is not None:
+                            out.append(new_line)
+                        continue
                 out.append(raw)
             new_text = "\n".join(out) + "\n" if out else ""
-            if new_text != old_text:
+            changed = new_text != old_text
+            if changed:
                 self._atomic_write(new_text, expect=token)
             return matched
 
-        return self._occ(attempt)
+        matched = self._occ(attempt)
+        if sealed and changed:
+            self.compute_chains()
+        return matched
 
     def _append_card(self, card: Card) -> None:
         """Append a single card line, adding the schema header only if missing.
@@ -369,14 +412,27 @@ class PlannerStore:
         OCC: this "append" is a full rebuild from a read snapshot — without
         the generation check, two concurrent adds erase each other's line
         (the original vanishing-card bug). Rebuild re-runs on conflict.
+
+        RESEAL: if the read snapshot shows a sealed board (string scan, no
+        JSON parse — this is the benchmarked hot path), the append is
+        followed by ``compute_chains()`` folding the new card into the
+        chain — the same two-write, OCC-protected window documented on
+        ``_surgical_rewrite``. Unsealed legacy boards are appended to
+        untouched (chain fields are never introduced). On a sealed board
+        the ``add_card()`` return value keeps its pre-seal chain fields;
+        read them back via ``get_card()``.
         """
 
+        sealed = False
+
         def attempt() -> None:
+            nonlocal sealed
             raw = (
                 self._board_file.read_text(encoding="utf-8")
                 if self._board_file.exists()
                 else ""
             )
+            sealed = _sealed_in(raw)
             token = _token_of(raw)
             body = [line for line in raw.splitlines() if line.strip()]
             out = list(body)
@@ -387,6 +443,8 @@ class PlannerStore:
             self._atomic_write("\n".join(out) + "\n", expect=token)
 
         self._occ(attempt)
+        if sealed:
+            self.compute_chains()
 
     def _read_board_lines(self) -> list[dict[str, Any]]:
         if not self._board_file.exists():

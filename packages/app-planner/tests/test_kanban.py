@@ -283,6 +283,56 @@ class TestCLI:
         assert "usage:" in out
 
 
+class TestBoardVerifyCLI:
+    """`board verify` — chain integrity report, three-way exit code:
+    0 sealed intact, 1 broken, 2 unsealed legacy (nothing to verify)."""
+
+    def test_unsealed_legacy_exits_2(self, tmp_path):
+        _add(tmp_path, "Legacy card")
+        code, out = _run(tmp_path, "board", "verify")
+        assert code == 2
+        assert "unsealed" in out
+
+    def test_sealed_intact_exits_0(self, tmp_path):
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        store.add_card("a")
+        store.add_card("b")
+        store.compute_chains()
+        code, out = _run(tmp_path, "board", "verify")
+        assert code == 0
+        assert "intact" in out
+
+    def test_broken_exits_1(self, tmp_path):
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        store.add_card("a")
+        store.add_card("b")
+        store.compute_chains()
+        text = store._board_file.read_text()
+        tampered = text.replace('"title": "a"', '"title": "evil"', 1)
+        store._atomic_write(tampered)
+        code, out = _run(tmp_path, "board", "verify")
+        assert code == 1
+        assert "BROKEN" in out
+
+    def test_kanban_alias_verify(self, tmp_path):
+        _add(tmp_path, "Legacy card")
+        code, _ = _run(tmp_path, "kanban", "verify")
+        assert code == 2
+
+    def test_cli_move_on_sealed_board_stays_intact(self, tmp_path):
+        """End-to-end regression for card 835122e0: a CLI move no longer
+        leaves the chain stale — verify stays green right after the move."""
+        store = PlannerStore(board_dir=tmp_path, notes_dir=tmp_path)
+        card = store.add_card("Movable")
+        store.add_card("b")
+        store.compute_chains()
+        code, _ = _run(tmp_path, "board", "move", card.id, "done")
+        assert code == 0
+        code, out = _run(tmp_path, "board", "verify")
+        assert code == 0
+        assert "intact" in out
+
+
 # ── Column vocabulary ──────────────────────────────────────────────────────
 
 

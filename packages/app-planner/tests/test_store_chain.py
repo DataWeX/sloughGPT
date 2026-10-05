@@ -126,10 +126,16 @@ class TestChainVerify:
         assert store.verify_chain() == []
 
     def test_verify_flags_mutation(self, store: PlannerStore):
-        a = store.add_card("a")
+        store.add_card("a")
         store.add_card("b")
         store.compute_chains()
-        store.update_card(a.id, title="tampered")
+        # A legitimate update now re-seals the board (TestChainSelfHeal), so
+        # tamper out-of-band — bypass the store entirely — to prove the
+        # chain still catches content edits made behind its back.
+        text = store._board_file.read_text()
+        tampered = text.replace('"title": "a"', '"title": "tampered"', 1)
+        assert tampered != text
+        store._atomic_write(tampered)
         assert store.verify_chain() == [0]
 
     def test_verify_flags_unchained(self, store: PlannerStore):
@@ -148,6 +154,64 @@ class TestChainVerify:
             text.replace(line_a, "\x00").replace(line_b, line_a).replace("\x00", line_b)
         )
         assert store.verify_chain() != []
+
+
+class TestChainSelfHeal:
+    """A sealed board re-seals itself after every store mutation.
+
+    Card 835122e0: surgical rewrites previously left chain_hash stale
+    until the next sync, so the chain could not serve as tamper evidence
+    between syncs. Legacy unsealed boards must stay unsealed — mutations
+    never introduce chain fields where they did not exist.
+    """
+
+    @pytest.fixture
+    def sealed(self, store: PlannerStore) -> PlannerStore:
+        store.add_card("a")
+        store.add_card("b")
+        store.compute_chains()
+        assert store.verify_chain() == []
+        return store
+
+    def test_move_reseals(self, sealed: PlannerStore):
+        first = sealed.load_board().cards[0]
+        sealed.move_card(first.id, "wip")
+        assert sealed.verify_chain() == []
+
+    def test_update_reseals(self, sealed: PlannerStore):
+        first = sealed.load_board().cards[0]
+        sealed.update_card(first.id, title="renamed")
+        assert sealed.verify_chain() == []
+
+    def test_add_reseals(self, sealed: PlannerStore):
+        sealed.add_card("c")
+        cards = sealed.load_board().cards
+        assert len(cards) == 3
+        assert [c.chain_index for c in cards] == [0, 1, 2]
+        assert sealed.verify_chain() == []
+
+    def test_delete_reseals(self, sealed: PlannerStore):
+        first = sealed.load_board().cards[0]
+        sealed.delete_card(first.id)
+        assert len(sealed.load_board().cards) == 1
+        assert sealed.verify_chain() == []
+
+    def test_block_reseals(self, sealed: PlannerStore):
+        blocker, blocked = sealed.load_board().cards[:2]
+        sealed.block_card(blocked.id, blocker.id)
+        assert sealed.verify_chain() == []
+
+    def test_legacy_board_never_auto_seals(self, store: PlannerStore):
+        a = store.add_card("a")
+        b = store.add_card("b")
+        store.move_card(a.id, "wip")
+        store.update_card(b.id, title="renamed")
+        store.add_card("c")
+        store.delete_card(a.id)
+        cards = store.load_board().cards
+        assert len(cards) == 2
+        assert all(c.chain_hash == "" and c.chain_index == -1 for c in cards)
+        assert store.verify_chain() == [-1]
 
 
 class TestChainSync:
