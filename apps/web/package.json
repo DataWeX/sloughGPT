@@ -37,6 +37,7 @@
     "e2e": "cypress run",
     "e2e:open": "cypress open",
     "e2e:ci": "start-server-and-test \"npm run dev:e2e\" http://localhost:3010 \"cypress run --config baseUrl=http://localhost:3010\"",
+    "e2e:vite": "start-server-and-test \"vite\" http://localhost:5173 \"cypress run\"",
     "ci": "npm run lint && npm run typecheck && npm run test && npm run build:clean",
     "ci:quick": "npm run typecheck && npm run test:lib && npm run test:components",
     "ci:e2e": "npm run build:clean && npm run e2e:ci"
