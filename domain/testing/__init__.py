@@ -4,6 +4,7 @@ Public API:
     StepResult, JourneyResult, Page, SiteConfig, Browser, Step, Journey
     assert_page_loads, assert_body_contains, assert_no_errors, create_site_config
 """
+from __future__ import annotations
 
 from domain.testing._internal.testing import (
     Browser,

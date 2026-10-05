@@ -3,6 +3,7 @@
 Canonical implementation of the consciousness subsystem. Re-exported by
 ``domain.cognition`` (canonical facade).
 """
+from __future__ import annotations
 
 from domain.cognition._internal.consciousness.config import ConsciousnessConfig
 from domain.cognition._internal.consciousness.engine import (

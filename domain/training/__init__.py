@@ -10,6 +10,7 @@ Public API:
     apply_lora_to_model, get_lora_parameters
     LongRunRecorder (durable JSONL metrics for long unattended runs)
 """
+from __future__ import annotations
 
 from domain.training._internal.checkpoints import (
     find_checkpoint,

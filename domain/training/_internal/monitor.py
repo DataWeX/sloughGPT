@@ -8,6 +8,7 @@ Usage:
     monitor.record_metric("accuracy", 0.85)
     alerts = monitor.get_alerts()
 """
+from __future__ import annotations
 
 import logging
 import threading

@@ -4,6 +4,7 @@ Public API:
     TraitWeightsConfig, PersonalityManager, MemoryManager, StyleManager, TaskManager
     ConsciousnessManager, get_trait_config, reset_trait_config
 """
+from __future__ import annotations
 
 from domain.context._internal.managers import (
     ConsciousnessManager,
