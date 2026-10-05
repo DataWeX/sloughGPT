@@ -49,6 +49,10 @@ export default defineConfig({
     },
     clearMocks: true,
     testTimeout: 30_000,
+    // beforeEach/afterEach kept the 10_000 default, so a loaded box killed
+    // hooks that testTimeout would have allowed ("Hook timed out in 10000ms").
+    // Match testTimeout: a slow hook is the same class of slowness as a slow test.
+    hookTimeout: 30_000,
   },
   resolve: {
     alias: {
