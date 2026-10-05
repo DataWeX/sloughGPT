@@ -51,12 +51,16 @@ _SERVER_ROOT = Path(__file__).resolve().parent
 _CORE_PY_ROOT = _REPO_ROOT / "packages" / "core-py"
 _SGLOADER_ROOT = _REPO_ROOT / "packages" / "downcraft"
 _CHARGECTL_ROOT = _REPO_ROOT / "packages" / "chargectl" / "src"
+# mogdb is source-only (not installed in the shared env) — declaring it here
+# rather than relying on startup_history._import_mogdb's sys.path side effect,
+# which only works when that module happens to import first.
+_MOGDB_ROOT = _REPO_ROOT / "packages" / "mogdb" / "src"
 
 _HF_CACHE = _REPO_ROOT / "models" / "hf-cache"
 _HF_CACHE.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("HF_HOME", str(_HF_CACHE))
 
-for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _REPO_ROOT):
+for _p in (_SERVER_ROOT, _CORE_PY_ROOT, _SGLOADER_ROOT, _CHARGECTL_ROOT, _MOGDB_ROOT, _REPO_ROOT):
     _s = str(_p)
     if _s not in sys.path:
         sys.path.insert(0, _s)

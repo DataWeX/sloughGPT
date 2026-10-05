@@ -4,6 +4,7 @@
 Auto-detects .venv, sets up sys.path, and runs the CLI.
 Works standalone (python3 cli.py) or via console_scripts (pip install -e .).
 """
+
 import os
 import sys
 from pathlib import Path
@@ -18,7 +19,10 @@ if _venv_py.exists() and sys.executable != str(_venv_py):
 # ── Path setup ──────────────────────────────────────────────────────────
 _CORE_PY = _REPO / "packages" / "core-py"
 _CLI_SRC = _REPO / "apps" / "cli" / "src"
-for _p in [_CLI_SRC, _CORE_PY]:
+# mogdb is source-only (never pip-installed — see startup_history._import_mogdb),
+# so the composition root must declare it, exactly as pytest.ini pythonpath does.
+_MOGDB_SRC = _REPO / "packages" / "mogdb" / "src"
+for _p in [_CLI_SRC, _CORE_PY, _MOGDB_SRC]:
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 

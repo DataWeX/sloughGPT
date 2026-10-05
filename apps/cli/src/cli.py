@@ -16,7 +16,9 @@ from pathlib import Path
 _CLI_DIR = Path(__file__).resolve().parent
 _ROOT_DIR = _CLI_DIR.parent.parent.parent
 _CORE_PY_DIR = _ROOT_DIR / "packages" / "core-py"
-for _sys_path in [_CLI_DIR, str(_ROOT_DIR), str(_CORE_PY_DIR)]:
+# Source-only package; declared here so any launch path reaches it (cf. pytest.ini).
+_MOGDB_DIR = _ROOT_DIR / "packages" / "mogdb" / "src"
+for _sys_path in [_CLI_DIR, str(_ROOT_DIR), str(_CORE_PY_DIR), str(_MOGDB_DIR)]:
     if str(_sys_path) not in sys.path:
         sys.path.insert(0, str(_sys_path))
 
@@ -1105,4 +1107,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
