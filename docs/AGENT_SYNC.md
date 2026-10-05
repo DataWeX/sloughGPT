@@ -434,6 +434,24 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
+- **2026-10-05 · chain seal self-heals after every store mutation — pushed on
+  `feat/board-chain-self-heal` (`45a516cc1`), card `835122e0`.** Every surgical
+  write funnel (`_surgical_rewrite`: move/update/delete/block/unblock/archive,
+  plus `_append_card` for add) now runs `compute_chains()` **only when the
+  pre-write snapshot shows a sealed board** (non-empty `chain_hash`) — legacy
+  unsealed boards never gain chain fields (retirement rule, card `a8e408dc`).
+  Detection is free (string scan in the hot add path, existing JSON parse in
+  the rewrite loop — zero extra IO); the two-write window is OCC-safe (the
+  reseal re-reads and commits under its own generation token, so it seals
+  whatever actually landed; a crash between writes is caught by `board
+  verify`, never silent). New CLI `board verify` / `kanban verify` → exit
+  **0 sealed intact, 1 broken, 2 unsealed legacy** (stdout report).
+  `test_verify_flags_mutation` retargeted to out-of-band `_atomic_write`
+  tamper, since legit updates now reseal; +`TestChainSelfHeal` (6),
+  +`TestBoardVerifyCLI` (5). Gates: app-planner **205 passed** (incl.
+  concurrency), ruff clean, board-write benchmark no regression (add
+  149.6 → 167.2 ops/s baseline → post). Queued for the `merge-to-main` lane.
+
 - **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
   (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
   fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
@@ -528,3 +546,10 @@ git push -u origin feat/<name>   # push your own branch when done
   board, then `move_card(<full-uuid>, <col>)` + `compute_chains()`), and
   `move_card` matches the id **exactly** (an 8-hex prefix returns `False`
   silently; resolve the full uuid first).
+- **app-planner test gates need TWO src trees on `PYTHONPATH`**:
+  `PYTHONPATH=<wt>/packages/app-planner/src:<wt>/packages/mogdb/src` — with
+  only the planner entry, `test_gui.py::test_create_list_and_get_note[mogdb]`
+  dies with `ModuleNotFoundError: No module named 'mogdb'` (the root
+  `pytest.ini` pythonpath fix `4ad4072d9` is not on every lineage). Full
+  green gate: `PYTHONNOUSERSITE=1 PYTHONPATH=<both> python -m pytest
+  packages/app-planner/tests -q` → 205 passed.
