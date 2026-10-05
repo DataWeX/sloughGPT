@@ -4,7 +4,21 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~10:15 — `feat/wip-column-rename` **lands on
+**Last update**: 2026-10-05 ~13:15 — `feat/mole-phase2-probes` **lands on
+main** (merge `74959c439`, card `1e57b2d9` → done): Mole phase 2 — two
+read-only probes registered in the existing `PROBES` registry (one
+registration each; watch/report pick them up automatically): **gates**
+(parses newest `~/.cache/slog-gates` suite artifact, verdict vs
+`SLO_GATES_DRIFT_MAX`, subset-scope guard + staleness check) and
+**benchmark-regression** (newest-vs-history per kind, importing
+`benchmark_results.py`'s `is_regression` — no reimplementation). No AI,
+suggest-only, ambient (no web surface). Gates: canonical 5-tree run
+**green-by-baseline** — 643 bad ids vs baseline 849 (PR #120 ci-baseline
+fixes landed between), 4 new ids all pass standalone (shared-state flakes:
+spinner/execute_code_js/ModelHealthMonitor tmp family `6369c03e`
+/chat_trainer). Doctor+mole+allowlist targeted **71 passed**, ruff clean,
+probe perf 0.9/0.05 ms per tick (phase-1 baseline 4.8 ms/tick). Earlier
+~10:15: `feat/wip-column-rename` **lands on
 main** (fast-forward `3f8465164`, card `ffaea823` → done): the kanban column
 is **`wip`, never `in_progress`** — `config` maps both directions, the default
 column schemas in Python **and** TS, 4 test files, package README + planner
