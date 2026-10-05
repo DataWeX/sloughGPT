@@ -16,14 +16,14 @@ from domain.core._internal.doctor.models import Finding
 from domain.core._internal.doctor.report import default_report_path
 from domain.infrastructure._internal.health_flow import Severity
 
-_KNOWN_PROBES = ("http", "sse", "journey")
+_KNOWN_PROBES = ("gates", "benchmarks", "http", "sse", "journey")
 _TOP_FINDINGS = 5
 
 
 def _summary_lines(report) -> list[str]:
     counts = report.summary["by_severity"]
     lines = [
-        f"site-doctor: overall {str(report.overall).upper()} — "
+        f"mole: overall {str(report.overall).upper()} — "
         f"{counts['critical']} critical, {counts['warn']} warn, "
         f"{counts['info']} info, {counts['ok']} ok ({report.summary['total']} findings)",
     ]

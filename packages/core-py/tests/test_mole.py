@@ -1,4 +1,4 @@
-"""Tests for Mole (``domain/core/_internal/mole``) — the always-on watcher.
+"""Tests for Mole (``domain/core/_internal/mole``) — the always-on monitor.
 
 Hermetic by construction: the doctor sweep is injected, sleeps are
 captured, no network, no browser, no AI. Mole adds *time* to the
@@ -135,7 +135,7 @@ def test_watch_survives_run_failure(tmp_path):
         context=lambda: {},
     )
     lines = _journal_lines(journal)
-    assert len(lines) == 2  # a watcher never dies mid-watch
+    assert len(lines) == 2  # the loop never dies mid-run
     assert all("probe stack exploded" in line["error"] for line in lines)
     assert exit_code == 2  # error tick → critical exit code
 

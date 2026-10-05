@@ -1,4 +1,4 @@
-"""CLI for Mole, the always-on watcher: ``python -m domain.core._internal.mole``.
+"""CLI for Mole, the always-on monitor: ``python -m domain.core._internal.mole``.
 
 Watch-only, read-only, no AI: one probe sweep per tick (the existing
 doctor probes), every tick journaled, a one-line event only when the
@@ -14,7 +14,7 @@ import sys
 
 from domain.core._internal.mole import default_journal_path, run_watch
 
-_KNOWN_PROBES = ("http", "sse", "journey")
+_KNOWN_PROBES = ("gates", "benchmarks", "http", "sse", "journey")
 
 
 def _event_line(line: dict) -> str:
@@ -31,7 +31,7 @@ def _event_line(line: dict) -> str:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="python -m domain.core._internal.mole",
-        description="Always-on watcher: probe on a cadence, journal every tick, "
+        description="Mole: probe on a cadence, journal every tick, "
         "alert only on change (no AI, read-only).",
     )
     parser.add_argument(

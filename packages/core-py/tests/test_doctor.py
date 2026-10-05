@@ -19,6 +19,8 @@ import pytest
 from domain.core._internal.doctor import run_doctor
 from domain.core._internal.doctor.models import Finding, band, rank, worst
 from domain.core._internal.doctor.probes import ProbeResult
+from domain.core._internal.doctor.probes import benchmarks as benchmarks_probe
+from domain.core._internal.doctor.probes import gates as gates_probe
 from domain.core._internal.doctor.probes import http as http_probe
 from domain.core._internal.doctor.probes import journey as journey_probe
 from domain.core._internal.doctor.probes import sse as sse_probe
@@ -33,9 +35,14 @@ def doctor_env(monkeypatch, tmp_path):
     monkeypatch.setenv("SLO_WEB_URL", "http://localhost:5173")
     monkeypatch.setenv("SLO_API_URL", "http://localhost:8000")
     monkeypatch.setenv("SLO_JOURNEY_REPORT", str(tmp_path / "ux-flows-report.json"))
+    monkeypatch.setenv("SLO_GATES_DIR", str(tmp_path / "gates"))
+    monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(tmp_path / "benchmarks"))
     monkeypatch.delenv("SLO_GATEWAY_URL", raising=False)
     monkeypatch.delenv("SLO_DOCTOR_REPORT", raising=False)
     monkeypatch.delenv("SLO_JOURNEY_CACHE", raising=False)
+    monkeypatch.delenv("SLO_GATES_DRIFT_MAX", raising=False)
+    monkeypatch.delenv("SLO_GATES_STALE_H", raising=False)
+    monkeypatch.delenv("SLO_GATES_FULL_PASSED", raising=False)
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -490,6 +497,238 @@ class TestSseProbe:
 
 
 # ──────────────────────────────────────────────────────────────────
+# local file probes — gates + benchmarks
+# ──────────────────────────────────────────────────────────────────
+
+
+def _gate_artifact(d: Path, name: str, summary: str, mtime: float | None = None) -> Path:
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / name
+    p.write_text("===FAILURES===\n(stub output)\n" + summary + "\n", encoding="utf-8")
+    if mtime is not None:
+        os.utime(p, (mtime, mtime))
+    return p
+
+
+def _bench_record(d: Path, kind: str, name: str, payload: dict, mtime: float) -> None:
+    kd = d / kind
+    kd.mkdir(parents=True, exist_ok=True)
+    p = kd / name
+    p.write_text(json.dumps(payload), encoding="utf-8")
+    os.utime(p, (mtime, mtime))
+
+
+class TestGatesProbe:
+    """Newest parseable suite*.out vs the known-drift baseline (card 56b49cf1)."""
+
+    OK_SUMMARY = "= 641 failed, 46235 passed, 32 skipped, 197 errors in 5963.47s (1:39:23) ="
+
+    def test_within_baseline_is_ok(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        _gate_artifact(d, "suite-a.out", self.OK_SUMMARY)
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.ok is True
+        finding = _finding(result, "gates.baseline")
+        assert finding.severity == Severity.OK
+        assert finding.score == 100.0
+        assert "838" in finding.message and "641" in finding.message
+        assert result.raw["failed"] == 641
+        assert result.raw["errors"] == 197
+
+    def test_over_baseline_is_warn(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        _gate_artifact(d, "suite-a.out", "= 900 failed, 45000 passed, 100 errors in 1.00s =")
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.ok is True
+        finding = _finding(result, "gates.baseline")
+        assert finding.severity == Severity.WARN
+        assert "1000" in finding.message and "838" in finding.message
+
+    def test_double_baseline_is_critical(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        _gate_artifact(d, "suite-a.out", "= 1000 failed, 44000 passed, 700 errors in 1.00s =")
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert _finding(result, "gates.baseline").severity == Severity.CRITICAL
+
+    def test_passed_only_summary_is_clean(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        _gate_artifact(d, "suite-a.out", "= 46241 passed in 6000.00s (1:40:00) =")
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.ok is True
+        assert _finding(result, "gates.baseline").severity == Severity.OK
+        assert result.raw["failed"] == 0 and result.raw["errors"] == 0
+        assert result.raw["passed"] == 46241
+        assert result.raw["full"] is True
+
+    def test_scope_limited_run_is_info_not_a_verdict(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        _gate_artifact(
+            d,
+            "suite-subset.out",
+            "= 65 failed, 11785 passed, 188 deselected, 13 errors in 3260.02s (0:54:20) =",
+        )
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.ok is False
+        scope = _finding(result, "gates.scope")
+        assert scope.severity == Severity.INFO
+        assert "11785" in scope.message and "40000" in scope.message
+        assert "gates.baseline" not in {f.check for f in result.findings}
+        assert result.raw["full"] is False
+
+    def test_full_run_preferred_over_newer_subset(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        now = time.time()
+        _gate_artifact(d, "suite-full.out", self.OK_SUMMARY, mtime=now - 100)
+        _gate_artifact(
+            d, "suite-subset.out", "= 65 failed, 11785 passed, 13 errors in 3260.02s =", mtime=now
+        )
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.ok is True
+        assert result.raw["file"] == "suite-full.out"
+        assert _finding(result, "gates.baseline").severity == Severity.OK
+
+    def test_baseline_env_override(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        _gate_artifact(d, "suite-a.out", "= 900 failed, 45000 passed, 100 errors in 1.00s =")
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        monkeypatch.setenv("SLO_GATES_DRIFT_MAX", "1000")  # bad=1000 → still within
+        result = gates_probe.run_probe()
+        assert _finding(result, "gates.baseline").severity == Severity.OK
+
+    def test_missing_dir_is_info_and_probe_fails(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("SLO_GATES_DIR", str(tmp_path / "nope"))
+        result = gates_probe.run_probe()
+        assert result.ok is False
+        assert result.error
+        assert _finding(result, "gates.artifact").severity == Severity.INFO
+
+    def test_unparsable_artifacts_warn(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        d.mkdir()
+        (d / "suite-a.out").write_text("killed mid-run\nno summary here\n", encoding="utf-8")
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.ok is False
+        assert _finding(result, "gates.parse").severity == Severity.WARN
+        assert result.error
+
+    def test_newest_artifact_wins(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        now = time.time()
+        _gate_artifact(d, "suite-old.out", "= 1 failed, 1 passed in 0.10s =", mtime=now - 100)
+        _gate_artifact(d, "suite-new.out", self.OK_SUMMARY, mtime=now)
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.raw["file"] == "suite-new.out"
+        assert result.raw["failed"] == 641
+
+    def test_falls_back_to_older_parsable_artifact(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        now = time.time()
+        _gate_artifact(d, "suite-old.out", self.OK_SUMMARY, mtime=now - 100)
+        _gate_artifact(d, "suite-junk.out", "killed mid-run\n", mtime=now)
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert result.ok is True
+        assert result.raw["file"] == "suite-old.out"
+
+    def test_stale_artifact_is_info(self, monkeypatch, tmp_path):
+        d = tmp_path / "gates"
+        old = time.time() - 48 * 3600
+        _gate_artifact(d, "suite-a.out", self.OK_SUMMARY, mtime=old)
+        monkeypatch.setenv("SLO_GATES_DIR", str(d))
+        result = gates_probe.run_probe()
+        assert _finding(result, "gates.stale").severity == Severity.INFO
+        assert _finding(result, "gates.baseline").severity == Severity.OK
+
+
+class TestBenchmarksProbe:
+    """Verdict comes from scripts/benchmark_results.py's own is_regression."""
+
+    def test_latency_regression_is_warn(self, monkeypatch, tmp_path):
+        d = tmp_path / "benchmarks"
+        now = time.time()
+        _bench_record(d, "latency", "a.json", {"mean_ms": 100.0, "p95_ms": 200.0}, now - 60)
+        _bench_record(d, "latency", "b.json", {"mean_ms": 150.0, "p95_ms": 210.0}, now)
+        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        result = benchmarks_probe.run_probe()
+        assert result.ok is True
+        finding = _finding(result, "benchmarks.latency")
+        assert finding.severity == Severity.WARN
+        assert "latency" in finding.message
+        assert "mean_ms" in finding.detail  # +50% vs the 20% rel threshold
+        assert result.raw["latency"] == 2
+
+    def test_clean_pair_is_ok(self, monkeypatch, tmp_path):
+        d = tmp_path / "benchmarks"
+        now = time.time()
+        _bench_record(d, "latency", "a.json", {"mean_ms": 100.0, "p95_ms": 200.0}, now - 60)
+        _bench_record(d, "latency", "b.json", {"mean_ms": 110.0, "p95_ms": 210.0}, now)
+        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        result = benchmarks_probe.run_probe()
+        assert result.ok is True
+        finding = _finding(result, "benchmarks.latency")
+        assert finding.severity == Severity.OK
+        assert result.findings == [finding]
+
+    def test_higher_is_better_drop_regresses(self, monkeypatch, tmp_path):
+        d = tmp_path / "benchmarks"
+        now = time.time()
+        _bench_record(d, "stability", "a.json", {"overall": 95.0}, now - 60)
+        _bench_record(d, "stability", "b.json", {"overall": 89.0}, now)  # -6 > 5.0 abs
+        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        result = benchmarks_probe.run_probe()
+        finding = _finding(result, "benchmarks.stability")
+        assert finding.severity == Severity.WARN
+        assert "overall" in finding.detail
+
+    def test_missing_dir_is_info_and_probe_fails(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(tmp_path / "nope"))
+        result = benchmarks_probe.run_probe()
+        assert result.ok is False
+        assert result.error
+        assert _finding(result, "benchmarks.store").severity == Severity.INFO
+
+    def test_single_record_is_silent(self, monkeypatch, tmp_path):
+        d = tmp_path / "benchmarks"
+        _bench_record(d, "latency", "a.json", {"mean_ms": 100.0}, time.time())
+        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        result = benchmarks_probe.run_probe()
+        assert result.ok is True
+        assert result.findings == []  # no baseline yet — no nagging
+        assert result.raw["latency"] == 1
+
+    def test_untracked_kind_is_ignored(self, monkeypatch, tmp_path):
+        d = tmp_path / "benchmarks"
+        now = time.time()
+        _bench_record(d, "training", "a.json", {"loss": 1.0}, now - 60)
+        _bench_record(d, "training", "b.json", {"loss": 9.0}, now)  # no thresholds → no verdict
+        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        result = benchmarks_probe.run_probe()
+        assert result.ok is True
+        assert result.findings == []
+
+    def test_unreadable_record_is_warn(self, monkeypatch, tmp_path):
+        d = tmp_path / "benchmarks"
+        now = time.time()
+        _bench_record(d, "latency", "a.json", {"mean_ms": 100.0}, now - 60)
+        kd = d / "latency"
+        (kd / "b.json").write_text("{truncated", encoding="utf-8")
+        os.utime(kd / "b.json", (now, now))
+        monkeypatch.setenv("SLO_BENCH_RESULTS_DIR", str(d))
+        result = benchmarks_probe.run_probe()
+        finding = _finding(result, "benchmarks.latency")
+        assert finding.severity == Severity.WARN
+        assert "unreadable" in finding.message
+
+
+# ──────────────────────────────────────────────────────────────────
 # merge + report + exit codes
 # ──────────────────────────────────────────────────────────────────
 
@@ -635,16 +874,40 @@ class TestReportSerialization:
 
 class TestRunDoctor:
     def test_all_skipped_is_clean_and_never_touches_network(self):
-        report = run_doctor(skip={"http", "sse", "journey"}, preflight=False, write=False)
+        report = run_doctor(
+            skip={"gates", "benchmarks", "http", "sse", "journey"},
+            preflight=False,
+            write=False,
+        )
         assert report.overall == Severity.OK
         assert report.exit_code() == 0
-        assert {p["name"] for p in report.probes} == {"http", "sse", "journey"}
+        assert {p["name"] for p in report.probes} == {
+            "gates",
+            "benchmarks",
+            "http",
+            "sse",
+            "journey",
+        }
         assert all(p["ok"] is None and p["error"] == "skipped" for p in report.probes)
+
+    def test_registry_runs_local_file_probes_first(self):
+        from domain.core._internal.doctor.probes import PROBES
+
+        assert [p["name"] for p in PROBES] == [
+            "gates",
+            "benchmarks",
+            "http",
+            "sse",
+            "journey",
+        ]
 
     def test_writes_to_env_report_path(self, tmp_path, monkeypatch):
         path = tmp_path / "sub" / "findings.json"
         monkeypatch.setenv("SLO_DOCTOR_REPORT", str(path))
-        run_doctor(skip={"http", "sse", "journey"}, preflight=False)
+        run_doctor(
+            skip={"gates", "benchmarks", "http", "sse", "journey"},
+            preflight=False,
+        )
         data = json.loads(path.read_text(encoding="utf-8"))
         assert data["overall"] == "ok"
         assert data["targets"]["web"] == "http://localhost:5173"

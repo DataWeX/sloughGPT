@@ -263,7 +263,12 @@ detail under the grandfather rule until the unified `mole` CLI lands.
 
 - **What it probes:** API health/errors (`/health*`, `/errors/*`),
   `/health/stream` cadence + payload size (flags >256 KB frames and >8s
-  stalls), and the UX journey sweep report (`domain/journeys`).
+  stalls), the UX journey sweep report (`domain/journeys`), the newest
+  full-suite gate artifact vs the drift baseline (`~/.cache/slog-gates`;
+  env `SLO_GATES_DIR` / `SLO_GATES_DRIFT_MAX` / `SLO_GATES_FULL_PASSED`),
+  and stored benchmark records vs thresholds — the verdict comes from
+  `scripts/benchmark_results.py` itself (`data/benchmark_results`;
+  env `SLO_BENCH_RESULTS_DIR`).
 - **Placement:** wiring lives in `domain/core/_internal/doctor/` (the
   "body of the system" — system-level ops); probes are seams onto the
   core components.
@@ -279,7 +284,7 @@ detail under the grandfather rule until the unified `mole` CLI lands.
 .venv/bin/python -m domain.core._internal.doctor --no-sweep
 # Machine-readable report on stdout; also written to the report path:
 .venv/bin/python -m domain.core._internal.doctor --json
-# --window N (SSE seconds), --skip sse,http,journey, --report PATH, --strict
+# --window N (SSE seconds), --skip gates,benchmarks,sse,http,journey, --report PATH, --strict
 ```
 
 **Exit codes:** `0` ok/info · `1` warn (with `--strict`: info too) ·
@@ -302,7 +307,7 @@ next tick).
 ```bash
 # Watch at 30s cadence, one event line per change, journal every tick:
 .venv/bin/python -m domain.core._internal.mole
-# --interval S · --max-ticks N · --skip http|sse|journey · --journal PATH
+# --interval S · --max-ticks N · --skip http|sse|journey|gates|benchmarks · --journal PATH
 # --strict (info → nonzero, same rule as the report run) · --quiet (journal only)
 # --json (change events as one JSON object each)
 ```

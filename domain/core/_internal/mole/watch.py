@@ -1,6 +1,6 @@
-"""Mole — the always-on watcher: dig the running system for change deltas.
+"""Mole — the always-on monitor: dig the running system for change deltas.
 
-Mole reuses the site-doctor contract wholesale (``run_doctor``,
+Mole reuses the probe contract wholesale (``run_doctor``,
 ``DoctorReport``, the ``PROBES`` registry) and adds *time*: a cadence, a
 findings fingerprint, an append-only journal, and change-only events so
 the same finding never alerts twice. No AI anywhere — the probes are
@@ -88,8 +88,8 @@ def run_watch(
 
     Sleeps happen *between* ticks (``max_ticks`` runs cost
     ``max_ticks - 1`` sleeps). Tick 1 is always a change (it establishes
-    the baseline). A failing tick is journaled and contained — a watcher
-    never dies mid-watch — and yields exit code ``2``; otherwise the exit
+    the baseline). A failing tick is journaled and contained — the loop
+    never dies mid-run — and yields exit code ``2``; otherwise the exit
     code is the last report's (doctor convention, ``strict`` aware).
 
     All seams (``run``, ``sleep``, ``on_event``, ``context``) are
