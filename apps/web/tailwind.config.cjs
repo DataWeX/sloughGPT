@@ -21,6 +21,12 @@ module.exports = {
     extend: {
       transitionTimingFunction: {
         smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
+        // Named keys, not `ease-[cubic-bezier(...)]`: tailwindcss-animate
+        // re-registers `ease` for animation-timing-function, so an arbitrary
+        // value matches two utilities and Tailwind drops the rule entirely
+        // (lib/tailwind-ambiguous-utilities.test.ts guards this).
+        snappy: 'cubic-bezier(0.16, 1, 0.3, 1)', // reasoning panel expand
+        glide: 'cubic-bezier(0.222, 0.133, 0, 1)', // sidebar collapse
       },
       fontFamily: {
         sans: ['var(--font-rubik)', 'system-ui', 'sans-serif'],

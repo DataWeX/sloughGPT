@@ -109,7 +109,7 @@ apps/web/
 ├── vite-entry.tsx       # SPA shell + React Router routes
 ├── vite.config.ts
 ├── index.html
-├── tailwind.config.js
+├── tailwind.config.cjs
 ├── tsconfig.json
 └── package.json
 ```

@@ -176,7 +176,7 @@ function AppLayoutInner({ children }: { children: React.ReactNode }) {
             className={cn(
               'group/tab absolute top-1/2 z-20 flex h-[4.5rem] w-[1.15rem] -translate-y-1/2 items-center justify-center',
               'rounded-r-md cursor-pointer',
-              'transition-all duration-300 ease-[cubic-bezier(0.222,0.133,0,1)]',
+              'transition-all duration-300 ease-glide',
               'hover:w-[1.4rem]',
               'right-0 translate-x-[calc(100%-1px)]',
               'bg-gradient-to-b from-primary/80 via-primary to-primary/90',
