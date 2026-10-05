@@ -4,7 +4,25 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~16:45 — `fix/board-column-validation` **lands on
+**Last update**: 2026-10-05 ~00:45 — `feat/planner-routes-python` **ready for
+main** (branch tip, card `51cd0e65` → review): the 11 dangling `app/api`
+handlers are ported to descriptor-projected FastAPI routers —
+`routers/planner.py` (board/cards/move/notes/stats/tags/sync, 12 routes) +
+`routers/calendar.py` (2) through `create_router`; Next tree deleted (17 files
+incl. nextauth) + the vite api-plugin trio deleted (dev now proxies `/api` to
+the Python core). The calendar page moved onto `apiGet` — it was the one
+raw-fetch consumer the `{status, data}` envelope would have silently emptied
+(regression test added). Live journeys walked on a temp stack (core `:8001` +
+gateway `:8083` over the built dist): board read, create/edit/move/delete/sync
+through the UI, calendar renders events. Gates: backend **3197 passed** / 1
+pre-existing order-dependent `slnc` flake (proven by negative control — fails
+identically with my test files deselected), frontend **8036**, tsc / eslint /
+ruff / contract-static green, `npm run build:vite` green. **Landing state:
+branch pushed; joined the local `merge-to-main` lane (lane push deferred —
+origin's lane is diverged with card039/040 test batches); `main` itself is
+checked out dirty in `sloughgpt-api-std`, so the final main integration belongs
+to whoever holds a clean `main`.** Earlier 2026-10-04 ~16:45 —
+`fix/board-column-validation` **lands on
 main** (fast-forward `67c406ee2`, card `46f0fac4` → done): the column name is
 validated at the **core**, not at the CLI. `PlannerStore.validate_column()` is
 now the single source of truth and every write path funnels through it —
@@ -427,9 +445,9 @@ git push -u origin feat/<name>   # push your own branch when done
   same top-level names. `npm run build:vite` builds **same-origin** (empty
   `NEXT_PUBLIC_API_URL`; `??` not `||` in `lib/config.ts` — a `||` fallback
   would silently restore a second origin). `main.py --web` retired: no Node is
-  spawned. **Still open:** the 11 `app/api/**` handlers (9 planner, 1 calendar,
-  1 nextauth) have no host in a static build — classification on the card
-  before anything is ported or deleted.
+  spawned. **Closed 2026-10-05:** those 11 `app/api/**` handlers (9 planner,
+  1 calendar, 1 nextauth) are ported to projected FastAPI routes and the tree
+  is deleted — `feat/planner-routes-python`, card `51cd0e65`.
 - Root-repo session on `fix/startup-finalizers` (supersedes
   `feat/pipe-bounded-execution`); ~40 `feat/*` worktrees active —
   `git branch -vv` + the kanban board name the owners.
@@ -437,6 +455,15 @@ git push -u origin feat/<name>   # push your own branch when done
   Check it before treating a failure as yours.
 
 ## Gotchas that cost hours (add yours here)
+
+- **Two vite binaries coexist: `apps/web/node_modules/vite` is 8.3.0, the root
+  one is 7.3.6.** Only `npm run build:vite` (which resolves the local 8.3.0)
+  builds — invoking `../../node_modules/.bin/vite build` directly fails with
+  `[vite:worker-import-meta-url] Invalid value "iife" ... UMD and IIFE output
+  formats are not supported for code-splitting builds` on
+  `lib/soulnet-webgpu` (v7 defaults `worker.format` to iife; v8 handles the
+  module worker). The failure looks like a code regression but reproduces on a
+  pristine tree — it is the wrong binary. Never call the root vite directly.
 
 - **`PYTHONNOUSERSITE=1` (AGENTS.md) breaks browser suites**: playwright is
   installed in `~/.local/lib/python3.12/site-packages/` (user site), not in
