@@ -143,13 +143,16 @@ class TestDistillEndpointErrors:
     """
 
     def _make_client(self):
-        from fastapi import FastAPI
+        # build_test_app registers the production exception handlers; a bare
+        # FastAPI() let raise_error()'s 400s escape as unhandled 500s, which
+        # made the >=400 assertions pass while ==200 ones failed (the
+        # misleading rotating signature in card 5473eb90).
         from fastapi.testclient import TestClient
         from training.router import router
 
-        app = FastAPI()
-        app.include_router(router)
-        return TestClient(app, raise_server_exceptions=False)
+        from tests.conftest import build_test_app
+
+        return TestClient(build_test_app(router), raise_server_exceptions=False)
 
     def test_missing_dataset_returns_error(self):
         client = self._make_client()
@@ -228,13 +231,13 @@ class TestDistillSlonetTeacher:
 
     @staticmethod
     def _make_client():
-        from fastapi import FastAPI
+        # Production exception handlers registered — see TestDistillEndpointErrors.
         from fastapi.testclient import TestClient
         from training.router import router
 
-        app = FastAPI()
-        app.include_router(router)
-        return TestClient(app, raise_server_exceptions=False)
+        from tests.conftest import build_test_app
+
+        return TestClient(build_test_app(router), raise_server_exceptions=False)
 
     @staticmethod
     def _fake_provider():

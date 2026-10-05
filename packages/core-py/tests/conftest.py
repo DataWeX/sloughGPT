@@ -11,7 +11,9 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "live: marks tests that require running servers")
 
 
-_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+# parents[3] = repo root for a file at packages/core-py/tests depth (same
+# idiom as the _avion_src line below); parents[2] yielded <repo>/packages/apps/...
+_server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
