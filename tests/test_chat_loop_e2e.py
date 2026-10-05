@@ -73,7 +73,15 @@ def mock_chat_deps():
     model_ctrl._tokenizer = MagicMock()
 
     with (
+        # Split coverage: get_provider is read through TWO bindings in prod.
+        #   domain.chat/_internal/{manager,domain}.py and
+        #   domain.feedback._internal.lora_eval.py import from
+        #   domain.models._internal.provider at CALL time  -> first patch
+        #   routers/inference.py imports from domain.models (eager __init__)
+        #   at MODULE level and reads it at chat_stream:2353 -> second patch
+        # One patch covers exactly one group; both are needed here.
         patch("domain.models._internal.provider.get_provider", return_value=provider),
+        patch("routers.inference.get_provider", return_value=provider),
         patch(
             "routers.inference._enrich_knowledge",
             return_value={"source": "none", "facts": [], "topics": []},
@@ -88,7 +96,7 @@ def mock_chat_deps():
         ),
         patch("controllers.feedback.get_feedback_controller") as mock_fb_ctrl,
         patch("controllers.models.get_models_controller", return_value=model_ctrl),
-        patch("domain.learner._internal.get_learner"),
+        patch("routers.inference.get_learner"),
         patch("state.model", new_callable=MagicMock),
     ):
         mock_fb = MagicMock()

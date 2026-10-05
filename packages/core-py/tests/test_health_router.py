@@ -162,9 +162,7 @@ class TestHealth:
         mock_mon.get_stats.return_value = {"accuracy": 0.9}
         with (
             patch("routers.health.get_health_controller", mock_get_ctrl),
-            patch(
-                "domain.feedback._internal.model_health.get_health_monitor", return_value=mock_mon
-            ),
+            patch("domain.feedback.get_health_monitor", return_value=mock_mon),
         ):
             resp = client.get("/health/model")
         assert resp.status_code == 200
@@ -176,7 +174,7 @@ class TestHealth:
         hr = _make_health_router()
         client = TestClient(_app(hr), raise_server_exceptions=False)
         with patch(
-            "domain.feedback._internal.model_health.get_health_monitor",
+            "domain.feedback.get_health_monitor",
             side_effect=RuntimeError("boom"),
         ):
             resp = client.get("/health/model")

@@ -165,6 +165,57 @@ packages/core-py/tests/
 └── ...
 ```
 
+### Patch Target Drift (test-doctor --mock-drift)
+
+A test patches the **definition** site while production reads the **re-export**:
+
+```python
+@patch("domain.feedback._internal.per_user_lora.get_per_user_lora")   # test
+# but routers/user_adapters.py:54 does:
+from domain.feedback import get_per_user_lora                          # reader
+```
+
+If `domain/feedback/__init__.py` binds that name **eagerly** (plain
+`from ... import ...`, no `__getattr__`), the package attribute is frozen at
+import time — the patch never reaches the reader and the test silently runs
+against **live state** instead of the fake. A lazy re-export
+(`__getattr__` that re-imports per access) does follow the patch.
+
+The same symbol can be read both ways, so **patch where it is read** — the
+target depends on the code under test, not on the symbol:
+
+```python
+# routers/memory.py imports _internal at call time -> this target is correct
+@patch("domain.memory._internal.task_memory.list_archive")
+# routers/user_adapters.py imports the package -> this one is required
+@patch("domain.feedback.get_per_user_lora")
+```
+
+```bash
+python scripts/test-doctor.py --mock-drift        # confirmed (exit 1 if any)
+python scripts/test-doctor.py --mock-drift -v     # + latent readers
+```
+
+Reports a target only when **both** hold: (1) patching it provably fails to
+move the reader's attribute, and (2) a test that patches it imports the module
+doing the non-patched read. Condition (2) keeps false positives down — a test
+whose subject imports `_internal` directly is fine even though the package
+binding does not follow.
+
+It also reports **unresolvable** targets, where `patch()` itself raises and the
+test errors at setup:
+
+```text
+✖ domain.learner._internal.get_learner
+      AttributeError: module 'domain.learner._internal' (namespace) … has no
+      attribute 'get_learner'
+```
+
+These are loud, but easy to miss for exactly that reason: if the file is
+`slow`-marked it is deselected and the ERRORs never reach a normal run. Call
+sites that pass `create=True` are skipped — that is an intentional mock of a
+name which does not exist yet, not a broken target.
+
 ## Test Coverage
 
 ### Current Status

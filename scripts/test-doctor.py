@@ -10,11 +10,13 @@ Usage:
     python scripts/test-doctor.py --recent                    # recent failures
     python scripts/test-doctor.py --flake                     # flaky detector
     python scripts/test-doctor.py --fix-hint <test>           # suggest fix
+    python scripts/test-doctor.py --mock-drift                # dead @patch targets
 """
 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import re
@@ -24,6 +26,7 @@ import textwrap
 import time
 from collections import defaultdict
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 HISTORY_FILE = REPO_ROOT / ".test-history.jsonl"
@@ -486,6 +489,357 @@ def cmd_flake() -> int:
     return 0
 
 
+# ── Mock drift ─────────────────────────────────────────────────────────
+#
+# The bug class: a test patches the *definition* site
+#
+#     @patch("domain.feedback._internal.per_user_lora.get_per_user_lora")
+#
+# while production reads the *re-export* at package level
+#
+#     from domain.feedback import get_per_user_lora     # routers/user_adapters.py:54
+#
+# If `domain/feedback/__init__.py` binds that name EAGERLY (a plain
+# `from ... import ...` with no `__getattr__`), the package attribute is frozen
+# at import time and the patch never reaches the reader — the test silently runs
+# against live state. Lazy re-export (`__getattr__` that re-imports per access)
+# does follow the patch.
+#
+# So a target is only worth reporting when BOTH hold:
+#   (1) EMPIRICAL — patching `_internal.X.attr` does not move `reader.attr`, and
+#   (2) RELEVANT  — some test that patches the target imports the module doing
+#                   the non-patched read.
+# (1) alone over-reports: if the code under test imports `_internal` directly
+# (function-level import), the patch lands and the package binding is irrelevant.
+
+_MOCK_DRIFT_TEST_DIRS = (
+    "packages/core-py/tests",
+    "tests",
+    "apps/cli/tests",
+    "apps/api/server/tests",
+)
+_MOCK_DRIFT_PROD_ROOTS = ("domain", "apps/api/server", "apps/cli/src", "packages")
+# Longest-prefix-wins roots, mirroring pytest.ini's `pythonpath`.
+# NOTE: `domain` is deliberately NOT a root — it is a package directory under
+# the repo root (pytest.ini puts `.` on the path), so `domain/feedback/` maps
+# to `domain.feedback`. Treating it as a root dropped the prefix and broke
+# relative-import resolution across all of `domain/`.
+_MOCK_DRIFT_PATH_ROOTS = (
+    ("apps", "api", "server"),
+    ("apps", "cli", "src"),
+    ("packages", "core-py"),
+    ("packages", "mogdb", "src"),
+    ("packages", "chargectl", "src"),
+    ("packages", "downcraft"),
+    ("packages", "infra-lib"),
+    (),
+)
+_MD_PATCH_RE = re.compile(r'patch\(\s*["\']([A-Za-z0-9_.]+)["\']')
+_MD_FROM_IMPORT_RE = re.compile(r"^\s*from\s+([A-Za-z0-9_.]+)\s+import\s+(.+)$")
+_MD_ANY_IMPORT_RE = re.compile(
+    r"^[ \t]*(?:from[ \t]+([A-Za-z0-9_.]+)[\t ]+import|import[ \t]+([A-Za-z0-9_.]+))",
+    re.MULTILINE,
+)
+_MD_MISSING = object()
+
+
+def _rel(p: Path) -> str:
+    try:
+        return str(p.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(p)
+
+
+def _md_setup_path() -> None:
+    """Put pytest.ini's shared pythonpath on sys.path — one copy, one config."""
+    ini = REPO_ROOT / "pytest.ini"
+    if not ini.exists():
+        return
+    for line in ini.read_text().splitlines():
+        if line.strip().startswith("pythonpath"):
+            _, _, val = line.partition("=")
+            for part in val.split():
+                s = str((REPO_ROOT / part).resolve())
+                if s not in sys.path:
+                    sys.path.insert(0, s)
+            return
+
+
+def _md_path_module(p: Path) -> str | None:
+    """Map a repo file to its dotted module path."""
+    s = str(p.relative_to(REPO_ROOT))
+    if s.endswith("/__init__.py"):
+        s = s[: -len("/__init__.py")]
+    elif s.endswith(".py"):
+        s = s[: -len(".py")]
+    else:
+        return None
+    parts = s.split("/")
+    for root in _MOCK_DRIFT_PATH_ROOTS:
+        if tuple(parts[: len(root)]) == root and len(parts) > len(root):
+            return ".".join(parts[len(root) :])
+    return None
+
+
+def _md_resolve(module: str, importer: Path) -> str:
+    """Resolve a (possibly relative) import to an absolute dotted path."""
+    if not module.startswith("."):
+        return module
+    base = _md_path_module(importer.with_name("__init__.py")) or str(
+        importer.parent.relative_to(REPO_ROOT)
+    ).replace("/", ".")
+    dots = len(module) - len(module.lstrip("."))
+    rest = module.lstrip(".")
+    parts = base.split(".")
+    if dots - 1 > 0:
+        parts = parts[: len(parts) - (dots - 1)]
+    if rest:
+        parts += rest.split(".")
+    return ".".join(x for x in parts if x)
+
+
+def _md_targets() -> dict[str, set[Path]]:
+    """patch target -> the test files that patch it (definition-site only)."""
+    out: dict[str, set[Path]] = {}
+    for d in _MOCK_DRIFT_TEST_DIRS:
+        root = REPO_ROOT / d
+        if not root.exists():
+            continue
+        for f in root.rglob("*.py"):
+            try:
+                txt = f.read_text(errors="ignore")
+            except OSError:
+                continue
+            for m in _MD_PATCH_RE.finditer(txt):
+                t = m.group(1)
+                if "._internal." in t:
+                    out.setdefault(t, set()).add(f)
+    return out
+
+
+def _md_readers() -> dict[str, dict[str, set[str]]]:
+    """attr -> reader module -> the file-modules doing `from reader import attr`."""
+    out: dict[str, dict[str, set[str]]] = {}
+    for root_s in _MOCK_DRIFT_PROD_ROOTS:
+        root = REPO_ROOT / root_s
+        if not root.exists():
+            continue
+        for f in root.rglob("*.py"):
+            if "/tests/" in str(f):
+                continue
+            try:
+                lines = f.read_text(errors="ignore").splitlines()
+            except OSError:
+                continue
+            me = _md_path_module(f)
+            for line in lines:
+                if line.lstrip().startswith("#"):
+                    continue
+                m = _MD_FROM_IMPORT_RE.match(line)
+                if not m:
+                    continue
+                mod_raw, names = m.group(1), m.group(2)
+                if "#" in names:
+                    names = names.split("#", 1)[0]
+                mod = _md_resolve(mod_raw, f)
+                for part in re.split(r"[(),]", names):
+                    name = part.strip().split(" as ")[0].strip()
+                    if name and name.isidentifier() and name != "*":
+                        out.setdefault(name, {}).setdefault(mod, set()).add(me or str(f))
+    return out
+
+
+def _md_test_imports(test: Path, module: str) -> bool:
+    """Does the test import `module` (or a package containing it)?"""
+    try:
+        txt = test.read_text(errors="ignore")
+    except OSError:
+        return False
+    for m in _MD_ANY_IMPORT_RE.finditer(txt):
+        imported = m.group(1) or m.group(2) or ""
+        if not imported:
+            continue
+        if (
+            module == imported
+            or module.startswith(imported + ".")
+            or imported.startswith(module + ".")
+        ):
+            return True
+    return False
+
+
+def _md_reaches(target: str, reader_mod: str, attr: str) -> bool | None:
+    """Does patching `target` move `reader_mod.attr`?
+
+    True  = patch lands (reader is lazy / reads the definition site directly)
+    False = patch is dead for that reader (eager re-export frozen at import)
+    None  = could not evaluate (module missing / attr absent / patch failed)
+    """
+    tgt_mod = target.rsplit(".", 1)[0]
+    try:
+        importlib.import_module(tgt_mod)
+        reader = importlib.import_module(reader_mod)
+        before = getattr(reader, attr)
+    except Exception:
+        return None
+    try:
+        with mock.patch(target):
+            after = getattr(reader, attr, _MD_MISSING)
+    except Exception:
+        return None
+    return after is not before
+
+
+def _md_create_true(txt: str, target: str) -> bool:
+    """True if the patch() call naming `target` passes create=True.
+
+    `create=True` means "add the attribute if absent" — an intentional mock of
+    a not-yet-existing name (e.g. domain.shell._internal.repl.TuiRepl). Those
+    must not be reported as broken.
+    """
+    i = -1
+    for q in ('"', "'"):
+        i = txt.find(f"{q}{target}{q}")
+        if i != -1:
+            break
+    if i == -1:
+        return False
+    j = txt.rfind("patch(", 0, i)
+    if j == -1:
+        return False
+    depth = 0
+    for k in range(j + len("patch"), len(txt)):
+        if txt[k] == "(":
+            depth += 1
+        elif txt[k] == ")":
+            depth -= 1
+            if depth == 0:
+                return bool(re.search(r"create\s*=\s*True", txt[j : k + 1]))
+    return False
+
+
+def _md_unresolvable(
+    targets: dict[str, set[Path]],
+) -> list[tuple[str, str, list[str]]]:
+    """Targets where `patch()` itself raises — the test errors at setup.
+
+    These are loud, not silent, but they can be invisible for just that reason:
+    a `slow`-marked file is deselected, so its ERRORs never reach a normal run
+    (that is exactly how test_chat_loop_e2e hid 6 of them).
+    """
+    out: list[tuple[str, str, list[str]]] = []
+    for target, tfiles in sorted(targets.items()):
+        texts = []
+        for f in tfiles:
+            try:
+                texts.append(f.read_text(errors="ignore"))
+            except OSError:
+                continue
+        if any(_md_create_true(t, target) for t in texts):
+            continue
+        try:
+            with mock.patch(target):
+                pass
+        except Exception as exc:
+            out.append(
+                (
+                    target,
+                    f"{type(exc).__name__}: {exc}",
+                    sorted(_rel(f) for f in tfiles),
+                )
+            )
+    return out
+
+
+def cmd_mock_drift(verbose: bool = False) -> int:
+    _p(f"\n  {_b}{_c}Mock drift{_r}\n")
+    _p(f"  {_dim('patch() targets that production no longer reads')}\n")
+    _md_setup_path()
+
+    targets = _md_targets()
+    readers = _md_readers()
+
+    confirmed: list[tuple[str, str, list[str]]] = []
+    latent: list[tuple[str, str]] = []
+    ok = 0
+
+    for target, tfiles in sorted(targets.items()):
+        mod, attr = target.rsplit(".", 1)
+        by_mod = readers.get(attr, {})
+        others = {r: fs for r, fs in by_mod.items() if r != mod and "._internal." not in r}
+        if not others:
+            continue  # nothing in production reads this any other way
+        for reader_mod, reader_files in others.items():
+            # Files that read via reader_mod. If the ONLY such file is the
+            # module the patch lands in, the patch already covers it: it
+            # replaces the module-global those reads use. The empirical fact
+            # "patching doesn't move reader_mod.attr" is then irrelevant --
+            # nothing in the code under test reads reader_mod.attr directly.
+            # (e.g. patching <pkg>._internal.training.MogDB while training.py
+            # itself does `from mogdb import MogDB`: the local rebinding IS
+            # the mock.) Without this filter that case reports as confirmed.
+            qualifying = {rf for rf in reader_files if rf != mod}
+            if not qualifying:
+                continue
+            reaches = _md_reaches(target, reader_mod, attr)
+            if reaches is None:
+                continue
+            if reaches:
+                ok += 1
+                continue
+            hits = sorted(
+                {
+                    f"{rf}  <-  {_rel(tf)}"
+                    for rf in qualifying
+                    for tf in tfiles
+                    if _md_test_imports(tf, rf)
+                }
+            )
+            if hits:
+                confirmed.append((target, reader_mod, hits))
+            else:
+                latent.append((target, reader_mod))
+
+    for target, reader_mod, hits in confirmed:
+        _line(_no, f"{_red(target)}")
+        _p(f"      read via {_b}{reader_mod}{_r}  (patch never reaches it)")
+        for h in hits[:3]:
+            _p(f"      {_dim(h)}")
+        _p(f'      {_gn}fix{_r}: patch({_c}"{reader_mod}.{target.rsplit(".", 1)[1]}"{_r})')
+
+    if confirmed:
+        _p()
+        _line(
+            _no,
+            _red(
+                f"{len(confirmed)} confirmed  ({ok} targets follow the patch, {len(latent)} latent)"
+            ),
+        )
+    else:
+        _line(_ok, _green(f"no drift  ({ok} targets follow the patch)"))
+
+    # Second class: the target itself cannot be resolved, so patch() raises
+    # and the test errors at setup. Loud — unless the file is deselected.
+    unresolvable = _md_unresolvable(targets)
+    if unresolvable:
+        _p()
+        _p(f"  {_b}{_rd}Unresolvable{_r}  {_dim('patch() raises at setup — the test errors')}")
+        for target, err, files in unresolvable:
+            _line(_no, f"{_red(target)}")
+            _p(f"      {_dim(err)}")
+            for f in files[:2]:
+                _p(f"      {_dim(f)}")
+
+    if latent:
+        _p(f"  {_dim(f'{len(latent)} latent — reader exists but no test exercises it')}")
+        if verbose:
+            for target, reader_mod in latent:
+                _p(f"    {_dim(f'{target}  (via {reader_mod})')}")
+
+    _p()
+    return 1 if (confirmed or unresolvable) else 0
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════════════════
@@ -501,12 +855,14 @@ def main() -> int:
               test-doctor                              health scan
               test-doctor tests/test_foo.py            diagnose file
               test-doctor --fix-hint <test>::test_fn   suggest fix
+              test-doctor --mock-drift                 dead @patch targets
         """),
     )
     ap.add_argument("target", nargs="?")
     ap.add_argument("--recent", "-r", action="store_true")
     ap.add_argument("--flake", "-f", action="store_true")
     ap.add_argument("--fix-hint", metavar="TEST")
+    ap.add_argument("--mock-drift", action="store_true", help="dead @patch targets")
     ap.add_argument("--no-color", action="store_true")
     ap.add_argument("--quiet", "-q", action="store_true", help="minimal output")
     ap.add_argument("--summary", "-s", action="store_true", help="summary only")
@@ -518,6 +874,8 @@ def main() -> int:
         _NC = True
         _b = _d = _r = _rd = _gn = _y = _c = _gr = ""
 
+    if args.mock_drift:
+        return cmd_mock_drift(verbose=args.verbose)
     if args.fix_hint:
         return cmd_fix_hint(args.fix_hint)
     if args.flake:
