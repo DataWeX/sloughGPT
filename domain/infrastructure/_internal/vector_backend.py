@@ -13,6 +13,7 @@ import multiprocessing.shared_memory as shm
 import os
 import sys
 import time
+from multiprocessing import resource_tracker
 from typing import Any
 
 import numpy as np
@@ -122,6 +123,17 @@ class VectorBE(ComputeBackend):
     def __init__(self, weights: dict[str, np.ndarray], arch: ArchConfig):
         self._arch = arch
         self._n_proc = _N_PROC
+        # Arm the shared resource tracker before the pool forks, mirroring
+        # what forkserver.py (getfd() in the spawn list) and spawn.py (tracker
+        # fd in the preparation data) already do for their children. Without
+        # this, fork-context workers inherit `_fd=None`, spawn a *private*
+        # tracker daemon each, and — because SharedMemory registers attaches
+        # as well as creates (gh-82344) — re-unlink every segment they
+        # attached at worker exit: '/psm_*: [Errno 2]' per registration
+        # (card ccad389e). Sharing the creator's daemon makes those
+        # attach-REGISTERs idempotent against the creator's claims, so the
+        # creator's create/unlink pairing alone governs cleanup.
+        resource_tracker.getfd()
         self._pool = mp.get_context(_pool_start_method()).Pool(_N_PROC)
 
         # Put all weights into shared memory
