@@ -1,7 +1,7 @@
 {
  "note": "Route + OpenAPI baseline for scripts/check_contract.py \u2014 report-only drift signal, regenerated with --write-baseline.",
- "routers": 53,
- "count": 555,
+ "routers": 54,
+ "count": 556,
  "routes": [
   [
    "/",
@@ -266,6 +266,10 @@
   [
    "/config/generation",
    "PUT"
+  ],
+  [
+   "/consciousness/personality/history",
+   "GET"
   ],
   [
    "/context/fact",
@@ -11015,6 +11019,17 @@
       "type": "string"
      }
     ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/consciousness/personality/history": {
+   "GET": {
+    "operationId": "consciousness.personality_history.get",
+    "params": [],
     "body": null,
     "responses": [
      "200",

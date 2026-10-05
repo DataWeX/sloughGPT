@@ -22,10 +22,12 @@ export default defineConfig({
       ['lib/cache/hooks.test.ts', 'jsdom'],
       ['lib/cache/api-hooks.test.ts', 'jsdom'],
       ['lib/soulnet-webgpu/**/*.test.ts', 'jsdom'],
+      ['lib/protocol/useEndpoint.test.tsx', 'jsdom'],
     ],
     include: [
       'proxy.test.ts',
       'lib/**/*.test.ts',
+      'lib/**/*.test.tsx',
       'contexts/**/*.test.{ts,tsx}',
       'hooks/**/*.test.{ts,tsx}',
       'components/**/*.test.{ts,tsx}',
