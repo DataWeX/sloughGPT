@@ -15911,7 +15911,9 @@ class TestCmdPwdExtra:
         assert os.getcwd() in out
 
     def test_pwd_after_cd(self, repl, tmp_path, monkeypatch):
-        monkeypatch.chdir(tmp_path)  # pin cwd — restores at teardown; bare cd below leaked (caught by TestCwdHygiene in gate run #4)
+        monkeypatch.chdir(
+            tmp_path
+        )  # pin cwd — restores at teardown; bare cd below leaked (caught by TestCwdHygiene in gate run #4)
         repl._cmd_cd(str(tmp_path))
         out = _run_with_io(repl, [], lambda: repl._cmd_pwd(""))
         assert str(tmp_path) in out
