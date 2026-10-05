@@ -62,10 +62,10 @@ class TestMetaWeights:
         from domain.feedback._internal.meta_weights import MetaWeights
 
         mw = MetaWeights()
-        assert mw.temperature == 0.8
-        assert mw.repetition_penalty == 1.0
-        assert mw.top_p == 0.9
-        assert mw.top_k == 50
+        assert mw.temperature == 0.7
+        assert mw.repetition_penalty == 1.15
+        assert mw.top_p == 0.85
+        assert mw.top_k == 40
         assert mw.style_bias == 0.0
 
     def test_custom(self):
@@ -161,8 +161,8 @@ class TestMetaWeightManagerSimple:
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             weights = mwm.get_adjustment("hello", k=5)
-            assert weights.temperature == 0.8
-            assert weights.repetition_penalty == 1.0
+            assert weights.temperature == 0.7
+            assert weights.repetition_penalty == 1.15
 
     def test_get_adjustment_clamps_values(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -255,13 +255,17 @@ class TestMetaWeightManagerSimple:
             assert Path(export_path).exists()
 
     def test_get_adjustment_with_user_weights(self):
+        from domain.feedback._internal.meta_weights import MetaWeights
+
         with tempfile.TemporaryDirectory() as tmp:
             from domain.feedback._internal.meta_weights import MetaWeightManager
 
             mwm = MetaWeightManager(db_path=str(Path(tmp) / "feedback.db"))
             mwm.record_feedback("hi", "hello", "thumbs_up", user_id="user1")
             weights = mwm.get_adjustment("test", user_id="user1")
-            assert weights.temperature >= 0.8
+            # Positive user feedback must nudge temperature ABOVE the default
+            # (0.7 — the base the adjustment starts from).
+            assert weights.temperature > MetaWeights().temperature
 
     def test_get_adjustment_fallback_to_simple_search(self):
         with tempfile.TemporaryDirectory() as tmp:

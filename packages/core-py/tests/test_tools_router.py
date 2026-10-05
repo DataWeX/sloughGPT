@@ -149,9 +149,5 @@ class TestGenerateTool:
         assert resp.headers["content-type"] == "text/event-stream; charset=utf-8"
         lines = resp.text.strip().split("\n")
         data_lines = [l for l in lines if l.startswith("data:")]
-        tokens = [
-            json.loads(l.removeprefix("data: ").strip())
-            for l in data_lines
-            if "token" in l
-        ]
+        tokens = [json.loads(l.removeprefix("data: ").strip()) for l in data_lines if "token" in l]
         assert len(tokens) >= 2

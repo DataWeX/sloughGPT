@@ -88,6 +88,7 @@ __all__ = [
     "QualiaState",
     "SelfEpisode",
     "SelfIdentity",
+    "default_report_path",
     "run_doctor",
     "DoctorReport",
     "default_report_path",

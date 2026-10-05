@@ -263,7 +263,9 @@ class TestHFLoraTrainer:
 
     def test_train_accepts_on_progress(self):
         """train() must accept the on_progress kwarg the router passes (regression)."""
-        config = HFLoraConfig(model_path="/nonexistent/model.slnc", data_path="/nonexistent/data.txt")
+        config = HFLoraConfig(
+            model_path="/nonexistent/model.slnc", data_path="/nonexistent/data.txt"
+        )
         trainer = HFLoraTrainer(config)
         seen = []
         result = trainer.train(on_progress=seen.append)

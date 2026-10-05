@@ -24,18 +24,14 @@ def _mock_engine():
     engine.visualize.return_value = MagicMock(
         success=True, data={"phonemes": ["h", "eh", "l", "ow"]}
     )
-    engine.score.return_value = MagicMock(
-        success=True, data={"score": 0.85, "details": {}}
-    )
+    engine.score.return_value = MagicMock(success=True, data={"score": 0.85, "details": {}})
     engine.batch_encode.return_value = MagicMock(
         success=True, data={"results": [{"ids": [1]}, {"ids": [2]}]}
     )
     engine.detect_language.return_value = MagicMock(
         success=True, data={"language": "en", "confidence": 0.95}
     )
-    engine.synthesize.return_value = MagicMock(
-        success=True, data={"audio": "base64data"}
-    )
+    engine.synthesize.return_value = MagicMock(success=True, data={"audio": "base64data"})
     engine.supported_languages.return_value = MagicMock(
         success=True, data={"languages": ["en", "es", "fr"]}
     )
@@ -67,9 +63,7 @@ class TestPhonemeEncode:
 
     def test_encode_with_language(self):
         client = TestClient(_app(engine=_mock_engine()))
-        resp = client.post(
-            "/phoneme/encode", json={"text": "hola", "language": "es"}
-        )
+        resp = client.post("/phoneme/encode", json={"text": "hola", "language": "es"})
         assert resp.status_code == 200
 
     def test_encode_empty_text(self):
