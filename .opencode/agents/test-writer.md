@@ -348,6 +348,18 @@ class TestMyModule:
 - Use `DATA_TEXT` constant for test data
 - Use `FAST_CONFIG` for training config
 - Mark slow tests: `@pytest.mark.slow`
+- **Patch where it is read.** `@patch("pkg._internal.mod.attr")` only reaches
+  code that reads that module. If production does `from pkg import attr`,
+  patch `pkg.attr` instead — an eager re-export (a plain `from ... import`,
+  no `__getattr__`) freezes the name at import, so the `_internal` patch
+  silently does nothing and the test runs against live state. The right target
+  is decided by the code under test, not by the symbol; check with
+  `PYTHONNOUSERSITE=1 python scripts/test-doctor.py --mock-drift`
+  (docs/TESTING.md § Patch Target Drift).
+- A `MagicMock` answers **any** attribute name, so a fake exposing `_x` while
+  the code reads `x` fails late and confusingly (`[] == 4`, after
+  `jsonable_encoder` turns the stray mock into an empty list). Mirror the
+  public surface the code under test actually reads.
 
 ---
 

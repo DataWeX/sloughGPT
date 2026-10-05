@@ -47,6 +47,12 @@ Out of scope unless asked: frontend, CLI UX, docs.
   - `/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile <file>` for syntax
   - `cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/<file>.py -x -q` for tests
 - Read failing output. Identify the smallest reproducible case.
+- If a mock appears not to take effect — assertions see real rows, a live
+  singleton, or live/empty data where a fake was installed — check the patch
+  target before debugging the test. `@patch("pkg._internal.mod.attr")` is dead
+  when production reads the re-export instead:
+  `PYTHONNOUSERSITE=1 /home/mana/miniconda3/envs/sloughgpt/bin/python scripts/test-doctor.py --mock-drift`
+  (see docs/TESTING.md § Patch Target Drift).
 
 ### 2. Investigate
 
@@ -111,6 +117,10 @@ cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/
 cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_training_*.py -q
 cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_inference_*.py -q
 cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_model_*.py -q
+
+# Patch-target drift — @patch targets production no longer reads (exit 1 if any)
+cd <worktree> && PYTHONNOUSERSITE=1 /home/mana/miniconda3/envs/sloughgpt/bin/python scripts/test-doctor.py --mock-drift
+cd <worktree> && PYTHONNOUSERSITE=1 /home/mana/miniconda3/envs/sloughgpt/bin/python scripts/test-doctor.py --mock-drift -v   # + latent readers
 
 # Clear pycache after edits
 find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null
