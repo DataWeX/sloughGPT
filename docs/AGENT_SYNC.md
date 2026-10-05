@@ -4,7 +4,32 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~19:20 — `fix/core-py-feedback-suite` **lands on
+**Last update**: 2026-10-05 ~03:27 — `fix/root-tests-order-dependence` **lands
+on main** (fast-forward `0246b027c`, card `5473eb90` → done): the rotating
+order-dependent `tests/` failure is **root-caused — it was never a
+module-level global; it was a path-depth off-by-one**. `tests/test_api_keys.py`
+computed `_server_dir` with `parents[2]` (the idiom for `tests/server/`-depth
+files), which at `tests/` depth overshoots to the PARENT of the repo — in a
+nested worktree (the gate layout) that's another checkout, so it put the parent
+repo's `apps/api/server` at `sys.path[0]` **twice** (the second insert was
+unconditional). `training` then resolved cross-tree, `find_repo_root` read the
+parent's `data/`, the dataset lookup missed, and `raise_error(400)` escaped the
+tests' bare `FastAPI()` as an unhandled **500** — so `>=400` assertions passed
+while `==200` ones failed: the rotating signature. Plain checkouts get a dead
+path (dormant → "stopped reproducing"); `tests/server/` scope was accidentally
+protective (imports `training` first, `sys.modules` shields the rest). Fix:
+`parents[1]` + drop the duplicate insert; same class in
+`packages/core-py/tests/conftest.py` (`parents[2]` → `parents[3]` — dead
+everywhere, while line 23 already had `parents[3]` right for avion); both
+`_make_client` builders now use conftest's `build_test_app` so `raise_error`
+yields 4xx, not 500 (the `ddd3b3d49` precedent). Gates: deterministic **2-file**
+repro 3 failed → 33 passed; non-server scope **1224 green** (was 1221+3); full
+scope **3166 green**; plain-layout worktree 1224 green; core-py collection exit
+0; ruff clean. `chat_trainer::test_generate` never reproduced after `ddd3b3d49`
+(green in every full run since) — no mechanism was ever observed for it, so the
+card records it as not-reproducing, not fixed.
+
+Earlier ~19:20: `fix/core-py-feedback-suite` **lands on
 main** (fast-forward `ce02af883`, card `37325860` → done): the 8 pre-existing
 feedback-suite failures are fixed, and **both clusters were test-vs-impl
 drift, not code bugs** — no production code changed. Cluster 1:
