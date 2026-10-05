@@ -27,7 +27,19 @@ the `:8000` backend runs** (today: root repo `feat/create-router-projection`,
 palette). Serving another branch's build there swaps the UI contract under a
 live backend; near-miss restored 2026-10-05 03:40 by rebuilding from the root
 checkout. Ship this branch's frontend **with** the backend cutover, never
-before it. Earlier 2026-10-04 ~16:45 —
+before it.
+
+**Follow-up `fix/fab-modal-layer` (same session):** the consciousness FAB
+trio (QuickActions button + panel, NotificationsPanel) moved `z-[9999]` →
+`z-[45]` — non-modal chrome now sits below the modal layer (`z-50`), so the
+planner Edit-card dialog covers the FAB and its **Save button is clickable
+with the FAB mounted** (live hit-test on a temp stack: Save owns its center;
+the FAB's point is owned by the dialog overlay; FAB still topmost with no
+dialog open). `StartupOverlay` keeps `z-[9999]` (boot layer, intended).
+Gates: component tests 21/21, tsc 0, eslint 0 errors, `build:vite` green.
+Kanban card `7a73f4fb`.
+
+Earlier 2026-10-04 ~16:45 —
 `fix/board-column-validation` **lands on
 main** (fast-forward `67c406ee2`, card `46f0fac4` → done): the column name is
 validated at the **core**, not at the CLI. `PlannerStore.validate_column()` is
