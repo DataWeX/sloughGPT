@@ -6,6 +6,7 @@ Public API:
     SloProfile, PersonalityCore, BehavioralTraits, CognitiveSignature, EmotionalRange
     GenerationParams, ContextParams, SouParser, create_soul_profile
     save_soul, load_soul, write_v3_sou, generate_sample_dialogue
+    soul_path, soul_meta_path, soul_read_candidates, is_soul_file
     train_embedder, SloTextEmbedder
     create_vector_store, get_slo_manager, PDFVLMProcessor, _ngram_embed
 """
@@ -21,8 +22,12 @@ from domain.inference._internal.slo_format import (
     SouParser,
     create_soul_profile,
     generate_sample_dialogue,
+    is_soul_file,
     load_soul,
     save_soul,
+    soul_meta_path,
+    soul_path,
+    soul_read_candidates,
     write_v3_sou,
 )
 from domain.inference._internal.vector_store import (
@@ -54,6 +59,10 @@ __all__ = [
     "create_soul_profile",
     "save_soul",
     "load_soul",
+    "soul_path",
+    "soul_meta_path",
+    "soul_read_candidates",
+    "is_soul_file",
     "write_v3_sou",
     "generate_sample_dialogue",
     "train_embedder",

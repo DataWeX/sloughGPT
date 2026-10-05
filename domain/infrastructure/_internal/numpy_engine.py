@@ -79,8 +79,8 @@ def _load_weights(model_id: str) -> tuple[dict, dict]:
 
     from domain.infrastructure._internal.slnc.parser import SLNCParser
 
-    parser = SLNCParser(str(slnc_path))
-    weights = parser.get_weights_dict_parallel()
+    with SLNCParser(str(slnc_path)) as parser:
+        weights = parser.get_weights_dict_parallel()
     logger.info(
         "Loaded %d weights from %s (slnc mmap)", len(weights), model_id, extra={"tag": "INFRA"}
     )

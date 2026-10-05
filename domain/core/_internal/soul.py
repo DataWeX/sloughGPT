@@ -37,6 +37,8 @@ from domain.inference import (
     SloProfile,
     load_soul,
     save_soul,
+    soul_meta_path,
+    soul_path,
 )
 
 try:
@@ -512,9 +514,7 @@ class SloEngine:
                         h = lstm_layer.init_hidden()
                         logits_t, _ = lstm_layer.forward(in_t, h)
                         logit_data = logits_t.data[np.newaxis, :, :]
-                        generated_arr = np.array(
-                            generated_ids[prompt_len:], dtype=np.int64
-                        )
+                        generated_arr = np.array(generated_ids[prompt_len:], dtype=np.int64)
                         nid = _sample_from_logits(
                             logit_data,
                             temperature=gen_params.get("temperature", 0.8),
@@ -698,15 +698,23 @@ class SloEngine:
         return "".join([chr(int(t) % 256) for t in tokens.flatten()])
 
     def save_soul(self, output_path: str) -> str:
-        """Save the soul as a .soul file with model weights. Soul is ALWAYS saved."""
+        """Save the soul as a .soul file with model weights. Soul is ALWAYS saved.
+
+        Returns the CANONICAL path written — callers must use it (for example
+        to derive the sidecar) rather than re-deriving from their own argument,
+        or a legacy spelling splits the checkpoint from its ``.meta.json``.
+        """
         if self._model is None:
             raise ValueError("No model loaded - cannot save .soul without a model")
 
+        # Canonicalize once, up front: save_soul and the sidecar then agree on
+        # the name without either re-deriving it independently.
+        output_path = soul_path(output_path)
         save_soul(self._model, output_path, soul_profile=self._soul, weights_only=False)
 
         import json
 
-        meta_path = output_path + ".meta.json"
+        meta_path = soul_meta_path(output_path)
         with open(meta_path, "w") as f:
             json.dump(self._soul.to_dict(), f, indent=2, default=str)
 

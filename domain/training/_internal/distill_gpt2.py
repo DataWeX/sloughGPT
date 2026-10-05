@@ -146,8 +146,8 @@ def _load_gpt2_numpy() -> tuple[dict, ArchConfig, dict]:
             "python -m domains.infrastructure.slnc.compiler gpt2"
         )
 
-    parser = SLNCParser(str(slnc_path))
-    weights = parser.get_weights_dict_parallel()
+    with SLNCParser(str(slnc_path)) as parser:
+        weights = parser.get_weights_dict_parallel()
 
     arch = build_arch("gpt2", {}, set(weights.keys()))
     rw = pre_extract_weights(arch, weights)

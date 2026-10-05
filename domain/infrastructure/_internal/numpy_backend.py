@@ -471,8 +471,12 @@ def create_backend_from_slnc(slnc_path: str, backend_name: str = "numpy") -> Com
     backend_cls = get_backend(backend_name)
     backend = backend_cls.from_weights(weights, arch)
 
-    # Keep parser alive for mmap-backed backends
+    # Keep the parser alive for mmap-backed backends; release it when nothing
+    # takes ownership, or the fd/mmap outlives its only consumer until GC
+    # happens to run __del__.
     if hasattr(backend, "_parser"):
         backend._parser = parser
+    else:
+        parser.close()
 
     return backend

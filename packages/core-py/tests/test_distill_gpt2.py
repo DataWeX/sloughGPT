@@ -434,6 +434,12 @@ class TestLoadGpt2Numpy:
             def __init__(self, path):
                 self._path = path
 
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return None
+
             def get_weights_dict_parallel(self):
                 return {"wte": np.zeros((2, 2)), "ln_f": np.zeros((2,))}
 
@@ -473,6 +479,12 @@ class TestLoadGpt2Numpy:
         class _FakeSLNCParser:
             def __init__(self, path):
                 pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return None
 
             def get_weights_dict_parallel(self):
                 return {"wte": np.zeros((2, 2))}

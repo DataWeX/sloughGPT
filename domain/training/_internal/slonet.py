@@ -4951,10 +4951,16 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
         base_metadata["metadata"] = {**(base_metadata.get("metadata") or {}), **metadata}
     metadata = base_metadata
     json_bytes = json.dumps(_sanitize(metadata), allow_nan=False).encode()
+
+    # Same grammar as save_soul — one owner for the checkpoint name, and the
+    # sidecar derived from the canonical path so the pair never splits.
+    from domain.inference import soul_meta_path, soul_path
+
+    path = soul_path(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
     # Write .meta.json first (small, fast — serves as sidecar for list endpoint)
-    with open(path + ".meta.json", "w") as f:
+    with open(soul_meta_path(path), "w") as f:
         json.dump(_sanitize(metadata), f, indent=2)
 
     # Atomic write: temp file then rename

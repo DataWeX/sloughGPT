@@ -2062,7 +2062,9 @@ class SloughGPTTrainer:
             avg_quality=self._avg_quality,
             is_final=is_final,
         )
-        self._last_checkpoint_path = str(checkpoint_path) + ".soul"
+        from domain.inference import soul_path
+
+        self._last_checkpoint_path = soul_path(str(checkpoint_path))
         self._prune_stale_checkpoints(keep_final=is_final)
 
     def _enforce_disk_limit(self, checkpoint_dir: Path) -> None:
@@ -2208,10 +2210,10 @@ class SloughGPTTrainer:
 
         os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-        if path.endswith(".soul"):
-            path = path[: -len(".soul")]
-
-        from domain.inference import create_soul_profile, save_soul
+        # Filename grammar is owned by soul_path — no local strip/append here.
+        # The old one-level `endswith(".soul")` collapse left x.soul.soul
+        # untouched (strip one, append one) and let .sou through unexamined.
+        from domain.inference import create_soul_profile, save_soul, soul_path
         from domain.inference._internal.slo_format import PersonalityCore
 
         # Honest metadata: only claim a loss that was actually observed. A save
@@ -2290,7 +2292,7 @@ class SloughGPTTrainer:
             initial_lr=self.config.learning_rate,
         )
 
-        output_path = path + ".soul"
+        output_path = soul_path(path)
         save_soul(self.model, output_path, soul_profile=soul)
 
         logger.info("Model saved to %s", output_path, extra={"tag": "TRAIN"})

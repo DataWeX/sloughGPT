@@ -675,7 +675,7 @@ def export_to_sou(
     """
     from domain.inference import save_soul as sou_export
 
-    sou_export(
+    written = sou_export(
         model=model,
         output_path=output_path,
         soul_profile=soul_profile,
@@ -683,10 +683,12 @@ def export_to_sou(
     )
     logger.info(
         "Exported Slo Unit: %s",
-        output_path,
+        written,
         extra={"tag": "TRAIN"},
     )
-    return output_path
+    # Return what was actually written: save_soul canonicalizes, so a caller
+    # that passed a bare stem or legacy spelling gets back the real file path.
+    return written
 
 
 def export_model(config: ExportConfig, model: Any, tokenizer: Any) -> list:

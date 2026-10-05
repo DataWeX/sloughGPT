@@ -73,8 +73,8 @@ def _load_from_slnc(slnc_path: Path, dtype: np.dtype) -> dict[str, np.ndarray]:
     from domain.infrastructure._internal.slnc.parser import SLNCParser
 
     logger.info("Loading from .slnc: %s", slnc_path.name, extra={"tag": "INFRA"})
-    parser = SLNCParser(str(slnc_path))
-    weights = parser.get_weights_dict_parallel()
+    with SLNCParser(str(slnc_path)) as parser:
+        weights = parser.get_weights_dict_parallel()
 
     result = {}
     for key, arr in weights.items():

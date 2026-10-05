@@ -53,9 +53,9 @@ class CTransformProvider:
 
         from .native.engine import NativeEngine
 
-        parser = SLNCParser(slnc_path)
-        config = parser.config
-        tensors = parser.get_weights_dict()
+        with SLNCParser(slnc_path) as parser:
+            config = parser.config
+            tensors = parser.get_weights_dict()
 
         engine = NativeEngine()
         info = engine.load_from_slnc(tensors, config, seq_capacity=seq_capacity)

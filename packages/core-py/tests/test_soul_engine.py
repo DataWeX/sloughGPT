@@ -1010,6 +1010,11 @@ class TestSaveSoul:
         with patch("domain.core.soul.save_soul") as mock_save:
             with patch("builtins.open") as mock_open:
                 path = e.save_soul("/tmp/out.sou")
-        assert path == "/tmp/out.sou"
+        # .sou is the initiator alias of the same lineage — the canonical
+        # name is what gets written and returned, so callers can find it.
+        assert path == "/tmp/out.soul"
         assert mock_save.call_count == 1
         assert mock_open.call_count == 1
+        # The sidecar must follow the CANONICAL name. Deriving it from the
+        # caller's argument would split /tmp/out.soul from /tmp/out.sou.meta.json.
+        mock_open.assert_called_once_with("/tmp/out.soul.meta.json", "w")

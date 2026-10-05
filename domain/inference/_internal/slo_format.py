@@ -567,6 +567,178 @@ def create_soul_profile(
     return sp
 
 
+# ── .soul filename grammar ──────────────────────────────────────────────────
+# ONE owner for the checkpoint name. Write side is strict and idempotent
+# (soul_path); read side is tolerant (soul_read_candidates) because legacy
+# artifacts on disk are not normalized.
+#
+# Format lineage:
+#   .sou  the initiator — simple module structure + metadata. Same lineage as
+#         .soul, so it ALIASES (collapses) instead of raising.
+#   .soul the canonical extensible weight file, built on .sou inside the
+#         executor: structured, richer weights.
+#   .slo  the official third-party interchange — data-rich weight mapping and
+#         loader logic that lets foreign models load into our engine and the
+#         SloNet architecture. A DIFFERENT format: never a write target for
+#         save_soul, always a read candidate.
+
+_SOUL_SUFFIX = ".soul"
+_SOU_ALIAS = ".sou"
+_SLO_SUFFIX = ".slo"
+
+# The soul family: every extension the soul reader accepts as a name for
+# itself. Public because dispatch (``ModelLoader.load``) must PROJECT this
+# list rather than re-declare it — a second copy is exactly how the suffixes
+# came to disagree across five sites. It overlaps ``_FOREIGN_SUFFIXES`` on
+# ``.slo`` on purpose: foreign is the WRITE axis (never a save target), this
+# is the READ axis (always a probe candidate).
+SOUL_SUFFIXES: tuple[str, ...] = (_SOUL_SUFFIX, _SOU_ALIAS, _SLO_SUFFIX)
+
+# Extensions that name some other format. Handing one to soul_path is a type
+# error, not a path to guess around: we refuse rather than write soul bytes
+# under a foreign name (or silently swap the extension).
+# NOTE: deliberately does NOT include .gguf — export_model(fmt="all") passes
+# the same output_path to both the soul and gguf exporters.
+_FOREIGN_SUFFIXES = (
+    ".safetensors",
+    ".npz",
+    ".msgpack",
+    ".pickle",
+    ".pt",
+    ".pth",
+    ".bin",
+    ".ckpt",
+    ".onnx",
+    ".h5",
+    ".npy",
+    ".slo",
+)
+
+
+def _collapse_soul_stem(basename: str) -> str:
+    """Strip the .sou initiator alias and every repeated .soul suffix.
+
+    ``x`` -> ``x``; ``x.sou`` -> ``x``; ``x.soul.soul`` -> ``x``.
+    """
+    stem = basename
+    while True:
+        for suffix in (_SOUL_SUFFIX, _SOU_ALIAS):
+            if stem.endswith(suffix):
+                stem = stem[: -len(suffix)]
+                break
+        else:
+            return stem
+
+
+def _dedupe(candidates: list[str]) -> list[str]:
+    """Preserve probe order, drop repeats (canonical and legacy often coincide)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            out.append(c)
+    return out
+
+
+def soul_path(path: str) -> str:
+    """Canonical ``.soul`` write path for *path*.
+
+    Only the final path component carries the grammar — directory components
+    are never inspected, so ``models/v2.3/x`` is a bare stem, not extension
+    ``.3/x``. Idempotent: ``soul_path(soul_path(p)) == soul_path(p)``.
+
+    Args:
+        path: destination. May be a bare stem, canonical, legacy double-appended,
+            or the ``.sou`` initiator alias.
+
+    Returns:
+        ``<dir>/<stem>.soul``
+
+    Raises:
+        ValueError: *path* names a foreign format (``.slo``, ``.pt``, ...).
+            Guessing an extension there would mislabel the bytes on disk.
+    """
+    directory, basename = os.path.split(path)
+    if not basename:
+        raise ValueError(f"{path!r} is not a .soul checkpoint path: empty file name")
+
+    stem = _collapse_soul_stem(basename)
+    for suffix in _FOREIGN_SUFFIXES:
+        if stem.endswith(suffix):
+            raise ValueError(
+                f"{path!r} is not a .soul checkpoint path: {suffix} is a foreign "
+                f"format; refusing to guess an extension"
+            )
+    return os.path.join(directory, stem + _SOUL_SUFFIX)
+
+
+def soul_meta_path(path: str) -> str:
+    """Sidecar path for *path*, always derived from the canonical name.
+
+    Every writer must use this instead of ``+ ".meta.json"`` on its own
+    argument, or a canonicalized checkpoint gets a sidecar under the
+    pre-canonicalized name (``demo.soul`` + ``demo.soul.soul.meta.json``).
+    """
+    return soul_path(path) + ".meta.json"
+
+
+def soul_read_candidates(path: str) -> list[str]:
+    """Ordered probe list for reading *path* — never raises.
+
+    Canonical name first, then the legacy spelling that may exist beside it:
+
+    - bare stem       -> ``<stem>.soul``, ``<stem>.slo``
+    - ``.soul``       -> canonical, ``<given>.soul`` (legacy double-append)
+    - ``.soul.soul``  -> canonical, as given
+    - ``.slo``        -> as given, ``<stem>.soul`` (interchange first: the
+      caller named it explicitly, and it is a real file in its own right)
+    """
+    directory, basename = os.path.split(path)
+
+    if basename.endswith(_SLO_SUFFIX):
+        stem = basename[: -len(_SLO_SUFFIX)]
+        return _dedupe([path, os.path.join(directory, stem + _SOUL_SUFFIX)])
+
+    if basename.endswith(_SOU_ALIAS):
+        # `.sou` names a DIFFERENT model (tiny sliney-trained / GPT-y), not a
+        # spelling of `.soul` — so probe as given FIRST, exactly like `.slo`.
+        # Both files parse as valid SOUL containers, so probing `.soul` first
+        # would hand back OUR model when the caller asked for theirs and
+        # nothing downstream (magic check, parse, finder globs) would catch it.
+        stem = basename[: -len(_SOU_ALIAS)]
+        return _dedupe([path, os.path.join(directory, stem + _SOUL_SUFFIX)])
+
+    canonical = os.path.join(directory, _collapse_soul_stem(basename) + _SOUL_SUFFIX)
+
+    if basename.endswith(_SOUL_SUFFIX):
+        # Explicitly soul-named: canonical first, then as given unless that
+        # is already the canonical spelling.
+        second = path if path != canonical else canonical + _SOUL_SUFFIX
+    else:
+        second = os.path.join(directory, _collapse_soul_stem(basename) + _SLO_SUFFIX)
+
+    return _dedupe([canonical, second])
+
+
+def is_soul_file(path: str) -> bool:
+    """True if *path* begins with the soul magic. Never raises.
+
+    The extension is a claim; the header is evidence. Dispatch falls back to
+    this whenever the suffix says nothing — a soul renamed ``.bin`` still
+    loads, while a ``.pt``/``.npz``/typo is refused up front by name instead
+    of dying deep inside the reader with a ``struct.error``.
+
+    Returns False for missing files, directories, and unreadable paths alike:
+    absence and illegibility are both "not a soul" from a prober's view.
+    """
+    try:
+        with open(path, "rb") as handle:
+            return handle.read(len(SOU_MAGIC)) == SOU_MAGIC
+    except OSError:
+        return False
+
+
 def save_soul(
     model,
     output_path: str,
@@ -579,18 +751,22 @@ def save_soul(
 
     Args:
         model: any object with a ``state_dict()`` method (PyTorch, SloNet, etc.)
-        output_path: destination file path
+        output_path: destination file path — canonicalized via :func:`soul_path`
+            before anything is written, so a bare stem or legacy spelling lands
+            on the one canonical name.
         soul_profile: optional SloProfile with personality/identity metadata
         weights_only: if True, skip writing weight data (header + config only)
 
     Returns:
-        output_path (for chaining)
+        the CANONICAL path written (for chaining) — callers must use this
+        rather than re-deriving a sidecar path from their own argument
 
     Side effects:
         - Writes .soul binary file
         - Writes .soul.meta.json companion file with readable metadata
         - Creates parent directories if missing
     """
+    output_path = soul_path(output_path)
 
     if soul_profile is None:
         soul_profile = SloProfile(name=Path(output_path).stem)
@@ -618,8 +794,9 @@ def save_soul(
 
     # Write .meta.json first (small, fast — serves as sidecar for list endpoint).
     # Atomic via temp + rename so a crash never leaves a partial sidecar that
-    # could be misread as matching the soul.
-    meta_path = output_path + ".meta.json"
+    # could be misread as matching the soul. Derived from the CANONICAL path so
+    # the pair always lands together.
+    meta_path = soul_meta_path(output_path)
     meta_fd, meta_tmp_path = tempfile.mkstemp(
         dir=os.path.dirname(output_path) or ".",
         suffix=".tmp",
@@ -707,16 +884,75 @@ def load_soul(sou_path: str):
 
     Reads v1/v2 (JSON weights) and v3 (binary float32) formats.
 
+    Probes :func:`soul_read_candidates` in order, so a canonical name finds a
+    legacy double-appended artifact on disk and a legacy name finds the
+    canonical one. A candidate that exists but is not a SOUL container (a
+    plain-text ``.slo`` profile, a truncated file) is recorded and skipped so
+    the probe can advance to the next spelling.
+
     Args:
-        sou_path: path to .soul file
+        sou_path: path to a .soul file — any spelling the grammar accepts
 
     Returns:
         (SloProfile, state_dict) where state_dict maps param names → numpy arrays.
         All versions return state_dict with flat array keys even if the original
         used state_dict-style keys internally.
 
+    Raises:
+        FileNotFoundError: no candidate exists on disk.
+        ValueError: a candidate existed but none parsed as a SOUL container.
+
     Side effects:
         - Reads file from disk
+    """
+    candidates = soul_read_candidates(sou_path)
+    last_err: Exception | None = None
+    skipped: list[str] = []
+    for candidate in candidates:
+        if not os.path.isfile(candidate):
+            continue
+        try:
+            result = _load_soul_file(candidate)
+        except (ValueError, struct.error, UnicodeDecodeError) as exc:
+            # Wrong format or corruption under this spelling — keep the reason,
+            # keep probing; the next candidate may be the real checkpoint.
+            last_err = exc
+            skipped.append(candidate)
+            continue
+        if skipped:
+            # We found the checkpoint, but not under the name that was asked
+            # for. Silent substitution would hand back a DIFFERENT file than
+            # the caller named — say so, with both paths.
+            logger.warning(
+                "load_soul: %s is present but not a SOUL container; loaded %s instead "
+                "(candidates: %s)",
+                skipped[0],
+                candidate,
+                ", ".join(candidates),
+                extra={"tag": "INF"},
+            )
+        return result
+    if last_err is not None:
+        # A plain-text .slo profile can open with the four bytes "SOUL", so it
+        # clears the magic check and dies later in struct.unpack. Normalize
+        # every parse failure to ValueError — callers must never see a raw
+        # struct.error escape from what the docstring documents as a ValueError.
+        if isinstance(last_err, ValueError):
+            raise last_err
+        raise ValueError(
+            f"Invalid .soul file: {candidates} (unparseable: {last_err})"
+        ) from last_err
+    raise FileNotFoundError(
+        f"No .soul checkpoint found at {sou_path!r} (probed: {', '.join(candidates)})"
+    )
+
+
+def _load_soul_file(sou_path: str):
+    """Read exactly one file as a SOUL container.
+
+    No probing — :func:`load_soul` owns candidate order. Split out so the
+    reader stays a single-file operation and the probe loop can catch a
+    format mismatch here without unwinding the whole search.
     """
     import numpy as np
 
@@ -908,6 +1144,11 @@ __all__ = [
     "load_soul",
     "write_v3_sou",
     "generate_sample_dialogue",
+    "soul_path",
+    "soul_meta_path",
+    "soul_read_candidates",
+    "is_soul_file",
+    "SOUL_SUFFIXES",
     "SOU_MAGIC",
     "SOU_VERSION",
     "SOU_VERSION_V3",

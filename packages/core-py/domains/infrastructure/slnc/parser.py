@@ -439,28 +439,44 @@ class SLNCParser:
         return self._n_positions
 
     def close(self) -> None:
-        """Close the mmap and file descriptor."""
-        try:
-            if self._mm is not None:
-                self._mm.close()
-        except Exception as exc:
-            logger.debug("mmap close failed: %s", exc)
-        try:
-            os.close(self._fd)
-        except OSError as exc:
-            logger.debug("fd close failed: %s", exc)
+        """Release the mmap and file descriptor. Idempotent.
+
+        The fd number is claimed (set to -1) BEFORE it goes back to the OS,
+        not after. Closing is not a promise that the number stays unclaimed:
+        any later ``close()``/``__del__`` — and an interpreter shutdown runs
+        ``__del__`` long after any explicit close — would otherwise drop
+        whatever unrelated file the allocator has since handed that number to.
+        """
+        mm = getattr(self, "_mm", None)
+        fd = getattr(self, "_fd", -1)
         self._mm = None
+        self._fd = -1
+        if mm is not None:
+            try:
+                mm.close()
+            except Exception as exc:
+                logger.debug("mmap close failed: %s", exc)
+        if fd >= 0:
+            try:
+                os.close(fd)
+            except OSError as exc:
+                logger.debug("fd close failed: %s", exc)
+
+    def __enter__(self) -> SLNCParser:
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
 
     def __del__(self):
+        # getattr-guarded: if __init__ raised before _mm/_fd were bound, this
+        # still has to run without raising.
         try:
-            if self._mm is not None:
-                self._mm.close()
-        except Exception as exc:
-            logger.debug("mmap close failed in __del__: %s", exc)
-        try:
-            os.close(self._fd)
-        except OSError as exc:
-            logger.debug("fd close failed in __del__: %s", exc)
+            self.close()
+        except Exception:
+            # Interpreter teardown: os/logging may already be gone and there
+            # is no one left to report to.
+            pass
 
     def __repr__(self) -> str:
         return (

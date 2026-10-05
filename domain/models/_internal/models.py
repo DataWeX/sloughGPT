@@ -131,16 +131,33 @@ class ModelLoader:
     def load(cls, path: str, device: str = "cpu", **kwargs) -> ModelInterface:
         from pathlib import Path
 
+        # Lazy, like Path above: domain.inference pulls a wider graph than
+        # this method needs, and models.py is imported early.
+        from domain.inference._internal.slo_format import SOUL_SUFFIXES, is_soul_file
+
         p = Path(path)
         suffix = p.suffix.lower()
         if suffix in cls._loader_funcs:
             return cls._loader_funcs[suffix](path, device, **kwargs)
-        if suffix in (".sou", ".soul", ".slo"):
+        if suffix in SOUL_SUFFIXES:
             return cls._load_sou(path, device, **kwargs)
-        elif suffix == ".gguf":
+        if suffix == ".gguf":
             return cls._load_gguf(path, device, **kwargs)
-        else:
+
+        # Unknown extension: the filename claims nothing, so decide on the
+        # bytes instead. A soul renamed `.bin` still loads; a `.pt`/`.npz`/
+        # typo is refused HERE, by name. It used to fall through to the soul
+        # reader and die inside it on the magic check — reporting a format
+        # problem as if the caller had asked for a soul parse at all.
+        if is_soul_file(path):
             return cls._load_sou(path, device, **kwargs)
+
+        known = sorted({*SOUL_SUFFIXES, ".gguf", *cls._loader_funcs})
+        raise ValueError(
+            f"Unsupported model file extension {suffix or '(none)'} for {path!r}. "
+            f"Known extensions: {known}. "
+            f"Register one with ModelLoader.register_loader({suffix!r}, fn)"
+        )
 
     @classmethod
     def _load_sou(cls, path: str, device: str, **kwargs) -> ModelInterface:

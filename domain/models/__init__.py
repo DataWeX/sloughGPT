@@ -2,6 +2,7 @@
 
 Public API:
     ModelInterface, ModelLoader, SloughGPTModel
+    RMSNorm, SloughGPTAttention, SloughGPTBlock, SwiGLU
     rotate_half, apply_rotary_pos_emb
     KnowledgeProcessor, ConsciousnessProcessor, apply_processors, get_provider, list_providers
 """
@@ -9,7 +10,11 @@ Public API:
 from domain.models._internal.models import (
     ModelInterface,
     ModelLoader,
+    RMSNorm,
+    SloughGPTAttention,
+    SloughGPTBlock,
     SloughGPTModel,
+    SwiGLU,
     apply_rotary_pos_emb,
     rotate_half,
 )
@@ -25,6 +30,10 @@ __all__ = [
     "ModelInterface",
     "ModelLoader",
     "SloughGPTModel",
+    "RMSNorm",
+    "SloughGPTAttention",
+    "SloughGPTBlock",
+    "SwiGLU",
     "rotate_half",
     "apply_rotary_pos_emb",
     "KnowledgeProcessor",
