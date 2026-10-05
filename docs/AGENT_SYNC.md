@@ -21,7 +21,13 @@ ruff / contract-static green, `npm run build:vite` green. **Landing state:
 branch pushed; joined the local `merge-to-main` lane (lane push deferred —
 origin's lane is diverged with card039/040 test batches); `main` itself is
 checked out dirty in `sloughgpt-api-std`, so the final main integration belongs
-to whoever holds a clean `main`.** Earlier 2026-10-04 ~16:45 —
+to whoever holds a clean `main`.** **Prod `dist-vite` belongs to the branch
+the `:8000` backend runs** (today: root repo `feat/create-router-projection`,
+59 frontend commits that main lacks — workspace shell, HealthBlocks, strui
+palette). Serving another branch's build there swaps the UI contract under a
+live backend; near-miss restored 2026-10-05 03:40 by rebuilding from the root
+checkout. Ship this branch's frontend **with** the backend cutover, never
+before it. Earlier 2026-10-04 ~16:45 —
 `fix/board-column-validation` **lands on
 main** (fast-forward `67c406ee2`, card `46f0fac4` → done): the column name is
 validated at the **core**, not at the CLI. `PlannerStore.validate_column()` is
