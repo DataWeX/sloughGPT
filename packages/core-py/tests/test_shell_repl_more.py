@@ -8228,7 +8228,10 @@ class TestCmdTui:
         real_import = builtins.__import__
 
         def mock_import(name, *args, **kwargs):
-            if name == "domain.shell._internal.tui_repl":
+            # A relative import passes the bare name ('tui_repl', level=1), not
+            # the resolved dotted path -- matching the dotted path never fired
+            # and let the real TuiRepl start curses in-process.
+            if name == "tui_repl":
                 mod = MagicMock()
                 mod.TuiRepl.side_effect = RuntimeError("tui crashed")
                 return mod
@@ -14162,7 +14165,13 @@ class TestCmdEnvExecution:
 
 class TestCmdTuiExtra:
     def test_tui(self, repl):
-        repl._cmd_tui("")
+        # Never let real curses start inside the pytest process: wrapper() would
+        # initscr() against capture's non-tty stdout, then fail in its finally at
+        # nocbreak() *before* endwin(), leaving a live SCREEN (isendwin() False)
+        # that every later pty.fork() child inherits -- those children then die
+        # with "nocbreak() returned ERR" and render nothing.
+        with patch("curses.wrapper"):
+            repl._cmd_tui("")
         assert repl._last_exit_code in (0, 1)
 
 
@@ -20275,7 +20284,7 @@ class TestCmdTuiDeeper2:
     def test_tui_runtime_error(self, repl):
         mock_tui = MagicMock()
         mock_tui.run.side_effect = RuntimeError("display error")
-        with patch("domain.shell._internal.repl.TuiRepl", return_value=mock_tui, create=True):
+        with patch("domain.shell._internal.tui_repl.TuiRepl", return_value=mock_tui):
             out = _run_with_io(repl, [], lambda: repl._cmd_tui(""))
             assert "TUI error" in out or repl._last_exit_code == 1
 
