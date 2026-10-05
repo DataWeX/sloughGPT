@@ -14,7 +14,6 @@ const REDIRECTS: Record<string, string> = {
   '/infer': '/models',
   '/world': '/models',
   '/registry': '/models',
-  '/multimodal': '/models',
   '/memory': '/knowledge',
   '/kb': '/knowledge',
   '/docstore': '/knowledge',
@@ -40,7 +39,6 @@ const REDIRECTS: Record<string, string> = {
   '/explain': '/chat?mode=explain',
   '/wellness': '/chat?mode=wellness',
   '/shell': '/developer',
-  '/vm': '/developer',
   '/workflow': '/feedback',
   '/tools': '/chat',
 }

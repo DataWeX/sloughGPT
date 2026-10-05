@@ -7,7 +7,7 @@ import './app/globals.css'
 
 import { Suspense, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 
 import AppLayout from '@/components/AppLayout'
 import { ThemeProvider } from '@/components/ThemeProvider'
@@ -43,10 +43,31 @@ function Shell() {
 }
 
 function NotFound() {
+  // Mirrors app/not-found.tsx (Next 404): h1 + Home/Chat links — the
+  // not-found-page.cy.ts spec asserts this markup in both stacks.
   return (
-    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 p-8 text-center">
-      <p className="text-2xl font-semibold">404</p>
-      <p className="text-sm text-muted-foreground">This page could not be found.</p>
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 p-8 text-center">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
+        <span className="text-2xl font-bold text-primary">?</span>
+      </div>
+      <h1 className="text-xl font-semibold">Page not found</h1>
+      <p className="text-sm text-muted-foreground text-center max-w-sm">
+        The page you&apos;re looking for doesn&apos;t exist or has been moved.
+      </p>
+      <div className="flex gap-2 mt-2">
+        <Link
+          to="/"
+          className="inline-flex items-center justify-center rounded-md border border-input bg-background px-3 h-8 text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          Home
+        </Link>
+        <Link
+          to="/chat"
+          className="inline-flex items-center justify-center rounded-md bg-primary text-primary-foreground px-3 h-8 text-xs font-medium hover:bg-primary/90 transition-colors"
+        >
+          Chat
+        </Link>
+      </div>
     </div>
   )
 }
