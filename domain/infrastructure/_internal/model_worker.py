@@ -316,9 +316,9 @@ def _slo_worker_main(
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         **_kwargs: Any,
     ) -> dict:
         token_ids = provider._tokenizer.encode(prompt)
@@ -385,9 +385,9 @@ def _slo_worker_main(
         hb_q: mp.Queue | None = None,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         **_kwargs: Any,
     ) -> None:
         """Stream tokens via ``generate_numpy_stream()`` into resp_q."""
@@ -614,9 +614,9 @@ def _hf_worker_main(
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         **gen_kwargs: Any,
     ) -> dict:
         inputs = tokenizer(prompt, return_tensors="pt")
@@ -659,9 +659,9 @@ def _hf_worker_main(
         hb_q: mp.Queue | None = None,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         **gen_kwargs: Any,
     ) -> None:
         from .model_server import _TokenStreamer
@@ -1014,9 +1014,9 @@ class ModelWorkerProcess:
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         **kwargs: Any,
     ) -> dict:
         """Send generate request to worker and wait for result.
@@ -1125,9 +1125,9 @@ class ModelWorkerProcess:
         prompt: str,
         max_new_tokens: int = 100,
         temperature: float = 0.7,
-        top_p: float = 0.9,
-        top_k: int = 50,
-        repetition_penalty: float = 1.0,
+        top_p: float = 0.85,
+        top_k: int = 40,
+        repetition_penalty: float = 1.15,
         **kwargs: Any,
     ) -> Generator[str, None, dict]:
         """Send streaming generate request to worker, yield tokens.

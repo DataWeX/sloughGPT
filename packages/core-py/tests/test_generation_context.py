@@ -13,9 +13,9 @@ class TestGenerationContextDefaults:
         )
         assert gc.prompt == "hello"
         assert np.array_equal(gc.prompt_tokens, np.array([1, 2, 3]))
-        assert gc.temperature == 0.8
+        assert gc.temperature == 0.7
         assert gc.top_k == 40
-        assert gc.top_p == 0.9
+        assert gc.top_p == 0.85
         assert gc.max_tokens == 2048
 
     def test_defaults_system_prompt(self):
@@ -32,7 +32,7 @@ class TestGenerationContextDefaults:
 
     def test_defaults_repetition_penalty(self):
         gc = GenerationContext(prompt="t", prompt_tokens=np.array([1]))
-        assert gc.repetition_penalty == 1.2
+        assert gc.repetition_penalty == 1.15
 
     def test_defaults_frequency_penalty(self):
         gc = GenerationContext(prompt="t", prompt_tokens=np.array([1]))
@@ -78,7 +78,7 @@ class TestGenerationContextCustomTemperature:
 
     def test_custom_temperature_default_unchanged(self):
         gc = GenerationContext(prompt="t", prompt_tokens=np.array([1]))
-        assert gc.temperature == 0.8
+        assert gc.temperature == 0.7
 
 
 class TestGenerationContextCustomTopK:
@@ -114,7 +114,7 @@ class TestGenerationContextCustomTopP:
 
     def test_custom_top_p_default_unchanged(self):
         gc = GenerationContext(prompt="t", prompt_tokens=np.array([1]))
-        assert gc.top_p == 0.9
+        assert gc.top_p == 0.85
 
 
 class TestGenerationContextCustomMaxTokens:

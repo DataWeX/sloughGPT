@@ -1533,7 +1533,7 @@ class SloNetChatProvider:
         self,
         messages: list[dict[str, str]],
         max_tokens: int = 512,
-        temperature: float = 0.8,
+        temperature: float = 0.7,
         **kwargs,
     ) -> str:
         """Blocking chat — returns complete response.
@@ -1582,10 +1582,10 @@ class SloNetChatProvider:
         self,
         messages,
         max_tokens=512,
-        temperature=0.8,
+        temperature=0.7,
         top_k=None,
         top_p=None,
-        repetition_penalty=1.0,
+        repetition_penalty=1.15,
         session_id=None,
     ):
         """Synchronous generate with KV cache — called from chat() via to_thread."""

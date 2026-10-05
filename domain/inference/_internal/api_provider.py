@@ -156,7 +156,7 @@ class ApiProvider:
         messages: list[dict[str, str]],
         max_tokens: int = 512,
         temperature: float = 0.7,
-        top_p: float = 0.9,
+        top_p: float = 0.85,
         **kwargs,
     ) -> str:
         """Non-streaming chat completion."""
@@ -212,7 +212,7 @@ class ApiProvider:
         messages: list[dict[str, str]],
         max_tokens: int = 512,
         temperature: float = 0.7,
-        top_p: float = 0.9,
+        top_p: float = 0.85,
         cancel_event=None,
         **kwargs,
     ) -> AsyncIterator[str]:

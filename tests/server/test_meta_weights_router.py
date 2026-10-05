@@ -27,10 +27,10 @@ def client(app):
 
 
 def _make_weight(
-    temperature=0.8,
-    repetition_penalty=1.0,
-    top_p=0.9,
-    top_k=50,
+    temperature=0.7,
+    repetition_penalty=1.15,
+    top_p=0.85,
+    top_k=40,
     style_bias=0.0,
     confidence_boost=0.0,
 ):

@@ -107,7 +107,7 @@ class ProviderRouter:
             if provider is not None:
                 try:
                     result = ""
-                    async for token in provider.chat_stream([{"role": "user", "content": [{"type": "image_url", "image_url": {"url": arg}}]}], max_tokens=30, temperature=0.8, cancel_event=cancel_event):
+                    async for token in provider.chat_stream([{"role": "user", "content": [{"type": "image_url", "image_url": {"url": arg}}]}], max_tokens=30, temperature=0.7, cancel_event=cancel_event):
                         result += token
                     return result.strip() or "[no description]"
                 except Exception as e:

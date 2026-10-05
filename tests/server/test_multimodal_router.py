@@ -430,7 +430,7 @@ class TestVideoInfer:
         assert "elapsed_ms" in data
         trainer.load_checkpoint.assert_called_once_with("/tmp/ck1.slnc")
         trainer.generate.assert_called_once_with(
-            video_path="/tmp/a.mp4", max_len=50, temperature=0.8
+            video_path="/tmp/a.mp4", max_len=50, temperature=0.7
         )
 
 

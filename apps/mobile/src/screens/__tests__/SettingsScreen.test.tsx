@@ -353,9 +353,9 @@ describe('SettingsScreen', () => {
   it('renders Top-P selector and taps a value', async () => {
     const view = await render(<SettingsScreen />);
     expect(view.getByText('Top-P')).toBeTruthy();
-    // Use 0.7 not 0.8 to avoid conflict with temperature's 0.8
-    fireEvent.press(view.getByText('0.7'));
-    expect(mockUpdate).toHaveBeenCalledWith({topP: 0.7});
+    // Use 0.85 — unique to Top-P (temperature now also offers 0.7)
+    fireEvent.press(view.getByText('0.85'));
+    expect(mockUpdate).toHaveBeenCalledWith({topP: 0.85});
   });
 
   it('renders Top-K selector and taps a value', async () => {

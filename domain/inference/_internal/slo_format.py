@@ -92,10 +92,10 @@ def _soul_profile_hash(soul_dict: dict) -> str:
 @dataclass
 class GenerationParams:
     temperature: float = 0.7
-    top_p: float = 0.9
+    top_p: float = 0.85
     top_k: int = 40
     max_tokens: int = 2048
-    repeat_penalty: float = 1.1
+    repeat_penalty: float = 1.15
     presence_penalty: float = 0.0
     frequency_penalty: float = 0.0
     stop: list[str] = field(default_factory=list)
@@ -879,7 +879,7 @@ def generate_sample_dialogue(
         idx = np.array([[stoi.get(c, 0) for c in prompt]], dtype=np.int64)
         try:
             if hasattr(model, "generate"):
-                output = model.generate(idx, max_new_tokens=max_tokens, temperature=0.8)
+                output = model.generate(idx, max_new_tokens=max_tokens, temperature=0.7)
             elif hasattr(model, "forward"):
                 output = model.forward(idx)
             else:
