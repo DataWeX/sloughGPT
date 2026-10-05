@@ -1,4 +1,4 @@
-import { logger } from '../dev-log'
+import { logger } from '../web/lib/dev-log'
 import { HttpCache } from './resilience'
 import type { CacheOptions, RequestOptions } from './types'
 import { request } from './request'

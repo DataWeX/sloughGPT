@@ -314,7 +314,7 @@ class TestSubprocessConfig:
         assert c.max_workers == 4
         assert c.memory_limit_mb is None
         assert c.cpu_affinity is None
-        assert c.start_method == "fork"
+        assert c.start_method == "forkserver"
         assert c.env is None
         assert c.cwd is None
         assert c.capture_output is False

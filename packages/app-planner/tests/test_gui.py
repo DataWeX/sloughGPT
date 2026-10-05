@@ -233,7 +233,7 @@ def test_board_returns_default_columns(server):
     with _client() as c:
         data = c.get(server.base_url + "/api/board").json()["board"]
     names = [col["name"] for col in data["columns"]]
-    assert names == ["todo", "in_progress", "review", "done"]
+    assert names == ["todo", "wip", "review", "done"]
     assert data["cards"] == []
 
 

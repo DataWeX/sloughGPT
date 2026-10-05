@@ -284,7 +284,9 @@ class HybridRetriever:
         w_total = (w_dense + self.sparse_weight) or 1.0
         results = []
         for doc_id, scores in combined_scores.items():
-            combined = (w_dense * scores["dense"] + self.sparse_weight * scores["sparse"]) / w_total
+            combined = (
+                w_dense * scores["dense"] + self.sparse_weight * scores["sparse"]
+            ) / w_total
             results.append(
                 RetrievalResult(
                     chunk=self.chunks[doc_id],

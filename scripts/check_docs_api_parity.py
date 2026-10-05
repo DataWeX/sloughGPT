@@ -40,6 +40,11 @@ TRAINING_ROUTER = REPO / "apps" / "api" / "server" / "training" / "router.py"
 ROUTERS_MD = REPO / "docs" / "routers.md"
 API_MD = REPO / "docs" / "API.md"
 TEST_DIRS = (REPO / "tests" / "server", REPO / "apps" / "api" / "server" / "tests")
+CONTROLLERS_DIR = REPO / "apps" / "api" / "server" / "controllers"
+CLAIMS_MD = REPO / "docs" / "DOC_VS_CODE_GAP_AUDIT.md"
+# Routers permitted to reach past the engine seam (see Router Playbook). The
+# routers_internal_in_scope_files claim is measured with them excluded.
+HANDLER_ALLOWLIST = frozenset({"shell", "vm", "world_render"})
 
 # docs/routers.md section title -> router file stem. Sections that map to no
 # single file (OpenAPI) or to main.py-registered routers are noted inline.
@@ -164,6 +169,11 @@ class Findings:
     doc_not_in_code: list[tuple[str, str]] = field(default_factory=list)
     undocumented: dict[str, int] = field(default_factory=dict)  # router -> #routes w/o doc row
     dynamic_routes: list[str] = field(default_factory=list)
+    # doc-vs-code architectural contract (the `parity-claims` block)
+    arch_claims: dict[str, int] = field(default_factory=dict)
+    arch_measured: dict[str, int] = field(default_factory=dict)
+    arch_mismatch: list[str] = field(default_factory=list)  # "key: doc=11 code=8"
+    arch_missing: list[str] = field(default_factory=list)  # claim keys absent from docs
 
 
 def _join(prefix: str, path: str) -> str:
@@ -328,11 +338,165 @@ def diff(findings: Findings) -> None:
         findings.undocumented[r.router] = findings.undocumented.get(r.router, 0) + 1
 
 
+CLAIMS_BLOCK_RE = re.compile(r"<!--\s*parity-claims:v1\s*(?P<body>.*?)-->", re.DOTALL)
+
+
+def _internal_stats(path: Path) -> tuple[list[int], set[str]]:
+    """Return (line numbers, module names) of `domain.*_internal*` imports.
+
+    Parses imports; never greps the token. Docstrings legitimately *mention*
+    ``_internal`` to assert they do not import it (``tokenizer.py``,
+    ``cloud_training.py``), which is what made the prose checklist drift.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        return [], set()
+    lines: list[int] = []
+    mods: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module.startswith("domain.") and "_internal" in node.module:
+                lines.append(node.lineno)
+                mods.add(node.module)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("domain.") and "_internal" in alias.name:
+                    lines.append(node.lineno)
+                    mods.add(alias.name)
+    return lines, mods
+
+
+def _py_files(directory: Path) -> list[Path]:
+    return [p for p in sorted(directory.glob("*.py")) if not p.name.startswith("_")]
+
+
+def collect_architecture(findings: Findings) -> None:
+    """Diff the ``parity-claims`` contract block against measured code.
+
+    The block is a snapshot kept in lockstep ("update it in the SAME change
+    that moves the code"), so a mismatch is an alarm either way: stale docs, or
+    code that drifted without being acknowledged. Once synced it acts as a
+    DOWNWARD ratchet — the conformance work lowers the numbers and this check
+    refuses to let them climb back.
+    """
+    if CLAIMS_MD.exists():
+        m = CLAIMS_BLOCK_RE.search(CLAIMS_MD.read_text(encoding="utf-8", errors="replace"))
+        if not m:
+            findings.arch_missing.append("no parity-claims block in " + CLAIMS_MD.name)
+        else:
+            for line in m.group("body").splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, _, raw = line.partition("=")
+                key = key.strip()
+                try:
+                    findings.arch_claims[key] = int(raw.strip())
+                except ValueError:
+                    findings.arch_missing.append(f"{key}: {raw.strip()!r} is not an int")
+    else:
+        findings.arch_missing.append(f"{CLAIMS_MD.name} missing")
+
+    # --- routers (all, plus the in-scope subset that excludes the allowlist) ---
+    r_files = r_stmts = scope_files = 0
+    for p in _py_files(ROUTERS_DIR):
+        lines, _ = _internal_stats(p)
+        if not lines:
+            continue
+        r_files += 1
+        r_stmts += len(lines)
+        if p.stem not in HANDLER_ALLOWLIST:
+            scope_files += 1
+
+    # --- controllers ---
+    c_files = c_lines = c_defs = c_ifiles = c_istmts = 0
+    c_mods: set[str] = set()
+    for p in _py_files(CONTROLLERS_DIR):
+        text = p.read_text(encoding="utf-8", errors="replace")
+        lines, mods = _internal_stats(p)
+        c_files += 1
+        c_lines += len(text.splitlines())
+        try:
+            tree = ast.parse(text)
+            c_defs += sum(
+                1 for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
+            )
+        except SyntaxError:
+            findings.arch_missing.append(f"{p.name}: unparseable")
+        if lines:
+            c_ifiles += 1
+            c_istmts += len(lines)
+            c_mods |= mods
+
+    findings.arch_measured = {
+        "routers_internal_files": r_files,
+        "routers_internal_stmts": r_stmts,
+        "routers_internal_in_scope_files": scope_files,
+        "controllers_files": c_files,
+        "controllers_lines": c_lines,
+        "controllers_defs": c_defs,
+        "controllers_internal_files": c_ifiles,
+        "controllers_internal_stmts": c_istmts,
+        "controllers_internal_modules": len(c_mods),
+        "combined_internal_files": r_files + c_ifiles,
+        "combined_internal_stmts": r_stmts + c_istmts,
+    }
+
+    for key, claimed in findings.arch_claims.items():
+        if key not in findings.arch_measured:
+            findings.arch_missing.append(f"{key}: claimed but not measurable")
+            continue
+        got = findings.arch_measured[key]
+        if got != claimed:
+            findings.arch_mismatch.append(f"{key}: doc={claimed} code={got}")
+    for key in findings.arch_measured:
+        if key not in findings.arch_claims:
+            findings.arch_missing.append(f"{key}: measured but not claimed in docs")
+
+
+def _render_architecture(f: Findings, as_json: bool = False) -> int:
+    """Print the architecture-contract report; return 0/1."""
+    gaps = bool(f.arch_mismatch or f.arch_missing)
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "claims": f.arch_claims,
+                    "measured": f.arch_measured,
+                    "mismatch": f.arch_mismatch,
+                    "missing": f.arch_missing,
+                },
+                indent=2,
+            )
+        )
+        return 1 if gaps else 0
+    print(
+        f"architecture contract:   {len(f.arch_claims)} claims, "
+        f"{len(f.arch_mismatch)} mismatched, {len(f.arch_missing)} unresolved"
+    )
+    for row in f.arch_mismatch:
+        print(f"  ALARM {row}")
+    for row in f.arch_missing:
+        print(f"  UNRESOLVED {row}")
+    return 1 if gaps else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="machine-readable output")
     ap.add_argument("--markdown", action="store_true", help="markdown report fragment")
+    ap.add_argument(
+        "--architecture-only",
+        action="store_true",
+        help="check only the parity-claims architecture contract, ignoring route docs",
+    )
     args = ap.parse_args()
+
+    if args.architecture_only:
+        arch = Findings()
+        collect_architecture(arch)
+        return _render_architecture(arch, as_json=args.json)
 
     if not ROUTERS_DIR.exists() or not ROUTERS_MD.exists():
         print(f"setup error: missing {ROUTERS_DIR} or {ROUTERS_MD}", file=sys.stderr)
@@ -343,11 +507,18 @@ def main() -> int:
     collect_docs(findings)
     collect_tests(findings)
     diff(findings)
+    collect_architecture(findings)
 
     literal = [r for r in findings.routes if not r.dynamic]
     actual_routes = len(literal)
     actual_routers = len(findings.routers_on_disk)
-    gaps = bool(findings.doc_not_in_code or findings.code_not_documented or findings.untested)
+    gaps = bool(
+        findings.doc_not_in_code
+        or findings.code_not_documented
+        or findings.untested
+        or findings.arch_mismatch
+        or findings.arch_missing
+    )
 
     if args.json:
         print(
@@ -368,6 +539,12 @@ def main() -> int:
                     "undocumented_routes": findings.undocumented,
                     "untested_routers": findings.untested,
                     "dynamic": findings.dynamic_routes,
+                    "architecture": {
+                        "claims": findings.arch_claims,
+                        "measured": findings.arch_measured,
+                        "mismatch": findings.arch_mismatch,
+                        "missing": findings.arch_missing,
+                    },
                 },
                 indent=2,
             )
@@ -401,6 +578,14 @@ def main() -> int:
     print(f"routers w/o tests:       {len(findings.untested)} {findings.untested}")
     if findings.dynamic_routes:
         print(f"dynamic (skipped):       {findings.dynamic_routes}")
+    print(
+        f"architecture contract:   {len(findings.arch_claims)} claims, "
+        f"{len(findings.arch_mismatch)} mismatched, {len(findings.arch_missing)} unresolved"
+    )
+    for row in findings.arch_mismatch:
+        print(f"  ALARM {row}")
+    for row in findings.arch_missing:
+        print(f"  UNRESOLVED {row}")
     return 1 if gaps else 0
 
 

@@ -1,5 +1,5 @@
-import { logger } from '../dev-log'
-import { useAuthStore } from '../auth'
+import { logger } from '../web/lib/dev-log'
+import { useAuthStore } from '../web/lib/auth'
 import { ApiError } from './errors'
 import type { RequestConfig, ResponseEnvelope, RequestOptions } from './types'
 import { _corrId, _trackCorrId } from './corr-id'
@@ -234,7 +234,7 @@ export async function request<T>(
         }
 
         if (!opts?.silent) {
-          import('../error-store').then(({ useErrorStore }) => {
+          import('../web/lib/error-store').then(({ useErrorStore }) => {
             useErrorStore.getState().addError(apiErr, {
               source: url,
               title:
@@ -303,13 +303,13 @@ export async function request<T>(
       }
 
       if (!opts?.silent) {
-        import('../error-store').then(({ useErrorStore }) => {
+        import('../web/lib/error-store').then(({ useErrorStore }) => {
           useErrorStore.getState().addError(apiErr, {
             source: url,
             title: 'Connection Error',
           })
         })
-        import('../api-monitor-store').then(({ useApiMonitor }) => {
+        import('../web/lib/api-monitor-store').then(({ useApiMonitor }) => {
           useApiMonitor.getState().addFailure({
             endpoint: url,
             error: message,

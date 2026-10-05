@@ -15910,7 +15910,8 @@ class TestCmdPwdExtra:
         assert repl._last_exit_code == 0
         assert os.getcwd() in out
 
-    def test_pwd_after_cd(self, repl, tmp_path):
+    def test_pwd_after_cd(self, repl, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)  # pin cwd — restores at teardown; bare cd below leaked (caught by TestCwdHygiene in gate run #4)
         repl._cmd_cd(str(tmp_path))
         out = _run_with_io(repl, [], lambda: repl._cmd_pwd(""))
         assert str(tmp_path) in out
@@ -15944,7 +15945,8 @@ class TestCmdEchoExtra:
 
 
 class TestCmdCdExtra:
-    def test_cd_no_args_goes_home(self, repl):
+    def test_cd_no_args_goes_home(self, repl, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)  # pin cwd — _cmd_cd("") below lands in HOME
         repl._cmd_cd("")
         assert repl._last_exit_code == 0
         import os
@@ -15952,7 +15954,8 @@ class TestCmdCdExtra:
 
         assert os.getcwd() == str(pathlib.Path.home())
 
-    def test_cd_tilde_goes_home(self, repl):
+    def test_cd_tilde_goes_home(self, repl, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)  # pin cwd — _cmd_cd("~") below lands in HOME
         repl._cmd_cd("~")
         assert repl._last_exit_code == 0
         import os
@@ -28788,7 +28791,8 @@ class TestPermitDenyV2:
 
 
 class TestCdPwdEchoV2:
-    def test_cd_home(self, repl):
+    def test_cd_home(self, repl, monkeypatch, tmp_path):
+        monkeypatch.chdir(tmp_path)  # pin cwd — _cmd_cd("") below lands in HOME
         with _CaptureOutput(repl):
             repl._cmd_cd("")
         assert repl._last_exit_code == 0
@@ -30852,3 +30856,20 @@ class TestCmdTrEnhanced:
             repl._cmd_tr("-s ' '")
         out = cap.getvalue()
         assert "  " not in out.strip()
+
+
+# Captured at collection time — before any test can chdir.
+_INITIAL_CWD = Path.cwd()
+
+
+class TestCwdHygiene:
+    def test_no_cwd_leak_after_cd_tests(self):
+        """cd tests must restore cwd instead of leaking HOME (run-3 evidence).
+
+        `test_cd_no_args_goes_home` / `test_cd_tilde_goes_home` /
+        `test_cd_home` called `repl._cmd_cd(...)` bare, leaving the whole
+        session in `$HOME` from their position onward — every later
+        relative-path test resolved against `/home/mana` (observed live in
+        gate run #3). `monkeypatch.chdir` first restores at teardown.
+        """
+        assert Path.cwd() == _INITIAL_CWD

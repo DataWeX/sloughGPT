@@ -10,7 +10,7 @@ Usage as a module::
 
     store = KanbanStore()
     card = store.add_card("Fix boot order", column="todo", priority="high")
-    store.move_card(card.id, "in_progress")
+    store.move_card(card.id, "wip")
     store.add_note(card.id, "Started debugging the init script")
 
 Usage as a CLI::
@@ -19,7 +19,7 @@ Usage as a CLI::
     app-planner add "Fix boot order" --priority high
     app-planner cards --column todo
     app-planner board
-    app-planner move <id> in_progress
+    app-planner move <id> wip
     app-planner note add <id> "Looking into it"
 """
 
@@ -44,7 +44,7 @@ _MAX_ID_SLUG = 60
 
 DEFAULT_COLUMNS = [
     {"name": "todo", "wip_limit": 0, "order": 0},
-    {"name": "in_progress", "wip_limit": 3, "order": 1},
+    {"name": "wip", "wip_limit": 3, "order": 1},
     {"name": "review", "wip_limit": 0, "order": 2},
     {"name": "done", "wip_limit": 0, "order": 3},
 ]

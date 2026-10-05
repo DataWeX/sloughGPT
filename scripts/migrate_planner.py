@@ -66,7 +66,7 @@ def migrate(repo_root: Path, dry_run: bool = False) -> dict:
     existing_cards = []
     columns = [
         {"name": "todo", "wip_limit": 0, "order": 0},
-        {"name": "in_progress", "wip_limit": 3, "order": 1},
+        {"name": "wip", "wip_limit": 3, "order": 1},
         {"name": "review", "wip_limit": 0, "order": 2},
         {"name": "done", "wip_limit": 0, "order": 3},
     ]
@@ -99,7 +99,7 @@ def migrate(repo_root: Path, dry_run: bool = False) -> dict:
             title = note["title"]
             STATUS_MAP = {
                 "done": "done",
-                "wip": "in_progress",
+                "wip": "wip",
                 "review": "review",
                 "todo": "todo",
                 "open": "todo",

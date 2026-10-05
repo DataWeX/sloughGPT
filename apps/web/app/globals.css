@@ -220,11 +220,14 @@ html {
   gap: 0.5rem;
   flex-shrink: 0;
   height: 1.75rem;
-  background-color: color-mix(in srgb, rgb(var(--warning)) 15%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 30%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--warning)) 9%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 20%, transparent);
   font-size: 11px;
   font-weight: 500;
-  color: rgb(var(--warning));
+  /* Faded warning ink: full-saturation amber read as a glowing strip. The
+     status dot still carries the pure tone; the copy sits at 65% warning over
+     the page background so it stays legible without flaring. */
+  color: color-mix(in srgb, rgb(var(--warning)) 65%, rgb(var(--background)));
 }
 
 /* Mobile drawer backdrop */

@@ -1,4 +1,4 @@
-import { useAuthStore } from '../auth'
+import { useAuthStore } from '../web/lib/auth'
 import { InterceptorManager } from './interceptors'
 import { HttpCache, CircuitBreaker, Throttler } from './resilience'
 import type { HttpClientOptions, RequestConfig, ResponseEnvelope, RequestOptions } from './types'

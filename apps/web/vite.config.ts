@@ -57,7 +57,9 @@ export default defineConfig({
   },
   define: {
     'process.env.NEXT_PUBLIC_API_URL': JSON.stringify(
-      process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+      // `||` would swallow an explicit empty string; an empty base makes the
+      // static build same-origin (gateway relays the API — one origin, no CORS).
+      process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000',
     ),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'development'),
   },

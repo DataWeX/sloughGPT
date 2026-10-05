@@ -7,6 +7,7 @@ Engine, Subprocess, Restart, and Monitor.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -71,7 +72,13 @@ class SubprocessConfig:
     max_workers: int = 4
     memory_limit_mb: int | None = None
     cpu_affinity: list | None = None
-    start_method: str = "fork"
+    # forkserver = fresh child by default (no inherited threads; kills the
+    # fork-into-multithreaded-parent deadlock class). fork is the legacy
+    # escape hatch: closures OK, nothing pickled. forkserver/spawn targets
+    # must be picklable or start() hard-fails before allocating anything.
+    # Platform-gated: POSIX gets forkserver; Windows only supports spawn
+    # (also a fresh child, same pickling contract).
+    start_method: str = "forkserver" if sys.platform != "win32" else "spawn"
     env: dict | None = None
     cwd: str | None = None
     capture_output: bool = False

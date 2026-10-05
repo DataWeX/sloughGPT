@@ -56,7 +56,7 @@ const sampleBoard = {
   name: 'Test Board',
   columns: [
     { name: 'todo', wip_limit: 5, order: 0 },
-    { name: 'in_progress', wip_limit: 3, order: 1 },
+    { name: 'wip', wip_limit: 3, order: 1 },
     { name: 'done', wip_limit: 0, order: 2 },
   ],
   cards: [
@@ -79,7 +79,7 @@ const sampleBoard = {
       id: 'card-2',
       title: 'Task 2',
       description: '',
-      column: 'in_progress',
+      column: 'wip',
       priority: 'low',
       tags: ['backend'],
       due_date: '',
@@ -171,8 +171,8 @@ describe('createCard', () => {
   })
 
   it('creates a card in a specific column', () => {
-    const card = createCard({ title: 'In Progress', column: 'in_progress' })
-    expect(card.column).toBe('in_progress')
+    const card = createCard({ title: 'In Progress', column: 'wip' })
+    expect(card.column).toBe('wip')
   })
 
   it('persists the card to disk', () => {
@@ -256,7 +256,7 @@ describe('getStats', () => {
     expect(stats.total_cards).toBe(2)
     expect(stats.columns).toBe(3)
     expect(stats.byColumn.todo).toBe(1)
-    expect(stats.byColumn.in_progress).toBe(1)
+    expect(stats.byColumn.wip).toBe(1)
   })
 })
 

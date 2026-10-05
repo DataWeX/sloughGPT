@@ -94,7 +94,7 @@ describe('StartupOverlay', () => {
       value: { ...window.location, reload },
       writable: true,
     })
-    render(<StartupOverlay />)
+    const { container } = render(<StartupOverlay />)
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.getByRole('heading')).toHaveTextContent('Connecting')
 
@@ -104,6 +104,11 @@ describe('StartupOverlay', () => {
     expect(screen.getByRole('alert')).toBeTruthy()
     expect(screen.getByRole('heading')).toHaveTextContent('Still connecting')
     expect(screen.getByRole('button', { name: 'Retry' })).toBeTruthy()
+    // De-stacked stuck variant: a "no response" screen must not also claim
+    // progress, so the shimmer bar and the stage dots stay out of it.
+    expect(screen.queryByRole('progressbar', { name: 'Startup progress' })).toBeNull()
+    expect(container.querySelector('[role="group"]')).toBeNull()
+    expect(screen.getByRole('status').textContent).toContain('no response')
 
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
     expect(reload).toHaveBeenCalledTimes(1)
@@ -129,7 +134,7 @@ describe('StartupOverlay', () => {
     // Banner raised the moment we give up; the overlay is mid-fade.
     const banners = useBannerStore.getState().banners
     expect(banners).toHaveLength(1)
-    expect(banners[0].key).toBe('startup-degraded')
+    expect(banners[0].key).toBe('backend-connection')
     expect(banners[0].tone).toBe('warning')
     expect(banners[0].action?.label).toBe('Retry')
     expect(logStateEvent).toHaveBeenCalledWith('overlay_timeout', expect.anything())
@@ -198,12 +203,38 @@ describe('StartupOverlay', () => {
     })
     const banners = useBannerStore.getState().banners
     expect(banners).toHaveLength(1)
-    expect(banners[0].key).toBe('startup-degraded')
+    expect(banners[0].key).toBe('backend-connection')
 
     act(() => {
       vi.advanceTimersByTime(600)
     })
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.queryByRole('progressbar', { name: 'Startup progress' })).toBeNull()
+  })
+
+  it('is an ambient click-through layer — the shell underneath stays usable', () => {
+    useLiveStatusMock.mockReturnValue(
+      status({
+        startupHooks: { db_pool: { name: 'db_pool', status: 'ok', duration_seconds: 0.4 } },
+      }),
+    )
+    const { container } = render(<StartupOverlay />)
+
+    // The layer informs but does not gate: translucent, pass-through, up.
+    const layer = container.firstChild as HTMLElement
+    expect(layer.className).toContain('pointer-events-none')
+    expect(layer.className).toContain('bg-[#0a0a0a]/80')
+    expect(layer.className).not.toContain('opacity-0')
+
+    // The overlay's own controls opt back in — pass-through never eats them.
+    expect(screen.getByRole('button', { name: 'Show timing' }).className).toContain(
+      'pointer-events-auto',
+    )
+    act(() => {
+      vi.advanceTimersByTime(8_000)
+    })
+    expect(screen.getByRole('button', { name: 'Retry' }).className).toContain(
+      'pointer-events-auto',
+    )
   })
 })

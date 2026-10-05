@@ -140,7 +140,7 @@ React Native 0.86. 32 screens, 32 services.
 
 Rust/Axum reverse proxy (`slough-gateway`, binds `:8080`).
 
-**Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves static files when present.
+**Role:** Fast entry point. Generic byte-relay to Python core. Stateless zstd/gzip compression (identity fallback for SSE/Range/small/HEAD). Strict path filters (traversal → 403). Opt-in `MAN_GATEWAY_DENY` prefixes + `MAN_GATEWAY_CHAT_ONLY=1`. Background health checker (3s poll, parses API `data` envelope). Serves the **static site document root** when a build exists (`MAN_STATIC_DIR`, default `apps/web/dist-vite`, then `apps/web/.next/static`): file hit → asset, browser navigation (`Accept: text/html`) → `index.html` for SPA routes, data requests → relay. Routing is by **request kind, not path prefix** — the SPA and the API own the same top-level names (`/training`, `/models`, `/chat`), and the only browser *navigation* onto API surface is `/docs`, `/redoc`, `/openapi.json` (path contract). Result: shell + API + SSE on one origin, and the shell still loads when the sidecar is down.
 
 **Not a logic layer.** No auth, no rate limiting, no error transformation. Just routing + filters + compression + health + static files.
 

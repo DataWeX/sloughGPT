@@ -352,11 +352,14 @@ class StartupOrchestrator:
         viz = get_terminal_viz()
         viz.start()
 
-        # Emit startup start webhook
+        # Emit startup start webhook — fire-and-forget: a slow registered
+        # webhook (3 retries x 10s timeout) must never stall the boot path.
         from infrastructure.startup_webhooks import WebhookEvent, get_webhook_manager
 
         webhook_mgr = get_webhook_manager()
-        await webhook_mgr.emit(WebhookEvent.STARTUP_START, {"server": "sloughgpt"})
+        self._startup_start_task = asyncio.create_task(
+            webhook_mgr.emit(WebhookEvent.STARTUP_START, {"server": "sloughgpt"})
+        )
 
         from infrastructure.staged_loader import Stage, get_staged_loader
 
@@ -479,11 +482,87 @@ class StartupOrchestrator:
         async def _post_bind():
             await loader.run_stage(Stage.READY)
             STARTUP_PHASE.update(phase="running", step=9, total=9, message="Server running")
-            await self._phase_ready()
+            fatal: str | None = None
+            try:
+                await self._phase_ready()
+            except Exception as exc:
+                fatal = str(exc)
+                raise
+            finally:
+                # Single wiring point for the boot finalizers (kanban 223001e4).
+                # Runs even if _phase_ready throws — otherwise history/terminal/
+                # webhook all silently lose their last event again.
+                self._finalize_startup(loader, fatal=fatal)
             await loader.run_stage(Stage.BACKGROUND)
 
         loop = asyncio.get_running_loop()
         loop.call_soon(lambda: asyncio.ensure_future(_post_bind()))
+
+    def _finalize_startup(self, loader: Any, fatal: str | None = None) -> None:
+        """Declare startup complete — commit all three boot finalizers.
+
+        Historically each of these had a start-side call and zero end-side
+        callers (write-only history, silent terminal, only STARTUP_START
+        emitted). This is the one place they fire, at the ready moment.
+        """
+        # Defensive parse: loaders in tests are mocks, and a finalizer must
+        # never be the thing that kills _post_bind (it runs in a finally).
+        raw_errors: object = {}
+        try:
+            raw_errors = loader.get_status().get("errors", {})
+        except Exception:
+            raw_errors = {}
+        errors: dict[str, str] = raw_errors if isinstance(raw_errors, dict) else {}
+        error = fatal
+        if error is None and errors:
+            for name, message in errors.items():
+                error = f"{name}: {message}"
+                break
+        success = error is None
+
+        # Each finalizer is isolated: an observability failure must log a
+        # warning, never propagate into _post_bind from its finally block.
+        # 9: commit the history record (was collected then discarded every boot)
+        try:
+            loader.finish_history(success=success, error=error)
+        except Exception:
+            logger.warning("finish_history finalizer failed", exc_info=True)
+
+        # 10: close the startup profile — the top-level totals (total_hooks /
+        # total_success / total_failure) are only computed by finish(), which
+        # otherwise had zero callers, so health.startup_profile served zeros.
+        try:
+            from infrastructure.startup_profiler import get_profiler
+
+            get_profiler().finish()
+        except Exception:
+            logger.warning("profiler finish finalizer failed", exc_info=True)
+
+        # 11: print the terminal summary ("✓ Ready in X.Xs (N hooks)")
+        try:
+            from infrastructure.startup_terminal import get_terminal_viz
+
+            get_terminal_viz().finish(success=success)
+        except Exception:
+            logger.warning("terminal finish finalizer failed", exc_info=True)
+
+        # 12: startup.complete / startup.failed — fire-and-forget like START
+        try:
+            from infrastructure.startup_webhooks import WebhookEvent, get_webhook_manager
+
+            event = WebhookEvent.STARTUP_COMPLETE if success else WebhookEvent.STARTUP_FAILED
+            self._startup_complete_task = asyncio.create_task(
+                get_webhook_manager().emit(
+                    event,
+                    {
+                        "server": "sloughgpt",
+                        "success": success,
+                        **({"error": error} if error else {}),
+                    },
+                )
+            )
+        except Exception:
+            logger.warning("startup webhook finalizer failed", exc_info=True)
 
     async def _phase2_model_load(self):
         """Start model load as a background task (non-blocking).

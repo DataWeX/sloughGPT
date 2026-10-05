@@ -174,25 +174,29 @@ def _board_show(args: argparse.Namespace) -> int:
 def _board_add(args: argparse.Namespace) -> int:
     store = _get_store(args)
     tags = [t.strip() for t in args.tags.split(",") if t.strip()] if args.tags else []
-    card = store.add_card(
-        args.title,
-        column=args.column or "todo",
-        priority=args.priority or "medium",
-        description=args.description or "",
-        tags=tags,
-    )
+    try:
+        card = store.add_card(
+            args.title,
+            column=args.column or "todo",
+            priority=args.priority or "medium",
+            description=args.description or "",
+            tags=tags,
+        )
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     print(f"Created: {card.id[:8]} — {card.title}")
     return 0
 
 
 def _board_move(args: argparse.Namespace) -> int:
     store = _get_store(args)
-    board = store.load_board()
-    valid_columns = [c["name"] for c in board.columns]
-    if args.column not in valid_columns:
-        print(f"Invalid column: {args.column}. Valid: {', '.join(valid_columns)}", file=sys.stderr)
+    try:
+        moved = store.move_card(args.id, args.column)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return 1
-    if store.move_card(args.id, args.column):
+    if moved:
         print(f"Moved {args.id[:8]} → {args.column}")
         return 0
     print(f"Card not found: {args.id}", file=sys.stderr)

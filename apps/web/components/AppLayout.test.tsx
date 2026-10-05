@@ -47,6 +47,7 @@ vi.mock('@sloughgpt/strui', () => ({
   cn: (...classes: any[]) => classes.filter(Boolean).join(' '),
   Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
   ErrorPanel: () => <div data-testid="error-panel" />,
+  StatusDot: () => <span data-testid="status-dot" />,
   IconX: (props: any) => <svg {...props} />,
   IconMenu: (props: any) => <svg {...props} />,
   IconChevronRight: () => null,
@@ -233,7 +234,12 @@ describe('AppLayout', () => {
         <div />
       </AppLayout>,
     )
-    expect(screen.getByText('Backend restarting — reconnecting…')).toBeDefined()
+    // The restarting notice now flows through the single banner surface
+    // (useBannerStore + <GlobalBanner />), so its title and message are
+    // separate structured nodes rather than one flat text node.
+    const banner = screen.getByRole('alert')
+    expect(banner.textContent).toContain('Backend restarting — reconnecting…')
+    expect(banner.getAttribute('data-tone')).toBe('warning')
     mockApiMonitor.status = 'connected'
   })
 

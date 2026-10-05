@@ -4,7 +4,21 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-04 ~05:05 — naming consolidated (card `43ca5222`):
+**Last update**: 2026-10-04 ~10:15 — `feat/wip-column-rename` **lands on
+main** (fast-forward `3f8465164`, card `ffaea823` → done): the kanban column
+is **`wip`, never `in_progress`** — `config` maps both directions, the default
+column schemas in Python **and** TS, 4 test files, package README + planner
+specs, and 31 board rows re-keyed (3 `in-progress` orphans folded in) with the
+card hash chain re-sealed because `chain_hash_for()` hashes `column`.
+Gates: app-planner **185**, web planner **89**, tsc/ruff clean, chain `[]`.
+Hard cutover — no compat alias. Earlier ~10:05: `feat/pugqeep-forkserver` **lands on
+main** (merge `d996f8ebc`; cards `df5affc7`+`e69915c1` → done, notes → done):
+gate run #4 green 621F ≤ baseline 683F, playwright-class E 0, 0 timeouts, no
+hang; post-merge targeted re-run = identical F-set, E 0 (see Landed). Earlier ~05:30: `feat/landing-7-cards` lands (7
+infra-review cards + campaign `d083e732`, cherry-picks `2127abb6e..344168b4f`,
+see Landed): startup finalizers + MogDB history + webhook facade + profiler
+feed + test hygiene — tests/server **1942/1/0 vs main's 5-failed baseline**.
+Earlier ~05:05: naming consolidated (card `43ca5222`):
 **Mole is the one app** — never "doctor"/"watcher" as names; docs realigned
 (TESTING/INDEX/FEATURES), legacy `/doctor` paths grandfathered until the
 unified `mole` CLI. Earlier ~04:45: `feat/mole-watcher` lands (card `e0c80774`,
@@ -46,7 +60,182 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `e9fb80cec`)
+## Landed on main (origin/main = `344168b4f`)
+
+- **2026-10-04 · `feat/wip-column-rename` lands — the kanban column is `wip`,
+  never `in_progress` (hard cutover).** Card `ffaea823` → done; ff `3f8465164`
+  (`.wt-wip` worktree). The column name is a **primary key** joining card data,
+  `config.STATUS_TO_COLUMN`/`COLUMN_TO_STATUS`, the default schemas in Python
+  *and* TS (`store.py`, `kanban.py`, `apps/web` planner helpers/BuffetEngine/
+  types) and every card's `chain_hash` payload — all moved in one pass; 4 test
+  files, the package README and the planner specs follow. `migrate_boards.py`
+  / `migrate_planner.py` keep `in_progress` only as a **legacy source key**
+  mapping onto `wip` (a re-run must not resurrect it); `wip` beats `doing`
+  everywhere (110 note entries use `wip`, **zero** use `doing`, and the web GUI
+  already emitted `wip`). Data migrated byte-surgically — **952 card rows
+  preserved**, 31 renames incl. the 3 `in-progress` orphans — then re-sealed
+  with `compute_chains()` (the same call `sync()` makes by design) because
+  `chain_hash_for()` hashes `column`: 29 → 0 violations, and pristine main was
+  already 3-red (`[-1, 911, 912]`). Gates: app-planner **185 passed**, web
+  planner **89 passed**, tsc clean, ruff clean, 0 eslint errors, `board stats`
+  → `wip: 30`. **Gotchas:** (1) `.kanban/slot_history.jsonl` (root branch)
+  keys slots as `column:pos` *inside* `node_hash()` — an append-only ledger,
+  never rewrite its keys; (2) `board add` does **not** validate `--column`, so
+  a stale session can reintroduce `in_progress`; (3) the long-lived
+  `feat/create-router-projection` branch still carries `in_progress` and will
+  conflict on `config.py` when it merges main.
+- **2026-10-04 · `feat/pugqeep-forkserver` lands — fork→forkserver kills the
+  fork-into-multithreaded class.** Cards `df5affc7` + `e69915c1` → done,
+  notes → done; merge `d996f8ebc` (`.wt-l2` worktree):
+  `SubprocessProcess` default `fork` → `forkserver` — the fresh child kills
+  the fork-into-multithreaded-pytest deadlock class (gate run7: 60
+  futex-stuck children). Module-level `_subprocess_worker` replaces the
+  unpicklable `_worker` closure; pre-flight pickle check hard-fails
+  (`PicklingError` before any allocation — closures/lambdas can't cross);
+  `fork` stays as the explicit escape hatch; forkserver preload
+  `[__main__, engine, target-module]` (steady spawn ~16 ms vs ~523 ms/child
+  without — `scripts/benchmark_pugqeep_spawn.py`). Extended this session with
+  card `a0ba949b`/`e69915c1`: **`VectorBE`'s bare `mp.Pool` (second fork site
+  of the same class) → `mp.get_context("forkserver")` + `SLO_VECTOR_START_METHOD`
+  escape** — it was the 88% gate wedge (isolated repro: parent `do_wait`,
+  futex-dead workers; benchmark: one-time ~1.4 s cold start, steady state at
+  parity — `scripts/benchmark_vector_backend_pool.py`); plus the
+  `test_linux_cmds.py` `host`-fixture cwd leak fixed (bare `os.chdir` →
+  `monkeypatch.chdir`; both gate runs sat in `test_time_no_args0` until exit —
+  hygiene test `TestHostFixtureCwdHygiene` guards it) plus the same class in
+  `test_shell_repl_more.py`: 3 bare `repl._cmd_cd("" / "~")` tests leaked
+  `$HOME` from idx ~27600 (run #3 saw pytest cwd=`/home/mana` live) →
+  `monkeypatch.chdir` + file-end `TestCwdHygiene`, and the shm
+  `resource_tracker` warning spam carded as `ccad389e` (pre-existing, both
+  start methods). **Gate run #3** (05:23→06:40, 77 min, no hang):
+  597F/175E vs baseline 683F/0E — vector/linux_cmds/timeout classes all
+  **0**; every one of the 175 E is the journeys family from
+  `ModuleNotFoundError: playwright` (PYTHONNOUSERSITE hides user-site
+  playwright; baseline chunks ran venv without -s) → run #4 carries
+  `/tmp/opencode/pyshim` (playwright+greenlet+pyee symlinks on PYTHONPATH,
+  no install). **Gate run #4** (07:05→08:34, 89 min, `gate exit=1`, no
+  hang, **0 timeout blocks**): **621F/41902P/2E vs baseline 683F/0E** —
+  vector/timeout/linux_cmds classes **0**; playwright-class **E 0**
+  (`test_user_journeys` 103/103, `test_computer_use` 21/21; node-id diff
+  removed 141 of run #3's E node-for-node). The 2 residual E = a
+  pre-existing missing `route` fixture (identical ERRORs in run #3;
+  `ROUTES`/`ALL_ROUTES` constants orphaned, zero `parametrize` in the
+  file) → fixed post-gate with `@pytest.mark.parametrize`, E=0 verified
+  by targeted re-run. The new `TestCwdHygiene` guard caught a 4th cd
+  leaker (`test_pwd_after_cd` bare cd into `tmp_path`, leaving cwd in an
+  empty dir → `test_tui_repl::test_dot` found no cwd dotfiles; run #3's
+  cd-`$HOME` leak had masked it) → `monkeypatch.chdir` pin, both GREEN
+  targeted; `test_phoneme_cli` 8F also disappeared (they had run against
+  the leaked tmp cwd). `comprehensive_training_journeys` F = the deferred
+  `:3000` hardcode class (card `e47e19ee` — `BASE = localhost:3000`,
+  server died mid-file in run #4 after its first 9 tests passed; fully
+  down post-gate, so its 19 parametrized routes join the same class) →
+  post-gate tree ≤640F, still under baseline. Caution: the live root
+  journal was externally reverted to HEAD mid-run (08:27, a session on
+  `feat/create-router-projection` is still writing it) — run #3/#4
+  evidence therefore lives in the WORKTREE journal only; `planner sync`
+  is also non-idempotent (flips 2 foreign cards per call — do not run).
+  Latency benchmark +414.9% vs baseline = contention artifact
+  (load 19.6, 71 foreign pytest procs; live `:8000` serves root code, not
+  this branch) — re-run when quiet. **Reconcile before
+  merging**: this edits main's multiprocessing engine
+  (`domain/infrastructure/_internal/pugqeep/engine.py`), while the root-repo
+  session — now on `fix/startup-finalizers` at `ae237996e`, **225 commits
+  ahead of main** — has already replaced that whole paradigm: `18c720be5`
+  (owned `os.fork()` + framed socketpair channel, multiprocessing gone from
+  their PGQ) + `d2454c84d` (single Pipe admission door) + `c4ecb6ff8`, all
+  on `packages/core-py/domains/infrastructure/pugqeep/engine.py`. Root
+  `AGENTS.md` on that branch now states the rewrite as fact ("Build from
+  scratch, import last"). Different paths ⇒ textual merge is clean, but the
+  two designs collide semantically on `SubprocessProcess.start`. This branch landed
+  2026-10-04 with user sign-off — `SubprocessProcess.start` on main is the
+  survivor; reconcile when their branch arrives. Benchmark names do NOT collide
+  (theirs `scripts/benchmark_pipe.py`).
+
+- **2026-10-04 · `fix/meta-weights-request-params` lands — requested sampling
+  params are honoured again.** Card `d2dda007` → done, commit `806073e15`
+  (onto `a189d78eb`). Contract chosen by the user: **feedback nudges only the
+  parameters the caller left at their default; an explicitly-set parameter
+  passes through verbatim.** Before this, `_apply_meta_weights` returned
+  `get_adjustment()`'s absolute values, and `get_adjustment()` never receives
+  the request — so with an empty feedback DB *every* request answered with
+  0.7/0.85/40/1.15 whatever was asked, while `GenerateRequest` still validated
+  the field (`ge=0.0, le=2.0`) and telemetry logged the request value the
+  provider never received. Changes: `MetaWeightManager.neutral_weights`
+  exposes the baseline so callers derive a *delta* (empty store ⇒ exactly zero
+  change rather than a silent default swap); `_apply_meta_weights` gains
+  `explicit` (pydantic `model_fields_set`; the WebSocket derives it from keys
+  present in the frame) — **5 call sites, not the 4 the card claimed** (chat
+  `:2971` was the fifth); the 5s cache now stores the **nudge**, never the
+  merged result, because the nudge depends only on message+user while the merge
+  depends on that request's explicit set (caching merged output would leak one
+  request's explicit set into another's); the 4 `capture()` sites record
+  `gen_params["temperature"]`. Tests: dropped the `_apply_meta_weights`
+  passthrough patch (real code now passes explicit params through — strictly
+  stronger), added nudge-applies-at-default and telemetry-records-sent-value,
+  plus an autouse nudge-cache clear. **Benchmark** `scripts/benchmark_meta_weights.py`
+  (new): cache HIT p50 1.64µs vs cache MISS p50 39.15µs (23.9×) — the merge
+  cannot surface end-to-end. Gates: `tests/` 3156 passed / 0 failed,
+  `apps/api/server/tests` 1223 / 0. **Found while verifying, proved NOT mine on
+  pristine `a189d78eb` → card `37325860`:** the hygiene ratchet's
+  `from __future__ import annotations` stringifies dataclass annotations, so
+  `assert f.type is float` can never pass (3), plus 5 stale meta-weights
+  *router* tests where `docs/routers.md:594-596` sides with the impl.
+
+- **2026-10-04 · `fix/main-gate-green` lands — main's default test gate goes
+  green (7 root-cause buckets).** Card `cbd2ffc3`, commit `ddd3b3d49` → landed
+  as `70b162449` (rebased onto `81fd4d554`, moodboard-only delta, no overlap).
+  Baseline on `c92adc47b`: **11 failed + 5 errors (16 red) in `tests/` → 3147
+  passed / 13 skipped / 0 failed / 0 errors, three consecutive runs**;
+  `apps/api/server/tests` **6 collection errors → 1223 passed** (the directory
+  was dormant, off-`testpaths`, and never ran anywhere). Root causes, not
+  counts: the contract gate was red because `routers/doctor.py` reached into
+  `domain.core._internal.doctor{,.report}` (retargeted to the public facade;
+  `default_report_path` joined the lazy map + `__all__`); `test_inference_generate`
+  ×6 patched `domain.models._internal.provider.get_provider` while the router
+  binds `get_provider` from `domain.models` **at import** — an inert mock — and
+  the bare test app registered no exception handlers, so `raise_error()`
+  propagated instead of returning 503; `test_cli_chat` ×5 imported `CLILogger`
+  from `domain.logging._internal`, which never re-exports it; `test_feedback_domain`
+  ×2 hit `_compute_gradients`' `engine is None → {}` guard (now driven by a stub
+  engine, with a genuine sign invariant replacing a tautological assertion);
+  `test_rag` ×1 was a **real product bug** — fusion applied `dense_weight=0.7`
+  to a channel `ProductionRAG` disables by default, capping `combined_score` at
+  0.3 so `HallucinationDetector.detect`'s `min_score=0.5` gate could never pass
+  (grounding was structurally impossible, confidence always 0) → weights now
+  renormalised over active channels; the `apps/api/server/tests` ×6 was a
+  `tests` package-name collision → canonical `apps.api.server.tests` path
+  (already used by `tests/server/test_server_api.py`). **Benchmarks:**
+  `benchmark_bm25` A/B vs `c92adc47b` — recall@k 0.9833, MRR 1.0, reranked MRR
+  1.0 **byte-identical**, latency within noise. Follow-ups filed: `b83a5788`
+  (online LoRA is a silent no-op — the engine is never attached, yet stats
+  count phantom updates) and `d2dda007` (meta-weights **replace** request
+  sampling params — `get_adjustment` never receives them, so it cannot blend).
+  **Gotcha:** the root repo's `app_planner` `.pth` has no `compute_chains`, so
+  board writes made from the root copy leave that branch's board unchained
+  (pre-existing there — base `f27654e54` predates the chain work); run board
+  commands with `PYTHONPATH=<worktree>/packages/app-planner/src` from a
+  chain-aware copy, and never issue two `board add` calls concurrently — the
+  second silently clobbers the first.
+
+- **2026-10-04 · `feat/landing-7-cards` lands — the infra-review follow-ups,
+  surgical cherry-pick onto main.** Cards `223001e4` `d1f544fb` `ad9ef322`
+  `b753cad5` `8349d901` `65d9e7ee` `832efdda` (+ campaign `d083e732`), 8
+  commits `2127abb6e..344168b4f`: boot finalizers ⑨⑪⑫⑬ (history deadlock
+  fixed; gzip at the seam — 4 MB stall 269.6 → 4.5 ms), startup history →
+  MogDB (12 records migrated, JSON kept `.bak`), `startup_webhooks` →
+  stateless facade over `WebhookStore` (shape-oracle pinned), profiler feed ⑩
+  (per-hook timings, non-mutating `get_summary`, module-level `profile_hook`),
+  test hygiene (stale patch targets at consumer read points + TestExecutor
+  precondition fixture). Lineage fork `f27654e54`, so every pick was resolved
+  against main's newer machinery: **main's REST contract, public module paths,
+  and plain `WebhookStore.register()` win; only my `+` lines land** (one of my
+  new tests adapted JSON-body → query-param POSTs). **Gates:** tests/server
+  **1942 passed / 1 skipped / 0 failed vs main's 5-failed baseline** (+37 new);
+  root `tests/` 13f/5e byte-identical to main's baseline (pre-existing); ruff
+  clean; compression benchmark ~60×. Gotcha: `apps/api/server/tests` glob has 6
+  order-dependent `tests.test_support` collection errors — pre-existing on
+  main (A/B proven), off testpaths.
 
 - **2026-10-04 · `feat/mole-watcher` lands — Mole phase 1: always-on, no-AI
   monitoring.** Card `e0c80774`, cherry-pick of `1b1ce40c6`: new
@@ -187,8 +376,41 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## In flight
 
-- Root-repo session on `feat/pipe-bounded-execution`; ~40 `feat/*` worktrees
-  active — `git branch -vv` + the kanban board name the owners.
+- **2026-10-04 · startup overlay becomes an ambient boot layer — landed on main
+  (`2fb066dce`, card `159300be`) and deployed in `apps/web/dist-vite`.** The
+  fullscreen overlay is now `bg-[#0a0a0a]/80` + `backdrop-blur-sm` +
+  `pointer-events-none` (its own controls — Retry, Show timing — opt back in
+  with `pointer-events-auto`): the shell stays visible **and clickable** for the
+  whole boot. The stuck (8 s) and stall (20 s) watchdog screens and the
+  key-deduped banner were NOT demoted — they live in the overlay/banner exactly
+  as before; only the layer's modality changed. Verified live: dead-core
+  walkthrough on `:8082` (t=0.46 s hit-test passes through the overlay to
+  `sl-app-content`; t=10.5 s "Still connecting" + Retry `pointer-events:auto`;
+  t=21.5 s overlay gone + `GlobalBanner` "Backend not responding") and healthy
+  `:8080` (overlay dismissed via ready path, `origins=[localhost:8080]`,
+  0 failed requests, 0 console errors). Gates: `StartupOverlay.test.tsx` 11/11
+  (incl. pass-through contract), full web suite 8075/8075 @ 841 files, tsc +
+  eslint clean. **Deploy = `npm run build:vite` from a checkout ≥ this commit,
+  copy `dist-vite/` to the repo root; `ServeDir` reads from disk, no gateway
+  restart needed.** From `.wt-orb`/`fix/startup-overlay-busy`.
+
+- **Landed on main (`d949eb509`, card `d484f48a`) and deployed on :8080** — the
+  gateway serves the repo root's `apps/web/dist-vite` as its document root;
+  rebuild with `npm run build:vite`, then restart `slough-gateway`. From
+  `.wt-static`/`feat/static-hosting`. Detail:
+  `apps/web/dist-vite` as its **document root** — file hit → asset, browser
+  navigation (`Accept: text/html`) → `index.html` (SPA), data request →
+  byte-relay; `/docs`, `/redoc`, `/openapi.json` stay proxied (path contract).
+  Routing is by request *kind*, not path prefix, because SPA and API share the
+  same top-level names. `npm run build:vite` builds **same-origin** (empty
+  `NEXT_PUBLIC_API_URL`; `??` not `||` in `lib/config.ts` — a `||` fallback
+  would silently restore a second origin). `main.py --web` retired: no Node is
+  spawned. **Still open:** the 11 `app/api/**` handlers (9 planner, 1 calendar,
+  1 nextauth) have no host in a static build — classification on the card
+  before anything is ported or deleted.
+- Root-repo session on `fix/startup-finalizers` (supersedes
+  `feat/pipe-bounded-execution`); ~40 `feat/*` worktrees active —
+  `git branch -vv` + the kanban board name the owners.
 - The 683 baseline failures are known drift → card `56b49cf1` (drift baseline).
   Check it before treating a failure as yours.
 
@@ -229,3 +451,13 @@ git push -u origin feat/<name>   # push your own branch when done
 - **`next lint` no longer exists in this Next version** (parses `lint` as a
   directory) — pre-existing repo breakage; the lint gate is root
   `node_modules/.bin/eslint <changed files>` run directly.
+- **`note update`/`note new` auto-run `_auto_sync` → `store.sync()`** — one
+  note edit triggers full notes↔board reconcile **plus** the chain reseal, so
+  expect a WHOLE-file `board.jsonl` diff (canonical re-order + `chain_hash`
+  cascade on dozens of cards) and cards moving to match note statuses. It is
+  not a clobber — diff per-card `column` fields before reacting. Two traps:
+  sync is non-idempotent (it flips cards `1f24a4f7`/`243016c3` every run —
+  revert unintended foreign flips before committing: `git checkout` the
+  board, then `move_card(<full-uuid>, <col>)` + `compute_chains()`), and
+  `move_card` matches the id **exactly** (an 8-hex prefix returns `False`
+  silently; resolve the full uuid first).
