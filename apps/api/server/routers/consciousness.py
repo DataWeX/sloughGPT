@@ -130,9 +130,6 @@ class ConsciousnessRouter:
         self.router.add_api_route("/personality", self.get_personality, methods=["GET"])
         self.router.add_api_route("/personality", self.update_personality, methods=["PATCH"])
         self.router.add_api_route("/personality/reset", self.reset_personality, methods=["POST"])
-        self.router.add_api_route(
-            "/personality/history", self.get_personality_history, methods=["GET"]
-        )
         self.router.add_api_route("/personality/presets", self.get_presets, methods=["GET"])
         self.router.add_api_route("/personality/presets/apply", self.apply_preset, methods=["POST"])
         self.router.add_api_route("/personality/conflicts", self.get_conflicts, methods=["GET"])
@@ -549,58 +546,6 @@ class ConsciousnessRouter:
         return success_response(data=profile.to_dict())
 
     @endpoint("consciousness.personality.history")
-    async def get_personality_history(
-        self, auth_user: dict = Depends(require_auth_if_enabled)
-    ) -> dict:
-        """Get personality evolution history derived from episodes."""
-        engine = self._get_engine()
-        episodes = engine.self_model.episodes
-
-        if not episodes:
-            return success_response(data={"history": [], "labels": {}})
-
-        from domain.cognition import PersonalityProfile
-
-        defaults = PersonalityProfile()
-        current = defaults.to_dict()
-        history = []
-        step = max(1, len(episodes) // 50)
-
-        for i, ep in enumerate(episodes):
-            growth = ep.growth_delta
-            qualia = ep.qualia
-
-            if growth > 0.05:
-                current["voice"]["confidence"] = min(1.0, current["voice"]["confidence"] + 0.01)
-            if qualia.get("novelty", 0) > 0.7:
-                current["traits"]["openness"] = min(1.0, current["traits"]["openness"] + 0.005)
-            if qualia.get("coherence", 1) < 0.3:
-                current["voice"]["verbosity"] = max(0.0, current["voice"]["verbosity"] - 0.01)
-            if qualia.get("valence", 0) > 0.5:
-                current["traits"]["agreeableness"] = min(
-                    1.0, current["traits"]["agreeableness"] + 0.005
-                )
-
-            if i % step == 0 or i == len(episodes) - 1:
-                history.append(
-                    {
-                        "timestamp": ep.timestamp,
-                        "step": i,
-                        "voice": {k: round(v, 4) for k, v in current["voice"].items()},
-                        "traits": {k: round(v, 4) for k, v in current["traits"].items()},
-                    }
-                )
-
-        return success_response(
-            data={
-                "history": history,
-                "labels": {
-                    "voice": list(defaults.voice.keys()),
-                    "traits": list(defaults.traits.keys()),
-                },
-            }
-        )
-
     @endpoint("consciousness.personality.presets")
     async def get_presets(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Get available personality presets."""

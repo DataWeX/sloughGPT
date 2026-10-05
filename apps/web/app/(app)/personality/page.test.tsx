@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, waitFor, fireEvent } from '@testing-library/react'
+import { protocolStore } from '@/lib/protocol/store'
 import PersonalityPage from './page'
 
 const {
   mockGetPersonality,
   mockGetPersonalityPresets,
-  mockGetPersonalityHistory,
   mockGetPersonalityConflicts,
   mockListPersonas,
   mockResetPersonality,
@@ -14,11 +14,11 @@ const {
   mockActivatePersona,
   mockDeletePersona,
   mockApiPatch,
+  mockApiGet,
   mockAddToast,
 } = vi.hoisted(() => ({
   mockGetPersonality: vi.fn(),
   mockGetPersonalityPresets: vi.fn(),
-  mockGetPersonalityHistory: vi.fn(),
   mockGetPersonalityConflicts: vi.fn(),
   mockListPersonas: vi.fn(),
   mockResetPersonality: vi.fn(),
@@ -27,6 +27,7 @@ const {
   mockActivatePersona: vi.fn(),
   mockDeletePersona: vi.fn(),
   mockApiPatch: vi.fn(),
+  mockApiGet: vi.fn(),
   mockAddToast: vi.fn(),
 }))
 
@@ -108,13 +109,13 @@ vi.mock('@sloughgpt/strui', () => {
 
 vi.mock('@/lib/http-client', () => ({
   apiPatch: mockApiPatch,
+  apiGet: mockApiGet,
 }))
 
 vi.mock('@/lib/consciousness-controller', () => ({
   consciousnessController: {
     getPersonality: mockGetPersonality,
     getPersonalityPresets: mockGetPersonalityPresets,
-    getPersonalityHistory: mockGetPersonalityHistory,
     getPersonalityConflicts: mockGetPersonalityConflicts,
     listPersonas: mockListPersonas,
     resetPersonality: mockResetPersonality,
@@ -128,7 +129,6 @@ vi.mock('@/lib/consciousness-controller', () => ({
 const consciousnessController = {
   getPersonality: mockGetPersonality,
   getPersonalityPresets: mockGetPersonalityPresets,
-  getPersonalityHistory: mockGetPersonalityHistory,
   getPersonalityConflicts: mockGetPersonalityConflicts,
   listPersonas: mockListPersonas,
   resetPersonality: mockResetPersonality,
@@ -141,9 +141,11 @@ const consciousnessController = {
 const apiPatch = mockApiPatch
 
 beforeEach(() => {
+  // The protocol store outlives tests — start each from a cold cache.
+  protocolStore.getState().invalidate()
   mockGetPersonality.mockResolvedValue(mockProfile)
   mockGetPersonalityPresets.mockResolvedValue({ names: ['default', 'formal', 'creative'] })
-  mockGetPersonalityHistory.mockResolvedValue({
+  mockApiGet.mockResolvedValue({
     history: [
       { timestamp: Date.now() / 1000 - 3600, voice: { warmth: 0.5 }, traits: { openness: 0.4 } },
       { timestamp: Date.now() / 1000, voice: { warmth: 0.7 }, traits: { openness: 0.6 } },

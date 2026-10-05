@@ -36,6 +36,7 @@ sys.path.insert(0, str(SCRIPTS_DIR))
 
 import check_contract  # noqa: E402
 import gen_router_manifest  # noqa: E402
+import gen_ts_contracts  # noqa: E402
 
 # ── helpers ────────────────────────────────────────────────────────────
 
@@ -359,6 +360,11 @@ def test_contract_gate_static_checks_pass():
     assert check_contract.main(["--static"]) == 0
 
 
+def test_ts_contract_projection_is_fresh():
+    """The frontend registry is a projection: change a descriptor ⇒ regen or red."""
+    assert gen_ts_contracts.main(["--check"]) == 0
+
+
 def test_importing_the_routers_package_stays_lazy():
     """Cold-start guard: no router module may load until get_all_routers()."""
     code = (
@@ -489,7 +495,11 @@ def test_pilot_is_documented_in_openapi():
 
 
 def test_pilot_registry_entry_is_actually_served():
-    """The registry's claim must match the router's route table (not a paper one)."""
+    """The contracts module's claims must match its own route table (not a paper one).
+
+    The cross-module invariant — every registry entry served by *some* router —
+    is verified by ``scripts/check_contract.py --runtime``.
+    """
     from routers.contracts import router as contracts_router
 
     served = {
@@ -499,7 +509,10 @@ def test_pilot_registry_entry_is_actually_served():
         if method != "HEAD"
     }
     assert ("/contracts", "GET") in served
-    claimed = {(e["path"], e["method"]) for e in REGISTRY.routes()}
+    claimed = {
+        (e["path"], e["method"]) for e in REGISTRY.routes() if e["module"] == "routers.contracts"
+    }
+    assert claimed, "no contracts entries found in the registry"
     assert claimed <= served, f"registry claims routes no router serves: {claimed - served}"
 
 
