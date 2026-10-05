@@ -4,7 +4,29 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-05 ~03:27 — `fix/root-tests-order-dependence` **lands
+**Last update**: 2026-10-05 ~08:15 — `fix/journey-server-skip` **lands on
+main** (fast-forward, card `b9f12ad2` → done): the serverless gate block in
+`packages/core-py/tests/test_user_journeys.py` +
+`test_computer_use_training_integration.py` is now **124 skipped in 12s,
+EXIT=0** (was ~113 errors plus a 90s × 2 dead wait) — both
+`ensure_servers_ready()` fixtures now do the repo-blessed capability gate (5s
+probe → `pytest.skip("API server not running")`, the `test_integration.py` /
+card `6e826226` convention) instead of asserting live servers. Chromium itself
+was already healthy (installed 10-02; live launch `151.0.7922.34` — the card's
+original "missing executable" premise was stale). SECOND defect found while
+verifying: `test_user_journeys.py` was **uncollectable under
+`--import-mode=importlib`** (root-ini addopts) — importlib's rootdir-relative
+`tests.*` module name resolves through cwd's repo-root `tests/` **package**
+(it has `__init__.py` + its own conftest), so `packages/core-py/tests/conftest.py`
+never executes its avion `sys.path` insert → `ModuleNotFoundError: avion` at
+collection (probe evidence: avion never in sys.path under importlib, present
+from sessionstart under plain mode). Fixed file-locally with the same
+source-bootstrap idiom both conftests already use (no installs, mode/cwd
+independent); the underlying duplicate-`tests/` naming collision remains card
+`d2803a3c`'s scope. Verified: both modes 124 skipped EXIT=0; ruff +
+py_compile clean.
+
+Earlier ~03:27: `fix/root-tests-order-dependence` **lands
 on main** (fast-forward `0246b027c`, card `5473eb90` → done): the rotating
 order-dependent `tests/` failure is **root-caused — it was never a
 module-level global; it was a path-depth off-by-one**. `tests/test_api_keys.py`
