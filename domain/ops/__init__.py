@@ -5,6 +5,7 @@ Public API:
     ChunkedOperation, MemoryEfficientSoftmax, FusedScaleBias, OptimizedEmbedding
     fused_swiglu, efficient_cross_entropy, chunked_matmul, silu, gelu
 """
+from __future__ import annotations
 
 from domain.ops._internal.ops import (
     ChunkedOperation,

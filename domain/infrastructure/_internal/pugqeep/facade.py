@@ -23,12 +23,13 @@ Quick start:
     pgq.put("weights", numpy_array)
     data = pgq.get("weights")
 """
+from __future__ import annotations
 
 import logging
 import threading
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 import numpy as np
 
@@ -109,7 +110,7 @@ class PGQ:
         n_clusters: int = 16,
         method: str = "cluster",
         storage_dir: Path | None = None,
-    ) -> "PGQ":
+    ) -> PGQ:
         """Load a HuggingFace model and compress all weights."""
         tree = load_model_to_points(
             model_id,
@@ -123,7 +124,7 @@ class PGQ:
         return sys
 
     @classmethod
-    def from_file(cls, path: Path) -> "PGQ":
+    def from_file(cls, path: Path) -> PGQ:
         """Load a saved library from disk."""
         library = PointLibrary.load(path)
         sys = cls(library.name)
@@ -311,7 +312,7 @@ class PGQ:
             fn, *args, name=name, timeout=timeout, priority=priority, **kwargs
         )
 
-    def tree(self, name: str, max_stems: int = 8, pool_workers: int = 4) -> "EngineTree":
+    def tree(self, name: str, max_stems: int = 8, pool_workers: int = 4) -> EngineTree:
         """Create a Tree on the core engine.
 
         A Tree is a model instance that branches Stems of parallel tasks.
@@ -357,7 +358,7 @@ class PGQ:
         """Get a process by id."""
         return self._engine.get_process(proc_id)
 
-    def get_engine_tree(self, name: str) -> Optional["EngineTree"]:
+    def get_engine_tree(self, name: str) -> EngineTree | None:
         """Get a Tree by name."""
         return self._engine.get_tree(name)
 
@@ -493,7 +494,7 @@ class PGQ:
         return p
 
     @classmethod
-    def load(cls, path: Path | str) -> "PGQ":
+    def load(cls, path: Path | str) -> PGQ:
         """Load from disk (library + task queue)."""
         p = Path(path)
         sys = cls.from_file(p)

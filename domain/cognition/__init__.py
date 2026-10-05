@@ -13,6 +13,7 @@ Public API:
     Reflection, SelfEpisode, SelfIdentity, SelfModel
     get_consciousness, reset_consciousness
 """
+from __future__ import annotations
 
 
 def __getattr__(name):

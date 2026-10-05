@@ -33,6 +33,7 @@ from __future__ import annotations
     │  ModelServer │  (unchanged)
     └──────────────┘
 """
+from __future__ import annotations
 
 import gc
 import itertools
@@ -1310,7 +1311,7 @@ class ModelWorkerProcess:
 
     # ── Context manager ────────────────────────────────────────────────
 
-    def __enter__(self) -> "ModelWorkerProcess":
+    def __enter__(self) -> ModelWorkerProcess:
         self.start()
         return self
 

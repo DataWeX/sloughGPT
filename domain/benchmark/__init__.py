@@ -3,6 +3,7 @@
 Public API:
     BenchmarkDomain, BenchmarkResult, get_benchmark_domain, reset_benchmark_domain
 """
+from __future__ import annotations
 
 from domain.benchmark._internal.domain import (
     BenchmarkDomain,

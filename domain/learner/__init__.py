@@ -3,6 +3,7 @@
 Public API:
     ContinualLearner, get_learner, extract_and_store, enrich_with_knowledge
 """
+from __future__ import annotations
 
 from domain.learner._internal.continual import (
     ContinualLearner,

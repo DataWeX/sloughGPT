@@ -3,6 +3,7 @@
 Public API:
     Plugin, PluginHook, PluginManager, PluginMetadata, get_plugin_manager
 """
+from __future__ import annotations
 
 from domain.plugins._internal.plugins import (
     Plugin,

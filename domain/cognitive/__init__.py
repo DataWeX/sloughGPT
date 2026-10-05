@@ -5,6 +5,7 @@ Public API:
     CognitiveCore, ThinkingMode, ReasoningType, ThoughtProcess
     CreativeIdea, ReasoningChain, CognitiveProcessor
 """
+from __future__ import annotations
 
 from domain.cognitive._internal.base import (
     CognitiveDomain,

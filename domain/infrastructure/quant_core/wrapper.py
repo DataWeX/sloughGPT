@@ -7,6 +7,7 @@ This alias swaps itself for that module object in ``sys.modules`` so every
 dotted path resolves to ONE module: reads, writes, and monkeypatching all
 hit the same object.
 """
+from __future__ import annotations
 
 import sys as _sys
 

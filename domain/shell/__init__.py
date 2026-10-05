@@ -5,6 +5,7 @@ Public API:
     ShellState, ShellIO, ConsoleIO, MemoryIO, capture_output
     ShellCommands, DaitRuntime, Resource, get_dait_runtime
 """
+from __future__ import annotations
 
 from domain.shell._internal.commands import (
     ShellCommands,
