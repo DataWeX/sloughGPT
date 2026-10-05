@@ -126,4 +126,6 @@ jobs:
           python-version: "3.11"
       - name: Check feature tags
         run: |
-          PYTHONPATH=packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
+          # domain/ lives at the repo root (packages/core-py has no domain/);
+          # the script imports domain.shared._internal.feature_flags.
+          PYTHONPATH=.:packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
