@@ -134,6 +134,9 @@ def record_devtools(step_name: str, console_msgs: list, network_reqs: list, erro
 
 @pytest.fixture(scope="module")
 def browser():
+    # Capability gate: skip cleanly when playwright is absent instead of
+    # erroring at fixture setup (card 6e826226).
+    pytest.importorskip("playwright.sync_api", reason="playwright not installed")
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:

@@ -10,13 +10,18 @@ Requirements:
     .venv/bin/playwright install chromium
 """
 
+from __future__ import annotations
+
 import json
 import time
 import urllib.request
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
-from playwright.sync_api import Page, sync_playwright
+
+if TYPE_CHECKING:
+    from playwright.sync_api import Page
 
 BASE = "http://localhost:3000"
 API = "http://localhost:8000"
@@ -79,6 +84,11 @@ def ok(name: str, passed: bool, detail: str = ""):
 
 @pytest.fixture(scope="module")
 def browser():
+    # Capability gate: skip cleanly when playwright is absent instead of
+    # erroring at fixture setup (card 6e826226).
+    pytest.importorskip("playwright.sync_api", reason="playwright not installed")
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as p:
         b = p.chromium.launch(headless=True)
         yield b
