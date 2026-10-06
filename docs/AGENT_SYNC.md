@@ -4,7 +4,9 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-06 ~04:45 — card `625d85e5` → done
+**Last update**: 2026-10-06 ~10:30 — card `625d85e5` → done, **live gap
+closed** (fix cherry-picked onto the root checkout as `98220d30f`;
+live `/health` 10,099,639 B → 1624 B)
 (investigation only, no new code; primary fix was already on main as
 `2c460cbaf` since 10-01): systemic ≥1s slow-log tail **root-caused** —
 `GET /health` shipped a ~10 MB `quantization.per_tensor` blob that
@@ -16,9 +18,15 @@ same-second multi-endpoint slow clusters, 188/207 warnings were small
 collateral victims. Amplifier: host CPU starvation from parallel
 session test runs (PSI cpu peaks 75–80%); secondary: HF-hub
 `getaddrinfo`/`list_hf_models` on request paths (`/datasets` 1.83s for
-36 KB). **LIVE GAP**: the server runs the root
-`feat/soul-path-grammar` checkout which predates the fix — live
-`/health` still ~10 MB until that branch absorbs main. Follow-ups
+36 KB). **LIVE GAP CLOSED 10-06 ~10:08** (user-approved): the fix's
+health files were cherry-picked onto the root checkout's
+`feat/soul-path-grammar` as `98220d30f` (patch applied clean despite
+that branch's Field-registry divergence; 49/49 + 3/3 tests on-tree;
+radar-polygon half left for the regular merge) — live `/health` after
+restart = **1624 B** with `model_loaded=True`, no `per_tensor`.
+Same window also produced COORD card `c550503c` (live :8000 wedge
+cycle evidence: accept queue 0→191, faulthandler dumps starved
+mid-write = GIL-held block; OOM/journald ruled out). Follow-ups
 filed: `d994d4f8` (rag/documents 2.8 MB paging), `14d26c75` (HF-DNS
 cache/fast-fail), `8db4031b` (slow-log carries PSI/loadavg). Method +
 evidence in the card (journalctl + faulthandler dumps; py-spy blocked
