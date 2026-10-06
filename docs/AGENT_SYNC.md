@@ -4,7 +4,35 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-05 ~12:55 — `fix/vector-shm-tracker` **lands on
+**Last update**: 2026-10-06 ~01:25 — `feat/kernels-nogil` **lands on
+main** (fast-forward, card `f30be275` → done): all 16 builder kernels in
+`domain/training/_internal/slonet_kernels.py` are now
+`@njit(cache=True, nogil=True)` — a thread-domain call to any hot kernel
+**releases the GIL** instead of starving the host loop for the whole run
+(the demonstrated outage mechanism, now measured at real scale: a stock
+prompt-scale `fused_attention_multi` call held the GIL for all ~42 s of
+its duration). New gate: `scripts/probe_gil_hold.py` (the card's
+referenced `benchmark_isolated_execution.py` never landed) answers the
+decision question directly — standalone twins: control thread stalled
+**100%** without nogil vs **0.5%** with it; `--real` mode probes the
+production decorator: **0.4%** of a 2.6 s call. Numerics are
+**bit-identical** (6/6 kernels, `max_abs=0` stock vs nogil);
+`benchmark_slonet.py` **7/7** (`logit_diff 0.0000`, `max_output_diff
+0.0000`); kernel suites 122 passed in both env protocols with the 2
+failures proven pre-existing/by-design (`test_causal_mask_effect` fails
+on the stock file under numba-hidden; `test_check_numba_false_branch`
+asserts numba-absent). First run recompiles (cache-signature change, one
+time, expected). Findings for follow-up: (a) numba is **user-site only** —
+the repo-standard `PYTHONNOUSERSITE=1` protocol silently runs the numpy
+fallback and never exercises the compiled kernels; (b) the
+`benchmark_latency.py` gate could not run — the shared `:8000` `/chat`
+hangs while `/health` reports healthy (reproduces after a server restart;
+PGQ-wedge territory, another session's lane) and the host sat at 97°C
+thermal clamp; (c) pre-existing perf oddity: prompt-scale
+`fused_attention_multi` (512×512×8×64) takes ~40 s/call **stock and
+nogil alike** — the docstring's einsum note understates it at that shape.
+
+Earlier ~12:55: `fix/vector-shm-tracker` **lands on
 main** (fast-forward, card `ccad389e` → done): VectorBE's `/psm_*`
 resource-tracker warning spam is fixed at the **topology** level —
 `VectorBE.__init__` now calls `resource_tracker.getfd()` before starting the
