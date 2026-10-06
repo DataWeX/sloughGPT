@@ -267,13 +267,22 @@ class ModelLoader:
     def _try_load_soul(self, model_id: str) -> LoadResult | None:
         """Try to load a .soul checkpoint from the native training directory.
 
-        Searches models/slonet-native/ for the most recent .soul file matching
-        the model_id or containing 'sloughgpt' in the name.
+        Searches ``<models_dir>/slonet-native/`` for the newest .soul file
+        and loads it regardless of *model_id* — there is no name filter, so
+        every id falls back to the same checkpoint. (The docstring used to
+        promise a match on model_id or 'sloughgpt'; it never did, and
+        adding one now would change which model the app loads by default.)
+
+        Respecting ``self.models_dir`` matters beyond tidiness: the path was
+        built from ``_REPO_ROOT`` directly, so a caller passing its own
+        ``models_dir`` still searched the real repo tree — which is how
+        ``ModelLoader(models_dir=tmp_path)`` in a test picked up a month-old
+        44MB checkpoint from the developer's disk instead of finding nothing.
 
         Returns LoadResult or None if no .soul found.
         """
 
-        native_dir = _REPO_ROOT / "models" / "slonet-native"
+        native_dir = self.models_dir / "slonet-native"
         if not native_dir.exists():
             return None
 
