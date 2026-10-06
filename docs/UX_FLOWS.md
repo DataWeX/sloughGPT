@@ -479,3 +479,45 @@ their own pages (`/chat`, `/training`).
 | Loss            | "Learning progress" (visual chart, not numbers) |
 | Epoch           | "Training round"                                |
 | Hyperparameters | "Advanced options" (hidden by default)          |
+
+---
+
+### Saved versions: telling two checkpoints apart
+
+**Who:** someone whose saved versions have interchangeable filenames —
+`test.soul`, `model.soul`, or a run written twice as
+`journey_select_trained.soul` and `journey_select_trained.soul.soul`. This
+is the power-user view (Souls → Checkpoints), not part of the 3-click flow.
+
+1. **Scan the list** (click 1)
+   - Every row carries the same plain facts: name, type, soul, learning
+     progress, size, dataset, date
+   - A row whose file records an identity also shows a short `· id` —
+     derived from the file's bytes, so two rows that share a name still
+     separate at a glance
+   - A badge names who wrote the file: `training`, `export`, `distillation`
+
+2. **Open a row** (click 2)
+   - An **Identity** block states format, tier and the full id
+   - A file whose bytes are not a soul container reports `not-soul` instead
+     of posing as one — how a stray `evil.soul` gets caught
+   - Fields the file does not record are left unstated, and nothing is
+     derived at read time, so the same file cannot show two answers
+
+3. **Choose by evidence** (click 3)
+   - Same-stem rows separate on learning progress, size, date and id — the
+     filename never decides which checkpoint is which
+
+**What they should NOT see:**
+
+- An identity the file does not actually record: absence reads as "not
+  recorded", never as an invented value — two different files must never be
+  handed the same id
+- One id in the list and a different id in the dialog for the same file
+- Status codes or stack traces when a file cannot be described
+
+**Progressive disclosure:**
+
+- The list stays scannable — identity appears only where the file declares it
+- Everything the bytes say lives one click away in the detail dialog
+- Nothing is classified while listing, which is what keeps the list instant
