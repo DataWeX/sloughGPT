@@ -12,6 +12,7 @@ from domain.training._internal.checkpoints import (
     TRAINED_DIR,
     _load_soul_from_path,
     checkpoint_info,
+    ckpt_roots,
     delete_checkpoint,
     download_checkpoint_path,
     export_all_metrics,
@@ -354,6 +355,55 @@ class TestAsyncFunctions:
         assert "exported_at" in result
         assert "total_checkpoints" in result
         assert "checkpoints" in result
+
+
+class TestListAndDetailAgree:
+    """A checkpoint the list reports must always be openable.
+
+    The search roots used to be hand-written per call site: the scan walked
+    ``LORA_DIR`` while ``load_soul``/``find_checkpoint``/``delete_checkpoint``
+    did not. A checkpoint in ``data/user_adapters`` was therefore listed —
+    and even downloadable — yet 404'd the instant it was opened, and Delete
+    silently removed nothing. ``ckpt_roots()`` is the single declaration.
+    """
+
+    @pytest.mark.asyncio
+    async def test_every_root_yields_an_openable_checkpoint(self):
+        # One file per root; models/ only ever lists final saves, so match
+        # that spelling there.
+        _make_soul_file(CHECKPOINTS_DIR / "probe_auto.soul")
+        _make_soul_file(TURBO_DIR / "probe_turbo.soul")
+        _make_soul_file(LORA_DIR / "probe_lora.soul")
+        _make_soul_file(TRAINED_DIR / "probe_final_trained.soul")
+
+        assert set(ckpt_roots()) == {CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, TRAINED_DIR}
+
+        listed = {row["name"] for row in await list_checkpoints()}
+        for name in (
+            "probe_auto.soul",
+            "probe_turbo.soul",
+            "probe_lora.soul",
+            "probe_final_trained.soul",
+        ):
+            assert name in listed, f"{name} must appear in the list"
+            # Listed, then all three consumers must agree it exists — this is
+            # exactly the trio that disagreed before ckpt_roots().
+            assert find_checkpoint(name) is not None, name
+            assert load_soul(name) is not None, name
+            info = await checkpoint_info(name)
+            assert info.get("name") == name
+
+    @pytest.mark.asyncio
+    async def test_sidecarless_file_is_unnamed_not_absent(self):
+        # No sidecar means nothing NAMES the file — not that it is gone.
+        # Reporting FileNotFoundError here made the list and the detail
+        # endpoint contradict each other about the same bytes.
+        _make_soul_file(CHECKPOINTS_DIR / "probe_naked.soul")
+
+        info = await checkpoint_info("probe_naked.soul")
+        assert info["soul"] == "unknown"
+        # Byte-derived identity still describes it for the caller.
+        assert info.get("model_path")
 
 
 class TestTrainedCheckpointSpelling:

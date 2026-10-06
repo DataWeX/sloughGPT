@@ -28,6 +28,24 @@ from .state import CHECKPOINTS_DIR, LORA_DIR, REPO_ROOT, TURBO_DIR, VALID_CKPT_N
 # outside auto-training/turbo-trained, and the exact path job records point at.
 TRAINED_DIR = REPO_ROOT / "models"
 
+
+# Every root a checkpoint may live in — declared ONCE, read at call time.
+#
+# Five operations need this set: the list that reports what exists, plus the
+# lookup, resolution, download and delete that act on it. They used to carry
+# five hand-written tuples, and LORA_DIR (data/user_adapters) sat in the list
+# but not in load_soul — so a checkpoint could be listed, even downloaded,
+# and still 404 the instant it was opened. One declaration makes that drift
+# impossible rather than merely unlikely.
+#
+# A function, not a tuple: a module-level tuple would bind the Paths at import
+# time, so patching these globals afterwards (which is how test isolation
+# redirects the whole module — see _isolated_ckpt_dirs in test_checkpoints.py)
+# would leave this set pointing at the real repo tree.
+def ckpt_roots() -> tuple[Path, ...]:
+    return (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, TRAINED_DIR)
+
+
 logger = logging.getLogger("slo.training")
 
 # The two spellings a final job save may legitimately carry. The legacy
@@ -81,7 +99,7 @@ def find_checkpoint(name: str) -> Path | None:
     name = Path(name).name
     if not name:
         return None
-    for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
+    for base in ckpt_roots():
         root = str(base.resolve())
         for candidate in _probe_paths(base, name):
             # resolve() first: a symlink, or a `..` that lands outside the
@@ -93,7 +111,7 @@ def find_checkpoint(name: str) -> Path | None:
 
 
 def load_soul(name: str) -> dict | None:
-    for d in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
+    for d in ckpt_roots():
         for fp in _probe_paths(d, name):
             if not fp.exists():
                 continue
@@ -210,7 +228,15 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
                         del row[_key]
             return row
 
-        return {"name": fp.name, "soul": "unknown", "size_mb": size_mb}
+        # No sidecar: the file still EXISTS, so it stays inspectable. Carry the
+        # path so a caller can classify identity from the bytes themselves —
+        # "unnamed" is not "absent".
+        return {
+            "name": fp.name,
+            "soul": "unknown",
+            "size_mb": size_mb,
+            "model_path": str(fp),
+        }
     except Exception as e:
         logger.debug("Failed to read soul header %s: %s", fp.name, e)
         return None
@@ -316,7 +342,7 @@ async def delete_checkpoint(name: str) -> list[str]:
     deleted = []
 
     def _delete():
-        for base in (CHECKPOINTS_DIR, TURBO_DIR, TRAINED_DIR):
+        for base in ckpt_roots():
             for ext in (".soul", ".slo"):
                 if name.endswith(ext):
                     candidates = [base / name]
@@ -436,7 +462,7 @@ async def download_checkpoint_path(name: str) -> str | None:
         raise ValueError("Invalid checkpoint name")
 
     def _find():
-        for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR, TRAINED_DIR):
+        for d in ckpt_roots():
             fp = (d / name).resolve()
             if d is TRAINED_DIR and not is_trained_checkpoint(fp.name):
                 continue
@@ -451,12 +477,48 @@ async def download_checkpoint_path(name: str) -> str | None:
     return await asyncio.to_thread(_find)
 
 
+def _describe_unnamed(info: dict) -> dict:
+    """Add byte-derived identity to a checkpoint that has no sidecar.
+
+    A missing sidecar means nothing *names* the checkpoint, not that it is
+    absent — so classify the bytes directly (it never raises). This is what
+    lets a stray ``evil.soul`` report ``not-soul`` instead of looking
+    indistinguishable from a real model the user simply cannot open.
+    """
+    path = info.get("model_path")
+    if not path:
+        return info
+    try:
+        from domain.inference import classify_soul
+
+        ident = classify_soul(path)
+    except Exception as e:  # never let identity enrichment mask the row
+        logger.debug("classify_soul failed for %s: %s", path, e)
+        return info
+    for field, value in (
+        ("format", ident.format),
+        ("tier", ident.tier),
+        ("provenance", ident.provenance),
+        ("integrity_hash", ident.integrity_hash),
+        ("born_at", ident.born_at),
+    ):
+        if value and not info.get(field):
+            info[field] = value
+    return info
+
+
 async def checkpoint_info(name: str) -> dict:
     if not VALID_CKPT_NAME.match(name) or ".." in name:
         raise ValueError("Invalid checkpoint name")
     info = await asyncio.to_thread(load_soul, name)
-    if not info or info.get("soul") == "unknown":
+    if not info:
+        # Absent row — the file is genuinely not there.
         raise FileNotFoundError(f"Checkpoint not found: {name}")
+    if info.get("soul") == "unknown":
+        # list_checkpoints just returned this file, so answering 404 made the
+        # two endpoints disagree about whether it exists. It is unnamed, not
+        # missing; report what the bytes say instead.
+        info = await asyncio.to_thread(_describe_unnamed, info)
     return info
 
 
@@ -481,8 +543,12 @@ async def export_checkpoint_mobile(name: str) -> dict:
     from domain.training._internal.slonet import import_from_sou
 
     def _find_ckpt():
-        for d in (CHECKPOINTS_DIR, TURBO_DIR, LORA_DIR):
+        for d in ckpt_roots():
             fp = d / name
+            # models/ root holds more than final saves — only export what the
+            # list would have offered (same rule delete/download apply).
+            if d is TRAINED_DIR and not is_trained_checkpoint(fp.name):
+                continue
             if fp.exists() and fp.suffix == ".soul":
                 return str(fp)
         return None
