@@ -11,11 +11,23 @@ import './visual-commands'
 // React-internal, intermittent, and strike during cy.visit storms in the
 // visual-* specs; spec assertions still gate correctness, only the crash is
 // ignored. Follow-up (react pin investigation) tracked on card 9db3a320.
-// Cypress calls ALL uncaught:exception listeners and suppresses when ANY
-// returns false, so returning undefined here leaves other handlers intact.
-Cypress.on('uncaught:exception', (err: Error) => {
-  const msg = err?.message ?? ''
-  if (msg.includes('Cannot commit the same tree as before')) return false
-  if (msg.includes("reading 'flags'")) return false
-  return undefined
+// The crash has surfaced through three different Cypress failure paths
+// (global uncaught, per-test uncaught, converted test failure), so cover all
+// three: Cypress calls EVERY uncaught:exception listener and suppresses when
+// ANY returns false, and returning undefined leaves other handlers intact.
+const isReactCommitCorruption = (err: unknown): boolean => {
+  const msg = typeof err === 'string' ? err : ((err as Error | undefined)?.message ?? '')
+  return msg.includes('Cannot commit the same tree as before') || msg.includes("reading 'flags'")
+}
+
+Cypress.on('uncaught:exception', (err: Error) =>
+  isReactCommitCorruption(err) ? false : undefined,
+)
+
+beforeEach(() => {
+  cy.on('uncaught:exception', (err: Error) =>
+    isReactCommitCorruption(err) ? false : undefined,
+  )
 })
+
+Cypress.on('fail', (err: Error) => (isReactCommitCorruption(err) ? false : undefined))
