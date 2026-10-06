@@ -259,4 +259,67 @@ describe('CheckpointList', () => {
     expect(screen.getAllByText('cp-001').length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByText('cp-002')).toBeNull()
   })
+
+  it('shows declared provenance as a badge', () => {
+    render(
+      <CheckpointList
+        checkpoints={[
+          makeCp({ name: 'cp-declared', soul: 'alpha', provenance: 'training' }),
+          makeCp({ name: 'cp-unknown', soul: 'beta' }),
+        ]}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        loadingCheckpoint={null}
+        onLoad={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onInfo={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    )
+    // Provenance is surfaced when declared...
+    expect(screen.getAllByText('training').length).toBe(1)
+    // ...and absent when not — an unknown provenance is never invented from
+    // the filename, so no badge renders for it.
+    expect(screen.getByText('beta').closest('div')?.textContent).not.toContain('export')
+  })
+
+  it('renders the integrity hash truncated, keeping the full value on hover', () => {
+    render(
+      <CheckpointList
+        checkpoints={[makeCp({ integrity_hash: 'd9676fd9ddc9cb22' })]}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        loadingCheckpoint={null}
+        onLoad={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onInfo={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    )
+    // The list summarises; the full hash stays one hover away.
+    expect(screen.getByText(/· id d9676fd9$/)).toBeTruthy()
+    expect(screen.getByTitle(/d9676fd9ddc9cb22/)).toBeTruthy()
+  })
+
+  it('omits identity fields when the sidecar carries none', () => {
+    render(
+      <CheckpointList
+        checkpoints={[makeCp({ name: 'cp-bare' })]}
+        searchQuery=""
+        onSearchChange={vi.fn()}
+        loadingCheckpoint={null}
+        onLoad={vi.fn()}
+        onDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onInfo={vi.fn()}
+        onRefresh={vi.fn()}
+      />,
+    )
+    // Checkpoints written before these fields existed must not gain a
+    // placeholder row — an empty axis stays invisible rather than shown blank.
+    expect(screen.queryByText(/· id /)).toBeNull()
+    expect(screen.queryByText('training')).toBeNull()
+  })
 })
