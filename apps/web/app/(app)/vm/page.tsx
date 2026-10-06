@@ -709,26 +709,29 @@ export default function VMPage() {
     loadState().catch(() => setHydrated(true))
   }, [])
 
-  // Save source to chatDB on change
+  // Save source to chatDB on change.
+  // Touched fields save immediately even before hydration (the hydration load
+  // skips touched fields, so writing early is safe); untouched fields wait so
+  // a default value can never overwrite the stored one on mount.
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated && !sourceTouched.current) return
     chatDB.setKV('vm-source', source).catch(() => {})
   }, [source, hydrated])
 
   // Save role and steps to chatDB on change
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated && !roleTouched.current) return
     chatDB.setKV('vm-role', role).catch(() => {})
   }, [role, hydrated])
 
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated && !stepsTouched.current) return
     chatDB.setKV('vm-max-steps', maxSteps).catch(() => {})
   }, [maxSteps, hydrated])
 
   // Save the training launch config to chatDB on change
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated && !trainTouched.current) return
     chatDB.setKV('vm-train-config', clampTrainConfig(trainConfig)).catch(() => {})
   }, [trainConfig, hydrated])
 

@@ -17,8 +17,10 @@ describe('Visual interactions — Home page', () => {
 
   it('captures quick action hover states', () => {
     // Scoped to main content: hidden sidebar links match these labels first.
+    // scrollIntoView: the quick-action grid sits below the fold inside the
+    // scrolling .sl-app-content, so unscrolled it is clipped (not visible).
     const quick = (label: string) =>
-      cy.get('.sl-app-content').contains('a', label).should('be.visible')
+      cy.get('.sl-app-content').contains('a', label).scrollIntoView().should('be.visible')
     cy.screenshotSequence('home-quick-actions', [
       { label: 'default', action: () => {} },
       { label: 'hover-chat', action: () => quick('Start chatting').trigger('mouseover') },

@@ -46,7 +46,9 @@ describe('VM console', () => {
     cy.contains('Result').scrollIntoView().should('be.visible')
     cy.contains('halted').should('be.visible')
     cy.contains('Registers').scrollIntoView().should('be.visible')
-    cy.contains('EAX').should('be.visible')
+    // Scope to the register row button: the role-denial warning copy also
+    // contains 'EAX' and matches first in DOM order.
+    cy.contains('button[title="Click to copy"]', 'EAX').should('be.visible')
   })
 
   it('shows the permission denied hint when a syscall returns EAX -2', () => {
