@@ -1473,6 +1473,66 @@ export default function SoulsPage() {
                   </div>
                 )}
               </div>
+              {/* Identity: what the bytes say, independent of the name — the
+                  list shows the short form; the detail view is where the
+                  full hash and the not-soul verdict become legible. */}
+              {(checkpointDetail.format ||
+                checkpointDetail.tier ||
+                checkpointDetail.provenance ||
+                checkpointDetail.integrity_hash) && (
+                <div className="border-t pt-3">
+                  <div className="text-muted-foreground font-medium mb-1.5">Identity</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {checkpointDetail.format && (
+                      <div>
+                        <span className="text-muted-foreground">Format:</span>{' '}
+                        <span
+                          className={
+                            checkpointDetail.format === 'not-soul'
+                              ? 'font-medium text-destructive'
+                              : 'font-medium'
+                          }
+                          title={
+                            checkpointDetail.format === 'not-soul'
+                              ? 'The bytes are not a SloughGPT checkpoint container — it will not load as one'
+                              : undefined
+                          }
+                        >
+                          {checkpointDetail.format}
+                        </span>
+                      </div>
+                    )}
+                    {checkpointDetail.tier && (
+                      <div>
+                        <span className="text-muted-foreground">Tier:</span>{' '}
+                        <span className="font-medium">{checkpointDetail.tier}</span>
+                      </div>
+                    )}
+                    {checkpointDetail.provenance && (
+                      <div>
+                        <span className="text-muted-foreground">Provenance:</span>{' '}
+                        <span
+                          className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium"
+                          title={`Declared provenance — this file was written by a ${checkpointDetail.provenance} producer`}
+                        >
+                          {checkpointDetail.provenance}
+                        </span>
+                      </div>
+                    )}
+                    {checkpointDetail.integrity_hash && (
+                      <div className="col-span-2">
+                        <span className="text-muted-foreground">Integrity hash:</span>{' '}
+                        <span
+                          className="font-mono"
+                          title="Content-derived, so it identifies this checkpoint independently of its filename — two files sharing a name differ here"
+                        >
+                          {checkpointDetail.integrity_hash}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {checkpointDetail.perplexity_delta != null &&
                 checkpointDetail.perplexity_delta !== 0 && (
                   <div className="flex gap-4 pt-1 border-t border-border/30">

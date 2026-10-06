@@ -320,6 +320,51 @@ describe('SoulsPage', () => {
     expect(sc.checkpointInfo).toHaveBeenCalledWith('cp-warm-v2')
   })
 
+  it('shows byte-derived identity in the detail dialog', async () => {
+    sc.checkpointInfo.mockResolvedValue({
+      ...CHECKPOINTS[0],
+      format: 'not-soul',
+      tier: 'canonical',
+      provenance: 'distillation',
+      integrity_hash: 'a1b2c3d4e5f6',
+    })
+    render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => {
+      expect(screen.getByText('cp-warm-v2')).toBeTruthy()
+    })
+    clickCheckpointRow('cp-warm-v2')
+    await waitFor(() => {
+      expect(screen.getByText('Identity')).toBeTruthy()
+    })
+    // A file whose bytes are not a checkpoint says so, rather than looking
+    // like any other model the user simply cannot open.
+    expect(screen.getByText('not-soul')).toBeTruthy()
+    expect(screen.getByText('distillation')).toBeTruthy()
+    // Full value, not the list's 8-character truncation.
+    expect(screen.getByText('a1b2c3d4e5f6')).toBeTruthy()
+  })
+
+  it('omits the identity block when nothing declares it', async () => {
+    sc.checkpointInfo.mockResolvedValue({
+      ...CHECKPOINTS[0],
+      format: undefined,
+      tier: undefined,
+      provenance: undefined,
+      integrity_hash: undefined,
+    })
+    render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => {
+      expect(screen.getByText('cp-warm-v2')).toBeTruthy()
+    })
+    clickCheckpointRow('cp-warm-v2')
+    await waitFor(() => {
+      expect(screen.getAllByText('cp-warm-v2').length).toBeGreaterThanOrEqual(1)
+    })
+    expect(screen.queryByText('Identity')).toBeNull()
+  })
+
   it('downloads checkpoint', async () => {
     render(<SoulsPage />)
     await clickTab('checkpoints')

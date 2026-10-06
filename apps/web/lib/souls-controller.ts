@@ -48,6 +48,10 @@ export interface Checkpoint {
   /** Declared provenance (training/export/distillation) from
    *  save_soul(record=...). Absent means unknown — never inferred. */
   provenance?: string
+  /** What the bytes say this container is (.soul/.sou/.slo/.slnc, or
+   *  not-soul). Only the detail endpoint computes it — classifying every row
+   *  in a listing costs one probe per file. */
+  format?: string
   epochs_trained?: number
   final_train_loss?: number
   final_val_loss?: number
