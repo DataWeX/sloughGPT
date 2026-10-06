@@ -12,7 +12,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -89,28 +89,46 @@ PATCH_PER_U_LORA = "domain.feedback._internal.per_user_lora.get_per_user_lora"
 
 
 class TestRunEval:
+    # The router binds Path at module scope, so patching pathlib.Path never
+    # reaches it — the old mock silently did nothing and the handler's real
+    # exists() ran against disk. This stub is bound where the handler looks.
+    class _PathExists:
+        def __init__(self, p):
+            self._p = p
+
+        def resolve(self):
+            # Real resolve — absolute, so the confinement check still sees a
+            # path genuinely under _ADAPTER_BASE.
+            return Path(self._p).resolve()
+
+        def exists(self):
+            return True
+
     @patch(PATCH_EVALUATOR)
     def test_baseline_only(self, mock_get):
         evaluator = _make_evaluator()
         mock_get.return_value = evaluator
         client = TestClient(_app())
-        resp = client.get("/lora-eval/run", params={"adapter_path": "/nonexistent/foo.npz"})
+        # Relative, and therefore CWD-relative like _ADAPTER_BASE itself, so
+        # the two agree wherever pytest runs. An absolute path cannot work:
+        # _VALID_ADAPTER_PATH rejects the space in this repo's directory name.
+        resp = client.post(
+            "/lora-eval/run", params={"adapter_path": "data/user_adapters/missing.npz"}
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "baseline_only"
         assert "baseline" in data
 
-    @patch("pathlib.Path")
     @patch(PATCH_EVALUATOR)
-    def test_with_adapter_comparison(self, mock_get, mock_path_cls):
+    def test_with_adapter_comparison(self, mock_get):
         evaluator = _make_evaluator()
         mock_get.return_value = evaluator
-        # Make Path.exists() return True
-        mock_path_instance = MagicMock()
-        mock_path_instance.exists.return_value = True
-        mock_path_cls.return_value = mock_path_instance
         client = TestClient(_app())
-        resp = client.get("/lora-eval/run", params={"adapter_path": "/tmp/best.npz"})
+        with patch("routers.lora_eval.Path", self._PathExists):
+            resp = client.post(
+                "/lora-eval/run", params={"adapter_path": "data/user_adapters/best.npz"}
+            )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "compared"
