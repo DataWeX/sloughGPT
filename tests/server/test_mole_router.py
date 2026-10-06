@@ -1,9 +1,9 @@
 """
-Tests for the Site Doctor router — GET /doctor/report, POST /doctor/run.
+Tests for the Mole router — GET /mole/report, POST /mole/run.
 
 Hermetic: the report path is redirected to ``tmp_path`` via the
 ``SLO_DOCTOR_REPORT`` env var, and every live probe is stubbed at the
-doctor-package seam (``PROBES`` registry + ``_preflight``), so no network,
+mole-package seam (``PROBES`` registry + ``_preflight``), so no network,
 no SSE consumption, and no browser sweep can happen here.
 """
 
@@ -18,11 +18,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from infrastructure.exception_handlers import register_all_handlers
 
-import domain.core._internal.doctor as doctor_mod
-from apps.api.server.routers.doctor import router
-from domain.core._internal.doctor.models import Finding
-from domain.core._internal.doctor.probes import PROBES, ProbeResult
-from domain.core._internal.doctor.probes import journey as journey_probe
+import domain.core._internal.mole as mole_mod
+from apps.api.server.routers.mole import router
+from domain.core._internal.mole.models import Finding
+from domain.core._internal.mole.probes import PROBES, ProbeResult
+from domain.core._internal.mole.probes import journey as journey_probe
 from domain.infrastructure._internal.health_flow import Severity
 
 # ── fixtures ────────────────────────────────────────────────────────────
@@ -42,7 +42,7 @@ def client(app):
 
 
 @pytest.fixture
-def doctor_env(monkeypatch, tmp_path):
+def mole_env(monkeypatch, tmp_path):
     """Isolated report path + live-stack target defaults (no gateway)."""
     report_path = tmp_path / "findings-report.json"
     journey_path = tmp_path / "ux-flows-report.json"
@@ -88,35 +88,35 @@ def _stub_probes(monkeypatch) -> list[str]:
         raise AssertionError("journey sweep must never run from the API")
 
     monkeypatch.setattr(journey_probe, "_sweep", _sweep_must_not_run)
-    monkeypatch.setattr(doctor_mod, "_preflight", lambda api: None)
+    monkeypatch.setattr(mole_mod, "_preflight", lambda api: None)
     monkeypatch.setitem(PROBES[0], "run", _stub_probe("http", "api.health"))
     monkeypatch.setitem(PROBES[1], "run", _stub_probe("sse", "stream.cadence"))
     return sweep_calls
 
 
-# ── GET /doctor/report ──────────────────────────────────────────────────
+# ── GET /mole/report ──────────────────────────────────────────────────
 
 
 class TestReportRead:
-    def test_envelope_shape(self, client, doctor_env):
-        resp = client.get("/doctor/report")
+    def test_envelope_shape(self, client, mole_env):
+        resp = client.get("/mole/report")
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
         data = body["data"]
         assert set(data) == {"report", "path", "age_s"}
 
-    def test_missing_file_is_empty_state_not_error(self, client, doctor_env):
-        resp = client.get("/doctor/report")
+    def test_missing_file_is_empty_state_not_error(self, client, mole_env):
+        resp = client.get("/mole/report")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["report"] is None
         assert data["age_s"] is None
-        assert data["path"] == str(doctor_env["report"])
+        assert data["path"] == str(mole_env["report"])
 
-    def test_returns_report_and_age(self, client, doctor_env):
+    def test_returns_report_and_age(self, client, mole_env):
         ts = time.time() - 120
-        doctor_env["report"].write_text(
+        mole_env["report"].write_text(
             json.dumps(
                 {
                     "schema_version": 1,
@@ -140,7 +140,7 @@ class TestReportRead:
             ),
             encoding="utf-8",
         )
-        resp = client.get("/doctor/report")
+        resp = client.get("/mole/report")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["report"]["overall"] == "ok"
@@ -148,27 +148,27 @@ class TestReportRead:
         assert data["age_s"] is not None
         assert 115.0 <= data["age_s"] <= 135.0
 
-    def test_corrupt_file_is_empty_state(self, client, doctor_env):
-        doctor_env["report"].write_text("{not json", encoding="utf-8")
-        resp = client.get("/doctor/report")
+    def test_corrupt_file_is_empty_state(self, client, mole_env):
+        mole_env["report"].write_text("{not json", encoding="utf-8")
+        resp = client.get("/mole/report")
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["report"] is None
         assert data["age_s"] is None
 
-    def test_non_object_json_is_empty_state(self, client, doctor_env):
-        doctor_env["report"].write_text("[1, 2, 3]", encoding="utf-8")
-        data = client.get("/doctor/report").json()["data"]
+    def test_non_object_json_is_empty_state(self, client, mole_env):
+        mole_env["report"].write_text("[1, 2, 3]", encoding="utf-8")
+        data = client.get("/mole/report").json()["data"]
         assert data["report"] is None
 
 
-# ── POST /doctor/run ────────────────────────────────────────────────────
+# ── POST /mole/run ────────────────────────────────────────────────────
 
 
-class TestDoctorRun:
-    def test_returns_report_and_writes_it(self, client, doctor_env, monkeypatch):
+class TestMoleRun:
+    def test_returns_report_and_writes_it(self, client, mole_env, monkeypatch):
         sweep_calls = _stub_probes(monkeypatch)
-        resp = client.post("/doctor/run")
+        resp = client.post("/mole/run")
         assert resp.status_code == 200
         body = resp.json()
         assert body["status"] == "success"
@@ -178,8 +178,8 @@ class TestDoctorRun:
         assert report["overall"] in {"ok", "info", "warn", "critical"}
 
         # Written atomically to $SLO_DOCTOR_REPORT and equal to the response.
-        assert doctor_env["report"].exists()
-        on_disk = json.loads(doctor_env["report"].read_text(encoding="utf-8"))
+        assert mole_env["report"].exists()
+        on_disk = json.loads(mole_env["report"].read_text(encoding="utf-8"))
         assert on_disk == report
 
         # Light run only — the browser journey sweep was never triggered.
@@ -187,9 +187,9 @@ class TestDoctorRun:
         journey_probe_result = next(p for p in report["probes"] if p["name"] == "journey")
         assert "must never run" not in str(journey_probe_result.get("error"))
 
-    def test_reads_journey_findings_from_disk(self, client, doctor_env, monkeypatch):
+    def test_reads_journey_findings_from_disk(self, client, mole_env, monkeypatch):
         sweep_calls = _stub_probes(monkeypatch)
-        doctor_env["journey"].write_text(
+        mole_env["journey"].write_text(
             json.dumps(
                 {
                     "flows": [
@@ -209,7 +209,7 @@ class TestDoctorRun:
             ),
             encoding="utf-8",
         )
-        resp = client.post("/doctor/run")
+        resp = client.post("/mole/run")
         assert resp.status_code == 200
         report = resp.json()["data"]["report"]
         journey = [f for f in report["findings"] if f["source"] == "journey"]
@@ -218,22 +218,22 @@ class TestDoctorRun:
         # _sweep (which raises) was never invoked.
         assert sweep_calls == []
 
-    def test_probe_crash_does_not_fail_the_endpoint(self, client, doctor_env, monkeypatch):
+    def test_probe_crash_does_not_fail_the_endpoint(self, client, mole_env, monkeypatch):
         _stub_probes(monkeypatch)
 
         def _boom(**_kwargs):
             raise RuntimeError("probe exploded")
 
         monkeypatch.setitem(PROBES[0], "run", _boom)
-        resp = client.post("/doctor/run")
+        resp = client.post("/mole/run")
         assert resp.status_code == 200
         report = resp.json()["data"]["report"]
-        assert any(f["check"] == "doctor.probe_crash" for f in report["findings"])
+        assert any(f["check"] == "mole.probe_crash" for f in report["findings"])
 
-    def test_written_report_is_served_by_get(self, client, doctor_env, monkeypatch):
+    def test_written_report_is_served_by_get(self, client, mole_env, monkeypatch):
         _stub_probes(monkeypatch)
-        posted = client.post("/doctor/run").json()["data"]["report"]
-        fetched = client.get("/doctor/report").json()["data"]
+        posted = client.post("/mole/run").json()["data"]["report"]
+        fetched = client.get("/mole/report").json()["data"]
         assert fetched["report"] == posted
         assert fetched["age_s"] is not None
         assert fetched["age_s"] < 5.0

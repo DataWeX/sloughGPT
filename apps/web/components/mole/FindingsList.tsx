@@ -2,13 +2,13 @@
 
 import { cn, FoldSection, StatusDot } from '@sloughgpt/strui'
 import { SEVERITY_LABEL, SEVERITY_ORDER, SEVERITY_TEXT_CLASS, SEVERITY_TONE } from './severity'
-import type { DoctorFinding, DoctorSeverity } from './types'
+import type { MoleFinding, MoleSeverity } from './types'
 
 interface FindingsListProps {
-  findings: DoctorFinding[]
+  findings: MoleFinding[]
 }
 
-function findingLabel(severity: DoctorSeverity, finding: DoctorFinding): string {
+function findingLabel(severity: MoleSeverity, finding: MoleFinding): string {
   return `${SEVERITY_LABEL[severity]}: ${finding.check} — ${finding.message}`
 }
 
@@ -17,7 +17,7 @@ function findingLabel(severity: DoctorSeverity, finding: DoctorFinding): string 
  * supporting detail folded behind a disclosure so the page stays a summary
  * rather than a dump.
  */
-function FindingRow({ finding, severity }: { finding: DoctorFinding; severity: DoctorSeverity }) {
+function FindingRow({ finding, severity }: { finding: MoleFinding; severity: MoleSeverity }) {
   const heading = (
     <span className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <StatusDot tone={SEVERITY_TONE[severity]} aria-hidden />

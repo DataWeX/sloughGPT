@@ -64,7 +64,7 @@ Single source of truth for navigation. Read this first.
 | Doc | Purpose |
 |-----|---------|
 | **TESTING.md** | Test guide |
-| **Mole** (in TESTING.md) | The one monitoring app — watches the running stack, heals by proposing fixes (suggest-only); legacy `/doctor` surface |
+| **Mole** (in TESTING.md) | The one monitoring app — watches the running stack, heals by proposing fixes (suggest-only); `/mole` surface |
 | **USER_PERSONA.md** | Who we build for |
 | **USER_JOURNEYS.md** | User flows |
 | **UX_FLOWS.md** | UX patterns |

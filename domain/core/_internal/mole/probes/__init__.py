@@ -1,10 +1,10 @@
-"""Doctor probe registry — each probe owns one seam of the live site.
+"""Mole probe registry — each probe owns one seam of the live site.
 
 A probe is a read-only observer: GET requests, SSE consumption, file
 reads, and (opt-in) the journey browser sweep. Every probe returns a
-:class:`ProbeResult`; the doctor never raises out of a probe.
+:class:`ProbeResult`; the mole never raises out of a probe.
 
-``PROBES`` is the execution registry (ordered fast → slow); the doctor
+``PROBES`` is the execution registry (ordered fast → slow); the mole
 dispatches keyword arguments to a probe by its registered name.
 """
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from domain.core._internal.doctor.models import Finding
+from domain.core._internal.mole.models import Finding
 
 __all__ = ["PROBES", "ProbeResult"]
 

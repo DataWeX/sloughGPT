@@ -21,12 +21,12 @@ import json
 import os
 import urllib.request
 
-from domain.core._internal.doctor.models import Finding
+from domain.core._internal.mole.models import Finding
 from domain.infrastructure._internal.health_flow import Severity
 
 from . import ProbeResult
 
-USER_AGENT = "sloughgpt-site-doctor/1.0"
+USER_AGENT = "sloughgpt-Mole/1.0"
 TIMEOUT_S = 8.0
 GROUP_WARN_COUNT = 10
 GROUP_CRITICAL_COUNT = 50

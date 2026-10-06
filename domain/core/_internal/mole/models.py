@@ -1,8 +1,8 @@
-"""Severity triage primitives for the site doctor.
+"""Severity triage primitives for the Mole.
 
 The vocabulary is shared with the API health flow — ``Severity`` and
 ``Diagnosis`` are imported from ``domain/infrastructure/_internal/
-health_flow.py``, never redefined, so a doctor finding projects straight
+health_flow.py``, never redefined, so a mole finding projects straight
 into the ``health_score.diagnoses`` shape the frontend already renders.
 
 Score banding (mirrors health_flow's healthy/degraded/unhealthy cut lines)::
@@ -35,7 +35,7 @@ _SEVERITY_RANK = {
 
 @dataclass
 class Finding:
-    """One doctor observation, produced by exactly one probe."""
+    """One mole observation, produced by exactly one probe."""
 
     source: str  # probe that produced it: http | sse | journey | preflight
     check: str  # stable check id, e.g. "api.health_score"

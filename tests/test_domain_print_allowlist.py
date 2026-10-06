@@ -33,7 +33,7 @@ DOMAIN = REPO / "domain"
 
 # path -> why this file's print() is its contract
 ALLOWLIST: dict[str, str] = {
-    "domain/core/_internal/doctor/__main__.py": "module CLI entrypoint; stdout is the CLI result",
+    "domain/core/_internal/mole/__main__.py": "module CLI entrypoint; stdout is the CLI result",
     "domain/core/_internal/mole/__main__.py": "module CLI entrypoint; stdout is the CLI result",
     "domain/infrastructure/_internal/inference_engine.py": (
         "ENGINE_READY port=... readiness line consumed over stdout by a parent process"

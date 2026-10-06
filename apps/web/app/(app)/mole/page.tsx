@@ -6,20 +6,20 @@ import { PageContainer } from '@/components/PageContainer'
 import { apiGet } from '@/lib/http-client'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { logger } from '@/lib/dev-log'
-import { ComponentHealthStrip } from '@/components/doctor/ComponentHealthStrip'
-import { DoctorSummary } from '@/components/doctor/DoctorSummary'
-import { FindingsList } from '@/components/doctor/FindingsList'
-import { RunDoctorButton } from '@/components/doctor/RunDoctorButton'
-import type { DoctorReport, DoctorReportResponse } from '@/components/doctor/types'
+import { ComponentHealthStrip } from '@/components/mole/ComponentHealthStrip'
+import { MoleSummary } from '@/components/mole/MoleSummary'
+import { FindingsList } from '@/components/mole/FindingsList'
+import { RunMoleButton } from '@/components/mole/RunMoleButton'
+import type { MoleReport, MoleReportResponse } from '@/components/mole/types'
 
 /**
- * Site Doctor page — surfaces the read-only doctor report.
+ * Mole page — surfaces the read-only mole report.
  *
- * GET /doctor/report on mount (and after every successful run), the live
+ * GET /mole/report on mount (and after every successful run), the live
  * component strip comes from the shared health stream.
  */
-export default function DoctorPage() {
-  const [report, setReport] = useState<DoctorReport | null>(null)
+export default function MolePage() {
+  const [report, setReport] = useState<MoleReport | null>(null)
   const [ageS, setAgeS] = useState<number | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -28,13 +28,13 @@ export default function DoctorPage() {
   const load = useCallback(async (initial = false) => {
     if (initial) setLoading(true)
     try {
-      const res = await apiGet<DoctorReportResponse>('/doctor/report')
+      const res = await apiGet<MoleReportResponse>('/mole/report')
       setReport(res?.report ?? null)
       setAgeS(res?.age_s ?? null)
       setError(null)
     } catch (e) {
-      logger.warning('doctor report load failed', { error: String(e) })
-      setError(e instanceof Error ? e.message : 'Could not load the doctor report')
+      logger.warning('mole report load failed', { error: String(e) })
+      setError(e instanceof Error ? e.message : 'Could not load the mole report')
     } finally {
       setLoading(false)
     }
@@ -46,9 +46,9 @@ export default function DoctorPage() {
 
   return (
     <PageContainer
-      title="Site Doctor"
+      title="Mole"
       subtitle="Read-only checks across the API, streams and journeys"
-      headerRight={<RunDoctorButton onCompleted={() => void load()} />}
+      headerRight={<RunMoleButton onCompleted={() => void load()} />}
       loading={loading}
       loadingCards={2}
       error={error}
@@ -58,13 +58,13 @@ export default function DoctorPage() {
 
       {report ? (
         <>
-          <DoctorSummary report={report} ageS={ageS} />
+          <MoleSummary report={report} ageS={ageS} />
           <FindingsList findings={report.findings ?? []} />
         </>
       ) : (
         <EmptyCard
           message="No report yet — run a check"
-          description="The doctor probes the live stack read-only, then writes a JSON report you can inspect here."
+          description="The mole probes the live stack read-only, then writes a JSON report you can inspect here."
           icon={<IconHeart className="h-5 w-5" aria-hidden />}
         />
       )}

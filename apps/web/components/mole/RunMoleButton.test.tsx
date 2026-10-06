@@ -12,8 +12,8 @@ vi.mock('@/lib/toast-store', () => ({
 }))
 
 import { apiPost } from '@/lib/http-client'
-import { RunDoctorButton } from './RunDoctorButton'
-import type { DoctorReport } from './types'
+import { RunMoleButton } from './RunMoleButton'
+import type { MoleReport } from './types'
 
 const post = vi.mocked(apiPost)
 
@@ -25,28 +25,28 @@ const REPORT = {
   findings: [],
   summary: { total: 0, by_severity: { ok: 0, info: 0, warn: 0, critical: 0 } },
   overall: 'ok',
-} as unknown as DoctorReport
+} as unknown as MoleReport
 
 afterEach(cleanup)
 
-describe('RunDoctorButton', () => {
+describe('RunMoleButton', () => {
   beforeEach(() => {
     post.mockReset()
   })
 
-  it('calls POST /doctor/run on click', async () => {
+  it('calls POST /mole/run on click', async () => {
     post.mockResolvedValue({ report: REPORT })
-    render(<RunDoctorButton />)
-    fireEvent.click(screen.getByTestId('run-doctor-button'))
+    render(<RunMoleButton />)
+    fireEvent.click(screen.getByTestId('run-mole-button'))
     await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
-    expect(post.mock.calls[0][0]).toBe('/doctor/run')
+    expect(post.mock.calls[0][0]).toBe('/mole/run')
   })
 
   it('reports the fresh report to onCompleted', async () => {
     post.mockResolvedValue({ report: REPORT })
     const onCompleted = vi.fn()
-    render(<RunDoctorButton onCompleted={onCompleted} />)
-    fireEvent.click(screen.getByTestId('run-doctor-button'))
+    render(<RunMoleButton onCompleted={onCompleted} />)
+    fireEvent.click(screen.getByTestId('run-mole-button'))
     await waitFor(() => expect(onCompleted).toHaveBeenCalledWith(REPORT))
   })
 
@@ -55,8 +55,8 @@ describe('RunDoctorButton', () => {
     post.mockImplementation(
       () => new Promise((r) => { resolve = r as (v: unknown) => void }) as never,
     )
-    render(<RunDoctorButton />)
-    const button = screen.getByTestId('run-doctor-button')
+    render(<RunMoleButton />)
+    const button = screen.getByTestId('run-mole-button')
     expect(button).toBeEnabled()
     fireEvent.click(button)
     await waitFor(() => expect(button).toBeDisabled())
@@ -68,18 +68,18 @@ describe('RunDoctorButton', () => {
 
   it('shows an inline error when the run fails', async () => {
     post.mockRejectedValue(new Error('Connection unavailable — server may be starting up'))
-    render(<RunDoctorButton />)
-    fireEvent.click(screen.getByTestId('run-doctor-button'))
-    const alert = await screen.findByTestId('run-doctor-error')
+    render(<RunMoleButton />)
+    fireEvent.click(screen.getByTestId('run-mole-button'))
+    const alert = await screen.findByTestId('run-mole-error')
     expect(alert).toHaveAttribute('role', 'alert')
     expect(alert).toHaveTextContent('Connection unavailable')
-    expect(screen.getByTestId('run-doctor-button')).toBeEnabled()
+    expect(screen.getByTestId('run-mole-button')).toBeEnabled()
   })
 
   it('retries are disabled for the run (single POST, no sweep storms)', async () => {
     post.mockResolvedValue({ report: REPORT })
-    render(<RunDoctorButton />)
-    fireEvent.click(screen.getByTestId('run-doctor-button'))
+    render(<RunMoleButton />)
+    fireEvent.click(screen.getByTestId('run-mole-button'))
     await waitFor(() => expect(post).toHaveBeenCalled())
     expect(post.mock.calls[0][2]).toMatchObject({ skipCircuitBreaker: true })
   })

@@ -13,7 +13,7 @@ from pathlib import Path
 from domain.logging import get_global
 
 log = get_global()
-from core.validator import Doctor
+from core.validator import Validator
 from utils.formatting import format_size
 
 
@@ -160,8 +160,8 @@ def cmd_config_check(args):
     """Check environment setup."""
     log.header("Environment Check")
 
-    doctor = Doctor()
-    result = doctor.run_all()
+    checker = Validator()
+    result = checker.run_all()
 
     log.blank()
     for check in result.checks:
