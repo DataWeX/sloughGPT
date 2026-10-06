@@ -405,6 +405,38 @@ class TestListAndDetailAgree:
         # Byte-derived identity still describes it for the caller.
         assert info.get("model_path")
 
+    @pytest.mark.asyncio
+    async def test_detail_states_format_even_with_a_stub_sidecar(self):
+        # checkpoint_info gated this enrichment on soul == "unknown", so a
+        # sidecar that merely NAMED the file suppressed format entirely. The
+        # dialog then dropped its whole Identity block — "not recorded"
+        # rendered as "nothing to show", and the file's real container was
+        # never stated anywhere.
+        _make_soul_with_meta(CHECKPOINTS_DIR / "probe_stub.soul", {"soul_name": "stub"})
+
+        info = await checkpoint_info("probe_stub.soul")
+        assert info["soul"] == "stub"
+        assert info.get("format"), "detail must say what container this is"
+
+    @pytest.mark.asyncio
+    async def test_enrichment_never_overwrites_declared_identity(self):
+        # Derived values fill gaps only — a stored hash/tier stays exactly as
+        # the writer wrote it, or read-time derivation could drift identity.
+        _make_soul_with_meta(
+            CHECKPOINTS_DIR / "probe_declared.soul",
+            {
+                "soul_name": "declared",
+                "integrity_hash": "storedhash0000",
+                "tier": "interchange",
+                "provenance": "export",
+            },
+        )
+
+        info = await checkpoint_info("probe_declared.soul")
+        assert info["integrity_hash"] == "storedhash0000"
+        assert info["tier"] == "interchange"
+        assert info["provenance"] == "export"
+
 
 class TestTrainedCheckpointSpelling:
     """The legacy double-append spelling is a first-class final job save.

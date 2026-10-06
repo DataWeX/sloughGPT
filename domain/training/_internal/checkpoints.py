@@ -477,13 +477,20 @@ async def download_checkpoint_path(name: str) -> str | None:
     return await asyncio.to_thread(_find)
 
 
-def _describe_unnamed(info: dict) -> dict:
-    """Add byte-derived identity to a checkpoint that has no sidecar.
+def _describe_identity(info: dict) -> dict:
+    """Fill identity gaps in a detail row from the bytes themselves.
 
-    A missing sidecar means nothing *names* the checkpoint, not that it is
-    absent — so classify the bytes directly (it never raises). This is what
-    lets a stray ``evil.soul`` report ``not-soul`` instead of looking
-    indistinguishable from a real model the user simply cannot open.
+    Detail view only — one file per request, so the probe is affordable;
+    running it per row would undo the listing speed-up.
+
+    Never overwrites what the sidecar already declared: only *missing*
+    fields are supplied. That is what lets a stray ``evil.soul`` report
+    ``not-soul``, and lets a file whose sidecar predates the identity
+    fields still name its container, instead of the dialog omitting the
+    Identity block entirely — a silent empty state that reads as "nothing
+    to show" when the truth is "not recorded".
+
+    classify_soul never raises, but a failure must not mask the row.
     """
     path = info.get("model_path")
     if not path:
@@ -514,12 +521,12 @@ async def checkpoint_info(name: str) -> dict:
     if not info:
         # Absent row — the file is genuinely not there.
         raise FileNotFoundError(f"Checkpoint not found: {name}")
-    if info.get("soul") == "unknown":
-        # list_checkpoints just returned this file, so answering 404 made the
-        # two endpoints disagree about whether it exists. It is unnamed, not
-        # missing; report what the bytes say instead.
-        info = await asyncio.to_thread(_describe_unnamed, info)
-    return info
+    # Unnamed, legacy or fully declared — all three describe themselves from
+    # their bytes. Gated before on soul == "unknown", which meant a file with
+    # a stub sidecar got no format at all and the dialog dropped the whole
+    # Identity block: a silent empty state where the honest answer was
+    # "not recorded". One file per request, so the probe is cheap here.
+    return await asyncio.to_thread(_describe_identity, info)
 
 
 async def get_all_checkpoint_data() -> list[dict]:
