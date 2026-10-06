@@ -4,7 +4,27 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-06 ~03:05 — `feat/board-read-column-guard`
+**Last update**: 2026-10-06 ~04:45 — card `625d85e5` → done
+(investigation only, no new code; primary fix was already on main as
+`2c460cbaf` since 10-01): systemic ≥1s slow-log tail **root-caused** —
+`GET /health` shipped a ~10 MB `quantization.per_tensor` blob that
+FastAPI JSON-encodes **on the single event loop** (2,106 calls/123 min
+≈ 179 MB/min from 3–4 persistent pollers), stalling every in-flight
+request: 61% of the 30s `SLO_DUMP_STACKS` stack dumps landing inside
+stall windows caught the main thread mid-encode (baseline 21%), 25
+same-second multi-endpoint slow clusters, 188/207 warnings were small
+collateral victims. Amplifier: host CPU starvation from parallel
+session test runs (PSI cpu peaks 75–80%); secondary: HF-hub
+`getaddrinfo`/`list_hf_models` on request paths (`/datasets` 1.83s for
+36 KB). **LIVE GAP**: the server runs the root
+`feat/soul-path-grammar` checkout which predates the fix — live
+`/health` still ~10 MB until that branch absorbs main. Follow-ups
+filed: `d994d4f8` (rag/documents 2.8 MB paging), `14d26c75` (HF-DNS
+cache/fast-fail), `8db4031b` (slow-log carries PSI/loadavg). Method +
+evidence in the card (journalctl + faulthandler dumps; py-spy blocked
+by ptrace_scope=1).
+
+Earlier ~03:05: `feat/board-read-column-guard`
 **lands on main** (fast-forward, card `b538ecbd` → done): `load_board()`
 now validates every card against the board's **own schema-header**
 vocabulary — an undeclared column (hand-typed; the file is editable by
