@@ -1,8 +1,8 @@
 """Tests for Mole (``domain/core/_internal/mole``) — the always-on monitor.
 
-Hermetic by construction: the doctor sweep is injected, sleeps are
+Hermetic by construction: the mole sweep is injected, sleeps are
 captured, no network, no browser, no AI. Mole adds *time* to the
-existing ``run_doctor`` contract — cadence, a findings fingerprint, an
+existing ``run_mole`` contract — cadence, a findings fingerprint, an
 append-only journal, and change-only events (dedupe so the same
 finding never alerts twice).
 """
@@ -12,15 +12,15 @@ from __future__ import annotations
 import json
 import os
 
-from domain.core._internal.doctor.models import Finding
-from domain.core._internal.doctor.probes import ProbeResult
-from domain.core._internal.doctor.report import merge
 from domain.core._internal.mole import (
     default_journal_path,
     fingerprint,
     load_context,
     run_watch,
 )
+from domain.core._internal.mole.models import Finding
+from domain.core._internal.mole.probes import ProbeResult
+from domain.core._internal.mole.report import merge
 from domain.infrastructure._internal.health_flow import Severity
 
 
@@ -102,7 +102,7 @@ def test_watch_dedupes_events_and_journals(tmp_path):
     assert sleeps == [7.0, 7.0]  # sleeps BETWEEN ticks only
     assert [line["changed"] for line in lines] == [True, False, True]
     assert len(events) == 2  # baseline + the real change; no repeats
-    assert exit_code == 2  # last tick flipped critical → doctor's exit 2
+    assert exit_code == 2  # last tick flipped critical → mole's exit 2
 
 
 def test_watch_records_context_each_tick(tmp_path):

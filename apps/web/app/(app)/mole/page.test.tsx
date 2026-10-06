@@ -16,9 +16,9 @@ vi.mock('@/lib/toast-store', () => ({
     selector({ addToast: vi.fn() }),
 }))
 
-import DoctorPage from './page'
+import MolePage from './page'
 import { apiGet } from '@/lib/http-client'
-import type { DoctorReportResponse } from '@/components/doctor/types'
+import type { MoleReportResponse } from '@/components/mole/types'
 
 const get = vi.mocked(apiGet)
 
@@ -54,7 +54,7 @@ const REPORT = {
   overall: 'warn',
 }
 
-describe('DoctorPage', () => {
+describe('MolePage', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
@@ -63,9 +63,9 @@ describe('DoctorPage', () => {
 
   it('shows the loading state until the report resolves', async () => {
     get.mockReturnValue(new Promise(() => {}) as never)
-    render(<DoctorPage />)
+    render(<MolePage />)
     expect(screen.getByTestId('page-container')).toHaveAttribute('data-state', 'loading')
-    expect(await screen.findByText('Site Doctor')).toBeInTheDocument()
+    expect(await screen.findByText('Mole')).toBeInTheDocument()
   })
 
   it('shows the empty state when no report exists yet', async () => {
@@ -73,17 +73,17 @@ describe('DoctorPage', () => {
       report: null,
       path: '/home/user/.cache/slog-doctor/findings-report.json',
       age_s: null,
-    } as DoctorReportResponse)
-    render(<DoctorPage />)
+    } as MoleReportResponse)
+    render(<MolePage />)
     expect(await screen.findByText('No report yet — run a check')).toBeInTheDocument()
-    expect(screen.getByTestId('run-doctor-button')).toBeInTheDocument()
+    expect(screen.getByTestId('run-mole-button')).toBeInTheDocument()
   })
 
   it('renders summary, findings and the live component strip', async () => {
     get.mockResolvedValue({ report: REPORT, path: '/tmp/report.json', age_s: 30 })
-    render(<DoctorPage />)
-    expect(await screen.findByTestId('doctor-summary')).toBeInTheDocument()
-    expect(screen.getByTestId('doctor-overall')).toHaveTextContent('Overall Warning')
+    render(<MolePage />)
+    expect(await screen.findByTestId('mole-summary')).toBeInTheDocument()
+    expect(screen.getByTestId('mole-overall')).toHaveTextContent('Overall Warning')
     expect(screen.getByTestId('findings-list')).toBeInTheDocument()
     expect(screen.getByText('Health score degraded (62)')).toBeInTheDocument()
     expect(screen.getByText('Live components')).toBeInTheDocument()
@@ -91,7 +91,7 @@ describe('DoctorPage', () => {
 
   it('keeps finding detail collapsed by default', async () => {
     get.mockResolvedValue({ report: REPORT, path: '/tmp/report.json', age_s: 30 })
-    const { container } = render(<DoctorPage />)
+    const { container } = render(<MolePage />)
     await screen.findByTestId('findings-list')
     const disclosures = container.querySelectorAll('details')
     expect(disclosures.length).toBeGreaterThanOrEqual(1)
@@ -102,7 +102,7 @@ describe('DoctorPage', () => {
 
   it('shows an error state when the report cannot be loaded', async () => {
     get.mockRejectedValue(new Error('Connection unavailable — server may be starting up'))
-    render(<DoctorPage />)
+    render(<MolePage />)
     await waitFor(() => {
       const alerts = screen.getAllByRole('alert')
       expect(alerts.length).toBeGreaterThan(0)
@@ -112,8 +112,8 @@ describe('DoctorPage', () => {
 
   it('has a run button in the page header', async () => {
     get.mockResolvedValue({ report: null, path: '/tmp/report.json', age_s: null })
-    render(<DoctorPage />)
-    expect(await screen.findByTestId('run-doctor-button')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Site Doctor')
+    render(<MolePage />)
+    expect(await screen.findByTestId('run-mole-button')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Mole')
   })
 })

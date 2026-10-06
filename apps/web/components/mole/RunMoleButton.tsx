@@ -4,19 +4,19 @@ import { useState } from 'react'
 import { Button, cn } from '@sloughgpt/strui'
 import { apiPost } from '@/lib/http-client'
 import { useToastStore } from '@/lib/toast-store'
-import type { DoctorReport } from './types'
+import type { MoleReport } from './types'
 
-interface RunDoctorButtonProps {
+interface RunMoleButtonProps {
   /** Fired after a successful run so the page can refresh its report. */
-  onCompleted?: (report: DoctorReport) => void
+  onCompleted?: (report: MoleReport) => void
   className?: string
 }
 
 /**
- * Kicks off the LIGHT doctor run (http + sse + journey-from-disk) and
+ * Kicks off the LIGHT mole run (http + sse + journey-from-disk) and
  * reports the result: transient success toast, inline error on failure.
  */
-export function RunDoctorButton({ onCompleted, className }: RunDoctorButtonProps) {
+export function RunMoleButton({ onCompleted, className }: RunMoleButtonProps) {
   const [running, setRunning] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const addToast = useToastStore((s) => s.addToast)
@@ -26,16 +26,16 @@ export function RunDoctorButton({ onCompleted, className }: RunDoctorButtonProps
     setRunning(true)
     setError(null)
     try {
-      const res = await apiPost<{ report: DoctorReport }>(
-        '/doctor/run',
+      const res = await apiPost<{ report: MoleReport }>(
+        '/mole/run',
         undefined,
         // No retries — a timed-out run must never fire a second sweep.
         { skipCircuitBreaker: true },
       )
-      addToast('Doctor check complete', 'success')
+      addToast('Mole check complete', 'success')
       if (res?.report) onCompleted?.(res.report)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Doctor check failed')
+      setError(e instanceof Error ? e.message : 'Mole check failed')
     } finally {
       setRunning(false)
     }
@@ -47,14 +47,14 @@ export function RunDoctorButton({ onCompleted, className }: RunDoctorButtonProps
         onClick={() => void run()}
         loading={running}
         loadingText="Running…"
-        data-testid="run-doctor-button"
+        data-testid="run-mole-button"
       >
         Run check
       </Button>
       {error ? (
         <span
           role="alert"
-          data-testid="run-doctor-error"
+          data-testid="run-mole-error"
           className="text-xs text-destructive"
         >
           {error}

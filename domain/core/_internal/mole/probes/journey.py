@@ -4,7 +4,7 @@ The journey runner freezes ``SLO_WEB_URL`` / ``SLO_API_URL`` as module
 globals at *import* time, and its web default is stale (``:5175``; the
 live vite dev server is ``:5173``). This probe therefore calls
 ``os.environ.setdefault`` for the live truth BEFORE importing anything
-from ``domain.journeys`` — the fix lives doctor-side; journey files are
+from ``domain.journeys`` — the fix lives mole-side; journey files are
 never edited.
 
 Findings (component ``journeys``):
@@ -22,7 +22,7 @@ import json
 import os
 import time
 
-from domain.core._internal.doctor.models import Finding
+from domain.core._internal.mole.models import Finding
 from domain.infrastructure._internal.health_flow import Severity
 
 from . import ProbeResult

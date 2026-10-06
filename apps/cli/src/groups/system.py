@@ -57,9 +57,9 @@ def register(cli):
 
         cmd_stats(_ns(json_output=ctx.obj.get("json")))
 
-    @system.command("doctor", help="Run environment checks")
+    @system.command("mole", help="Run environment checks")
     @click.pass_context
-    def system_doctor(ctx):
+    def system_mole(ctx):
         from commands.system import cmd_config_check
 
         cmd_config_check(_ns(json_output=ctx.obj.get("json")))

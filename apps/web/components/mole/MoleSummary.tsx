@@ -9,15 +9,15 @@ import {
   SEVERITY_ORDER,
   SEVERITY_TONE,
 } from './severity'
-import type { DoctorReport } from './types'
+import type { MoleReport } from './types'
 
-interface DoctorSummaryProps {
-  report: DoctorReport
+interface MoleSummaryProps {
+  report: MoleReport
   /** Seconds since the report was written — fallback when `report.ts` is absent. */
   ageS?: number | null
 }
 
-function reportAge(report: DoctorReport, ageS?: number | null): string {
+function reportAge(report: MoleReport, ageS?: number | null): string {
   if (report.ts) return timeAgo(report.ts)
   if (ageS != null) return `${Math.max(0, Math.round(ageS))}s ago`
   return 'unknown'
@@ -29,7 +29,7 @@ function reportAge(report: DoctorReport, ageS?: number | null): string {
  * Summary, not a dump: counts and the worst severity only — the per-finding
  * detail lives in `FindingsList`.
  */
-export function DoctorSummary({ report, ageS }: DoctorSummaryProps) {
+export function MoleSummary({ report, ageS }: MoleSummaryProps) {
   const counts = report.summary?.by_severity ?? ({} as Record<string, number>)
   const overall = report.overall ?? 'ok'
   const findings = report.findings ?? []
@@ -38,8 +38,8 @@ export function DoctorSummary({ report, ageS }: DoctorSummaryProps) {
 
   return (
     <section
-      data-testid="doctor-summary"
-      aria-label="Doctor summary"
+      data-testid="mole-summary"
+      aria-label="Mole summary"
       className="rounded-lg border border-border/60 bg-card/50 px-4 py-3"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
@@ -49,7 +49,7 @@ export function DoctorSummary({ report, ageS }: DoctorSummaryProps) {
             pulse={overall === 'critical'}
             aria-hidden
           />
-          <span className="text-sm font-medium" data-testid="doctor-overall">
+          <span className="text-sm font-medium" data-testid="mole-overall">
             Overall {SEVERITY_LABEL[overall]}
           </span>
           <StatusBadge tone={SEVERITY_BADGE_TONE[overall]} size="md">

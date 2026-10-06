@@ -302,23 +302,23 @@ journey suite cannot drift apart.
 `scripts/run_ux_flows.py` is the legacy runner; this library is the
 spec-linked successor.
 
-## Mole — app surface (legacy `/doctor` paths)
+## Mole — app surface
 
-The read-only **Mole** monitoring app (probes in `domain/core/_internal/doctor/`,
-documented in `TESTING.md` → *Mole*) surfaced in the app; the `/doctor`
+The read-only **Mole** monitoring app (probes in `domain/core/_internal/mole/`,
+documented in `TESTING.md` → *Mole*) surfaced in the app; the `/mole`
 routes, page, and nav label are grandfathered legacy paths.
 
 | Piece | Where | Notes |
 |-------|-------|-------|
-| Router | `apps/api/server/routers/doctor.py` | `GET /doctor/report`, `POST /doctor/run` — registered additively in `routers/__init__.py` |
-| Page | `apps/web/app/(app)/doctor/page.tsx` | header + `RunDoctorButton`, summary, live component strip, findings |
-| Components | `apps/web/components/doctor/` | `DoctorSummary`, `FindingsList` (detail folded), `RunDoctorButton`, `ComponentHealthStrip` |
-| Nav | `apps/web/lib/navigation.ts` | one **Doctor** entry in the system section |
+| Router | `apps/api/server/routers/mole.py` | `GET /mole/report`, `POST /mole/run` — registered additively in `routers/__init__.py` |
+| Page | `apps/web/app/(app)/mole/page.tsx` | header + `RunMoleButton`, summary, live component strip, findings |
+| Components | `apps/web/components/mole/` | `MoleSummary`, `FindingsList` (detail folded), `RunMoleButton`, `ComponentHealthStrip` |
+| Nav | `apps/web/lib/navigation.ts` | one **Mole** entry in the system section |
 
-- **Contract:** `GET /doctor/report` → `{report, path, age_s}` (missing or
+- **Contract:** `GET /mole/report` → `{report, path, age_s}` (missing or
   corrupt report file → `report: null`, an empty state rather than an error);
-  `POST /doctor/run` → `{report}`.
-- **Light run only:** the API runs `run_doctor(run_sweep=False, window_s=6.0)`
+  `POST /mole/run` → `{report}`.
+- **Light run only:** the API runs `run_mole(run_sweep=False, window_s=6.0)`
   — `http` + `sse` probes plus journey findings read **from disk**. The
   browser journey sweep is never triggered from the API.
 - **Data path:** the page uses `apiGet`/`apiPost` from `lib/http-client.ts`

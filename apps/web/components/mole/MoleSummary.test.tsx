@@ -2,12 +2,12 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 
-import { DoctorSummary } from './DoctorSummary'
-import type { DoctorFinding, DoctorReport } from './types'
+import { MoleSummary } from './MoleSummary'
+import type { MoleFinding, MoleReport } from './types'
 
 afterEach(cleanup)
 
-const FINDINGS: DoctorFinding[] = [
+const FINDINGS: MoleFinding[] = [
   {
     source: 'http',
     check: 'api.health_score',
@@ -27,7 +27,7 @@ const FINDINGS: DoctorFinding[] = [
   },
 ]
 
-function makeReport(overrides: Partial<DoctorReport> = {}): DoctorReport {
+function makeReport(overrides: Partial<MoleReport> = {}): MoleReport {
   return {
     schema_version: 1,
     ts: Math.floor(Date.now() / 1000) - 120,
@@ -47,14 +47,14 @@ function makeReport(overrides: Partial<DoctorReport> = {}): DoctorReport {
   }
 }
 
-describe('DoctorSummary', () => {
+describe('MoleSummary', () => {
   it('renders the overall severity pill', () => {
-    render(<DoctorSummary report={makeReport()} />)
-    expect(screen.getByTestId('doctor-overall')).toHaveTextContent('Overall Critical')
+    render(<MoleSummary report={makeReport()} />)
+    expect(screen.getByTestId('mole-overall')).toHaveTextContent('Overall Critical')
   })
 
   it('renders severity counts', () => {
-    render(<DoctorSummary report={makeReport()} />)
+    render(<MoleSummary report={makeReport()} />)
     expect(screen.getByTestId('severity-count-critical')).toHaveTextContent('1Critical')
     expect(screen.getByTestId('severity-count-warn')).toHaveTextContent('1Warning')
     expect(screen.getByTestId('severity-count-info')).toHaveTextContent('1Info')
@@ -62,24 +62,24 @@ describe('DoctorSummary', () => {
   })
 
   it('renders probe and finding totals', () => {
-    render(<DoctorSummary report={makeReport()} />)
+    render(<MoleSummary report={makeReport()} />)
     expect(screen.getByText(/4 findings/)).toBeInTheDocument()
     expect(screen.getByText(/2\/3 probes ok/)).toBeInTheDocument()
   })
 
   it('renders report age from the report timestamp', () => {
-    render(<DoctorSummary report={makeReport()} />)
+    render(<MoleSummary report={makeReport()} />)
     expect(screen.getByText(/Checked 2m ago/)).toBeInTheDocument()
   })
 
   it('falls back to age_s when the report has no timestamp', () => {
-    render(<DoctorSummary report={makeReport({ ts: 0 })} ageS={30} />)
+    render(<MoleSummary report={makeReport({ ts: 0 })} ageS={30} />)
     expect(screen.getByText(/Checked 30s ago/)).toBeInTheDocument()
   })
 
   it('renders info/warn pill tones without raw colors', () => {
-    const { container } = render(<DoctorSummary report={makeReport({ overall: 'warn' })} />)
-    expect(screen.getByTestId('doctor-overall')).toHaveTextContent('Overall Warning')
+    const { container } = render(<MoleSummary report={makeReport({ overall: 'warn' })} />)
+    expect(screen.getByTestId('mole-overall')).toHaveTextContent('Overall Warning')
     expect(container.innerHTML).not.toMatch(/#[0-9a-fA-F]{3,8}\b/)
     expect(container.innerHTML).not.toMatch(/rgba?\(/)
   })

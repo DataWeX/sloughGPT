@@ -37,12 +37,12 @@ import time
 import urllib.error
 import urllib.request
 
-from domain.core._internal.doctor.models import Finding
+from domain.core._internal.mole.models import Finding
 from domain.infrastructure._internal.health_flow import Severity
 
 from . import ProbeResult
 
-USER_AGENT = "sloughgpt-site-doctor/1.0"
+USER_AGENT = "sloughgpt-Mole/1.0"
 MAX_FRAME_BYTES = 262144  # 256 KiB — the original bug was ~10.5 MB/frame
 STALL_GAP_S = 8.0  # 2× the 3.0s cadence + slack
 EXPECTED_CADENCE_S = 3.0

@@ -98,7 +98,7 @@ class TestCmdOptimize:
 
 
 class TestCmdConfigCheck:
-    def test_runs_doctor(self, mock_log):
+    def test_runs_checks(self, mock_log):
         from commands.system import cmd_config_check
 
         args = MagicMock()

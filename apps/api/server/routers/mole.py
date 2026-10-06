@@ -1,10 +1,10 @@
 """
-Site Doctor router — surface the read-only doctor report to the UI.
+Mole router — surface the read-only mole report to the UI.
 
-Contract (the /doctor page is built against exactly this):
+Contract (the /mole page is built against exactly this):
 
-    GET  /doctor/report  -> data: {report: object|null, path: str, age_s: float|null}
-    POST /doctor/run     -> data: {report: object}
+    GET  /mole/report  -> data: {report: object|null, path: str, age_s: float|null}
+    POST /mole/run     -> data: {report: object}
 
 ``GET`` only reads the report file (``$SLO_DOCTOR_REPORT``, default
 ``~/.cache/slog-doctor/findings-report.json``). A missing or corrupt file
@@ -12,7 +12,7 @@ is an empty state, not an error: ``report`` comes back ``null``.
 
 ``POST`` runs the LIGHT probes only — ``http`` (read-only GETs) and ``sse``
 (6s window) — and folds in the journey findings that are already on disk.
-The browser journey sweep is never triggered from the API: ``run_doctor``
+The browser journey sweep is never triggered from the API: ``run_mole``
 is called with ``run_sweep=False``, so the journey probe only reads the
 existing sweep report. Budget on a responsive stack: preflight 3s (which
 skips ``http``/``sse`` outright when the API is dead) + SSE window 6s (plus
@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import endpoint, success_response
 
-logger = logging.getLogger("slo.routers.doctor")
+logger = logging.getLogger("slo.routers.mole")
 
 # SSE observation window for the API-initiated light run (CLI default is 9s;
 # the API keeps the interactive run short).
@@ -40,7 +40,7 @@ LIGHT_WINDOW_S = 6.0
 
 
 def default_report_path() -> str:
-    """Resolve the report path through the doctor package (``$SLO_DOCTOR_REPORT``)."""
+    """Resolve the report path through the mole package (``$SLO_DOCTOR_REPORT``)."""
     from domain.core import default_report_path as _default
 
     return _default()
@@ -59,7 +59,7 @@ def read_report(path: str) -> tuple[dict | None, float | None]:
         return None, None
     except (OSError, ValueError) as exc:
         # Corrupt or unreadable report — an empty state, never a 500.
-        logger.debug("doctor report unreadable at %s: %s", path, exc)
+        logger.debug("mole report unreadable at %s: %s", path, exc)
         return None, None
     if not isinstance(data, dict):
         return None, None
@@ -71,35 +71,35 @@ def read_report(path: str) -> tuple[dict | None, float | None]:
     return data, age_s
 
 
-class DoctorRouter:
-    """Report-surfacing endpoints for the Site Doctor."""
+class MoleRouter:
+    """Report-surfacing endpoints for the Mole."""
 
     def __init__(self):
-        self.router = APIRouter(prefix="/doctor", tags=["doctor"])
+        self.router = APIRouter(prefix="/mole", tags=["mole"])
         self._register_routes()
 
     def _register_routes(self):
         self.router.add_api_route("/report", self.get_report, methods=["GET"])
-        self.router.add_api_route("/run", self.run_doctor, methods=["POST"])
+        self.router.add_api_route("/run", self.run_mole, methods=["POST"])
 
-    @endpoint("doctor.report")
+    @endpoint("mole.report")
     async def get_report(self) -> dict:
-        """Read the stored doctor report (empty state when there is none)."""
+        """Read the stored mole report (empty state when there is none)."""
         path = default_report_path()
         report, age_s = await asyncio.to_thread(read_report, path)
         return success_response(data={"report": report, "path": path, "age_s": age_s})
 
-    @endpoint("doctor.run")
-    async def run_doctor(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+    @endpoint("mole.run")
+    async def run_mole(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
         """Run the light probes (http + sse + journey-from-disk), write the report.
 
         The browser journey sweep is never invoked here — ``run_sweep=False``
         keeps the journey probe on its read-the-file path.
         """
-        from domain.core import run_doctor as _run_doctor
+        from domain.core import run_mole as _run_mole
 
         report = await asyncio.to_thread(
-            _run_doctor,
+            _run_mole,
             run_sweep=False,
             window_s=LIGHT_WINDOW_S,
             write=True,
@@ -107,4 +107,4 @@ class DoctorRouter:
         return success_response(data={"report": report.to_dict()})
 
 
-router = DoctorRouter().router
+router = MoleRouter().router

@@ -89,8 +89,8 @@ __all__ = [
     "SelfEpisode",
     "SelfIdentity",
     "default_report_path",
-    "run_doctor",
-    "DoctorReport",
+    "run_mole",
+    "MoleReport",
     "default_report_path",
 ]
 
@@ -134,10 +134,10 @@ def __getattr__(name):
         "MultimodalManager": "domain.multimodal",
         "get_multimodal_manager": "domain.multimodal",
         "MultimodalCapabilities": "domain.multimodal",
-        # Site doctor (Phase A: report-only probes)
-        "run_doctor": "domain.core._internal.doctor",
-        "DoctorReport": "domain.core._internal.doctor",
-        "default_report_path": "domain.core._internal.doctor.report",
+        # Mole (Phase A: report-only probes)
+        "run_mole": "domain.core._internal.mole",
+        "MoleReport": "domain.core._internal.mole",
+        "default_report_path": "domain.core._internal.mole.report",
     }
     if name in _lazy:
         mod = _importlib.import_module(_lazy[name])

@@ -436,14 +436,6 @@
    "PUT"
   ],
   [
-   "/doctor/report",
-   "GET"
-  ],
-  [
-   "/doctor/run",
-   "POST"
-  ],
-  [
    "/errors/clear",
    "DELETE"
   ],
@@ -1213,6 +1205,14 @@
   ],
   [
    "/models/visual-load",
+   "POST"
+  ],
+  [
+   "/mole/report",
+   "GET"
+  ],
+  [
+   "/mole/run",
    "POST"
   ],
   [
@@ -10984,26 +10984,6 @@
     ]
    }
   },
-  "/doctor/report": {
-   "GET": {
-    "operationId": "get_report_doctor_report_get",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
-  "/doctor/run": {
-   "POST": {
-    "operationId": "run_doctor_doctor_run_post",
-    "params": [],
-    "body": null,
-    "responses": [
-     "200"
-    ]
-   }
-  },
   "/contracts": {
    "GET": {
     "operationId": "contracts.list.get",
@@ -11019,6 +10999,26 @@
     "responses": [
      "200",
      "422"
+    ]
+   }
+  },
+  "/mole/report": {
+   "GET": {
+    "operationId": "get_report_mole_report_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mole/run": {
+   "POST": {
+    "operationId": "run_mole_mole_run_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
     ]
    }
   }

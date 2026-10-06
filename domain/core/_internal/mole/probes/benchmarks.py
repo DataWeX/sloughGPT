@@ -22,7 +22,7 @@ import importlib.util
 import os
 from pathlib import Path
 
-from domain.core._internal.doctor.models import Finding
+from domain.core._internal.mole.models import Finding
 from domain.infrastructure._internal.health_flow import Severity
 
 from . import ProbeResult

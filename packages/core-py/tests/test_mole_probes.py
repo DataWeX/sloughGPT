@@ -1,4 +1,4 @@
-"""Tests for the site doctor (domain/core/_internal/doctor) — Phase A.
+"""Tests for the Mole (domain/core/_internal/mole) — Phase A.
 
 Hermetic by construction: no network, no browser, no live ports. The
 journey runner is stubbed via ``sys.modules``; http/sse probes take
@@ -16,21 +16,21 @@ from pathlib import Path
 
 import pytest
 
-from domain.core._internal.doctor import run_doctor
-from domain.core._internal.doctor.models import Finding, band, rank, worst
-from domain.core._internal.doctor.probes import ProbeResult
-from domain.core._internal.doctor.probes import benchmarks as benchmarks_probe
-from domain.core._internal.doctor.probes import gates as gates_probe
-from domain.core._internal.doctor.probes import http as http_probe
-from domain.core._internal.doctor.probes import journey as journey_probe
-from domain.core._internal.doctor.probes import sse as sse_probe
-from domain.core._internal.doctor.probes.sse import StreamAuthError
-from domain.core._internal.doctor.report import default_report_path, default_targets, merge
+from domain.core._internal.mole import run_mole
+from domain.core._internal.mole.models import Finding, band, rank, worst
+from domain.core._internal.mole.probes import ProbeResult
+from domain.core._internal.mole.probes import benchmarks as benchmarks_probe
+from domain.core._internal.mole.probes import gates as gates_probe
+from domain.core._internal.mole.probes import http as http_probe
+from domain.core._internal.mole.probes import journey as journey_probe
+from domain.core._internal.mole.probes import sse as sse_probe
+from domain.core._internal.mole.probes.sse import StreamAuthError
+from domain.core._internal.mole.report import default_report_path, default_targets, merge
 from domain.infrastructure._internal.health_flow import Diagnosis, Severity
 
 
 @pytest.fixture(autouse=True)
-def doctor_env(monkeypatch, tmp_path):
+def mole_env(monkeypatch, tmp_path):
     """Live-stack defaults + isolated journey report path for every test."""
     monkeypatch.setenv("SLO_WEB_URL", "http://localhost:5173")
     monkeypatch.setenv("SLO_API_URL", "http://localhost:8000")
@@ -860,8 +860,8 @@ class TestReportSerialization:
         assert not list(target.parent.glob("*.tmp"))  # tmp file was renamed away
 
     def test_default_path_env(self, monkeypatch):
-        monkeypatch.setenv("SLO_DOCTOR_REPORT", "/tmp/x/doctor.json")
-        assert default_report_path() == "/tmp/x/doctor.json"
+        monkeypatch.setenv("SLO_DOCTOR_REPORT", "/tmp/x/mole.json")
+        assert default_report_path() == "/tmp/x/mole.json"
 
     def test_default_targets_apply_5173_fix(self, monkeypatch):
         monkeypatch.delenv("SLO_WEB_URL", raising=False)
@@ -872,9 +872,9 @@ class TestReportSerialization:
         assert "gateway" not in targets
 
 
-class TestRunDoctor:
+class TestRunMole:
     def test_all_skipped_is_clean_and_never_touches_network(self):
-        report = run_doctor(
+        report = run_mole(
             skip={"gates", "benchmarks", "http", "sse", "journey"},
             preflight=False,
             write=False,
@@ -891,7 +891,7 @@ class TestRunDoctor:
         assert all(p["ok"] is None and p["error"] == "skipped" for p in report.probes)
 
     def test_registry_runs_local_file_probes_first(self):
-        from domain.core._internal.doctor.probes import PROBES
+        from domain.core._internal.mole.probes import PROBES
 
         assert [p["name"] for p in PROBES] == [
             "gates",
@@ -904,7 +904,7 @@ class TestRunDoctor:
     def test_writes_to_env_report_path(self, tmp_path, monkeypatch):
         path = tmp_path / "sub" / "findings.json"
         monkeypatch.setenv("SLO_DOCTOR_REPORT", str(path))
-        run_doctor(
+        run_mole(
             skip={"gates", "benchmarks", "http", "sse", "journey"},
             preflight=False,
         )

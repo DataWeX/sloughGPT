@@ -3,11 +3,11 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { FindingsList } from './FindingsList'
-import type { DoctorFinding } from './types'
+import type { MoleFinding } from './types'
 
 afterEach(cleanup)
 
-const FINDINGS: DoctorFinding[] = [
+const FINDINGS: MoleFinding[] = [
   {
     source: 'http',
     check: 'api.reachable',

@@ -256,7 +256,7 @@ SloughGPT — getting started
        python3 -m pip install -e ".[dev]"
 
   2. Verify environment:
-       sloughgpt system doctor
+       sloughgpt system mole
 
   3. First training run:
        sloughgpt train quick
