@@ -23,6 +23,7 @@ import fcntl
 import hashlib
 import heapq
 import json
+import logging
 import os
 import random
 import tempfile
@@ -34,6 +35,8 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import config
+
+logger = logging.getLogger("app_planner.store")
 
 # ── Data Models ──────────────────────────────────────────────────────────
 
@@ -413,12 +416,37 @@ class PlannerStore:
     def load_board(self) -> Board:
         lines = self._read_board_lines()
         board = Board()
+        valid: list[str] | None = None
         for obj in lines:
             if obj.get("schema") == "planner/1" and obj.get("columns"):
                 board.name = obj.get("name", "Main")
                 board.columns = obj["columns"]
+                valid = [c.get("name") for c in obj["columns"]]
             elif obj.get("id") and obj.get("title"):
-                board.cards.append(Card.from_dict(obj))
+                card = Card.from_dict(obj)
+                if valid is None:
+                    # card lines before any header (or headerless file):
+                    # fall back to the board vocabulary reader once.
+                    valid = self.column_names()
+                if card.column not in valid:
+                    # The board file is hand-editable by design, so a
+                    # hand-typed column (e.g. the retired 'in-progress')
+                    # would otherwise make the card silently invisible:
+                    # renderers iterate the header columns only (card
+                    # b538ecbd). Re-home it under a declared column
+                    # instead of raising — one typo must not break the
+                    # whole board.
+                    target = "todo" if "todo" in valid else valid[0]
+                    logger.warning(
+                        "Card %r has undeclared column %r (valid: %s); "
+                        "showing it under %r",
+                        card.id,
+                        card.column,
+                        valid,
+                        target,
+                    )
+                    card.column = target
+                board.cards.append(card)
         return board
 
     def column_names(self) -> list[str]:
