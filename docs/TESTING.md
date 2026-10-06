@@ -235,6 +235,53 @@ it at runtime, so the exit code stays `0` while confirmed and unresolvable still
 exit `1`. The point is that without this hop the latent count reads as "all
 clear" while a second router is quietly on live state.
 
+#### Verifying a suspect
+
+Reach cannot tell you whether the reader is actually _used_, so make it say so:
+replace the reader's binding with a sentinel that raises, and rerun the file.
+
+```python
+# /tmp/md_probe_plugin.py
+# PYTHONPATH="$PYTHONPATH:/tmp" MD_PROBE_SPEC='[{"mod":"domain.knowledge",
+#   "attr":"get_knowledge_ingestor","reader_files":["domain.knowledge.engine"]}]' \
+#   python -m pytest tests/test_learner_pipeline.py -q -p md_probe_plugin
+import importlib
+import json
+import os
+from unittest.mock import patch
+
+
+def _boom(mod, attr):
+    def f(*_a, **_k):
+        raise AssertionError(f"PROBE-CALLED {mod}.{attr}")
+
+    return f
+
+
+def pytest_configure(config):
+    for it in json.loads(os.environ["MD_PROBE_SPEC"]):
+        for name in {it["mod"], *it.get("reader_files", [])}:
+            try:
+                m = importlib.import_module(name)
+            except Exception:
+                continue
+            if hasattr(m, it["attr"]):
+                patch.object(m, it["attr"], _boom(name, it["attr"])).start()
+```
+
+Two details matter. Patch **both** `reader_mod` and the reader file module: a
+function-level `from shim import x` re-reads the shim at call time, while an
+already-bound module-level read only moves via its own attribute. And install in
+`pytest_configure`, before collection binds the name.
+
+- Tests still pass → the reader is never exercised on that path: **harmless**,
+  a trap for whoever later extends the test down it, not a defect today.
+- Tests fail with `PROBE-CALLED` → the reader **is** used, so the `_internal`
+  patch never fed it and the test has been running on live state: **retarget**.
+
+The 9 suspects found on 2026-10-05 were triaged this way and all 9 came back
+harmless — which is why the class does not set the exit code.
+
 ## Test Coverage
 
 ### Current Status
