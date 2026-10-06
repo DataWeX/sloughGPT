@@ -4,7 +4,28 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-05 ~13:15 — `feat/mole-phase2-probes` **lands on
+**Last update**: 2026-10-06 ~10:45 — `feat/mole-rename` **lands on main**
+(merges `78be4e601` + `26e5a1ee0`, card `752b27ab` → done): the full
+**doctor → Mole rebrand** — `domain/core/_internal/doctor/` **merged into
+`mole/`** (one package: probes + report + watch, cycle-safe imports),
+identifiers `run_mole` / `MoleReport` / `MoleRouter`, URLs `/doctor/*` →
+`/mole/*` (manifest + contract-baseline regenerated), web route
+`(app)/mole` + `MoleSummary` / `RunMoleButton` + nav `nav.mole` in every
+locale, CLI `sloughgpt system mole` (validator class `Doctor` →
+`Validator`), tests renamed (`test_mole_probes.py`, `test_mole_router.py`),
+docs FEATURES/TESTING/INDEX/TRANSPORT reworded. **ONE CLI entry** (user
+decision): default = one-pass sweep + printed summary, `--watch` = cadence
++ journal, no subcommands. Grandfathered kept: `$SLO_DOCTOR_*`,
+`~/.cache/slog-doctor/`, `scripts/test-doctor.py`, phoneme word-data,
+historical records — **import renames break in-flight branches** still
+using `run_doctor`/`DoctorReport`. Gates: canonical 5-tree
+**green-by-baseline** — 388 bad ids vs baseline 849; all 32 new ids
+attributed (18 journey route-loads + 2 whoami + 6 log-noise = environment,
+A/B on origin/main identical; 3 `build_test_app` collection errors
+reproduce on unmodified main; 3 flakes standalone-green), targeted 80 py +
+24 cli + 31 web vitest, ruff/contract/manifest green, full web vitest
+8072 passed + 3 standalone-green load flakes. Earlier 2026-10-05 ~13:15:
+`feat/mole-phase2-probes` **lands on
 main** (merge `74959c439`, card `1e57b2d9` → done): Mole phase 2 — two
 read-only probes registered in the existing `PROBES` registry (one
 registration each; watch/report pick them up automatically): **gates**
