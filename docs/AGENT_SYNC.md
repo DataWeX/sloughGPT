@@ -4,7 +4,25 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-06 ~01:25 — `feat/kernels-nogil` **lands on
+**Last update**: 2026-10-06 ~02:10 — `feat/stats-local-day` **lands on
+main** (fast-forward, card `7e708a68` → done): the stats "today" count
+no longer reports 0 during the first hour after local midnight.
+`Note.date_str` sliced the **UTC**-stamped `created_at` while
+stats/filters compare against `date.today()` (**local**) — during
+00:00–01:00 WAT the two dates disagree (a midnight-only flake,
+invisible to daytime CI; `test_stats_endpoint` failed only in that
+window). Fixed at the single derivation point: aware stamps now convert
+to the local calendar day (`astimezone().date()`), naive/malformed
+stamps keep the historical slice, so all four comparison sites plus the
+export/grouping displays inherit local-day semantics in one place. Ids
+and stored data untouched; kanban `card.due_date` (a different date
+source) deliberately not touched. Evidence: live before/after with
+`TZ=America/Los_Angeles` forcing the mismatch — endpoint `assert 0 == 2`
+FAIL → PASS; full app-planner suite **200/200 in default TZ and TZ=LA**;
+6 new deterministic `TZ`-forced unit tests
+(`tests/test_note_date_str.py`, both conversion directions + fallbacks).
+
+Earlier ~01:25: `feat/kernels-nogil` **lands on
 main** (fast-forward, card `f30be275` → done): all 16 builder kernels in
 `domain/training/_internal/slonet_kernels.py` are now
 `@njit(cache=True, nogil=True)` — a thread-domain call to any hot kernel
