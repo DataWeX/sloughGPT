@@ -4,7 +4,24 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-06 ~02:10 — `feat/stats-local-day` **lands on
+**Last update**: 2026-10-06 ~03:05 — `feat/board-read-column-guard`
+**lands on main** (fast-forward, card `b538ecbd` → done): `load_board()`
+now validates every card against the board's **own schema-header**
+vocabulary — an undeclared column (hand-typed; the file is editable by
+design) logs a warning and re-homes under `todo`, instead of letting
+renderers silently drop the card (`board show` iterates header columns
+only; stats still counted it → the two views disagreed). Never raises:
+one typo must not break the board. Completes the split fix: write-path
+`validate_column()` = `67c406ee2` (card `46f0fac4`, other session), data
+repair of the 3 `in-progress` orphans = `86fb9a300` (same session);
+read-path guard was the missing half. Note the branch vocab divergence
+(main header `todo/wip/review/done`, root header `.../in_progress/...`)
+— validating against each board's own header makes the guard
+branch-agnostic; both live boards are internally consistent today (0
+coercions). Verified: 5 new tests (`test_board_column_guard.py`,
+incl. a repo-board canary) + full app-planner suite **205/205**.
+
+Earlier ~02:10: `feat/stats-local-day` **lands on
 main** (fast-forward, card `7e708a68` → done): the stats "today" count
 no longer reports 0 during the first hour after local midnight.
 `Note.date_str` sliced the **UTC**-stamped `created_at` while
