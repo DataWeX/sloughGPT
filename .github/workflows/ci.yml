@@ -76,6 +76,15 @@ jobs:
           node-version: "20"
           cache: "npm"
           cache-dependency-path: package-lock.json
+      # Cache the Cypress binary (~120 MB) keyed on the exact lockfile
+      # version — `npx cypress install` skips the download when warm.
+      - name: Resolve Cypress version
+        id: cypress
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/cypress'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ steps.cypress.outputs.version }}
       - run: npm ci --ignore-scripts
       # --ignore-scripts skips cypress's binary download; fetch it explicitly.
       - run: npx cypress install

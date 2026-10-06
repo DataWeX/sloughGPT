@@ -1,47 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-
-const IGNORE_PATHS = ['/_next', '/favicon', '/sw.js', '/workbox']
-
-const REDIRECTS: Record<string, string> = {
-  '/companion': '/souls',
-  '/evaluate': '/benchmark',
-  '/compare': '/benchmark',
-  '/lora-eval': '/benchmark',
-  '/experiments': '/benchmark',
-  '/token-tree': '/tokenizer',
-  '/meta-weights': '/models',
-  '/infer': '/models',
-  '/world': '/models',
-  '/registry': '/models',
-  '/memory': '/knowledge',
-  '/kb': '/knowledge',
-  '/docstore': '/knowledge',
-  '/collections': '/datasets',
-  '/self-train': '/training',
-  '/learn': '/training',
-  '/auto-train': '/training',
-  '/rate-limit': '/monitoring',
-  '/admin': '/settings',
-  '/auth': '/settings',
-  '/export': '/settings',
-  '/errors': '/monitoring',
-  '/security': '/monitoring',
-  '/images': '/developer',
-  '/session': '/chat',
-  '/files': '/developer',
-  '/voice': '/chat?mode=talk',
-  '/writing': '/chat?mode=write',
-  '/rewrite': '/chat?mode=rewrite',
-  '/translate': '/chat?mode=translate',
-  '/brainstorm': '/chat?mode=brainstorm',
-  '/decide': '/chat?mode=decide',
-  '/explain': '/chat?mode=explain',
-  '/wellness': '/chat?mode=wellness',
-  '/shell': '/developer',
-  '/workflow': '/feedback',
-  '/tools': '/chat',
-}
+// Single source of truth — redirects.ts is shared by this proxy and the
+// Vite dev/static middleware. An inline copy here silently drifted (37 vs
+// 47: the ten /workspace legacy paths were missing), so import, don't fork.
+import { IGNORE_PATHS, REDIRECTS } from './lib/redirects'
 
 export function proxy(request: NextRequest) {
   const start = Date.now()
