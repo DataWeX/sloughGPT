@@ -179,6 +179,31 @@ back to the suffix because container tier really is a property of the
 spelling; provenance may not, because no filename records who made a file.
 Neither enters `integrity_hash`, so declaring them changes no existing hash.
 
+**Where identity ends.** `integrity_hash` hashes the declared profile, so it
+exists only where a profile does. Two sidecar shapes are in the tree:
+`save_soul` writes the full ~30-key profile and stamps a hash, while older
+producers write a 1–3 key descriptor (`soul_name`, occasionally `lineage` or
+`soul_signature` — an architecture record, not content). The second kind
+cannot yield a hash and must not be given one: synthesising a profile from
+`{"soul_name": ...}` plus defaults would hand _different_ files the _same_
+digest, manufacturing false "these are the same checkpoint" claims. Absence
+means "not recorded", never "missing".
+
+Detail therefore states what a file is instead of staying silent.
+`checkpoint_info` fills only _missing_ identity fields from `classify_soul` —
+`format` at minimum, so a stray `evil.soul` reports `not-soul` and
+`traits.soul` shows its declared name disagreeing with its bytes — and never
+overwrites a stored value, because read-time derivation must not drift
+identity. One file per request (~7ms). The listing never classifies per row:
+that is what keeps `cmd_models` at 0.20s rather than 81.74s.
+
+Search roots are declared once, in `ckpt_roots()`. The list, lookup, download
+and delete carried five hand-written tuples, and `LORA_DIR` sat in the scan
+but not in `load_soul`, so a checkpoint could be listed and even downloaded
+yet 404 the instant it was opened (measured: 11 of 23 rows) while Delete
+removed nothing. It is a function rather than a tuple so that test isolation
+patching the module globals still redirects it.
+
 ## Quick Train Workflow
 
 ```bash
