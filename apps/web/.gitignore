@@ -52,3 +52,4 @@ dist-vite/
 # Next.js build outputs (dev uses .next-dev, prod build uses .next)
 .next-dev/
 .next-build*/
+.hydration-dump.json

@@ -160,8 +160,43 @@ Cypress.Commands.add('mockKnowledge', (items: string[] = []) => {
  * model lists, ...), while everything else answers with an object.
  */
 Cypress.Commands.add('mockApiFallback', () => {
+  // Stateful docstore KV: chatDB KV reads/writes are HTTP calls
+  // (PUT/GET /docstore/kv/{key}), and a purely stateless fallback would drop
+  // every write — persisted state (vm role/steps, training config, sidebar)
+  // would silently revert on reload (vm-page 'persists the selected role and
+  // steps across reloads'). The store closes over spec-frame state, so it
+  // survives cy.reload() within a test. Handled INSIDE the one generic
+  // handler so matching precedence between interceptors never comes into it.
+  const kvStore: Record<string, unknown> = {}
   cy.intercept({ url: `${api}/**` }, (req) => {
     const path = req.url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+    const kvPrefix = '/docstore/kv/'
+    if (path.startsWith(kvPrefix)) {
+      const key = decodeURIComponent(path.slice(kvPrefix.length))
+      if (req.method === 'GET') {
+        req.reply({
+          statusCode: 200,
+          body: key in kvStore ? { key, value: kvStore[key] } : {},
+        })
+        return
+      }
+      if (req.method === 'DELETE') {
+        delete kvStore[key]
+        req.reply({ statusCode: 200, body: {} })
+        return
+      }
+      let body: unknown = req.body
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body)
+        } catch {
+          body = {}
+        }
+      }
+      kvStore[key] = (body as { value?: unknown } | null)?.value
+      req.reply({ statusCode: 200, body: {} })
+      return
+    }
     const segments = path.split('/').filter(Boolean)
     const collectionish =
       req.method === 'GET' &&
