@@ -688,6 +688,14 @@ export default function SoulsPage() {
                               {cp.model_type}
                             </span>
                           )}
+                          {cp.provenance && (
+                            <span
+                              className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium"
+                              title={`Declared provenance — this file was written by a ${cp.provenance} producer`}
+                            >
+                              {cp.provenance}
+                            </span>
+                          )}
                         </div>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                           {cp.soul && <span>{cp.soul}</span>}
@@ -700,6 +708,14 @@ export default function SoulsPage() {
                             <span>· {cp.training_duration_s.toFixed(0)}s</span>
                           )}
                           {cp.born_at && <span>· {formatShortDate(cp.born_at)}</span>}
+                          {cp.integrity_hash && (
+                            <span
+                              className="font-mono"
+                              title={`Integrity hash ${cp.integrity_hash} — content-derived, so it identifies this checkpoint independently of its filename`}
+                            >
+                              · id {cp.integrity_hash.slice(0, 8)}
+                            </span>
+                          )}
                         </div>
                         {cp.perplexity_delta != null && cp.perplexity_delta !== 0 && (
                           <div className="flex items-center gap-3 text-xs mt-0.5">

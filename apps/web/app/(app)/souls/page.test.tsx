@@ -71,6 +71,8 @@ const CHECKPOINTS: Checkpoint[] = [
     size_mb: 1.2,
     perplexity_delta: -0.12,
     bleu_delta: 0.08,
+    provenance: 'training',
+    integrity_hash: 'deadbeefcafe1234',
   },
   { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
 ]
@@ -274,6 +276,20 @@ describe('SoulsPage', () => {
       expect(screen.getAllByText('Improved').length).toBeGreaterThanOrEqual(1)
       expect(screen.getAllByText('loss 0.450').length).toBeGreaterThanOrEqual(1)
     })
+  })
+
+  it('shows identity on the row itself, not only in the detail dialog', async () => {
+    // The identity spans were first added to CheckpointList — a component no
+    // page renders (only its own test imports it). The inline rows this page
+    // really draws carried no id, so two same-named files stayed
+    // indistinguishable in the very view built to tell them apart.
+    render(<SoulsPage />)
+    await clickTab('checkpoints')
+    await waitFor(() => {
+      expect(screen.getByText('cp-warm-v2')).toBeTruthy()
+    })
+    expect(screen.getByText(/id deadbeef/)).toBeTruthy()
+    expect(screen.getAllByText('training').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows perplexity and BLEU deltas', async () => {
