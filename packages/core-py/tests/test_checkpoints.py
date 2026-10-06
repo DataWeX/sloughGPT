@@ -437,6 +437,29 @@ class TestListAndDetailAgree:
         assert info["tier"] == "interchange"
         assert info["provenance"] == "export"
 
+    @pytest.mark.asyncio
+    async def test_lookup_and_listing_never_classify_each_row(self, monkeypatch):
+        # The mirror of detail's enrichment. find_checkpoint answers "where
+        # is it" and list_checkpoints answers "what rows exist" — neither
+        # probes bytes. classify_soul per row is the 81.74s cmd_models
+        # defect (read_sidecar's size guard fixed half of it; not calling
+        # it at all fixes the rest), and a timing assertion would flake
+        # under the load this box runs at, so spy instead: the call either
+        # happens or it does not.
+        _make_soul_file(CHECKPOINTS_DIR / "probe_spy.soul")
+        calls: list[str] = []
+
+        def _spy(path):
+            calls.append(str(path))
+            raise AssertionError(f"classify_soul leaked into the scan path: {path}")
+
+        monkeypatch.setattr("domain.inference.classify_soul", _spy)
+
+        assert find_checkpoint("probe_spy.soul") is not None
+        rows = await list_checkpoints()
+        assert rows, "fixture must produce at least one row to be meaningful"
+        assert calls == [], f"classify_soul ran over the listing: {calls[:3]}"
+
 
 class TestTrainedCheckpointSpelling:
     """The legacy double-append spelling is a first-class final job save.

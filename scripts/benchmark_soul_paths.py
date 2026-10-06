@@ -23,6 +23,7 @@ Benchmarks:
   load_legacy_hit      load_soul() where only .soul.soul exists (2 probes + miss)
   sidecar_small        read_sidecar() on a normal sidecar (no training blob)
   sidecar_bloated      read_sidecar() where metadata.training_state is 40MB
+  detail_enrich        identity fill for one checkpoint detail request
 
 Interpretation: the four string benchmarks should read as microseconds; the
 I/O benchmarks should be dominated by the read itself. A regression shows up
@@ -38,6 +39,15 @@ GET /training/checkpoints. `read_sidecar` skips the blob, so the two reads
 should land in the same sub-millisecond band; a large ratio means the size
 guard has stopped working and the blob is being parsed again. This benchmark
 exits 1 when it does.
+
+The detail benchmark guards the opposite edge of the same split. Opening one
+checkpoint now runs classify_soul() so the row always names its container
+(all 23 files on this machine self-describe, ~7ms each), but that probe must
+stay a per-request cost: if enrichment ever grows into parsing a whole
+sidecar or hashing a whole file, opening a single checkpoint starts paying
+what listing all of them once cost — the 81.74s cmd_models defect. Exits 1
+past 50ms, ~50x the expected probe and still under what a 40MB blob parse
+(3.85s) or a 44MB whole-file hash would cost.
 
 Usage:
     python scripts/benchmark_soul_paths.py
@@ -109,6 +119,19 @@ def _sidecar_exit(bloated: BenchResult) -> int:
     return 1 if bloated.p50_ms > _SIDECAR_P50_MS else 0
 
 
+# Detail-enrichment guard. classify_soul() probes the spelling candidates and
+# reads a handful of KB, so it lands well under a millisecond; 50ms is ~50x
+# that headroom (concurrent runs here swing the load average 18-30) while
+# staying far below the failure cases — parsing a 40MB resume blob whole cost
+# 3.85s and hashing a 44MB checkpoint would cost hundreds of ms.
+_DETAIL_P50_MS = 50.0
+
+
+def _detail_exit(detail: BenchResult) -> int:
+    """0 when identity fill stayed a per-request cost, 1 when it grew heavy."""
+    return 1 if detail.p50_ms > _DETAIL_P50_MS else 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--repeats", type=int, default=500, help="iterations per benchmark")
@@ -118,6 +141,7 @@ def main() -> int:
 
     from domain.inference import load_soul, save_soul, soul_path, soul_read_candidates
     from domain.inference._internal.slo_format import read_sidecar
+    from domain.training._internal.checkpoints import _describe_identity
 
     results: list[BenchResult] = []
 
@@ -217,12 +241,29 @@ def main() -> int:
                 sc_repeats,
             )
         )
+
+        # ── Detail enrichment: classify one file, fill only what's missing ─
+        # checkpoint_info() runs this on every detail request so a file whose
+        # sidecar merely names it can't leave the dialog with no format at
+        # all. The contract it must keep: one file per request, and gaps only
+        # — a stored integrity_hash / tier / provenance is never overwritten,
+        # or read-time derivation would drift identity between sessions.
+        (tmp / "detail.soul").write_bytes(b"not a soul container, just bytes")
+        detail_row = {"name": "detail", "model_path": str(tmp / "detail.soul")}
+        results.append(
+            _summarize(
+                "detail_enrich",
+                _time(lambda: _describe_identity(dict(detail_row)), sc_repeats),
+                sc_repeats,
+            )
+        )
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
     by_name = {r.name: r for r in results}
     hit, legacy = by_name["load_canonical_hit"], by_name["load_legacy_hit"]
     sc_small_r, sc_big_r = by_name["sidecar_small"], by_name["sidecar_bloated"]
+    detail_r = by_name["detail_enrich"]
 
     if args.json:
         print(
@@ -233,11 +274,12 @@ def main() -> int:
                     "sidecar_bloat_ratio": round(sc_big_r.p50_ms / sc_small_r.p50_ms, 4)
                     if sc_small_r.p50_ms
                     else None,
+                    "detail_p50_ms": detail_r.p50_ms,
                 },
                 indent=2,
             )
         )
-        return _sidecar_exit(sc_big_r)
+        return _sidecar_exit(sc_big_r) | _detail_exit(detail_r)
 
     print("\nSoul filename grammar + checkpoint I/O")
     print("=" * 66)
@@ -265,8 +307,19 @@ def main() -> int:
         "model listing pays the resume-state parse again."
     )
     print("sidecar guard: " + ("PASS" if rc == 0 else "FAIL"))
+    drc = _detail_exit(detail_r)
+    print(
+        f"detail enrichment (classify one file, fill missing fields): {detail_r.p50_ms:.4f} ms p50"
+    )
+    print(
+        "guard: opening one checkpoint may classify its bytes and nothing "
+        f"heavier — past {_DETAIL_P50_MS} ms it is parsing a whole sidecar or "
+        "hashing a whole file, so one detail click starts costing what "
+        "listing every model once cost."
+    )
+    print("detail guard: " + ("PASS" if drc == 0 else "FAIL"))
     print()
-    return rc
+    return rc | drc
 
 
 if __name__ == "__main__":
