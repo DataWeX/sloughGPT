@@ -59,7 +59,20 @@ class Note:
 
     @property
     def date_str(self) -> str:
-        return self.created_at[:10] if self.created_at else ""
+        """Local calendar day of creation.
+
+        ``created_at`` is stamped in UTC while stats/filters compare
+        against ``date.today()`` (local), so slicing the raw stamp made
+        ``today`` report 0 during the first hour after local midnight
+        (card 7e708a68). Convert aware stamps to local; naive or
+        malformed stamps keep the historical slice behaviour.
+        """
+        if not self.created_at:
+            return ""
+        try:
+            return datetime.fromisoformat(self.created_at).astimezone().date().isoformat()
+        except ValueError:
+            return self.created_at[:10]
 
     @property
     def short_id(self) -> str:
