@@ -21,6 +21,7 @@ _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server
 if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -88,6 +89,26 @@ PATCH_STORE = "domain.feedback._internal.per_user_lora.get_per_user_lora"
 PATCH_PER_U_LORA = "domain.feedback._internal.per_user_lora.get_per_user_lora"
 
 
+@pytest.fixture
+def aligned_cwd(monkeypatch):
+    """Run the test from where the router bound its adapter base.
+
+    ``routers.lora_eval`` resolves request paths against the directory that
+    is current *now*, while ``_ADAPTER_BASE`` was resolved once at import —
+    and this file imports the router at module scope, i.e. at collection
+    time. Any suite that chdirs and does not restore (``test_linux_cmds``'
+    ``host`` fixture calls bare ``os.chdir(tmp_path)``) leaves the two
+    disagreeing, so the confinement check rejects every adapter path and
+    these tests fail for reasons that have nothing to do with them.
+
+    Pinning the CWD to the binding makes the promise these tests were
+    written under — "the two agree wherever pytest runs" — actually hold.
+    """
+    import routers.lora_eval as mod
+
+    monkeypatch.chdir(mod._ADAPTER_BASE.parents[1])
+
+
 class TestRunEval:
     # The router binds Path at module scope, so patching pathlib.Path never
     # reaches it — the old mock silently did nothing and the handler's real
@@ -105,7 +126,7 @@ class TestRunEval:
             return True
 
     @patch(PATCH_EVALUATOR)
-    def test_baseline_only(self, mock_get):
+    def test_baseline_only(self, mock_get, aligned_cwd):
         evaluator = _make_evaluator()
         mock_get.return_value = evaluator
         client = TestClient(_app())
@@ -121,7 +142,7 @@ class TestRunEval:
         assert "baseline" in data
 
     @patch(PATCH_EVALUATOR)
-    def test_with_adapter_comparison(self, mock_get):
+    def test_with_adapter_comparison(self, mock_get, aligned_cwd):
         evaluator = _make_evaluator()
         mock_get.return_value = evaluator
         client = TestClient(_app())
