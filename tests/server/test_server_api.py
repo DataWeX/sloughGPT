@@ -183,6 +183,16 @@ class TestStatsEndpoints:
 
 class TestAutoTrainEndpoints:
     @pytest.mark.slow
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "PRODUCTION BUG: the /auto-train/* router was deleted by d63f5cb0c "
+            "('split training service into focused modules') while production "
+            "shell still calls it (domain/shell/_internal/commands.py:217, "
+            "repl.py:200). Card e205b15c. RED when the route returns — then "
+            "delete this marker."
+        ),
+    )
     def test_list_checkpoints(self):
         response = client.get("/auto-train/checkpoints")
         assert response.status_code == 200

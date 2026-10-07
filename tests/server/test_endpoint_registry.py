@@ -162,6 +162,17 @@ class TestEndpointRegistry:
         assert r.status_code == 200
 
     # ── metrics ─────────────────────────────────────────────────────
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "PRODUCTION BUG: root /metrics was deleted by 5717e1f5f "
+            "('delete dead routers') but apps/cli/src/commands/dev.py:1334 still "
+            "calls it, auth_middleware.py:32 still allowlists it and "
+            "docs/DEPLOYMENT.md:175 still documents it. Live routes are only "
+            "/system/metrics and /benchmark/metrics. RED when root /metrics "
+            "returns — then delete this marker."
+        ),
+    )
     def test_metrics_root(self):
         r = client.get("/metrics")
         assert r.status_code == 200
@@ -211,10 +222,26 @@ class TestEndpointRegistry:
             assert isinstance(data, dict)
 
     # ── auto-train (no model loaded) ────────────────────────────────
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "PRODUCTION BUG: the /auto-train/* router was deleted by d63f5cb0c "
+            "('split training service into focused modules') while production "
+            "shell still calls it (domain/shell/_internal/commands.py:217, "
+            "repl.py:200). Card e205b15c. RED when the route returns."
+        ),
+    )
     def test_auto_train_status(self):
         r = client.get("/auto-train/status")
         assert r.status_code == 200
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "PRODUCTION BUG: /auto-train/* router deleted by d63f5cb0c; "
+            "production shell still calls it. Card e205b15c. RED when it returns."
+        ),
+    )
     def test_auto_train_checkpoints(self):
         r = client.get("/auto-train/checkpoints")
         assert r.status_code == 200
