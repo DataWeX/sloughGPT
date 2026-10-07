@@ -172,7 +172,9 @@ describe('LearnPage', () => {
     await act(async () => { fireEvent.change(input, { target: { value: 'machine learning' } }) })
     await act(async () => { screen.getByText('Search & Learn').click() })
     await waitFor(() => { expect(mockSearch).toHaveBeenCalledWith('machine learning') })
-    expect(screen.getByText('Ingested 500 tokens, 3 new facts')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Ingested 500 tokens, 3 new facts')).toBeTruthy()
+    })
   })
 
   it('shows error message when search fails', async () => {
@@ -201,7 +203,9 @@ describe('LearnPage', () => {
     await act(async () => { fireEvent.change(urlInput, { target: { value: 'https://example.com' } }) })
     await act(async () => { screen.getByText('Ingest URL').click() })
     await waitFor(() => { expect(mockIngestUrl).toHaveBeenCalledWith('https://example.com') })
-    expect(screen.getByText('Added 7 facts from URL')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Added 7 facts from URL')).toBeTruthy()
+    })
     expect((screen.getByPlaceholderText('https://...') as HTMLInputElement).value).toBe('')
   })
 
@@ -213,7 +217,9 @@ describe('LearnPage', () => {
     await act(async () => { fireEvent.change(ta, { target: { value: 'some article text' } }) })
     await act(async () => { screen.getByText('Ingest Text').click() })
     await waitFor(() => { expect(mockIngestText).toHaveBeenCalledWith('some article text') })
-    expect(screen.getByText('Added 9 facts from text')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Added 9 facts from text')).toBeTruthy()
+    })
   })
 
   it('shows error message when URL ingest fails', async () => {
@@ -234,11 +240,13 @@ describe('LearnPage', () => {
     await renderLoaded()
     await act(async () => { screen.getByRole('button', { name: 'Knowledge' }).click() })
     await waitFor(() => { expect(mockQueryKnowledge).toHaveBeenCalledWith(undefined) })
-    expect(screen.getByText('Knowledge (1)')).toBeTruthy()
-    expect(screen.getByText('Paris is the capital of France')).toBeTruthy()
-    expect(screen.getByText('geography')).toBeTruthy()
-    expect(screen.getByText('wikipedia')).toBeTruthy()
-    expect(screen.getByTestId('learning-insights-card')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Knowledge (1)')).toBeTruthy()
+      expect(screen.getByText('Paris is the capital of France')).toBeTruthy()
+      expect(screen.getByText('geography')).toBeTruthy()
+      expect(screen.getByText('wikipedia')).toBeTruthy()
+      expect(screen.getByTestId('learning-insights-card')).toBeTruthy()
+    })
   })
 
   it('shows empty knowledge state', async () => {
@@ -276,9 +284,11 @@ describe('LearnPage', () => {
     await renderLoaded()
     await act(async () => { screen.getByRole('button', { name: 'Feeds' }).click() })
     await waitFor(() => { expect(mockListFeeds).toHaveBeenCalled() })
-    expect(screen.getByText('RSS Feeds')).toBeTruthy()
-    expect(screen.getByText('https://news.example.com/rss')).toBeTruthy()
-    expect(screen.getByText('3600s')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('RSS Feeds')).toBeTruthy()
+      expect(screen.getByText('https://news.example.com/rss')).toBeTruthy()
+      expect(screen.getByText('3600s')).toBeTruthy()
+    })
   })
 
   it('shows empty feeds state', async () => {
@@ -298,7 +308,9 @@ describe('LearnPage', () => {
     await act(async () => { fireEvent.change(feedInput, { target: { value: 'https://rss.example.com' } }) })
     await act(async () => { screen.getByText('Subscribe').click() })
     await waitFor(() => { expect(mockSubscribeFeed).toHaveBeenCalledWith('https://rss.example.com') })
-    expect(screen.getByText('Subscribed')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Subscribed')).toBeTruthy()
+    })
     expect(mockListFeeds).toHaveBeenCalledTimes(2)
   })
 

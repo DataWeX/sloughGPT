@@ -157,7 +157,9 @@ describe('TokenTreeTrainCard', () => {
     fireEvent.click(screen.getByRole('button', { name: /Train token tree/i }))
 
     await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('boom', 'error'))
-    expect(screen.getByText(/Training failed/)).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText(/Training failed/)).toBeDefined()
+    })
   })
 
   it('disables the button while training', async () => {

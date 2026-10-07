@@ -93,8 +93,10 @@ describe('QuickImportDialog', () => {
     }, { signal: expect.any(AbortSignal) }))
     expect(mocks.mockAddToast).toHaveBeenCalledWith('Imported 5 files', 'success')
     expect(onImported).toHaveBeenCalled()
-    expect(screen.getByText('Imported successfully')).toBeDefined()
-    expect(screen.getByText('Imported 5 files')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('Imported successfully')).toBeDefined()
+      expect(screen.getByText('Imported 5 files')).toBeDefined()
+    })
   })
 
   it('passes a custom dataset name when provided', async () => {

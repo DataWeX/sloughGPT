@@ -347,7 +347,12 @@ describe('SessionPage', () => {
       },
       { timeout: 5000 },
     )
-    expect(screen.getByText(/Sessions \(2\)/)).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(screen.getByText(/Sessions \(2\)/)).toBeInTheDocument()
+      },
+      { timeout: 5000 },
+    )
     expect(screen.getAllByText(/Chat 1/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Chat 2/).length).toBeGreaterThanOrEqual(1)
   })
