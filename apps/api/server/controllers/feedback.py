@@ -61,6 +61,12 @@ class FeedbackController:
 
     def __init__(self, repo_root: Path, db_path: str | None = None):
         self.repo_root = repo_root
+        # Directory holding the legacy feedback.jsonl stream. Records now live in
+        # MogDB (see class docstring), but the training/export consumers
+        # (training/feeds.py "data/feedback.jsonl",
+        # domain/training/_internal/experience_adapter.py) and
+        # training/jobs_api.py export_feedback_pairs() still address this path.
+        self.feedback_dir = repo_root / "data"
         if db_path is None:
             db_path = str(repo_root / "data" / "feedback_mogdb")
         self._db = _get_mogdb(db_path)

@@ -176,12 +176,14 @@ def test_export_training(client):
 
     response = test_client.post(
         "/training/export-text",
-        json={"max_pairs": 10},
+        # ExportTextRequest's field is target_count (max_pairs was never a field).
+        json={"target_count": 10},
     )
     assert response.status_code == 200
     data = response.json()
     assert "pairs_count" in data
-    assert "filepath" in data
+    # The endpoint's key is "file"; no endpoint in this repo returns "filepath".
+    assert "file" in data
 
 
 def test_export_training_invalid(client):
