@@ -2,6 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "preserve",
+    "allowImportingTsExtensions": true,
     "types": ["@webgpu/types"],
     "paths": {
       "@/*": ["./*"],

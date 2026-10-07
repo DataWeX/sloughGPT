@@ -2,7 +2,7 @@
 
 import type { Plugin } from 'vite'
 import type { ServerResponse } from 'node:http'
-import { isIgnoredPath, REDIRECTS } from '../lib/redirects'
+import { isIgnoredPath, REDIRECTS } from '../lib/redirects.ts'
 
 export function applyRedirect(pathname: string, res: ServerResponse): boolean {
   if (isIgnoredPath(pathname)) return false

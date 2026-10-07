@@ -3,7 +3,12 @@
 
 import type { Plugin } from 'vite'
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { discoverApiRoutes, isScopedApiPath, matchApiRoute, type ApiRouteDef } from './api-routes'
+import {
+  discoverApiRoutes,
+  isScopedApiPath,
+  matchApiRoute,
+  type ApiRouteDef,
+} from './api-routes.ts'
 
 type RouteModule = Record<string, unknown>
 

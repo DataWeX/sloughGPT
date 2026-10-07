@@ -1,8 +1,11 @@
 import path from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { apiRoutesPlugin } from './vite/api-middleware-plugin'
-import { redirectsPlugin } from './vite/redirect-plugin'
+// Relative specifiers carry explicit .ts extensions: with `"type": "module"`
+// the config graph is ESM, and the native config loader (Vite's future
+// default) resolves ESM the way Node does — no extension search.
+import { apiRoutesPlugin } from './vite/api-middleware-plugin.ts'
+import { redirectsPlugin } from './vite/redirect-plugin.ts'
 
 // Vite is the single web build stack (Next.js coexistence removed).
 // Maps next/* onto local compat shims so App Router page components work unchanged
@@ -13,7 +16,7 @@ import { redirectsPlugin } from './vite/redirect-plugin'
 //
 // Env: loadEnv reads .env.local / .env / .env.[mode] so NEXT_PUBLIC_API_URL
 // points the client at the edge (:8080) without exporting shell vars.
-const env = loadEnv('development', __dirname, '')
+const env = loadEnv('development', import.meta.dirname, '')
 const apiUrl = env.NEXT_PUBLIC_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
 const nodeEnv = env.NODE_ENV || process.env.NODE_ENV || 'development'
 
@@ -52,7 +55,7 @@ export default defineConfig({
       NODE_ENV: nodeEnv,
     }),
   ],
-  root: __dirname,
+  root: import.meta.dirname,
   publicDir: 'public',
   server: {
     host: true,
@@ -61,34 +64,43 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: /^@\//, replacement: path.resolve(__dirname) + '/' },
+      { find: /^@\//, replacement: path.resolve(import.meta.dirname) + '/' },
       {
         find: /^@sloughgpt\/strui$/,
-        replacement: path.resolve(__dirname, '../../packages/strui/src'),
+        replacement: path.resolve(import.meta.dirname, '../../packages/strui/src'),
       },
-      { find: /^next\/link$/, replacement: path.resolve(__dirname, 'vite/next-compat/link.tsx') },
+      {
+        find: /^next\/link$/,
+        replacement: path.resolve(import.meta.dirname, 'vite/next-compat/link.tsx'),
+      },
       {
         find: /^next\/navigation$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/navigation.ts'),
+        replacement: path.resolve(import.meta.dirname, 'vite/next-compat/navigation.ts'),
       },
       {
         find: /^next\/dynamic$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/dynamic.tsx'),
+        replacement: path.resolve(import.meta.dirname, 'vite/next-compat/dynamic.tsx'),
       },
       {
         find: /^next\/web-vitals$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/web-vitals.ts'),
+        replacement: path.resolve(import.meta.dirname, 'vite/next-compat/web-vitals.ts'),
       },
       {
         find: /^next\/server$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/server.ts'),
+        replacement: path.resolve(import.meta.dirname, 'vite/next-compat/server.ts'),
       },
       {
         find: /^next-auth\/react$/,
-        replacement: path.resolve(__dirname, 'vite/next-compat/next-auth.tsx'),
+        replacement: path.resolve(import.meta.dirname, 'vite/next-compat/next-auth.tsx'),
       },
-      { find: /^react$/, replacement: path.resolve(__dirname, '../../node_modules/react') },
-      { find: /^react-dom$/, replacement: path.resolve(__dirname, '../../node_modules/react-dom') },
+      {
+        find: /^react$/,
+        replacement: path.resolve(import.meta.dirname, '../../node_modules/react'),
+      },
+      {
+        find: /^react-dom$/,
+        replacement: path.resolve(import.meta.dirname, '../../node_modules/react-dom'),
+      },
     ],
     dedupe: ['react', 'react-dom', 'scheduler'],
     preserveSymlinks: true,

@@ -1,6 +1,6 @@
 /**
  * Repo invariant: every top-level source dir of `apps/web` must appear in
- * `tailwind.config.js` -> `content`.
+ * `tailwind.config.cjs` -> `content`.
  *
  * Tailwind only emits utilities it finds while scanning those globs. An omitted
  * dir does not fail the build — its classes are silently dropped from the
@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest'
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const nodeRequire = createRequire(import.meta.url)
-const config = nodeRequire(join(webRoot, 'tailwind.config.js')) as { content?: string[] }
+const config = nodeRequire(join(webRoot, 'tailwind.config.cjs')) as { content?: string[] }
 
 /** Build output and vendored specs are not shipped UI, so they are not scanned. */
 const NOT_SOURCE = new Set(['node_modules', 'dist', 'dist-vite', 'coverage', 'public', 'cypress'])
@@ -70,7 +70,7 @@ describe('tailwind content globs', () => {
       (name) => !content.some((glob) => glob.startsWith(`./${name}/`)),
     )
 
-    expect(uncovered, `tailwind.config.js content misses: ${uncovered.join(', ')}`).toEqual([])
+    expect(uncovered, `tailwind.config.cjs content misses: ${uncovered.join(', ')}`).toEqual([])
   })
 
   it('covers the chat feature that regressed (card bb8212a8)', () => {
