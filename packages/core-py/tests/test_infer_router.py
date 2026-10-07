@@ -90,11 +90,17 @@ class FakeModel:
 def app():
     """Create FastAPI app with the infer router."""
     from fastapi import FastAPI
+    from infrastructure.exception_handlers import register_app_error_handler
 
     from apps.api.server.routers.infer import router
 
     app = FastAPI()
     app.include_router(router)
+    # Without this the bare app has no AppError handler, so raise_error() in the
+    # router re-raises out of TestClient instead of becoming the 503 response the
+    # assertions expect. register_app_error_handler is the "minimal handler for
+    # test clients" variant — it adds only AppError, leaving FastAPI defaults.
+    register_app_error_handler(app)
     return app
 
 
@@ -107,12 +113,38 @@ def client(app):
 
 
 def _patch_state(model=None, phase="ready"):
-    """Return list of context managers that mock the router's model accessors."""
+    """Return list of context managers that mock the router's model accessors.
+
+    Two gates stand between the router and a 200, and the original helper opened
+    neither:
+
+    1. ``_get_model_status()`` checks ``_model_ready()``, which reads **global
+       ``state``** (``state.model`` / ``state.provider`` / ``ServerState``) — not
+       ``InferRouter._get_model``. Patching the accessors alone left it False, so
+       the endpoint answered 503 "Model still loading" with a FakeModel in hand.
+       Bound here to "ready iff a model was supplied", which keeps the no-model
+       tests on their 503 path.
+    2. ``STARTUP_PHASE`` starts at ``initializing`` (step 0/8), so a second gate
+       answered E_STARTING. ``phase`` was accepted but never applied.
+    """
+    import routers.inference as inference_mod
+    import startup_progress
+
     import apps.api.server.routers.infer as infer_mod
 
     return [
         patch.object(infer_mod.InferRouter, "_get_model", return_value=model),
         patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=model),
+        # _model_ready lives in routers.inference — where _get_model_status's
+        # __globals__ resolve it. `routers.inference` and
+        # `apps.api.server.routers.inference` are TWO DISTINCT module objects
+        # (verified: id() differs) for the same file, so patching the long-form
+        # name silently does nothing. Patch the binding it is read from.
+        patch.object(inference_mod, "_model_ready", return_value=model is not None),
+        patch.dict(
+            startup_progress.STARTUP_PHASE,
+            {"phase": phase, "step": 8, "message": "Ready"},
+        ),
     ]
 
 
@@ -252,12 +284,7 @@ class TestInferEmbed:
 class TestInferGenerate:
     def test_generate_no_model_returns_503(self, client):
         """Generate returns 503 when model not ready."""
-        import apps.api.server.routers.infer as infer_mod
-
-        patches = [
-            patch.object(infer_mod.InferRouter, "_get_model", return_value=None),
-            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=None),
-        ]
+        patches = _patch_state(model=None)
         for p in patches:
             p.start()
         try:
@@ -273,12 +300,16 @@ class TestInferGenerate:
         mock_provider = AsyncMock()
         mock_provider.chat = AsyncMock(return_value="Hello world!")
 
-        import apps.api.server.routers.infer as infer_mod
-
-        patches = [
-            patch.object(infer_mod.InferRouter, "_get_model", return_value=fake),
-            patch.object(infer_mod.InferRouter, "_get_model_interface", return_value=fake),
-            patch("domain.models._internal.provider.get_provider", return_value=mock_provider),
+        # _patch_state also opens the startup gate — without it the endpoint
+        # answers E_STARTING (503) before the provider is ever consulted.
+        #
+        # Provider target: infer.py does `from domain.models import get_provider`
+        # (function-level), so the binding actually read is
+        # domain.models.get_provider. Patching
+        # domain.models._internal.provider.get_provider moves a different object
+        # and the endpoint still answers "No provider available" (503).
+        patches = _patch_state(model=fake) + [
+            patch("domain.models.get_provider", return_value=mock_provider),
         ]
         for p in patches:
             p.start()

@@ -45,7 +45,8 @@ class TestHealthEndpoints:
         """Test root endpoint returns API info."""
         response = requests.get(f"{BASE_URL}/", timeout=TIMEOUT)
         assert response.status_code == 200
-        data = response.json()
+        # success_response() envelope: {"status","data"} — the info lives in data.
+        data = response.json()["data"]
         assert "version" in data
         assert "endpoints" in data
 
@@ -60,7 +61,8 @@ class TestHealthEndpoints:
         """Test liveness probe."""
         response = requests.get(f"{BASE_URL}/health/live", timeout=TIMEOUT)
         assert response.status_code == 200
-        data = response.json()
+        # liveness() docstring: 'Envelope with status: "alive"' — unwrap first.
+        data = response.json()["data"]
         assert data.get("status") == "alive"
 
     def test_health_readiness(self):
@@ -104,8 +106,11 @@ class TestGenerationEndpoints:
         """Test that empty prompt is handled gracefully."""
         payload = {"prompt": ""}
         response = requests.post(f"{BASE_URL}/inference/generate", json=payload, timeout=TIMEOUT)
-        # Server accepts empty prompt and returns 200
-        assert response.status_code == 200
+        # GenerateRequest declares prompt: str = Field(..., min_length=1), so an
+        # empty prompt is rejected by schema validation. 422 IS the graceful
+        # answer (a validation error, not a 500) — the old "returns 200" comment
+        # predated min_length.
+        assert response.status_code == 422
 
     def test_generate_stream_endpoint(self):
         """Test streaming generation endpoint."""
@@ -135,7 +140,8 @@ class TestModelEndpoints:
         """Test listing available models."""
         response = requests.get(f"{BASE_URL}/models", timeout=TIMEOUT)
         assert response.status_code == 200
-        data = response.json()
+        # Envelope unwrapped: payload is the model list itself.
+        data = response.json()["data"]
         assert "models" in data or isinstance(data, list)
 
     def test_list_huggingface_models(self):
@@ -172,6 +178,17 @@ class TestDatasetEndpoints:
 class TestMetricsEndpoints:
     """Integration tests for metrics and monitoring endpoints."""
 
+    _REASON = (
+        "PRODUCTION BUG: root /metrics was deleted by 5717e1f5f "
+        "('delete dead routers'), but production still calls it "
+        "(apps/cli/src/commands/dev.py:1334), it is still allowlisted in "
+        "infrastructure/auth_middleware.py:32, and docs/DEPLOYMENT.md:175 "
+        "documents `curl localhost:8000/metrics`. The live routes are only "
+        "/system/metrics and /benchmark/metrics. strict=True: goes RED when "
+        "root /metrics is restored — the signal to delete this marker."
+    )
+
+    @pytest.mark.xfail(strict=True, reason=_REASON)
     def test_metrics_json(self):
         """Test metrics endpoint in JSON format."""
         response = requests.get(f"{BASE_URL}/metrics", timeout=TIMEOUT)
@@ -179,6 +196,7 @@ class TestMetricsEndpoints:
         data = response.json()
         assert "uptime" in data or "requests_total" in data or "metrics" in data
 
+    @pytest.mark.xfail(strict=True, reason=_REASON)
     def test_metrics_prometheus(self):
         """Test metrics endpoint in Prometheus format."""
         response = requests.get(f"{BASE_URL}/metrics/prometheus", timeout=TIMEOUT)

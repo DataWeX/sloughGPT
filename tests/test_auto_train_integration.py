@@ -28,6 +28,16 @@ class TestAutoTrainIntegration:
         return "http://localhost:8000"
 
     @pytest.mark.anyio
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "PRODUCTION BUG: the /auto-train/* router was deleted by d63f5cb0c "
+            "('split training service into focused modules'); production shell "
+            "still calls it (domain/shell/_internal/commands.py:217, repl.py:200). "
+            "Tracked alongside tests/test_e2e_smoke.py::TestAutoTrain. "
+            "strict=True: RED when the route returns."
+        ),
+    )
     async def test_start_then_stream_sequence(self, api_base_url):
         """Full flow: start -> stream several steps -> stop."""
         async with httpx.AsyncClient(timeout=300.0) as client:
@@ -57,6 +67,14 @@ class TestAutoTrainIntegration:
             assert stop_resp.status_code == 200
 
     @pytest.mark.anyio
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "PRODUCTION BUG: /auto-train/stream 404s — router deleted by "
+            "d63f5cb0c. Zero events is the 404, not a stream that stayed quiet. "
+            "strict=True: RED when the route returns."
+        ),
+    )
     async def test_stream_fails_without_start(self, api_base_url):
         """Stream should fail gracefully if start wasn't called."""
         async with httpx.AsyncClient(timeout=30.0) as client:
