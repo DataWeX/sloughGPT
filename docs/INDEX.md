@@ -26,6 +26,7 @@ Single source of truth for navigation. Read this first.
 | **PRODUCER_CONSUMER_QUEUE.md**    | Queue pattern                 |
 | **PUGQEEP.md**                    | PGQ: points, pools, Pipe      |
 | **TRANSPORT_PROJECTIONS.md**      | Capability → contract → route |
+| **RESPONSE_MODES_PROTOCOL.md**    | Interface → modes → displays  |
 
 ## Features
 
