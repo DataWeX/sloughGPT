@@ -114,3 +114,77 @@ def test_every_provenance_constant_is_registered() -> None:
         "SOUL_PROVENANCE_* constants whose value is missing from the "
         f"SOUL_PROVENANCE tuple (save_soul would reject them): {unregistered}"
     )
+
+
+# ── the value's last hop: over HTTP ──────────────────────────────────────────
+
+
+def test_identity_survives_the_trip_to_the_http_response(tmp_path, monkeypatch) -> None:
+    """Pin the delivery this module's docstring already claims (lines 6-7).
+
+    Every other seam in the chain has coverage: producers declare
+    ``record=`` (above), the domain builds rows that carry identity
+    (``test_checkpoints``), and the web renders whatever the controller
+    hands it (the souls page vitest). This route is the seam *between*
+    those, and a field dropped here is invisible to all three — the API
+    still answers 200 with fewer keys, the list simply stops printing an id,
+    and no assertion anywhere is about this hop: the vitest mocks the
+    controller, the domain test never leaves Python.
+
+    So: real files under redirected roots, read through the real route, with
+    both the file that declares identity and the one that declares nothing.
+    """
+    import json
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from infrastructure.exception_handlers import register_app_error_handler
+    from training.router import router
+
+    import domain.training._internal.checkpoints as ckpt_mod
+
+    for name in ("CHECKPOINTS_DIR", "TURBO_DIR", "LORA_DIR", "TRAINED_DIR"):
+        root = tmp_path / name.lower()
+        root.mkdir(parents=True, exist_ok=True)
+        monkeypatch.setattr(ckpt_mod, name, root)
+    ckpts = ckpt_mod.CHECKPOINTS_DIR
+
+    # A file that declares identity, in the shape save_soul writes it.
+    (ckpts / "contract-declared.soul").write_text("x" * 5000)
+    (ckpts / "contract-declared.soul.meta.json").write_text(
+        json.dumps(
+            {
+                "name": "contract-declared",
+                "integrity_hash": "abc123def456",
+                "tier": "interchange",
+                "provenance": "export",
+            }
+        ),
+        encoding="utf-8",
+    )
+    # …and one that declares nothing at all.
+    (ckpts / "contract-bare.soul").write_text("x" * 5000)
+
+    app = FastAPI()
+    register_app_error_handler(app)
+    app.include_router(router)
+    client = TestClient(app)
+
+    resp = client.get("/training/checkpoints")
+    assert resp.status_code == 200, resp.text
+    rows = {r["name"]: r for r in resp.json()["data"]}
+    assert "contract-declared.soul" in rows, f"listing missed it: {sorted(rows)}"
+
+    row = rows["contract-declared.soul"]
+    assert row.get("integrity_hash") == "abc123def456", row
+    assert row.get("tier") == "interchange", row
+    assert row.get("provenance") == "export", row
+
+    # Detail must say what each container *is* even when no sidecar does:
+    # the dialog renders its Identity block only when a field is present, so
+    # a dropped format reads as "nothing to show" instead of "not recorded".
+    for name in ("contract-declared.soul", "contract-bare.soul"):
+        detail = client.get(f"/training/checkpoints/{name}/info")
+        assert detail.status_code == 200, f"{name}: {detail.text}"
+        info = detail.json()["data"]
+        assert info.get("format"), f"{name}: detail did not state its container: {info}"
