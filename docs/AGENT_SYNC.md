@@ -4,6 +4,18 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**Last update**: 2026-10-07 — card `d994d4f8` → done: `GET
+/knowledge/rag/documents` now pages (**default 200, `?limit`/`?offset`,
+`?all=1` escape hatch**; envelope gains `total`/`limit`/`offset`;
+`RAGService.list_documents` slices *before* building per-doc dicts) —
+first page **31 KB vs 3,080,544 B encoded (99×)** measured on the live
+19,703-doc index; the knowledge page Sources panel shows "Showing X of
+Y" + Load more instead of downloading/rendering everything. Contract
+baseline regenerated (+3 query params, +422; 54/556/492 unchanged).
+Tests: 233 Python + 29 vitest + tsc/ruff green. Not on the live server
+yet — arrives when the root checkout absorbs main (or a cherry-pick,
+as done for the health fix in `98220d30f`).
+
 **Last update**: 2026-10-06 ~10:30 — card `625d85e5` → done, **live gap
 closed** (fix cherry-picked onto the root checkout as `98220d30f`;
 live `/health` 10,099,639 B → 1624 B)
