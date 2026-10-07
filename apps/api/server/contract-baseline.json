@@ -3920,10 +3920,30 @@
   "/knowledge/rag/documents": {
    "GET": {
     "operationId": "rag_list_documents_knowledge_rag_documents_get",
-    "params": [],
+    "params": [
+     {
+      "name": "all",
+      "in": "query",
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
     "body": null,
     "responses": [
-     "200"
+     "200",
+     "422"
     ]
    }
   },

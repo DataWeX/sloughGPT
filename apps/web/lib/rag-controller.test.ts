@@ -83,6 +83,19 @@ describe('rag-controller', () => {
       expect(mockApiGet).toHaveBeenCalledWith('/knowledge/rag/documents')
       expect(result.documents).toHaveLength(1)
     })
+
+    it('passes limit and offset as query params', async () => {
+      mockApiGet.mockResolvedValue({
+        documents: [],
+        stats: { total_documents: 0, total_chunks: 0, index_size: 0 },
+        ready: true,
+        total: 0,
+        limit: 2,
+        offset: 4,
+      })
+      await listRAGDocuments(2, 4)
+      expect(mockApiGet).toHaveBeenCalledWith('/knowledge/rag/documents?limit=2&offset=4')
+    })
   })
 
   describe('getRAGStats', () => {
