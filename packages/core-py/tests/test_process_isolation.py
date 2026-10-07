@@ -646,7 +646,14 @@ class TestProcessGuard:
         from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
 
         slnc = tmp_path / "model.slnc"
-        slnc.write_bytes(b"\x00" * (1024 * 1024 * 4096))  # 4 GB
+        # 4 GB *sparse* file. The previous form materialised a 4 GiB bytes object
+        # in RAM and wrote 4 GiB of zeros to disk, which ENOSPC'd outright once the
+        # volume passed ~96% (and could take other sessions' runs down with it).
+        # resolve_memory_limit_mb reads os.path.getsize — the LOGICAL size — so a
+        # hole gives the identical answer with no blocks allocated.
+        slnc.touch()
+        with slnc.open("r+b") as fh:
+            fh.truncate(1024 * 1024 * 1024 * 4)  # 4 GB logical, ~0 blocks
         assert resolve_memory_limit_mb(str(slnc), None) == 4096 * 8
 
     def test_resolve_memory_limit_missing_file(self, tmp_path):
@@ -1024,6 +1031,20 @@ class TestProcessGuardSlo:
     """Tests for ProcessGuard in SloNet mode (slnc_path)."""
 
     GUARD_KWARGS = {
+        # Opt in to SUBPROCESS explicitly. ProcessGuard's default flipped from
+        # SUBPROCESS to THREAD in b002cc789 ("add /self-train to sidebar
+        # navigation" — an unrelated commit), and every test in this class
+        # depends on process semantics that THREAD cannot provide:
+        #   - _patch_worker replaces model_worker._slo_worker_main, which only
+        #     _launch_worker's SUBPROCESS branch ever reads (process_guard.py:837).
+        #     In THREAD mode _run_slo() runs a REAL SloNetChatProvider.from_slnc
+        #     against "/fake/test.slnc" -> "ThreadWorker[slo-guard]: model load
+        #     failed" for all 8 tests.
+        #   - test_crash_and_restart / test_max_restarts_exhausted read
+        #     g._worker._process.pid and os.kill(SIGKILL); _ThreadWorker has no
+        #     ._process and cannot be signalled.
+        # Same opt-in as lines 624 and 841 below.
+        "mode": ExecutionMode.SUBPROCESS,
         "slnc_path": "/fake/test.slnc",
         "model_id": "test-slo",
         "worker_id": "slo-guard",
@@ -1036,6 +1057,9 @@ class TestProcessGuardSlo:
 
     @pytest.fixture(autouse=True)
     def _patch_worker(self, monkeypatch):
+        # Patches model_worker._slo_worker_main: in SUBPROCESS mode
+        # ModelWorkerProcess forks this target into the child (model_worker.py:837),
+        # so the fake serves generate/stream without ever loading a model.
         import domain.infrastructure._internal.model_worker as mw_mod
 
         monkeypatch.setattr(mw_mod, "_slo_worker_main", _fake_slo_worker_main)
@@ -1222,8 +1246,8 @@ class TestCreateSloGuard:
             restart_delay=1.0,
             worker_id="slo-guard-gpt2",
         )
-        assert g._slnc_path == "/tmp/test.slnc"
-        assert g._model_id == "gpt2"
+        assert g._config.slnc_path == "/tmp/test.slnc"
+        assert g._config.model_id == "gpt2"
         assert g.max_restarts == 3
         assert g.restart_delay == 1.0
         assert g.worker_id == "slo-guard-gpt2"
@@ -1261,12 +1285,12 @@ class TestCreateSloGuard:
             quantize=True,
             quant_bits=4,
         )
-        assert guard._slnc_path == "/tmp/m.slnc"
-        assert guard._model_id == "gpt2"
+        assert guard._config.slnc_path == "/tmp/m.slnc"
+        assert guard._config.model_id == "gpt2"
         assert guard.worker_id == "slo-guard-gpt2"
         assert guard.max_restarts == 1
-        assert guard._quantize is True
-        assert guard._quant_bits == 4
+        assert guard._config.quantize is True
+        assert guard._config.quant_bits == 4
 
 
 class TestCreateModelGuard:
@@ -1282,11 +1306,14 @@ class TestCreateModelGuard:
             generate_timeout=3.0,
             max_concurrent=2,
         )
+        # create_model_guard hard-codes this path (process_guard.py:687), and
+        # hf_model_worker.py:11 uses the same one. The old expectation
+        # `domain.infrastructure._internal.…` predates the domains/ package alias.
         assert (
-            guard.model_cls_path
-            == "domain.infrastructure._internal.hf_model_worker.hf_model_loader"
+            guard._config.hf_model_cls_path
+            == "domains.infrastructure.hf_model_worker.hf_model_loader"
         )
-        assert guard.model_kwargs == {"model_id": "my-org/model", "device": "cpu"}
+        assert guard._config.hf_model_kwargs == {"model_id": "my-org/model", "device": "cpu"}
         assert guard.worker_id == "guard-model"
         assert guard.max_restarts == 2
         assert guard.restart_delay == 0.5
