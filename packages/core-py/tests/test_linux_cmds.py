@@ -30,9 +30,22 @@ class FakeHost(LinuxCommandsMixin):
 
 @pytest.fixture
 def host(tmp_path):
+    """Run under tmp_path, and put the process back afterwards.
+
+    The chdir used to be permanent: ``monkeypatch.chdir`` restores itself,
+    but a bare ``os.chdir`` in a fixture does not, so every test collected
+    after this one ran from a stale tmp directory. That silently broke
+    anything resolving paths against the current directory — eight
+    ``test_phoneme_cli`` cases and two ``test_lora_eval_router`` cases
+    failed in full gates while passing alone.
+    """
     h = FakeHost()
+    previous = os.getcwd()
     os.chdir(tmp_path)
-    return h
+    try:
+        yield h
+    finally:
+        os.chdir(previous)
 
 
 # ── Static helpers ────────────────────────────────────────────────────────────
