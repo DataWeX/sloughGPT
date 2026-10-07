@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, cleanup, waitFor, fireEvent, within } from '@testing-library/react'
 import React from 'react'
 import { act } from 'react'
 
@@ -179,6 +179,16 @@ async function renderLoaded() {
   })
 }
 
+// The vocab tab renders TWO pagers: this card's, and TokenTreeVocabCard's
+// ("Token Tree Vocabulary"), whose entries come from /token-tree/* calls that
+// this file does not mock - they hit the live backend, so whether it has loaded
+// by assertion time is a network race. Scope pager queries to this card.
+function vocabPager() {
+  const title = screen.getByText(/^Vocabulary \(\d+\)$/)
+  const card = (title.parentElement?.parentElement ?? title) as HTMLElement
+  return within(card)
+}
+
 describe('TokenizerPage', () => {
   it('shows loading skeleton and calls getStats on mount', async () => {
     let resolveStats: (v: typeof stats) => void
@@ -221,7 +231,9 @@ describe('TokenizerPage', () => {
         screen.getByText('BPE tokenizer — try it, peek under hood, train your own'),
       ).toBeTruthy()
     })
-    expect(screen.queryByText('Vocab Size')).toBeFalsy()
+    await waitFor(() => {
+      expect(screen.queryByText('Vocab Size')).toBeFalsy()
+    })
   })
 
   it('keeps Tokenize disabled and does not call tokenize for empty input', async () => {
@@ -248,10 +260,12 @@ describe('TokenizerPage', () => {
     await waitFor(() => {
       expect(mockTokenize).toHaveBeenCalledWith('hello world')
     })
-    expect(screen.getByText('Tokens (2)')).toBeTruthy()
-    expect(screen.getByText('hello')).toBeTruthy()
-    expect(screen.getByText('world')).toBeTruthy()
-    expect(screen.getByText('[100, 200]')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Tokens (2)')).toBeTruthy()
+      expect(screen.getByText('hello')).toBeTruthy()
+      expect(screen.getByText('world')).toBeTruthy()
+      expect(screen.getByText('[100, 200]')).toBeTruthy()
+    })
   })
 
   it('shows error toast when tokenization fails', async () => {
@@ -284,11 +298,13 @@ describe('TokenizerPage', () => {
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
     })
-    expect(screen.getByText('Vocabulary (2)')).toBeTruthy()
-    expect(screen.getByText('<pad>')).toBeTruthy()
-    expect(screen.getByText('hello')).toBeTruthy()
-    expect((screen.getByText('Prev') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByText('Next') as HTMLButtonElement).disabled).toBe(true)
+    await waitFor(() => {
+      expect(screen.getByText('Vocabulary (2)')).toBeTruthy()
+      expect(screen.getByText('<pad>')).toBeTruthy()
+      expect(screen.getByText('hello')).toBeTruthy()
+    })
+    expect((vocabPager().getByText('Prev') as HTMLButtonElement).disabled).toBe(true)
+    expect((vocabPager().getByText('Next') as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('paginates through vocabulary with Prev and Next', async () => {
@@ -306,17 +322,17 @@ describe('TokenizerPage', () => {
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
     })
-    expect((screen.getByText('Prev') as HTMLButtonElement).disabled).toBe(true)
-    expect((screen.getByText('Next') as HTMLButtonElement).disabled).toBe(false)
+    expect((vocabPager().getByText('Prev') as HTMLButtonElement).disabled).toBe(true)
+    expect((vocabPager().getByText('Next') as HTMLButtonElement).disabled).toBe(false)
     await act(async () => {
-      screen.getByText('Next').click()
+      vocabPager().getByText('Next').click()
     })
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 50)
     })
-    expect((screen.getByText('Prev') as HTMLButtonElement).disabled).toBe(false)
+    expect((vocabPager().getByText('Prev') as HTMLButtonElement).disabled).toBe(false)
     await act(async () => {
-      screen.getByText('Prev').click()
+      vocabPager().getByText('Prev').click()
     })
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
@@ -346,10 +362,12 @@ describe('TokenizerPage', () => {
       expect(mockGetSamples).toHaveBeenCalled()
     })
     expect(screen.getByText('Samples')).toBeTruthy()
-    expect(screen.getByText('hello')).toBeTruthy()
-    expect(screen.getByText('he')).toBeTruthy()
-    expect(screen.getByText('llo')).toBeTruthy()
-    expect(screen.getByText('3 tokens')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('hello')).toBeTruthy()
+      expect(screen.getByText('he')).toBeTruthy()
+      expect(screen.getByText('llo')).toBeTruthy()
+      expect(screen.getByText('3 tokens')).toBeTruthy()
+    })
   })
 
   it('shows Load Samples button and loads samples on click when empty', async () => {
@@ -361,7 +379,9 @@ describe('TokenizerPage', () => {
     await waitFor(() => {
       expect(mockGetSamples).toHaveBeenCalledTimes(1)
     })
-    expect(screen.getByText('Load Samples')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Load Samples')).toBeTruthy()
+    })
     await act(async () => {
       screen.getByText('Load Samples').click()
     })
@@ -407,7 +427,9 @@ describe('TokenizerPage', () => {
     await waitFor(() => {
       expect(mockTrain).toHaveBeenCalledWith({ vocab_size: 768 })
     })
-    expect(screen.getByText('Trained on 1000 lines. Vocab: 512')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Trained on 1000 lines. Vocab: 512')).toBeTruthy()
+    })
   })
 
   it('shows error message when training fails', async () => {

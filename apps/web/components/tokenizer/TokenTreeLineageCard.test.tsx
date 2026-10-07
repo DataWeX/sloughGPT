@@ -93,9 +93,11 @@ describe('TokenTreeLineageCard', () => {
     fireEvent.click(screen.getByText('Show lineage'))
     await waitFor(() => expect(mocks.mockLineage).toHaveBeenCalledWith('quick'))
     expect(await screen.findByText(/Merge lineage of/)).toBeDefined()
-    expect(screen.getByText('q')).toBeDefined()
-    expect(screen.getByText('</w>')).toBeDefined()
-    expect(screen.getByText(/quick<\/w>/)).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('q')).toBeDefined()
+      expect(screen.getByText('</w>')).toBeDefined()
+      expect(screen.getByText(/quick<\/w>/)).toBeDefined()
+    })
   })
 
   it('shows a skeleton while loading', async () => {
@@ -120,7 +122,9 @@ describe('TokenTreeLineageCard', () => {
     fireEvent.change(screen.getByLabelText('Token to inspect'), { target: { value: 'zzz' } })
     fireEvent.click(screen.getByText('Show lineage'))
     await waitFor(() => expect(mocks.mockAddToast).toHaveBeenCalledWith('Token not in vocabulary: zzz', 'error'))
-    expect(screen.queryByText(/Merge lineage of/)).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByText(/Merge lineage of/)).toBeNull()
+    })
   })
 
   it('disables the button when the input is empty', async () => {

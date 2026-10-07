@@ -135,9 +135,11 @@ describe('DebugOverlay', () => {
       const gpt2s = screen.getAllByText('gpt2')
       expect(gpt2s.length).toBeGreaterThanOrEqual(1)
     })
-    expect(screen.getByText('friendly')).toBeDefined()
-    expect(screen.getByText('3600s')).toBeDefined()
-    expect(screen.getByText('150')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('friendly')).toBeDefined()
+      expect(screen.getByText('3600s')).toBeDefined()
+      expect(screen.getByText('150')).toBeDefined()
+    })
   })
 
   it('shows model metrics section', async () => {

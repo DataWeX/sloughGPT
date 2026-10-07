@@ -286,7 +286,9 @@ describe('CompanionPage — presets flow', () => {
     await waitFor(() => {
       expect(mockListPresets).toHaveBeenCalled()
     })
-    expect(screen.getByText('Companion')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('Companion')).toBeTruthy()
+    })
   })
 
   it('displays Active Preset stat card', async () => {

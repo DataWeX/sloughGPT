@@ -118,7 +118,9 @@ describe('CheckpointCompareDialog', () => {
         'error',
       )
     })
-    expect(screen.getByRole('alert')).toBeDefined()
-    expect(screen.queryByText('answer one')).toBeNull()
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeDefined()
+      expect(screen.queryByText('answer one')).toBeNull()
+    })
   })
 })

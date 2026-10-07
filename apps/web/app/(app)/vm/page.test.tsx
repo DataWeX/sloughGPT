@@ -260,9 +260,11 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Registers')).toBeInTheDocument()
     })
-    expect(screen.getByText('EAX')).toBeInTheDocument()
-    expect(screen.getByText('0x00000001')).toBeInTheDocument()
-    expect(screen.getByText('EIP')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('EAX')).toBeInTheDocument()
+      expect(screen.getByText('0x00000001')).toBeInTheDocument()
+      expect(screen.getByText('EIP')).toBeInTheDocument()
+    })
   })
 
   it('shows VGA display after run', async () => {
@@ -294,8 +296,10 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/Execution Trace/)).toBeInTheDocument()
     })
-    expect(screen.getByText('MOV')).toBeInTheDocument()
-    expect(screen.getByText('HLT')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('MOV')).toBeInTheDocument()
+      expect(screen.getByText('HLT')).toBeInTheDocument()
+    })
   })
 
   it('clears result on Clear button', async () => {
@@ -365,7 +369,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Output')).toBeInTheDocument()
     })
-    expect(screen.getByText('Hello, World!')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Hello, World!')).toBeInTheDocument()
+    })
   })
 
   it('renders memory dump in debug mode', async () => {
@@ -392,7 +398,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('halted')).toBeInTheDocument()
     })
-    expect(screen.queryByText('Training')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('Training')).not.toBeInTheDocument()
+    })
     expect(mockedTrainingJob).not.toHaveBeenCalled()
   })
 
@@ -411,9 +419,11 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Training')).toBeInTheDocument()
     })
-    expect(screen.getByText('running')).toBeInTheDocument()
-    expect(screen.getByText('abc-123')).toBeInTheDocument()
-    expect(screen.getByText(/Training in progress/)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('running')).toBeInTheDocument()
+      expect(screen.getByText('abc-123')).toBeInTheDocument()
+      expect(screen.getByText(/Training in progress/)).toBeInTheDocument()
+    })
   })
 
   it('shows completed training card state and stops polling', async () => {
@@ -432,7 +442,9 @@ describe('VMPage', () => {
       expect(screen.getByText('Training completed successfully.')).toBeInTheDocument()
     })
     expect(screen.getByText('completed')).toBeInTheDocument()
-    expect(screen.getByText('#3')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('#3')).toBeInTheDocument()
+    })
   })
 
   it('renders the final result JSON inside the completed training card', async () => {
@@ -451,7 +463,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Training completed successfully.')).toBeInTheDocument()
     })
-    expect(screen.getByText(/final_loss.*1\.2/)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText(/final_loss.*1\.2/)).toBeInTheDocument()
+    })
   })
 
   it('shows a Stop button on a running job and stops on click', async () => {
@@ -495,7 +509,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('dataset not found').length).toBeGreaterThanOrEqual(1)
     })
-    expect(screen.getByText('failed')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('failed')).toBeInTheDocument()
+    })
   })
 
   it('shows permission denied hint when EAX is -2', async () => {
@@ -514,8 +530,12 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/A syscall was denied for the current role/)).toBeInTheDocument()
     })
-    expect(screen.getByText(/require the role/)).toBeInTheDocument()
-    expect(screen.getAllByText('admin').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getByText(/require the role/)).toBeInTheDocument()
+    })
+    await waitFor(() => {
+      expect(screen.getAllByText('admin').length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('does not show permission denied hint on a normal run', async () => {
@@ -525,7 +545,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('halted')).toBeInTheDocument()
     })
-    expect(screen.queryByText(/A syscall was denied for the current role/)).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText(/A syscall was denied for the current role/)).not.toBeInTheDocument()
+    })
   })
 
   it('renders the training result JSON from the run response', async () => {
@@ -539,7 +561,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Training result')).toBeInTheDocument()
     })
-    expect(screen.getByText(/final_loss.*1\.5/)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText(/final_loss.*1\.5/)).toBeInTheDocument()
+    })
   })
 
   it('does not render a training result card when absent', async () => {
@@ -549,7 +573,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(screen.getByText('halted')).toBeInTheDocument()
     })
-    expect(screen.queryByText('Training result')).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.queryByText('Training result')).not.toBeInTheDocument()
+    })
   })
 
   it('renders the training launch card with default config', () => {
@@ -633,7 +659,9 @@ describe('VMPage', () => {
     await waitFor(() => {
       expect(mockedRun).toHaveBeenCalled()
     })
-    expect(within(container).queryByText(/Launched training job/)).toBeNull()
+    await waitFor(() => {
+      expect(within(container).queryByText(/Launched training job/)).toBeNull()
+    })
   })
 
   it('dismisses the launch confirmation', async () => {
@@ -655,7 +683,9 @@ describe('VMPage', () => {
     })
 
     fireEvent.click(within(container).getByRole('button', { name: 'Dismiss' }))
-    expect(within(container).queryByText(/Launched training job/)).toBeNull()
+    await waitFor(() => {
+      expect(within(container).queryByText(/Launched training job/)).toBeNull()
+    })
   })
 
   it('renders a dataset dropdown populated from the backend', async () => {

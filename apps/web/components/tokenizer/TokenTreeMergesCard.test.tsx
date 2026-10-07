@@ -90,10 +90,14 @@ describe('TokenTreeMergesCard', () => {
     render(<TokenTreeMergesCard />)
 
     await waitFor(() => expect(mocks.mockGetMerges).toHaveBeenCalledWith(20, ''))
-    expect(screen.getByText('the')).toBeDefined()
-    expect(screen.getAllByText('quic')).toHaveLength(2)
-    expect(screen.getByText('quick')).toBeDefined()
-    expect(screen.getAllByText('42')).toHaveLength(1)
+    await waitFor(() => {
+      expect(screen.getByText('the')).toBeDefined()
+      expect(screen.getAllByText('quic')).toHaveLength(2)
+      expect(screen.getByText('quick')).toBeDefined()
+    })
+    await waitFor(() => {
+      expect(screen.getAllByText('42')).toHaveLength(1)
+    })
   })
 
   it('searches with the typed query', async () => {
@@ -158,10 +162,14 @@ describe('TokenTreeMergesCard', () => {
     fireEvent.click(screen.getByLabelText('Toggle lineage for the'))
 
     await waitFor(() => expect(mocks.mockLineage).toHaveBeenCalledWith('the</w>'))
-    expect(screen.getAllByText('t')).toHaveLength(1)
-    expect(screen.getAllByText('h')).toHaveLength(1)
-    expect(screen.getAllByText('e')).toHaveLength(2)
-    expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getAllByText('t')).toHaveLength(1)
+      expect(screen.getAllByText('h')).toHaveLength(1)
+      expect(screen.getAllByText('e')).toHaveLength(2)
+    })
+    await waitFor(() => {
+      expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    })
   })
 
   it('toggles a rule lineage closed on second click', async () => {

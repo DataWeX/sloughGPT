@@ -163,7 +163,9 @@ describe('TokenTreePage', () => {
     await waitFor(() => {
       expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
     }, { timeout: 5000 })
-    expect(screen.getByText('alpha')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('alpha')).toBeInTheDocument()
+    })
   })
 
   it('loads merges when Merges tab clicked', async () => {
@@ -174,7 +176,9 @@ describe('TokenTreePage', () => {
     await waitFor(() => {
       expect(mockGetMerges).toHaveBeenCalledWith(30, '')
     }, { timeout: 5000 })
-    expect(screen.getByText('xy')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('xy')).toBeInTheDocument()
+    })
   })
 
   it('loads saved trees when Saved tab clicked', async () => {
