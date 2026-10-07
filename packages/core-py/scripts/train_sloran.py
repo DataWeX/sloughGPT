@@ -5,9 +5,9 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import numpy as np
-from domain.training._internal.sloran import SloRAN
 
 from domain.training._internal.slonet import Tensor, no_grad
+from domain.training._internal.sloran import SloRAN
 
 DATA = os.path.join(os.path.dirname(__file__), "..", "..", "..", "data", "shakespeare", "input.txt")
 B, T, V = 8, 64, None

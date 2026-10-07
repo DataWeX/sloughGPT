@@ -33,18 +33,15 @@ jobs:
       # Pinned to the shared toolchain's version (conda env = ruff 0.16.8).
       # CI was installing latest, whose import-sorting rules flagged 11 I001s
       # that pass locally -- one toolchain, one verdict (card ca647de2).
-      # DIAGNOSTIC (card ca647de2): the 0.16.8 pin did NOT reconcile verdicts —
-      # two local 0.16.8 binaries (conda + pip wheel) pass where CI fails 11
-      # I001s on byte-identical files/config. Print the binary actually
-      # executing, its PATH, and its config resolution before checking.
+      # The follow-up probe proved the pin was not the cause (same version,
+      # same config, same bytes on both sides); the real cause was isort
+      # first-party classification probing a machine-local domain symlink.
+      # Fixed declaratively: known-first-party = ["domain"] in pyproject.toml.
       - run: pip install ruff==0.16.8 mypy
       - name: Ruff lint
         run: |
-          pwd
-          which ruff
           ruff --version
-          echo "PATH=$PATH"
-          ruff check --no-cache -v packages/core-py/ apps/api/server/ --exclude '__pycache__'
+          ruff check packages/core-py/ apps/api/server/ --exclude '__pycache__'
       - name: Ruff format check
         run: ruff format --check packages/core-py/ apps/api/server/ --exclude '__pycache__'
       - name: Mypy type check
