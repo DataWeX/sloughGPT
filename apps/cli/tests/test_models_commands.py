@@ -85,6 +85,55 @@ class TestCmdModels:
         assert by_name["declared.soul"][idx] == "training"
         assert by_name["unknown.soul"][idx] == "-"
 
+    def test_format_and_hash_come_from_bytes_not_the_name(self, mock_log, tmp_path, monkeypatch):
+        """The two columns that cannot be read off the filename are not.
+
+        This table exists because name and size cannot tell same-stem
+        checkpoints apart — two ``journey_select_trained`` siblings sit 1KB
+        apart with losses 4.10 and 3.97. So Format must come from the header
+        (a ``.soul`` whose bytes disagree says ``not-soul`` rather than
+        inheriting the claim) and Hash from the sidecar's content digest,
+        truncated, reading ``-`` when no digest was recorded.
+
+        Both are silent-failure columns: drop the classify call and every
+        Format quietly follows the name again; drop the sidecar field and
+        every Hash reads ``-``. Nothing else in the suite would notice.
+        """
+        from commands.models import cmd_models
+
+        from domain.inference._internal.slo_format import SOU_MAGIC
+
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+
+        # The name claims soul; the header disagrees.
+        stray = models_dir / "claimed.soul"
+        stray.write_bytes(b"not actually a soul")
+        stray.with_name("claimed.soul.meta.json").write_text(
+            '{"soul_name": "claimed"}', encoding="utf-8"
+        )
+        # Real magic, with the digest save_soul stamped beside it.
+        kept = models_dir / "kept.soul"
+        kept.write_bytes(SOU_MAGIC + b"\x00" * 32)
+        kept.with_name("kept.soul.meta.json").write_text(
+            '{"soul_name": "kept", "integrity_hash": "deadbeefcafe1234"}', encoding="utf-8"
+        )
+
+        import utils.helpers
+
+        monkeypatch.setattr(utils.helpers, "local_soul_candidate_paths", lambda x: [stray, kept])
+        monkeypatch.chdir(tmp_path)
+        cmd_models(MagicMock())
+
+        headers, rows = mock_log.table.call_args_list[0][0][:2]
+        assert headers == ["Name", "Size", "Format", "Hash", "Loss", "Born", "Provenance"]
+        by_name = {r[0]: r for r in rows}
+        fmt_idx, hash_idx = headers.index("Format"), headers.index("Hash")
+        assert by_name["claimed.soul"][fmt_idx] == "not-soul"
+        assert by_name["claimed.soul"][hash_idx] == "-"
+        assert by_name["kept.soul"][fmt_idx] == "soul"
+        assert by_name["kept.soul"][hash_idx] == "deadbeefca"
+
     def test_no_soul_files_info(self, mock_log, monkeypatch):
         import utils.helpers
         from commands.models import cmd_models
