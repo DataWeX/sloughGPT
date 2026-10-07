@@ -195,7 +195,11 @@ Detail therefore states what a file is instead of staying silent.
 `traits.soul` shows its declared name disagreeing with its bytes — and never
 overwrites a stored value, because read-time derivation must not drift
 identity. One file per request (~7ms). The listing never classifies per row:
-that is what keeps `cmd_models` at 0.20s rather than 81.74s.
+that is what keeps `cmd_models` at 0.20s rather than 81.74s — yet it still
+shows identity, because `integrity_hash` and `provenance` are plain row
+fields the scan already returns. The list renders what exists and derives
+nothing, which is why it and the detail dialog agree about one file without
+the list doing any of `checkpoint_info`'s work.
 
 Search roots are declared once, in `ckpt_roots()`. The list, lookup, download
 and delete carried five hand-written tuples, and `LORA_DIR` sat in the scan
