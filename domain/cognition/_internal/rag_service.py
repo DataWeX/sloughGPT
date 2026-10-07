@@ -322,9 +322,20 @@ class RAGService:
             )
             raise
 
-    def list_documents(self) -> list[dict[str, Any]]:
-        """List all ingested documents (metadata only, no content)."""
+    def list_documents(self, limit: int | None = None, offset: int = 0) -> list[dict[str, Any]]:
+        """List ingested documents (metadata only, no content).
+
+        Pagination: ``offset`` skips entries, ``limit`` caps the page
+        (``None`` = every remaining entry). The slice happens *before* the
+        per-document dicts are built, so a paged call never pays for the
+        full index (live: 19.7k docs / 2.8 MB single-shot).
+        """
+        offset = max(0, offset)
         with self._lock:
+            if limit is None:
+                page = self._documents[offset:]
+            else:
+                page = self._documents[offset : offset + max(0, limit)]
             return [
                 {
                     "metadata": doc.get("metadata", {}),
@@ -332,7 +343,7 @@ class RAGService:
                     "num_chunks": len(doc.get("chunk_ids", [])),
                     "added_at": doc.get("added_at", 0),
                 }
-                for doc in self._documents
+                for doc in page
             ]
 
     def clear(self) -> int:

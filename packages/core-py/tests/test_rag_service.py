@@ -354,6 +354,54 @@ class TestKBRouterRAGEndpoints:
         data = resp.json()["data"]
         assert len(data["documents"]) >= 1
 
+    def test_rag_list_documents_paging(self):
+        for i in range(3):
+            self.client.post(
+                "/knowledge/rag/ingest", json={"content": f"paging doc {i}", "source": f"p{i}"}
+            )
+        resp = self.client.get("/knowledge/rag/documents?limit=2")
+        assert resp.status_code == 200
+        page1 = resp.json()["data"]
+        assert page1["limit"] == 2
+        assert page1["offset"] == 0
+        assert len(page1["documents"]) == min(2, page1["total"])
+
+        resp = self.client.get("/knowledge/rag/documents?limit=2&offset=2")
+        assert resp.status_code == 200
+        page2 = resp.json()["data"]
+        assert page2["limit"] == 2
+        assert page2["offset"] == 2
+        assert page2["total"] == page1["total"]
+        assert len(page2["documents"]) == max(0, page1["total"] - 2)
+
+        # paged results are exact, in-order slices of the full list
+        full = self.client.get("/knowledge/rag/documents?all=1").json()["data"]
+        assert full["limit"] is None
+        assert full["total"] == page1["total"]
+        assert len(full["documents"]) == full["total"]
+        assert page1["documents"] == full["documents"][0:2]
+        assert page2["documents"] == full["documents"][2:4]
+
+    def test_rag_list_documents_default_page(self):
+        resp = self.client.get("/knowledge/rag/documents")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["limit"] == 200
+        assert data["offset"] == 0
+        assert len(data["documents"]) == min(200, data["total"])
+
+    def test_rag_list_documents_empty_pages(self):
+        resp = self.client.get("/knowledge/rag/documents?limit=0")
+        assert resp.json()["data"]["documents"] == []
+        resp = self.client.get("/knowledge/rag/documents?offset=100000")
+        data = resp.json()["data"]
+        assert data["documents"] == []
+        assert data["offset"] == 100000
+
+    def test_rag_list_documents_rejects_negative_params(self):
+        assert self.client.get("/knowledge/rag/documents?limit=-1").status_code == 422
+        assert self.client.get("/knowledge/rag/documents?offset=-1").status_code == 422
+
     def test_rag_stats(self):
         resp = self.client.get("/knowledge/rag/stats")
         assert resp.status_code == 200

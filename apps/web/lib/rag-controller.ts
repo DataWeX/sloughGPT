@@ -105,13 +105,29 @@ export async function verifyRAG(
 }
 
 /**
- * List all documents in the RAG index.
+ * One page of documents in the RAG index.
+ *
+ * The server returns the first 200 by default; pass `offset` to fetch
+ * later pages (omit `limit` to keep the server default page size).
  */
-export async function listRAGDocuments(): Promise<{
+export interface RAGDocumentsPage {
   documents: RAGDocument[]
   stats: RAGStats
-}> {
-  return apiGet('/knowledge/rag/documents') as Promise<{ documents: RAGDocument[]; stats: RAGStats }>
+  ready: boolean
+  total: number
+  limit: number | null
+  offset: number
+}
+
+export async function listRAGDocuments(
+  limit?: number,
+  offset?: number,
+): Promise<RAGDocumentsPage> {
+  const params = new URLSearchParams()
+  if (limit !== undefined) params.set('limit', String(limit))
+  if (offset) params.set('offset', String(offset))
+  const qs = params.toString()
+  return apiGet(`/knowledge/rag/documents${qs ? `?${qs}` : ''}`) as Promise<RAGDocumentsPage>
 }
 
 /**

@@ -107,6 +107,8 @@ export default function KnowledgePage() {
   const [editErrors, setEditErrors] = useState<{ content?: string; topic?: string }>({})
   const [ragStats, setRagStats] = useState<RAGStats | null>(null)
   const [ragDocs, setRagDocs] = useState<RAGDocument[]>([])
+  const [ragDocsTotal, setRagDocsTotal] = useState(0)
+  const [ragLoadingMore, setRagLoadingMore] = useState(false)
   const [ragClearing, setRagClearing] = useState(false)
   const [ragSyncing, setRagSyncing] = useState(false)
   const [showRagDocs, setShowRagDocs] = useState(false)
@@ -172,6 +174,7 @@ export default function KnowledgePage() {
       const [s, docs] = await Promise.all([getRAGStats(), listRAGDocuments()])
       setRagStats(s)
       setRagDocs(docs.documents || [])
+      setRagDocsTotal(docs.total ?? docs.stats?.total_documents ?? 0)
     } catch {
       addToast('Could not load deep memory data', 'error')
     }
@@ -187,6 +190,7 @@ export default function KnowledgePage() {
       await clearRAG()
       setRagStats({ total_documents: 0, total_chunks: 0, index_size: 0 })
       setRagDocs([])
+      setRagDocsTotal(0)
       addToast('Deep memory index cleared', 'success')
     } catch {
       addToast('Could not clear deep memory index', 'error')
@@ -194,6 +198,20 @@ export default function KnowledgePage() {
       setRagClearing(false)
     }
   }, [addToast])
+
+  const handleRAGLoadMoreDocs = useCallback(async () => {
+    setRagLoadingMore(true)
+    try {
+      const next = await listRAGDocuments(undefined, ragDocs.length)
+      const more = next.documents || []
+      setRagDocs((prev) => [...prev, ...more])
+      setRagDocsTotal(next.total ?? 0)
+    } catch {
+      addToast('Could not load more sources', 'error')
+    } finally {
+      setRagLoadingMore(false)
+    }
+  }, [ragDocs.length, addToast])
 
   const handleRAGSync = useCallback(async () => {
     setRagSyncing(true)
@@ -882,21 +900,41 @@ export default function KnowledgePage() {
                 <span>{ragStats.total_chunks} pieces indexed</span>
               </div>
               {showRagDocs && ragDocs.length > 0 && (
-                <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
-                  {ragDocs.map((doc, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <span className="text-foreground truncate block">
-                          {(doc.metadata?.source as string) || 'unknown'}
-                        </span>
-                        <span className="text-muted-foreground">{doc.num_chunks} pieces</span>
+                <>
+                  <div className="mt-3 space-y-1 max-h-48 overflow-y-auto">
+                    {ragDocs.map((doc, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="text-foreground truncate block">
+                            {(doc.metadata?.source as string) || 'unknown'}
+                          </span>
+                          <span className="text-muted-foreground">{doc.num_chunks} pieces</span>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                  {ragDocs.length > 0 && (
+                    <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                      <span>
+                        Showing {ragDocs.length} of {ragDocsTotal}
+                      </span>
+                      {ragDocs.length < ragDocsTotal && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 px-2 text-xs"
+                          onClick={handleRAGLoadMoreDocs}
+                          disabled={ragLoadingMore}
+                        >
+                          {ragLoadingMore ? 'Loading…' : 'Load more'}
+                        </Button>
+                      )}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
               {showRagDocs && ragDocs.length === 0 && (
                 <p className="mt-3 text-xs text-muted-foreground">No sources yet.</p>
