@@ -200,7 +200,9 @@ describe('ConsciousnessComparePage', () => {
       expect(screen.getAllByText('consciousness_compare.page_title').length).toBeGreaterThan(0)
     })
 
-    expect(screen.getAllByText('85').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText('85').length).toBeGreaterThanOrEqual(1)
+    })
 
     const scoreTexts = screen.getAllByText(/^\d+$/)
     expect(scoreTexts.length).toBeGreaterThanOrEqual(2)
@@ -212,10 +214,12 @@ describe('ConsciousnessComparePage', () => {
       expect(screen.getAllByText('consciousness_compare.page_title').length).toBeGreaterThan(0)
     })
 
-    expect(screen.getAllByText(/valence/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/arousal/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/novelty/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/coherence/i).length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(screen.getAllByText(/valence/i).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/arousal/i).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/novelty/i).length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/coherence/i).length).toBeGreaterThan(0)
+    })
   })
 
   it('shows belief comparisons', async () => {
@@ -224,8 +228,10 @@ describe('ConsciousnessComparePage', () => {
       expect(screen.getAllByText('consciousness_compare.page_title').length).toBeGreaterThan(0)
     })
 
-    expect(screen.getAllByText('Self-awareness').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Emotional range').length).toBeGreaterThan(0)
-    expect(screen.getAllByText('Context awareness').length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(screen.getAllByText('Self-awareness').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Emotional range').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Context awareness').length).toBeGreaterThan(0)
+    })
   })
 })

@@ -133,9 +133,11 @@ describe('TokenTreeQueryCard', () => {
     fireEvent.click(screen.getByText('Find neighbors'))
     await waitFor(() => expect(mocks.mockSimilar).toHaveBeenCalledWith('quick', 5))
     expect(await screen.findByText('brown')).toBeDefined()
-    expect(screen.getByText('lazy')).toBeDefined()
-    expect(screen.getByText('0.850')).toBeDefined()
-    expect(screen.getByText(/Nearest neighbors of/)).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('lazy')).toBeDefined()
+      expect(screen.getByText('0.850')).toBeDefined()
+      expect(screen.getByText(/Nearest neighbors of/)).toBeDefined()
+    })
   })
 
   it('triggers search on Enter key', async () => {
@@ -173,7 +175,9 @@ describe('TokenTreeQueryCard', () => {
     fireEvent.click(neighbor)
     await waitFor(() => expect(mocks.mockLineage).toHaveBeenCalledWith('20'))
     expect(await screen.findByText(/brown<\/w>/)).toBeDefined()
-    expect(screen.getAllByText(/brown<\/w>/).length).toBeGreaterThan(0)
+    await waitFor(() => {
+      expect(screen.getAllByText(/brown<\/w>/).length).toBeGreaterThan(0)
+    })
     expect(mocks.mockLineage).toHaveBeenCalledWith('20')
   })
 

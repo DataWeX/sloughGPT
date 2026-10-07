@@ -111,12 +111,14 @@ describe('TokenTreeVocabCard', () => {
     await waitFor(() => expect(mocks.mockGetStats).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(mocks.mockGetVocab).toHaveBeenCalledWith(50, 0))
 
-    expect(screen.getByText('<pad>')).toBeDefined()
-    expect(screen.getByText('the')).toBeDefined()
-    expect(screen.getByText('quick')).toBeDefined()
-    expect(screen.getAllByText('Special')).toHaveLength(1)
-    expect(screen.getAllByText('Merged')).toHaveLength(1)
-    expect(screen.getByText(/Showing 1–3 of 3/)).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('<pad>')).toBeDefined()
+      expect(screen.getByText('the')).toBeDefined()
+      expect(screen.getByText('quick')).toBeDefined()
+      expect(screen.getAllByText('Special')).toHaveLength(1)
+      expect(screen.getAllByText('Merged')).toHaveLength(1)
+      expect(screen.getByText(/Showing 1–3 of 3/)).toBeDefined()
+    })
   })
 
   it('renders stat chips from stats', async () => {
@@ -186,7 +188,9 @@ describe('TokenTreeVocabCard', () => {
 
     fireEvent.click(screen.getByLabelText('Toggle lineage for the'))
     await waitFor(() => expect(mocks.mockLineage).toHaveBeenCalledWith('the</w>'))
-    expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    })
 
     fireEvent.click(screen.getByLabelText('Toggle lineage for the'))
     await waitFor(() => expect(screen.queryByText(/Merge lineage of/)).toBeNull())

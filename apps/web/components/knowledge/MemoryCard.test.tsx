@@ -113,9 +113,11 @@ describe('MemoryCard', () => {
       expect(mockStats).toHaveBeenCalled()
       expect(mockList).toHaveBeenCalled()
     })
-    expect(screen.getAllByText('Memory').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('User prefers espresso in the morning').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => {
+      expect(screen.getAllByText('Memory').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('Active').length).toBeGreaterThanOrEqual(1)
+      expect(screen.getAllByText('User prefers espresso in the morning').length).toBeGreaterThanOrEqual(1)
+    })
   })
 
   it('shows stats numbers', async () => {
@@ -428,7 +430,9 @@ describe('MemoryCard', () => {
     expect(mockDelete).toHaveBeenCalledWith('m1')
     expect(mockDelete).toHaveBeenCalledWith('m2')
     expect(mockAddToast).toHaveBeenCalledWith('Deleted 2 memory item(s)', 'success')
-    expect(screen.queryByText('Delete (2)')).toBeNull()
+    await waitFor(() => {
+      expect(screen.queryByText('Delete (2)')).toBeNull()
+    })
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     })
@@ -632,12 +636,14 @@ describe('MemoryCard', () => {
       expect(mockArchive).toHaveBeenCalledWith(20)
     })
     const dialog = screen.getByRole('dialog')
-    expect(within(dialog).getByText('Provenance archive')).toBeTruthy()
-    expect(within(dialog).getAllByText(/Stockholm is the capital of Sweden/)).toBeTruthy()
-    expect(within(dialog).getByText(/Consolidated 2 duplicate\(s\), kept 3/)).toBeTruthy()
-    expect(within(dialog).getByText('Topic: geography')).toBeTruthy()
-    expect(within(dialog).getByText('forget')).toBeTruthy()
-    expect(within(dialog).getByText('remember')).toBeTruthy()
+    await waitFor(() => {
+      expect(within(dialog).getByText('Provenance archive')).toBeTruthy()
+      expect(within(dialog).getAllByText(/Stockholm is the capital of Sweden/)).toBeTruthy()
+      expect(within(dialog).getByText(/Consolidated 2 duplicate\(s\), kept 3/)).toBeTruthy()
+      expect(within(dialog).getByText('Topic: geography')).toBeTruthy()
+      expect(within(dialog).getByText('forget')).toBeTruthy()
+      expect(within(dialog).getByText('remember')).toBeTruthy()
+    })
   })
 
   it('shows an empty state when the archive has no records', async () => {

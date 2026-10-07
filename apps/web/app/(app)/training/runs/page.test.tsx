@@ -288,7 +288,9 @@ describe('TrainingRunsPage', () => {
     await waitFor(() => {
       expect(consoleSpy).toHaveBeenCalledWith('Failed to fetch training runs:', expect.any(Error))
     })
-    expect(screen.getByText('No training runs found.')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByText('No training runs found.')).toBeTruthy()
+    })
     consoleSpy.mockRestore()
   })
 

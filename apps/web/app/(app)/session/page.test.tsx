@@ -253,7 +253,9 @@ describe('SessionPage', () => {
     await waitFor(() => {
       expect(mockList).toHaveBeenCalled()
     }, { timeout: 5000 })
-    expect(screen.getByText(/Sessions \(2\)/)).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText(/Sessions \(2\)/)).toBeInTheDocument()
+    })
     expect(screen.getAllByText(/Chat 1/).length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText(/Chat 2/).length).toBeGreaterThanOrEqual(1)
   })
@@ -265,7 +267,9 @@ describe('SessionPage', () => {
     await waitFor(() => {
       expect(mockListArchived).toHaveBeenCalled()
     }, { timeout: 5000 })
-    expect(screen.getByText('Old Chat')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('Old Chat')).toBeInTheDocument()
+    })
   })
 
   it('creates a new session', async () => {
