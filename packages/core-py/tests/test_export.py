@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from domain.training._internal.export import (
     ExportConfig,
@@ -242,9 +241,6 @@ class TestConfigs:
         assert g.rope_freq_base == 50000.0
         assert g.rope_freq_scale == 0.5
         assert g.use_gpu is True
-
-
-pytest.importorskip("gguf", reason="gguf not installed")
 
 
 class TestGGUFWrappers:
