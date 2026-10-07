@@ -282,6 +282,41 @@ already-bound module-level read only moves via its own attribute. And install in
 The 9 suspects found on 2026-10-05 were triaged this way and all 9 came back
 harmless — which is why the class does not set the exit code.
 
+## The `slow` blind spot
+
+Both `pytest.ini` files carry `addopts = … -m "not slow" …`, so **every default
+run — including CI and every bare `python -m pytest` — deselects the `slow`-marked
+files entirely.** As of 2026-10-07 that is **24 files / ~700 tests**. Anything
+wrong in them is invisible to every regression gate; `test_chat_loop_e2e.py` hid
+6 ERRORs that way, and the march below cleared 27 more failures.
+
+Run them explicitly:
+
+```bash
+# one file
+python -m pytest tests/test_e2e_smoke.py -m "slow or not slow" -q
+
+# everything a default run skips
+python -m pytest -m "slow" -q
+```
+
+Two traps when you do:
+
+- **Do not pass `--timeout=N`.** Neither `pytest.ini` declares a timeout, so the
+  flag _creates_ failures: `test_continual_learner.py` "fails" at `--timeout=120`
+  and passes at 289 s with no flag, because `train_now()` really trains — which is
+  why those tests are marked `slow` in the first place.
+- **`pytest.importorskip(...)` exits `5`** (zero items collected) when the
+  capability is absent. `tests/test_optimized_pipeline.py` does this for `torch`,
+  so it is both invisible _and_ non-zero. The gate is correct; the signal is
+  ambiguous.
+
+Walking these files in 2026-10-07 sorted every failure into four buckets:
+**envelope drift** (reading top level where `success_response()` wrapped it),
+**contract drift** (an assertion that predated schema validation), **dead routes**
+(see cards `e205b15c` and `db9c4e70`), and **test-harness defects** (a fixture app
+missing its exception handlers, or a patch aimed at a binding nothing reads).
+
 ## Test Coverage
 
 ### Current Status
