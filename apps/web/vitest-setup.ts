@@ -1,7 +1,13 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, vi } from 'vitest'
+
+// waitFor / findBy* inherit a 1000ms asyncUtilTimeout — the tightest budget in
+// the suite and the first thing to break when the box is loaded (VMPage flaked
+// with 22ms of headroom left; TokenTreeMergesCard was caught mid-load). Keep it
+// well under vitest's testTimeout so a genuine hang still fails in seconds.
+configure({ asyncUtilTimeout: 5_000 })
 
 // react-router Link needs a Router context; unit tests render leaves without one.
 vi.mock('@/vite/next-compat/link', () => ({
