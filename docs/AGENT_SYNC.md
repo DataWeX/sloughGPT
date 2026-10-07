@@ -12,9 +12,9 @@ first page **31 KB vs 3,080,544 B encoded (99×)** measured on the live
 19,703-doc index; the knowledge page Sources panel shows "Showing X of
 Y" + Load more instead of downloading/rendering everything. Contract
 baseline regenerated (+3 query params, +422; 54/556/492 unchanged).
-Tests: 233 Python + 29 vitest + tsc/ruff green. Not on the live server
-yet — arrives when the root checkout absorbs main (or a cherry-pick,
-as done for the health fix in `98220d30f`).
+Tests: 233 Python + 29 vitest + tsc/ruff green. Live: cherry-picked onto the root checkout's branch (now
+`feat/dev-ai-unified`) as `57098d898` — 7 files; baseline + paging
+tests stay on main — active from the next server restart.
 
 **Last update**: 2026-10-06 ~10:30 — card `625d85e5` → done, **live gap
 closed** (fix cherry-picked onto the root checkout as `98220d30f`;
