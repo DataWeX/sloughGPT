@@ -194,12 +194,16 @@ Detail therefore states what a file is instead of staying silent.
 `format` at minimum, so a stray `evil.soul` reports `not-soul` and
 `traits.soul` shows its declared name disagreeing with its bytes — and never
 overwrites a stored value, because read-time derivation must not drift
-identity. One file per request (~7ms). The listing never classifies per row:
-that is what keeps `cmd_models` at 0.20s rather than 81.74s — yet it still
-shows identity, because `integrity_hash` and `provenance` are plain row
-fields the scan already returns. The list renders what exists and derives
-nothing, which is why it and the detail dialog agree about one file without
-the list doing any of `checkpoint_info`'s work.
+identity. One file per request (~7ms). The two listings take different
+roads. `GET /training/checkpoints` and `find_checkpoint` never classify per
+row — a spy test pins it — so the web list renders only what the scan
+already returns (`integrity_hash`, `provenance`) and derives nothing: it
+and the detail dialog agree about a file without paying any of
+`checkpoint_info`'s cost. `cmd_models` does probe every row, because
+bytes-derived Format and Hash are the point of that table. It costs 29ms of
+scan and probe across 19 rows since `read_sidecar` refuses to parse the
+blob, where the same listing took 81.74s while every read json.load()'d one
+whole.
 
 Search roots are declared once, in `ckpt_roots()`. The list, lookup, download
 and delete carried five hand-written tuples, and `LORA_DIR` sat in the scan
