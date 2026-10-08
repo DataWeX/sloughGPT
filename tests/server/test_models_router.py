@@ -805,3 +805,85 @@ class TestCacheUsage:
         data = resp.json()["data"]
         assert data["total_bytes"] == 100
         assert data["model_count"] == 1
+
+
+class TestRunExternalDownloadWiring:
+    """``POST /models/external/download`` must actually download.
+
+    ``_run_external_download`` calls ``DownloadManager.download_with(model_id,
+    backend)`` — a method that never existed.  The AttributeError died in the
+    bare ``except`` while the route answered ``download_started``, so the
+    endpoint was a no-op with only the unknown-server 404 path covered.
+    """
+
+    async def test_background_task_registers_and_completes(self):
+        """The real manager must get a registry entry out of the background task."""
+        from domain.infrastructure._internal.download_manager import DownloadManager
+
+        mgr = DownloadManager()
+
+        class _Backend:
+            def download(self, resource_id, on_progress, on_file_complete):
+                on_progress(resource_id, 10, 10, 100.0)
+                return {"status": "completed", "cache_dir": "/ext", "total_bytes": 10}
+
+        with patch(
+            "domain.infrastructure.download_manager.get_download_manager",
+            return_value=mgr,
+        ):
+            await ModelsRouter()._run_external_download(_Backend(), "ext-model")
+
+        progress = mgr.get_progress("ext-model")
+        assert progress is not None, "download_with must register the download"
+        assert progress["status"] == "complete"
+        assert mgr.is_downloading("ext-model") is False
+
+    async def test_backend_error_is_terminal_failed(self):
+        """A backend-reported error must not be swallowed into a silent no-op."""
+        from domain.infrastructure._internal.download_manager import DownloadManager
+
+        mgr = DownloadManager()
+
+        class _Backend:
+            def download(self, resource_id, on_progress, on_file_complete):
+                return {"status": "error", "error": "manifest missing"}
+
+        with patch(
+            "domain.infrastructure.download_manager.get_download_manager",
+            return_value=mgr,
+        ):
+            await ModelsRouter()._run_external_download(_Backend(), "ext-fail")
+
+        progress = mgr.get_progress("ext-fail")
+        assert progress is not None
+        assert progress["status"] == "failed"
+        assert mgr.is_downloading("ext-fail") is False
+
+    def test_route_schedules_background_task(self, client):
+        """Contract: registered server → 200 download_started, task gets (backend, model_id)."""
+        reg = client.post(
+            "/models/external/servers",
+            json={"name": "peer", "url": "http://peer:9000", "compressed": False},
+        )
+        assert reg.status_code == 200
+
+        with patch.object(
+            ModelsRouter, "_run_external_download", new_callable=AsyncMock
+        ) as run:
+            resp = client.post(
+                "/models/external/download",
+                json={"server": "peer", "model_id": "m1"},
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "download_started"
+        args = run.call_args.args
+        assert args[1] == "m1"
+        assert "peer" in str(args[0]._base_url) or "9000" in str(args[0]._base_url)
+
+    def test_route_unknown_server_still_404s(self, client):
+        resp = client.post(
+            "/models/external/download",
+            json={"server": "ghost", "model_id": "m1"},
+        )
+        assert resp.status_code == 404

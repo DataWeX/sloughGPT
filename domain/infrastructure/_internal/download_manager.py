@@ -30,6 +30,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from .download_backend import DownloadBackend
+
 logger = logging.getLogger("slo.infrastructure.download_manager")
 
 # ---------------------------------------------------------------------------
@@ -446,7 +448,8 @@ class DownloadManager:
           ``url`` parameter on 2026-09-16.
         * no ``url`` → the model is identified by its Hub id, so
           ``HFDownloadBackend`` (``download_hf_model``) resolves the file
-          list and cache layout.  Progress is mirrored into the registry so
+          list and cache layout — one call into ``download_with()``, the
+          backend-generic seam.  Progress is mirrored into the registry so
           ``GET /models/downloads`` surfaces it like any other download.
 
         Args:
@@ -473,10 +476,58 @@ class DownloadManager:
 
         from .hf_hub import HFDownloadBackend
 
+        return await self.download_with(
+            model_id, HFDownloadBackend(), total_bytes_hint=total_bytes_hint
+        )
+
+    async def download_with(
+        self,
+        model_id: str,
+        backend: DownloadBackend,
+        total_bytes_hint: int = 0,
+    ) -> dict[str, Any]:
+        """Download a resource through an arbitrary ``DownloadBackend``.
+
+        The backend-generic twin of ``download()``: the backend owns the
+        source-specific logic (manifests, file lists, compression), this
+        method owns scheduling, progress mirroring, cancellation and the
+        terminal registry states.  Two callers share it:
+
+        * ``download_model()`` with no URL passes ``HFDownloadBackend()`` —
+          this is where the Hub path has always lived, just extracted;
+        * the models router's ``_run_external_download`` passes an
+          ``ExternalDownloadBackend`` for a registered peer server.  That
+          call site already existed but the method did not: the
+          AttributeError died in a bare ``except`` while the route answered
+          ``download_started``, so ``POST /models/external/download`` was a
+          silent no-op.
+
+        Backend result vocabularies differ — HF says ``complete`` /
+        ``already_cached``, the external backend says ``completed`` /
+        ``error`` — so statuses are normalized here: ``completed`` maps to
+        ``complete``, and any *returned* error status flips the registry
+        entry to ``failed`` (an error result must never be recorded as a
+        completed download).
+
+        Args:
+            model_id: Model id or download id — the registry key.
+            backend: Any ``DownloadBackend``; only ``download()`` is called.
+            total_bytes_hint: Expected total bytes before the first
+                progress callback (0 = auto-detect).
+
+        Returns:
+            Dict with ``status`` (``complete`` / ``failed`` / ``cancelled`` /
+            ``already_cached`` / ``already_downloading``) and ``model_id``.
+
+        Note:
+            Cancelling flips the entry to cancelled once the backend
+            returns, but the transfer itself is only interruptible if the
+            backend's ``download()`` cooperates — the Hub and external
+            paths have no cancel hook (same caveat as ``download_model``).
+        """
         if self.is_downloading(model_id):
             return {"status": "already_downloading", "model_id": model_id}
 
-        backend = HFDownloadBackend()
         started = time.time()
 
         def _on_progress(mid: str, done: int, total: int, speed: float) -> None:
@@ -491,6 +542,12 @@ class DownloadManager:
             )
             self._notify_callbacks(mid)
 
+        def _on_file_complete(mid: str, file_path: str) -> None:
+            # ExternalDownloadBackend invokes this unconditionally per file
+            # (None would TypeError), and HFDownloadBackend calls it when
+            # given — so every path through this seam gets a callable.
+            logger.debug("File complete for %s: %s", mid, file_path)
+
         self._set_progress(
             model_id,
             status=DownloadStatus.QUEUED,
@@ -504,7 +561,7 @@ class DownloadManager:
                 backend.download,
                 model_id,
                 on_progress=_on_progress,
-                on_file_complete=None,
+                on_file_complete=_on_file_complete,
             )
         except Exception as exc:
             self._set_progress(model_id, status=DownloadStatus.FAILED, error=str(exc))
@@ -518,6 +575,14 @@ class DownloadManager:
         if cancelled:
             self._record_download_cancelled(model_id)
             return {"status": "cancelled", "model_id": model_id}
+
+        raw_status = str(result.get("status", "complete"))
+        if raw_status in ("error", "failed"):
+            error = str(result.get("error") or raw_status)
+            self._set_progress(model_id, status=DownloadStatus.FAILED, error=error)
+            self._notify_callbacks(model_id)
+            self._record_download_failed(model_id)
+            return {"status": "failed", "model_id": model_id, "error": error}
 
         elapsed = time.time() - started
         total_bytes = int(result.get("total_bytes") or 0)
@@ -538,7 +603,7 @@ class DownloadManager:
         self._record_download_complete(model_id, bytes_done, elapsed, speed)
 
         return {
-            "status": result.get("status", "complete"),
+            "status": "complete" if raw_status == "completed" else raw_status,
             "model_id": model_id,
             "cache_dir": result.get("cache_dir", ""),
             "elapsed_seconds": elapsed,

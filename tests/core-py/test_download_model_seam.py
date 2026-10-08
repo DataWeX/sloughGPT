@@ -205,3 +205,119 @@ class TestDownloadModelHfBranch:
         assert result["status"] == "already_cached"
         assert mgr.get_progress("gpt2")["status"] == "complete"
         assert mgr.is_downloading("gpt2") is False
+
+
+class _FakeBackend:
+    """A DownloadBackend whose ``download()`` returns (or raises) a canned outcome.
+
+    ``DownloadManager.download_with`` only ever calls ``backend.download``,
+    so the rest of the ABC is intentionally absent — if the seam starts
+    reaching for more of the protocol, this fake fails loudly.
+    """
+
+    def __init__(self, outcome):
+        self.outcome = outcome
+        self.calls: list[str] = []
+
+    def download(self, resource_id, on_progress, on_file_complete):
+        self.calls.append(resource_id)
+        if isinstance(self.outcome, Exception):
+            raise self.outcome
+        on_progress(resource_id, 50, 100, 25.0)
+        return self.outcome
+
+
+class TestDownloadWithBackend:
+    """``download_with(model_id, backend)`` — the backend-generic seam.
+
+    ``POST /models/external/download`` already calls this method
+    (``models.py`` ``_run_external_download``), but it never existed: the
+    AttributeError died in a bare ``except`` while the route answered
+    ``download_started``.  The HF path of ``download_model`` is the same
+    logic with ``HFDownloadBackend`` hardcoded, so extracting it makes both
+    callers share one registry-mirroring implementation.
+    """
+
+    def test_backend_success_is_normalized_and_mirrored(self):
+        mgr = dm.DownloadManager()
+        backend = _FakeBackend(
+            {"status": "completed", "cache_dir": "/ext/cache", "total_bytes": 100}
+        )
+
+        result = asyncio.run(mgr.download_with("ext-model", backend))
+
+        # External backends say "completed"; the registry says "complete".
+        assert result["status"] == "complete"
+        assert backend.calls == ["ext-model"]
+        progress = mgr.get_progress("ext-model")
+        assert progress["status"] == "complete"
+        assert progress["percentage"] == 100.0
+        assert progress["total_bytes"] == 100
+        assert mgr.is_downloading("ext-model") is False
+
+    def test_backend_error_status_is_terminal_failed(self):
+        """ExternalDownloadBackend reports errors as a *returned* status, not an exception."""
+        mgr = dm.DownloadManager()
+        backend = _FakeBackend({"status": "error", "error": "manifest missing"})
+
+        result = asyncio.run(mgr.download_with("ext-fail", backend))
+
+        assert result["status"] == "failed"
+        assert "manifest missing" in result["error"]
+        progress = mgr.get_progress("ext-fail")
+        assert progress["status"] == "failed"
+        assert mgr.is_downloading("ext-fail") is False, "must not wedge retries"
+
+    def test_backend_exception_marks_failed(self):
+        mgr = dm.DownloadManager()
+        backend = _FakeBackend(RuntimeError("connection refused"))
+
+        result = asyncio.run(mgr.download_with("ext-exc", backend))
+
+        assert result["status"] == "failed"
+        assert "connection refused" in result["error"]
+        assert mgr.get_progress("ext-exc")["status"] == "failed"
+        assert mgr.is_downloading("ext-exc") is False
+
+    def test_second_call_while_running_short_circuits(self):
+        mgr = dm.DownloadManager()
+        mgr._set_progress("busy-ext", status=dm.DownloadStatus.DOWNLOADING)
+        backend = _FakeBackend({"status": "completed"})
+
+        result = asyncio.run(mgr.download_with("busy-ext", backend))
+
+        assert result["status"] == "already_downloading"
+        assert backend.calls == []
+
+    def test_file_complete_callback_is_callable_for_backends(self):
+        """ExternalDownloadBackend invokes on_file_complete unconditionally — None would TypeError."""
+        mgr = dm.DownloadManager()
+
+        class _FileCompleteBackend:
+            def download(self, resource_id, on_progress, on_file_complete):
+                on_progress(resource_id, 10, 10, 10.0)
+                on_file_complete(resource_id, "/ext/cache/model.bin")  # must not be None
+                return {"status": "completed", "total_bytes": 10}
+
+        result = asyncio.run(mgr.download_with("ext-fc", _FileCompleteBackend()))
+
+        assert result["status"] == "complete"
+        assert mgr.get_progress("ext-fc")["status"] == "complete"
+
+    def test_download_model_no_url_passes_hf_backend_to_the_seam(self, monkeypatch):
+        """``download_model`` keeps its HF contract by being one call into the seam."""
+        mgr = dm.DownloadManager()
+        seen: dict = {}
+
+        async def fake_download_with(model_id, backend, total_bytes_hint=0):
+            seen.update(model_id=model_id, backend=backend, hint=total_bytes_hint)
+            return {"status": "complete", "model_id": model_id}
+
+        monkeypatch.setattr(mgr, "download_with", fake_download_with)
+
+        result = asyncio.run(mgr.download_model("gpt2", total_bytes_hint=7))
+
+        assert result["status"] == "complete"
+        assert seen["model_id"] == "gpt2"
+        assert seen["hint"] == 7
+        assert type(seen["backend"]).__name__ == "HFDownloadBackend"
