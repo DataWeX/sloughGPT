@@ -4,7 +4,25 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~04:20 — `fix/shm-resource-tracker-warnings`
+**Last update**: 2026-10-08 ~05:00 — `fix/online-lora-phantom-updates`
+**lands on main** (push `93286c6fe`, card `b83a5788` → done): **phantom
+online-LoRA updates retired** — the loop was dead in production (no engine
+attach path, `engine=None` always) yet counted every buffer drain as a
+successful update with "Updated with N samples" telemetry. DECIDE resolved to
+retire: `apply_to_logits` has **zero production callers** (so even a wired
+engine wouldn't reach inference — wiring is a separate feature card) and real
+backprop needs engine access the interface doesn't expose. Shipped: honest
+applied-vs-skipped accounting (`total_skipped_updates/skipped_samples`,
+`total_updates`/`last_update_time` only move on real applies), shape-mismatched
+gradients skipped instead of raising into the swallow, the pseudo-gradient
+**random-noise fallback removed** (it mutated live weights), `engine_attached`
+stat + not-implemented docstrings. 16 tests new/retargeted — 4 of them were
+baseline reds asserting gradients-from-nothing, now green under the honest
+contract. Gates: RED 8+3 → GREEN **273 passed** across 6 files
+(online_lora/online_train/feedback_domain + feedback_controller/
+workflow_router/quality_guard), ruff + py_compile clean, 0 frontend consumers.
+
+Earlier 2026-10-08 ~04:20: `fix/shm-resource-tracker-warnings`
 **lands on main** (push `f5ccd713a`, card `ccad389e` → done): **resource_tracker
 `/psm_*` warning flood silenced** — root cause *proven* with a tracker-pid probe:
 `VectorBE` forked its Pool before any shm op, so fork-arm workers each started
