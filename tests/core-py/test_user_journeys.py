@@ -192,11 +192,7 @@ ROUTES = [
     ("/consciousness/settings", "consciousness_settings"),
     ("/consciousness/playground", "consciousness_playground"),
     # Training sub-pages
-    ("/training/analytics", "training_analytics"),
-    ("/training/presets", "training_presets"),
     ("/training/runs", "training_runs"),
-    ("/training/compare", "training_compare"),
-    ("/training/trends", "training_trends"),
     # Other
     ("/shortcuts", "shortcuts"),
     ("/phoneme", "phoneme"),
@@ -207,8 +203,15 @@ class TestNavigation:
     @pytest.mark.parametrize("path,name", ROUTES)
     def test_route(self, page: Page, path: str, name: str):
         body = go(page, path)
-        ok(f"nav_{name}", len(body) > 50, f"len={len(body)}")
-        assert len(body) > 50, f"{path} returned empty body"
+        # "Page not found" = the client router's not-found.tsx inside the SPA
+        # shell — a dead route serves HTTP 200 and passes any length guard.
+        alive = len(body) > 50 and "Page not found" not in body
+        ok(
+            f"nav_{name}",
+            alive,
+            f"len={len(body)}",
+        )
+        assert alive, f"{path} returned empty body"
 
 
 # ── Chat ──────────────────────────────────────────────────────
