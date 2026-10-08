@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from .vm import VMRunner
 
 # ── x86 Syscall Test Programs ────────────────────────────────────────────────
@@ -1925,6 +1927,622 @@ SHELL_ASM = """\
 """
 
 
+# ── cave_game — Minecraft iteration 1 ───────────────────────────────────────
+#
+# First-person heightmap raycaster on the 80x25 VGA text screen: procedural
+# xorshift terrain (32x32, border cells = wall), front-to-back voxel-space
+# column fill, HUD line, WASD-style keys + mine/place.
+#
+# Runner contract (works on BOTH engines, zero syscalls):
+#   - no [ORG]: every loader supplies its own org (VMEngine 0x1000,
+#     X86VirtualSystem.spawn 0x100000) so labels always match the load address
+#   - no INT 0x80: raw VGA pokes at 0xB8000 + keyboard buffer poll at 0x400
+#     + HLT — the bare VMEngine has no syscall handler
+#   - idle exit: no input for 40 frames -> HLT (batch/CLI mode); any keypress
+#     switches to interactive mode where only 'q' quits
+#
+# View rows 0..23 (horizon 11, camera height 6), row 24 = HUD.
+# Terrain chars '0'..'5' (green), walls '#' (light red), sky ' ' (blue).
+
+_SIN64_TABLE = ", ".join(
+    str(128 + int(round(64.0 * math.sin(2.0 * math.pi * i / 64.0)))) for i in range(64)
+)
+
+CAVE_GAME_ASM = f"""\
+; cave_game - Minecraft "iteration 1" (Cave Game) voxel runner
+[BITS 32]
+
+start:
+    mov esp, 0xB8000              ; stack grows down into free 0xB0000 area
+    mov esi, str_hello
+    call serial_str
+    ; clear full screen: 80x25 = 2000 cells = 1000 dwords (char 0x20, attr 0x03)
+    mov edi, 0xB8000
+    mov ecx, 1000
+clear_screen:
+    mov dword [edi], 0x03200320
+    add edi, 4
+    dec ecx
+    jnz clear_screen
+    call gen_world
+    jmp frame_loop
+
+; ════════════════════════════════════════════════════════════════════════════
+frame_loop:
+    ; clear view rows 0..23 (1920 cells = 960 dwords)
+    mov edi, 0xB8000
+    mov ecx, 960
+clear_view:
+    mov dword [edi], 0x03200320
+    add edi, 4
+    dec ecx
+    jnz clear_view
+
+    ; direction: diry = sin[ang], dirx = sin[ang+16] (table biased by 128)
+    mov eax, [ang]
+    mov ecx, 63
+    and eax, ecx
+    mov ebx, sin64
+    add ebx, eax
+    xor ecx, ecx
+    mov cl, [ebx]
+    sub ecx, 128
+    mov [diry], ecx
+    mov eax, [ang]
+    add eax, 16
+    mov ecx, 63
+    and eax, ecx
+    mov ebx, sin64
+    add ebx, eax
+    xor ecx, ecx
+    mov cl, [ebx]
+    sub ecx, 128
+    mov [dirx], ecx
+    ; camera plane = dir rotated 90 deg * FOV 42/64
+    mov eax, [diry]
+    neg eax
+    mov ecx, 42
+    imul eax, ecx
+    sar eax, 6
+    mov [planex], eax
+    mov eax, [dirx]
+    mov ecx, 42
+    imul eax, ecx
+    sar eax, 6
+    mov [planey], eax
+
+    ; ── column loop: ray = dir + plane * (2*col-79)/79 ──
+    mov dword [col], 0
+col_loop:
+    mov eax, [col]
+    shl eax, 1
+    sub eax, 79                    ; tc = -79..79
+    mov [tmp], eax
+    mov eax, [planex]
+    mov ecx, [tmp]
+    imul eax, ecx
+    call sdiv79
+    add eax, [dirx]
+    mov [raydx], eax
+    mov eax, [planey]
+    mov ecx, [tmp]
+    imul eax, ecx
+    call sdiv79
+    add eax, [diry]
+    mov [raydy], eax
+
+    mov dword [topy], 24
+    mov dword [d8], 512            ; depth from 2 cells, step 1.0 -> 8 steps
+depth_loop:
+    ; sample point = pos + ray * depth  (ray64 * d8 * 4 = Q16.16 step)
+    mov eax, [raydx]
+    mov ecx, [d8]
+    imul eax, ecx
+    shl eax, 2
+    add eax, [px]
+    mov [sx], eax
+    mov eax, [raydy]
+    mov ecx, [d8]
+    imul eax, ecx
+    shl eax, 2
+    add eax, [py]
+    mov [sy], eax
+    ; cx = clamp(sx >> 16, 0, 31)
+    mov eax, [sx]
+    sar eax, 16
+    cmp eax, 0
+    jge sx_pos
+    xor eax, eax
+sx_pos:
+    cmp eax, 31
+    jle sx_max
+    mov eax, 31
+sx_max:
+    mov [cxi], eax
+    ; cy = clamp(sy >> 16, 0, 31)
+    mov eax, [sy]
+    sar eax, 16
+    cmp eax, 0
+    jge sy_pos
+    xor eax, eax
+sy_pos:
+    cmp eax, 31
+    jle sy_max
+    mov eax, 31
+sy_max:
+    mov [cyi], eax
+    ; h = heightmap[cy*32 + cx]
+    mov eax, [cyi]
+    shl eax, 5
+    add eax, [cxi]
+    mov ebx, heightmap
+    add ebx, eax
+    xor ecx, ecx
+    mov cl, [ebx]
+    mov [hval], ecx
+    ; y = 11 +/- (|6-h| * 1024 / d8): h>6 towers above horizon, h<6 below
+    mov eax, 6
+    sub eax, [hval]
+    cmp eax, 0
+    jge y_below
+    neg eax
+    shl eax, 10
+    mov ecx, [d8]
+    xor edx, edx
+    idiv ecx
+    mov ebx, 11
+    sub ebx, eax
+    jmp y_clamp
+y_below:
+    shl eax, 10
+    mov ecx, [d8]
+    xor edx, edx
+    idiv ecx
+    mov ebx, 11
+    add ebx, eax
+y_clamp:
+    cmp ebx, 23
+    jle yc_low
+    mov ebx, 23
+yc_low:
+    cmp ebx, 0
+    jge yc_done
+    xor ebx, ebx
+yc_done:
+    ; front-to-back fill: paint rows y..topy-1 if y < topy
+    mov [yorig], ebx
+    mov eax, [topy]
+    cmp ebx, eax
+    jge nofill
+    mov [ytop], ebx
+fill_loop:
+    mov eax, [ytop]
+    mov ecx, 80
+    imul eax, ecx
+    add eax, [col]
+    shl eax, 1
+    add eax, 0xB8000
+    mov ecx, [hval]
+    cmp ecx, 6
+    jl ground_ch
+    mov dl, '#'
+    mov dh, 0x0C
+    jmp plot_ch
+ground_ch:
+    add ecx, '0'
+    mov dl, cl
+    mov dh, 0x0A
+plot_ch:
+    mov [eax], dl
+    mov [eax+1], dh
+    inc dword [ytop]
+    mov ebx, [ytop]
+    mov eax, [topy]
+    cmp ebx, eax
+    jl fill_loop
+    mov eax, [yorig]
+    mov [topy], eax
+nofill:
+    mov eax, [d8]
+    add eax, 512
+    mov [d8], eax
+    cmp eax, 4096
+    jle depth_loop
+    mov eax, [col]
+    inc eax
+    mov [col], eax
+    cmp eax, 80
+    jl col_loop
+
+    call draw_hud
+
+    ; ── input: poll keyboard buffer at 0x400 (non-blocking) ──
+    xor eax, eax
+    mov al, [0x400]
+    cmp al, 0
+    je no_input
+    mov byte [0x400], 0
+    mov dword [ever], 1
+    cmp al, 'q'
+    je do_quit
+    cmp al, 'w'
+    je key_w
+    cmp al, 's'
+    je key_s
+    cmp al, 'a'
+    je key_a
+    cmp al, 'd'
+    je key_d
+    cmp al, 'm'
+    je key_m
+    cmp al, 'p'
+    je key_p
+    jmp next_frame
+no_input:
+    mov eax, [ever]
+    cmp eax, 0
+    jne next_frame                 ; played before -> run until 'q'
+    inc dword [idle]
+    mov eax, [idle]
+    cmp eax, 40
+    jl next_frame                  ; batch mode: idle -> quit
+    jmp do_quit
+next_frame:
+    inc dword [frame]
+    jmp frame_loop
+
+; ════════════════════════════════════════════════════════════════════════════
+; keys: w/s forward-back (0.5 cell), a/d turn, m/p mine-place (2 cells ahead)
+key_w:
+    mov eax, [dirx]
+    mov ecx, 512
+    imul eax, ecx
+    add eax, [px]
+    mov [tmp], eax
+    mov eax, [diry]
+    mov ecx, 512
+    imul eax, ecx
+    add eax, [py]
+    mov [tmp2], eax
+    call try_move
+    cmp eax, 0
+    je next_frame
+    mov eax, [tmp]
+    mov [px], eax
+    mov eax, [tmp2]
+    mov [py], eax
+    jmp next_frame
+key_s:
+    mov eax, [dirx]
+    mov ecx, 512
+    imul eax, ecx
+    mov ebx, [px]
+    sub ebx, eax
+    mov [tmp], ebx
+    mov eax, [diry]
+    mov ecx, 512
+    imul eax, ecx
+    mov ebx, [py]
+    sub ebx, eax
+    mov [tmp2], ebx
+    call try_move
+    cmp eax, 0
+    je next_frame
+    mov eax, [tmp]
+    mov [px], eax
+    mov eax, [tmp2]
+    mov [py], eax
+    jmp next_frame
+key_a:
+    dec dword [ang]
+    jmp next_frame
+key_d:
+    inc dword [ang]
+    jmp next_frame
+key_m:
+    call target_cell
+    cmp ebx, 0
+    je next_frame
+    xor eax, eax
+    mov al, [ebx]
+    cmp eax, 0
+    je next_frame                  ; already air
+    sub al, 1
+    mov [ebx], al
+    inc dword [mined]
+    jmp next_frame
+key_p:
+    call target_cell
+    cmp ebx, 0
+    je next_frame
+    xor eax, eax
+    mov al, [ebx]
+    cmp eax, 15
+    jge next_frame
+    add al, 1
+    mov [ebx], al
+    inc dword [placed]
+    jmp next_frame
+
+do_quit:
+    mov esi, str_bye
+    call serial_str
+    hlt
+
+; ════════════════════════════════════════════════════════════════════════════
+; subroutines
+; ════════════════════════════════════════════════════════════════════════════
+
+; gen_world: xorshift32 noise 0..5 + border walls (12) + spawn clearing (2)
+gen_world:
+    mov dword [seed], 0x2F6E2B1
+    mov edi, heightmap
+    mov ecx, 1024
+gw_loop:
+    mov eax, [seed]
+    mov ebx, eax
+    shl ebx, 13
+    xor eax, ebx
+    mov ebx, eax
+    shr ebx, 17
+    xor eax, ebx
+    mov ebx, eax
+    shl ebx, 5
+    xor eax, ebx
+    mov [seed], eax
+    shr eax, 29                    ; 0..7; remap 6,7 -> 2
+    cmp eax, 6
+    jl gw_ok
+    mov eax, 2
+gw_ok:
+    mov [edi], al
+    inc edi
+    dec ecx
+    jnz gw_loop
+    mov edi, heightmap             ; top row
+    mov ecx, 32
+gw_top:
+    mov byte [edi], 12
+    inc edi
+    dec ecx
+    jnz gw_top
+    mov edi, heightmap             ; bottom row
+    add edi, 992
+    mov ecx, 32
+gw_bot:
+    mov byte [edi], 12
+    inc edi
+    dec ecx
+    jnz gw_bot
+    mov edi, heightmap             ; side columns (y=1..30)
+    mov ecx, 30
+gw_side:
+    mov byte [edi], 12
+    mov byte [edi+31], 12
+    add edi, 32
+    dec ecx
+    jnz gw_side
+    mov edi, heightmap             ; spawn clearing (10,10)-(11,11)
+    add edi, 330
+    mov byte [edi], 2
+    mov byte [edi+1], 2
+    mov byte [edi+32], 2
+    mov byte [edi+33], 2
+    ret
+
+; sdiv79: eax = eax / 79, sign handled manually (no cdq in this assembler)
+sdiv79:
+    mov [sdiv_tmp], eax
+    cmp eax, 0
+    jge sd_pos
+    neg eax
+sd_pos:
+    xor edx, edx
+    mov ecx, 79
+    idiv ecx
+    mov ecx, [sdiv_tmp]
+    cmp ecx, 0
+    jge sd_done
+    neg eax
+sd_done:
+    ret
+
+; try_move: [tmp]=x [tmp2]=y in Q16.16 -> eax=1 if target cell walkable
+try_move:
+    mov eax, [tmp]
+    sar eax, 16
+    cmp eax, 0
+    jl tm_bad
+    cmp eax, 31
+    jg tm_bad
+    mov ecx, [tmp2]
+    sar ecx, 16
+    cmp ecx, 0
+    jl tm_bad
+    cmp ecx, 31
+    jg tm_bad
+    shl ecx, 5
+    add ecx, eax
+    mov ebx, heightmap
+    add ebx, ecx
+    xor edx, edx
+    mov dl, [ebx]
+    cmp edx, 6
+    jge tm_bad                      ; walls and borders block movement
+    mov eax, 1
+    ret
+tm_bad:
+    xor eax, eax
+    ret
+
+; target_cell: cell 2 cells ahead -> ebx = &heightmap[ty*32+tx], 0 if OOB
+target_cell:
+    mov eax, [dirx]
+    mov ecx, 2048
+    imul eax, ecx
+    add eax, [px]
+    sar eax, 16
+    mov [tmp], eax
+    mov eax, [diry]
+    mov ecx, 2048
+    imul eax, ecx
+    add eax, [py]
+    sar eax, 16
+    mov [tmp2], eax
+    mov eax, [tmp2]                 ; ty
+    cmp eax, 0
+    jl tc_bad
+    cmp eax, 31
+    jg tc_bad
+    mov ecx, [tmp]                  ; tx
+    cmp ecx, 0
+    jl tc_bad
+    cmp ecx, 31
+    jg tc_bad
+    shl eax, 5
+    add eax, ecx
+    mov ebx, heightmap
+    add ebx, eax
+    ret
+tc_bad:
+    xor ebx, ebx
+    ret
+
+; draw_hud: row 24 = CRAFT x=NN y=NN a=NN m=NN p=NN + key legend
+draw_hud:
+    mov edi, 0xB8F00
+    mov esi, hud1
+    call wr_str
+    mov eax, [px]
+    shr eax, 16
+    call wr_num2
+    mov esi, hud2
+    call wr_str
+    mov eax, [py]
+    shr eax, 16
+    call wr_num2
+    mov esi, hud3
+    call wr_str
+    mov eax, [ang]
+    mov ecx, 63
+    and eax, ecx
+    call wr_num2
+    mov esi, hud4
+    call wr_str
+    mov eax, [mined]
+    cmp eax, 99
+    jle hud_m_ok
+    mov eax, 99
+hud_m_ok:
+    call wr_num2
+    mov esi, hud5
+    call wr_str
+    mov eax, [placed]
+    cmp eax, 99
+    jle hud_p_ok
+    mov eax, 99
+hud_p_ok:
+    call wr_num2
+    mov esi, hud6
+    call wr_str
+    ret
+
+; wr_str: NUL-terminated string at esi -> VGA at edi (attr 0x07)
+wr_str:
+    xor eax, eax
+    mov al, [esi]
+    cmp al, 0
+    je ws_done
+    mov [edi], al
+    mov byte [edi+1], 0x07
+    add edi, 2
+    inc esi
+    jmp wr_str
+ws_done:
+    ret
+
+; wr_num2: eax (0..99) -> two digits at edi (attr 0x07), edi += 4
+wr_num2:
+    push edx
+    push ecx
+    cmp eax, 99
+    jle wn_ok
+    mov eax, 99
+wn_ok:
+    mov ecx, 10
+    xor edx, edx
+    idiv ecx                        ; eax = tens, edx = ones
+    add eax, '0'
+    mov [edi], al
+    mov byte [edi+1], 0x07
+    add edx, '0'
+    mov [edi+2], dl
+    mov byte [edi+3], 0x07
+    add edi, 4
+    pop ecx
+    pop edx
+    ret
+
+; serial_str: NUL-terminated string at esi -> port 0x3F8 (CLI console)
+serial_str:
+    push edx
+ss_loop:
+    xor eax, eax
+    mov al, [esi]
+    cmp al, 0
+    je ss_done
+    mov edx, 0x3F8
+    out dx, al
+    inc esi
+    jmp ss_loop
+ss_done:
+    pop edx
+    ret
+
+; ════════════════════════════════════════════════════════════════════════════
+; data
+; ════════════════════════════════════════════════════════════════════════════
+seed:      dd 0x2F6E2B1
+px:        dd 0x000A8000            ; 10.5 in Q16.16
+py:        dd 0x000A8000
+ang:       dd 0
+frame:     dd 0
+idle:      dd 0
+ever:      dd 0
+mined:     dd 0
+placed:    dd 0
+dirx:      dd 0
+diry:      dd 0
+planex:    dd 0
+planey:    dd 0
+raydx:     dd 0
+raydy:     dd 0
+col:       dd 0
+d8:        dd 0
+topy:      dd 0
+yorig:     dd 0
+ytop:      dd 0
+sx:        dd 0
+sy:        dd 0
+cxi:       dd 0
+cyi:       dd 0
+hval:      dd 0
+tmp:       dd 0
+tmp2:      dd 0
+sdiv_tmp:  dd 0
+heightmap: times 1024 db 0
+sin64:     db {_SIN64_TABLE}
+str_hello: db "cave_game: voxel world online (w/s move, a/d turn, m/p dig/place, q quit)", 10, 0
+str_bye:   db "cave_game: exit", 10, 0
+hud1:      db "CRAFT x=", 0
+hud2:      db " y=", 0
+hud3:      db " a=", 0
+hud4:      db " m=", 0
+hud5:      db " p=", 0
+hud6:      db " w/s mv a/d turn m/p dig q quit", 0
+"""
+
+
 # ── Program Registry ──────────────────────────────────────────────────────────
 
 PROGRAMS = {
@@ -1960,6 +2578,7 @@ PROGRAMS = {
     "counter": COUNTER_ASM,
     "fib": FIB_ASM,
     "collatz": COLLATZ_ASM,
+    "cave_game": CAVE_GAME_ASM,
 }
 
 

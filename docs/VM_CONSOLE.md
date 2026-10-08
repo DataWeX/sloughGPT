@@ -21,7 +21,7 @@ apps/web (VM Console)           apps/api /vm/run              packages/core-py X
 | Endpoint                      | Method | Description                                                                                                                                                                                                                                  |
 | ----------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `/vm/run`                     | POST   | Assemble + execute source. Body: `source`, `max_steps`, `role` (`user`/`admin`/`kernel`), `debug`, `keyboard_input`. Returns `VMRunResponse` (status, exit_code, registers, output, vga, memory_dump, `training_job_id`, `training_result`). |
-| `/vm/builtins`                | GET    | Program catalog (hello, count, fib, sort, rainbow, primes, calculator, factorial, guess, train, train-status).                                                                                                                               |
+| `/vm/builtins`                | GET    | Program catalog (hello, count, fib, sort, rainbow, primes, calculator, factorial, guess, cave_game, train, train-status).                                                                                                                    |
 | `/vm/info`                    | GET    | VM capabilities (ISA, register set, memory limits, features).                                                                                                                                                                                |
 | `/vm/training/jobs/{id}`      | GET    | Bridge-tracked training job status (`job_id`, `api_job_id`, `status`, `progress`, `error`). Completed jobs also return the result JSON (`result`).                                                                                           |
 | `/vm/training/jobs/{id}/stop` | POST   | Ask the API to stop a running job (proxies `POST /training/jobs/{api_job_id}/stop`). Returns `{status, job_id}`.                                                                                                                             |
@@ -43,24 +43,24 @@ steps the CPU, and output reaches the browser as SSE. Sessions live in memory in
 `routers/vm.py` — up to 8 concurrent, evicted after 30 minutes idle — and each has its
 own persistent-block-device filesystem that resets with the session.
 
-| Command                                 | Description                       |
-| --------------------------------------- | --------------------------------- |
-| `help`                                  | List commands                     |
-| `ls`                                    | Directory listing                 |
-| `cat <file>`                            | Print a file                      |
-| `cp <src> <dst>`                        | Copy a file (truncates dst)       |
-| `grep <pattern> <file>`                 | Search a file for matching lines  |
-| `wc <file>`                             | Count lines, words, bytes         |
-| `head <file> [n]`                       | First n lines (default 10)        |
-| `tail <file> [n]`                       | Last n lines (default 10)         |
-| `write <file> <text>`                   | Create/overwrite a file with text |
+| Command                                 | Description                                                                  |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| `help`                                  | List commands                                                                |
+| `ls`                                    | Directory listing                                                            |
+| `cat <file>`                            | Print a file                                                                 |
+| `cp <src> <dst>`                        | Copy a file (truncates dst)                                                  |
+| `grep <pattern> <file>`                 | Search a file for matching lines                                             |
+| `wc <file>`                             | Count lines, words, bytes                                                    |
+| `head <file> [n]`                       | First n lines (default 10)                                                   |
+| `tail <file> [n]`                       | Last n lines (default 10)                                                    |
+| `write <file> <text>`                   | Create/overwrite a file with text                                            |
 | `echo <text>`                           | Print text; `echo <text> > <file>` writes the file (create/truncate) instead |
-| `uname`                                 | Kernel name/version               |
-| `pid`                                   | Current process id                |
-| `clear`                                 | Clear the screen                  |
-| `about`                                 | Console banner                    |
-| `halt`                                  | End the session (stream closes)   |
-| `train`, `train-status`, `train-result` | Training bridge (ADMIN role only) |
+| `uname`                                 | Kernel name/version                                                          |
+| `pid`                                   | Current process id                                                           |
+| `clear`                                 | Clear the screen                                                             |
+| `about`                                 | Console banner                                                               |
+| `halt`                                  | End the session (stream closes)                                              |
+| `train`, `train-status`, `train-result` | Training bridge (ADMIN role only)                                            |
 
 Line editing is client-side: Up/Down recall history, Backspace sends `0x0E`. If the SSE
 connection drops, the error banner's **Reconnect** button re-subscribes the same
@@ -102,19 +102,20 @@ Config keys: `dataset` (name under `datasets/`), `epochs`, `lr`, `batch_size`,
 
 ### Sample programs
 
-| Sample         | Demonstrates                                                                             |
-| -------------- | ---------------------------------------------------------------------------------------- |
-| `hello`        | VGA text-buffer write, LODSB/STOSW loop                                                  |
-| `count`        | VGA digits, loop/counter                                                                 |
-| `fib`          | Fibonacci, div/mod digit conversion                                                      |
-| `sort`         | Bubble sort                                                                              |
-| `rainbow`      | VGA colored banner                                                                       |
-| `primes`       | Prime sieve, VGA output                                                                  |
-| `calculator`   | Arithmetic, keyboard input                                                               |
-| `factorial`    | Recursive multiplication                                                                 |
-| `guess`        | Number-guessing with keyboard + VGA prompt                                               |
-| `train`        | `SYS_TRAIN_START` (EAX=28) launching a Shakespeare training job                          |
-| `train-status` | `SYS_TRAIN_STATUS` (29) then `SYS_TRAIN_GET_RESULT` (30), results stored to guest memory |
+| Sample         | Demonstrates                                                                                |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| `hello`        | VGA text-buffer write, LODSB/STOSW loop                                                     |
+| `count`        | VGA digits, loop/counter                                                                    |
+| `fib`          | Fibonacci, div/mod digit conversion                                                         |
+| `sort`         | Bubble sort                                                                                 |
+| `rainbow`      | VGA colored banner                                                                          |
+| `primes`       | Prime sieve, VGA output                                                                     |
+| `calculator`   | Arithmetic, keyboard input                                                                  |
+| `factorial`    | Recursive multiplication                                                                    |
+| `guess`        | Number-guessing with keyboard + VGA prompt                                                  |
+| `cave_game`    | First-person voxel raycaster (Minecraft iteration 1): terrain, mine/place, HUD, no syscalls |
+| `train`        | `SYS_TRAIN_START` (EAX=28) launching a Shakespeare training job                             |
+| `train-status` | `SYS_TRAIN_STATUS` (29) then `SYS_TRAIN_GET_RESULT` (30), results stored to guest memory    |
 
 `train` and `train-status` require the `admin` role. After a successful `train` run the
 console's Training card polls `/vm/training/jobs/{id}` until the job reaches a terminal

@@ -26,6 +26,7 @@ if _CORE_DIR not in sys.path:
 from domain.shell._internal.vm import (  # noqa: E402
     X86SyscallHandler,
 )
+from domain.shell._internal.vm_programs import CAVE_GAME_ASM  # noqa: E402
 
 
 def _syscall_num(name: str) -> int:
@@ -1839,6 +1840,10 @@ BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "shell": {
         "description": "Interactive console REPL (line-buffered commands over stdin)",
         "program": _shell,
+    },
+    "cave_game": {
+        "description": "Minecraft iteration-1 voxel runner: first-person terrain, mine/place (VGA text)",
+        "program": lambda: CAVE_GAME_ASM,
     },
 }
 
