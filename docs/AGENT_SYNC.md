@@ -4,7 +4,26 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~02:12 — `fix/tokens-router-nonederef` **lands on
+**Last update**: 2026-10-08 ~02:45 — `fix/vite-worker-format` **lands on
+main** (push `3f73ff956`, card `60652af2` → done): **production `vite build`
+unblocked** — explicit `worker: { format: 'es' }` in `apps/web/vite.config.ts`.
+The WebGPU worker is a module worker (`lib/soulnet-webgpu/index.ts:62`, the
+only `new Worker` site) and vite ≤7 defaults `worker.format: 'iife'`, which
+code-splitting builds reject. Nuance found while verifying: the shared lock
+resolves **two** vites — `apps/web` → 8.3.0 (rolldown, canonical
+`npm run build:vite`, was already green) and root → 7.3.6 (the path the
+Oct-04 sweep hit, bare `vite build` / checkouts without
+`apps/web/node_modules`); explicit `'es'` makes the build green on **both**
+(exit 0, `dist-vite/` + ESM worker chunk, entry wiring intact). Also: `.wt-mole`
+was the only worktree missing the standard `node_modules` bridges — repointed
+`apps/web/node_modules` (empty dir; only a regenerable vitest cache, backed
+up) + worktree-root symlink to the shared root copy, matching the exact
+pattern all 7 other `.wt-*` worktrees use (no install, no new tree). Gates:
+RED vite7 exit 1 → GREEN both vites, `tsc --noEmit` clean, vitest
+`test:lib` 1517/1517. Covers the forward risk for `870ab1bad`'s CI
+"Vite build" step.
+
+Earlier 2026-10-08 ~02:12: `fix/tokens-router-nonederef` **lands on
 main** (push `d50dafa15`, card `f01852a3` → done): **tokens router identity
 fix** — all 6 `/tokens/*` endpoints crashed in every auth mode:
 `require_auth_if_enabled` returns `None` when `SLO_AUTH_REQUIRED` is off (dev
