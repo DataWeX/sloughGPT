@@ -1,0 +1,342 @@
+{
+  "generated": "2026-10-08T09:55:59+00:00",
+  "manifest_version": 1,
+  "steps_budget": 300000,
+  "rows": [
+    {
+      "name": "hello_x86",
+      "tier": "control",
+      "source": "hello_x86",
+      "verdict": "ok",
+      "reason": "",
+      "asm_ms": 0.791,
+      "asm_bytes": 52,
+      "wall_ms": 0.30146400001740403,
+      "steps": 8,
+      "exit_code": 0,
+      "syscalls": {
+        "EXIT": 1,
+        "WRITE": 1
+      },
+      "denials": 0,
+      "port_io": {},
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 0,
+      "stdout_lines": 1,
+      "stdout_head": "Hello from x86 VM!",
+      "asm_error_line": null,
+      "asm_error_src": ""
+    },
+    {
+      "name": "test_syscalls",
+      "tier": "control",
+      "source": "test_syscalls",
+      "verdict": "budget",
+      "reason": "step budget 300000 reached (interactive/loop program)",
+      "asm_ms": 28.604,
+      "asm_bytes": 1824,
+      "wall_ms": 4510.934832000089,
+      "steps": 300000,
+      "exit_code": null,
+      "syscalls": {
+        "READ": 1,
+        "WRITE": 17,
+        "OPEN": 1,
+        "CLOSE": 1,
+        "FORK": 1,
+        "WAIT": 1,
+        "GETPID": 1
+      },
+      "denials": 0,
+      "port_io": {},
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 0,
+      "stdout_lines": 9,
+      "stdout_head": "[01] exit+getpid        FAIL\\n[02] read               PASS\\n[03] write            Hello, world!\\n  PASS\\n[04] open               FAIL\\n[05] close              PASS\\n[06] fork               FAIL\\n[07] exec   ",
+      "asm_error_line": null,
+      "asm_error_src": ""
+    },
+    {
+      "name": "cave_game",
+      "tier": "control",
+      "source": "cave_game",
+      "verdict": "budget",
+      "reason": "step budget 300000 reached (interactive/loop program)",
+      "asm_ms": 63.999,
+      "asm_bytes": 3095,
+      "wall_ms": 2893.9162440000246,
+      "steps": 300000,
+      "exit_code": null,
+      "syscalls": {},
+      "denials": 0,
+      "port_io": {
+        "0x3F8": 74
+      },
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 4000,
+      "stdout_lines": 0,
+      "stdout_head": "",
+      "asm_error_line": null,
+      "asm_error_src": ""
+    },
+    {
+      "name": "asteroids_main",
+      "tier": "tier2",
+      "source": "asteroids_main.asm",
+      "verdict": "asm_gap",
+      "reason": "OverflowError: int too big to convert @ line 93",
+      "asm_ms": 1.196,
+      "asm_bytes": 0,
+      "wall_ms": 0.0,
+      "steps": 0,
+      "exit_code": null,
+      "syscalls": {},
+      "denials": 0,
+      "port_io": {},
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 0,
+      "stdout_lines": 0,
+      "stdout_head": "",
+      "asm_error_line": 93,
+      "asm_error_src": "call setup_window_and_renderer"
+    },
+    {
+      "name": "bootmine",
+      "tier": "tier2",
+      "source": "bootmine.asm",
+      "verdict": "asm_gap",
+      "reason": "OverflowError: int too big to convert @ line 152",
+      "asm_ms": 0.923,
+      "asm_bytes": 0,
+      "wall_ms": 0.0,
+      "steps": 0,
+      "exit_code": null,
+      "syscalls": {},
+      "denials": 0,
+      "port_io": {},
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 0,
+      "stdout_lines": 0,
+      "stdout_head": "",
+      "asm_error_line": 152,
+      "asm_error_src": "call GetTextBufIndex"
+    },
+    {
+      "name": "bweeper",
+      "tier": "tier2",
+      "source": "bweeper.asm",
+      "verdict": "asm_gap",
+      "reason": "ValueError: invalid literal for int() with base 16: '0x8000 + ((BOARD_TOP * 80) + BOARD_LEFT) * 2' @ line 37",
+      "asm_ms": 0.171,
+      "asm_bytes": 0,
+      "wall_ms": 0.0,
+      "steps": 0,
+      "exit_code": null,
+      "syscalls": {},
+      "denials": 0,
+      "port_io": {},
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 0,
+      "stdout_lines": 0,
+      "stdout_head": "",
+      "asm_error_line": 37,
+      "asm_error_src": "BOARD_OFFSET    equ 0x8000 + ((BOARD_TOP * 80) + BOARD_LEFT) * 2"
+    },
+    {
+      "name": "nasm_tetris",
+      "tier": "tier2",
+      "source": "nasm_tetris.asm",
+      "verdict": "asm_gap",
+      "reason": "OverflowError: int too big to convert @ line 58",
+      "asm_ms": 1.809,
+      "asm_bytes": 0,
+      "wall_ms": 0.0,
+      "steps": 0,
+      "exit_code": null,
+      "syscalls": {},
+      "denials": 0,
+      "port_io": {},
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 0,
+      "stdout_lines": 0,
+      "stdout_head": "",
+      "asm_error_line": 58,
+      "asm_error_src": "call drawFrame"
+    },
+    {
+      "name": "snake_main",
+      "tier": "tier2",
+      "source": "snake_main.asm",
+      "verdict": "asm_gap",
+      "reason": "OverflowError: int too big to convert @ line 146",
+      "asm_ms": 1.424,
+      "asm_bytes": 0,
+      "wall_ms": 0.0,
+      "steps": 0,
+      "exit_code": null,
+      "syscalls": {},
+      "denials": 0,
+      "port_io": {},
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 0,
+      "stdout_lines": 0,
+      "stdout_head": "",
+      "asm_error_line": 146,
+      "asm_error_src": "jmp .exit"
+    }
+  ],
+  "coverage": {
+    "syscalls_observed": ["CLOSE", "EXIT", "FORK", "GETPID", "OPEN", "READ", "WAIT", "WRITE"],
+    "syscalls_unobserved": [
+      "BRK",
+      "DISK_READ",
+      "DISK_WRITE",
+      "EXEC",
+      "FREE",
+      "GETROLE",
+      "GETTIMEOFDAY",
+      "KILL",
+      "MALLOC",
+      "MOUSE_READ",
+      "NET_RECV",
+      "NET_SEND",
+      "READDIR",
+      "RTC_GETTIME",
+      "SBRK",
+      "SERIAL_READ",
+      "SERIAL_WRITE",
+      "TRAIN_GET_RESULT",
+      "TRAIN_START",
+      "TRAIN_STATUS",
+      "UNAME",
+      "UNLINK",
+      "YIELD"
+    ],
+    "unhandled_interrupts": {},
+    "devices": [
+      {
+        "contract": "8250 UART serial",
+        "status": "wired",
+        "observed": true,
+        "via": ["port:0x3F8"]
+      },
+      {
+        "contract": "8254 PIT system timer",
+        "status": "wired",
+        "observed": false,
+        "via": ["always-on"]
+      },
+      {
+        "contract": "8259-style PIC dispatch",
+        "status": "wired",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "VGA text buffer @0xB8000",
+        "status": "wired",
+        "observed": true,
+        "via": ["memory-diff"]
+      },
+      {
+        "contract": "PS/2 keyboard",
+        "status": "wired",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "PS/2 mouse",
+        "status": "wired",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "CMOS/RTC",
+        "status": "wired",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "ATA-like block storage",
+        "status": "wired",
+        "observed": true,
+        "via": ["syscall:OPEN"]
+      },
+      {
+        "contract": "virtio-style NIC",
+        "status": "wired",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "FileDevice host-fs bridge",
+        "status": "wired",
+        "observed": true,
+        "via": ["syscall:READ"]
+      },
+      {
+        "contract": "ConsoleDevice engine sink",
+        "status": "wired",
+        "observed": false,
+        "via": ["engine-tier"]
+      },
+      {
+        "contract": "BIOS video services INT 10h",
+        "status": "planned",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "BIOS keyboard services INT 16h",
+        "status": "planned",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "BIOS disk services INT 13h",
+        "status": "planned",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "real-mode IVT + segment model",
+        "status": "planned",
+        "observed": false,
+        "via": []
+      },
+      {
+        "contract": "scripted input injection (keyboard)",
+        "status": "planned",
+        "observed": false,
+        "via": []
+      }
+    ],
+    "gaps": [
+      {
+        "entry": "asteroids_main",
+        "verdict": "asm_gap",
+        "reason": "OverflowError: int too big to convert @ line 93"
+      },
+      {
+        "entry": "bootmine",
+        "verdict": "asm_gap",
+        "reason": "OverflowError: int too big to convert @ line 152"
+      },
+      {
+        "entry": "bweeper",
+        "verdict": "asm_gap",
+        "reason": "ValueError: invalid literal for int() with base 16: '0x8000 + ((BOARD_TOP * 80) + BOARD_LEFT) * 2' @ line 37"
+      },
+      {
+        "entry": "nasm_tetris",
+        "verdict": "asm_gap",
+        "reason": "OverflowError: int too big to convert @ line 58"
+      },
+      {
+        "entry": "snake_main",
+        "verdict": "asm_gap",
+        "reason": "OverflowError: int too big to convert @ line 146"
+      }
+    ]
+  }
+}

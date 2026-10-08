@@ -30,14 +30,15 @@ Single source of truth for navigation. Read this first.
 
 ## Features
 
-| Doc                         | Purpose                 |
-| --------------------------- | ----------------------- |
-| **FEATURES.md**             | Feature list            |
-| **NAVIGATION_AND_SOULS.md** | Soul/personality system |
-| **SHELL.md**                | CLI shell               |
-| **VM_CONSOLE.md**           | VM console              |
-| **vm-devices-spec.md**      | VM device spec          |
-| **WORLD_REALM.md**          | World rendering         |
+| Doc                         | Purpose                               |
+| --------------------------- | ------------------------------------- |
+| **FEATURES.md**             | Feature list                          |
+| **NAVIGATION_AND_SOULS.md** | Soul/personality system               |
+| **SHELL.md**                | CLI shell                             |
+| **VM_CONSOLE.md**           | VM console                            |
+| **VM_COMPAT.md**            | Third-party compat matrix (generated) |
+| **vm-devices-spec.md**      | VM device spec                        |
+| **WORLD_REALM.md**          | World rendering                       |
 
 ## Design
 

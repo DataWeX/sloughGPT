@@ -1,0 +1,176 @@
+{
+  "version": 1,
+  "notes": "Standard contracts the x86 VM claims (or plans) to implement. scripts/compat_track.py measures each corpus run's observed coverage against this manifest and emits the matrix. Statuses: supported = program-reachable today; planned = named gap (backlog card); standalone = class exists but is not wired into X86VirtualSystem.",
+  "intake": [
+    {
+      "form": "single-file source via X86Assembler",
+      "status": "supported",
+      "notes": "NASM-like subset: [BITS 16/32], [ORG], labels, equ, db/dw/dd, ';' and '#' comments, int 0x80"
+    },
+    {
+      "form": "%include / multi-file projects",
+      "status": "planned",
+      "notes": "the line parser has no include directive; corpus rows record the first offending construct"
+    },
+    {
+      "form": "external nasm -> flat binary -> load_bytes",
+      "status": "planned",
+      "notes": "VMEngine.load_bytes(org) exists; nasm is not installed in the environment"
+    },
+    {
+      "form": "ELF / DOS .com / PE object loaders",
+      "status": "planned",
+      "notes": "no object-file loader; programs must be assembled from text source"
+    },
+    {
+      "form": "x86-64 long mode",
+      "status": "planned",
+      "notes": "CPU is 32-bit with a 0x66 operand-size prefix for 16-bit ops"
+    }
+  ],
+  "abi": {
+    "mechanism": "int 0x80 -> X86SyscallHandler.handle(), RBAC-checked per call (domain/shell/_internal/vm_permissions.py)",
+    "syscalls": [
+      "EXIT",
+      "READ",
+      "WRITE",
+      "OPEN",
+      "CLOSE",
+      "FORK",
+      "EXEC",
+      "WAIT",
+      "BRK",
+      "GETPID",
+      "SBRK",
+      "YIELD",
+      "KILL",
+      "GETTIMEOFDAY",
+      "MALLOC",
+      "FREE",
+      "READDIR",
+      "UNAME",
+      "SERIAL_WRITE",
+      "SERIAL_READ",
+      "MOUSE_READ",
+      "RTC_GETTIME",
+      "DISK_READ",
+      "DISK_WRITE",
+      "NET_SEND",
+      "NET_RECV",
+      "GETROLE",
+      "TRAIN_START",
+      "TRAIN_STATUS",
+      "TRAIN_GET_RESULT",
+      "UNLINK"
+    ]
+  },
+  "devices": [
+    {
+      "contract": "8250 UART serial",
+      "impl": "SerialDevice",
+      "wired": true,
+      "access": "ports 0x3F8+ and SYS_SERIAL_WRITE(19)/SYS_SERIAL_READ(20)",
+      "observe": ["syscall:SERIAL_WRITE", "syscall:SERIAL_READ", "port:0x3F8"]
+    },
+    {
+      "contract": "8254 PIT system timer",
+      "impl": "PITDevice + ClockDevice(freq)",
+      "wired": true,
+      "access": "IRQ0 pacing, SYS_GETTIMEOFDAY(14)",
+      "observe": ["syscall:GETTIMEOFDAY", "always-on"]
+    },
+    {
+      "contract": "8259-style PIC dispatch",
+      "impl": "X86CPU._idt_handlers + fire_irq (IRQDevice class standalone)",
+      "wired": true,
+      "access": "interrupt vectors via CPU.register_handler",
+      "observe": ["interrupt-spy"]
+    },
+    {
+      "contract": "VGA text buffer @0xB8000",
+      "impl": "memory-mapped text buffer (VGADevice for CRTC/VBE regs)",
+      "wired": true,
+      "access": "direct stores to 0xB8000",
+      "observe": ["memory-diff"]
+    },
+    {
+      "contract": "PS/2 keyboard",
+      "impl": "INT 1 handler (PS2KeyboardDevice standalone)",
+      "wired": "handler",
+      "access": "INT 1 vector, injected IRQ1",
+      "observe": ["interrupt-spy", "input-injection planned"]
+    },
+    {
+      "contract": "PS/2 mouse",
+      "impl": "MouseDevice",
+      "wired": true,
+      "access": "SYS_MOUSE_READ(21)",
+      "observe": ["syscall:MOUSE_READ"]
+    },
+    {
+      "contract": "CMOS/RTC",
+      "impl": "CMOSDevice + ClockDevice",
+      "wired": true,
+      "access": "SYS_RTC_GETTIME(22)",
+      "observe": ["syscall:RTC_GETTIME"]
+    },
+    {
+      "contract": "ATA-like block storage",
+      "impl": "BlockDevice + DiskDevice + FlatFS",
+      "wired": true,
+      "access": "SYS_DISK_READ(23)/SYS_DISK_WRITE(24), file syscalls over FlatFS",
+      "observe": ["syscall:DISK_READ", "syscall:DISK_WRITE", "syscall:OPEN"]
+    },
+    {
+      "contract": "virtio-style NIC",
+      "impl": "NICDevice",
+      "wired": true,
+      "access": "SYS_NET_SEND(25)/SYS_NET_RECV(26)",
+      "observe": ["syscall:NET_SEND", "syscall:NET_RECV"]
+    },
+    {
+      "contract": "FileDevice host-fs bridge",
+      "impl": "FileDevice (standalone; X86VirtualSystem serves files through FlatFS/BlockDevice)",
+      "wired": "standalone",
+      "access": "file syscalls route to FlatFS in the virtual system",
+      "observe": ["syscall:READ"]
+    },
+    {
+      "contract": "ConsoleDevice engine sink",
+      "impl": "ConsoleDevice (wired on VMEngine's DeviceBus at 0x3F8)",
+      "wired": "engine-tier",
+      "access": "serial port output on the bare VMEngine",
+      "observe": ["engine-tier"]
+    },
+    {
+      "contract": "BIOS video services INT 10h",
+      "impl": null,
+      "status": "planned",
+      "notes": "unregistered interrupt vectors are silent no-ops in X86CPU._raise_interrupt; the harness interrupt-spy counts them"
+    },
+    {
+      "contract": "BIOS keyboard services INT 16h",
+      "impl": null,
+      "status": "planned",
+      "notes": "same silent-no-op semantics; programs spin waiting for input"
+    },
+    {
+      "contract": "BIOS disk services INT 13h",
+      "impl": null,
+      "status": "planned"
+    },
+    {
+      "contract": "real-mode IVT + segment model",
+      "impl": null,
+      "status": "planned",
+      "notes": "flat model (CS=0); [BITS 16] operand path exists in the CPU but real-mode execution is unverified"
+    },
+    {
+      "contract": "scripted input injection (keyboard)",
+      "impl": null,
+      "status": "planned",
+      "notes": "harness v1 runs no input; interactive programs reach the step budget"
+    }
+  ],
+  "roles": ["USER", "ADMIN", "KERNEL"]
+}
