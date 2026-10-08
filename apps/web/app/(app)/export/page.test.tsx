@@ -10,6 +10,7 @@ const {
   mockList,
   mockGetExportFormats,
   mockExportFeedbackPairs,
+  mockDownloadCheckpoint,
   mockApiGet,
   mockDownloadJson,
   mockDownloadBlob,
@@ -18,6 +19,7 @@ const {
   mockList: vi.fn(),
   mockGetExportFormats: vi.fn(),
   mockExportFeedbackPairs: vi.fn(),
+  mockDownloadCheckpoint: vi.fn(),
   mockApiGet: vi.fn(),
   mockDownloadJson: vi.fn(),
   mockDownloadBlob: vi.fn(),
@@ -107,6 +109,7 @@ vi.mock('@/lib/model-controller', () => ({
 vi.mock('@/lib/training-controller', () => ({
   trainingJobsController: {
     exportFeedbackPairs: (...a: unknown[]) => mockExportFeedbackPairs(...a),
+    downloadCheckpoint: (...a: unknown[]) => mockDownloadCheckpoint(...a),
   },
 }))
 
@@ -257,6 +260,19 @@ describe('ExportPage — checkpoint download flow', () => {
       .getAllByRole('button')
       .filter((b) => b.textContent?.toLowerCase().includes('download'))
     expect(downloadBtns.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('downloads the checkpoint by its row address', async () => {
+    mockDownloadCheckpoint.mockResolvedValue(new Blob())
+    render(<ExportPage />)
+    await waitFor(() => {
+      expect(screen.getByText('cp-1')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Download cp-1' }))
+    await waitFor(() => {
+      expect(mockDownloadCheckpoint).toHaveBeenCalledWith('cp-1', '/models/cp-1.soul')
+      expect(mockDownloadBlob).toHaveBeenCalled()
+    })
   })
 })
 

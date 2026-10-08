@@ -524,6 +524,40 @@ describe('trainingJobsController.deleteCheckpointsBatch', () => {
     const result = await trainingJobsController.deleteCheckpointsBatch(['cp1', 'cp2', 'cp3'])
     expect(result.deleted).toBe(2)
   })
+
+  it('threads each row address so a batch is not a name sweep', async () => {
+    apiClient.apiDelete.mockResolvedValue({ success: true })
+    const result = await trainingJobsController.deleteCheckpointsBatch([
+      { name: 'cp1', path: 'models/auto-training/cp1.soul' },
+      { name: 'cp2' },
+    ])
+    expect(result.deleted).toBe(2)
+    expect(apiClient.apiDelete).toHaveBeenCalledWith(
+      '/training/checkpoints/cp1?path=models%2Fauto-training%2Fcp1.soul',
+    )
+    // No address on the row → legacy name delete, same as a bare string.
+    expect(apiClient.apiDelete).toHaveBeenCalledWith('/training/checkpoints/cp2')
+  })
+})
+
+describe('trainingJobsController.getCheckpointInfo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('fetches info for the row address when given', async () => {
+    apiClient.apiGet.mockResolvedValue({ name: 'cp1' })
+    await trainingJobsController.getCheckpointInfo('cp1', 'models/auto-training/cp1.soul')
+    expect(apiClient.apiGet).toHaveBeenCalledWith(
+      '/training/checkpoints/cp1/info?path=models%2Fauto-training%2Fcp1.soul',
+    )
+  })
+
+  it('keeps the legacy name lookup when no address is given', async () => {
+    apiClient.apiGet.mockResolvedValue({ name: 'cp1' })
+    await trainingJobsController.getCheckpointInfo('cp1')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/training/checkpoints/cp1/info')
+  })
 })
 
 describe('trainingJobsController.listFineTuned', () => {

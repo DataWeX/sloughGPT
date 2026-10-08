@@ -92,7 +92,14 @@ describe('useChatModelSettings', () => {
     })
     mockSoulsListCheckpoints.mockResolvedValue({
       checkpoints: [
-        { name: 'ckpt1', loss: 0.5, traits: { warmth: 0.8 }, is_loaded: true, verdict: 'Good' },
+        {
+          name: 'ckpt1',
+          path: 'models/auto-training/ckpt1.soul',
+          loss: 0.5,
+          traits: { warmth: 0.8 },
+          is_loaded: true,
+          verdict: 'Good',
+        },
       ],
     })
 
@@ -109,6 +116,9 @@ describe('useChatModelSettings', () => {
     expect(result.current.currentSoul?.name).toBe('friendly')
     expect(result.current.checkpoints).toHaveLength(1)
     expect(result.current.checkpoints[0].name).toBe('ckpt1')
+    // The row's address must survive the mapping — dropping it here would
+    // force every downstream loader into a name sweep.
+    expect(result.current.checkpoints[0].path).toBe('models/auto-training/ckpt1.soul')
     expect(result.current.model).toBe('gpt2')
   })
 

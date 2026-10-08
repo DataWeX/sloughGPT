@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, cleanup, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react'
 
 vi.mock('@/lib/model-controller', () => ({
   modelController: { getExportFormats: vi.fn() },
@@ -25,55 +25,77 @@ vi.mock('@/components/export/ExportHistoryCard', () => ({
 }))
 vi.mock('@sloughgpt/strui', () => ({
   cn: (...a: any[]) => a.filter(Boolean).join(' '),
-  Card: ({ children, ...p }: any) => <div data-testid="card" {...p}>{children}</div>,
-  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
+  Card: ({ children, ...p }: any) => (
+    <div data-testid="card" {...p}>
+      {children}
+    </div>
+  ),
+  ActionCard: ({ title, actions, children, ...p }: any) => (
+    <div data-testid="action-card" {...p}>
+      {title}
+      {actions}
+      {children}
+    </div>
+  ),
   CardHeader: ({ children }: any) => <div>{children}</div>,
-  CardTitle: ({ children, ...p }: any) => <div data-testid="card-title" {...p}>{children}</div>,
+  CardTitle: ({ children, ...p }: any) => (
+    <div data-testid="card-title" {...p}>
+      {children}
+    </div>
+  ),
   CardContent: ({ children }: any) => <div>{children}</div>,
-  Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
+  Button: ({ children, onClick, disabled, ...p }: any) => (
+    <button onClick={onClick} disabled={disabled} {...p}>
+      {children}
+    </button>
+  ),
   Badge: ({ children }: any) => <span>{children}</span>,
   IconDownload: () => <span>↓</span>,
   IconRefresh: () => <span>↻</span>,
 
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import ExportContent from './ExportContent'
 import { modelController } from '@/lib/model-controller'
+import { trainingJobsController } from '@/lib/training-controller'
 import { apiGet } from '@/lib/http-client'
+import { downloadBlob } from '@/lib/download-utils'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -81,7 +103,9 @@ beforeEach(() => {
     { key: 'sou', label: 'Soul (.soul)' },
     { key: 'gguf', label: 'GGUF' },
   ] as any)
-  vi.mocked(apiGet).mockResolvedValue({ checkpoints: [{ name: 'cp1' }, { name: 'cp2' }] })
+  vi.mocked(apiGet).mockResolvedValue({
+    checkpoints: [{ name: 'cp1', path: 'models/auto-training/cp1.soul' }, { name: 'cp2' }],
+  })
 })
 
 afterEach(() => cleanup())
@@ -102,6 +126,20 @@ describe('ExportContent', () => {
     render(<ExportContent />)
     await waitFor(() => {
       expect(modelController.getExportFormats).toHaveBeenCalled()
+    })
+  })
+
+  it('downloads a checkpoint by its row address', async () => {
+    vi.mocked(trainingJobsController.downloadCheckpoint).mockResolvedValue(new Blob() as any)
+    render(<ExportContent />)
+    const btn = await screen.findByRole('button', { name: 'Download cp1' })
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(trainingJobsController.downloadCheckpoint).toHaveBeenCalledWith(
+        'cp1',
+        'models/auto-training/cp1.soul',
+      )
+      expect(downloadBlob).toHaveBeenCalled()
     })
   })
 })

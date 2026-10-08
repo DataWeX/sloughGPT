@@ -118,10 +118,11 @@ export default function ExportPage() {
     }
   }
 
-  const handleDownloadCheckpoint = async (name: string) => {
+  const handleDownloadCheckpoint = async (cp: { name: string; path?: string }) => {
     try {
-      const blob = await trainingJobsController.downloadCheckpoint(name)
-      downloadBlob(blob, `${name}.soul`)
+      // The row's own address: absent, the server name-sweeps every root.
+      const blob = await trainingJobsController.downloadCheckpoint(cp.name, cp.path)
+      downloadBlob(blob, `${cp.name}.soul`)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Could not checkpoint download')
     }
@@ -288,7 +289,8 @@ export default function ExportPage() {
                     size="sm"
                     variant="ghost"
                     className="h-6 text-[10px]"
-                    onClick={() => handleDownloadCheckpoint(cp.name)}
+                    aria-label={`Download ${cp.name}`}
+                    onClick={() => handleDownloadCheckpoint(cp)}
                   >
                     <IconDownload className="h-3 w-3" />
                   </Button>

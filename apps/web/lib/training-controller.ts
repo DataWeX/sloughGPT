@@ -131,6 +131,8 @@ export interface FineTunedModelLoadResponse {
 
 export interface TrainingBuild {
   name: string
+  /** Repo-relative address when the row is a file on disk; job-record rows lack it. */
+  path?: string
   build_type: 'auto-train' | 'lora' | 'hf-finetune' | 'hf-finetuned-dir' | 'vlm' | 'visual'
   job_id?: string
   model?: string
@@ -564,9 +566,18 @@ export const trainingJobsController = {
     return apiDelete(`/training/checkpoints/${encodeURIComponent(name)}${qs}`)
   },
 
-  async deleteCheckpointsBatch(names: string[]): Promise<{ deleted: number }> {
+  async deleteCheckpointsBatch(
+    targets: Array<string | { name: string; path?: string }>,
+  ): Promise<{ deleted: number }> {
     const self = this
-    const results = await Promise.allSettled(names.map((n) => self.deleteCheckpoint(n)))
+    // A bare string is a name-only target (legacy sweep for callers without a
+    // row); an object carries the row's address so batch delete lands on the
+    // exact files instead of every same-named twin across the roots.
+    const results = await Promise.allSettled(
+      targets.map((t) =>
+        typeof t === 'string' ? self.deleteCheckpoint(t) : self.deleteCheckpoint(t.name, t.path),
+      ),
+    )
     return { deleted: results.filter((r) => r.status === 'fulfilled').length }
   },
 
@@ -583,8 +594,12 @@ export const trainingJobsController = {
     return res.blob()
   },
 
-  async getCheckpointInfo(name: string): Promise<Record<string, unknown>> {
-    return apiGet<Record<string, unknown>>(`/training/checkpoints/${encodeURIComponent(name)}/info`)
+  async getCheckpointInfo(name: string, path?: string): Promise<Record<string, unknown>> {
+    // Row address, same as load/download: absent, the server name-sweeps.
+    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+    return apiGet<Record<string, unknown>>(
+      `/training/checkpoints/${encodeURIComponent(name)}/info${qs}`,
+    )
   },
 
   async downloadTrainingJob(jobId: string): Promise<Blob> {

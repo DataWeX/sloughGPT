@@ -17,6 +17,7 @@ interface LearnerInfo {
 
 interface Checkpoint {
   name: string
+  path?: string
   loss?: number
   traits?: string[]
   is_loaded?: boolean
@@ -65,7 +66,7 @@ export interface ChatModelContextValue {
   checkpoints: Checkpoint[]
   currentCheckpoint: string | undefined
   setCurrentCheckpoint: (c: string | undefined) => void
-  onLoadCheckpoint: (name: string) => Promise<void>
+  onLoadCheckpoint: (name: string, path?: string) => Promise<void>
   agents: AgentDef[]
   currentAgent: AgentDef | null
   setCurrentAgent: (a: AgentDef | null) => void
@@ -107,7 +108,8 @@ export function useChatUI() {
 
 // ── Combined type for backward compat ─────────────────────────────────────
 
-export interface ChatContextValue extends ChatHealthContextValue, ChatModelContextValue, ChatUICallbacksContextValue {}
+export interface ChatContextValue
+  extends ChatHealthContextValue, ChatModelContextValue, ChatUICallbacksContextValue {}
 
 // ── Backward-compat hook ──────────────────────────────────────────────────
 
@@ -131,9 +133,7 @@ export function ChatProvider({ children, health, model, ui }: ChatProviderProps)
   return (
     <ChatHealthContext.Provider value={health}>
       <ChatModelContext.Provider value={model}>
-        <ChatUICallbacksContext.Provider value={ui}>
-          {children}
-        </ChatUICallbacksContext.Provider>
+        <ChatUICallbacksContext.Provider value={ui}>{children}</ChatUICallbacksContext.Provider>
       </ChatModelContext.Provider>
     </ChatHealthContext.Provider>
   )

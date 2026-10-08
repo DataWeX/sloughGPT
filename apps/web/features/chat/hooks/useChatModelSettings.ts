@@ -47,6 +47,7 @@ export function useChatModelSettings(
   const [checkpoints, setCheckpoints] = useState<
     Array<{
       name: string
+      path?: string
       loss?: number
       traits?: string[]
       is_loaded?: boolean
@@ -296,6 +297,9 @@ export function useChatModelSettings(
         setCheckpoints(
           (checkpointsData.checkpoints || []).map((c) => ({
             name: c.name || 'unknown',
+            // Keep the row's address: dropping it here would force every
+            // downstream loader into a name sweep.
+            path: c.path,
             loss: c.loss,
             traits: c.traits ? Object.keys(c.traits) : undefined,
             is_loaded: c.is_loaded || false,

@@ -21,51 +21,58 @@ vi.mock('@sloughgpt/strui', () => ({
       {children}
     </div>
   ),
-  Button: ({ children, onClick, disabled, ...p }: any) => <button onClick={onClick} disabled={disabled} {...p}>{children}</button>,
+  Button: ({ children, onClick, disabled, ...p }: any) => (
+    <button onClick={onClick} disabled={disabled} {...p}>
+      {children}
+    </button>
+  ),
   Skeleton: ({ className }: any) => <div data-testid="skeleton" className={className} />,
 
-    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Tooltip: ({ children }: any) => <>{children}</>,
-    TooltipTrigger: ({ children }: any) => <>{children}</>,
-    TooltipContent: ({ children }: any) => <>{children}</>,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Tooltip: ({ children }: any) => <>{children}</>,
+  TooltipTrigger: ({ children }: any) => <>{children}</>,
+  TooltipContent: ({ children }: any) => <>{children}</>,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 vi.mock('@/components/ConfirmDialog', () => ({
-  ConfirmDialog: ({ open, onConfirm, title }: any) => open ? (
-    <div role="dialog">
-      <p>{title}</p>
-      <button onClick={onConfirm}>Confirm</button>
-    </div>
-  ) : null,
+  ConfirmDialog: ({ open, onConfirm, title }: any) =>
+    open ? (
+      <div role="dialog">
+        <p>{title}</p>
+        <button onClick={onConfirm}>Confirm</button>
+      </div>
+    ) : null,
 }))
 
 import { TrainingBuildsCard } from './TrainingBuildsCard'
@@ -74,8 +81,25 @@ import { soulsController } from '@/lib/souls-controller'
 
 const mockToast = vi.fn()
 const builds = [
-  { name: 'build-1', build_type: 'auto-train', loss: 0.3, epochs: 5, size_mb: 10, model: 'gpt2' },
-  { name: 'build-2', build_type: 'lora', loss: 0.2, epochs: 3, size_mb: 5, model: 'qwen' },
+  {
+    name: 'build-1',
+    path: 'models/auto-training/build-1.soul',
+    build_type: 'auto-train',
+    loss: 0.3,
+    epochs: 5,
+    size_mb: 10,
+    model: 'gpt2',
+  },
+  {
+    name: 'build-2',
+    path: 'data/user_adapters/build-2.soul',
+    build_type: 'lora',
+    loss: 0.2,
+    epochs: 3,
+    size_mb: 5,
+    model: 'qwen',
+  },
+  // No path — a job-record row, not a file we can address directly.
   { name: 'build-3', build_type: 'auto-train', loss: 0.1, epochs: 10, size_mb: 20, model: 'gpt2' },
 ]
 
@@ -85,6 +109,10 @@ beforeEach(() => {
   vi.mocked(soulsController.loadCheckpoint).mockResolvedValue(undefined as any)
   vi.mocked(trainingJobsController.deleteCheckpoint).mockResolvedValue(undefined as any)
   vi.mocked(trainingJobsController.downloadCheckpoint).mockResolvedValue(new Blob() as any)
+  // jsdom has no blob URLs and does not navigate on anchor clicks.
+  URL.createObjectURL = vi.fn(() => 'blob:mock')
+  URL.revokeObjectURL = vi.fn()
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 })
 
 afterEach(() => cleanup())
@@ -102,7 +130,9 @@ describe('TrainingBuildsCard', () => {
 
   it('filters builds by type', async () => {
     render(<TrainingBuildsCard addToast={mockToast} />)
-    await waitFor(() => { expect(screen.getByText('build-1')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByText('build-1')).toBeDefined()
+    })
     const loraBtn = screen.getByText('lora (1)')
     fireEvent.click(loraBtn)
     expect(screen.queryByText('build-1')).toBeNull()
@@ -111,23 +141,62 @@ describe('TrainingBuildsCard', () => {
 
   it('loads checkpoint on Load click', async () => {
     render(<TrainingBuildsCard addToast={mockToast} />)
-    await waitFor(() => { expect(screen.getByText('build-1')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByText('build-1')).toBeDefined()
+    })
     const loads = screen.getAllByText('Load')
     fireEvent.click(loads[0])
     await waitFor(() => {
-      expect(soulsController.loadCheckpoint).toHaveBeenCalledWith('build-1')
+      expect(soulsController.loadCheckpoint).toHaveBeenCalledWith(
+        'build-1',
+        'models/auto-training/build-1.soul',
+      )
+    })
+  })
+
+  it('loads by name alone for rows without an address', async () => {
+    render(<TrainingBuildsCard addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getByText('build-3')).toBeDefined()
+    })
+    const loads = screen.getAllByText('Load')
+    fireEvent.click(loads[2])
+    await waitFor(() => {
+      expect(soulsController.loadCheckpoint).toHaveBeenCalledWith('build-3', undefined)
+    })
+  })
+
+  it('downloads the row file by its address', async () => {
+    render(<TrainingBuildsCard addToast={mockToast} />)
+    await waitFor(() => {
+      expect(screen.getByText('build-1')).toBeDefined()
+    })
+    const downloads = screen.getAllByText('Download')
+    fireEvent.click(downloads[0])
+    await waitFor(() => {
+      expect(trainingJobsController.downloadCheckpoint).toHaveBeenCalledWith(
+        'build-1',
+        'models/auto-training/build-1.soul',
+      )
     })
   })
 
   it('deletes checkpoint on Delete click', async () => {
     render(<TrainingBuildsCard addToast={mockToast} />)
-    await waitFor(() => { expect(screen.getByText('build-1')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByText('build-1')).toBeDefined()
+    })
     const deletes = screen.getAllByText('Delete')
     fireEvent.click(deletes[0])
-    await waitFor(() => { expect(screen.getByRole('dialog')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeDefined()
+    })
     fireEvent.click(screen.getByText('Confirm'))
     await waitFor(() => {
-      expect(trainingJobsController.deleteCheckpoint).toHaveBeenCalledWith('build-1')
+      expect(trainingJobsController.deleteCheckpoint).toHaveBeenCalledWith(
+        'build-1',
+        'models/auto-training/build-1.soul',
+      )
     })
   })
 
@@ -141,24 +210,37 @@ describe('TrainingBuildsCard', () => {
 
   it('paginates builds at 10 per page', async () => {
     const manyBuilds = Array.from({ length: 15 }, (_, i) => ({
-      name: `build-${i}`, build_type: 'auto-train', loss: 0.1 * i, epochs: 5, size_mb: 10, model: 'gpt2',
+      name: `build-${i}`,
+      build_type: 'auto-train',
+      loss: 0.1 * i,
+      epochs: 5,
+      size_mb: 10,
+      model: 'gpt2',
     }))
     vi.mocked(trainingJobsController.listBuilds).mockResolvedValue(manyBuilds as any[])
     render(<TrainingBuildsCard addToast={mockToast} />)
-    await waitFor(() => { expect(screen.getByText('build-0')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByText('build-0')).toBeDefined()
+    })
     expect(screen.queryByText('build-10')).toBeNull()
     expect(screen.getByText('1–10 of 15')).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
-    await waitFor(() => { expect(screen.getByText('build-10')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByText('build-10')).toBeDefined()
+    })
     expect(screen.queryByText('build-0')).toBeNull()
     expect(screen.getByText('11–15 of 15')).toBeDefined()
     fireEvent.click(screen.getByRole('button', { name: 'Prev' }))
-    await waitFor(() => { expect(screen.getByText('build-0')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByText('build-0')).toBeDefined()
+    })
   })
 
   it('does not show pagination when 10 or fewer builds', async () => {
     render(<TrainingBuildsCard addToast={mockToast} />)
-    await waitFor(() => { expect(screen.getByText('build-1')).toBeDefined() })
+    await waitFor(() => {
+      expect(screen.getByText('build-1')).toBeDefined()
+    })
     expect(screen.queryByText('1–3 of 3')).toBeNull()
   })
 })

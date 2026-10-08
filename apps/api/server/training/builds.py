@@ -29,14 +29,20 @@ async def list_builds():
 
     builds = []
 
-    # 1. Auto-train checkpoints (.soul / .npz)
+    # Keyed by address, not by name: two roots may hold one filename, and a
+    # name-keyed set hid the second build from the list while its file still
+    # existed — the same defect the checkpoint listing fixed. The glob already
+    # knows the exact file, so rows are built from THAT path rather than a name
+    # probe that walks the roots in order and can describe another root's twin.
     seen = set()
+
+    # 1. Auto-train checkpoints (.soul / .npz)
     for ext in ("*.soul", "*.npz"):
         for f in sorted(_checkpoints_dir.glob(ext), key=lambda p: p.stat().st_mtime, reverse=True):
-            if f.name in seen:
+            if str(f) in seen:
                 continue
-            seen.add(f.name)
-            info = load_soul(f.name)
+            seen.add(str(f))
+            info = load_soul(f.name, path=str(f))
             if info:
                 info["build_type"] = "auto-train"
                 builds.append(info)
@@ -46,19 +52,19 @@ async def list_builds():
     for f in sorted(
         _trained_dir.glob("*_trained.soul"), key=lambda p: p.stat().st_mtime, reverse=True
     ):
-        if f.name in seen:
+        if str(f) in seen:
             continue
-        seen.add(f.name)
-        info = load_soul(f.name)
+        seen.add(str(f))
+        info = load_soul(f.name, path=str(f))
         if info:
             info["build_type"] = "trained"
             builds.append(info)
 
     # 3. LoRA .soul files
     for npz in sorted(_lora_dir.glob("*.soul"), key=lambda p: p.stat().st_mtime, reverse=True):
-        if npz.name in seen:
+        if str(npz) in seen:
             continue
-        seen.add(npz.name)
+        seen.add(str(npz))
         info = load_lora_soul(npz.name)
         if info:
             info["build_type"] = "lora"
@@ -90,8 +96,8 @@ async def list_builds():
     # 4. HF fine-tuned model directories on disk (for builds not tracked in memory)
     if _hf_finetuned_dir.is_dir():
         for d in sorted(_hf_finetuned_dir.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
-            if d.is_dir() and d.name not in seen:
-                seen.add(d.name)
+            if d.is_dir() and str(d) not in seen:
+                seen.add(str(d))
                 size_mb = sum(f.stat().st_size for f in d.rglob("*") if f.is_file()) / (1024 * 1024)
                 builds.append(
                     {
