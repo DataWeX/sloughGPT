@@ -1,10 +1,18 @@
 """
-Shell Device Nodes — /dev/llm, /dev/embedding, /dev/vision, /dev/knowledge, /dev/null, /dev/random.
+Shell Device Nodes — /dev/ai (unified) and the per-capability nodes.
+
+``/dev/ai`` is the single AI node: ``generate``, ``embed``, ``health`` and
+``info`` all go through one driver's ``ioctl``. ``/dev/llm`` and
+``/dev/embedding`` are aliases of it, so old habits keep working.
+The remaining nodes stay separate: /dev/null, /dev/random, /dev/knowledge,
+/dev/vision and /dev/proc. Hardware drivers (tensor, npu, storage, network,
+display, input) live in ``kernel_devices`` and share the same registry.
 
 Each device behaves like a Unix device file:
-  - cat /dev/llm       → read generates text
-  - echo text > /dev/llm → write sends prompt
-  - cat /dev/random    → reads random content
+  - cat /dev/ai                 → capability card (no API call)
+  - echo prompt > /dev/ai       → generate
+  - echo "embed: text" > /dev/ai → pick an op with an <op>: prefix
+  - cat /dev/random             → reads random content
 """
 
 from __future__ import annotations
@@ -15,6 +23,10 @@ import random
 import re
 import string
 from collections.abc import Callable
+from typing import Any
+
+from .kernel_devices import DeviceDriver, DeviceType
+from .kernel_syscall import SyscallResult
 
 logger = logging.getLogger("slo.shell.devices")
 
@@ -35,6 +47,15 @@ class AIDevice:
     def write(self, data: str) -> str:
         """Write to device. Returns response text (printed to stdout)."""
         raise NotImplementedError
+
+    def info(self) -> dict[str, Any]:
+        """Device info dict — same shape DeviceDriver.info() returns."""
+        return {
+            "name": self.name,
+            "type": "ai",
+            "state": "READY",
+            "description": self.description,
+        }
 
 
 # ── Device Implementations ─────────────────────────────────────────────────
@@ -274,6 +295,222 @@ class ProcDevice(AIDevice):
         return "  /proc is read-only"
 
 
+# ── Unified AI node ────────────────────────────────────────────────────────
+
+
+class AIDeviceDriver(DeviceDriver, AIDevice):
+    """The unified AI device node — ``/dev/ai``.
+
+    One node, several operations, all dispatched through the kernel's
+    existing ``ioctl`` seam rather than a per-capability device file::
+
+        ioctl("generate", prompt)   text generation   (LLMDevice)
+        ioctl("embed", text)        embedding         (EmbeddingDevice)
+        ioctl("health")             API probe
+        ioctl("info")               capability card
+        ioctl("auto", payload)      ``<op>:`` prefix selects, else generate
+
+    The VFS projects this onto ``/dev/ai`` plus the alias nodes
+    ``/dev/llm`` and ``/dev/embedding`` (see :meth:`vfs_ops`), so the shell's
+    plain ``cat`` / ``echo >`` reach the driver without any device-specific
+    plumbing. Behaviour is *composed* from the existing ``LLMDevice`` and
+    ``EmbeddingDevice`` — never duplicated.
+
+    Training is deliberately not an operation here: it is long-running and
+    checkpointed, with its own ``TRAIN_START``/``TRAIN_STOP`` syscalls.
+    """
+
+    #: Operations this node advertises (``DeviceTable.capabilities`` reads it).
+    OPS: tuple[str, ...] = ("generate", "embed", "health", "info")
+
+    description = "Unified AI device — generate, embed, health, info"
+
+    #: VFS projection per node name: ``(read_op, write_op)``.
+    #: ``"auto"`` lets the written payload pick the operation with an
+    #: ``<op>:`` prefix; the suffix names the default when there is no
+    #: prefix (``auto`` → generate, ``auto:embed`` → embed) so
+    #: ``echo text > /dev/embedding`` keeps embedding while
+    #: ``echo prompt > /dev/ai`` keeps generating.
+    VFS_OPS: dict[str, tuple[str, str]] = {
+        "ai": ("info", "auto"),
+        "llm": ("info", "auto"),
+        "embedding": ("info", "auto:embed"),
+    }
+
+    #: Write default per node, derived from :attr:`VFS_OPS` once at class
+    #: definition — the card renders often and shouldn't parse op strings.
+    _WRITE_DEFAULT: dict[str, str] = {
+        node: (ops[1].partition(":")[2] or "generate") for node, ops in VFS_OPS.items()
+    }
+
+    def __init__(
+        self,
+        name: str = "ai",
+        *,
+        generate_fn: Callable | None = None,
+        embed_fn: Callable | None = None,
+    ):
+        super().__init__(name, DeviceType.INFERENCE)
+        self._llm = LLMDevice(generate_fn=generate_fn)
+        self._embedding = EmbeddingDevice(embed_fn=embed_fn)
+        self._aliases: set[str] = {name}
+
+    # ── Kernel seam ────────────────────────────────────────────────────
+
+    def ioctl(self, command: str, *args: Any) -> SyscallResult:
+        """Run an operation on this node. Payload, if any, is ``args[0]``."""
+        op = (command or "").strip().lower()
+        payload = str(args[0]) if args else ""
+        if op.startswith("auto"):
+            # ``auto`` → the payload's ``<op>:`` prefix, else generate;
+            # ``auto:<op>`` → same, but fall back to that node's default.
+            default = op.partition(":")[2].strip()
+            if default and default not in self.OPS:
+                return SyscallResult.fail(
+                    f"/dev/{self.name}: bad default op '{default}' (ops: {', '.join(self.OPS)})"
+                )
+            op, payload = self._split_op(payload, default or "generate")
+        elif not op:
+            op = "info"
+        if op not in self.OPS:
+            return SyscallResult.fail(
+                f"/dev/{self.name}: unknown operation '{command}' (ops: {', '.join(self.OPS)})"
+            )
+        return SyscallResult.ok(self._run(op, payload))
+
+    def list_commands(self) -> list[str]:
+        """Advertised capabilities — ``DeviceTable.capabilities()`` reads this."""
+        return list(self.OPS)
+
+    def info(self) -> dict[str, Any]:
+        info = super().info()
+        info.update(
+            {
+                "description": self.description,
+                "ops": list(self.OPS),
+                "aliases": sorted(self._aliases - {self.name}),
+            }
+        )
+        return info
+
+    # ── AIDevice projection (cat / echo >) ─────────────────────────────
+
+    def read(self, args: str = "") -> str:
+        """``cat /dev/ai`` → capability card; ``cat /dev/ai <prompt>`` → generate."""
+        payload = (args or "").strip()
+        if not payload:
+            return self._run("info", "")
+        return self._run("generate", payload)
+
+    def write(self, data: str) -> str:
+        """Write payload — an ``<op>:`` prefix selects the operation."""
+        op, payload = self._split_op(data)
+        return self._run(op, payload)
+
+    # ── VFS projection ─────────────────────────────────────────────────
+
+    def vfs_ops(self, name: str) -> tuple[str, str] | None:
+        """``(read_op, write_op)`` for node ``name``, or None if we don't own it."""
+        if name in self.VFS_OPS:
+            return self.VFS_OPS[name]
+        if name in self._aliases:
+            return ("info", "auto")
+        return None
+
+    def add_alias(self, name: str) -> bool:
+        """Track an extra node name for this driver."""
+        if not name or name == self.name:
+            return False
+        self._aliases.add(name)
+        return True
+
+    # ── Operation implementations ──────────────────────────────────────
+
+    @staticmethod
+    def _split_op(data: str, default_op: str = "generate") -> tuple[str, str]:
+        """``"embed: hello"`` → ``("embed", "hello")``; anything else → ``default_op``.
+
+        ``echo`` prints its arguments verbatim, so a quoted payload reaches the
+        device with the quotes intact (``'"embed: hello"'``). Strip one matched
+        outer quote pair before matching the ``<op>:`` prefix — but only when the
+        inner text holds no same-kind quote, so ``'it's fine'`` and half-quoted
+        expressions are passed through untouched.
+        """
+        text = (data or "").strip()
+        if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+            inner = text[1:-1]
+            if text[0] not in inner:
+                text = inner.strip()
+        head, sep, rest = text.partition(":")
+        key = head.strip().lower()
+        if sep and key in AIDeviceDriver.OPS:
+            return key, rest.strip()
+        return default_op, text
+
+    def _run(self, op: str, payload: str) -> str:
+        if op == "generate":
+            return self._generate(payload)
+        if op == "embed":
+            return self._embed(payload)
+        if op == "health":
+            return self._health()
+        # ``info``: the VFS passes the node name it was opened through.
+        node = payload if payload in self._aliases else ""
+        return self._info_text(node)
+
+    def _generate(self, prompt: str) -> str:
+        prompt = (prompt or "").strip()
+        if not prompt:
+            return f'  no prompt — usage: echo "<prompt>" > /dev/{self.name}'
+        return self._llm.read(prompt)
+
+    def _embed(self, text: str) -> str:
+        text = (text or "").strip()
+        if not text:
+            # Empty read previews the last embedding (or explains how to make one).
+            return self._embedding.read().strip()
+        dims = self._embedding.write(text).strip()
+        return f"{dims}\n{self._embedding.read().strip()}"
+
+    def _health(self) -> str:
+        try:
+            from .config import get_api_base
+            from .runtime import _probe_api
+        except Exception as exc:  # pragma: no cover - import guarded
+            return f"  /dev/{self.name}: health unavailable ({exc})"
+        status = _probe_api(get_api_base())
+        if not status.get("available"):
+            return f"  /dev/{self.name}: API unreachable — {status.get('error', 'unknown')}"
+        model = status.get("model_id") or "none"
+        state = "loaded" if status.get("model_loaded") else "not loaded"
+        return f"  /dev/{self.name}: API {status.get('status', 'ok')} — model {model} ({state})"
+
+    def _info_text(self, node: str = "") -> str:
+        node = node or self.name
+        # The card must state THIS node's write default: /dev/embedding
+        # embeds, /dev/ai and /dev/llm generate.
+        default = self._default_write_op(node)
+        example = "text" if default == "embed" else "prompt"
+        lines = [
+            f"  /dev/{node} — {self.description}",
+            f"  ops: {', '.join(self.OPS)}",
+            f'  echo "<{example}>" > /dev/{node}      # {default}',
+            f'  echo "embed: <text>" > /dev/{node}  # any op as <op>: <payload>',
+            f"  cat /dev/{node}                    # this card",
+        ]
+        if node != self.name:
+            lines.append(f"  canonical node: /dev/{self.name}")
+        others = sorted(n for n in self._aliases if n != node)
+        if others:
+            lines.append("  also reachable as: " + ", ".join(f"/dev/{n}" for n in others))
+        return "\n".join(lines)
+
+    @classmethod
+    def _default_write_op(cls, node: str) -> str:
+        """Fallback operation for a node's write when the payload has no ``<op>:``."""
+        return cls._WRITE_DEFAULT.get(node, "generate")
+
+
 # ── Device Manager ─────────────────────────────────────────────────────────
 
 
@@ -296,10 +533,12 @@ class DeviceManager:
         return sorted(self._devices.keys())
 
     def list_devices(self) -> str:
-        lines = [
-            f"  {'/dev/' + n:<20} {self._devices[n].info().get('type', 'unknown')}"
-            for n in self.names
-        ]
+        """Human-readable device listing (``lsdev`` prints this)."""
+        lines = []
+        for n in self.names:
+            dev = self._devices[n]
+            desc = getattr(dev, "description", "") or str(dev.info().get("type", "unknown"))
+            lines.append(f"  {'/dev/' + n:<20} {desc}")
         return "\n".join(lines)
 
     def read(self, path: str, args: str = "") -> str:
@@ -335,7 +574,20 @@ class DeviceManager:
 
 
 def create_default_devices(get_kernel: Callable | None = None) -> DeviceManager:
-    """Create and register all built-in device nodes."""
+    """Create and register all built-in device nodes.
+
+    Two families share one registry:
+
+    - **AI** — ``/dev/ai`` plus its aliases ``/dev/llm`` and ``/dev/embedding``
+      (one driver instance, three node names), then ``null``, ``random``,
+      ``knowledge``, ``vision`` and ``proc``.
+    - **hardware** — ``tensor``, ``npu``, ``storage``, ``network``,
+      ``display``, ``input``.
+
+    The VFS builds ``/dev`` from ``mgr.names``, so both families appear there;
+    only nodes whose driver exposes ``vfs_ops()`` get a live (ioctl-backed)
+    entry — everything else keeps the inert placeholder it has always had.
+    """
     from .display_device import DisplayDevice
     from .input_device import InputDevice
     from .kernel_devices import DeviceManager as KernelDeviceManager
@@ -345,6 +597,19 @@ def create_default_devices(get_kernel: Callable | None = None) -> DeviceManager:
     from .tensor_device import TensorDevice
 
     mgr = KernelDeviceManager()
+
+    # AI family — one unified node, aliased twice.
+    ai = AIDeviceDriver("ai")
+    mgr.register(ai)
+    mgr.alias("llm", "ai")
+    mgr.alias("embedding", "ai")
+    mgr.register(NullDevice())
+    mgr.register(RandomDevice())
+    mgr.register(KnowledgeDevice())
+    mgr.register(VisionDevice())
+    mgr.register(ProcDevice(get_kernel))
+
+    # Hardware family.
     mgr.register(TensorDevice("tensor"))
     mgr.register(NPUDevice("npu"))
     mgr.register(StorageDevice("storage"))

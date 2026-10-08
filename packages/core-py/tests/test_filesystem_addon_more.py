@@ -17,6 +17,7 @@ from domain.shell._internal.addons.filesystem import (
     VFSEntry,
     VFSWriteOnlyFile,
 )
+from domain.shell._internal.devices import create_default_devices
 
 
 def _psutil_stub(cpu_freq_val):
@@ -324,3 +325,86 @@ class TestVirtualDispatchBranches:
         vfs.mount("/mnt", root)
         s = vfs.stat("/mnt/sub")
         assert s is not None and stat_mod.S_ISDIR(s.st_mode)
+
+
+# ── /dev/ai — live device entries ──────────────────────────────────────────
+
+
+class TestDeviceEntryWiring:
+    """cat / echo > must reach the driver, not an inert placeholder node."""
+
+    @staticmethod
+    def _mgr_with_ai():
+        from domain.shell._internal.devices import AIDeviceDriver
+        from domain.shell._internal.kernel_devices import DeviceManager
+
+        mgr = DeviceManager()
+        mgr.register(
+            AIDeviceDriver(
+                "ai",
+                generate_fn=lambda p: f"AI: {p}",
+                embed_fn=lambda t: [0.1, 0.2, 0.3],
+            )
+        )
+        mgr.alias("llm", "ai")
+        mgr.alias("embedding", "ai")
+        return mgr
+
+    @staticmethod
+    def _vfs(mgr):
+        vfs = VFS()
+        vfs.set_devices(mgr)
+        return vfs
+
+    def test_read_dev_ai_returns_capability_card(self):
+        out = self._vfs(self._mgr_with_ai()).read("/dev/ai")
+        assert out.startswith("  /dev/ai")
+        assert "ops: generate, embed, health, info" in out
+
+    def test_read_through_alias_names_that_alias(self):
+        assert self._vfs(self._mgr_with_ai()).read("/dev/llm").startswith("  /dev/llm")
+
+    def test_write_returns_generated_text(self):
+        vfs = self._vfs(self._mgr_with_ai())
+        assert vfs.write("/dev/ai", "hello") == "AI: hello"
+        assert vfs.write("/dev/llm", "hello") == "AI: hello"
+
+    def test_write_dispatches_op_prefix(self):
+        vfs = self._vfs(self._mgr_with_ai())
+        assert vfs.write("/dev/ai", "embed: hi").startswith("embedding: 3 dims")
+        assert vfs.write("/dev/embedding", "hi").startswith("embedding: 3 dims")
+
+    def test_write_accepts_payload_with_echoed_quotes(self):
+        """``echo "embed: hi" > /dev/ai`` — echo keeps the quotes verbatim."""
+        vfs = self._vfs(self._mgr_with_ai())
+        assert vfs.write("/dev/ai", '"embed: hi"').startswith("embedding: 3 dims")
+        assert vfs.write("/dev/llm", '"hello"') == "AI: hello"
+
+    def test_alias_nodes_keep_their_own_default_op(self):
+        """The node name carries intent: embedding embeds, llm generates."""
+        vfs = self._vfs(self._mgr_with_ai())
+        assert vfs.write("/dev/embedding", "plain text").startswith("embedding: 3 dims")
+        assert vfs.write("/dev/llm", "plain text") == "AI: plain text"
+        assert vfs.write("/dev/ai", "plain text") == "AI: plain text"
+        # an explicit <op>: prefix still wins over the node's default
+        assert vfs.write("/dev/embedding", "generate: hi") == "AI: hi"
+        assert vfs.write("/dev/ai", "embed: hi").startswith("embedding: 3 dims")
+
+    def test_real_factory_card_needs_no_network(self):
+        out = self._vfs(create_default_devices()).read("/dev/ai")
+        assert out.startswith("  /dev/ai")
+        assert "ops:" in out
+
+    def test_hardware_nodes_stay_inert(self):
+        # Scope guard: only nodes exposing vfs_ops() become live entries.
+        vfs = self._vfs(create_default_devices())
+        assert vfs.read("/dev/tensor") == ""
+        assert vfs.write("/dev/tensor", "x") is None
+        assert vfs.read("/dev/null") == ""
+
+    def test_ai_node_is_a_file_not_a_directory(self):
+        vfs = self._vfs(self._mgr_with_ai())
+        assert vfs.isfile("/dev/ai") is True
+        assert vfs.listdir("/dev/ai") is None
+        assert vfs.read("/dev") is None
+        assert vfs.write("/dev", "x") == "Is a directory"

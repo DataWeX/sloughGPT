@@ -7,6 +7,7 @@ import pytest
 
 from domain.shell._internal.devices import (
     AIDevice,
+    AIDeviceDriver,
     DeviceManager,
     EmbeddingDevice,
     KnowledgeDevice,
@@ -376,12 +377,180 @@ class TestDeviceManager:
 
     def test_create_default_devices(self):
         mgr = create_default_devices(_Kernel)
-        assert set(mgr.names) == {
-            "null",
-            "random",
-            "llm",
-            "embedding",
-            "knowledge",
-            "vision",
-            "proc",
-        }
+        # AI family: the unified node, its two aliases, and the per-capability
+        # nodes that stay separate (knowledge/vision/null/random/proc).
+        ai_family = {"ai", "llm", "embedding", "null", "random", "knowledge", "vision", "proc"}
+        # Hardware family (unchanged) shares the same registry.
+        hardware_family = {"tensor", "npu", "storage", "network", "display", "input"}
+        assert set(mgr.names) == ai_family | hardware_family
+        # /dev/ai, /dev/llm and /dev/embedding are one driver, three names.
+        assert mgr.get("llm") is mgr.get("ai") is mgr.get("embedding")
+        assert mgr.get("null") is not mgr.get("ai")
+
+
+# ── /dev/ai — the unified AI node ──────────────────────────────────────────
+
+
+class TestAIDeviceDriver:
+    """The one node that replaces /dev/llm + /dev/embedding."""
+
+    @staticmethod
+    def _driver(**kwargs) -> AIDeviceDriver:
+        return AIDeviceDriver(
+            "ai",
+            generate_fn=lambda p: f"AI: {p}",
+            embed_fn=lambda t: [0.1, 0.2, 0.3],
+            **kwargs,
+        )
+
+    # ── advertised contract ──
+
+    def test_ops_advertised(self):
+        driver = self._driver()
+        assert driver.OPS == ("generate", "embed", "health", "info")
+        assert driver.list_commands() == ["generate", "embed", "health", "info"]
+
+    def test_capabilities_via_manager(self):
+        assert create_default_devices().capabilities("ai") == [
+            "generate",
+            "embed",
+            "health",
+            "info",
+        ]
+
+    def test_info_dict_carries_description_ops_aliases(self):
+        info = create_default_devices().get("ai").info()
+        assert info["name"] == "ai"
+        assert "Unified AI device" in info["description"]
+        assert info["ops"] == ["generate", "embed", "health", "info"]
+        assert set(info["aliases"]) == {"llm", "embedding"}
+
+    def test_base_ai_device_info_shape(self):
+        info = NullDevice().info()
+        assert info["name"] == "null"
+        assert info["type"] == "ai"
+        assert info["state"] == "READY"
+
+    # ── operations ──
+
+    def test_info_card_is_offline(self):
+        result = self._driver().ioctl("info")
+        assert result.success is True
+        assert "/dev/ai" in result.value
+        assert "ops: generate, embed, health, info" in result.value
+
+    def test_card_states_the_write_default_of_that_node(self):
+        driver = create_default_devices().get("ai")
+        assert "# generate" in driver.ioctl("info", "ai").value
+        assert "# generate" in driver.ioctl("info", "llm").value
+        card = driver.ioctl("info", "embedding").value
+        assert "# embed" in card and 'echo "<text>"' in card
+
+    def test_generate_uses_injected_fn(self):
+        assert self._driver().ioctl("generate", "hi").value == "AI: hi"
+
+    def test_generate_without_prompt_prints_usage(self):
+        assert "no prompt" in self._driver().ioctl("generate", "   ").value
+
+    def test_embed_reports_dims_and_preview(self):
+        out = self._driver().ioctl("embed", "hi").value
+        assert "3 dims" in out
+        assert "[0.1000" in out
+
+    def test_embed_without_payload_previews_last(self):
+        assert "No embedding computed yet" in self._driver().ioctl("embed").value
+
+    def test_unknown_operation_fails(self):
+        result = self._driver().ioctl("frobnicate")
+        assert result.success is False
+        assert "unknown operation" in result.error
+        assert "ops: generate, embed, health, info" in result.error
+
+    def test_health_reports_unreachable_api(self):
+        probe = {"available": False, "error": "boom"}
+        with patch("domain.shell._internal.runtime._probe_api", return_value=probe):
+            assert "API unreachable — boom" in self._driver().ioctl("health").value
+
+    def test_health_reports_loaded_model(self):
+        probe = {"available": True, "status": "ok", "model_id": "slo-1", "model_loaded": True}
+        with patch("domain.shell._internal.runtime._probe_api", return_value=probe):
+            out = self._driver().ioctl("health").value
+        assert "API ok" in out and "model slo-1 (loaded)" in out
+
+    # ── write payload dispatch ──
+
+    def test_write_dispatches_on_op_prefix(self):
+        driver = self._driver()
+        assert driver.write("embed: hi").startswith("embedding: 3 dims")
+        assert driver.write("plain prompt") == "AI: plain prompt"
+
+    def test_write_leaves_non_op_colon_in_prompt(self):
+        assert self._driver().write("note: hi") == "AI: note: hi"
+
+    def test_write_tolerates_echoed_quotes(self):
+        """``echo "embed: hi" > /dev/ai`` — echo keeps the quotes verbatim."""
+        driver = self._driver()
+        assert driver.write('"embed: hi"').startswith("embedding: 3 dims")
+        assert driver.write("'embed: hi'").startswith("embedding: 3 dims")
+        # outer quotes stripped from a plain prompt too (they aren't the prompt)
+        assert driver.write('"plain prompt"') == "AI: plain prompt"
+
+    def test_write_keeps_quotes_when_inner_quotes_present(self):
+        """A same-kind quote inside means the pair is not a wrapper."""
+        driver = self._driver()
+        assert driver.write('"say \\"hi\\""') == 'AI: "say \\"hi\\""'
+        # the apostrophe does not block stripping of a double-quote wrapper
+        assert driver.write('"it\'s fine"') == "AI: it's fine"
+
+    def test_write_empty_prints_usage(self):
+        assert "no prompt" in self._driver().write("")
+
+    def test_auto_op_accepts_a_default_suffix(self):
+        """``auto:<op>`` — the node's fallback when the payload has no prefix."""
+        driver = self._driver()
+        assert driver.ioctl("auto", "hi").value == "AI: hi"
+        assert driver.ioctl("auto:embed", "hi").value.startswith("embedding: 3 dims")
+        # prefix still wins over the fallback
+        assert driver.ioctl("auto:embed", "generate: hi").value == "AI: hi"
+        assert driver.ioctl("auto:embed", '"embed: hi"').value.startswith("embedding: 3 dims")
+        bad = driver.ioctl("auto:bogus", "hi")
+        assert bad.success is False and "bad default op" in bad.error
+
+    def test_read_is_card_then_generation(self):
+        driver = self._driver()
+        assert driver.read("").startswith("  /dev/ai")
+        assert driver.read("hello") == "AI: hello"
+
+    # ── node identity ──
+
+    def test_info_payload_is_only_a_node_when_it_is_one(self):
+        assert self._driver().ioctl("info", "hello").value.startswith("  /dev/ai")
+
+    def test_info_names_the_alias_that_was_opened(self):
+        out = create_default_devices().get("ai").ioctl("info", "llm").value
+        assert out.startswith("  /dev/llm")
+        assert "canonical node: /dev/ai" in out
+
+    def test_vfs_ops_per_node(self):
+        driver = create_default_devices().get("ai")
+        # All three names read as the card; the write default differs by intent.
+        assert driver.vfs_ops("ai") == ("info", "auto")
+        assert driver.vfs_ops("llm") == ("info", "auto")
+        assert driver.vfs_ops("embedding") == ("info", "auto:embed")
+        # Not ours — the VFS must fall back to an inert entry.
+        assert driver.vfs_ops("tensor") is None
+        assert driver.vfs_ops("null") is None
+
+    def test_aliases_open_as_file_descriptors(self):
+        mgr = create_default_devices()
+        fd = mgr.open("llm")
+        assert fd >= 0
+        try:
+            assert mgr.ioctl(fd, "info").success is True
+        finally:
+            assert mgr.close(fd) is True
+
+    def test_aliases_are_one_instance_not_copies(self):
+        mgr = create_default_devices()
+        assert mgr.get("llm") is mgr.get("ai") is mgr.get("embedding")
+        assert mgr.list_devices().count(mgr.get("ai").info()) == 1

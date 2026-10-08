@@ -147,6 +147,22 @@ class DeviceTable:
             self._device_types[device.name] = device_type
             return True
 
+    def alias(self, name: str, target: str) -> bool:
+        """Point an extra name at an already-registered device.
+
+        One driver instance, several node names — both open as fds and both
+        answer ioctls, so an alias is indistinguishable from the original.
+        """
+        with self._lock:
+            dev = self._devices.get(target)
+            if dev is None:
+                return False
+            if name in self._devices and self._devices[name] is not dev:
+                return False
+            self._devices[name] = dev
+            self._device_types[name] = self._device_types.get(target, 0)
+            return True
+
     def unregister(self, name: str) -> bool:
         """Unregister device."""
         with self._lock:
@@ -200,8 +216,15 @@ class DeviceTable:
     # ── Info ──────────────────────────────────────────────────────────────
 
     def list_devices(self) -> list[dict]:
-        """List all registered devices."""
-        return [d.info() for d in self._devices.values()]
+        """List registered devices — aliases collapse to one entry."""
+        seen: set[int] = set()
+        devices: list[dict] = []
+        for device in self._devices.values():
+            if id(device) in seen:
+                continue
+            seen.add(id(device))
+            devices.append(device.info())
+        return devices
 
     def stats(self) -> dict:
         """Get table stats."""
@@ -239,6 +262,24 @@ class DeviceManager:
         """Register device — compatible with old interface."""
         self._devices[device.name] = device
         return self.table.register(device, device_type)
+
+    def alias(self, name: str, target: str) -> bool:
+        """Register an alternate node name for an existing device.
+
+        ``llm`` and ``embedding`` resolve to the same driver instance as
+        ``ai``: one registry entry, several names.
+        """
+        dev = self._devices.get(target)
+        if dev is None:
+            return False
+        if name in self._devices and self._devices[name] is not dev:
+            return False
+        self._devices[name] = dev
+        self.table.alias(name, target)
+        add_alias = getattr(dev, "add_alias", None)
+        if callable(add_alias):
+            add_alias(name)
+        return True
 
     def unregister(self, name: str) -> bool:
         """Unregister device."""
