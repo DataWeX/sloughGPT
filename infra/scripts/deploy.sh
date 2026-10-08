@@ -3,7 +3,11 @@ set -euo pipefail
 
 # SloughGPT Cloud Deployment Script
 # Usage: ./deploy.sh [api|web|all]
-# Requirements: docker, docker compose, curl
+# Requirements: docker, docker compose
+#
+# Port note (card 257d310b): docker-compose.prod.yml publishes ONLY nginx
+# (:80/:443) — nothing listens on host :8000/:3000. Health is therefore read
+# from container health status (docker inspect), not host curls.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -20,7 +24,6 @@ err() { echo -e "\033[1;31m[deploy]\033[0m $*" >&2; exit 1; }
 check_deps() {
     command -v docker >/dev/null 2>&1 || err "docker not found"
     command -v docker compose >/dev/null 2>&1 || err "docker compose not found"
-    command -v curl >/dev/null 2>&1 || err "curl not found"
 }
 
 build() {
@@ -46,14 +49,44 @@ pull() {
 
 deploy() {
     log "Deploying $TARGET..."
-    docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d "$TARGET"
+    # "all" is not a compose service name — omit the selector to bring up
+    # the whole project (compose v2 errors on `up -d all`).
+    if [[ "$TARGET" == "all" ]]; then
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d
+    else
+        docker compose -f "$COMPOSE_FILE" --env-file "$ENV_FILE" up -d "$TARGET"
+    fi
+}
+
+wait_healthy() {
+    local name=$1 st="absent" i
+    # prod publishes only nginx — container-internal healthchecks are the
+    # source of truth (web's own wget localhost:3000 runs INSIDE the web
+    # container, where :3000 is the real listener).
+    for i in $(seq 1 90); do
+        st=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$name" 2>/dev/null || echo absent)
+        case "$st" in
+            healthy|running)
+                log "$name: $st"
+                return 0
+                ;;
+        esac
+        sleep 2
+    done
+    err "$name not healthy after 180s (last status: $st)"
 }
 
 health() {
-    log "Waiting for health checks..."
-    sleep 5
-    curl -fsS http://localhost:8000/health || err "API health check failed"
-    curl -fsS http://localhost:3000/ || err "Web health check failed"
+    log "Waiting for health checks (container health — prod has no host :8000/:3000)..."
+    case "$TARGET" in
+        api) wait_healthy sloughgpt-api ;;
+        web) wait_healthy sloughgpt-web ;;
+        all)
+            wait_healthy sloughgpt-api
+            wait_healthy sloughgpt-web
+            wait_healthy sloughgpt-nginx
+            ;;
+    esac
     log "All services healthy."
 }
 
