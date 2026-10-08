@@ -244,9 +244,9 @@ def _history() -> list[dict]:
 
 def cmd_health(quiet: bool = False, summary: bool = False, verbose: bool = False) -> int:
     areas = [
-        ("CLI framework", "apps/cli/tests/test_slo_cli.py"),
-        ("CLI commands", "apps/cli/tests/"),
-        ("Core Python", "packages/core-py/tests/"),
+        ("CLI framework", "tests/cli/test_slo_cli.py"),
+        ("CLI commands", "tests/cli/"),
+        ("Core Python", "tests/core-py/"),
         ("Root tests", "tests/"),
     ]
 
@@ -512,12 +512,11 @@ def cmd_flake() -> int:
 # (1) alone over-reports: if the code under test imports `_internal` directly
 # (function-level import), the patch lands and the package binding is irrelevant.
 
-_MOCK_DRIFT_TEST_DIRS = (
-    "packages/core-py/tests",
-    "tests",
-    "apps/cli/tests",
-    "apps/api/server/tests",
-)
+# One test root since 2026-10-08 (was: packages/core-py/tests, tests,
+# apps/cli/tests, apps/api/server/tests — four roots, 86 colliding basenames).
+# `tests` rglobs the three subdirs, so a single entry is the non-duplicative
+# form; listing them separately would rescan the same files.
+_MOCK_DRIFT_TEST_DIRS = ("tests",)
 _MOCK_DRIFT_PROD_ROOTS = ("domain", "apps/api/server", "apps/cli/src", "packages")
 # Longest-prefix-wins roots, mirroring pytest.ini's `pythonpath`.
 # NOTE: `domain` is deliberately NOT a root — it is a package directory under

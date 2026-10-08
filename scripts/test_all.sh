@@ -8,13 +8,16 @@ FAILURES=0
 
 echo "=== Python core-py tests ==="
 cd "$REPO_ROOT"
-python3 -m pytest packages/core-py/tests/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
+python3 -m pytest tests/core-py/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
 
 echo ""
 echo "=== Root-level Python tests ==="
 python3 -m pytest tests/ \
   --override-ini="testpaths=tests" \
   --override-ini="addopts=" \
+  --ignore=tests/core-py/ \
+  --ignore=tests/cli/ \
+  --ignore=tests/api-server/ \
   --ignore=tests/test_checkpoint_utils.py \
   --ignore=tests/test_knowledge_graph.py \
   --ignore=tests/test_lm_eval_char.py \
@@ -32,8 +35,10 @@ python3 -m pytest tests/ \
 
 echo ""
 echo "=== Server API tests ==="
-cd "$REPO_ROOT/apps/api/server"
-python3 -m pytest tests/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
+# Was: cd apps/api/server && pytest tests/  — that directory moved to the
+# single test root, so run it from the repo root with the same addopts.
+cd "$REPO_ROOT"
+python3 -m pytest tests/api-server/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
 
 echo ""
 echo "=== Frontend tests ==="

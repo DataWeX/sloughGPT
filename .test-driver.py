@@ -1,6 +1,6 @@
 """Resumable per-file pytest driver with per-file timeouts.
 
-Runs each test_*.py in packages/core-py/tests separately so a slow or
+Runs each test_*.py in tests/core-py separately so a slow or
 hanging file never blocks the others, and writes incremental PASS/FAIL
 results to test_results.txt so the run survives interruptions and can be
 resumed by skipping already-finished files.
@@ -10,7 +10,7 @@ import pathlib
 import subprocess
 import time
 
-TESTS_DIR = pathlib.Path("packages/core-py/tests")
+TESTS_DIR = pathlib.Path("tests/core-py")
 RESULTS = pathlib.Path("test_results.txt")
 PYTHON = ".venv/bin/python"
 TIMEOUT_S = 900

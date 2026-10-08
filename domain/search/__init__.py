@@ -9,7 +9,7 @@ Public surface:
 
 Adding a store: write an adapter in ``domain/search/adapters/`` and
 register it in ``_register_default_stores``; the contract suite in
-``apps/api/server/tests/search/`` validates it against every other.
+``tests/api-server/`` validates it against every other.
 """
 
 from domain.search.protocol import Capability, Searchable

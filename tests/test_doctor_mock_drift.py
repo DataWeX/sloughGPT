@@ -142,7 +142,7 @@ def test_cmd_mock_drift_reports_a_confirmed_hit(tool, monkeypatch, capsys):
     monkeypatch.setattr(
         tool,
         "_md_targets",
-        lambda: {target: {_REPO / "packages/core-py/tests/test_health_router.py"}},
+        lambda: {target: {_REPO / "tests/core-py/test_health_router.py"}},
     )
     monkeypatch.setattr(
         tool,
@@ -168,7 +168,7 @@ def test_reader_that_is_the_patched_module_is_not_a_hit(tool, monkeypatch, capsy
     monkeypatch.setattr(
         tool,
         "_md_targets",
-        lambda: {target: {_REPO / "packages/core-py/tests/test_feedback_training.py"}},
+        lambda: {target: {_REPO / "tests/core-py/test_feedback_training.py"}},
     )
     # reader file == the patched module itself
     monkeypatch.setattr(tool, "_md_readers", lambda: {"MogDB": {"mogdb": {mod}}})

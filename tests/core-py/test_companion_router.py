@@ -1,0 +1,247 @@
+"""Tests for the companion API router (routers/companion.py).
+
+Covers: CompanionRouter get/set/patch/reset preset/prompt/chat/presets.
+All domain calls are mocked; only HTTP-level behavior is tested.
+
+Note: the companion router imports get_companion / create_companion inside
+the handler function body, so we must patch at the domain module level.
+"""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+# ---------------------------------------------------------------------------
+# Path setup
+# ---------------------------------------------------------------------------
+_server_dir = str(Path(__file__).resolve().parents[2] / "apps" / "api" / "server")
+if _server_dir not in sys.path:
+    sys.path.insert(0, _server_dir)
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+sys.path.insert(0, _server_dir)
+from routers.companion import router  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+_TRAIT_KEYS = ("name", "warmth", "curiosity", "creativity", "confidence", "humor")
+
+
+def _make_companion(**overrides):
+    """Build a fake matching the real CompanionSystem surface.
+
+    The router reads `companion.traits.<field>` (routers/companion.py:214,239)
+    and calls `companion.respond(...)` (:265). The real class exposes both —
+    a public `traits` attribute (domain/companion/_internal/companion.py:90)
+    and `def respond` (:180) — so the fake must too.
+    """
+    defaults = {
+        "traits": SimpleNamespace(
+            name="Friend",
+            warmth=0.7,
+            curiosity=0.6,
+            creativity=0.5,
+            confidence=0.5,
+            humor=0.4,
+        ),
+        "set_personality": lambda **kw: None,
+        "get_system_prompt": lambda: "You are a friendly companion.",
+        "build_system_prompt": lambda: "You are a friendly companion.",
+        "adjust_for_mood": lambda mood: None,
+    }
+    defaults.update(overrides)
+    ns = SimpleNamespace(**defaults)
+
+    # set_personality writes back through the public `traits` attribute, which
+    # is what the router reads afterwards to build the response payload.
+    def _set_personality(**kw):
+        for key, value in kw.items():
+            if hasattr(ns.traits, key):
+                setattr(ns.traits, key, value)
+
+    ns.set_personality = _set_personality
+    ns.to_dict = lambda: {
+        "name": ns.traits.name,
+        "traits": {key: getattr(ns.traits, key) for key in _TRAIT_KEYS},
+    }
+
+    # The chat route calls companion.respond(user_message=...) directly — there
+    # is no provider hop and no get_provider() check, so the fake implements
+    # respond rather than the generate()/RuntimeError path an older fake had.
+    # It must be SYNCHRONOUS: the real CompanionSystem.respond is `def` (not
+    # `async def`) and the route does not await it.
+    def _respond(user_message: str, context=None) -> str:
+        return "Hello there!"
+
+    ns.respond = _respond
+    return ns
+
+
+def _app():
+    app = FastAPI()
+    app.include_router(router)
+    from infrastructure.exception_handlers import register_all_handlers
+
+    register_all_handlers(app)
+    return app
+
+
+# ---------------------------------------------------------------------------
+# Tests — patch at domain.companion.* (lazy imports inside handler body)
+# ---------------------------------------------------------------------------
+
+PATCH_GET = "domain.companion.get_companion"
+PATCH_CREATE = "domain.companion.create_companion"
+
+
+class TestGetCompanionInfo:
+    @patch(PATCH_GET)
+    def test_returns_traits(self, mock_get):
+        comp = _make_companion()
+        mock_get.return_value = comp
+        client = TestClient(_app())
+        resp = client.get("/companion/")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "traits" in data
+        assert data["traits"]["warmth"] == 0.7
+
+
+class TestSetPersonality:
+    @patch(PATCH_GET)
+    def test_full_replacement(self, mock_get):
+        comp = _make_companion()
+        mock_get.return_value = comp
+        client = TestClient(_app())
+        resp = client.post(
+            "/companion/personality",
+            json={
+                "name": "Alice",
+                "warmth": 0.9,
+                "curiosity": 0.8,
+                "creativity": 0.7,
+                "confidence": 0.6,
+                "humor": 0.5,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "traits" in data
+
+
+class TestPatchPersonality:
+    @patch(PATCH_GET)
+    def test_partial_update(self, mock_get):
+        comp = _make_companion()
+        mock_get.return_value = comp
+        client = TestClient(_app())
+        resp = client.patch("/companion/personality", json={"warmth": 0.95})
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "traits" in data
+
+
+class TestResetCompanion:
+    @patch(PATCH_CREATE)
+    @patch(PATCH_GET)
+    def test_reset_to_default(self, mock_get, mock_create):
+        mock_get.return_value = _make_companion()
+        mock_create.return_value = _make_companion()
+        client = TestClient(_app())
+        resp = client.delete("/companion/")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["reset"] is True
+        mock_create.assert_called_once()
+
+
+class TestUsePreset:
+    @patch("routers.companion._get_db")
+    @patch(PATCH_CREATE)
+    @patch(PATCH_GET)
+    def test_apply_preset(self, mock_get, mock_create, mock_db):
+        mock_get.return_value = _make_companion()
+        comp = _make_companion()
+        mock_create.return_value = comp
+        # Mock the database to return a preset
+        mock_col = MagicMock()
+        mock_col.find_one.return_value = {"id": "warm", "traits": {"warmth": 0.9}}
+        mock_db.return_value.collection.return_value = mock_col
+        client = TestClient(_app())
+        resp = client.post("/companion/preset", json="warm")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert "traits" in data
+
+
+class TestGetPrompt:
+    @patch(PATCH_GET)
+    def test_returns_system_prompt(self, mock_get):
+        comp = _make_companion()
+        mock_get.return_value = comp
+        client = TestClient(_app())
+        resp = client.get("/companion/prompt")
+        assert resp.status_code == 200
+        assert "You are a friendly" in resp.json()["data"]["system_prompt"]
+
+
+class TestListPresets:
+    @patch(PATCH_GET)
+    def test_returns_preset_list(self, mock_get):
+        mock_get.return_value = _make_companion()
+        client = TestClient(_app())
+        resp = client.get("/companion/presets")
+        assert resp.status_code == 200
+        presets = resp.json()["data"]["presets"]
+        # The preset collection is persistent and accumulates user-created
+        # presets (this machine holds 168), so pin the four seeded defaults
+        # rather than an exact count — same contract the canonical suite uses
+        # (tests/api-server: `len(presets) >= 4`).
+        assert len(presets) >= 4
+        ids = [p["id"] for p in presets]
+        assert "warm" in ids
+        assert "curious" in ids
+
+
+class TestChat:
+    # /companion/chat returns a FLAT ChatResponse (response/system_prompt/
+    # elapsed_ms), not a success_response envelope, so these keys are top-level.
+
+    @patch(PATCH_GET)
+    def test_chat_returns_companion_response(self, mock_get):
+        mock_get.return_value = _make_companion()
+        client = TestClient(_app())
+        resp = client.post("/companion/chat", json={"message": "Hi", "include_system_prompt": True})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["response"] == "Hello there!"
+        assert "system_prompt" in data
+
+    @patch(PATCH_GET)
+    def test_chat_works_without_a_model(self, mock_get):
+        # The route no longer gates on get_provider(); an older revision 503'd
+        # with "No model loaded". The canonical suite (tests/api-server,
+        # 28 passing) pins chat as 200 whenever the message is valid.
+        mock_get.return_value = _make_companion()
+        client = TestClient(_app())
+        resp = client.post("/companion/chat", json={"message": "Hi"})
+        assert resp.status_code == 200
+        assert len(resp.json()["response"]) > 0
+
+    @patch(PATCH_GET)
+    def test_chat_with_mood_adjustment(self, mock_get):
+        # user_mood is declared on ChatRequest, so the route must accept it.
+        # (It is currently accepted-but-unread: the handler consumes only
+        # req.message and req.include_system_prompt.)
+        mock_get.return_value = _make_companion()
+        client = TestClient(_app())
+        resp = client.post("/companion/chat", json={"message": "Hi", "user_mood": "happy"})
+        assert resp.status_code == 200
+        assert "response" in resp.json()

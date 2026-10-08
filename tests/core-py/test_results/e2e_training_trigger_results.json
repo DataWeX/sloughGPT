@@ -1,0 +1,52 @@
+[
+  {
+    "test": "e2e_training_page_ui",
+    "passed": false,
+    "detail": "checks={'page_loaded': False, 'has_content': False, 'has_train_keyword': False}"
+  },
+  {
+    "test": "e2e_training_config_elements",
+    "passed": false,
+    "detail": "elements={'has_method': False, 'has_epochs': False, 'has_lr': False, 'has_batch': False}"
+  },
+  {
+    "test": "e2e_training_start_button",
+    "passed": false,
+    "detail": "found=False"
+  },
+  {
+    "test": "e2e_datasets_import_button",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "test": "e2e_training_devtools",
+    "passed": false,
+    "detail": "checks={'has_steps': True, 'has_console': False, 'has_network': True, 'no_critical_errors': True}"
+  },
+  {
+    "test": "e2e_full_flow_devtools",
+    "passed": false,
+    "detail": "steps=2, ui=False"
+  },
+  {
+    "test": "e2e_cross_page_navigation",
+    "passed": true,
+    "detail": "steps=5, failed=0"
+  },
+  {
+    "test": "e2e_api_health_reachable",
+    "passed": false,
+    "detail": "body="
+  },
+  {
+    "test": "e2e_training_job_detail",
+    "passed": false,
+    "detail": "len=0"
+  },
+  {
+    "test": "e2e_monitoring_metrics",
+    "passed": false,
+    "detail": "body_snippet="
+  }
+]

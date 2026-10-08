@@ -8,7 +8,7 @@ Cross-references three sources and reports the gaps:
    ``APIRouter(prefix=...)``.
 2. **Doc claims**  — the endpoint tables in ``docs/routers.md`` and the
    count claims in ``docs/API.md`` (``N routes across M routers``).
-3. **Test coverage** — ``tests/server/`` + ``apps/api/server/tests/`` files
+3. **Test coverage** — ``tests/server/`` + ``tests/api-server/`` files
    per router (fuzzy name match).
 
 Findings (docs claim but code lacks / code has but docs lack / stale counts

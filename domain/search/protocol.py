@@ -3,7 +3,7 @@
 Deliberately narrow: a store decides *how* it matches (substring over
 rows, FTS, embeddings) and only promises normalized output plus honest
 capability metadata. The contract test suite in
-``apps/api/server/tests/search/`` validates every registered adapter
+``tests/api-server/`` validates every registered adapter
 against the same expectations — that suite, not this interface, is what
 makes "one search over the whole system" true.
 """
