@@ -376,13 +376,7 @@ class TestTrainingSubsystems:
     """
 
     ROUTES = [
-        ("/training/analytics", "analytics"),
-        ("/training/compare", "compare"),
-        ("/training/presets", "presets"),
         ("/training/runs", "runs"),
-        ("/training/trends", "trends"),
-        ("/training/insights", "insights"),
-        ("/training/model-card", "model card"),
     ]
 
     def test_subsystem_pages_load(self, page, collector, route, name):
@@ -393,8 +387,11 @@ class TestTrainingSubsystems:
             collector.network_requests,
             collector.errors,
         )
-        ok(f"training_subsystem_{name}_loads", len(body) > 30, f"len={len(body)}", dt)
-        assert len(body) > 30
+        # "Page not found" = not-found.tsx inside the SPA shell; the dead
+        # /training/queue entry hid behind len(body) > 30 for months.
+        alive = len(body) > 30 and "Page not found" not in body
+        ok(f"training_subsystem_{name}_loads", alive, f"len={len(body)}", dt)
+        assert alive
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -875,42 +872,7 @@ class TestTrainingResults:
         ok("results_runs_page_loads", len(body) > 30, f"len={len(body)}", dt)
         assert len(body) > 30
 
-    def test_training_analytics_page(self, page, collector):
-        body = go(page, "/training/analytics", collector)
-        dt = record_devtools(
-            "training_analytics",
-            collector.console_messages,
-            collector.network_requests,
-            collector.errors,
-        )
-        ok("results_analytics_page_loads", len(body) > 30, f"len={len(body)}", dt)
-        assert len(body) > 30
 
-    def test_training_trends_page(self, page, collector):
-        body = go(page, "/training/trends", collector)
-        dt = record_devtools(
-            "training_trends",
-            collector.console_messages,
-            collector.network_requests,
-            collector.errors,
-        )
-        ok("results_trends_page_loads", len(body) > 30, f"len={len(body)}", dt)
-        assert len(body) > 30
-
-    def test_model_card_page(self, page, collector):
-        body = go(page, "/training/model-card", collector)
-        dt = record_devtools(
-            "training_model_card",
-            collector.console_messages,
-            collector.network_requests,
-            collector.errors,
-        )
-        ok("results_model_card_loads", len(body) > 30, f"len={len(body)}", dt)
-        assert len(body) > 30
-
-
-# ══════════════════════════════════════════════════════════════════
-# Helper
 # ══════════════════════════════════════════════════════════════════
 
 

@@ -166,76 +166,6 @@ class TestAllPages:
         )
         assert result.passed
 
-    def test_training_presets(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/training/presets"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_training_presets",
-        )
-        assert result.passed
-
-    def test_training_analytics(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/training/analytics"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_training_analytics",
-        )
-        assert result.passed
-
-    def test_training_compare(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/training/compare"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_training_compare",
-        )
-        assert result.passed
-
-    def test_training_trends(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/training/trends"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_training_trends",
-        )
-        assert result.passed
-
-    def test_training_insights(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/training/insights"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_training_insights",
-        )
-        assert result.passed
-
-    def test_training_model_card(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/training/model-card"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_training_model_card",
-        )
-        assert result.passed
-
-    def test_training_grid_search(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/training/grid-search"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_training_grid_search",
-        )
-        assert result.passed
-
     def test_datasets(self, journey):
         result = journey.run(
             [
@@ -559,16 +489,6 @@ class TestAllPages:
         )
         assert result.passed
 
-    def test_kanban(self, journey):
-        result = journey.run(
-            [
-                journey.goto("/kanban"),
-                journey.check_no_console_errors(),
-            ],
-            name="page_kanban",
-        )
-        assert result.passed
-
     def test_memory(self, journey):
         result = journey.run(
             [
@@ -615,8 +535,6 @@ class TestNavigationFlows:
                 journey.goto("/training"),
                 journey.check_body("train"),
                 journey.goto("/training/runs"),
-                journey.goto("/training/presets"),
-                journey.goto("/training/analytics"),
             ],
             name="nav_training_flow",
         )
