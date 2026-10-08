@@ -59,8 +59,10 @@ interface UsageData {
 }
 
 function getActivityLink(a: Activity): string | null {
-  if (a.job_id) return `/training/queue`
-  if (a.type === 'training') return '/training/queue'
+  // /training/queue was never a route — training activity lands on the hub
+  // (/training: pipeline + history), same as the redirect in lib/redirects.ts.
+  if (a.job_id) return `/training`
+  if (a.type === 'training') return '/training'
   if (a.type === 'dataset') return '/datasets'
   if (a.type === 'knowledge') return '/knowledge'
   if (a.type === 'member') return '/workspace/members'
@@ -237,8 +239,8 @@ export default function WorkspaceDashboardPage() {
                   {stats?.active_training_jobs !== 1 ? 's' : ''} running
                 </span>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => router.push('/training/queue')}>
-                View Queue <ChevronRight className="h-3 w-3 ml-1" />
+              <Button variant="ghost" size="sm" onClick={() => router.push('/training')}>
+                View Training <ChevronRight className="h-3 w-3 ml-1" />
               </Button>
             </div>
           </CardContent>

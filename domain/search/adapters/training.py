@@ -5,7 +5,7 @@ from __future__ import annotations
 from domain.search.matching import substring_score
 from domain.search.types import SearchContext, SearchHit
 
-_ROUTE = "route:/training/queue"
+_ROUTE = "route:/training"
 
 
 class TrainingJobsAdapter:

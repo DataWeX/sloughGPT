@@ -33,7 +33,10 @@ vi.mock('@/components/icons/NavIcons', () => ({
 
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title }: any) => (
-    <div data-testid="page-container" data-title={title}><h1>{title}</h1>{children}</div>
+    <div data-testid="page-container" data-title={title}>
+      <h1>{title}</h1>
+      {children}
+    </div>
   ),
 }))
 
@@ -46,21 +49,36 @@ vi.mock('@sloughgpt/strui', () => {
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...a: any[]) => a.join(' ')),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
-    Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
-    Input: ({ value, onChange, placeholder, ...props }: any) => <input value={value} onChange={onChange} placeholder={placeholder} {...props} />,
+    Button: ({ children, onClick, ...props }: any) => (
+      <button onClick={onClick} {...props}>
+        {children}
+      </button>
+    ),
+    Input: ({ value, onChange, placeholder, ...props }: any) => (
+      <input value={value} onChange={onChange} placeholder={placeholder} {...props} />
+    ),
     Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
     Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
-  
+
     Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
     Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
     Tabs: ({ children }: any) => <div>{children}</div>,
     TabsList: ({ children }: any) => <div>{children}</div>,
     TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     TabsContent: ({ children }: any) => <div>{children}</div>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
     Separator: () => <hr />,
     Tooltip: ({ children }: any) => <>{children}</>,
     TooltipTrigger: ({ children }: any) => <>{children}</>,
@@ -87,7 +105,7 @@ vi.mock('@sloughgpt/strui', () => {
     CommandEmpty: ({ children }: any) => <div>{children}</div>,
     CommandGroup: ({ children }: any) => <div>{children}</div>,
     CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-}
+  }
 })
 
 vi.mock('lucide-react', () => ({
@@ -100,13 +118,42 @@ vi.mock('lucide-react', () => ({
 }))
 
 import WorkspaceSearchPage from './page'
+import { SEARCH_STORES } from '@/lib/search-stores'
 
 describe('WorkspaceSearchPage', () => {
+  it('training store chip points at a live route', () => {
+    // The store's link backs the group chip on this page and in the command
+    // palette — /training/queue was never a route (dead link, card c712a1b7).
+    expect(SEARCH_STORES.training_jobs.link).toBe('/training')
+    expect(SEARCH_STORES.training_jobs.link).not.toBe('/training/queue')
+  })
+
   const mockSearchResults = {
     hits: [
-      { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
-      { id: 't1', store: 'training_jobs', title: 'Fine-tune LLaMA', detail: 'Status: completed', score: 1.0, locator: 'route:/training/queue' },
-      { id: 'd1', store: 'datasets', title: 'training-data', detail: '1000 rows', score: 0.6, locator: 'route:/datasets' },
+      {
+        id: 'u1',
+        store: 'members',
+        title: 'alice',
+        detail: 'Role: admin',
+        score: 1.0,
+        locator: 'route:/workspace/members',
+      },
+      {
+        id: 't1',
+        store: 'training_jobs',
+        title: 'Fine-tune LLaMA',
+        detail: 'Status: completed',
+        score: 1.0,
+        locator: 'route:/training',
+      },
+      {
+        id: 'd1',
+        store: 'datasets',
+        title: 'training-data',
+        detail: '1000 rows',
+        score: 0.6,
+        locator: 'route:/datasets',
+      },
     ],
     partial: [],
     skipped: [],
@@ -159,7 +206,14 @@ describe('WorkspaceSearchPage', () => {
     // and the UI must still render what the server returned.
     mockApiGet.mockResolvedValue({
       hits: [
-        { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+        {
+          id: 'u1',
+          store: 'members',
+          title: 'alice',
+          detail: 'Role: admin',
+          score: 1.0,
+          locator: 'route:/workspace/members',
+        },
       ],
       partial: ['datasets'],
       skipped: [],
@@ -193,7 +247,14 @@ describe('WorkspaceSearchPage', () => {
     try {
       mockApiGet.mockResolvedValue({
         hits: [
-          { id: 'u1', store: 'members', title: 'alice', detail: 'Role: admin', score: 1.0, locator: 'route:/workspace/members' },
+          {
+            id: 'u1',
+            store: 'members',
+            title: 'alice',
+            detail: 'Role: admin',
+            score: 1.0,
+            locator: 'route:/workspace/members',
+          },
         ],
         partial: [],
         skipped: [],

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, waitFor } from '@testing-library/react'
 
 const mockApiGet = vi.fn()
+const { mockPush } = vi.hoisted(() => ({ mockPush: vi.fn() }))
 
 vi.mock('@/lib/http-client', () => ({
   apiGet: (...args: unknown[]) => mockApiGet(...args),
@@ -22,7 +23,7 @@ vi.mock('@/lib/dev-log', () => ({
 
 vi.mock('@/vite/next-compat/navigation', () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
     replace: vi.fn(),
     refresh: vi.fn(),
     back: vi.fn(),
@@ -106,6 +107,75 @@ describe('WorkspaceDashboardPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText(/recent activity/i).length).toBeGreaterThanOrEqual(1)
     })
+  })
+
+  it('links training activity to the live training route, never /training/queue', async () => {
+    // Two activities: one with job_id (first branch), one training-typed
+    // without job_id (second branch) — both must land on a route that exists.
+    mockApiGet.mockImplementation((url: string) => {
+      if (url.includes('/activity'))
+        return Promise.resolve({
+          data: {
+            activities: [
+              {
+                type: 'training',
+                action: 'Training started',
+                detail: 'distill run',
+                status: 'running',
+                timestamp: '2026-10-08T09:00:00Z',
+                user: 'alice',
+                job_id: 'j1',
+              },
+              {
+                type: 'training',
+                action: 'Checkpoint saved',
+                detail: 'epoch 3',
+                status: 'ok',
+                timestamp: '2026-10-08T09:01:00Z',
+                user: 'bob',
+              },
+            ],
+          },
+        })
+      if (url.includes('/stats'))
+        return Promise.resolve({
+          data: {
+            name: 'W',
+            member_count: 5,
+            dataset_count: 7,
+            training_jobs: 12,
+            active_training_jobs: 2,
+            knowledge_items: 3,
+          },
+        })
+      if (url.includes('/usage'))
+        return Promise.resolve({
+          data: {
+            members: { total: 5 },
+            training: { total: 12 },
+            datasets: { total: 7 },
+            knowledge: { total: 3 },
+          },
+        })
+      if (url.includes('/health')) return Promise.resolve({ data: { status: 'healthy' } })
+      return Promise.resolve({ data: null })
+    })
+    render(<WorkspaceDashboardPage />)
+    const started = await screen.findByText('Training started')
+    const checkpoint = await screen.findByText('Checkpoint saved')
+    for (const el of [started, checkpoint]) {
+      const href = el.closest('a')?.getAttribute('href')
+      expect(href).toBe('/training')
+      expect(href).not.toBe('/training/queue')
+    }
+  })
+
+  it('View Training button pushes the live training route', async () => {
+    render(<WorkspaceDashboardPage />)
+    const btn = await screen.findByText('View Training')
+    btn.closest('button')!.click()
+    expect(mockPush).toHaveBeenCalledWith('/training')
+    expect(mockPush).not.toHaveBeenCalledWith('/training/queue')
   })
 
   it('displays training progress', async () => {
