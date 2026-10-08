@@ -15,6 +15,11 @@
     "./react": {
       "types": "./dist/useSloughGPT.d.ts",
       "import": "./dist/useSloughGPT.js"
+    },
+    "./contracts": {
+      "types": "./dist/contracts.gen.d.ts",
+      "import": "./dist/contracts.gen.js",
+      "require": "./dist/contracts.gen.js"
     }
   },
   "files": ["dist", "src"],
