@@ -33,6 +33,22 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-08 ~07:05 — `fix/board-sync-idempotency`
+**lands on main** (card `08baf13f` → done): **notes→board sync is now
+net-idempotent.** `canonical_notes()` in `app_planner/sync.py` collapses
+duplicate-title journal twins to ONE winner per title (latest `updated_at`,
+ties `created_at`/`id`, then title-sorted) and feeds both `PlannerStore.sync()`
+and the legacy branch the GUI `--sync` runs — reruns report `0 moved` instead
+of flipping cards forever. `get_stats()` gained `uniqueIds` / `dupIdLines` /
+`titleCollisions`: the hash chain stays green while id/title duplication
+exists, so check these, not just `verify_chain()`. Board deduped to 946/946
+unique ids (last-wins; the 3 column-conflict triples todo/wip/done kept
+`done`; 3 distinct-id `titleCollisions` remain for human review). Journal
+twin notes left in place (user-journal file-safety) — sync now ignores the
+loser deterministically. Tests 185 → 190 passed; the 13 pre-existing
+`[mogdb]` failures unchanged (baseline owned by `ca647de2`, `d2803a3c`,
+`56cf354c` — not duplicated).
+
 **Last update**: 2026-10-08 ~05:40 — `fix/kanban-phantom-column`
 **lands on main** (push `91e81243b`, card `b538ecbd` → done): **read-path
 column validation** — write paths already rejected retired spellings
