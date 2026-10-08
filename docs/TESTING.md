@@ -339,6 +339,70 @@ both tools at once — the binding probe sees a sound patch, and a boom-probe se
 the same failure either way — so `--mock-drift`'s `exit=0` is a statement about
 bindings, not about tests passing.
 
+## Flake Ledger
+
+Six tests flaked in full-suite runs around 2026-10-06 and the per-test analysis
+was lost to a server reboot. The record now lives here — **append to it instead
+of re-deriving from memory** (cards `297573d9`, `b015795b`).
+
+| Flake | Root cause | Fix |
+| ----- | ---------- | --- |
+| `vm/page`, `TokenTreeMergesCard` | racy post-`waitFor` assertion | `f964dfe53` |
+| `TokenizerPage` (found later, 4/10 isolated) | two "Prev" pagers on one page; the unmocked `TokenTreeVocabCard` reaches the live backend → network race | `f964dfe53` |
+| `TokenTreePage` | racy post-`waitFor` assertion — the detector missed it: `getAllBy*` was never matched | `f964dfe53` |
+| `ConsciousnessComparePage > shows qualia dimensions` | same blind spot; it had been **mis-triaged** as "a different root cause" | `f964dfe53` |
+| `useChatModelSettings` (`0.8 != 0.5`) | async `initStore()` hydration lands *after* the `beforeEach` reset; the hook's store-sync effect applies the backend's `0.8` over the value the test just fetched | `19e922561` |
+| `step-components` | **nothing to race**: a call-through fetch probe records 0 requests, the test never uses `fireEvent`, and none of the components it renders (`DataStep`/`TrainStep`/`ResultsStep`) has an effect. 25/25 in every surviving log; the failure text is gone | — |
+
+### Why one test can see another run's value
+
+Three facts, each verified rather than assumed:
+
+1. **`chatDB` is HTTP, not local storage.** `lib/db.ts` implements
+   `getKV`/`setKV` with `apiGet`/`apiPut` against `/docstore/kv/*`, so every
+   test file shares *one* backend KV — the live one (`localhost:8000` was up).
+   Probe: file A does `await chatDB.setKV('app-settings', { defaultTemp: 999 })`;
+   file B reads `999`.
+2. **`initStore()` self-starts** at `lib/store.ts:168` on module import and
+   `setState`s whenever that read resolves — which can be *after* a test's
+   `beforeEach` reset. Deterministic repro (throwaway file, KV restored
+   afterwards): write `0.8` → `_resetInitGuard()` → reset the store →
+   `await initStore()` → the store reads `0.8`; gate the other way
+   (`await initStore()` **then** reset) → `0.7` and stays there.
+3. **The store writes back.** `updateSettings` → `_pushToBackend` →
+   `settingsController.updateGeneration` PATCHes `/settings/generation`.
+   Before the fix that file issued 6 such calls per run — mutating whatever
+   backend happened to be running.
+
+**Fix pattern** — all three channels, test-only, no product code touched:
+
+```ts
+beforeEach(async () => {
+  await initStore() // hydration finishes first → the reset below is final
+  vi.clearAllMocks()
+  useAppStore.setState({ settings: { ...DEFAULT_SETTINGS } })
+})
+vi.mock('@/lib/settings-controller', () => ({ settingsController: {/* … */} }))
+afterEach(() => expect(fetchUrls, `not hermetic: ${fetchUrls}`).toEqual([]))
+```
+
+The guard must be a hard assertion, not a log: after the fix the window records
+0 calls, while the file's only remaining requests are `initStore`'s two
+hydration GETs — issued at import, before any spy exists, read-only, and now
+awaited by `beforeEach`, so they can no longer race anything.
+
+Still open: any test using the real store can poison the shared KV for every
+file that runs after it, so the *reader-side* fix above does not close the class
+— see card `a8d41abd` for the 4 files still writing unmocked.
+
+### When a run fails wholesale
+
+A run with many **file-level** failures and **0 failing tests** is an
+environment fault, not a code fault: on 2026-10-06 ENOSPC at 97% disk failed 189
+files at collection while 5530/5530 tests still passed, and that exhaustion also
+killed shell output so it looked like a tool outage. Check `df` before triaging
+assertions (card `dddd954a`).
+
 ## Test Coverage
 
 ### Current Status

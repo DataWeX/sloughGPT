@@ -75,7 +75,7 @@ generated from it and guarded by `packages/strui/src/tokens/tokens.test.ts`.
 
 | Doc                          | Purpose                               |
 | ---------------------------- | ------------------------------------- |
-| **TESTING.md**               | Test guide                            |
+| **TESTING.md**               | Test guide + flake ledger (root causes for the 2026-10 suite flakes) |
 | **USER_PERSONA.md**          | Who we build for                      |
 | **USER_JOURNEYS.md**         | User flows                            |
 | **UX_FLOWS.md**              | UX patterns                           |
