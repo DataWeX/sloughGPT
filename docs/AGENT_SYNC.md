@@ -4,7 +4,23 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~05:00 — `fix/online-lora-phantom-updates`
+**Last update**: 2026-10-08 ~05:40 — `fix/kanban-phantom-column`
+**lands on main** (push `91e81243b`, card `b538ecbd` → done): **read-path
+column validation** — write paths already rejected retired spellings
+(`67c406ee2`) but `load_board()` — every reader's choke point — accepted
+anything, so a hand-edited `"column": "in-progress"` line produced a card
+`board show` (header-driven) never rendered while `stats` (card-driven)
+counted it: two views, two totals. Now `load_board()` warns + coerces to the
+fallback (`todo`, else first declared) — coerced, never dropped; the card
+becomes visible and consistently counted. Card drifted before pickup: the 3
+phantom cards were already repaired to `wip` (verified, untouched) and C
+follows automatically (stats reads load_board). 4 new tests incl. a
+recurrence guard on the **real** `.kanban/board.jsonl` (would have caught the
+original bug). Gates: RED 3 → GREEN **198 passed** (full app-planner suite),
+ruff clean; DONE-WHEN proven live: show renders **966** card lines == stats
+Total 966 (842/77/32/15 all in vocabulary).
+
+Earlier 2026-10-08 ~05:00: `fix/online-lora-phantom-updates`
 **lands on main** (push `93286c6fe`, card `b83a5788` → done): **phantom
 online-LoRA updates retired** — the loop was dead in production (no engine
 attach path, `engine=None` always) yet counted every buffer drain as a
