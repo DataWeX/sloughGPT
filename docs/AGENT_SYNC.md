@@ -33,6 +33,25 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-08 ~12:10 — `e8fd60d4` **closed (site-doctor design +
+inventory reconciled to the landed MOLE)**. The card's 2026-10-01 inventory
+was stale: the doctor rebrand → **Mole** (`752b27ab`) and most of the
+"missing" list LANDED — `domain/core/_internal/mole/` (run_mole single
+read-only sweep over 5 self-registered probes gates/benchmarks/http/sse/
+journey → `merge()` → one MoleReport, exit 0/1/2; `run_watch` journal +
+fingerprint monitor; http probe covers `/health/detailed` +
+`/errors/recent|grouped|trends`; sse probe flags >256 KiB frames / >8 s
+stalls — the 10.5 MB bug class; health_flow Severity bands shared), API
+`routers/mole.py`, UI `/mole`, `test_mole.py`, docs INDEX:67 + TESTING.md
+§Mole. Design review (step-4) recorded on the card; actual placement
+(`domain/core/_internal/mole/` registry) judged better than the card's
+original `domain/journeys/triage.py` proposal. **No new cards spawned** —
+`6edae3a7` (wip, unassigned) already owns Phase B (LLM triage behind the
+avion gate) + Phase C (nightly timer after units-session coordination +
+cross-run NEW/KNOWN baseline; bawl wiring), `a101ee3a` (review) owns system
+probes + CLI consumption. Still-open pointers only; do-not-race
+`13f50db7` (avion CDP) stands.
+
 **Last update**: 2026-10-08 ~12:05 — `257d310b` **closed (container-port truth
 documented; prod deploy health was dead).** Truth: the web container listens
 on **:3000 inside** both image paths (Next `ENV PORT=3000`/`EXPOSE 3000`;
