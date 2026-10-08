@@ -168,12 +168,15 @@ base64 URL hash takes precedence over the saved source on load.
 | `packages/core-py/domains/shell/vm.py`                 | `X86VirtualSystem`, `X86Assembler`, syscall handlers, `_perm_map`       |
 | `packages/core-py/domains/shell/vm_permissions.py`     | `Role`, `Permission`, `X86RBAC`                                         |
 | `packages/core-py/domains/shell/vm_training_bridge.py` | `VMTrainingBridge`, `get_bridge()`                                      |
+| `domain/shell/_internal/vm_programs.py`                | Shared program registry `PROGRAMS` (cave_game, fib, primes, guess, …)   |
 | `apps/api/server/routers/vm.py`                        | `/vm/*` endpoints, role mapping, console sessions (SSE pump, caps, TTL) |
 | `apps/api/server/vm_builtins.py`                       | Shell REPL kernel source (`ls`/`cat`/`cp`/`write`/`train*`/…)           |
 | `apps/web/hooks/useVmConsole.ts`                       | Session lifecycle hook: SSE subscribe, input, errors                    |
 | `apps/web/components/shell/VmSessionPanel.tsx`         | Console panel UI: history, sanitize, restart, error state               |
 | `apps/web/app/(app)/vm/page.tsx`                       | Console UI: role selector, samples, Training card, permission banner    |
 | `apps/web/lib/vm-controller.ts`                        | `vmController.run/builtins/info/trainingJob`                            |
-| `packages/core-py/tests/test_vm_rbac.py`               | RBAC enforcement tests (USER denial, ADMIN allow, full syscall lane)    |
+| `tests/core-py/test_vm_rbac.py`                        | RBAC enforcement tests (USER denial, ADMIN allow, full syscall lane)    |
+| `tests/core-py/test_vm_cave_game.py`                   | cave_game program tests (registry, HUD, mine/place, idle exit)          |
 | `apps/api/server/tests/test_vm_console_session.py`     | Session/REPL tests (boot, commands, input sanitizing, SSE lifecycle)    |
 | `scripts/benchmark_vm_shell.py`                        | Shell REPL boot/latency/throughput benchmark                            |
+| `scripts/benchmark_vm_cave_game.py`                    | cave_game render cost — steps/frame, fps, assemble ms, batch-to-halt    |
