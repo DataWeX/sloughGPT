@@ -65,6 +65,32 @@ class TestAuthDisabled:
         data = response.json()["data"]
         assert data["userId"] == "anonymous"
 
+    @pytest.mark.parametrize(
+        ("method", "path", "body"),
+        [
+            ("GET", "/tokens/balance", None),
+            ("GET", "/tokens/usage/summary", None),
+            ("GET", "/tokens/usage/history", None),
+            ("POST", "/tokens/topup", {"amount": 10}),
+            ("POST", "/tokens/upgrade", {"tier": "pro"}),
+            ("POST", "/tokens/check", {"model": "m", "input_tokens": 1, "output_tokens": 1}),
+        ],
+    )
+    def test_every_route_survives_auth_disabled(self, app, client, method, path, body):
+        """Regression (card f01852a3): every /tokens/* route used to do
+        ``auth_user["id"]`` on None when auth was off (the default) and 500
+        with a logged ``'NoneType' object is not subscriptable``. Fixed in
+        90a1c1b95 via ``audit_user(...)``. The default fixtures override
+        auth with a user payload, so only balance was pinned — this pins all
+        six routes, keeping the deref from coming back on the other five.
+        """
+        app.dependency_overrides.clear()
+
+        response = client.request(method, path, json=body)
+
+        assert response.status_code == 200, response.text
+        assert response.json()["status"] == "success"
+
 
 class TestGetBalance:
     def test_get_balance(self, client):
