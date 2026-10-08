@@ -146,10 +146,14 @@ describe('TokenTreeMergesCard', () => {
     fireEvent.click(screen.getByLabelText('Toggle lineage for the'))
 
     await waitFor(() => expect(mocks.mockLineage).toHaveBeenCalledWith('the</w>'))
-    expect(screen.getAllByText('t')).toHaveLength(1)
-    expect(screen.getAllByText('h')).toHaveLength(1)
-    expect(screen.getAllByText('e')).toHaveLength(2)
-    expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    // The spy fires before React commits the expanded tree — wait for the
+    // rendered lineage rather than asserting synchronously (races under load).
+    await waitFor(() => {
+      expect(screen.getAllByText('t')).toHaveLength(1)
+      expect(screen.getAllByText('h')).toHaveLength(1)
+      expect(screen.getAllByText('e')).toHaveLength(2)
+      expect(screen.getByText(/Merge lineage of/)).toBeDefined()
+    })
   })
 
   it('toggles a rule lineage closed on second click', async () => {

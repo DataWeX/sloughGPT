@@ -819,9 +819,13 @@ describe('MemoryCard', () => {
     mockStats.mockResolvedValue({ ...stats, enabled: false })
     mockSetEnabled.mockResolvedValue({ enabled: true })
     render(<MemoryCard />)
+    // The switch renders while stats are still loading (aria-checked=false,
+    // disabled) — wait for the loaded state or the one-shot click below is
+    // dropped by `disabled={stats === null}` under load.
     await waitFor(() => {
       const toggle = screen.getByRole('switch', { name: 'Toggle automatic memory' })
       expect(toggle.getAttribute('aria-checked')).toBe('false')
+      expect(toggle).not.toBeDisabled()
     })
 
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle automatic memory' }))
@@ -838,6 +842,11 @@ describe('MemoryCard', () => {
     mockSetEnabled.mockRejectedValue(new Error('boom'))
     render(<MemoryCard />)
     await screen.findByText('User prefers espresso in the morning')
+    // Items can resolve before stats — the switch stays disabled until
+    // stats arrive, so wait for it or the click never reaches the handler.
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: 'Toggle automatic memory' })).not.toBeDisabled()
+    })
 
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle automatic memory' }))
 
