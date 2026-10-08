@@ -49,6 +49,29 @@ _WRITE = "POST"
 # (routers/contracts.py) reads this back.
 _CONTRACTS: dict[str, dict[str, Any]] = {}
 
+# operation_id -> (method, full path). Two capabilities may share a base id, so
+# `claim_operation_id` disambiguates with a `_2`, `_3` ... suffix; the same
+# crossing re-claiming its own id is a no-op, so re-projection stays idempotent.
+_OPERATION_IDS: dict[str, tuple[str, str]] = {}
+
+
+def claim_operation_id(base: str, verb: str, full_path: str) -> str:
+    """Reserve a unique operation_id for a crossing, disambiguating repeats.
+
+    Kept deliberately identical to the ``ContractRegistry`` semantics on the
+    protocol-projection line, so the two registries agree on ids when they
+    converge.
+    """
+    candidate = base
+    n = 2
+    while candidate in _OPERATION_IDS:
+        if _OPERATION_IDS[candidate] == (verb, full_path):
+            return candidate
+        candidate = f"{base}_{n}"
+        n += 1
+    _OPERATION_IDS[candidate] = (verb, full_path)
+    return candidate
+
 
 def get_contracts() -> list[dict[str, Any]]:
     """Every descriptor-projected HTTP contract registered so far, sorted."""
@@ -58,6 +81,7 @@ def get_contracts() -> list[dict[str, Any]]:
 def clear_contracts() -> None:
     """Empty the registry (tests only — a fresh process starts empty anyway)."""
     _CONTRACTS.clear()
+    _OPERATION_IDS.clear()
 
 
 # JSON Schema type -> python type used to build the request model.
@@ -184,6 +208,10 @@ def create_router(
     if not clean:
         raise ValueError(f"create_router: {spec.name!r} has an empty route")
     path = "/" + clean
+    # Full path as the router will serve it (prefix + fragment). This is the
+    # crossing's identity: the operation_id claim and the registry key both use
+    # it, so two prefixes never collide on one id.
+    full = (prefix.rstrip("/") + path) if prefix else path
     if tags is None:
         tags = [clean.split("/")[0]]
 
@@ -229,17 +257,21 @@ def create_router(
         annotations[input_name] = model
     endpoint.__annotations__ = annotations
 
+    operation_id = claim_operation_id(f"{spec.name}.{verb.lower()}", verb, full)
     router.add_api_route(
         path,
         endpoint,
         methods=[verb],
+        operation_id=operation_id,
         openapi_extra=openapi_extra,
         summary=spec.description or spec.name,
     )
 
     # Register the projection. Keyed by "VERB path" so re-projecting the same
-    # contract replaces its entry rather than duplicating it.
-    full = (prefix.rstrip("/") + path) if prefix else path
+    # contract replaces its entry rather than duplicating it. `operation_id` and
+    # `module` make the row a complete descriptor projection — the frontend
+    # `ContractDescriptor` requires both, and `module` names the router that
+    # declared the capability (falling back to the projection's own source).
     _CONTRACTS[f"{verb} {full}"] = {
         "method": verb,
         "path": full,
@@ -247,6 +279,8 @@ def create_router(
         "version": spec.version,
         "auth_scope": spec.auth_scope,
         "idempotent": spec.idempotent,
+        "operation_id": operation_id,
+        "module": getattr(handler, "__module__", f"contract.{spec.name}"),
         "params": spec.params,
         "result": spec.result,
         "description": spec.description,

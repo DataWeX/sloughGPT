@@ -34,7 +34,7 @@ stored, `params` derives the JSON Schema view — one declaration, two views,
 never stored twice.
 
 **2. Projections — adapters that emit the transport.** Real routes, generated
-rather than hand-written: a module declares its descriptor, a `build_router(spec)`
+rather than hand-written: a module declares its descriptor, `create_router(spec, route, handler)`
 helper emits the fragment — `GET /tools/doctor/report` for reads,
 `POST /tools/doctor/check` for actions — with proper verbs, status codes,
 `success_response` envelopes and `classify_and_raise` errors, all from the one
@@ -42,13 +42,13 @@ entry. FastAPI composes the fragments (`include_router` → `app.openapi()`
 merges), so **the contract itself is modular**. The same descriptor projects
 everywhere else:
 
-| Projection          | Consumer                                                   | Status here                                 |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------- |
-| HTTP route fragment | web / mobile / SDK clients                                 | ❌ `build_router(spec)` not implemented     |
-| SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                 |
-| CLI subcommand      | `cli.py` shell                                             | ❌ not projected                            |
-| Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly |
-| TS client helper    | `http-client.ts` (the only API surface allowed)            | ❌ hand-written per endpoint                |
+| Projection          | Consumer                                                   | Status here                                                                          |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| HTTP route fragment | web / mobile / SDK clients                                 | ✅ `create_router(spec, route, handler)`                                             |
+| SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                                                          |
+| CLI subcommand      | `cli.py` shell                                             | ❌ not projected                                                                     |
+| Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly                                          |
+| TS client helper    | `http-client.ts` (the only API surface allowed)            | ✅ `gen_ts_contracts.py` → `lib/protocol/contracts.gen.ts` (rest still hand-written) |
 
 **3. Registration — microkernel, not a switchyard.** Each module self-registers
 at boot (import side-effect or a `@tool(descriptor)` decorator — the WordPress
@@ -70,7 +70,7 @@ agent) = adapters, web/CLI/agents = clients of one contract.**
    `auth_scope`, `idempotent`, `version`.
 3. **Self-register at boot** — one registry entry; no edit to any central
    feature list.
-4. **Emit the projections** — route fragment (via `build_router`), SSE frame,
+4. **Emit the projections** — route fragment (via `create_router`), SSE frame,
    CLI subcommand, TS helper. Auth scope and version come from the descriptor,
    so there is _one_ auth decision and _one_ versioning story.
 5. **Contract gate** — descriptor schema check + contract test + OpenAPI diff
