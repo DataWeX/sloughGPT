@@ -286,9 +286,12 @@ harmless — which is why the class does not set the exit code.
 
 Both `pytest.ini` files carry `addopts = … -m "not slow" …`, so **every default
 run — including CI and every bare `python -m pytest` — deselects the `slow`-marked
-files entirely.** As of 2026-10-07 that is **24 files / ~700 tests**. Anything
-wrong in them is invisible to every regression gate; `test_chat_loop_e2e.py` hid
-6 ERRORs that way, and the march below cleared 27 more failures.
+files entirely.** As of 2026-10-07 that is **24 files / 715 tests** — and the split
+matters: **693 sit behind a module-level `pytestmark = pytest.mark.slow`,** so
+those files collect _zero_ tests under a default run, while only **22 are
+individual `@pytest.mark.slow` decorators across 7 files.** Anything wrong in
+them is invisible to every regression gate; `test_chat_loop_e2e.py` hid 6 ERRORs
+that way, and the march below cleared 38 more failures.
 
 Run them explicitly:
 
@@ -300,7 +303,7 @@ python -m pytest tests/test_e2e_smoke.py -m "slow or not slow" -q
 python -m pytest -m "slow" -q
 ```
 
-Two traps when you do:
+Three traps when you do:
 
 - **Do not pass `--timeout=N`.** Neither `pytest.ini` declares a timeout, so the
   flag _creates_ failures: `test_continual_learner.py` "fails" at `--timeout=120`
@@ -308,14 +311,33 @@ Two traps when you do:
   why those tests are marked `slow` in the first place.
 - **`pytest.importorskip(...)` exits `5`** (zero items collected) when the
   capability is absent. `tests/test_optimized_pipeline.py` does this for `torch`,
-  so it is both invisible _and_ non-zero. The gate is correct; the signal is
-  ambiguous.
+  so it is both invisible _and_ non-zero. The gate itself is correct.
+- **Treat exit `5` as _not tested_, never as passed.** A per-file runner that
+  logs "processed" rather than the _outcome_ reports success over an empty set:
+  gate 1 counted **11 files as processed** while every one recorded
+  `NO-SUMMARY exit=5`. A `skipped` count also understates its own blast radius —
+  `test_export.py` gated on `gguf` at module level _mid-file_ and reported
+  **`1 skipped`** while actually discarding **32 tests**, none of which needed
+  `gguf`. When a file comes back `exit=5`, open it before believing it.
 
-Walking these files in 2026-10-07 sorted every failure into four buckets:
-**envelope drift** (reading top level where `success_response()` wrapped it),
-**contract drift** (an assertion that predated schema validation), **dead routes**
-(see cards `e205b15c` and `db9c4e70`), and **test-harness defects** (a fixture app
-missing its exception handlers, or a patch aimed at a binding nothing reads).
+Walking these files in 2026-10-07 sorted every failure into seven classes —
+worth knowing by name, because each one is invisible to a different check:
+
+| class                          | what broke                                                                        | caught by                            |
+| ------------------------------ | --------------------------------------------------------------------------------- | ------------------------------------ |
+| **envelope drift**             | reading top level where `success_response()` wrapped it                           | run the file                         |
+| **contract drift**             | an assertion predating schema validation                                          | run the file                         |
+| **dead routes**                | production route deleted, callers still live (cards `e205b15c`, `db9c4e70`)       | run the file                         |
+| **test-harness defect**        | fixture app missing exception handlers; unwired `phase` param                     | run the file                         |
+| **config move + rename**       | params folded into `ModelConfig`/`feedback_dir`; 2 also renamed                   | run the file                         |
+| **dead seam**                  | patch installs on the _correct_ symbol, but production stopped routing through it | **neither run nor binding probe**    |
+| **over-broad capability gate** | module-level `importorskip` mid-file discards unrelated tests                     | count what ran, not what was skipped |
+
+Only the first four were reachable by static analysis; the last three are why
+**fail-first beats reason-first** here. In particular the _dead seam_ defeats
+both tools at once — the binding probe sees a sound patch, and a boom-probe sees
+the same failure either way — so `--mock-drift`'s `exit=0` is a statement about
+bindings, not about tests passing.
 
 ## Test Coverage
 
