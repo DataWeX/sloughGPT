@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends
 from infrastructure.auth import require_auth_if_enabled
 from schemas.common import raise_error
 
+from domain.training._internal.checkpoint_files import sanitize_stem
 from domain.training._internal.executor import get_training_executor
 
 from .controller import get_training_controller
@@ -55,7 +56,7 @@ def _feed_spec(request: TrainingRequest) -> tuple[str, str, None, str] | None:
             stem = dataset_str.split(":", 1)[1] or "feed"
     except Exception:
         stem = "feed"
-    out_stem = "".join(c if c.isalnum() or c in "-_" else "_" for c in stem)[:80]
+    out_stem = sanitize_stem(stem)
     logger.info(
         "Starting training from feed %s (stem=%s)",
         dataset_str,
@@ -270,6 +271,24 @@ async def start_training(
             raise
         logger.warning("JSONL validation failed (proceeding): %s", e)
 
+    # Resume target: resolve BEFORE the job record exists — an unknown
+    # checkpoint is a refused request (400), not a job that fails later or,
+    # worse, a run that silently starts fresh. The row's address (path) beats
+    # the name when both arrive: two roots may hold one filename.
+    resume_path: str | None = None
+    if request.checkpoint_name:
+        from domain.training._internal.checkpoints import find_checkpoint
+
+        resolved = find_checkpoint(request.checkpoint_name, path=request.checkpoint_path)
+        if resolved is None:
+            raise_error(
+                f"Checkpoint not found: {request.checkpoint_name}",
+                "E_BAD_REQUEST",
+                status_code=400,
+            )
+        resume_path = str(resolved)
+        logger.info("Resuming training from %s", resume_path, extra={"tag": "TRAIN"})
+
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     job: dict[str, Any] = {
         "id": job_id,
@@ -289,6 +308,9 @@ async def start_training(
         "eval_loss": None,
         "loss_history": [],
         "checkpoint": None,
+        # None for a fresh run — visible on the record so fresh-vs-resumed
+        # is never silent for the job list or its tests.
+        "resume_from": resume_path,
         "checkpoint_dir": str(getattr(request, "checkpoint_dir", None) or "models/auto-training"),
         "user_id": auth_user.get("sub", "") if auth_user else "",
         "workspace_id": auth_user.get("workspace_id", "") if auth_user else "",
@@ -422,10 +444,13 @@ async def start_training(
                 on_progress=on_progress,
                 cancel_event=cancel_event,
                 pause_event=pause_event,
+                # Explicit resume: the path was resolved and existence-checked
+                # in pre-flight, so this can never be the trainer's implicit
+                # "warn and start fresh" branch.
+                resume=resume_path is not None,
+                resume_path=resume_path,
             )
-            safe_stem = "".join(
-                c if c.isalnum() or c in "-_" else "_" for c in out_stem_for_thread
-            )[:120]
+            safe_stem = sanitize_stem(out_stem_for_thread)
             if cancel_event.is_set():
                 _finish_job(jid, "cancelled")
                 training_jobs[jid]["progress"] = 0

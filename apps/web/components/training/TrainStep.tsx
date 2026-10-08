@@ -19,13 +19,14 @@ interface SummaryRow {
 export function TrainStep({ form, datasets, onBack }: StepProps) {
   const datasetName = (() => {
     if (!datasets.selectedDataset) return undefined
-    const ds = datasets.datasets.find(d => d.id === datasets.selectedDataset)
+    const ds = datasets.datasets.find((d) => d.id === datasets.selectedDataset)
     return ds?.name || datasets.selectedDataset
   })()
 
   const rows: SummaryRow[] = []
   if (form.method === 'vlm') {
-    if (form.visualVisionEncoder) rows.push({ label: 'Vision encoder', value: form.visualVisionEncoder })
+    if (form.visualVisionEncoder)
+      rows.push({ label: 'Vision encoder', value: form.visualVisionEncoder })
     if (form.visualLLM) rows.push({ label: 'Language model', value: form.visualLLM })
     rows.push({ label: 'Stage 1 epochs', value: String(form.visualStage1Epochs) })
     rows.push({ label: 'Stage 2 epochs', value: String(form.visualStage2Epochs) })
@@ -68,10 +69,12 @@ export function TrainStep({ form, datasets, onBack }: StepProps) {
           {form.inputMode === 'text' && form.textInput.trim() && (
             <div className="flex items-center justify-between">
               <span>Source</span>
-              <span className="font-medium text-foreground">Pasted text ({form.textInput.length.toLocaleString()} chars)</span>
+              <span className="font-medium text-foreground">
+                Pasted text ({form.textInput.length.toLocaleString()} chars)
+              </span>
             </div>
           )}
-          {rows.map(row => (
+          {rows.map((row) => (
             <div key={row.label} className="flex items-center justify-between">
               <span>{row.label}</span>
               <span className="font-medium text-foreground tabular-nums">{row.value}</span>
@@ -80,12 +83,21 @@ export function TrainStep({ form, datasets, onBack }: StepProps) {
         </div>
 
         <div className="flex items-center gap-1.5">
-          <Button size="sm" className="h-7 text-[10px]" disabled={!form.canStart} onClick={() => form.startTraining()}>
+          <Button
+            size="sm"
+            className="h-7 text-[10px]"
+            disabled={!form.canStart}
+            onClick={() => form.startTraining(form.resumeCheckpoint || undefined)}
+          >
             {form.method === 'distill' && form.inputMode === 'text' && form.textInput.trim()
               ? 'Train on pasted text'
-              : form.method === 'vlm' ? 'Start vision training' : 'Start training'}
+              : form.method === 'vlm'
+                ? 'Start vision training'
+                : 'Start training'}
           </Button>
-          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={onBack}>Back</Button>
+          <Button size="sm" variant="ghost" className="h-7 text-[10px]" onClick={onBack}>
+            Back
+          </Button>
         </div>
       </CardContent>
     </Card>

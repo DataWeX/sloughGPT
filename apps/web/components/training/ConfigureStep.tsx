@@ -418,7 +418,12 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                 )}
               </div>
             )}
-            {checkpoints && checkpoints.checkpoints.length > 0 && (
+            {/* Resume only for methods whose start request carries the
+                checkpoint contract (/training/start). vlm never reaches this
+                branch (outer ternary renders the visual UI instead); finetune
+                posts an HF LoRA job with no .soul resume, so a select shown
+                there would be a control that silently does nothing. */}
+            {checkpoints && checkpoints.checkpoints.length > 0 && form.method !== 'finetune' && (
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor="resume-checkpoint"
@@ -437,7 +442,10 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   <SelectContent>
                     <SelectItem value="">Start fresh</SelectItem>
                     {checkpoints.checkpoints.map((c) => (
-                      <SelectItem key={c.name} value={c.name}>
+                      // Value is the row's ADDRESS, not its name: two roots may
+                      // hold one filename, and duplicate name values would make
+                      // the twin selection ambiguous (and duplicate React keys).
+                      <SelectItem key={c.path ?? c.name} value={c.path ?? c.name}>
                         {c.name} {c.loss != null ? `(${c.loss.toFixed(4)})` : ''}
                       </SelectItem>
                     ))}

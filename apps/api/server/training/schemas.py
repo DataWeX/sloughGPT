@@ -117,6 +117,10 @@ class TrainingRequest(TrainDataSourceBody, _TrainHyperparameters):
     model: str = Field(..., min_length=1, max_length=200)
     algo: str | None = Field(default=None, description="Training algorithm (e.g. bpe, wordpiece)")
     checkpoint_name: str | None = Field(default=None, description="Resume from checkpoint")
+    checkpoint_path: str | None = Field(
+        default=None,
+        description="Row address of the checkpoint to resume from; beats the name when both are given",
+    )
     source_text: str | None = Field(default=None, description="Raw text input for training")
 
 

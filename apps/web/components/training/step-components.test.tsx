@@ -272,6 +272,40 @@ describe('TrainStep', () => {
     expect(startTraining).toHaveBeenCalled()
   })
 
+  it('passes the selected resume checkpoint to startTraining', () => {
+    const startTraining = vi.fn()
+    render(
+      <TrainStep
+        form={makeForm({
+          canStart: true,
+          startTraining,
+          resumeCheckpoint: 'models/auto-training/x.soul',
+        })}
+        datasets={makeDatasets()}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    screen.getByText('Start training').closest('button')!.click()
+    // The form value must REACH the call — dropping it here is exactly how
+    // the control became dead in the first place.
+    expect(startTraining).toHaveBeenCalledWith('models/auto-training/x.soul')
+  })
+
+  it('calls startTraining with no resume when the select is untouched', () => {
+    const startTraining = vi.fn()
+    render(
+      <TrainStep
+        form={makeForm({ canStart: true, startTraining, resumeCheckpoint: '' })}
+        datasets={makeDatasets()}
+        onNext={vi.fn()}
+        onBack={vi.fn()}
+      />,
+    )
+    screen.getByText('Start training').closest('button')!.click()
+    expect(startTraining).toHaveBeenCalledWith(undefined)
+  })
+
   it('calls onBack when Back is clicked', () => {
     const onBack = vi.fn()
     render(
