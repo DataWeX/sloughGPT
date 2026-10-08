@@ -4,7 +4,27 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~00:35 — `fix/conftest-collection` **lands on
+**Last update**: 2026-10-08 ~02:12 — `fix/tokens-router-nonederef` **lands on
+main** (push `d50dafa15`, card `f01852a3` → done): **tokens router identity
+fix** — all 6 `/tokens/*` endpoints crashed in every auth mode:
+`require_auth_if_enabled` returns `None` when `SLO_AUTH_REQUIRED` is off (dev
+default) → `auth_user["id"]` raised `TypeError` (caught → AppError 500), and
+JWT payloads carry `sub`, so auth-**on** raised `KeyError` too. tokens.py was
+the only router in the server with unconditional `auth_user["id"]` derefs.
+Fix = `_resolve_user_id()` None-safe claim fallback `sub → id → username →
+"anonymous"` (mirrors errors.ingest / api_keys / users) — endpoints stay
+functional with auth off; no 401-when-anonymous exists anywhere to copy.
+Tests 12F → **13/13** (fixture now registers `register_app_error_handler`,
+overrides the auth dependency to scope accounts by `X-User-Id` — the approach
+from orphaned unmerged `ee1ba337f`, rescued — resets the billing singleton
+per test, unwraps the `["data"]` envelope, asserts **422** for pydantic field
+violations per `exception_handlers.py` contract, not 400) + new `TestAuthDisabled`
+regression test. Router-family A/B on identical env: origin/main 111 failed →
+fixed 98, comm diff = **zero new ids**; ruff + py_compile clean. Note: family-
+shape failures in `test_self_train`/`test_settings` are baseline path drift
+(old `tests/server/` ids, card `d2803a3c`) — pass 55/55 standalone.
+
+Earlier 2026-10-08 ~00:35: `fix/conftest-collection` **lands on
 main** (push `b4ab962e1`, card `5c909109` → done): **conftest-shadowing
 collection fix** — the 8 router test files in `packages/core-py/tests/`
 (self_train/souls/system/health/inference/kb/mobile/models) now import
