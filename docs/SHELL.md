@@ -169,6 +169,15 @@ $(<command>)                    # Command substitution
 | `py <expr>`           | Evaluate a Python expression     |
 | `ai <query>`          | Natural language → shell command |
 
+### Virtual Machine
+
+| Command                                 | Description                                                                                |
+| --------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `vmrun <name-or-file.asm>`              | Run a built-in/registry program (incl. `cave_game`) or an asm file in the x86 VM           |
+| `vmrun --list`                          | List runnable program names                                                                |
+| `vmrun [--steps=N] [--admin] [--debug]` | Budget steps, pick role, single-step debug (directive-less source defaults to `[BITS 32]`) |
+| `echo '<asm>' \| vmrun`                 | Run piped assembly                                                                         |
+
 ### Pipe Filters
 
 | Command               | Description                              |
