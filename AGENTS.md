@@ -25,6 +25,16 @@
 15. **Summarize, don't dump** — UIs and reports show concise summaries (key metrics, highlighted states), never raw thousand-line dumps. Raw logs stay one click away, collapsed by default.
 16. **One global banner** — app-wide alerts go through `useBannerStore` + `<GlobalBanner />` in `AppLayout`, never a per-page banner. Toasts for transient confirmations; banners for journey blockers with actions. Dedupe with `key`.
 
+### One-shot execution (no mid-build stops)
+
+Runs launched with `/goal` (or the phrases "one shot", "no check-ins", "just build it") follow these rules **in addition to** the SOP:
+
+1. **Questions are soft stops, used sparingly.** `permission.question = "allow"` (build and plan alike) so the agent can check in for genuinely missing information or post an update — a soft pause, never a hard gate and never a permission prompt. Cadence: one clarifying question max before the first edit; after that, check in only for missing information or progress updates — never for approval or "should I continue?".
+2. **Ambiguity → conservative default.** Take the safest reasonable option, implement it, and list every such choice under **ASSUMPTIONS** in the final summary.
+3. **Failing tests are not a stopping point.** Group failures by root cause → fix the code (not the test, unless the test itself is wrong) → re-run until green. Stop only if the fix requires a product decision or would delete user data; then state the proposed fix and wait.
+4. **SOP gates run without re-asking.** Steps 3 and 10–13 (workflow, test, benchmark, merge-when-green, summary) execute automatically; the step-4 go-ahead is satisfied by launching with `/goal`.
+5. **Finish with a summary:** changed files, ASSUMPTIONS, test + benchmark numbers.
+
 ### Core Rules
 
 - **ALWAYS check if something already exists before building it.** Before creating new files, modules, or features, search the codebase for existing implementations. Use `grep`, `glob`, and `find` to check for existing code, patterns, or similar functionality. Duplicate work wastes time and creates confusion. **This has cost us hours of wasted effort — never skip this step.**

@@ -4,6 +4,7 @@
     "paths": [".opencode/skills"]
   },
   "permission": {
+    "question": "allow",
     "bash": {
       "*": "allow",
       "*npm install*": "ask",
@@ -74,6 +75,13 @@
     }
   },
   "agent": {
+    "plan": {
+      "description": "Explores and plans without editing project files. Clarifying questions live here; build uses soft check-ins only (one-shot execution).",
+      "mode": "primary",
+      "permission": {
+        "question": "allow"
+      }
+    },
     "error-fixer": {
       "description": "Diagnoses and fixes errors detected in CLI logs.",
       "mode": "subagent",
