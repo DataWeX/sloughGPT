@@ -810,16 +810,6 @@ export class SloughGPTClient {
     return (obj.logs as Record<string, unknown>[]) ?? (obj as unknown as Record<string, unknown>[]);
   }
 
-  async getSecurityKeys(): Promise<Record<string, unknown>[]> {
-    const data = await this.request<Record<string, unknown>>('GET', '/security/keys');
-    const unwrapped = this.unwrap(data);
-    if (Array.isArray(unwrapped)) {
-      return unwrapped as Record<string, unknown>[];
-    }
-    const obj = (unwrapped ?? data) as Record<string, unknown>;
-    return (obj.keys as Record<string, unknown>[]) ?? (obj as unknown as Record<string, unknown>[]);
-  }
-
   // ============ Model Registry ============
 
   async listRegistryModels(): Promise<Record<string, unknown>[]> {
@@ -1173,7 +1163,7 @@ export class SloughGPTClient {
   // ============ Security ============
 
   async getSecurityKeys(): Promise<any[]> {
-    const response = await this.request('GET', '/security/keys');
+    const response = await this.request<any>('GET', '/security/keys');
     return Array.isArray(response) ? response : response.keys || response;
   }
 
@@ -1203,7 +1193,7 @@ export class SloughGPTClient {
   // ============ Tenants ============
 
   async listTenants(): Promise<any[]> {
-    const response = await this.request('GET', '/tenants');
+    const response = await this.request<any>('GET', '/tenants');
     return Array.isArray(response) ? response : response.tenants || response;
   }
 
@@ -1230,7 +1220,7 @@ export class SloughGPTClient {
   // ============ Profiles ============
 
   async listProfiles(): Promise<any[]> {
-    const response = await this.request('GET', '/profiles');
+    const response = await this.request<any>('GET', '/profiles');
     return Array.isArray(response) ? response : response.profiles || response;
   }
 
@@ -1253,7 +1243,7 @@ export class SloughGPTClient {
   // ============ Workspaces ============
 
   async listWorkspaces(): Promise<any[]> {
-    const response = await this.request('GET', '/workspaces');
+    const response = await this.request<any>('GET', '/workspaces');
     return Array.isArray(response) ? response : response.workspaces || response;
   }
 
@@ -1270,12 +1260,12 @@ export class SloughGPTClient {
   }
 
   async openwebuiDatasets(): Promise<any[]> {
-    const response = await this.request('GET', '/openwebui/datasets');
+    const response = await this.request<any>('GET', '/openwebui/datasets');
     return response.datasets;
   }
 
   async openwebuiCheckpoints(): Promise<any[]> {
-    const response = await this.request('GET', '/openwebui/checkpoints');
+    const response = await this.request<any>('GET', '/openwebui/checkpoints');
     return response.checkpoints;
   }
 
@@ -1294,7 +1284,7 @@ export class SloughGPTClient {
   // ============ Cloud Training ============
 
   async cloudTrainingJobs(limit: number = 10): Promise<any[]> {
-    const response = await this.request('GET', `/cloud-training/jobs?limit=${limit}`);
+    const response = await this.request<any>('GET', `/cloud-training/jobs?limit=${limit}`);
     return response.jobs;
   }
 
@@ -1313,7 +1303,7 @@ export class SloughGPTClient {
   // ============ Plugins ============
 
   async pluginsList(): Promise<any[]> {
-    const response = await this.request('GET', '/plugins');
+    const response = await this.request<any>('GET', '/plugins');
     return response.plugins;
   }
 
