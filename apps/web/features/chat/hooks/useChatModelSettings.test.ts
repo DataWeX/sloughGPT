@@ -1,6 +1,6 @@
 import { renderHook, act } from '@testing-library/react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useAppStore, DEFAULT_SETTINGS } from '@/lib/store'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { useAppStore, initStore, DEFAULT_SETTINGS } from '@/lib/store'
 
 const mockList = vi.fn()
 const mockLoad = vi.fn()
@@ -51,14 +51,59 @@ vi.mock('@/lib/training-controller', () => ({
   },
 }))
 
+// The hook writes fetched settings back through the store, and the real store
+// pushes them to the backend (updateSettings → _pushToBackend →
+// settingsController.updateGeneration). Unmocked, every run of this file PATCHed
+// whatever backend happened to be on localhost:8000 — and the settings KV is
+// shared across test files, so it also fed the cross-file leak this card fixes.
+vi.mock('@/lib/settings-controller', () => ({
+  settingsController: {
+    getAll: vi.fn().mockResolvedValue(null),
+    getGeneration: vi.fn().mockResolvedValue(null),
+    updateGeneration: vi.fn().mockResolvedValue(null),
+  },
+}))
+
 import { useChatModelSettings } from './useChatModelSettings'
 
 describe('useChatModelSettings', () => {
   const showToast = vi.fn()
   const refreshHealth = vi.fn()
 
-  beforeEach(() => {
+  // Hermetic guard: the real store pushes settings to the backend
+  // (updateSettings → _pushToBackend → settingsController.updateGeneration).
+  // Any fetch reaching past the mocks below means the test is talking to — and
+  // writing — whatever backend happens to be running. See card b015795b.
+  const fetchSpy =
+    typeof globalThis.fetch === 'function' ? vi.spyOn(globalThis, 'fetch') : null
+  const fetchUrls: string[] = []
+  if (fetchSpy) {
+    fetchSpy.mockImplementation(((input: any, init?: any) => {
+      fetchUrls.push(String(typeof input === 'string' ? input : input?.url))
+      return Promise.reject(new Error('network disabled in test'))
+    }) as any)
+  }
+
+  // Hard hermetic guard: no test in this file may reach the network. The store
+  // pushes settings to the backend and the controllers below are the hook's only
+  // sanctioned I/O, so a fetch here means a mock went missing (card b015795b).
+  afterEach(() => {
+    expect(
+      fetchUrls,
+      `useChatModelSettings test made a network call — not hermetic: ${fetchUrls.join(', ')}`,
+    ).toEqual([])
+  })
+
+  // initStore() hydrates settings from the chatDB KV — which the probe showed is
+  // SHARED across test files — and it is kicked off at store-module import. Left
+  // unawaited it can land AFTER the reset below, re-poisoning defaultTemp with
+  // another file's value (0.8), which the hook's store-sync effect then applies
+  // over the value this test just fetched. Awaiting it first makes the reset
+  // final. See card b015795b.
+  beforeEach(async () => {
+    await initStore()
     vi.clearAllMocks()
+    fetchUrls.length = 0
     useAppStore.setState({ settings: { ...DEFAULT_SETTINGS } })
     mockList.mockResolvedValue([])
     mockGet.mockResolvedValue({ temperature: 0.8, max_new_tokens: 200 })
