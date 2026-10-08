@@ -4,7 +4,28 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~03:05 — `fix/feedback-suite-drift` **lands on
+**Last update**: 2026-10-08 ~03:45 — `feat/generic-provider-config` **lands on
+main** (pushes `859b83811` + `226b35352`, card `90839119` → done): **generic
+embedding provider config** — `EmbeddingConfig` gains `api_key` + `base_url`
+(any OpenAI-compatible endpoint: ollama, LM Studio, vLLM) with a bidirectional
+alias mirror so `openai_api_key` reads/writes keep working; env ordering
+covered (`_apply_env_overrides` ends in `model_validate`, so both the legacy
+`SLO_EMBEDDING__OPENAI_API_KEY` and new `SLO_EMBEDDING__API_KEY` resolve);
+`OpenAIEmbedder`/`Embedder` pass `base_url` into the client; `.env.example` +
+example config updated. **Reuse, not rebuild**: the work already existed as
+`bab6c42ed` on `origin/feat/embedding-provider-config` (137 unmerged commits,
+2026-09-29 — card notes even said "delivered: bab6c42ed"), so it was
+cherry-picked (clean). This session added 3 gap tests (legacy-env back-compat,
+precedence, `base_url=None` default) and fixed 5 `FakeClient` fakes in
+`test_embeddings.py` the original commit missed (TypeError on `base_url`, new
+vs baseline). **Disclosure**: the feature first rode into the board-reseal
+commit `859b83811` still staged from the cherry-pick (message says reseal
+only) — contents recorded in `226b35352`'s message; no history rewrite on
+shared main. Gates: red-green proven (pre-feature `HEAD~2`: 9F/2P → 11/11);
+family `test_config` + `test_embedding_config` + `test_embeddings{,2}` = **100
+passed**; ruff + py_compile clean.
+
+Earlier 2026-10-08 ~03:05: `fix/feedback-suite-drift` **lands on
 main** (push `dd83baf9a`, card `37325860` → done): **feedback suite drift
 fixed** — 7 red (card reported 8; the `test_dataclass_field_types` "×2"
 counts once on current main) across two root causes, both test-side, no
