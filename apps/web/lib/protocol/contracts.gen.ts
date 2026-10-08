@@ -6,27 +6,27 @@
 import type { ContractDescriptor } from './types'
 
 export const CONTRACTS = {
-  'contracts/list': {
-    auth_scope: 'public',
-    description: 'List every descriptor-projected HTTP contract registered at boot',
-    idempotent: true,
-    method: 'GET',
-    module: 'routers.contracts',
-    name: 'contracts/list',
-    operation_id: 'contracts/list.get',
-    params: {
-      properties: {
-        name: {
-          description: 'Case-insensitive substring to filter descriptor names',
-          type: 'string',
-        },
+  "contracts/list": {
+    "auth_scope": "public",
+    "description": "List every descriptor-projected HTTP contract registered at boot",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.contracts",
+    "name": "contracts/list",
+    "operation_id": "contracts/list.get",
+    "params": {
+      "properties": {
+        "name": {
+          "description": "Case-insensitive substring to filter descriptor names",
+          "type": "string"
+        }
       },
-      required: [],
-      type: 'object',
+      "required": [],
+      "type": "object"
     },
-    path: '/contracts',
-    result: null,
-    version: '1',
+    "path": "/contracts",
+    "result": null,
+    "version": "1"
   },
 } as const satisfies Record<string, ContractDescriptor>
 
