@@ -126,15 +126,27 @@ vi.mock('@sloughgpt/strui', () => {
   }
 })
 
-const { mockGetStats, mockTokenize, mockGetVocab, mockGetSamples, mockTrain, mockAddToast } =
-  vi.hoisted(() => ({
-    mockGetStats: vi.fn(),
-    mockTokenize: vi.fn(),
-    mockGetVocab: vi.fn(),
-    mockGetSamples: vi.fn(),
-    mockTrain: vi.fn(),
-    mockAddToast: vi.fn(),
-  }))
+const {
+  mockGetStats,
+  mockTokenize,
+  mockGetVocab,
+  mockGetSamples,
+  mockTrain,
+  mockAddToast,
+  mockTreeGetStats,
+  mockTreeGetVocab,
+  mockTreeLineage,
+} = vi.hoisted(() => ({
+  mockGetStats: vi.fn(),
+  mockTokenize: vi.fn(),
+  mockGetVocab: vi.fn(),
+  mockGetSamples: vi.fn(),
+  mockTrain: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockTreeGetStats: vi.fn(),
+  mockTreeGetVocab: vi.fn(),
+  mockTreeLineage: vi.fn(),
+}))
 
 vi.mock('@/lib/tokenizer-controller', () => ({
   tokenizerController: {
@@ -143,6 +155,16 @@ vi.mock('@/lib/tokenizer-controller', () => ({
     getVocab: mockGetVocab,
     getSamples: mockGetSamples,
     train: mockTrain,
+  },
+}))
+// TokenTreeVocabCard (rendered on this tab) talks to /token-tree/* through its
+// own controller. Without this mock the card's getStats/getVocab fall through
+// to the real apiGet and the test depends on a live backend being reachable.
+vi.mock('@/lib/token-tree-controller', () => ({
+  tokenTreeController: {
+    getStats: mockTreeGetStats,
+    getVocab: mockTreeGetVocab,
+    lineage: mockTreeLineage,
   },
 }))
 vi.mock('@/lib/toast-store', () => ({
@@ -164,12 +186,47 @@ const stats = {
   trained: true,
 }
 
+// Stand-ins for the /token-tree/* payloads TokenTreeVocabCard would otherwise
+// fetch from a live backend. total > PAGE_SIZE (50) keeps that card's Next
+// button enabled, so its pager renders exactly like a real first page.
+const treeStats = {
+  trained: true,
+  vocab_size: 120,
+  num_merges: 70,
+  num_base_tokens: 50,
+  embedding_points: 0,
+  embedding_compression_ratio: 1,
+  embed_dim: 8,
+}
+
+const treePage = {
+  total: 120,
+  entries: [
+    { id: 900, token: 'tree</w>', freq: 12, is_special: false, is_merged: false },
+    { id: 901, token: '<tree-pad>', freq: 3, is_special: true, is_merged: false },
+    { id: 902, token: 'tree-merge</w>', freq: 7, is_special: false, is_merged: true },
+  ],
+}
+
+// Hermetic guard (card 5640f391): every controller this page renders is mocked
+// above, so no test in this file may reach the network. Spying rather than
+// stubbing keeps real call behaviour intact while any attempt to talk to a live
+// backend (the old localhost:8000 dependency) fails the test instead of racing.
+const fetchSpy =
+  typeof globalThis.fetch === 'function' ? vi.spyOn(globalThis, 'fetch') : null
+
 afterEach(() => {
   cleanup()
+  if (fetchSpy) {
+    expect(fetchSpy, 'TokenizerPage test made a network call — it is not hermetic').not.toHaveBeenCalled()
+  }
 })
 beforeEach(() => {
   vi.clearAllMocks()
   mockGetStats.mockResolvedValue(stats)
+  mockTreeGetStats.mockResolvedValue(treeStats)
+  mockTreeGetVocab.mockResolvedValue(treePage)
+  mockTreeLineage.mockResolvedValue(null)
 })
 
 async function renderLoaded() {
@@ -180,9 +237,10 @@ async function renderLoaded() {
 }
 
 // The vocab tab renders TWO pagers: this card's, and TokenTreeVocabCard's
-// ("Token Tree Vocabulary"), whose entries come from /token-tree/* calls that
-// this file does not mock - they hit the live backend, so whether it has loaded
-// by assertion time is a network race. Scope pager queries to this card.
+// ("Token Tree Vocabulary"). Both are loaded and both expose Prev/Next, so a
+// bare screen.getByText('Prev') matches twice - scope pager queries to this
+// card. (The token-tree side used to be unmocked and fetched /token-tree/*
+// from a live backend; it is now mocked above, so its load no longer races.)
 function vocabPager() {
   const title = screen.getByText(/^Vocabulary \(\d+\)$/)
   const card = (title.parentElement?.parentElement ?? title) as HTMLElement
