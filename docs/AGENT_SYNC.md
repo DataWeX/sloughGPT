@@ -33,6 +33,29 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-08 ~11:05 — `5473eb90` **closed: rotating-victim root
+cause was missing from main — ported.** The root-cause fix `0246b027c`
+(root lane, Oct-5; its message names this card) was on 6 feature branches but
+**never an ancestor of origin/main**: `tests/test_api_keys.py` used
+`parents[2]` at `tests/` depth → overshoot to the PARENT checkout, inserting
+its `apps/api/server` at `sys.path[0]` twice (second unconditional). Dormant
+in plain checkouts (dead path), **live in nested worktrees** (`.wt-mole` →
+parent checkout is a real repo). Ported via `git cherry-pick -x` →
+`1eca0294a` (api_keys `parents[1]` + dedupe, core-py conftest `parents[3]`,
+distill `_make_client` → `build_test_app`). **Second victim found and fixed by
+the same port**: `tests/server/test_vm_router::test_returns_10_programs`
+failed only in full-collection scope — `vm_builtins` resolved to the parent
+checkout (imports `CAVE_GAME_ASM`, absent from this tree's `vm_programs`)
+→ ImportError silently swallowed by the endpoint → `programs: []`;
+predecessor-scope runs were accidentally protective (sys.modules caching),
+exactly as `0246b027c` describes. Evidence: chat_trainer 19/19, distill 12/12,
+api_keys 21/21, 2-file repro 33 passed, **full `pytest tests/` gate = 3226
+passed / 0 failed / EXIT 0** (was 1 failed). Rule of thumb: at `tests/`
+depth the repo root is `parents[1]`; `parents[2]` is OUTSIDE the repo. A
+quiet-window core-py full-suite baseline run is still pending for triage
+cards (`56b49cf1`, `ca167dbd`) — today's full run was abandoned (repeated
+300s hanger-timeout burns under machine contention).
+
 **Last update**: 2026-10-08 ~09:20 — `2656f858` **closed by reconciliation, not
 rework** + **PYTHONPATH correction (read before judging any red)**: the card
 had already been resolved 2026-10-05 on the ROOT lane's board
