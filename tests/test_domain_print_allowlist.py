@@ -43,6 +43,8 @@ ALLOWLIST: dict[str, str] = {
         "writes to stderr during logging bootstrap — a logging failure cannot be logged"
     ),
     "domain/multimodal/_internal/phoneme_encoder_cli.py": "_cli module: CLI output",
+    "domain/shell/_internal/cmds/dashboard.py": "dashboard watch loop; terminal frames ARE its stdout output",
+    "domain/shell/_internal/cmds/status.py": "status --json result is written to stdout for piping",
     "domain/shell/_internal/input_device.py": "terminal echo (bare newline on Enter)",
     "domain/shell/_internal/realm_live.py": "realm harness; prints the run summary",
     "domain/shell/_internal/world_driver.py": "headless world harness; aligned report tables",

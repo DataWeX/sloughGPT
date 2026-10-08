@@ -185,13 +185,15 @@ class TestCompanionSystem:
 
     def test_adjust_for_mood_down(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.5
+        # adjust_for_mood applies deltas from _base_traits (anti-drift design),
+        # so the seed value goes on the base, not the live traits.
+        c._base_traits.warmth = 0.5
         c.adjust_for_mood("down")
         assert c.traits.warmth == pytest.approx(0.7)
 
     def test_adjust_for_mood_upset(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.9
+        c._base_traits.warmth = 0.9
         c.adjust_for_mood("upset")
         # min(1.0, 0.9 + 0.2) = 1.0
         assert c.traits.warmth == pytest.approx(1.0)
@@ -204,7 +206,7 @@ class TestCompanionSystem:
 
     def test_adjust_for_mood_excited(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.8
+        c._base_traits.warmth = 0.8
         c.adjust_for_mood("excited")
         assert c.traits.warmth == pytest.approx(0.9)
 

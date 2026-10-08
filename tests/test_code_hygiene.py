@@ -73,6 +73,10 @@ PRINT_ALLOWLIST = {
         "--json machine-readable stdout mode",
     "domain/journeys/runner.py":
         "argparse CLI journey runner — [PASS]/[FAIL] report IS stdout",
+    "domain/shell/_internal/cmds/dashboard.py":
+        "dashboard watch-loop renderer — terminal frames ARE its output",
+    "domain/shell/_internal/cmds/status.py":
+        "status --json machine-readable stdout mode (CLI result channel)",
 }
 
 
