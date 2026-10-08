@@ -91,7 +91,10 @@ class TestOnlineLoRAUpdater:
         assert not u._is_updating
         u.add_feedback("q2", "a2", "thumbs_down")
         time.sleep(0.05)
-        assert u._stats["total_updates"] >= 1
+        # Trigger fired (buffer drained) but no engine -> honest skip, not a
+        # phantom applied update (card b83a5788).
+        assert u._stats["total_updates"] == 0
+        assert u._stats["total_skipped_updates"] >= 1
 
     def test_quality_score_default(self):
         u = OnlineLoRAUpdater()
@@ -102,15 +105,15 @@ class TestOnlineLoRAUpdater:
         assert u._feedback_buffer[1]["quality_score"] == 0.0
 
     def test_compute_gradients_reinforcement(self):
+        # Retired contract (card b83a5788): no engine attached -> no
+        # gradients; the update path skips honestly instead.
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=16)
         batch = [
             {"rating": "thumbs_up", "quality_score": 1.0, "prompt": "a", "response": "b"},
             {"rating": "thumbs_up", "quality_score": 1.0, "prompt": "c", "response": "d"},
         ]
-        grads = u._compute_gradients(batch)
-        assert "W_a" in grads
-        assert "W_b" in grads
+        assert u._compute_gradients(batch) == {}
 
     def test_compute_gradients_all_negative(self):
         u = OnlineLoRAUpdater()
@@ -223,12 +226,13 @@ class TestGradientComputation:
             assert np.allclose(g, 0.0, atol=1e-6)
 
     def test_gradient_shapes_match_weights(self):
+        # Retired contract (card b83a5788): an engine-less updater computes
+        # no gradients — shape-matching is covered by the shape-correct
+        # apply tests once an engine (real feature work) exists.
         u = OnlineLoRAUpdater()
         u.initialize(model_dim=32)
         batch = [{"rating": "thumbs_up", "quality_score": 1.0, "prompt": "q", "response": "a"}]
-        grads = u._compute_gradients(batch)
-        assert grads["W_a"].shape == u._lora_weights["W_a"].shape
-        assert grads["W_b"].shape == u._lora_weights["W_b"].shape
+        assert u._compute_gradients(batch) == {}
 
 
 class TestGradientApplication:
@@ -437,9 +441,13 @@ class TestPerformUpdate:
             {"rating": "thumbs_up", "quality_score": 1.0, "prompt": "q", "response": "a"},
         ]
         u._perform_update()
-        assert u._stats["total_updates"] == 1
-        assert u._stats["total_samples"] == 1
-        assert u._stats["last_update_time"] is not None
+        # No engine -> drained as a skipped update, never a phantom applied one
+        # (card b83a5788).
+        assert u._stats["total_updates"] == 0
+        assert u._stats["total_samples"] == 0
+        assert u._stats["last_update_time"] is None
+        assert u._stats["total_skipped_updates"] == 1
+        assert u._stats["total_skipped_samples"] == 1
 
     def test_perform_update_clears_buffer(self):
         u = OnlineLoRAUpdater()
@@ -467,5 +475,8 @@ class TestPerformUpdate:
                 {"rating": "thumbs_up", "quality_score": 1.0, "prompt": "q", "response": "a"},
             ]
             u._perform_update()
-        assert u._stats["total_updates"] == 3
-        assert u._stats["total_samples"] == 3
+        # Engine-less runs accumulate as skips (card b83a5788).
+        assert u._stats["total_updates"] == 0
+        assert u._stats["total_samples"] == 0
+        assert u._stats["total_skipped_updates"] == 3
+        assert u._stats["total_skipped_samples"] == 3

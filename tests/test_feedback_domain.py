@@ -799,15 +799,16 @@ class TestOnlineLoRAUpdater:
         assert "W_a" in g_up and "W_a" in g_down
         np.testing.assert_allclose(g_up["W_a"], -g_down["W_a"])
 
-    def test_compute_gradients_fallback_populates_all_weights(self):
-        """A failing forward pass falls back to pseudo-gradients for every weight."""
+    def test_compute_gradients_fallback_yields_no_gradients(self):
+        """A failing forward pass yields NO gradients — the pseudo-gradient
+        random-noise fallback is retired (card b83a5788: it mutated live
+        weights with noise); the update counts as skipped instead."""
         updater = OnlineLoRAUpdater(learning_rate=0.01, engine=_ExplodingEngine())
         updater.initialize(model_dim=768)
         grads = updater._compute_gradients(
             [{"prompt": "hi", "response": "hello", "rating": "thumbs_up"}]
         )
-        assert "W_a" in grads
-        assert "W_b" in grads
+        assert grads == {}
 
     def test_apply_gradients(self):
         updater = OnlineLoRAUpdater(learning_rate=0.01)
