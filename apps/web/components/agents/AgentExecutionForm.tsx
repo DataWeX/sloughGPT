@@ -1,6 +1,6 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, cn } from '@sloughgpt/strui'
+import { Button, Input } from '@sloughgpt/strui'
 
 interface ToolUsed {
   tool: string
@@ -67,7 +67,10 @@ export function AgentExecutionForm({
           {toolsUsed.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1">
               {toolsUsed.map((t, i) => (
-                <span key={i} className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                <span
+                  key={i}
+                  className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium"
+                >
                   {t.tool.replace(/_/g, ' ')}
                 </span>
               ))}

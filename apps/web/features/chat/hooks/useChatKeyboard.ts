@@ -34,14 +34,16 @@ interface KeyboardDeps {
 
 export function useChatKeyboard(deps: KeyboardDeps) {
   const {
-    loading, currentError, showSettings,
-    setToolPanelOpen, setShowSettings, setLoading, setCurrentError,
-    loadingRef, newChatRef, handleRegenerateRef,
-    searchInputRef, handleSearchChange,
-    onRenameConversation, onExportMarkdown,
-    onDuplicateConversation, onToggleBookmarks,
-    onCancelStream, onApproveTool, onDenyTool, onToggleSidebar,
-    onAddNoteToLastMessage, onOpenNoteSearch, onOpenShortcuts, onOpenTemplates, onOpenConversationSearch, onOpenStats,
+    loading,
+    currentError,
+    showSettings,
+    setToolPanelOpen,
+    setShowSettings,
+    setLoading,
+    setCurrentError,
+    loadingRef,
+    newChatRef,
+    handleRegenerateRef,
   } = deps
 
   const depsRef = useRef(deps)
@@ -59,20 +61,20 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         } else if (d.currentError) {
           d.setCurrentError(null)
         } else if (d.showSettings) {
-          d.setShowSettings(prev => !prev)
+          d.setShowSettings((prev) => !prev)
         }
       }
       if ((foreKey || e.ctrlKey) && e.key === 'b' && e.shiftKey) {
         e.preventDefault()
-        d.setToolPanelOpen(prev => !prev)
+        d.setToolPanelOpen((prev) => !prev)
       }
       if ((foreKey || e.ctrlKey) && e.key === 'b' && !e.shiftKey) {
         e.preventDefault()
-        d.setToolPanelOpen(prev => !prev)
+        d.setToolPanelOpen((prev) => !prev)
       }
       if (e.key === '?' && (foreKey || e.ctrlKey)) {
         e.preventDefault()
-        d.setShowSettings(prev => !prev)
+        d.setShowSettings((prev) => !prev)
       }
       if (e.key === 'n' && (foreKey || e.ctrlKey) && !e.shiftKey) {
         e.preventDefault()
@@ -90,7 +92,11 @@ export function useChatKeyboard(deps: KeyboardDeps) {
         e.preventDefault()
         d.searchInputRef?.current?.focus()
       }
-      if (e.key === '/' && !(foreKey || e.ctrlKey) && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      if (
+        e.key === '/' &&
+        !(foreKey || e.ctrlKey) &&
+        !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+      ) {
         e.preventDefault()
         d.searchInputRef?.current?.focus()
       }
@@ -149,5 +155,16 @@ export function useChatKeyboard(deps: KeyboardDeps) {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [loading, currentError, showSettings, setToolPanelOpen, setShowSettings, setLoading, setCurrentError, loadingRef, newChatRef, handleRegenerateRef])
+  }, [
+    loading,
+    currentError,
+    showSettings,
+    setToolPanelOpen,
+    setShowSettings,
+    setLoading,
+    setCurrentError,
+    loadingRef,
+    newChatRef,
+    handleRegenerateRef,
+  ])
 }

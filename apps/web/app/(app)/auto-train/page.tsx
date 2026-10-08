@@ -3,9 +3,8 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
-import { formatDateTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardHeader, CardTitle, Button, Badge, Input } from '@sloughgpt/strui'
+import { Card, CardContent } from '@sloughgpt/strui'
 import { trainingFacade } from '@/lib/training-facade'
 
 const autoTrain = trainingFacade.automation
@@ -13,7 +12,6 @@ import { apiGet } from '@/lib/http-client'
 import { AutoTrainStatusCard } from '@/components/auto-train/AutoTrainStatusCard'
 import { AutoTrainConfigCard } from '@/components/auto-train/AutoTrainConfigCard'
 import { AutoTrainHistoryCard } from '@/components/auto-train/AutoTrainHistoryCard'
-import { Zap, Play, Pause, Settings, Clock, Database, AlertCircle, CheckCircle } from 'lucide-react'
 
 interface AutoTrainStatus {
   enabled: boolean
@@ -39,9 +37,7 @@ export default function AutoTrainPage() {
   const [status, setStatus] = useState<AutoTrainStatus | null>(null)
   const [stats, setStats] = useState<TrainingStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [updating, setUpdating] = useState(false)
-  const [threshold, setThreshold] = useState(10)
-  const [intervalS, setIntervalS] = useState(120)
+  const [, setThreshold] = useState(10)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -52,7 +48,7 @@ export default function AutoTrainPage() {
       ])
       if (statusData) {
         setStatus(statusData as unknown as AutoTrainStatus)
-        setThreshold((statusData as any).threshold || 10)
+        setThreshold((statusData as unknown as { threshold?: number }).threshold || 10)
       }
       if (statsData) {
         setStats(statsData as unknown as TrainingStats)
@@ -67,27 +63,6 @@ export default function AutoTrainPage() {
   useEffect(() => {
     fetchData()
   }, [fetchData])
-
-  const handleUpdateConfig = async () => {
-    setUpdating(true)
-    try {
-      await autoTrain.updateAutoTrainConfig({ threshold, interval_s: intervalS })
-      fetchData()
-    } catch (err) {
-      console.error('Failed to update config:', err)
-    } finally {
-      setUpdating(false)
-    }
-  }
-
-  const formatDate = (ts: string | null) => {
-    if (!ts) return '-'
-    try {
-      return formatDateTime(ts)
-    } catch {
-      return ts
-    }
-  }
 
   return (
     <PageContainer title="Auto-Train">

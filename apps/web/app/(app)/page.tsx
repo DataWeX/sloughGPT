@@ -8,23 +8,14 @@ import Link from '@/vite/next-compat/link'
 import { useRouter } from '@/vite/next-compat/navigation'
 
 import { PageContainer } from '@/components/PageContainer'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Card, CardContent } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconChat, IconModels } from '@/components/icons/NavIcons'
-import {
-  IconChevronRight,
-  IconMessage,
-  LossCurve,
-  SectionHeader,
-  StatusDot,
-} from '@sloughgpt/strui'
+import { IconChevronRight, IconMessage, LossCurve, StatusDot } from '@sloughgpt/strui'
 
 import { apiGet } from '@/lib/http-client'
-import { chatController } from '@/lib/chat-controller'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useLocale } from '@/hooks/useLocale'
-import { knowledgeController } from '@/lib/knowledge-controller'
-import { useToastStore } from '@/lib/toast-store'
 import { OnboardingCard } from '@/components/onboarding/OnboardingCard'
 import { sessionController } from '@/lib/session-controller'
 import { datasetController } from '@/lib/dataset-controller'
@@ -105,7 +96,6 @@ export default function HomePage() {
   const router = useRouter()
   const { t } = useLocale()
   const { healthLegacy: health, health: liveHealth } = useLiveStatus()
-  const addToast = useToastStore((s) => s.addToast)
   const {
     modelCount,
     currentSoul,
