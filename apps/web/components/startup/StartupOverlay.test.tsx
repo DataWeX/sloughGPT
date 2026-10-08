@@ -108,4 +108,23 @@ describe('StartupOverlay', () => {
     })
     expect(screen.queryByRole('alert')).toBeNull()
   })
+
+  it('reads Ready, not Almost ready, once the model is loaded at 100%', () => {
+    useLiveStatusMock.mockReturnValue(
+      status({
+        startupStage: 'background',
+        startupModelProgress: 1,
+        startupModelProgressMessage: 'Model loaded successfully',
+      }),
+    )
+    render(<StartupOverlay />)
+    // headline, bar and detail row must tell one story
+    expect(screen.getByRole('heading')).toHaveTextContent('Ready')
+    expect(screen.getByRole('progressbar', { name: 'Startup progress' })).toHaveAttribute(
+      'aria-valuenow',
+      '100',
+    )
+    expect(screen.getByRole('status')).toHaveTextContent('Ready')
+    expect(screen.getByText('Model loaded successfully')).toBeTruthy()
+  })
 })

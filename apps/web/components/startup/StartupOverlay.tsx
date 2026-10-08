@@ -46,6 +46,13 @@ export function StartupOverlay() {
 
   const stageIndex = STAGE_ORDER.indexOf(startupStage)
   const isReady = startupStage === 'background' || startupStage === 'ready'
+  // Model-load progress is a sub-step, not a stage: the loader pins it to 1.0
+  // ("Model loaded successfully") while the stage machine can still be sitting
+  // on `ready`/`background`. Headline, bar and detail row must agree, so once
+  // the weights are in memory the headline reads "Ready" instead of claiming
+  // the model is still loading — or that we are "Almost ready" at 100%.
+  const modelLoaded = startupModelProgress >= 1
+  const stageLabel = modelLoaded ? 'Ready' : STAGE_LABELS[startupStage] || 'Starting up'
 
   useEffect(() => {
     logStateEvent('overlay_shown', {
@@ -124,7 +131,7 @@ export function StartupOverlay() {
 
       {/* Stage label */}
       <h2 className="text-[14px] font-medium text-foreground mb-6">
-        {stuck ? 'Still connecting' : STAGE_LABELS[startupStage] || 'Starting up'}
+        {stuck ? 'Still connecting' : stageLabel}
       </h2>
 
       {/* Progress bar */}
@@ -258,9 +265,13 @@ export function StartupOverlay() {
         })}
       </div>
       <span className="sr-only" role="status">
-        {stageIndex < 0
-          ? 'Connecting'
-          : `Stage ${stageIndex + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[startupStage]}`}
+        {stuck
+          ? 'Still connecting'
+          : modelLoaded
+            ? 'Ready'
+            : stageIndex < 0
+              ? 'Connecting'
+              : `Stage ${stageIndex + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[startupStage]}`}
       </span>
     </div>
   )
