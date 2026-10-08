@@ -33,6 +33,17 @@ from domain.inference._internal.native.engine import (
 from domain.inference._internal.native.weight_mapper import map_slnc_to_native
 from domain.infrastructure._internal.slnc.spec import compute_header_size
 
+# Real-component coverage needs the compiled shared library (bindings.py
+# carries the cc one-liner). Nothing ships it compiled — skip cleanly on
+# machines/CI without it instead of erroring ~40 tests.
+try:
+    B.load_lib()
+except RuntimeError:
+    pytest.skip(
+        "native libtransformer_forward not compiled — see bindings.py compile hint",
+        allow_module_level=True,
+    )
+
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 
 L = 2
