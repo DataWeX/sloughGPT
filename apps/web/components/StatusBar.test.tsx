@@ -8,11 +8,46 @@ const mockGetTraitWeights = vi.fn()
 vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => {
     const h = mockHealthState()
-    if (h === 'offline') return { connectionStatus: 'offline', health: null, healthLegacy: 'offline', lastUpdate: null, failureCount: 1, connected: false, live: false }
-    if (h === null) return { connectionStatus: 'connecting', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0, connected: false, live: false }
-    return { connectionStatus: 'connected', health: h, healthLegacy: h, lastUpdate: Date.now(), failureCount: 0, connected: true, live: true }
+    if (h === 'offline')
+      return {
+        connectionStatus: 'offline',
+        health: null,
+        healthLegacy: 'offline',
+        lastUpdate: null,
+        failureCount: 1,
+        connected: false,
+        live: false,
+      }
+    if (h === null)
+      return {
+        connectionStatus: 'connecting',
+        health: null,
+        healthLegacy: null,
+        lastUpdate: null,
+        failureCount: 0,
+        connected: false,
+        live: false,
+      }
+    return {
+      connectionStatus: 'connected',
+      health: h,
+      healthLegacy: h,
+      lastUpdate: Date.now(),
+      failureCount: 0,
+      connected: true,
+      live: true,
+    }
   },
-  liveStatusStore: { getState: vi.fn(() => ({ connectionStatus: 'connected', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0 })), subscribe: vi.fn(() => vi.fn()) },
+  liveStatusStore: {
+    getState: vi.fn(() => ({
+      connectionStatus: 'connected',
+      health: null,
+      healthLegacy: null,
+      lastUpdate: null,
+      failureCount: 0,
+    })),
+    subscribe: vi.fn(() => vi.fn()),
+  },
 }))
 
 vi.mock('@/lib/souls-controller', () => ({
@@ -32,15 +67,36 @@ vi.mock('@/components/WhatsNewDialog', () => ({
   getUnseenCount: () => Promise.resolve(mockGetUnseenCount()),
 }))
 
-const mockHealthSummary = { score: 85, summary: 'Healthy', tokens_per_sec: 15, model_loaded: true, model_type: 'gpt2', soul: 'friendly', uptime_seconds: 100, request_count: 50, error_count: 0, cpu_percent: 30, memory_percent: 40 }
+const mockHealthSummary = {
+  score: 85,
+  summary: 'Healthy',
+  tokens_per_sec: 15,
+  model_loaded: true,
+  model_type: 'gpt2',
+  soul: 'friendly',
+  uptime_seconds: 100,
+  request_count: 50,
+  error_count: 0,
+  cpu_percent: 30,
+  memory_percent: 40,
+}
 
 const mockClearFailures = vi.fn()
 
 const { useApiMonitor: _useApiMonitor, setHealthSummaryData } = vi.hoisted(() => {
   let hc: typeof mockHealthSummary | null = null
   return {
-    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc, recentFailures: [], failureCount: 0, lastOffline: null, clearFailures: mockClearFailures }),
-    setHealthSummaryData: (v: typeof mockHealthSummary | null) => { hc = v },
+    useApiMonitor: (selector: (s: any) => any) =>
+      selector({
+        healthSummary: hc,
+        recentFailures: [],
+        failureCount: 0,
+        lastOffline: null,
+        clearFailures: mockClearFailures,
+      }),
+    setHealthSummaryData: (v: typeof mockHealthSummary | null) => {
+      hc = v
+    },
   }
 })
 
@@ -64,38 +120,45 @@ vi.mock('@sloughgpt/strui', () => ({
   IconRefresh: (props: any) => <span />,
   IconX: (props: any) => <span />,
 
-Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
-    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
-    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
-    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
-    Tabs: ({ children }: any) => <div>{children}</div>,
-    TabsList: ({ children }: any) => <div>{children}</div>,
-    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    TabsContent: ({ children }: any) => <div>{children}</div>,
-    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
-    Separator: () => <hr />,
-    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
-    Avatar: ({ children }: any) => <div>{children}</div>,
-    AvatarFallback: ({ children }: any) => <div>{children}</div>,
-    ScrollArea: ({ children }: any) => <div>{children}</div>,
-    Table: ({ children }: any) => <table>{children}</table>,
-    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
-    TableRow: ({ children }: any) => <tr>{children}</tr>,
-    TableCell: ({ children }: any) => <td>{children}</td>,
-    TableHead: ({ children }: any) => <th>{children}</th>,
-    TableHeader: ({ children }: any) => <thead>{children}</thead>,
-    Collapsible: ({ children }: any) => <div>{children}</div>,
-    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
-    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    ToggleGroup: ({ children }: any) => <div>{children}</div>,
-    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    Command: ({ children }: any) => <div>{children}</div>,
-    CommandInput: ({ ...props }: any) => <input {...props} />,
-    CommandList: ({ children }: any) => <div>{children}</div>,
-    CommandEmpty: ({ children }: any) => <div>{children}</div>,
-    CommandGroup: ({ children }: any) => <div>{children}</div>,
-    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+  Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+  Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+  Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+  ActionCard: ({ title, children }: any) => (
+    <div data-testid="action-card">
+      <h3>{title}</h3>
+      {children}
+    </div>
+  ),
+  Tabs: ({ children }: any) => <div>{children}</div>,
+  TabsList: ({ children }: any) => <div>{children}</div>,
+  TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  TabsContent: ({ children }: any) => <div>{children}</div>,
+  Textarea: ({ value, onChange, ...props }: any) => (
+    <textarea value={value} onChange={onChange} {...props} />
+  ),
+  Separator: () => <hr />,
+  Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+  Avatar: ({ children }: any) => <div>{children}</div>,
+  AvatarFallback: ({ children }: any) => <div>{children}</div>,
+  ScrollArea: ({ children }: any) => <div>{children}</div>,
+  Table: ({ children }: any) => <table>{children}</table>,
+  TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+  TableRow: ({ children }: any) => <tr>{children}</tr>,
+  TableCell: ({ children }: any) => <td>{children}</td>,
+  TableHead: ({ children }: any) => <th>{children}</th>,
+  TableHeader: ({ children }: any) => <thead>{children}</thead>,
+  Collapsible: ({ children }: any) => <div>{children}</div>,
+  CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+  Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  ToggleGroup: ({ children }: any) => <div>{children}</div>,
+  ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Command: ({ children }: any) => <div>{children}</div>,
+  CommandInput: ({ ...props }: any) => <input {...props} />,
+  CommandList: ({ children }: any) => <div>{children}</div>,
+  CommandEmpty: ({ children }: any) => <div>{children}</div>,
+  CommandGroup: ({ children }: any) => <div>{children}</div>,
+  CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { StatusBar } from './StatusBar'
@@ -105,9 +168,28 @@ describe('StatusBar', () => {
     vi.clearAllMocks()
     setHealthSummaryData(null)
     mockGetUnseenCount.mockReturnValue(0)
-    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
+    mockHealthState.mockReturnValue({
+      model_loaded: true,
+      model_type: 'gpt2',
+      inference_count: 42,
+      health_score: 85,
+      health_status: 'healthy',
+      health_summary: 'Healthy',
+      tokens_per_sec: 15,
+      is_inferencing: false,
+      cpu_percent: 30,
+      memory_percent: 40,
+      uptime_seconds: 100,
+      request_count: 50,
+      error_count: 0,
+      soul: 'friendly',
+    })
     mockGetCurrent.mockResolvedValue({ name: 'friendly', description: 'Friendly soul' })
-    mockGetTraitWeights.mockResolvedValue({ personality: { warmth: 0.7 }, cognition: {}, emotion: {} })
+    mockGetTraitWeights.mockResolvedValue({
+      personality: { warmth: 0.7 },
+      cognition: {},
+      emotion: {},
+    })
   })
 
   afterEach(cleanup)
@@ -124,14 +206,44 @@ describe('StatusBar', () => {
   })
 
   it('renders tokens per second from live health', async () => {
-    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
+    mockHealthState.mockReturnValue({
+      model_loaded: true,
+      model_type: 'gpt2',
+      inference_count: 42,
+      health_score: 85,
+      health_status: 'healthy',
+      health_summary: 'Healthy',
+      tokens_per_sec: 15,
+      is_inferencing: false,
+      cpu_percent: 30,
+      memory_percent: 40,
+      uptime_seconds: 100,
+      request_count: 50,
+      error_count: 0,
+      soul: 'friendly',
+    })
     render(<StatusBar />)
     const tps = await screen.findAllByText('15 tok/s')
     expect(tps.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders inference count when no tps', async () => {
-    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 0, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
+    mockHealthState.mockReturnValue({
+      model_loaded: true,
+      model_type: 'gpt2',
+      inference_count: 42,
+      health_score: 85,
+      health_status: 'healthy',
+      health_summary: 'Healthy',
+      tokens_per_sec: 0,
+      is_inferencing: false,
+      cpu_percent: 30,
+      memory_percent: 40,
+      uptime_seconds: 100,
+      request_count: 50,
+      error_count: 0,
+      soul: 'friendly',
+    })
     render(<StatusBar />)
     const count = await screen.findAllByText('42 reqs')
     expect(count.length).toBeGreaterThanOrEqual(1)
@@ -157,7 +269,22 @@ describe('StatusBar', () => {
   it('re-fetches soul when the active soul changes', async () => {
     const { rerender } = render(<StatusBar />)
     await screen.findAllByText('The Optimist')
-    mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'curious' })
+    mockHealthState.mockReturnValue({
+      model_loaded: true,
+      model_type: 'gpt2',
+      inference_count: 42,
+      health_score: 85,
+      health_status: 'healthy',
+      health_summary: 'Healthy',
+      tokens_per_sec: 15,
+      is_inferencing: false,
+      cpu_percent: 30,
+      memory_percent: 40,
+      uptime_seconds: 100,
+      request_count: 50,
+      error_count: 0,
+      soul: 'curious',
+    })
     mockGetCurrent.mockResolvedValue({ name: 'curious', description: 'Curious soul' })
     rerender(<StatusBar />)
     await waitFor(() => {
@@ -195,5 +322,101 @@ describe('StatusBar', () => {
     await waitFor(() => {
       expect(screen.getByText('9+')).toBeDefined()
     })
+  })
+
+  it('renders the engine chip as short model + quant, titled with the full identity', () => {
+    mockHealthState.mockReturnValue({
+      ...mockHealthSummary,
+      health_summary: 'All systems nominal',
+      model_type: 'Qwen/Qwen2.5-0.5B-Instruct',
+      device: 'cuda',
+      quantization: { bits: 8 },
+    })
+    render(<StatusBar />)
+    expect(screen.getByText('Qwen2.5-0.5B-Instruct')).toBeDefined()
+    expect(screen.getByText('8-bit')).toBeDefined()
+    expect(screen.getByTitle('Qwen2.5-0.5B-Instruct · 8-bit · cuda')).toBeDefined()
+  })
+
+  it('does not repeat the model when the health summary already names it', () => {
+    mockHealthState.mockReturnValue({
+      ...mockHealthSummary,
+      model_type: 'gpt2',
+      health_summary: 'gpt2 healthy',
+    })
+    render(<StatusBar />)
+    expect(screen.queryByText('gpt2', { selector: '.sl-status-bar-engine' })).toBeNull()
+  })
+
+  it('renders latency, CPU and memory chips', () => {
+    mockHealthState.mockReturnValue({
+      ...mockHealthSummary,
+      p95_latency_ms: 84,
+      avg_latency_ms: 41,
+      cpu_percent: 30,
+      memory_percent: 40,
+    })
+    render(<StatusBar />)
+    expect(screen.getByText('84ms p95')).toBeDefined()
+    expect(screen.getByText('30% CPU')).toBeDefined()
+    expect(screen.getByText('40% RAM')).toBeDefined()
+    expect(screen.getByTitle('Latency p95 · avg 41ms')).toBeDefined()
+  })
+
+  it('renders the training chip only while the pool is busy', () => {
+    const { rerender } = render(<StatusBar />)
+    expect(screen.queryByText(/train/)).toBeNull()
+
+    mockHealthState.mockReturnValue({
+      ...mockHealthSummary,
+      training_pool: { active_jobs: 2, max_workers: 4, total_tracked: 9 },
+    })
+    rerender(<StatusBar />)
+    expect(screen.getByText('2 train')).toBeDefined()
+    expect(screen.getByTitle('Training 2 of 4 workers')).toBeDefined()
+  })
+
+  it('keeps the live region on the status line — metrics are never announced', () => {
+    const { container } = render(<StatusBar />)
+    const live = screen.getByRole('status')
+    expect(live).toHaveTextContent('Healthy')
+    expect(live.textContent ?? '').not.toContain('tok/s')
+
+    const bar = container.querySelector('.sl-status-bar')
+    expect(bar?.getAttribute('role')).toBeNull()
+    expect(bar?.getAttribute('aria-live')).toBeNull()
+  })
+
+  it('expands into the grouped detail strip (engine · perf · host)', () => {
+    mockHealthState.mockReturnValue({
+      ...mockHealthSummary,
+      model_type: 'Qwen/Qwen2.5-0.5B-Instruct',
+      device: 'cuda',
+      quantization: { bits: 8 },
+      num_parameters: 494_000_000,
+      avg_latency_ms: 41,
+      p95_latency_ms: 84,
+      requests_per_minute: 12,
+      health_score: 85,
+      request_count: 50,
+      error_count: 3,
+      training_pool: { active_jobs: 2, max_workers: 4, total_tracked: 9 },
+    })
+    render(<StatusBar />)
+
+    fireEvent.click(screen.getByLabelText('Expand details'))
+
+    expect(screen.getByText('Quant')).toBeDefined()
+    expect(screen.getByText('8-bit')).toBeDefined()
+    expect(screen.getByText('Device')).toBeDefined()
+    expect(screen.getByText('cuda')).toBeDefined()
+    expect(screen.getByText('494M')).toBeDefined()
+    expect(screen.getByText('41ms')).toBeDefined()
+    expect(screen.getByText('84ms')).toBeDefined()
+    expect(screen.getByText('12/min')).toBeDefined()
+    expect(screen.getByText('Errors')).toBeDefined()
+    expect(screen.getByText('CPU')).toBeDefined()
+    expect(screen.getByText('Score')).toBeDefined()
+    expect(screen.getByText('2/4')).toBeDefined()
   })
 })

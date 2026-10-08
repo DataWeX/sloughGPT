@@ -35,6 +35,45 @@ function getFailureSummary(
   return last.error.slice(0, 40)
 }
 
+/** `Qwen/Qwen2.5-0.5B-Instruct` -> `Qwen2.5-0.5B-Instruct` (last path segment). */
+function shortModel(model: string | null): string | null {
+  if (!model) return null
+  const trimmed = model.trim()
+  if (!trimmed) return null
+  return trimmed.split('/').filter(Boolean).pop() ?? trimmed
+}
+
+/**
+ * `quantization` is typed `unknown | null` because two shapes are in the wild
+ * (string and `{bits}`). Read only what is understood; never render JSON at the
+ * user from a payload we do not control.
+ */
+function quantLabel(q: unknown): string | null {
+  if (typeof q === 'string') return q.trim() || null
+  if (q && typeof q === 'object' && 'bits' in q) {
+    const bits = (q as { bits?: unknown }).bits
+    if (typeof bits === 'number' && Number.isFinite(bits)) return `${bits}-bit`
+  }
+  return null
+}
+
+const pctLabel = (value: number | null | undefined): string | null =>
+  value == null ? null : `${Math.round(value)}%`
+
+const msLabel = (value: number | null | undefined): string | null => {
+  if (value == null || value <= 0) return null
+  return value >= 1000 ? `${(value / 1000).toFixed(1)}s` : `${Math.round(value)}ms`
+}
+
+/** 494_000_000 -> `0.5B` (parameters are only ever shown formatted). */
+const paramsLabel = (value: number | null | undefined): string | null => {
+  if (value == null || value <= 0) return null
+  if (value >= 1e9) return `${(value / 1e9).toFixed(1)}B`
+  if (value >= 1e6) return `${Math.round(value / 1e6)}M`
+  if (value >= 1e3) return `${Math.round(value / 1e3)}K`
+  return String(value)
+}
+
 export function StatusBar() {
   const { health, healthLegacy, connectionStatus } = useLiveStatus()
   const recentFailures = useApiMonitor((s) => s.recentFailures)
@@ -148,11 +187,30 @@ export function StatusBar() {
   const isOffline = connectionStatus === 'offline'
   const isOnline = connectionStatus === 'connected' && health !== null
 
+  // Rich strip — derived once, rendered as chips. Everything here is a
+  // *summary*: the raw numbers live in the expanded row and the monitoring page.
+  const engine = shortModel(health?.model_type ?? null)
+  const quant = quantLabel(health?.quantization ?? null)
+  const device = health?.device ?? null
+  const params = paramsLabel(health?.num_parameters)
+  const cpu = pctLabel(health?.cpu_percent)
+  const ram = pctLabel(health?.memory_percent)
+  const p50 = msLabel(health?.avg_latency_ms)
+  const p95 = msLabel(health?.p95_latency_ms)
+  const rpm = health?.requests_per_minute ?? 0
+  const pool = health?.training_pool ?? null
+  const activeJobs = pool?.active_jobs ?? 0
+  // The health summary is a sentence that frequently already names the model —
+  // never say it twice on one line.
+  const showEngine = Boolean(engine) && !statusText.includes(engine ?? '')
+
   return (
-    <div className="sl-status-bar" role="status" aria-live="polite" aria-atomic="true">
+    <div className="sl-status-bar">
       {/* Compact row — always visible */}
       <div className="sl-status-bar-row">
-        {/* Left: Status dot + text */}
+        {/* Left: Status dot + text. The text span — and only that span — is the
+            live region: announcing the whole bar would re-read every metric on
+            each health tick. */}
         <Link
           href="/settings"
           prefetch={false}
@@ -160,14 +218,31 @@ export function StatusBar() {
           aria-label="System health"
         >
           <span className={cn('sl-status-bar-dot', dotColor)} aria-hidden="true" />
-          <span className="truncate max-w-[180px] sm:max-w-none" title={statusText}>
+          <span
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+            className="truncate max-w-[180px] sm:max-w-none"
+            title={statusText}
+          >
             {statusText}
           </span>
           {isOnline && <span className="sl-badge sl-badge-success">live</span>}
         </Link>
 
-        {/* Right: Actions + metrics */}
+        {/* Right: identity · failures · live metrics · controls */}
         <div className="sl-status-bar-actions">
+          {/* Engine identity — stable while the metrics move, so it leads. */}
+          {showEngine && (
+            <span
+              className="sl-badge sl-badge-secondary sl-status-bar-engine"
+              title={[engine, quant, device].filter(Boolean).join(' · ')}
+            >
+              {engine}
+              {quant && <span className="opacity-70">{quant}</span>}
+            </span>
+          )}
+
           {/* Failure count */}
           {hasFailures && (
             <Tooltip>
@@ -236,17 +311,73 @@ export function StatusBar() {
             </span>
           )}
 
-          {/* Token rate or inference count */}
-          {isOnline && health?.tokens_per_sec ? (
-            <span className="sl-status-bar-metric tabular-nums">
-              <span className="h-1 w-1 rounded-full bg-success animate-pulse" aria-hidden="true" />
-              {health.tokens_per_sec.toFixed(0)} tok/s
-            </span>
-          ) : isOnline && health?.inference_count != null ? (
-            <span className="sl-status-bar-metric tabular-nums">
-              {health.inference_count} req{health.inference_count !== 1 ? 's' : ''}
-            </span>
-          ) : null}
+          {/* Live metrics — one cluster, hairline-separated from identity.
+              Values only; the sentence lives on the left, the full breakdown
+              in the expanded row. */}
+          {isOnline && (
+            <div className="sl-status-bar-cluster" role="group" aria-label="Live metrics">
+              {health?.is_inferencing && (
+                <span className="sl-badge sl-badge-primary" title="Generating">
+                  <span
+                    className="h-1 w-1 rounded-full bg-primary animate-pulse"
+                    aria-hidden="true"
+                  />
+                  gen
+                </span>
+              )}
+
+              {health?.tokens_per_sec ? (
+                <span
+                  className="sl-status-bar-metric tabular-nums"
+                  title={`${health.tokens_per_sec.toFixed(1)} tokens/second`}
+                >
+                  <span
+                    className="h-1 w-1 rounded-full bg-success animate-pulse"
+                    aria-hidden="true"
+                  />
+                  {health.tokens_per_sec.toFixed(0)} tok/s
+                </span>
+              ) : health?.inference_count != null ? (
+                <span
+                  className="sl-status-bar-metric tabular-nums"
+                  title={`${health.inference_count} requests served`}
+                >
+                  {health.inference_count} req{health.inference_count !== 1 ? 's' : ''}
+                </span>
+              ) : null}
+
+              {p95 && (
+                <span
+                  className="sl-status-bar-metric tabular-nums"
+                  title={`Latency p95${p50 ? ` · avg ${p50}` : ''}`}
+                >
+                  {p95} p95
+                </span>
+              )}
+              {cpu && (
+                <span className="sl-status-bar-metric tabular-nums" title="Host CPU">
+                  {cpu} CPU
+                </span>
+              )}
+              {ram && (
+                <span className="sl-status-bar-metric tabular-nums" title="Host memory">
+                  {ram} RAM
+                </span>
+              )}
+              {activeJobs > 0 && (
+                <span
+                  className="sl-status-bar-metric tabular-nums"
+                  title={`Training ${activeJobs} of ${pool?.max_workers ?? '?'} workers`}
+                >
+                  <span
+                    className="h-1 w-1 rounded-full bg-primary animate-pulse"
+                    aria-hidden="true"
+                  />
+                  {activeJobs} train
+                </span>
+              )}
+            </div>
+          )}
 
           {/* What's new — always visible */}
           <button
@@ -312,22 +443,110 @@ export function StatusBar() {
       {/* Expanded row — details */}
       {expanded && (
         <div className="sl-status-bar-details">
+          {/* Engine */}
           <div className="sl-status-bar-detail-group">
             <span className="sl-status-bar-detail-label">Model</span>
-            <span className="sl-status-bar-detail-value">{health?.model_type || '—'}</span>
+            <span className="sl-status-bar-detail-value">
+              {engine || health?.model_type || '—'}
+            </span>
           </div>
+          {quant && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Quant</span>
+              <span className="sl-status-bar-detail-value">{quant}</span>
+            </div>
+          )}
+          {device && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Device</span>
+              <span className="sl-status-bar-detail-value">{device}</span>
+            </div>
+          )}
+          {params && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Params</span>
+              <span className="sl-status-bar-detail-value tabular-nums">{params}</span>
+            </div>
+          )}
+
+          {/* Performance */}
+          {health?.tokens_per_sec ? (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Speed</span>
+              <span className="sl-status-bar-detail-value tabular-nums">
+                {health.tokens_per_sec.toFixed(0)} tok/s
+              </span>
+            </div>
+          ) : null}
+          {p50 && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Avg</span>
+              <span className="sl-status-bar-detail-value tabular-nums">{p50}</span>
+            </div>
+          )}
+          {p95 && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">P95</span>
+              <span className="sl-status-bar-detail-value tabular-nums">{p95}</span>
+            </div>
+          )}
+          {rpm > 0 && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Rate</span>
+              <span className="sl-status-bar-detail-value tabular-nums">{rpm}/min</span>
+            </div>
+          )}
           <div className="sl-status-bar-detail-group">
             <span className="sl-status-bar-detail-label">Requests</span>
             <span className="sl-status-bar-detail-value tabular-nums">
-              {health?.inference_count ?? '—'}
+              {health?.request_count ?? '—'}
             </span>
           </div>
+          <div className="sl-status-bar-detail-group">
+            <span className="sl-status-bar-detail-label">Errors</span>
+            <span
+              className={cn(
+                'sl-status-bar-detail-value tabular-nums',
+                (health?.error_count ?? 0) > 0 && 'text-destructive',
+              )}
+            >
+              {health?.error_count ?? '—'}
+            </span>
+          </div>
+
+          {/* Host */}
+          {cpu && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">CPU</span>
+              <span className="sl-status-bar-detail-value tabular-nums">{cpu}</span>
+            </div>
+          )}
+          {ram && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Memory</span>
+              <span className="sl-status-bar-detail-value tabular-nums">{ram}</span>
+            </div>
+          )}
           <div className="sl-status-bar-detail-group">
             <span className="sl-status-bar-detail-label">Uptime</span>
             <span className="sl-status-bar-detail-value tabular-nums">
               {health?.uptime_seconds ? formatDuration(health.uptime_seconds) : '—'}
             </span>
           </div>
+          {health?.health_score != null && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Score</span>
+              <span className="sl-status-bar-detail-value tabular-nums">{health.health_score}</span>
+            </div>
+          )}
+          {activeJobs > 0 && pool && (
+            <div className="sl-status-bar-detail-group">
+              <span className="sl-status-bar-detail-label">Training</span>
+              <span className="sl-status-bar-detail-value tabular-nums">
+                {activeJobs}/{pool.max_workers}
+              </span>
+            </div>
+          )}
           {modelReadiness && !modelReadiness.ready && (
             <div className="sl-status-bar-detail-group">
               <span className="sl-status-bar-detail-label">Loading</span>
