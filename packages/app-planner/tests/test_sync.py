@@ -95,3 +95,65 @@ def test_sync_does_not_move_card_with_matching_column(store):
     assert added == 0
     assert updated == 0
     assert total == 1
+
+
+# ── Twin-note idempotency (card 08baf13f) ───────────────────────────────
+#
+# Duplicate journal notes with the SAME title and CONFLICTING statuses made
+# every sync run re-apply both twins: cards flipped column on each run and
+# the count never returned to zero ("0 new, 2 moved" forever).
+
+
+def test_sync_twin_notes_add_one_card_and_converge(store):
+    store.create_note("Twin task", status="wip")
+    store.create_note("Twin task", status="done")
+    added, updated, total = store.sync()
+    assert added == 1, "duplicate-title notes must produce ONE card"
+    assert total == 1
+    assert store.sync()[:2] == (0, 0), "second run must be net-zero"
+
+
+def test_sync_twin_winner_is_latest_edit(store):
+    wip = store.create_note("Rotating twin", status="wip")
+    store.create_note("Rotating twin", status="done")
+    # The wip twin is edited LAST — latest human intent must win.
+    store.update_note(wip.id, status="wip")
+    added, updated, total = store.sync()
+    assert (added, updated) == (1, 0), "card is created directly in the winner's column"
+    assert store.list_cards()[0].column == "wip"
+    for _ in range(3):
+        assert store.sync()[:2] == (0, 0), "card must never flip again"
+    assert store.list_cards()[0].column == "wip"
+
+
+def test_sync_twin_notes_never_duplicate_board_ids(store):
+    store.create_note("Dup-id twin", status="wip")
+    store.create_note("Dup-id twin", status="done")
+    for _ in range(3):
+        store.sync()
+    ids = [c.id for c in store.list_cards()]
+    assert len(ids) == len(set(ids)), "sync must not mint duplicate card ids"
+
+
+def test_legacy_sync_twin_notes_converges(tmp_path):
+    """The legacy NoteStore/KanbanStore branch (what the GUI --sync runs)."""
+    from app_planner.core import Note
+    from app_planner.kanban import KanbanStore
+    from app_planner.sync import sync_notes_to_board
+
+    kanban = KanbanStore(tmp_path / "board")
+    kanban.init_board()
+    wip = Note(id="n-1", title="Legacy twin", status="wip", updated_at="2026-10-01T00:00:00")
+    done = Note(id="n-2", title="Legacy twin", status="done", updated_at="2026-10-07T00:00:00")
+
+    class _StubNotes:
+        def list_notes(self, limit: int = 50):
+            return [wip, done]
+
+    added, updated, total = sync_notes_to_board(_StubNotes(), kanban)
+    assert added == 1, "legacy path must collapse twin notes to one card"
+    assert total == 1
+    board = kanban.load_board()
+    assert board.cards[0].column == "done", "latest-edited twin decides the column"
+    added, updated, total = sync_notes_to_board(_StubNotes(), kanban)
+    assert (added, updated) == (0, 0), "legacy rerun must be net-zero"
