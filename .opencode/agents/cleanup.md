@@ -148,9 +148,9 @@ scripts/                # Utility scripts
 ```
 
 Note: this diagram shows the `packages/core-py` tree; check the
-worktree's layout — repo-root `domain/` and `tests/` currently coexist
-with `packages/core-py/domains/` and `packages/core-py/tests/`
-(reconciliation decision D4 pending).
+worktree's layout — repo-root `domain/` and `packages/core-py/domains/`
+currently coexist (reconciliation decision D4 pending). Tests are
+consolidated at repo-root `tests/` — one test root only.
 
 ## Key Files
 

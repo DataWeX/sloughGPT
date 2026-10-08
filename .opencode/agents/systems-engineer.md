@@ -192,31 +192,31 @@ Targeted tests (run from the target worktree root; make targets are not availabl
 
 ```bash
 # Kernel / init / devices
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_shell_runtime.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_shell_runtime.py -x -q
 
 # VM
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_vm*.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_vm*.py -x -q
 
 # VM devices
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_vm_devices*.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_vm_devices*.py -x -q
 
 # Block device
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_disk_block_device.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_disk_block_device.py -x -q
 
 # Shell TUI
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_shell_tui_repl.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_shell_tui_repl.py -x -q
 
 # Pane engine
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_shell_pane.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_shell_pane.py -x -q
 
 # All shell tests
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_shell_*.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_shell_*.py -x -q
 ```
 
 Before completion:
 
 ```bash
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_shell_*.py -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_shell_*.py -q
 ```
 
 ### Full Verification Checklist
@@ -916,7 +916,7 @@ class TestClassA:
         assert "error" in result.error.lower()
 ```
 
-**Test file location**: `packages/core-py/tests/test_<module>.py`
+**Test file location**: `tests/core-py/test_<module>.py`
 **Test class pattern**: `class Test<Feature>:`
 **Test method pattern**: `def test_<behavior>(self):`
 

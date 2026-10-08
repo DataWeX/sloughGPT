@@ -79,8 +79,8 @@ packages/strui/         # Component library
 ```
 
 Path note: check the target worktree's layout — repo-root `domain/` and
-`tests/` currently coexist with `packages/core-py/domains/` and
-`packages/core-py/tests/` (reconciliation decision D4 pending).
+`packages/core-py/domains/` currently coexist (reconciliation decision D4
+pending). Tests are consolidated at repo-root `tests/` — one test root only.
 
 ## Key Commands
 

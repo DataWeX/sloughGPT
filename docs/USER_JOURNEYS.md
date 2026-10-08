@@ -1,6 +1,6 @@
 # User Journeys
 
-End-to-end user flows tested via Playwright in `packages/core-py/tests/test_user_journeys.py`.
+End-to-end user flows tested via Playwright in `tests/core-py/test_user_journeys.py`.
 
 ## Tested Journeys
 
@@ -82,13 +82,13 @@ The following routes have `page.tsx` files but are not covered by Playwright tes
 
 ```bash
 # Full suite
-.venv/bin/python -m pytest packages/core-py/tests/test_user_journeys.py -x -v
+.venv/bin/python -m pytest tests/core-py/test_user_journeys.py -x -v
 
 # Single journey class
-.venv/bin/python -m pytest packages/core-py/tests/test_user_journeys.py::TestDatasetsImport -v
+.venv/bin/python -m pytest tests/core-py/test_user_journeys.py::TestDatasetsImport -v
 ```
 
-Results are saved to `packages/core-py/tests/test_results/user_journey_results.json`
+Results are saved to `tests/core-py/test_results/user_journey_results.json`
 (written by `Path(__file__).parent / "test_results"` — this doc previously said
 `tests/test_results/`, which is not a path the code ever writes).
 

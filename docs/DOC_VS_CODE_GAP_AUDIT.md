@@ -21,7 +21,7 @@ Three sources, cross-referenced mechanically:
 2. **Doc claims** — endpoint tables in `docs/routers.md`, count claims in
    `docs/API.md`, page/router counts in `docs/PRODUCT_ENGINEERING.md`.
 3. **Test coverage** — per-router file coverage across `tests/server/` and
-   `apps/api/server/tests/`. (Runtime ping coverage exists separately:
+   `tests/api-server/`. (Runtime ping coverage exists separately:
    `tests/server/test_endpoint_registry.py`, deselected `-m slow`.)
 
 Sample dead rows were grep-verified by hand: `/session/list`, `/models/huggingface`
@@ -119,7 +119,7 @@ as current.
 | `PRODUCT_ENGINEERING.md` r15  | consciousness "not wired"                        | `ConsciousnessProcessor` exported from `domain/models/__init__.py`                                                                              |
 | `PRODUCT_ENGINEERING.md` r16  | voice "router bypasses domain"                   | **0** `_internal` in `voice.py`/`phoneme.py`                                                                                                    |
 | `PRODUCT_ENGINEERING.md` l319 | `_internal` "remains only in `shell.py`/`vm.py`" | **11** routers import `domain.*_internal.*`                                                                                                     |
-| `USER_JOURNEYS.md`            | results → `tests/test_results/`                  | code writes `packages/core-py/tests/test_results/`                                                                                              |
+| `USER_JOURNEYS.md`            | results → `tests/test_results/`                  | code writes `tests/core-py/test_results/`                                                                                                       |
 | this document, above          | G1/G2 open                                       | parity script **exit 0**                                                                                                                        |
 
 Seven of eight resolve the same way — **the docs lag the code**. The exception
@@ -288,7 +288,7 @@ reporter now surfaces it instead of leaving it to be dug out of the JSON.
 
 ### Journeys
 
-`packages/core-py/tests/test_results/user_journey_results.json`
+`tests/core-py/test_results/user_journey_results.json`
 (2026-09-29 12:07): **46/46 passed** — but **33 are presence checks**
 (19 `nav_*`, 6 `*_loads`, 8 `redirect__*`); only 3 are genuine end-to-end
 (`chat_type_message`, `datasets_kaggle_import_success`,

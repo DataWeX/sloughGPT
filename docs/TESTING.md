@@ -4,10 +4,10 @@ This document covers the testing infrastructure for sloughGPT across both the Py
 
 ## Test Overview
 
-| Stack    | Framework                      | Location                  | Run Command                                             |
-| -------- | ------------------------------ | ------------------------- | ------------------------------------------------------- |
-| Frontend | Vitest + React Testing Library | `apps/web/`               | `cd apps/web && npm test`                               |
-| Backend  | pytest                         | `packages/core-py/tests/` | `cd packages/core-py && python -m pytest -n auto -x -q` |
+| Stack    | Framework                      | Location         | Run Command                                            |
+| -------- | ------------------------------ | ---------------- | ------------------------------------------------------ |
+| Frontend | Vitest + React Testing Library | `apps/web/`      | `cd apps/web && npm test`                              |
+| Backend  | pytest                         | `tests/core-py/` | `cd <repo root> && python -m pytest tests/core-py/ -q` |
 
 ## Frontend Testing
 
@@ -155,10 +155,10 @@ python -m pytest -v tests/
 
 ### Test File Convention
 
-Tests live in `packages/core-py/tests/`:
+Tests live in `tests/core-py/`:
 
 ```
-packages/core-py/tests/
+tests/core-py/
 ├── test_training_infrastructure.py
 ├── test_training_export_presets.py
 ├── test_inference.py

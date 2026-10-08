@@ -66,9 +66,9 @@
    > (`scripts/run_journey_tests.py` — "Arken journey test runner for sloughGPT",
    > `packages/arken/`), and `packages/voyager/tests/test_sloughgpt_journeys.py`
    > **does not exist**. The 8 journey names above are accurate. Playwright
-   > journey coverage lives in `packages/core-py/tests/test_user_journeys.py`
+   > journey coverage lives in `tests/core-py/test_user_journeys.py`
    > (75 collected / 46 recorded), writing to
-   > `packages/core-py/tests/test_results/user_journey_results.json`.
+   > `tests/core-py/test_results/user_journey_results.json`.
 9. ~~**Wire Consciousness to inference** — Connect `domain/consciousness/` cognitive engine to the inference pipeline.~~ **Done** — `SloEngine._init_consciousness()` loads consciousness engine. `SloEngine.generate()` processes responses through `ConsciousnessEngine.process()` post-generation. Configurable via `ConsciousnessConfig.level`.
 10. ~~**Consolidate training loops** — Three copies of the forward/loss/backward/grad-clip/optimize loop exist (`train_pipeline.py`, `chat_trainer.py`, `consciousness/training.py`). Consolidate into `SloughGPTTrainer` with dataset adapters.~~ **Done** — `training_handler.py` is the single composable training engine with protocols (BatchSampler, GradientHandler, LossTracker, CheckpointSaver) and implementations (RandomBlockSampler, PermutationSampler, ChatPairSampler, DirectGradientHandler, AccumulationGradientHandler, RawLossTracker, EMALossTracker, SoulCheckpointSaver, NpzCheckpointSaver). All three training files now import from `training_handler.py`. One gap: `domain/consciousness/training.py` was deleted in the layout refactor and never re-created, so the router's `_get_trainer()` still imports `domain.consciousness.training` and 500s on `/status` and `/train/*`. Restored as a dataset adapter in goal 15.
 

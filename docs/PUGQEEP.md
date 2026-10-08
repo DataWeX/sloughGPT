@@ -453,13 +453,13 @@ except Exception as e:
 ```bash
 # All pugqeep tests
 PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
-  -m pytest packages/core-py/tests/test_pugqeep*.py packages/core-py/tests/test_producer_consumer.py -q
+  -m pytest tests/core-py/test_pugqeep*.py tests/core-py/test_producer_consumer.py -q
 
 # Specific suites
 PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
-  -m pytest packages/core-py/tests/test_pugqeep_point_interface.py -q  # Point protocol + views
+  -m pytest tests/core-py/test_pugqeep_point_interface.py -q  # Point protocol + views
 PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
-  -m pytest packages/core-py/tests/test_pugqeep_parallel.py -q         # Parallel batch ops
+  -m pytest tests/core-py/test_pugqeep_parallel.py -q         # Parallel batch ops
 PYTHONPATH="$PWD/packages/core-py" /home/mana/miniconda3/envs/sloughgpt/bin/python \
-  -m pytest packages/core-py/tests/test_pugqeep_pipe.py -q             # Bounded execution: Pipe/ProcessQueue
+  -m pytest tests/core-py/test_pugqeep_pipe.py -q             # Bounded execution: Pipe/ProcessQueue
 ```

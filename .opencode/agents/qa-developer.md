@@ -30,12 +30,12 @@ core Python infrastructure in `domain/`.
   context core, model server.
 - `domain/feedback/_internal/` — LoRA, DPO, meta weights.
 - `domain/multimodal/_internal/` — vision, speech, engine.
-- `packages/core-py/tests/` — unit and integration tests.
+- `tests/core-py/` — unit and integration tests.
 
 Layout note: check the target worktree's layout — `domain/…` and
-`packages/core-py/domains/…` currently coexist (repo-root `tests/` and
-`packages/core-py/tests/` exist too), until reconciliation decision D4
-executes.
+`packages/core-py/domains/…` currently coexist, until reconciliation
+decision D4 executes. Tests are consolidated at repo-root `tests/`
+(`tests/core-py/`, `tests/api-server/`, `tests/cli/`) — one test root only.
 
 Out of scope unless asked: frontend, CLI UX, docs.
 
@@ -45,7 +45,7 @@ Out of scope unless asked: frontend, CLI UX, docs.
 
 - Run the smallest useful verification first:
   - `/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile <file>` for syntax
-  - `cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/<file>.py -x -q` for tests
+  - `cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/<file>.py -x -q` for tests
 - Read failing output. Identify the smallest reproducible case.
 - If a mock appears not to take effect — assertions see real rows, a live
   singleton, or live/empty data where a fake was installed — check the patch
@@ -73,7 +73,7 @@ Out of scope unless asked: frontend, CLI UX, docs.
 
 - Re-run the exact failing test.
 - Run a targeted regression check on nearby tests:
-  - `cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<area>*.py -q`
+  - `cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_<area>*.py -q`
 - Run `/home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile` on every file you edited.
 - Do not run the full 1700+ test suite unless the change touches
   foundational infrastructure.
@@ -108,15 +108,15 @@ Out of scope unless asked: frontend, CLI UX, docs.
 /home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile domain/<module>/_internal/file.py
 
 # Single test file — run from the target worktree root; PYTHONPATH prefix is mandatory
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_file.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_file.py -x -q
 
 # Full core suite (pytest.ini testpaths apply; addopts already excludes slow tests; former fast-target xdist flags dropped — pytest-xdist is not in the conda env)
 cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest
 
 # Targeted area
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_training_*.py -q
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_inference_*.py -q
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_model_*.py -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_training_*.py -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_inference_*.py -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_model_*.py -q
 
 # Patch-target drift — @patch targets production no longer reads (exit 1 if any)
 cd <worktree> && PYTHONNOUSERSITE=1 /home/mana/miniconda3/envs/sloughgpt/bin/python scripts/test-doctor.py --mock-drift

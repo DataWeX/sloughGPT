@@ -629,5 +629,5 @@ cd apps/api && .venv/bin/python -m uvicorn server.main:app --port 8000
 .venv/bin/python -m apps.cli.src.cli
 
 # Tests
-PYTHONPATH=packages/core-py .venv/bin/python -m pytest packages/core-py/tests/test_file.py -x -v
+PYTHONPATH=packages/core-py .venv/bin/python -m pytest tests/core-py/test_file.py -x -v
 ```

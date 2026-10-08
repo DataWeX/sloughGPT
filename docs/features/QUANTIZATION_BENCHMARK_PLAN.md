@@ -248,7 +248,7 @@ End-to-end stack benchmark in `tests/test_slonet_kv_benchmark.py`:
   distinct sessions stay isolated, and missing session_id stays fresh
   (3 new tests)
 
-Verified in `apps/api/server/tests/test_health_router.py`:
+Verified in `tests/api-server/test_health_router.py`:
 
 - `kv_sessions` present in detailed health; provider stats reflected in
   `/health`; disabled-by-default absence (3 new tests)
@@ -259,7 +259,7 @@ Lifecycle wiring:
   `clear_session()` on the slonet provider — best-effort, guarded.
 - Model unload (controllers/models.py) calls `clear_all_sessions()` so
   cached keys from the old model are dropped.
-- Verified in `apps/api/server/tests/test_inference_router.py`: delete
+- Verified in `tests/api-server/test_inference_router.py`: delete
   clears provider KV (2 new tests)
 
 Verified in `apps/web/lib/system-controller.test.ts`:
@@ -302,7 +302,7 @@ grow monotonically (0→12→23→34) and KV-reused output is bit-identical to
 fresh recompute (100% consistency) — reuse preserves generation quality.
 Larger max-tokens runs show stronger per-turn speedup (up to ~2.2x).
 
-Verified in `packages/core-py/tests/test_benchmark_kv_reuse.py` (11 tests):
+Verified in `tests/core-py/test_benchmark_kv_reuse.py` (11 tests):
 
 - `prefix_match`: identical, partial, prefix, empty, disjoint (5)
 - Benchmark invariants on a real 2-turn run: structure, prompt growth,
@@ -350,7 +350,7 @@ argmax whenever `temperature < 1e-6` (slonet.py). Direct model calls were
 deterministic because the benchmark passed `top_p=None`; the server path
 was not. Stack consistency went from 33.3%→100%.
 
-`packages/core-py/tests/test_benchmark_kv_reuse.py` now has 15 tests
+`tests/core-py/test_benchmark_kv_reuse.py` now has 15 tests
 (+4): stack structure, stack monotonic reuse growth, stack warm/cold
 consistency, and a `_sample_from_logits` greedy regression asserting
 temp-0 + top_p=0.9 returns the deterministic argmax.
@@ -384,7 +384,7 @@ reused. Reuse growth and consistency (0→12→23→34, 100%) are identical
 to the batch stack and direct modes — cross-turn KV reuse behaves the
 same under token-by-token SSE generation.
 
-`packages/core-py/tests/test_benchmark_kv_reuse.py` now has 20 tests
+`tests/core-py/test_benchmark_kv_reuse.py` now has 20 tests
 (+5): streaming stack structure, prompt growth (history accumulates),
 monotonic reuse growth, bit-identical warm/cold streaming, and stack
 reuse = prior turn's cached prefix (`prompt_len_turn0 + max_tokens`).
@@ -426,7 +426,7 @@ All three modes report identical reuse growth to float32 (0→12→23→34)
 outputs differ from float32 outputs (int8 rounding changes logits), an
 expected quality trade-off tracked separately.
 
-`packages/core-py/tests/test_benchmark_kv_reuse.py` now has 32 tests
+`tests/core-py/test_benchmark_kv_reuse.py` now has 32 tests
 (+5 for KV memory accounting): empty state → 0 KiB, int8 memory is
 exactly 3.2x smaller at head_dim=16, memory grows with turn length,
 int8 benchmark stays below float32 at matched turns, and stack-mode rows
@@ -461,7 +461,7 @@ now seeds numpy (`np.random.seed(0)`) before weight init, so these agreement
 figures — which depend on the random init — are reproducible run to run. The
 command exits 1 with a warning if overall agreement drops below 50%.
 
-`packages/core-py/tests/test_benchmark_kv_reuse.py` now has 39 tests
+`tests/core-py/test_benchmark_kv_reuse.py` now has 39 tests
 (+7 for quality): structure, length bounds, turn-0 perfect agreement,
 ≥90% overall agreement, prefix ≤ generated bounds, and both `--compare-kv`
 exit paths (0 on healthy agreement, 1 below the floor).
@@ -501,7 +501,7 @@ lone-session run would produce. Measured with 2 sessions (batch and streaming):
 | `--sessions 2`          | [0,12,23,34] × 2 | 100.0%      | OK        |
 | `--sessions 2 --stream` | [0,12,23,34] × 2 | 100.0%      | OK        |
 
-`packages/core-py/tests/test_benchmark_kv_reuse.py` now has 44 tests
+`tests/core-py/test_benchmark_kv_reuse.py` now has 44 tests
 (+5 for sessions): structure + `isolation_ok`, per-session monotonic reuse,
 100% interleaved consistency, session-0 reuse identical to a lone-session
 stack run (the cross-wiring detector), and streaming isolation.
@@ -758,13 +758,13 @@ Overall: 7/7 tests passed
 
 ## Files to Create/Modify
 
-| File                                                        | Action                 | Purpose                                                                                                                                                                                                                          |
-| ----------------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scripts/benchmark_quantization.py`                         | CREATED                | Runnable benchmark (tiny in-process model by default; `--model <cached-id>` for the real path); `--quick`, `--json`, `--report`, `--bits 8,4`, `--validate`, `--per-layer`, `--models <a,b>`, `--csv` flags                      |
-| `scripts/benchmark_quantization_report.md`                  | CREATED via `--report` | Auto-generated markdown report (config header, per-test metric tables, notes)                                                                                                                                                    |
-| `packages/core-py/tests/test_quantization_benchmark.py`     | CREATED                | Synthetic-weight unit tests (MSE/cosine, compression, C-kernel speed)                                                                                                                                                            |
-| `packages/core-py/tests/test_quantization_benchmark_e2e.py` | CREATED                | End-to-end tiny-model run gates (7/7 pass, ~4x/~8x compression, logit-cosine floors, determinism, JSON + markdown report shape, multi-precision comparison, validate mode, cached-model discovery, multi-model parse/comparison) |
-| `docs/features/QUANTIZATION_BENCHMARK_PLAN.md`              | MODIFIED               | This plan                                                                                                                                                                                                                        |
+| File                                               | Action                 | Purpose                                                                                                                                                                                                                          |
+| -------------------------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scripts/benchmark_quantization.py`                | CREATED                | Runnable benchmark (tiny in-process model by default; `--model <cached-id>` for the real path); `--quick`, `--json`, `--report`, `--bits 8,4`, `--validate`, `--per-layer`, `--models <a,b>`, `--csv` flags                      |
+| `scripts/benchmark_quantization_report.md`         | CREATED via `--report` | Auto-generated markdown report (config header, per-test metric tables, notes)                                                                                                                                                    |
+| `tests/core-py/test_quantization_benchmark.py`     | CREATED                | Synthetic-weight unit tests (MSE/cosine, compression, C-kernel speed)                                                                                                                                                            |
+| `tests/core-py/test_quantization_benchmark_e2e.py` | CREATED                | End-to-end tiny-model run gates (7/7 pass, ~4x/~8x compression, logit-cosine floors, determinism, JSON + markdown report shape, multi-precision comparison, validate mode, cached-model discovery, multi-model parse/comparison) |
+| `docs/features/QUANTIZATION_BENCHMARK_PLAN.md`     | MODIFIED               | This plan                                                                                                                                                                                                                        |
 
 ---
 

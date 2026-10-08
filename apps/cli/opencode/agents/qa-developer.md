@@ -30,19 +30,21 @@ core Python infrastructure in `packages/core-py/domains/`.
   context core, model server.
 - `packages/core-py/domains/feedback/` — LoRA, DPO, meta weights.
 - `packages/core-py/domains/multimodal/` — vision, speech, engine.
-- `packages/core-py/tests/` — unit and integration tests.
+- `tests/core-py/` — unit and integration tests.
 
 Out of scope unless asked: frontend, CLI UX, docs.
 
 ## Workflow
 
 ### 1. Triage
+
 - Run the smallest useful verification first:
   - `python3 -m py_compile <file>` for syntax
-  - `python3 -m pytest packages/core-py/tests/<file>.py -x -q` for tests
+  - `python3 -m pytest tests/core-py/<file>.py -x -q` for tests
 - Read failing output. Identify the smallest reproducible case.
 
 ### 2. Investigate
+
 - Read the failing test and the source file it exercises.
 - Search for related call sites:
   - `grep -r "function_name" packages/core-py/domains/`
@@ -50,20 +52,23 @@ Out of scope unless asked: frontend, CLI UX, docs.
 - Check `infrastructure/` for process/model guards that may change behavior.
 
 ### 3. Fix
+
 - Prefer fixing the root cause, not the symptom.
 - Keep changes minimal. Do not refactor unrelated code.
 - Preserve public APIs and existing test expectations unless they are
   themselves the bug.
 
 ### 4. Verify
+
 - Re-run the exact failing test.
 - Run a targeted regression check on nearby tests:
-  - `python3 -m pytest packages/core-py/tests/test_<area>*.py -q`
+  - `python3 -m pytest tests/core-py/test_<area>*.py -q`
 - Run `python3 -m py_compile` on every file you edited.
 - Do not run the full 1700+ test suite unless the change touches
   foundational infrastructure.
 
 ### 5. Test Coverage
+
 - If the bug had no test, add one in the same directory.
 - Test the failure mode explicitly (error path, edge case, bad input).
 - Use existing test patterns in the file. Do not introduce new frameworks.
@@ -98,9 +103,9 @@ make test-py ARGS="tests/test_file.py -x -q"
 make test-py-fast
 
 # Targeted area
-python3 -m pytest packages/core-py/tests/test_training_*.py -q
-python3 -m pytest packages/core-py/tests/test_inference_*.py -q
-python3 -m pytest packages/core-py/tests/test_model_*.py -q
+python3 -m pytest tests/core-py/test_training_*.py -q
+python3 -m pytest tests/core-py/test_inference_*.py -q
+python3 -m pytest tests/core-py/test_model_*.py -q
 
 # Clear pycache after edits
 find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null

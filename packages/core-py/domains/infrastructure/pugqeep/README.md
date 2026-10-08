@@ -130,13 +130,13 @@ PGQ (facade)
 
 ## Point Types
 
-| Type | How It Works | Best For |
-|------|-------------|----------|
-| `cluster` | Vector quantization (VQ with Lloyd's) | Neural network weights |
-| `linear` | `a*i + b` fit | Smoothly varying weights |
-| `polynomial` | `a*i² + b*i + c` fit | Curved distributions |
-| `periodic` | `a*cos(i) + b*sin(i) + w` | Recurring patterns |
-| `raw` | Base64-encoded original | Incompressible data |
+| Type         | How It Works                          | Best For                 |
+| ------------ | ------------------------------------- | ------------------------ |
+| `cluster`    | Vector quantization (VQ with Lloyd's) | Neural network weights   |
+| `linear`     | `a*i + b` fit                         | Smoothly varying weights |
+| `polynomial` | `a*i² + b*i + c` fit                  | Curved distributions     |
+| `periodic`   | `a*cos(i) + b*sin(i) + w`             | Recurring patterns       |
+| `raw`        | Base64-encoded original               | Incompressible data      |
 
 ## Config
 
@@ -162,5 +162,5 @@ Only `numpy` + Python stdlib. No PyTorch, no sentence-transformers, no Pinecone.
 ## Tests
 
 ```bash
-PYTHONPATH=packages/core-py python3 -m pytest packages/core-py/tests/test_pugqeep.py -v
+PYTHONPATH=packages/core-py python3 -m pytest tests/core-py/test_pugqeep.py -v
 ```

@@ -247,7 +247,7 @@ use.
 
 **Should `packages/core-py` survive?** Yes — as _packaging_, not as a code tree.
 It is the packaging root; deleting it entirely (an alternative) means the root
-`pyproject.toml` must take over publication, and `packages/core-py/tests/` needs
+`pyproject.toml` must take over publication, and `tests/core-py/` needs
 a new home. Recommended: keep `core-py` as a packaging-only shell now, retire it
 once the tree is empty.
 

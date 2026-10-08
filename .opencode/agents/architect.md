@@ -52,7 +52,7 @@ After each change:
 
 ```bash
 /home/mana/miniconda3/envs/sloughgpt/bin/python -m py_compile <file>
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_<module>.py -x -q
 ```
 
 Before completion:

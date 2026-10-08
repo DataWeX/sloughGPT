@@ -357,26 +357,26 @@
 
 ## Precision Comparison
 
-| Metric | int8 | int4 |
-|--------|------|------ |
-| Gen geomean | 1.35x | 0.77x |
-| Prompt geomean | 1.47x | 0.83x |
-| Temp geomean | 1.44x | 0.97x |
-| Weight compression | 4.0x | 8.0x |
-| Logit cosine | 0.9996 | 0.9208 |
-| Token agreement | 0.01 | 0.0 |
-| PPL ratio (Q/NQ) | 1.00 | 1.00 |
-| Cold start (s) | 0.121s | 0.079s |
-| Warm median (s) | 0.087s | 0.082s |
-| Tests passed | 7/7 | 7/7 |
+| Metric             | int8   | int4   |
+| ------------------ | ------ | ------ |
+| Gen geomean        | 1.35x  | 0.77x  |
+| Prompt geomean     | 1.47x  | 0.83x  |
+| Temp geomean       | 1.44x  | 0.97x  |
+| Weight compression | 4.0x   | 8.0x   |
+| Logit cosine       | 0.9996 | 0.9208 |
+| Token agreement    | 0.01   | 0.0    |
+| PPL ratio (Q/NQ)   | 1.00   | 1.00   |
+| Cold start (s)     | 0.121s | 0.079s |
+| Warm median (s)    | 0.087s | 0.082s |
+| Tests passed       | 7/7    | 7/7    |
 
 ## Recommendations
 
 Best precision per model (score = 0.4*quality + 0.4*compression + 0.2*speed, metrics normalized to the best candidate).
 
 | Model | Precision | Score | Logit cosine | Compression | Gen geomean |
-|-------|-----------|-------|--------------|-------------|-------------|
-| tiny | int4 | 0.883 | 0.9208 | 8.0x | 0.7743x |
+| ----- | --------- | ----- | ------------ | ----------- | ----------- |
+| tiny  | int4      | 0.883 | 0.9208       | 8.0x        | 0.7743x     |
 
 ---
 
@@ -389,32 +389,32 @@ int8 and int4. The headline perplexity ratio is scored over a fixed 94-token
 passage (single teacher-forced forward per model); short-prompt perplexity is
 reported per prompt.
 
-| Metric | int8 | int4 |
-|--------|------|------|
-| Gen geomean | 3.15x | 3.72x |
-| Prompt geomean | 3.01x | 4.48x |
-| Temp geomean | 4.74x | 4.72x |
-| Regression speedup | 10.76x | 4.52x |
-| Weight compression | 4.0x (1884→471 MB) | 8.0x (1884→236 MB) |
-| Logit cosine | 0.9868 (floor 0.95) | 0.8366 (floor 0.85) |
-| Token agreement | 7% | 2.5% |
-| **PPL ratio (Q/NQ, 94-token passage)** | **1.02** | **2.58** |
-| Cold start (generation, s) | NQ 18.0 / Q 3.0 | NQ 16.6 / Q 3.3 |
-| Tests passed | **7/7** | 6/7 |
-| **Recommended** | **int8** | — |
+| Metric                                 | int8                | int4                |
+| -------------------------------------- | ------------------- | ------------------- |
+| Gen geomean                            | 3.15x               | 3.72x               |
+| Prompt geomean                         | 3.01x               | 4.48x               |
+| Temp geomean                           | 4.74x               | 4.72x               |
+| Regression speedup                     | 10.76x              | 4.52x               |
+| Weight compression                     | 4.0x (1884→471 MB)  | 8.0x (1884→236 MB)  |
+| Logit cosine                           | 0.9868 (floor 0.95) | 0.8366 (floor 0.85) |
+| Token agreement                        | 7%                  | 2.5%                |
+| **PPL ratio (Q/NQ, 94-token passage)** | **1.02**            | **2.58**            |
+| Cold start (generation, s)             | NQ 18.0 / Q 3.0     | NQ 16.6 / Q 3.3     |
+| Tests passed                           | **7/7**             | 6/7                 |
+| **Recommended**                        | **int8**            | —                   |
 
 ### Quality detail (per prompt)
 
-| Precision | Prompt | Logit cosine | NQ PPL | Q PPL |
-|-----------|--------|--------------|--------|-------|
-| int8 | "The capital of France is" | 0.9941 | 43.5 | 87.7 |
-| int8 | "def fibonacci(n):" | 0.9777 | 16.4 | 33.4 |
-| int8 | "Once upon a time" | 0.9893 | 10.8 | 118.4 |
-| int8 | "The quick brown fox" | 0.9860 | 8.2 | 51.5 |
-| int4 | "The capital of France is" | 0.9280 | 43.5 | 104.3 |
-| int4 | "def fibonacci(n):" | 0.7270 | 16.4 | 557.3 |
-| int4 | "Once upon a time" | 0.8635 | 10.8 | 480.9 |
-| int4 | "The quick brown fox" | 0.8277 | 8.2 | 2072.0 |
+| Precision | Prompt                     | Logit cosine | NQ PPL | Q PPL  |
+| --------- | -------------------------- | ------------ | ------ | ------ |
+| int8      | "The capital of France is" | 0.9941       | 43.5   | 87.7   |
+| int8      | "def fibonacci(n):"        | 0.9777       | 16.4   | 33.4   |
+| int8      | "Once upon a time"         | 0.9893       | 10.8   | 118.4  |
+| int8      | "The quick brown fox"      | 0.9860       | 8.2    | 51.5   |
+| int4      | "The capital of France is" | 0.9280       | 43.5   | 104.3  |
+| int4      | "def fibonacci(n):"        | 0.7270       | 16.4   | 557.3  |
+| int4      | "Once upon a time"         | 0.8635       | 10.8   | 480.9  |
+| int4      | "The quick brown fox"      | 0.8277       | 8.2    | 2072.0 |
 
 ### Verdict
 
@@ -433,13 +433,13 @@ reported per prompt.
 
 Prior real-model run preserved for reference:
 
-| Metric | int4 | int8 |
-|--------|------|------|
-| Speedup | 1.2-1.6x | 1.7-2.65x |
-| Weight Compression | 8.0x (579→72 MB) | 4.0x (579→145 MB) |
-| Quality (Token Agreement) | 0% | 41% |
-| Tests Passed | 6/7 (int4 quality failed) | 6/7 |
-| Recommended | No (GPT-2) | Yes |
+| Metric                    | int4                      | int8              |
+| ------------------------- | ------------------------- | ----------------- |
+| Speedup                   | 1.2-1.6x                  | 1.7-2.65x         |
+| Weight Compression        | 8.0x (579→72 MB)          | 4.0x (579→145 MB) |
+| Quality (Token Agreement) | 0%                        | 41%               |
+| Tests Passed              | 6/7 (int4 quality failed) | 6/7               |
+| Recommended               | No (GPT-2)                | Yes               |
 
 ---
 
@@ -527,8 +527,7 @@ SLO_QUANT_MODE=symmetric
 - `scripts/benchmark_quantization.py` — Benchmark script (7 tests; `--bits 8|4|8,4`, `--models`, `--quick`, `--json`, `--report`, `--validate`, `--per-layer`, `--csv`, `--baseline`)
 - `quantization_baseline.json` — Committed regression baseline (tiny int8/int4 + Qwen int8 headline metrics; created by `--baseline`, checked by `--validate --baseline`)
 - `.github/workflows/reusable-ci-core.yml` — `quantization-gate` job runs `--validate --bits 8,4 --baseline` on every push
-- `packages/core-py/tests/test_quantization_benchmark.py` — Synthetic-weight unit tests
-- `packages/core-py/tests/test_quantization_benchmark_e2e.py` — End-to-end suite (74 e2e tests + 5 baseline-comparison unit tests)
+- `tests/core-py/test_quantization_benchmark.py` — Synthetic-weight unit tests
+- `tests/core-py/test_quantization_benchmark_e2e.py` — End-to-end suite (74 e2e tests + 5 baseline-comparison unit tests)
 - `docs/features/QUANTIZATION_BENCHMARK_PLAN.md` — Test plan (steps 1-14, complete)
 - `docs/features/QUANTIZATION_BENCHMARK_REPORT.md` — This report
-

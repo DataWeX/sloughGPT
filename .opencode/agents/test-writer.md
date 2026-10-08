@@ -289,12 +289,12 @@ it('renders after load', async () => {
 ### Run
 
 ```bash
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>.py -x -v
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_<module>.py -x -v
 ```
 
 ### File Location
 
-`packages/core-py/tests/test_<module>.py`
+`tests/core-py/test_<module>.py`
 
 ### Pattern
 
@@ -368,7 +368,7 @@ class TestMyModule:
 ### Run
 
 ```bash
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_user_journeys.py -x -v
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_user_journeys.py -x -v
 ```
 
 **Requires:** API on `:8000`, web on `:3000`.
@@ -426,7 +426,7 @@ class TestToolsFlows:
 
 ```bash
 # Python (from the target worktree root)
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>*.py \
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_<module>*.py \
   --cov=domains/<area>/<module> \
   --cov-report=term-missing -q
 

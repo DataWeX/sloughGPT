@@ -38,7 +38,7 @@ the conda python directly.
 /home/mana/miniconda3/envs/sloughgpt/bin/python -c "from domains.<module> import <class>"
 
 # 3. Run unit tests for that module
-cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest packages/core-py/tests/test_<module>.py -x -q
+cd <worktree> && PYTHONPATH="$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" /home/mana/miniconda3/envs/sloughgpt/bin/python -m pytest tests/core-py/test_<module>.py -x -q
 ```
 
 ### For Each Batch of Changes
