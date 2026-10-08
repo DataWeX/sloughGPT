@@ -24,9 +24,14 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      # --ignore-scripts on every npm ci here: npm resolves an install run in
+      # a workspace member to the workspace ROOT, whose "prepare": "husky"
+      # is not on PATH in CI -> `sh -c husky` exit 127, all frontend jobs red
+      # (card 2811cbba). Members declare no own lifecycle scripts; esbuild/swc
+      # binaries ship as optional-dep packages, not install scripts.
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: packages/strui
       - name: Ensure @sloughgpt/strui symlink
         run: |
@@ -50,7 +55,7 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
       - run: npm run test:lib
         working-directory: apps/web
@@ -67,9 +72,9 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
-      - run: npm ci --omit=peer
+      - run: npm ci --ignore-scripts --omit=peer
         working-directory: packages/strui
       - name: Ensure @sloughgpt/strui symlink
         run: |
@@ -109,9 +114,13 @@ jobs:
           cache-dependency-path: |
             apps/web/package-lock.json
             packages/strui/package-lock.json
-      - run: npm ci
+      - run: npm ci --ignore-scripts
         working-directory: apps/web
-      - run: npm ci --omit=peer
+      # --ignore-scripts skipped cypress's binary download (postinstall) —
+      # fetch it explicitly or `npx cypress run` below fails with no binary.
+      - run: npx cypress install
+        working-directory: apps/web
+      - run: npm ci --ignore-scripts --omit=peer
         working-directory: packages/strui
       - name: Ensure @sloughgpt/strui symlink
         run: |
