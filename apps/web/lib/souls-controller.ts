@@ -30,6 +30,12 @@ export interface Soul {
 
 export interface Checkpoint {
   name: string
+  /** Repo-relative address of the exact file this row describes. Two roots
+   *  may hold one filename, so `name` cannot say which file this is: every
+   *  action sends this back to act on the row the user pointed at. Without
+   *  it the server falls back to a name match — first root wins for reads,
+   *  and every root for delete. */
+  path: string
   download_url?: string | null
   soul: string
   loss?: number
@@ -120,7 +126,10 @@ export const soulsController = {
     return { checkpoints }
   },
 
-  async loadCheckpoint(name: string): Promise<{
+  async loadCheckpoint(
+    name: string,
+    path?: string,
+  ): Promise<{
     status: string
     name: string
     soul?: string
@@ -132,6 +141,7 @@ export const soulsController = {
     // Job records store the final save as "models/<stem>_trained.soul" but the
     // route's {name} segment cannot contain "/" — send the bare file name.
     const fileName = name.split('/').pop() || name
+    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
     return apiPost<{
       status: string
       name: string
@@ -140,7 +150,7 @@ export const soulsController = {
       steps?: number
       traits?: Record<string, number>
       path?: string
-    }>(`/training/checkpoints/${encodeURIComponent(fileName)}/load`)
+    }>(`/training/checkpoints/${encodeURIComponent(fileName)}/load${qs}`)
   },
 
   // ── Trait Weights ──
@@ -205,8 +215,16 @@ export const soulsController = {
     return apiPost<{ status: string }>('/souls/weights', weights)
   },
 
-  async deleteCheckpoint(name: string): Promise<{ status: string }> {
-    return apiDelete<{ status: string }>(`/training/checkpoints/${encodeURIComponent(name)}`)
+  async deleteCheckpoint(
+    name: string,
+    path?: string,
+  ): Promise<{ status?: string; deleted?: string[] }> {
+    // `path` narrows the delete to one file; omitted, the server sweeps every
+    // root for that name — the behaviour callers without a row use.
+    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+    return apiDelete<{ status?: string; deleted?: string[] }>(
+      `/training/checkpoints/${encodeURIComponent(name)}${qs}`,
+    )
   },
 
   async getSoul(name: string): Promise<Soul | null> {
@@ -226,9 +244,10 @@ export const soulsController = {
     return apiGet('/souls/stats')
   },
 
-  async checkpointInfo(name: string): Promise<Checkpoint | null> {
+  async checkpointInfo(name: string, path?: string): Promise<Checkpoint | null> {
     try {
-      return await apiGet<Checkpoint>(`/training/checkpoints/${encodeURIComponent(name)}/info`)
+      const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+      return await apiGet<Checkpoint>(`/training/checkpoints/${encodeURIComponent(name)}/info${qs}`)
     } catch (err) {
       _log.debug('Failed to get checkpoint info', {
         error: err instanceof Error ? err.message : String(err),
@@ -237,8 +256,11 @@ export const soulsController = {
     }
   },
 
-  async downloadCheckpoint(name: string): Promise<Blob> {
-    const response = await authFetch(`/training/checkpoints/${encodeURIComponent(name)}/download`)
+  async downloadCheckpoint(name: string, path?: string): Promise<Blob> {
+    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+    const response = await authFetch(
+      `/training/checkpoints/${encodeURIComponent(name)}/download${qs}`,
+    )
     if (!response.ok) throw new Error('Could not download')
     return response.blob()
   },

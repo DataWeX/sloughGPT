@@ -14,17 +14,21 @@ vi.mock('@sloughgpt/strui', () => ({
 import { TrainingTipsCard } from './TrainingTipsCard'
 import type { Checkpoint } from '@/lib/souls-controller'
 
-afterEach(() => { cleanup() })
+afterEach(() => {
+  cleanup()
+})
 
 function makeCheckpoint(overrides: Partial<Checkpoint> = {}): Checkpoint {
-  return { name: 'cp1', soul: 'test', ...overrides }
+  return { name: 'cp1', soul: 'test', path: 'models/auto-training/cp1.soul', ...overrides }
 }
 
 describe('TrainingTipsCard', () => {
   it('renders without crashing with empty checkpoints', () => {
     render(<TrainingTipsCard checkpoints={[]} />)
     expect(screen.getByText('Training tips')).toBeDefined()
-    expect(screen.getByText('Start training to see personalized tips and recommendations.')).toBeDefined()
+    expect(
+      screen.getByText('Start training to see personalized tips and recommendations.'),
+    ).toBeDefined()
   })
 
   it('shows loading skeleton when loading and no checkpoints', () => {
@@ -52,7 +56,7 @@ describe('TrainingTipsCard', () => {
 
   it('shows success when training has converged', () => {
     const checkpoints = Array.from({ length: 6 }, (_, i) =>
-      makeCheckpoint({ loss: 0.5 + i * 0.001 })
+      makeCheckpoint({ loss: 0.5 + i * 0.001 }),
     )
     render(<TrainingTipsCard checkpoints={checkpoints} />)
     expect(screen.getByText(/Training has converged/)).toBeDefined()

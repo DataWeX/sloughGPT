@@ -550,8 +550,11 @@ export const trainingJobsController = {
     })
   },
 
-  async deleteCheckpoint(name: string): Promise<{ success: boolean }> {
-    return apiDelete(`/training/checkpoints/${encodeURIComponent(name)}`)
+  async deleteCheckpoint(name: string, path?: string): Promise<{ success: boolean }> {
+    // `path` is the row's own address: without it the server sweeps every
+    // search root for this name and takes same-named twins with it.
+    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+    return apiDelete(`/training/checkpoints/${encodeURIComponent(name)}${qs}`)
   },
 
   async deleteCheckpointsBatch(names: string[]): Promise<{ deleted: number }> {

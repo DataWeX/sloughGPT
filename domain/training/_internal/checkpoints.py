@@ -91,7 +91,59 @@ def _probe_paths(base: Path, name: str) -> list[Path]:
     return [Path(c) for c in soul_read_candidates(str(base / name))]
 
 
-def find_checkpoint(name: str) -> Path | None:
+def _in_root(resolved: Path, base: Path) -> bool:
+    """*resolved* is a direct child of search root *base*.
+
+    Direct-child, never a string prefix: the roots are flat and ``models/``
+    literally contains ``models/auto-training/``, so a file has to answer to
+    exactly one root's rules — ``models/`` lists only ``*_trained`` while
+    auto-training lists everything. ``str.startswith`` cannot say which root
+    owns a nested file, and it counts ``<root>-evil/…`` as inside.
+    """
+    try:
+        return resolved.parent == base.resolve()
+    except OSError:  # a root that vanished must not take a lookup down with it
+        return False
+
+
+def _owning_root(resolved: Path) -> Path | None:
+    """The one root *resolved* belongs to, or None when it belongs to none."""
+    return next((b for b in ckpt_roots() if _in_root(resolved, b)), None)
+
+
+def _resolve_ref_path(path: str) -> Path | None:
+    """Resolve the ``path`` a listing handed back, confined to one root.
+
+    Absolute or repo-relative both land here; being a direct child of a
+    search root is the whole check. ``None`` means "not a checkpoint we may
+    touch", and callers must NOT fall back to name order on it — falling
+    back would act on a different file than the row the user pointed at,
+    which is the very bug this parameter exists to prevent.
+    """
+    p = Path(path)
+    if not p.is_absolute():
+        p = REPO_ROOT / p
+    try:
+        resolved = p.resolve()
+    except OSError:
+        return None
+    return resolved if _owning_root(resolved) is not None else None
+
+
+def _path_key(fp: Path) -> str:
+    """The address a row carries, so two same-named rows stay distinguishable.
+
+    Repo-relative keeps the server's absolute layout out of the payload; the
+    tmp roots tests redirect live outside the repo, so those fall back to an
+    absolute path that still resolves back to the same file.
+    """
+    try:
+        return fp.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return fp.resolve().as_posix()
+
+
+def find_checkpoint(name: str, path: str | None = None) -> Path | None:
     # Callers hand back either a bare file name or the job record's
     # "models/<stem>_trained.soul" path style. Every search root is a flat
     # directory, so stripping directory components is safe — and it is what
@@ -99,20 +151,29 @@ def find_checkpoint(name: str) -> Path | None:
     name = Path(name).name
     if not name:
         return None
+    if path is not None:
+        # The row's own address wins: two roots may hold this exact name, so
+        # the name alone cannot say which file the caller means.
+        resolved = _resolve_ref_path(path)
+        return resolved if resolved is not None and resolved.exists() else None
     for base in ckpt_roots():
-        root = str(base.resolve())
         for candidate in _probe_paths(base, name):
             # resolve() first: a symlink, or a `..` that lands outside the
-            # root, fails the prefix check instead of being handed back.
+            # root, fails the direct-child check instead of being handed back.
             resolved = candidate.resolve()
-            if resolved.exists() and str(resolved).startswith(root):
+            if resolved.exists() and _in_root(resolved, base):
                 return resolved
     return None
 
 
-def load_soul(name: str) -> dict | None:
-    for d in ckpt_roots():
-        for fp in _probe_paths(d, name):
+def load_soul(name: str, path: str | None = None) -> dict | None:
+    if path is not None:
+        resolved = _resolve_ref_path(path)
+        batches = [[resolved]] if resolved is not None else []
+    else:
+        batches = [_probe_paths(d, name) for d in ckpt_roots()]
+    for candidates in batches:
+        for fp in candidates:
             if not fp.exists():
                 continue
             try:
@@ -180,6 +241,10 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
             tier = str(meta.get("tier") or "") or SOUL_TIER_POLICY.get(fp.suffix, "")
             row = {
                 "name": fp.name,
+                # The address this row IS. Two roots may hold one filename, so
+                # `name` alone cannot tell two rows apart — actions are keyed
+                # by this, and React lists key on it for the same reason.
+                "path": _path_key(fp),
                 "soul": soul,
                 # Content-derived unique key. Every sidecar already carries it;
                 # nothing read it until now, which is why two DIFFERENT
@@ -233,6 +298,7 @@ def _load_soul_from_path(fp: Path, st=None) -> dict | None:
         # "unnamed" is not "absent".
         return {
             "name": fp.name,
+            "path": _path_key(fp),
             "soul": "unknown",
             "size_mb": size_mb,
             "model_path": str(fp),
@@ -257,6 +323,11 @@ def load_lora_soul(name: str) -> dict | None:
 
 def _scan_all_checkpoints() -> list[dict]:
     checkpoints = []
+    # Keyed by path, not by name: two roots may hold one filename, and
+    # name-keyed dedupe hid the second one from the list while name-based
+    # delete still walked every root — a file the user could not see being
+    # deleted alongside the row they clicked. Rows carry their own `path`
+    # so both are listable and individually addressable.
     seen = set()
 
     def _stat_key(p: Path):
@@ -267,9 +338,9 @@ def _scan_all_checkpoints() -> list[dict]:
 
     for ext in ("*.soul", "*.slo"):
         for f in sorted(CHECKPOINTS_DIR.glob(ext), key=_stat_key, reverse=True):
-            if f.name in seen:
+            if str(f) in seen:
                 continue
-            seen.add(f.name)
+            seen.add(str(f))
             try:
                 st = f.stat()
             except OSError:
@@ -281,9 +352,9 @@ def _scan_all_checkpoints() -> list[dict]:
                 checkpoints.append(info)
 
     for f in sorted(TURBO_DIR.glob("*.soul"), key=_stat_key, reverse=True):
-        if f.name in seen:
+        if str(f) in seen:
             continue
-        seen.add(f.name)
+        seen.add(str(f))
         try:
             st = f.stat()
         except OSError:
@@ -299,9 +370,9 @@ def _scan_all_checkpoints() -> list[dict]:
     # be silently skipped.
     trained_saves = [p for p in TRAINED_DIR.glob("*.soul") if is_trained_checkpoint(p.name)]
     for f in sorted(trained_saves, key=_stat_key, reverse=True):
-        if f.name in seen:
+        if str(f) in seen:
             continue
-        seen.add(f.name)
+        seen.add(str(f))
         try:
             st = f.stat()
         except OSError:
@@ -314,8 +385,8 @@ def _scan_all_checkpoints() -> list[dict]:
             checkpoints.append(info)
 
     for npz in sorted(LORA_DIR.glob("*.soul"), key=_stat_key, reverse=True):
-        if npz.name not in seen:
-            seen.add(npz.name)
+        if str(npz) not in seen:
+            seen.add(str(npz))
             try:
                 st = npz.stat()
             except OSError:
@@ -335,13 +406,33 @@ async def list_checkpoints() -> list[dict]:
     return await asyncio.to_thread(_scan_all_checkpoints)
 
 
-async def delete_checkpoint(name: str) -> list[str]:
+async def delete_checkpoint(name: str, path: str | None = None) -> list[str]:
     if not re.match(r"^[\w\-]+(\.\w+)*$", name):
         raise ValueError(f"Invalid checkpoint name: {name!r}")
 
     deleted = []
 
+    def _unlink(resolved: Path) -> bool:
+        root = _owning_root(resolved)
+        # models/ root holds more than final saves — only ever delete what
+        # the scan lists from it.
+        if root is TRAINED_DIR and not is_trained_checkpoint(resolved.name):
+            return False
+        resolved.unlink()
+        meta = Path(str(resolved) + ".meta.json")
+        if meta.exists():
+            meta.unlink()
+        return True
+
     def _delete():
+        if path is not None:
+            # Exactly one file — the one the caller pointed at. No root sweep:
+            # with a path in hand, walking every root would unlink same-named
+            # siblings the user never selected.
+            resolved = _resolve_ref_path(path)
+            if resolved is not None and resolved.exists() and _unlink(resolved):
+                deleted.append(resolved.name)
+            return
         for base in ckpt_roots():
             for ext in (".soul", ".slo"):
                 if name.endswith(ext):
@@ -349,23 +440,15 @@ async def delete_checkpoint(name: str) -> list[str]:
                 else:
                     candidates = [base / (name + ext)]
                 for candidate in candidates:
-                    # models/ root holds more than final saves — only ever
-                    # delete what the scan lists from it.
-                    if base is TRAINED_DIR and not is_trained_checkpoint(candidate.name):
-                        continue
                     resolved = candidate.resolve()
-                    if resolved.exists() and str(resolved).startswith(str(base.resolve())):
-                        resolved.unlink()
+                    if resolved.exists() and _in_root(resolved, base) and _unlink(resolved):
                         deleted.append(candidate.name)
-                    meta = Path(str(resolved) + ".meta.json")
-                    if meta.exists():
-                        meta.unlink()
 
     await asyncio.to_thread(_delete)
     return deleted
 
 
-async def build_checkpoint_provider(name: str) -> tuple[Any, dict]:
+async def build_checkpoint_provider(name: str, path: str | None = None) -> tuple[Any, dict]:
     """Load a checkpoint's weights into a provider WITHOUT registering it.
 
     Registration decides which model the server serves, so inspection and
@@ -374,7 +457,7 @@ async def build_checkpoint_provider(name: str) -> tuple[Any, dict]:
     from domain.models._internal.provider import SloTransformerProvider
     from domain.training._internal.slonet import import_from_sou
 
-    cp = await asyncio.to_thread(find_checkpoint, name)
+    cp = await asyncio.to_thread(find_checkpoint, name, path)
     if cp is None:
         raise FileNotFoundError(f"Checkpoint not found: {name}")
 
@@ -420,10 +503,10 @@ async def build_checkpoint_provider(name: str) -> tuple[Any, dict]:
     return provider, info
 
 
-async def load_checkpoint(name: str) -> dict:
+async def load_checkpoint(name: str, path: str | None = None) -> dict:
     from domain.models._internal.provider import register_provider
 
-    provider, info = await build_checkpoint_provider(name)
+    provider, info = await build_checkpoint_provider(name, path)
     register_provider("slonet", provider)
     register_provider("default", provider)
     return info
@@ -457,20 +540,24 @@ async def compare_checkpoints(
     return results
 
 
-async def download_checkpoint_path(name: str) -> str | None:
+async def download_checkpoint_path(name: str, path: str | None = None) -> str | None:
     if not VALID_CKPT_NAME.match(name) or ".." in name:
         raise ValueError("Invalid checkpoint name")
 
     def _find():
+        if path is not None:
+            # The row's address, so the file served is the file shown.
+            resolved = _resolve_ref_path(path)
+            if resolved is None or not resolved.exists():
+                return None
+            if _owning_root(resolved) is TRAINED_DIR and not is_trained_checkpoint(resolved.name):
+                return None
+            return str(resolved) if resolved.suffix in (".soul", ".slo") else None
         for d in ckpt_roots():
             fp = (d / name).resolve()
             if d is TRAINED_DIR and not is_trained_checkpoint(fp.name):
                 continue
-            if (
-                fp.exists()
-                and fp.suffix in (".soul", ".slo")
-                and str(fp).startswith(str(d.resolve()))
-            ):
+            if fp.exists() and fp.suffix in (".soul", ".slo") and _in_root(fp, d):
                 return str(fp)
         return None
 
@@ -514,10 +601,10 @@ def _describe_identity(info: dict) -> dict:
     return info
 
 
-async def checkpoint_info(name: str) -> dict:
+async def checkpoint_info(name: str, path: str | None = None) -> dict:
     if not VALID_CKPT_NAME.match(name) or ".." in name:
         raise ValueError("Invalid checkpoint name")
-    info = await asyncio.to_thread(load_soul, name)
+    info = await asyncio.to_thread(load_soul, name, path)
     if not info:
         # Absent row — the file is genuinely not there.
         raise FileNotFoundError(f"Checkpoint not found: {name}")

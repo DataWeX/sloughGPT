@@ -441,6 +441,17 @@ describe('trainingJobsController.deleteCheckpoint', () => {
     expect(result.success).toBe(true)
     expect(apiClient.apiDelete).toHaveBeenCalledWith('/training/checkpoints/old-checkpoint')
   })
+
+  it('sends the row address as ?path so only that file is deleted', async () => {
+    apiClient.apiDelete.mockResolvedValue({ success: true })
+    await trainingJobsController.deleteCheckpoint(
+      'old-checkpoint',
+      'models/turbo-trained/old-checkpoint.soul',
+    )
+    expect(apiClient.apiDelete).toHaveBeenCalledWith(
+      '/training/checkpoints/old-checkpoint?path=models%2Fturbo-trained%2Fold-checkpoint.soul',
+    )
+  })
 })
 
 describe('trainingJobsController.deleteCheckpointsBatch', () => {

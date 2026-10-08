@@ -42,8 +42,14 @@ const emptyCheckpoints: UseTrainingCheckpointsReturn = {
 const checkpointsWithData: UseTrainingCheckpointsReturn = {
   ...emptyCheckpoints,
   checkpoints: [
-    { name: 'cp-1', soul: 'soul-1', loss: 0.45, tags: ['distill'] },
-    { name: 'cp-2', soul: 'soul-2', loss: 0.32, tags: [] },
+    {
+      name: 'cp-1',
+      path: 'models/checkpoints/cp-1.soul',
+      soul: 'soul-1',
+      loss: 0.45,
+      tags: ['distill'],
+    },
+    { name: 'cp-2', path: 'models/checkpoints/cp-2.soul', soul: 'soul-2', loss: 0.32, tags: [] },
   ],
 }
 
@@ -86,16 +92,43 @@ const checkpointsWithInterrupted: UseTrainingCheckpointsReturn = {
 const checkpointsWithTurbo: UseTrainingCheckpointsReturn = {
   ...emptyCheckpoints,
   checkpoints: [
-    { name: 'cp-1', soul: 'soul-1', loss: 0.45, tags: ['distill'] },
-    { name: 'turbo-1', soul: 'soul-1', loss: 1.2, tags: [], source: 'turbo' },
+    {
+      name: 'cp-1',
+      path: 'models/checkpoints/cp-1.soul',
+      soul: 'soul-1',
+      loss: 0.45,
+      tags: ['distill'],
+    },
+    {
+      name: 'turbo-1',
+      path: 'models/turbo-trained/turbo-1.soul',
+      soul: 'soul-1',
+      loss: 1.2,
+      tags: [],
+      source: 'turbo',
+    },
   ],
 }
 
 const checkpointsWithQuality: UseTrainingCheckpointsReturn = {
   ...emptyCheckpoints,
   checkpoints: [
-    { name: 'cp-1', soul: 'soul-1', loss: 0.45, avg_quality: 4.2, tags: ['distill'] },
-    { name: 'cp-2', soul: 'soul-2', loss: 0.32, avg_quality: 3.8, tags: [] },
+    {
+      name: 'cp-1',
+      path: 'models/checkpoints/cp-1.soul',
+      soul: 'soul-1',
+      loss: 0.45,
+      avg_quality: 4.2,
+      tags: ['distill'],
+    },
+    {
+      name: 'cp-2',
+      path: 'models/checkpoints/cp-2.soul',
+      soul: 'soul-2',
+      loss: 0.32,
+      avg_quality: 3.8,
+      tags: [],
+    },
   ],
 }
 
@@ -205,7 +238,9 @@ describe('ResultsStep', () => {
   it('hides Compare when a single checkpoint has nothing to compare against', () => {
     renderStep({
       ...emptyCheckpoints,
-      checkpoints: [{ name: 'solo', soul: 'soul-1', loss: 0.5, tags: [] }],
+      checkpoints: [
+        { name: 'solo', path: 'models/checkpoints/solo.soul', soul: 'soul-1', loss: 0.5, tags: [] },
+      ],
     })
     expect(screen.queryByText('Compare')).toBeNull()
   })
@@ -247,7 +282,11 @@ describe('ResultsStep', () => {
       vi.fn(() => true),
     )
     deleteButtons[0].click()
-    expect(handleDeleteCheckpoint).toHaveBeenCalledWith('cp-1', expect.any(Function))
+    expect(handleDeleteCheckpoint).toHaveBeenCalledWith(
+      'cp-1',
+      expect.any(Function),
+      'models/checkpoints/cp-1.soul',
+    )
     vi.unstubAllGlobals()
   })
 

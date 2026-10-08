@@ -259,7 +259,7 @@ export function ResultsStep({
                       size="sm"
                       variant="ghost"
                       className="h-6 text-[10px] text-destructive"
-                      onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast)}
+                      onClick={() => checkpoints.handleDeleteCheckpoint(cp.name, addToast, cp.path)}
                     >
                       Delete
                     </Button>

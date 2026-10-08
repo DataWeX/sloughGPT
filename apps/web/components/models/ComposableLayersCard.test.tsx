@@ -25,8 +25,24 @@ describe('ComposableLayersCard', () => {
 
   it('counts checkpoints total', () => {
     const checkpoints = [
-      { name: 'c1', soul: 's1', created_at: '', loss: 0, epochs: 0, dataset: '' },
-      { name: 'c2', soul: '', created_at: '', loss: 0, epochs: 0, dataset: '' },
+      {
+        name: 'c1',
+        path: 'models/checkpoints/c1.soul',
+        soul: 's1',
+        created_at: '',
+        loss: 0,
+        epochs: 0,
+        dataset: '',
+      },
+      {
+        name: 'c2',
+        path: 'models/checkpoints/c2.soul',
+        soul: '',
+        created_at: '',
+        loss: 0,
+        epochs: 0,
+        dataset: '',
+      },
     ]
     render(<ComposableLayersCard modelsCount={0} soulsCount={0} checkpoints={checkpoints} />)
     expect(screen.getAllByText('2 available').length).toBeGreaterThanOrEqual(1)
@@ -34,13 +50,37 @@ describe('ComposableLayersCard', () => {
 
   it('counts adapters as checkpoints with soul', () => {
     const checkpoints = [
-      { name: 'c1', soul: 's1', created_at: '', loss: 0, epochs: 0, dataset: '' },
-      { name: 'c2', soul: 's2', created_at: '', loss: 0, epochs: 0, dataset: '' },
-      { name: 'c3', soul: '', created_at: '', loss: 0, epochs: 0, dataset: '' },
+      {
+        name: 'c1',
+        path: 'models/checkpoints/c1.soul',
+        soul: 's1',
+        created_at: '',
+        loss: 0,
+        epochs: 0,
+        dataset: '',
+      },
+      {
+        name: 'c2',
+        path: 'models/checkpoints/c2.soul',
+        soul: 's2',
+        created_at: '',
+        loss: 0,
+        epochs: 0,
+        dataset: '',
+      },
+      {
+        name: 'c3',
+        path: 'models/checkpoints/c3.soul',
+        soul: '',
+        created_at: '',
+        loss: 0,
+        epochs: 0,
+        dataset: '',
+      },
     ]
     render(<ComposableLayersCard modelsCount={0} soulsCount={0} checkpoints={checkpoints} />)
     const availableTexts = screen.getAllByText(/available/)
-    const counts = availableTexts.map(el => el.textContent)
+    const counts = availableTexts.map((el) => el.textContent)
     expect(counts).toContain('2 available')
   })
 
@@ -53,7 +93,9 @@ describe('ComposableLayersCard', () => {
   })
 
   it('shows layer icons as SVG elements', () => {
-    const { container } = render(<ComposableLayersCard modelsCount={0} soulsCount={0} checkpoints={[]} />)
+    const { container } = render(
+      <ComposableLayersCard modelsCount={0} soulsCount={0} checkpoints={[]} />,
+    )
     const svgs = container.querySelectorAll('svg')
     expect(svgs.length).toBeGreaterThanOrEqual(4)
   })

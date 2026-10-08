@@ -748,11 +748,11 @@ class TrainingEngine:
 
         return await get_log()
 
-    async def delete_checkpoint(self, name: str) -> list[str]:
-        """Delete a checkpoint by name."""
+    async def delete_checkpoint(self, name: str, path: str | None = None) -> list[str]:
+        """Delete one checkpoint: by the row's `path` when the caller has it."""
         from domain.training._internal.service import delete_checkpoint
 
-        return await delete_checkpoint(name)
+        return await delete_checkpoint(name, path=path)
 
     def is_valid_checkpoint_name(self, name: str) -> bool:
         """True if the checkpoint name matches the canonical validator."""
@@ -760,27 +760,25 @@ class TrainingEngine:
 
         return bool(VALID_CKPT_NAME.match(name))
 
-    async def checkpoint_load(self, name: str) -> Any:
+    async def checkpoint_load(self, name: str, path: str | None = None) -> Any:
         """Load and register a checkpoint for serving."""
         from domain.training._internal.service import load_checkpoint
 
-        return await load_checkpoint(name)
+        return await load_checkpoint(name, path=path)
 
-    async def checkpoint_download_path(self, name: str) -> Any:
+    async def checkpoint_download_path(self, name: str, path: str | None = None) -> Any:
         """Filesystem path for downloading a checkpoint (None if missing)."""
         from domain.training._internal.service import download_checkpoint_path
 
-        return await download_checkpoint_path(name)
+        return await download_checkpoint_path(name, path=path)
 
-    async def checkpoint_info(self, name: str) -> Any:
+    async def checkpoint_info(self, name: str, path: str | None = None) -> Any:
         """Describe a single checkpoint."""
         from domain.training._internal.service import checkpoint_info
 
-        return await checkpoint_info(name)
+        return await checkpoint_info(name, path=path)
 
-    async def checkpoint_compare(
-        self, a: str, b: str, prompt: str, max_new_tokens: int
-    ) -> Any:
+    async def checkpoint_compare(self, a: str, b: str, prompt: str, max_new_tokens: int) -> Any:
         """Run the same prompt against two checkpoints."""
         from domain.training._internal.service import compare_checkpoints
 

@@ -65,6 +65,7 @@ const SOULS: Soul[] = [
 const CHECKPOINTS: Checkpoint[] = [
   {
     name: 'cp-warm-v2',
+    path: 'models/auto-training/cp-warm-v2.soul',
     soul: 'Friendly',
     loss: 0.45,
     verdict: 'improved',
@@ -74,7 +75,14 @@ const CHECKPOINTS: Checkpoint[] = [
     provenance: 'training',
     integrity_hash: 'deadbeefcafe1234',
   },
-  { name: 'cp-base-v1', soul: 'Analyst', loss: 0.62, verdict: 'neutral', size_mb: 0.8 },
+  {
+    name: 'cp-base-v1',
+    path: 'models/turbo-trained/cp-base-v1.soul',
+    soul: 'Analyst',
+    loss: 0.62,
+    verdict: 'neutral',
+    size_mb: 0.8,
+  },
 ]
 
 async function clickTab(name: string) {
@@ -333,7 +341,10 @@ describe('SoulsPage', () => {
       expect(screen.getAllByText('cp-warm-v2').length).toBeGreaterThanOrEqual(1)
       expect(screen.getAllByText('Friendly').length).toBeGreaterThanOrEqual(1)
     })
-    expect(sc.checkpointInfo).toHaveBeenCalledWith('cp-warm-v2')
+    expect(sc.checkpointInfo).toHaveBeenCalledWith(
+      'cp-warm-v2',
+      'models/auto-training/cp-warm-v2.soul',
+    )
   })
 
   it('shows byte-derived identity in the detail dialog', async () => {

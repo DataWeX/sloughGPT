@@ -65,15 +65,27 @@ import type { Checkpoint } from '@/lib/souls-controller'
 
 const makeCp = (overrides: Partial<Checkpoint> = {}): Checkpoint => ({
   name: 'cp-001',
+  path: 'models/auto-training/cp-001.soul',
   soul: 'test-soul',
   loss: 0.5,
   ...overrides,
 })
 
 const checkpoints: Checkpoint[] = [
-  makeCp({ name: 'cp-001', soul: 'alpha', verdict: 'improved', is_loaded: true }),
-  makeCp({ name: 'cp-002', soul: 'beta', verdict: 'degraded' }),
-  makeCp({ name: 'cp-003', soul: 'gamma' }),
+  makeCp({
+    name: 'cp-001',
+    path: 'models/auto-training/cp-001.soul',
+    soul: 'alpha',
+    verdict: 'improved',
+    is_loaded: true,
+  }),
+  makeCp({
+    name: 'cp-002',
+    path: 'models/checkpoints/cp-002.soul',
+    soul: 'beta',
+    verdict: 'degraded',
+  }),
+  makeCp({ name: 'cp-003', path: 'models/turbo-trained/cp-003.soul', soul: 'gamma' }),
 ]
 
 describe('CheckpointList', () => {
@@ -165,7 +177,7 @@ describe('CheckpointList', () => {
     )
     const loadButtons = screen.getAllByText('Load')
     fireEvent.click(loadButtons[0])
-    expect(onLoad).toHaveBeenCalledWith('cp-001')
+    expect(onLoad).toHaveBeenCalledWith('cp-001', 'models/auto-training/cp-001.soul')
   })
 
   it('shows spinner when loading', () => {
@@ -202,7 +214,7 @@ describe('CheckpointList', () => {
     )
     const deleteButtons = screen.getAllByLabelText('Delete checkpoint')
     fireEvent.click(deleteButtons[0])
-    expect(onDelete).toHaveBeenCalledWith('cp-001')
+    expect(onDelete).toHaveBeenCalledWith('cp-001', 'models/auto-training/cp-001.soul')
   })
 
   it('calls onInfo when checkpoint name clicked', () => {
@@ -222,7 +234,7 @@ describe('CheckpointList', () => {
     )
     const nameEl = screen.getAllByText('cp-001')[0]
     fireEvent.click(nameEl)
-    expect(onInfo).toHaveBeenCalledWith('cp-001')
+    expect(onInfo).toHaveBeenCalledWith('cp-001', 'models/auto-training/cp-001.soul')
   })
 
   it('shows empty state when no checkpoints', () => {

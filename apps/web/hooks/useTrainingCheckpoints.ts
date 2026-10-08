@@ -27,6 +27,7 @@ export interface UseTrainingCheckpointsReturn {
   handleDeleteCheckpoint: (
     name: string,
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+    path?: string,
   ) => Promise<void>
 }
 
@@ -100,11 +101,17 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
   )
 
   const handleDeleteCheckpoint = useCallback(
-    async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
+    async (
+      name: string,
+      addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+      path?: string,
+    ) => {
       if (!confirm(`Delete trained version "${name}"?`)) return
       try {
-        await trainingJobsController.deleteCheckpoint?.(name)
-        setCheckpoints((prev) => prev.filter((c) => c.name !== name))
+        await trainingJobsController.deleteCheckpoint?.(name, path)
+        // By address when the caller has the row: a name filter would also
+        // drop the same-named row in another root that was left untouched.
+        setCheckpoints((prev) => prev.filter((c) => (path ? c.path !== path : c.name !== name)))
         setActiveCheckpoint((prev) => (prev === name ? null : prev))
         trackEvent('checkpoint_deleted', { name })
         addToast(`Deleted ${name}`, 'success')

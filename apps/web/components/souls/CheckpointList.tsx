@@ -21,10 +21,12 @@ interface CheckpointListProps {
   searchQuery: string
   onSearchChange: (query: string) => void
   loadingCheckpoint: string | null
-  onLoad: (name: string) => void
-  onDownload: (name: string) => void
-  onDelete: (name: string) => void
-  onInfo: (name: string) => void
+  // Every action carries the row's `path` alongside its name: two roots may
+  // hold one filename, and the address is what says which file was clicked.
+  onLoad: (name: string, path?: string) => void
+  onDownload: (name: string, path?: string) => void
+  onDelete: (name: string, path?: string) => void
+  onInfo: (name: string, path?: string) => void
   onRefresh: () => void
 }
 
@@ -76,16 +78,16 @@ export function CheckpointList({
           <div className="space-y-2 max-h-96 overflow-y-auto">
             {filtered.map((cp) => (
               <div
-                key={cp.name}
+                key={cp.path}
                 className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2.5 text-sm group hover:bg-muted/50 transition-colors"
               >
                 <div
                   className="flex-1 min-w-0 cursor-pointer"
-                  onClick={() => onInfo(cp.name)}
+                  onClick={() => onInfo(cp.name, cp.path)}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault()
-                      onInfo(cp.name)
+                      onInfo(cp.name, cp.path)
                     }
                   }}
                   role="button"
@@ -161,7 +163,7 @@ export function CheckpointList({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => onLoad(cp.name)}
+                    onClick={() => onLoad(cp.name, cp.path)}
                     disabled={loadingCheckpoint === cp.name}
                   >
                     {loadingCheckpoint === cp.name ? <Spinner size="sm" /> : 'Load'}
@@ -169,7 +171,7 @@ export function CheckpointList({
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => onDownload(cp.name)}
+                    onClick={() => onDownload(cp.name, cp.path)}
                     aria-label="Download checkpoint"
                   >
                     <IconDownload className="h-3.5 w-3.5" />
@@ -178,7 +180,7 @@ export function CheckpointList({
                     size="sm"
                     variant="ghost"
                     className="text-destructive"
-                    onClick={() => onDelete(cp.name)}
+                    onClick={() => onDelete(cp.name, cp.path)}
                     aria-label="Delete checkpoint"
                   >
                     <IconTrash className="h-3.5 w-3.5" />

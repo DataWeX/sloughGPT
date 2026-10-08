@@ -190,6 +190,9 @@ export default function SoulsPage() {
   )
   const [savingWeights, setSavingWeights] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  // The row's address travels with the name so the delete dialog acts on the
+  // exact file shown — two roots may hold one filename.
+  const [deleteTargetPath, setDeleteTargetPath] = useState<string | null>(null)
   const [deleteType, setDeleteType] = useState<'checkpoint' | 'snapshot'>('checkpoint')
 
   // ── Dialogs ──
@@ -246,10 +249,10 @@ export default function SoulsPage() {
   }
 
   // ── Checkpoint Actions ──
-  const handleLoadCheckpoint = async (name: string) => {
+  const handleLoadCheckpoint = async (name: string, path?: string) => {
     setLoadingCheckpoint(name)
     try {
-      await soulsController.loadCheckpoint(name)
+      await soulsController.loadCheckpoint(name, path)
       addToast(`Loaded checkpoint: ${name}`, 'success')
       await handleRefresh()
     } catch {
@@ -259,20 +262,27 @@ export default function SoulsPage() {
     }
   }
 
-  const handleDeleteCheckpoint = async (name: string) => {
+  const handleDeleteCheckpoint = async (name: string, path?: string) => {
     try {
-      await soulsController.deleteCheckpoint(name)
-      addToast(`Deleted checkpoint: ${name}`, 'success')
-      setCheckpoints((prev) => prev.filter((cp) => cp.name !== name))
+      const res = await soulsController.deleteCheckpoint(name, path)
+      const count = res?.deleted?.length ?? 1
+      addToast(
+        count > 1 ? `Deleted ${count} checkpoints named ${name}` : `Deleted checkpoint: ${name}`,
+        'success',
+      )
+      // Drop by address, not by name: filtering names away would also remove
+      // the same-named row in the other root that was left untouched.
+      setCheckpoints((prev) => prev.filter((cp) => (path ? cp.path !== path : cp.name !== name)))
     } catch {
       addToast('Could not delete checkpoint', 'error')
     }
     setDeleteTarget(null)
+    setDeleteTargetPath(null)
   }
 
-  const handleDownloadCheckpoint = async (name: string) => {
+  const handleDownloadCheckpoint = async (name: string, path?: string) => {
     try {
-      const blob = await soulsController.downloadCheckpoint(name)
+      const blob = await soulsController.downloadCheckpoint(name, path)
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -285,9 +295,9 @@ export default function SoulsPage() {
     }
   }
 
-  const handleCheckpointInfo = async (name: string) => {
+  const handleCheckpointInfo = async (name: string, path?: string) => {
     try {
-      const info = await soulsController.checkpointInfo(name)
+      const info = await soulsController.checkpointInfo(name, path)
       if (info) setCheckpointDetail(info)
     } catch {
       addToast('Could not load checkpoint info', 'error')
@@ -372,6 +382,7 @@ export default function SoulsPage() {
       addToast('Could not delete snapshot', 'error')
     }
     setDeleteTarget(null)
+    setDeleteTargetPath(null)
   }
 
   // ── Filtered Data ──
@@ -613,8 +624,9 @@ export default function SoulsPage() {
             loadingCheckpoint={loadingCheckpoint}
             onLoad={handleLoadCheckpoint}
             onDownload={handleDownloadCheckpoint}
-            onDelete={(name) => {
+            onDelete={(name, path) => {
               setDeleteTarget(name)
+              setDeleteTargetPath(path ?? null)
               setDeleteType('checkpoint')
             }}
             onInfo={handleCheckpointInfo}
@@ -1426,7 +1438,8 @@ export default function SoulsPage() {
                   size="sm"
                   variant="ghost"
                   onClick={() => {
-                    if (checkpointDetail) handleDownloadCheckpoint(checkpointDetail.name)
+                    if (checkpointDetail)
+                      handleDownloadCheckpoint(checkpointDetail.name, checkpointDetail.path)
                   }}
                 >
                   <IconDownload className="h-3.5 w-3.5 mr-1" /> Download
@@ -1436,7 +1449,7 @@ export default function SoulsPage() {
                     size="sm"
                     onClick={() => {
                       if (checkpointDetail) {
-                        handleLoadCheckpoint(checkpointDetail.name)
+                        handleLoadCheckpoint(checkpointDetail.name, checkpointDetail.path)
                         setCheckpointDetail(null)
                       }
                     }}
@@ -1454,7 +1467,10 @@ export default function SoulsPage() {
       <AlertDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleteTarget(null)
+          if (!open) {
+            setDeleteTarget(null)
+            setDeleteTargetPath(null)
+          }
         }}
       >
         <AlertDialogContent>
@@ -1471,7 +1487,8 @@ export default function SoulsPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 if (!deleteTarget) return
-                if (deleteType === 'checkpoint') handleDeleteCheckpoint(deleteTarget)
+                if (deleteType === 'checkpoint')
+                  handleDeleteCheckpoint(deleteTarget, deleteTargetPath ?? undefined)
                 else handleDeleteSnapshot(deleteTarget)
               }}
             >

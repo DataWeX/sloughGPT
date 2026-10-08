@@ -96,15 +96,17 @@ describe('useTrainingCheckpoints', () => {
     await waitFor(() => {
       act(() =>
         result.current.setCheckpoints([
-          { name: 'cp1', soul: 'default' },
-          { name: 'cp2', soul: 'default' },
+          { name: 'cp1', path: 'models/auto-training/cp1.soul', soul: 'default' },
+          { name: 'cp2', path: 'models/auto-training/cp2.soul', soul: 'default' },
         ]),
       )
     })
-    await result.current.handleDeleteCheckpoint('cp1', addToast)
-    expect(mockDeleteCheckpoint).toHaveBeenCalledWith('cp1')
+    await result.current.handleDeleteCheckpoint('cp1', addToast, 'models/auto-training/cp1.soul')
+    expect(mockDeleteCheckpoint).toHaveBeenCalledWith('cp1', 'models/auto-training/cp1.soul')
     await waitFor(() =>
-      expect(result.current.checkpoints).toEqual([{ name: 'cp2', soul: 'default' }]),
+      expect(result.current.checkpoints).toEqual([
+        { name: 'cp2', path: 'models/auto-training/cp2.soul', soul: 'default' },
+      ]),
     )
     expect(addToast).toHaveBeenCalledWith('Deleted cp1', 'success')
   })

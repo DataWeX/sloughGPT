@@ -585,7 +585,7 @@ async def training_list_checkpoints():
 
 
 @router.delete("/training/checkpoints/{name}")
-async def training_delete_checkpoint(name: str):
+async def training_delete_checkpoint(name: str, path: str | None = None):
     from schemas.common import safe_audit_log, success_response
 
     from domain.training import get_training_engine
@@ -593,46 +593,53 @@ async def training_delete_checkpoint(name: str):
     engine = get_training_engine()
     if not engine.is_valid_checkpoint_name(name):
         raise_error("Invalid checkpoint name", "E_BAD_REQUEST", status_code=400)
-    deleted = await engine.delete_checkpoint(name)
+    # `path` is the row the client is looking at. Present, it deletes exactly
+    # that file; absent, the legacy name sweep walks every root — which is why
+    # the web client always sends it now.
+    deleted = await engine.delete_checkpoint(name, path=path)
     if deleted:
-        safe_audit_log("training.checkpoint.delete", resource=name, detail="deleted")
+        safe_audit_log(
+            "training.checkpoint.delete",
+            resource=path or name,
+            detail="deleted",
+        )
     return success_response(data={"deleted": deleted, "name": name})
 
 
 @router.post("/training/checkpoints/{name}/load")
-async def training_load_checkpoint(name: str):
+async def training_load_checkpoint(name: str, path: str | None = None):
     from schemas.common import classify_and_raise, success_response
 
     from domain.training import get_training_engine
 
     try:
-        result = await get_training_engine().checkpoint_load(name)
+        result = await get_training_engine().checkpoint_load(name, path=path)
         return success_response(data=result, message="loaded")
     except Exception as e:
         classify_and_raise(e, source="training.load_checkpoint")
 
 
 @router.get("/training/checkpoints/{name}/download")
-async def training_download_checkpoint(name: str):
+async def training_download_checkpoint(name: str, path: str | None = None):
     from fastapi.responses import FileResponse
     from schemas.common import raise_error
 
     from domain.training import get_training_engine
 
-    fp = await get_training_engine().checkpoint_download_path(name)
+    fp = await get_training_engine().checkpoint_download_path(name, path=path)
     if fp:
         return FileResponse(fp, media_type="application/octet-stream", filename=name)
     raise_error("Checkpoint not found", "E_NOT_FOUND", status_code=404)
 
 
 @router.get("/training/checkpoints/{name}/info")
-async def training_checkpoint_info(name: str):
+async def training_checkpoint_info(name: str, path: str | None = None):
     from schemas.common import classify_and_raise, success_response
 
     from domain.training import get_training_engine
 
     try:
-        info = await get_training_engine().checkpoint_info(name)
+        info = await get_training_engine().checkpoint_info(name, path=path)
         return success_response(data=info)
     except Exception as e:
         classify_and_raise(e, source="training.checkpoint_info")
