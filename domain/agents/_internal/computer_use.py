@@ -82,7 +82,7 @@ class ComputerUseAgent:
 
     def __init__(
         self,
-        base_url: str = "http://localhost:3000",
+        base_url: str = "http://localhost:5173",
         api_url: str = "http://localhost:8000",
         headless: bool = True,
         viewport_width: int = 1280,

@@ -6,12 +6,13 @@ automation, verifying each phase with Playwright interactions and capturing
 DevTools telemetry (console logs, network requests, errors, performance).
 
 Usage:
-    .venv/bin/python -m pytest tests/test_comprehensive_training_journeys.py -x -v
+    python -m pytest packages/core-py/tests/test_comprehensive_training_journeys.py -v
 
 Requirements:
-    .venv/bin/playwright install chromium
-    API server at localhost:8000
-    Web server at localhost:3000
+    playwright chromium
+    Web server at localhost:5173  (scripts/dev-stack.sh; SLO_WEB_URL overrides)
+    API server at localhost:8000  (SLO_API_URL overrides)
+    Skips itself when the stack is not running (serverless gate stays green).
 """
 
 from __future__ import annotations
@@ -33,8 +34,12 @@ pytest.importorskip(
     reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
 )
 
-BASE = "http://localhost:3000"
-API = "http://localhost:8000"
+# Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
+# stale :3000 default). Override with SLO_WEB_URL / SLO_API_URL for
+# non-standard setups.
+BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
+API = os.environ.get("SLO_API_URL") or "http://localhost:8000"
+API_NETLOC = API.split("://", 1)[-1]
 RESULTS: list[dict[str, Any]] = []
 DEVTOOLS_LOG: list[dict[str, Any]] = []
 
@@ -67,15 +72,15 @@ def _api_is_ready() -> bool:
 
 # These journeys drive a real browser against a live stack, so skip the whole
 # module when one isn't running instead of failing every test — that keeps the
-# default offline suite green. The module docstring already lists "Web server
-# at localhost:3000" as a Requirement; this turns that requirement into a skip
+# default offline suite green. The module docstring already lists the web
+# server as a Requirement; this turns that requirement into a skip
 # instead of 58 × net::ERR_CONNECTION_REFUSED. Start a stack first to enable:
-#   scripts/dev-stack.sh   (web + api)  or  ./sloughgpt serve --web
+#   scripts/dev-stack.sh   (web :5173, api :8000)  or  ./sloughgpt serve --web
 pytestmark = pytest.mark.skipif(
     not (_web_is_ready() and _api_is_ready()),
     reason=(
-        "browser journeys need a live stack (web :3000 + api :8000 — "
-        "scripts/dev-stack.sh or sloughgpt serve --web)"
+        f"training journeys need a live stack "
+        f"({BASE} + {API} — scripts/dev-stack.sh or sloughgpt serve --web)"
     ),
 )
 
@@ -103,8 +108,9 @@ def _wait_for_api(timeout: int = 60) -> bool:
 
 def _web_is_ready() -> bool:
     try:
-        with urllib.request.urlopen(BASE, timeout=5) as resp:
-            return resp.status == 200
+        req = urllib.request.Request(BASE)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return 200 <= resp.status < 400
     except Exception:
         return False
 
@@ -810,7 +816,7 @@ class TestDevToolsTelemetry:
     def test_api_requests_reach_backend(self, page, collector):
         go(page, "/training", collector)
         time.sleep(2)
-        api_reqs = [r for r in collector.network_requests if "localhost:8000" in r.get("url", "")]
+        api_reqs = [r for r in collector.network_requests if API_NETLOC in r.get("url", "")]
         dt = record_devtools(
             "telemetry_api_requests",
             collector.console_messages,
