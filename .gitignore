@@ -265,3 +265,4 @@ y
 
 # avion journey-engine test artifacts
 arken_output/
+.resilient-state/
