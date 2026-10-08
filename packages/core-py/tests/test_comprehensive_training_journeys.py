@@ -28,6 +28,11 @@ if TYPE_CHECKING:
 
 import pytest
 
+pytest.importorskip(
+    "playwright.sync_api",
+    reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
+)
+
 BASE = "http://localhost:3000"
 API = "http://localhost:8000"
 RESULTS: list[dict[str, Any]] = []

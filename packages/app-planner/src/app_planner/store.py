@@ -623,11 +623,19 @@ class PlannerStore:
         for card in board.cards:
             by_column[card.column] = by_column.get(card.column, 0) + 1
             by_priority[card.priority] = by_priority.get(card.priority, 0) + 1
+        ids = [c.id for c in board.cards]
+        titles = [c.title for c in board.cards]
         return {
             "total": len(board.cards),
             "byColumn": by_column,
             "byPriority": by_priority,
             "columns": len(board.columns),
+            # Integrity diagnostics: the hash chain is position-based and
+            # stays green while id/title duplication exists (card 08baf13f),
+            # so surface both as counts — 0/0 = healthy board.
+            "uniqueIds": len(set(ids)),
+            "dupIdLines": len(ids) - len(set(ids)),
+            "titleCollisions": len(titles) - len(set(titles)),
         }
 
     # ── Notes ───────────────────────────────────────────────────────────
@@ -885,7 +893,9 @@ class PlannerStore:
 
     def sync(self) -> tuple[int, int, int]:
         """Reconcile notes ↔ board. Returns (added, updated, total)."""
-        notes = self.list_notes(limit=9999)
+        from .sync import canonical_notes
+
+        notes = canonical_notes(self.list_notes(limit=9999))
         board = self.load_board()
         existing = {c.title: c for c in board.cards}
         added = 0
@@ -897,7 +907,7 @@ class PlannerStore:
             card = existing.get(title)
 
             if card is None:
-                self.add_card(
+                card = self.add_card(
                     title=title,
                     column=col,
                     tags=list(note.tags or []),
@@ -906,6 +916,7 @@ class PlannerStore:
                     sprint=note.sprint or "",
                     gh=note.gh or "",
                 )
+                existing[title] = card
                 added += 1
                 continue
 

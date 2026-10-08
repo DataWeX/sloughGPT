@@ -117,6 +117,27 @@ class TestPlannerStore:
         assert stats["byColumn"]["todo"] == 1
         assert stats["byColumn"]["done"] == 1
 
+    def test_get_stats_reports_dup_diagnostics(self, store):
+        """The hash chain does not catch id/title duplication — stats must."""
+        from app_planner.store import _token_of
+
+        solo = store.add_card("Solo")
+        store.add_card("Shared")
+        store.add_card("Shared", column="done")
+        stats = store.get_stats()
+        assert stats["uniqueIds"] == 3
+        assert stats["dupIdLines"] == 0
+        assert stats["titleCollisions"] == 1
+
+        # Simulate historical union-merge damage: a duplicate-id line.
+        text = store._board_file.read_text(encoding="utf-8")
+        store._atomic_write(text + store._card_line(solo) + "\n", expect=_token_of(text))
+        stats = store.get_stats()
+        assert stats["total"] == 4
+        assert stats["uniqueIds"] == 3
+        assert stats["dupIdLines"] == 1
+        assert stats["titleCollisions"] == 2
+
 
 # ── Surgical JSONL write tests ────────────────────────────────────────────
 

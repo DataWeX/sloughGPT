@@ -25,6 +25,11 @@ import urllib.request
 from pathlib import Path
 
 import pytest
+
+pytest.importorskip(
+    "playwright.sync_api",
+    reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
+)
 from avion import Arken, ElementLocator, PageControls, SyncRunner
 
 # Web lives on vite :5173 (scripts/dev-stack.sh; card e47e19ee retired the
