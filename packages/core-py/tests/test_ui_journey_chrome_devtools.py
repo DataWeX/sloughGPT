@@ -63,11 +63,14 @@ class TestSloughGPTConfig:
         assert "datasets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_training_pages(self):
-        from domain.testing._internal.sloughgpt import SLOUGHPGPT_TRAINING_PAGES
+        # SLOUGHPGPT_TRAINING_PAGES was folded into SLOUGHPGPT_PAGES under
+        # training/* keys by the spec consolidation (f7e3d3963 removed the
+        # standalone dict); "/training/queue" no longer exists as a route.
+        from domain.testing._internal.sloughgpt import SLOUGHPGPT_PAGES
 
-        assert "queue" in SLOUGHPGPT_TRAINING_PAGES
-        assert "runs" in SLOUGHPGPT_TRAINING_PAGES
-        assert "presets" in SLOUGHPGPT_TRAINING_PAGES
+        assert "training" in SLOUGHPGPT_PAGES
+        assert "training/runs" in SLOUGHPGPT_PAGES
+        assert "training/presets" in SLOUGHPGPT_PAGES
 
     def test_sloughgpt_api_endpoints(self):
         from domain.testing._internal.sloughgpt import SLOUGHPGPT_API_ENDPOINTS
