@@ -33,6 +33,26 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-08 ~11:55 — `ca167dbd` **closed (test suite resilience
+landed)**: (a) `pytest.ini` now sets `timeout = 120` + `timeout_method =
+signal` for ALL sessions — proven by a synthetic `sleep(300)` test failing
+at `Timeout (>120.0s)` in 120.25s and the session header printing
+`timeout: 120.0s / timeout method: signal`; `--timeout` flags are now
+redundant (CLI still overrides). Only those two keys were touched — ini
+consolidation stays `d2803a3c` (coordination note added to that card).
+(b) `scripts/test_resilient.sh` = chunked resumable runner for long runs:
+per-chunk summary markers survive a whole-run kill (`SKIP chunk_*` on
+rerun), and if only pytest dies the DIED branch salvages file-level
+progress from the dead chunk's log — rerun resumes at the last completed
+file (`.done` markers) and the script exits 2 for an incomplete run;
+`--babysit` promotes the sweep's idle-child killer; canonical gate
+PYTHONPATH baked in; paths after `--` scope the file list, flags run on
+every chunk. **pytest 9 gotcha**: `--collect-only -q` prints a
+`<Dir>/<File>` TREE (parses to an empty file list), use `-qq` for bare
+nodeids. (c) fork fix pre-landed by `a0ba949b` — `test_vector_backend`
+solo 24 passed / 4.02s (<2min acceptance). State dir `.resilient-state/`
+is gitignored.
+
 **Last update**: 2026-10-08 ~11:05 — `5473eb90` **closed: rotating-victim root
 cause was missing from main — ported.** The root-cause fix `0246b027c`
 (root lane, Oct-5; its message names this card) was on 6 feature branches but
