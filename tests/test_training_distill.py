@@ -328,6 +328,10 @@ class TestDistillSlonetTeacher:
                 training_jobs.pop(job_id, None)
             shutil.rmtree(ds_dir, ignore_errors=True)
             ckpt.unlink(missing_ok=True)
+            # The sidecar too — it was the one thing this cleanup missed, so
+            # every run of this test left a 23KB ``*.soul.meta.json`` orphan in
+            # models/auto-training/ with no data file under it.
+            Path(str(ckpt) + ".meta.json").unlink(missing_ok=True)
 
     def test_slonet_teacher_not_loaded_fails(self):
         import shutil
