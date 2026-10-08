@@ -17,6 +17,7 @@ Requirements:
 from __future__ import annotations
 
 import json
+import os
 import time
 import urllib.request
 from pathlib import Path
@@ -97,10 +98,14 @@ def api_get_json(path: str, retries: int = 3) -> dict[str, Any]:
 
 @pytest.fixture(scope="session", autouse=True)
 def ensure_servers_ready():
-    assert _wait_for_api(timeout=90), (
-        f"API at {API} not ready after 90s. "
-        "Start the server with: FORCE_COLOR=1 ./sloughgpt serve --web"
-    )
+    # Live-stack journey tests: skip (don't error) when no server is up —
+    # CI runs core-py as a pure unit job with no ./sloughgpt serve process.
+    timeout = 5 if os.environ.get("CI") else 90
+    if not _wait_for_api(timeout=timeout):
+        pytest.skip(
+            f"API at {API} not ready — journey tests need a live stack "
+            "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
+        )
     time.sleep(3)
 
 

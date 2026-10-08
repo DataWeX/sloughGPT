@@ -50,9 +50,15 @@ def _make_companion(**overrides):
     defaults.update(overrides)
     ns = SimpleNamespace(**defaults)
 
+    # Public traits view — the router reads companion.traits (mirrors the
+    # public attr on CompanionSystem), kept in sync with the _traits dict.
+    ns.traits = SimpleNamespace(**ns._traits)
+
     # Allow set_personality to update _traits
     def _set_personality(**kw):
         ns._traits.update(kw)
+        for key, val in kw.items():
+            setattr(ns.traits, key, val)
 
     ns.set_personality = _set_personality
     # Make to_dict return current traits
@@ -158,6 +164,7 @@ class TestUsePreset:
         # Mock the database to return a preset
         mock_col = MagicMock()
         mock_col.find_one.return_value = {"id": "warm", "traits": {"warmth": 0.9}}
+        mock_col.count.return_value = 1  # presets exist — _seed_default_presets returns early
         mock_db.return_value.collection.return_value = mock_col
         client = TestClient(_app())
         resp = client.post("/companion/preset", json="warm")
