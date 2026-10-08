@@ -90,11 +90,11 @@ class TestDownloadModelUrlBranch:
         mgr = dm.DownloadManager()
         seen: dict = {}
 
-        async def fake_download(model_id, url="", dest="", total_bytes_hint=0, **kw):
+        async def fake_download(resource_id, url="", dest="", total_bytes_hint=0, **kw):
             seen.update(
-                model_id=model_id, url=url, dest=dest, total_bytes_hint=total_bytes_hint
+                resource_id=resource_id, url=url, dest=dest, total_bytes_hint=total_bytes_hint
             )
-            return {"status": "complete", "model_id": model_id}
+            return {"status": "complete", "resource_id": resource_id}
 
         monkeypatch.setattr(mgr, "download", fake_download)
 
@@ -111,7 +111,7 @@ class TestDownloadModelUrlBranch:
 
         assert result["status"] == "complete"
         assert seen == {
-            "model_id": "artifact",
+            "resource_id": "artifact",
             "url": "https://host/x.pdf",
             "dest": "/tmp/x.pdf",
             "total_bytes_hint": 42,
@@ -228,7 +228,7 @@ class _FakeBackend:
 
 
 class TestDownloadWithBackend:
-    """``download_with(model_id, backend)`` — the backend-generic seam.
+    """``download_with(resource_id, backend)`` — the backend-generic seam.
 
     ``POST /models/external/download`` already calls this method
     (``models.py`` ``_run_external_download``), but it never existed: the
@@ -309,15 +309,73 @@ class TestDownloadWithBackend:
         mgr = dm.DownloadManager()
         seen: dict = {}
 
-        async def fake_download_with(model_id, backend, total_bytes_hint=0):
-            seen.update(model_id=model_id, backend=backend, hint=total_bytes_hint)
-            return {"status": "complete", "model_id": model_id}
+        async def fake_download_with(resource_id, backend, total_bytes_hint=0):
+            seen.update(resource_id=resource_id, backend=backend, hint=total_bytes_hint)
+            return {"status": "complete", "resource_id": resource_id}
 
         monkeypatch.setattr(mgr, "download_with", fake_download_with)
 
         result = asyncio.run(mgr.download_model("gpt2", total_bytes_hint=7))
 
         assert result["status"] == "complete"
-        assert seen["model_id"] == "gpt2"
+        assert seen["resource_id"] == "gpt2"
         assert seen["hint"] == 7
         assert type(seen["backend"]).__name__ == "HFDownloadBackend"
+
+
+class TestGenericVocabulary:
+    """``resource_id`` everywhere except the model facade (card 3f749b34).
+
+    The stack serves PDF books and external artifacts; ``model_id`` on a
+    generic seam was a lie.  The model facade (``download_model``) keeps
+    ``model_id`` — there it is honest — and the serialized registry/HTTP
+    contract is pinned in tests/server's TestDownloadContractIsGeneric.
+    """
+
+    def test_progress_entry_serializes_resource_id(self):
+        mgr = dm.DownloadManager()
+        mgr._set_progress("book.pdf", status=dm.DownloadStatus.COMPLETE)
+
+        entry = mgr.get_progress("book.pdf")
+
+        assert entry["resource_id"] == "book.pdf"
+        assert "model_id" not in entry
+
+    def test_backend_result_envelope_is_generic(self):
+        mgr = dm.DownloadManager()
+        backend = _FakeBackend({"status": "completed", "total_bytes": 100})
+
+        result = asyncio.run(mgr.download_with("ext-model", backend))
+
+        assert result["resource_id"] == "ext-model"
+        assert "model_id" not in result
+
+    def test_seams_and_accessors_speak_resource_id(self):
+        """Signature-level pin: one vocabulary across the generic surface."""
+        import inspect
+
+        generic = (
+            "download",
+            "download_with",
+            "get_progress",
+            "is_downloading",
+            "is_cached",
+            "cancel",
+            "pause",
+            "resume",
+            "verify",
+            "on_progress",
+            "_set_progress",
+        )
+        for name in generic:
+            params = inspect.signature(getattr(dm.DownloadManager, name)).parameters
+            assert "resource_id" in params, f"{name} must speak resource_id"
+            assert "model_id" not in params, f"{name} still says model_id"
+
+    def test_model_facade_keeps_model_id(self):
+        """download_model takes model ids — the honest name stays."""
+        import inspect
+
+        facade = inspect.signature(dm.DownloadManager.download_model).parameters
+        assert "model_id" in facade
+        assert "resource_id" not in facade

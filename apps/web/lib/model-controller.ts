@@ -232,24 +232,24 @@ export const modelController = {
     }
   },
 
-  async startDownload(modelId: string, totalBytesHint = 0): Promise<{ status: string; model_id: string }> {
-    return apiPost('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
+  async startDownload(resourceId: string, totalBytesHint = 0): Promise<{ status: string; resource_id: string }> {
+    return apiPost('/models/download', { resource_id: resourceId, total_bytes_hint: totalBytesHint })
   },
 
-  async getDownloadStatus(modelId: string): Promise<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number; error?: string }> {
-    return apiGet(`/models/download/${encodeURIComponent(modelId)}`)
+  async getDownloadStatus(resourceId: string): Promise<{ resource_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number; error?: string }> {
+    return apiGet(`/models/download/${encodeURIComponent(resourceId)}`)
   },
 
-  async listDownloads(): Promise<{ downloads: Array<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }>; count: number }> {
+  async listDownloads(): Promise<{ downloads: Array<{ resource_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }>; count: number }> {
     try {
       const raw = await apiGet<unknown>('/models/downloads')
       const d = raw as Record<string, unknown>
       if (d && typeof d === 'object' && Array.isArray((d as { downloads?: unknown }).downloads)) {
-        const arr = (d as { downloads: Array<{ model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }> }).downloads
+        const arr = (d as { downloads: Array<{ resource_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number }> }).downloads
         return { downloads: arr, count: arr.length }
       }
       if (d && typeof d === 'object' && !Array.isArray(d)) {
-        const downloads = Object.values(d).filter((v): v is { model_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number } => v != null && typeof v === 'object' && 'model_id' in (v as object))
+        const downloads = Object.values(d).filter((v): v is { resource_id: string; status: string; progress: number; bytes_downloaded: number; total_bytes: number; speed_bps: number } => v != null && typeof v === 'object' && 'resource_id' in (v as object))
         return { downloads, count: downloads.length }
       }
       return { downloads: [], count: 0 }
@@ -259,16 +259,16 @@ export const modelController = {
     }
   },
 
-  async cancelDownload(modelId: string): Promise<{ status: string }> {
-    return apiPost(`/models/download/${encodeURIComponent(modelId)}/cancel`)
+  async cancelDownload(resourceId: string): Promise<{ status: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(resourceId)}/cancel`)
   },
 
-  async retryDownload(modelId: string): Promise<{ status: string }> {
-    return apiPost(`/models/download/${encodeURIComponent(modelId)}/retry`)
+  async retryDownload(resourceId: string): Promise<{ status: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(resourceId)}/retry`)
   },
 
-  async verifyDownload(modelId: string): Promise<{ verified: boolean; model_id: string; error?: string }> {
-    return apiPost(`/models/download/${encodeURIComponent(modelId)}/verify`)
+  async verifyDownload(resourceId: string): Promise<{ verified: boolean; resource_id: string; error?: string }> {
+    return apiPost(`/models/download/${encodeURIComponent(resourceId)}/verify`)
   },
 
   async getEngineStatus(): Promise<{ engine: string; version: string; models_loaded: number; uptime_s: number; memory_usage_mb: number } | null> {
@@ -311,12 +311,12 @@ export const modelController = {
 }
 
 export async function* streamModelEvents(
-  modelId: string,
+  resourceId: string,
 ): AsyncGenerator<{ phase: string; progress: number }> {
   const { apiGet } = await import('./http-client')
   while (true) {
     try {
-      const data = await apiGet<{ model_id: string; cached?: boolean; status?: string; progress?: number }>(`/models/download/${encodeURIComponent(modelId)}`)
+      const data = await apiGet<{ resource_id: string; cached?: boolean; status?: string; progress?: number }>(`/models/download/${encodeURIComponent(resourceId)}`)
       if (data.cached) {
         yield { phase: 'ready', progress: 100 }
         return

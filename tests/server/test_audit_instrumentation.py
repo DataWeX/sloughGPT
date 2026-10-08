@@ -184,10 +184,10 @@ class TestModelAudit:
         mgr.download = AsyncMock(return_value={"status": "in_progress"})
         mock_mgr.return_value = mgr
         resp = models_client.post(
-            "/models/download", json={"model_id": "gpt2", "total_bytes_hint": 1000}
+            "/models/download", json={"resource_id": "gpt2", "total_bytes_hint": 1000}
         )
         assert resp.status_code == 200
-        assert resp.json()["data"]["model_id"] == "gpt2"
+        assert resp.json()["data"]["resource_id"] == "gpt2"
         logger = mock_logger.return_value
         assert logger.log.call_count >= 1
         first_call_args, first_call_kwargs = logger.log.call_args_list[0]
@@ -207,7 +207,7 @@ class TestModelAudit:
         mock_mgr.return_value = mgr
         resp = models_client.post(
             "/models/download",
-            json={"model_id": "xv6-book", "url": "https://host/book.pdf"},
+            json={"resource_id": "xv6-book", "url": "https://host/book.pdf"},
         )
         assert resp.status_code == 200
         first_call_args, first_call_kwargs = mock_logger.return_value.log.call_args_list[0]

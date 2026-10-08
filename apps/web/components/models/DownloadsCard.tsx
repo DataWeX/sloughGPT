@@ -9,7 +9,7 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { formatBytes } from '@/lib/format-bytes'
 
 interface Download {
-  model_id: string
+  resource_id: string
   status: string
   progress: number
   bytes_downloaded: number
@@ -65,33 +65,33 @@ export default function DownloadsCard() {
     return () => clearInterval(timer)
   }, [downloads, fetchDownloads])
 
-  const handleCancel = async (modelId: string) => {
+  const handleCancel = async (resourceId: string) => {
     try {
-      await modelController.cancelDownload(modelId)
-      addToast(`Cancelled download: ${modelId}`, 'success')
+      await modelController.cancelDownload(resourceId)
+      addToast(`Cancelled download: ${resourceId}`, 'success')
       await fetchDownloads()
     } catch (err) {
       addToast(extractErrorMessage(err, 'Could not cancel'), 'error')
     }
   }
 
-  const handleRetry = async (modelId: string) => {
+  const handleRetry = async (resourceId: string) => {
     try {
-      await modelController.retryDownload(modelId)
-      addToast(`Retrying download: ${modelId}`, 'success')
+      await modelController.retryDownload(resourceId)
+      addToast(`Retrying download: ${resourceId}`, 'success')
       await fetchDownloads()
     } catch (err) {
       addToast(extractErrorMessage(err, 'Could not retry'), 'error')
     }
   }
 
-  const handleVerify = async (modelId: string) => {
+  const handleVerify = async (resourceId: string) => {
     try {
-      const result = await modelController.verifyDownload(modelId)
+      const result = await modelController.verifyDownload(resourceId)
       if (result.verified) {
-        addToast(`${modelId} verified`, 'success')
+        addToast(`${resourceId} verified`, 'success')
       } else {
-        addToast(`${modelId} verification failed: ${result.error || 'unknown'}`, 'error')
+        addToast(`${resourceId} verification failed: ${result.error || 'unknown'}`, 'error')
       }
     } catch (err) {
       addToast(extractErrorMessage(err, 'Could not verify'), 'error')
@@ -117,10 +117,10 @@ export default function DownloadsCard() {
             const isActive = d.status === 'downloading' || d.status === 'queued'
             const isFailed = d.status === 'failed' || d.status === 'error'
             return (
-              <div key={d.model_id} className="rounded-lg border border-border/40 px-2.5 py-2 text-xs">
+              <div key={d.resource_id} className="rounded-lg border border-border/40 px-2.5 py-2 text-xs">
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="font-medium truncate text-[11px]">{d.model_id}</span>
+                    <span className="font-medium truncate text-[11px]">{d.resource_id}</span>
                     <span className={cn('text-[9px] px-1.5 py-0.5 rounded-full font-medium', isActive ? 'bg-primary/10 text-primary' :
                       isFailed ? 'bg-destructive/10 text-destructive' :
                       d.status === 'completed' ? 'bg-success/10 text-success' :
@@ -136,12 +136,12 @@ export default function DownloadsCard() {
                 )}
                 {isFailed && (
                   <div className="flex gap-0.5 mt-1">
-                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleRetry(d.model_id)}>Retry</Button>
-                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleVerify(d.model_id)}>Verify</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleRetry(d.resource_id)}>Retry</Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleVerify(d.resource_id)}>Verify</Button>
                   </div>
                 )}
                 {isActive && (
-                  <Button size="sm" variant="ghost" className="h-6 text-[10px] mt-1" onClick={() => handleCancel(d.model_id)}>Cancel</Button>
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px] mt-1" onClick={() => handleCancel(d.resource_id)}>Cancel</Button>
                 )}
               </div>
             )

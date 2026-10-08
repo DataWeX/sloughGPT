@@ -1,7 +1,7 @@
 import { apiGet, apiPost } from './http-client'
 
 export interface DownloadProgress {
-  model_id: string
+  resource_id: string
   status: 'queued' | 'downloading' | 'complete' | 'failed' | 'cancelled' | 'not_found' | 'already_cached' | 'already_downloading' | 'started'
   bytes_downloaded: number
   total_bytes: number
@@ -17,10 +17,10 @@ export interface DownloadProgress {
   cached?: boolean
 }
 
-export async function startDownload(modelId: string, totalBytesHint = 0): Promise<DownloadProgress> {
-  return apiPost<DownloadProgress>('/models/download', { model_id: modelId, total_bytes_hint: totalBytesHint })
+export async function startDownload(resourceId: string, totalBytesHint = 0): Promise<DownloadProgress> {
+  return apiPost<DownloadProgress>('/models/download', { resource_id: resourceId, total_bytes_hint: totalBytesHint })
 }
 
-export async function getDownloadStatus(modelId: string): Promise<DownloadProgress> {
-  return apiGet<DownloadProgress>(`/models/download/${encodeURIComponent(modelId)}`)
+export async function getDownloadStatus(resourceId: string): Promise<DownloadProgress> {
+  return apiGet<DownloadProgress>(`/models/download/${encodeURIComponent(resourceId)}`)
 }

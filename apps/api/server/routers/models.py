@@ -55,11 +55,15 @@ class ExportRequest(BaseModel):
 
 
 class DownloadRequest(BaseModel):
-    model_id: str = Field(..., min_length=1, max_length=200)
+    # The download stack is generic (card 3f749b34): the registry key is a
+    # resource id — models, artifacts, books all travel through here under
+    # the same name the DownloadBackend ABC already speaks.  Hard cut from
+    # the former ``model_id``: no alias.
+    resource_id: str = Field(..., min_length=1, max_length=200)
     total_bytes_hint: int = Field(default=0, ge=0)
     # Generic-download surface: an explicit URL (and optional destination)
-    # travels straight to DownloadManager.download().  Omitted → the model
-    # id is resolved through the HuggingFace Hub instead.
+    # travels straight to DownloadManager.download().  Omitted → the id is
+    # resolved through the HuggingFace Hub instead (model-domain callers).
     url: str = Field(default="", max_length=2048)
     dest: str = Field(default="", max_length=1024)
 
@@ -93,7 +97,7 @@ class ExternalDownloadRequest(BaseModel):
     """Request body for POST /models/external/download."""
 
     server: str = Field(..., min_length=1, max_length=100)
-    model_id: str = Field(..., min_length=1, max_length=200)
+    resource_id: str = Field(..., min_length=1, max_length=200)
 
 
 class ModelsRouter:
@@ -124,23 +128,23 @@ class ModelsRouter:
         )
         self.router.add_api_route(path="/download", endpoint=self.start_download, methods=["POST"])
         self.router.add_api_route(
-            path="/download/{model_id:path}", endpoint=self.get_download_status, methods=["GET"]
+            path="/download/{resource_id:path}", endpoint=self.get_download_status, methods=["GET"]
         )
         self.router.add_api_route(path="/downloads", endpoint=self.list_downloads, methods=["GET"])
         self.router.add_api_route(
-            path="/download/{model_id:path}/cancel", endpoint=self.cancel_download, methods=["POST"]
+            path="/download/{resource_id:path}/cancel", endpoint=self.cancel_download, methods=["POST"]
         )
         self.router.add_api_route(
-            path="/download/{model_id:path}/pause", endpoint=self.pause_download, methods=["POST"]
+            path="/download/{resource_id:path}/pause", endpoint=self.pause_download, methods=["POST"]
         )
         self.router.add_api_route(
-            path="/download/{model_id:path}/resume", endpoint=self.resume_download, methods=["POST"]
+            path="/download/{resource_id:path}/resume", endpoint=self.resume_download, methods=["POST"]
         )
         self.router.add_api_route(
-            path="/download/{model_id:path}/verify", endpoint=self.verify_download, methods=["POST"]
+            path="/download/{resource_id:path}/verify", endpoint=self.verify_download, methods=["POST"]
         )
         self.router.add_api_route(
-            path="/download/{model_id:path}/retry", endpoint=self.retry_download, methods=["POST"]
+            path="/download/{resource_id:path}/retry", endpoint=self.retry_download, methods=["POST"]
         )
         self.router.add_api_route(path="/cache-usage", endpoint=self.cache_usage, methods=["GET"])
         self.router.add_api_route(
@@ -636,31 +640,31 @@ class ModelsRouter:
 
             mgr = get_download_manager()
 
-            if mgr.is_cached(req.model_id):
-                return success_response(data={"model_id": req.model_id}, message="already_cached")
+            if mgr.is_cached(req.resource_id):
+                return success_response(data={"resource_id": req.resource_id}, message="already_cached")
 
-            if mgr.is_downloading(req.model_id):
+            if mgr.is_downloading(req.resource_id):
                 return success_response(
-                    data={"model_id": req.model_id}, message="already_downloading"
+                    data={"resource_id": req.resource_id}, message="already_downloading"
                 )
 
             asyncio.create_task(
-                self._run_download(req.model_id, req.total_bytes_hint, req.url, req.dest)
+                self._run_download(req.resource_id, req.total_bytes_hint, req.url, req.dest)
             )
             safe_audit_log(
                 "model.download",
-                resource=req.model_id,
+                resource=req.resource_id,
                 detail="started",
                 total_bytes_hint=req.total_bytes_hint,
                 url=req.url,
             )
-            return success_response(data={"model_id": req.model_id}, message="started")
+            return success_response(data={"resource_id": req.resource_id}, message="started")
         except Exception as e:
             classify_and_raise(e, source="models.download_start")
 
     async def _run_download(
         self,
-        model_id: str,
+        resource_id: str,
         total_bytes_hint: int,
         url: str = "",
         dest: str = "",
@@ -686,21 +690,21 @@ class ModelsRouter:
             cm = get_cancel_manager()
             cm_op = cm.register(
                 op_type=OpType.DOWNLOAD,
-                label=f"download:{model_id}",
-                cancel_fn=lambda: mgr.cancel(model_id),
+                label=f"download:{resource_id}",
+                cancel_fn=lambda: mgr.cancel(resource_id),
             )
             cm.start(cm_op)
         except Exception as e:
             logger.warning(
                 "CancelManager registration failed for download %s: %s",
-                model_id,
+                resource_id,
                 e,
                 extra={"tag": "MODEL"},
             )
 
         try:
             result = await mgr.download_model(
-                model_id,
+                resource_id,
                 url=url,
                 dest=dest,
                 total_bytes_hint=total_bytes_hint,
@@ -710,16 +714,16 @@ class ModelsRouter:
             if result.get("status") == "complete":
                 safe_audit_log(
                     "model.download.complete",
-                    resource=model_id,
+                    resource=resource_id,
                     detail=f"elapsed={_download_elapsed_ms:.0f}ms size={result.get('size', 0)}",
                 )
                 ctrl = get_models_controller()
                 try:
-                    ctrl.load_model(model_id)
+                    ctrl.load_model(resource_id)
                 except Exception as e:
                     logger.warning(
                         "Auto-load after download failed for %s: %s",
-                        model_id,
+                        resource_id,
                         e,
                         extra={"tag": "MODEL"},
                     )
@@ -728,7 +732,7 @@ class ModelsRouter:
                         get_cancel_manager().finish(cm_op)
                     except Exception as exc:
                         logger.warning(
-                            "CancelManager.finish failed for download %s: %s", model_id, exc
+                            "CancelManager.finish failed for download %s: %s", resource_id, exc
                         )
             elif result.get("status") == "cancelled":
                 if cm_op:
@@ -737,13 +741,13 @@ class ModelsRouter:
                     except Exception as exc:
                         logger.warning(
                             "CancelManager.finish failed for cancelled download %s: %s",
-                            model_id,
+                            resource_id,
                             exc,
                         )
             else:
                 safe_audit_log(
                     "model.download.failed",
-                    resource=model_id,
+                    resource=resource_id,
                     detail=f"elapsed={_download_elapsed_ms:.0f}ms error={result.get('error', 'unknown')}",
                 )
                 if cm_op:
@@ -753,13 +757,13 @@ class ModelsRouter:
                         )
                     except Exception as exc:
                         logger.warning(
-                            "CancelManager.finish failed for failed download %s: %s", model_id, exc
+                            "CancelManager.finish failed for failed download %s: %s", resource_id, exc
                         )
         except Exception as e:
             _download_elapsed_ms = (_time.monotonic() - _download_t0) * 1000
             safe_audit_log(
                 "model.download.failed",
-                resource=model_id,
+                resource=resource_id,
                 detail=f"elapsed={_download_elapsed_ms:.0f}ms error={e}",
             )
             if cm_op:
@@ -767,20 +771,20 @@ class ModelsRouter:
                     get_cancel_manager().finish(cm_op, error=str(e))
                 except Exception as exc:
                     logger.warning(
-                        "CancelManager.finish failed for download exception %s: %s", model_id, exc
+                        "CancelManager.finish failed for download exception %s: %s", resource_id, exc
                     )
 
     @endpoint("models.get_download_status")
-    async def get_download_status(self, model_id: str) -> dict[str, Any]:
+    async def get_download_status(self, resource_id: str) -> dict[str, Any]:
         """Get download progress for a specific model."""
         from domain.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
-        progress = mgr.get_progress(model_id)
+        progress = mgr.get_progress(resource_id)
         if progress is None:
-            cached = mgr.is_cached(model_id)
+            cached = mgr.is_cached(resource_id)
             return success_response(
-                data={"model_id": model_id, "cached": cached}, message="not_found"
+                data={"resource_id": resource_id, "cached": cached}, message="not_found"
             )
         return success_response(data=progress)
 
@@ -840,55 +844,55 @@ class ModelsRouter:
 
     @endpoint("models.cancel_download")
     async def cancel_download(
-        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+        self, resource_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
         """Cancel an in-progress download."""
         try:
             from domain.infrastructure.download_manager import get_download_manager
 
             mgr = get_download_manager()
-            if mgr.cancel(model_id):
-                safe_audit_log("model.cancel", resource=model_id, detail="cancelled")
-                return success_response(data={"model_id": model_id}, message="cancelled")
-            return success_response(data={"model_id": model_id}, message="not_found")
+            if mgr.cancel(resource_id):
+                safe_audit_log("model.cancel", resource=resource_id, detail="cancelled")
+                return success_response(data={"resource_id": resource_id}, message="cancelled")
+            return success_response(data={"resource_id": resource_id}, message="not_found")
         except Exception as e:
             classify_and_raise(e, source="models.download_cancel")
 
     @endpoint("models.pause_download")
     async def pause_download(
-        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+        self, resource_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
         """Pause an in-progress download."""
         try:
             from domain.infrastructure.download_manager import get_download_manager
 
             mgr = get_download_manager()
-            if mgr.pause(model_id):
-                safe_audit_log("model.pause", resource=model_id, detail="paused")
-                return success_response(data={"model_id": model_id}, message="paused")
-            return success_response(data={"model_id": model_id}, message="not_found")
+            if mgr.pause(resource_id):
+                safe_audit_log("model.pause", resource=resource_id, detail="paused")
+                return success_response(data={"resource_id": resource_id}, message="paused")
+            return success_response(data={"resource_id": resource_id}, message="not_found")
         except Exception as e:
             classify_and_raise(e, source="models.download_pause")
 
     @endpoint("models.resume_download")
     async def resume_download(
-        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+        self, resource_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
         """Resume a paused download."""
         try:
             from domain.infrastructure.download_manager import get_download_manager
 
             mgr = get_download_manager()
-            if mgr.resume(model_id):
-                safe_audit_log("model.resume", resource=model_id, detail="resumed")
-                return success_response(data={"model_id": model_id}, message="resumed")
-            return success_response(data={"model_id": model_id}, message="not_found")
+            if mgr.resume(resource_id):
+                safe_audit_log("model.resume", resource=resource_id, detail="resumed")
+                return success_response(data={"resource_id": resource_id}, message="resumed")
+            return success_response(data={"resource_id": resource_id}, message="not_found")
         except Exception as e:
             classify_and_raise(e, source="models.download_resume")
 
     @endpoint("models.verify_download")
     async def verify_download(
-        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+        self, resource_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
         """Verify a downloaded model's weight files against Hub SHA-256 checksums.
         Returns verification result and on-disk size."""
@@ -901,16 +905,16 @@ class ModelsRouter:
         try:
 
             def _verify():
-                cache_dir = get_cache_dir(model_id)
+                cache_dir = get_cache_dir(resource_id)
                 refs_main = cache_dir / "refs" / "main"
                 if not refs_main.exists():
-                    return {"status": "not_cached", "model_id": model_id}
-                ok = verify_model(model_id)
-                missing = list_missing_files(model_id)
-                size_str = format_size_gb(compute_model_size_gb(model_id)) or "—"
+                    return {"status": "not_cached", "resource_id": resource_id}
+                ok = verify_model(resource_id)
+                missing = list_missing_files(resource_id)
+                size_str = format_size_gb(compute_model_size_gb(resource_id)) or "—"
                 return {
                     "status": "verified" if ok else "corrupt",
-                    "model_id": model_id,
+                    "resource_id": resource_id,
                     "verified": ok,
                     "missing_files_count": len(missing),
                     "missing_files": missing,
@@ -920,12 +924,12 @@ class ModelsRouter:
             result = await asyncio.to_thread(_verify)
             return success_response(data=result)
         except Exception as e:
-            logger.warning("Verify download failed (model=%s): %s", model_id, e)
+            logger.warning("Verify download failed (model=%s): %s", resource_id, e)
             classify_and_raise(e, source="verify_download")
 
     @endpoint("models.retry_download")
     async def retry_download(
-        self, model_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+        self, resource_id: str, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict[str, Any]:
         try:
             """Redownload a cached model (cleanup + fresh download)."""
@@ -935,16 +939,16 @@ class ModelsRouter:
                 is_download_complete,
             )
 
-            if is_download_complete(model_id):
-                cleanup_incomplete(model_id)
-                safe_audit_log("model.retry_download", resource=model_id, detail="cleanup+restart")
+            if is_download_complete(resource_id):
+                cleanup_incomplete(resource_id)
+                safe_audit_log("model.retry_download", resource=resource_id, detail="cleanup+restart")
 
             mgr = get_download_manager()
-            if mgr.is_downloading(model_id):
-                return success_response(data={"model_id": model_id}, message="already_downloading")
+            if mgr.is_downloading(resource_id):
+                return success_response(data={"resource_id": resource_id}, message="already_downloading")
 
-            asyncio.create_task(self._run_download(model_id, 0))
-            return success_response(data={"model_id": model_id}, message="started")
+            asyncio.create_task(self._run_download(resource_id, 0))
+            return success_response(data={"resource_id": resource_id}, message="started")
 
         except Exception as e:
             classify_and_raise(e, source="models.retry_download")
@@ -1173,26 +1177,26 @@ class ModelsRouter:
         from domain.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
-        if mgr.is_downloading(req.model_id):
-            return success_response(data={"model_id": req.model_id}, message="already_downloading")
+        if mgr.is_downloading(req.resource_id):
+            return success_response(data={"resource_id": req.resource_id}, message="already_downloading")
 
-        asyncio.create_task(self._run_external_download(backend, req.model_id))
+        asyncio.create_task(self._run_external_download(backend, req.resource_id))
         return success_response(
-            data={"model_id": req.model_id, "server": req.server},
+            data={"resource_id": req.resource_id, "server": req.server},
             message="download_started",
         )
 
-    async def _run_external_download(self, backend, model_id: str):
+    async def _run_external_download(self, backend, resource_id: str):
         """Background task that runs the external download."""
         from domain.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
         try:
-            result = await mgr.download_with(model_id, backend)
+            result = await mgr.download_with(resource_id, backend)
             if result.get("status") == "complete":
-                logger.info("External download completed: %s", model_id)
+                logger.info("External download completed: %s", resource_id)
         except Exception as e:
-            logger.warning("External download failed for %s: %s", model_id, e)
+            logger.warning("External download failed for %s: %s", resource_id, e)
 
     # ── Backend management ───────────────────────────────────────────────
 

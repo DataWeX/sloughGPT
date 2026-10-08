@@ -126,12 +126,12 @@ Separate inference endpoint backed by the direct model server.
 | `POST`   | `/models/dequantize`                            | Dequantize a model.                                                   |
 | `POST`   | `/models/download`                              | Start downloading a model.                                            |
 | `GET`    | `/models/download/qwen-gguf`                    | Download Qwen2.5-0.5B-Instruct GGUF (Q4_K_M) from HuggingFace Hub.    |
-| `GET`    | `/models/download/{model_id:path}`              | Get download progress for a specific model.                           |
-| `POST`   | `/models/download/{model_id:path}/cancel`       |                                                                       |
-| `POST`   | `/models/download/{model_id:path}/pause`        |                                                                       |
-| `POST`   | `/models/download/{model_id:path}/resume`       |                                                                       |
-| `POST`   | `/models/download/{model_id:path}/retry`        |                                                                       |
-| `POST`   | `/models/download/{model_id:path}/verify`       |                                                                       |
+| `GET`    | `/models/download/{resource_id:path}`              | Get download progress for a specific model.                           |
+| `POST`   | `/models/download/{resource_id:path}/cancel`       |                                                                       |
+| `POST`   | `/models/download/{resource_id:path}/pause`        |                                                                       |
+| `POST`   | `/models/download/{resource_id:path}/resume`       |                                                                       |
+| `POST`   | `/models/download/{resource_id:path}/retry`        |                                                                       |
+| `POST`   | `/models/download/{resource_id:path}/verify`       |                                                                       |
 | `GET`    | `/models/downloads`                             | List all active downloads.                                            |
 | `POST`   | `/models/engine/reload`                         | Reload the model engine.                                              |
 | `GET`    | `/models/engine/status`                         | Get engine status.                                                    |

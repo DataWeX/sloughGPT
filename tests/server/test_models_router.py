@@ -2,6 +2,7 @@
 Tests for the models router — list, load, unload, HF models.
 """
 
+import time
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -377,7 +378,7 @@ class TestStartDownload:
         mgr = MagicMock()
         mgr.is_cached.return_value = True
         mock_mgr.return_value = mgr
-        resp = client.post("/models/download", json={"model_id": "gpt2"})
+        resp = client.post("/models/download", json={"resource_id": "gpt2"})
         assert resp.status_code == 200
         assert resp.json()["message"] == "already_cached"
 
@@ -387,7 +388,7 @@ class TestStartDownload:
         mgr.is_cached.return_value = False
         mgr.is_downloading.return_value = True
         mock_mgr.return_value = mgr
-        resp = client.post("/models/download", json={"model_id": "gpt2"})
+        resp = client.post("/models/download", json={"resource_id": "gpt2"})
         assert resp.status_code == 200
         assert resp.json()["message"] == "already_downloading"
 
@@ -398,7 +399,7 @@ class TestStartDownload:
         mgr.is_cached.return_value = False
         mgr.is_downloading.return_value = False
         mock_mgr.return_value = mgr
-        resp = client.post("/models/download", json={"model_id": "gpt2", "total_bytes_hint": 100})
+        resp = client.post("/models/download", json={"resource_id": "gpt2", "total_bytes_hint": 100})
         assert resp.status_code == 200
         assert resp.json()["message"] == "started"
         mock_run.assert_called_once_with("gpt2", 100, "", "")
@@ -414,7 +415,7 @@ class TestStartDownload:
         resp = client.post(
             "/models/download",
             json={
-                "model_id": "xv6-book",
+                "resource_id": "xv6-book",
                 "total_bytes_hint": 750111,
                 "url": "https://pdos.csail.mit.edu/6.828/2024/xv6/book.pdf",
                 "dest": "/tmp/xv6-book.pdf",
@@ -437,7 +438,7 @@ class TestStartDownload:
         mgr.is_cached.return_value = False
         mgr.is_downloading.return_value = False
         mock_mgr.return_value = mgr
-        resp = client.post("/models/download", json={"model_id": "gpt2"})
+        resp = client.post("/models/download", json={"resource_id": "gpt2"})
         assert resp.status_code == 200
         mock_run.assert_called_once_with("gpt2", 0, "", "")
 
@@ -456,7 +457,7 @@ class TestRunDownloadWiring:
         return mgr
 
     async def test_url_and_dest_reach_download_model_as_keywords(self):
-        mgr = self._manager({"status": "failed", "model_id": "m", "error": "boom"})
+        mgr = self._manager({"status": "failed", "resource_id": "m", "error": "boom"})
         with patch(
             "domain.infrastructure.download_manager.get_download_manager",
             return_value=mgr,
@@ -470,7 +471,7 @@ class TestRunDownloadWiring:
         )
 
     async def test_no_url_defaults_to_model_path(self):
-        mgr = self._manager({"status": "failed", "model_id": "gpt2", "error": "x"})
+        mgr = self._manager({"status": "failed", "resource_id": "gpt2", "error": "x"})
         with patch(
             "domain.infrastructure.download_manager.get_download_manager",
             return_value=mgr,
@@ -484,7 +485,7 @@ class TestRunDownloadWiring:
         assert mgr.download_model.call_args.kwargs["url"] == ""
 
     async def test_download_result_drives_audit_outcome(self):
-        mgr = self._manager({"status": "complete", "model_id": "m"})
+        mgr = self._manager({"status": "complete", "resource_id": "m"})
         controller = MagicMock()
         with (
             patch(
@@ -540,12 +541,12 @@ class TestEngineStatusContract:
 
 
 class TestDownloadStatus:
-    """GET /models/download/{model_id}"""
+    """GET /models/download/{resource_id}"""
 
     @patch("domain.infrastructure.download_manager.get_download_manager")
     def test_returns_progress(self, mock_mgr, client):
         mgr = MagicMock()
-        mgr.get_progress.return_value = {"model_id": "gpt2", "pct": 42.0, "status": "downloading"}
+        mgr.get_progress.return_value = {"resource_id": "gpt2", "pct": 42.0, "status": "downloading"}
         mock_mgr.return_value = mgr
         resp = client.get("/models/download/gpt2")
         assert resp.status_code == 200
@@ -570,7 +571,7 @@ class TestListDownloads:
     @patch("domain.infrastructure.download_manager.get_download_manager")
     def test_returns_list_and_cleans_stale(self, mock_mgr, client):
         mgr = MagicMock()
-        mgr.list_downloads.return_value = [{"model_id": "gpt2", "pct": 10}]
+        mgr.list_downloads.return_value = [{"resource_id": "gpt2", "pct": 10}]
         mock_mgr.return_value = mgr
         resp = client.get("/models/downloads")
         assert resp.status_code == 200
@@ -579,7 +580,7 @@ class TestListDownloads:
 
 
 class TestCancelDownload:
-    """POST /models/download/{model_id}/cancel"""
+    """POST /models/download/{resource_id}/cancel"""
 
     @patch("domain.infrastructure.download_manager.get_download_manager")
     def test_cancel_true(self, mock_mgr, client):
@@ -599,7 +600,7 @@ class TestCancelDownload:
 
 
 class TestRetryDownload:
-    """POST /models/download/{model_id}/retry"""
+    """POST /models/download/{resource_id}/retry"""
 
     @patch("apps.api.server.routers.models.ModelsRouter._run_download")
     @patch("domain.infrastructure.download_manager.is_download_complete")
@@ -872,7 +873,7 @@ class TestRunExternalDownloadWiring:
         ) as run:
             resp = client.post(
                 "/models/external/download",
-                json={"server": "peer", "model_id": "m1"},
+                json={"server": "peer", "resource_id": "m1"},
             )
 
         assert resp.status_code == 200
@@ -884,6 +885,93 @@ class TestRunExternalDownloadWiring:
     def test_route_unknown_server_still_404s(self, client):
         resp = client.post(
             "/models/external/download",
-            json={"server": "ghost", "model_id": "m1"},
+            json={"server": "ghost", "resource_id": "m1"},
         )
         assert resp.status_code == 404
+
+
+class TestDownloadContractIsGeneric:
+    """The download stack is generic — its contract says ``resource_id`` (card 3f749b34).
+
+    ``model_id`` was a lie the moment the stack served a PDF book under it.
+    Hard cut: no ``model_id`` alias in bodies, registry JSON, or responses —
+    the model domain (/models/load, /models/current, catalog) keeps its name
+    because there it is honest.
+    """
+
+    @patch("apps.api.server.routers.models.ModelsRouter._run_download")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
+    def test_start_body_and_response_use_resource_id(self, mock_mgr, mock_run, client):
+        mgr = MagicMock()
+        mgr.is_cached.return_value = False
+        mgr.is_downloading.return_value = False
+        mock_mgr.return_value = mgr
+
+        resp = client.post("/models/download", json={"resource_id": "gpt2"})
+
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["resource_id"] == "gpt2"
+        assert "model_id" not in data
+
+    @patch("domain.infrastructure.download_manager.get_download_manager")
+    def test_legacy_model_id_body_is_rejected(self, mock_mgr, client):
+        """Hard cut: the old field must 422, not silently alias."""
+        resp = client.post("/models/download", json={"model_id": "gpt2"})
+        assert resp.status_code == 422
+
+    def test_external_body_rejects_model_id(self, client):
+        client.post(
+            "/models/external/servers",
+            json={"name": "peer", "url": "http://peer:9000", "compressed": False},
+        )
+        with patch.object(ModelsRouter, "_run_external_download", new_callable=AsyncMock):
+            legacy = client.post(
+                "/models/external/download",
+                json={"server": "peer", "model_id": "m1"},
+            )
+            generic = client.post(
+                "/models/external/download",
+                json={"server": "peer", "resource_id": "m1"},
+            )
+        assert legacy.status_code == 422
+        assert generic.status_code == 200
+
+    def test_registry_json_exposes_resource_id(self, client):
+        """GET /models/downloads and /models/download/{id} speak resource_id."""
+        from domain.infrastructure._internal.download_manager import DownloadManager, DownloadStatus
+
+        mgr = DownloadManager()
+        mgr._set_progress(
+            "book.pdf",
+            status=DownloadStatus.COMPLETE,
+            total_bytes=42,
+            started_at=time.time(),
+            completed_at=time.time(),
+        )
+        with patch(
+            "domain.infrastructure.download_manager.get_download_manager",
+            return_value=mgr,
+        ):
+            listed = client.get("/models/downloads").json()["data"]["book.pdf"]
+            status = client.get("/models/download/book.pdf").json()["data"]
+
+        for entry in (listed, status):
+            assert entry["resource_id"] == "book.pdf"
+            assert "model_id" not in entry
+
+    def test_action_responses_use_resource_id(self, client):
+        from domain.infrastructure._internal.download_manager import DownloadManager, DownloadStatus
+
+        mgr = DownloadManager()
+        mgr._set_progress("book.pdf", status=DownloadStatus.DOWNLOADING)
+        with patch(
+            "domain.infrastructure.download_manager.get_download_manager",
+            return_value=mgr,
+        ):
+            cancelled = client.post("/models/download/book.pdf/cancel").json()
+            cancelled_again = client.post("/models/download/book.pdf/cancel").json()
+
+        assert cancelled["data"]["resource_id"] == "book.pdf"
+        assert "model_id" not in cancelled["data"]
+        assert cancelled_again["message"] == "not_found"

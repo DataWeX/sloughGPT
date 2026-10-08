@@ -25,16 +25,16 @@ import {
 describe('startDownload', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /models/download with model_id', async () => {
+  it('POSTs to /models/download with resource_id', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started' })
     await startDownload('gpt2')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download', { model_id: 'gpt2', total_bytes_hint: 0 })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download', { resource_id: 'gpt2', total_bytes_hint: 0 })
   })
 
   it('includes totalBytesHint when provided', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started' })
     await startDownload('gpt2', 500000000)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download', { model_id: 'gpt2', total_bytes_hint: 500000000 })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download', { resource_id: 'gpt2', total_bytes_hint: 500000000 })
   })
 
   it('returns started status', async () => {
@@ -47,29 +47,29 @@ describe('startDownload', () => {
 describe('getDownloadStatus', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /models/download/{modelId}', async () => {
+  it('GETs /models/download/{resourceId}', async () => {
     apiClient.apiGet.mockResolvedValue({
-      model_id: 'gpt2',
+      resource_id: 'gpt2',
       status: 'downloading',
       percentage: 45,
       bytes_downloaded: 100,
       total_bytes: 200,
     })
     const result = await getDownloadStatus('gpt2')
-    expect(result.model_id).toBe('gpt2')
+    expect(result.resource_id).toBe('gpt2')
     expect(result.status).toBe('downloading')
     expect(result.percentage).toBe(45)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/models/download/gpt2')
   })
 
-  it('URL-encodes special characters in modelId', async () => {
-    apiClient.apiGet.mockResolvedValue({ model_id: 'org/model', status: 'complete' })
+  it('URL-encodes special characters in resourceId', async () => {
+    apiClient.apiGet.mockResolvedValue({ resource_id: 'org/model', status: 'complete' })
     await getDownloadStatus('org/model')
     expect(apiClient.apiGet).toHaveBeenCalledWith('/models/download/org%2Fmodel')
   })
 
   it('returns complete status', async () => {
-    apiClient.apiGet.mockResolvedValue({ model_id: 'gpt2', status: 'complete', percentage: 100 })
+    apiClient.apiGet.mockResolvedValue({ resource_id: 'gpt2', status: 'complete', percentage: 100 })
     const result = await getDownloadStatus('gpt2')
     expect(result.status).toBe('complete')
   })

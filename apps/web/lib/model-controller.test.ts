@@ -83,13 +83,14 @@ describe('modelController', () => {
   })
 
   it('startDownload posts to /models/download', async () => {
-    apiClient.apiPost.mockResolvedValue({ status: 'started', model_id: 'gpt2' })
+    apiClient.apiPost.mockResolvedValue({ status: 'started', resource_id: 'gpt2' })
     const result = await modelController.startDownload('gpt2')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/models/download', { resource_id: 'gpt2', total_bytes_hint: 0 })
     expect(result.status).toBe('started')
   })
 
   it('getDownloadStatus fetches download info', async () => {
-    apiClient.apiGet.mockResolvedValue({ model_id: 'gpt2', status: 'downloading', progress: 50, bytes_downloaded: 500, total_bytes: 1000, speed_bps: 100 })
+    apiClient.apiGet.mockResolvedValue({ resource_id: 'gpt2', status: 'downloading', progress: 50, bytes_downloaded: 500, total_bytes: 1000, speed_bps: 100 })
     const result = await modelController.getDownloadStatus('gpt2')
     expect(result.progress).toBe(50)
   })
@@ -98,6 +99,15 @@ describe('modelController', () => {
     apiClient.apiGet.mockResolvedValue({ downloads: [], count: 0 })
     const result = await modelController.listDownloads()
     expect(result.count).toBe(0)
+  })
+
+  it('listDownloads keeps registry entries keyed by resource_id', async () => {
+    apiClient.apiGet.mockResolvedValue({
+      book: { resource_id: 'book', status: 'complete', progress: 100, bytes_downloaded: 10, total_bytes: 10, speed_bps: 1 },
+    })
+    const result = await modelController.listDownloads()
+    expect(result.downloads).toHaveLength(1)
+    expect(result.downloads[0].resource_id).toBe('book')
   })
 
   it('listDownloads returns empty on error', async () => {
@@ -119,7 +129,7 @@ describe('modelController', () => {
   })
 
   it('verifyDownload posts verify', async () => {
-    apiClient.apiPost.mockResolvedValue({ verified: true, model_id: 'gpt2' })
+    apiClient.apiPost.mockResolvedValue({ verified: true, resource_id: 'gpt2' })
     const result = await modelController.verifyDownload('gpt2')
     expect(result.verified).toBe(true)
   })

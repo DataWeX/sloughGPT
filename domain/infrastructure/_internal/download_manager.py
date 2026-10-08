@@ -63,7 +63,7 @@ class DownloadStatus(StrEnum):
 
 @dataclass
 class DownloadProgress:
-    model_id: str
+    resource_id: str
     status: DownloadStatus
     bytes_downloaded: int = 0
     total_bytes: int = 0
@@ -79,7 +79,7 @@ class DownloadProgress:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "model_id": self.model_id,
+            "resource_id": self.resource_id,
             "status": self.status.value,
             "bytes_downloaded": self.bytes_downloaded,
             "total_bytes": self.total_bytes,
@@ -126,21 +126,21 @@ class DownloadStats:
 # ---------------------------------------------------------------------------
 
 
-def is_download_complete(model_id: str, deep_check: bool = False) -> bool:
+def is_download_complete(resource_id: str, deep_check: bool = False) -> bool:
     """Check if a model is fully cached on disk."""
     if _downcraft is None:
         return False
     # Check if the file exists and is complete
-    dest = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / model_id
+    dest = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / resource_id
     return dest.exists() and dest.stat().st_size > 0
 
 
-def cleanup_incomplete(model_id: str) -> bool:
+def cleanup_incomplete(resource_id: str) -> bool:
     """Remove an incomplete/partial download."""
     if _downcraft is None:
         return False
     # Remove .sgpart file if it exists
-    dest = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / model_id
+    dest = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / resource_id
     part = dest.with_suffix(dest.suffix + ".sgpart")
     if part.exists():
         part.unlink()
@@ -179,40 +179,40 @@ class DownloadManager:
         self._callbacks: dict[str, list] = {}
         self._stats = DownloadStats()
 
-    def get_progress(self, model_id: str) -> dict[str, Any] | None:
+    def get_progress(self, resource_id: str) -> dict[str, Any] | None:
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             return entry.to_dict() if entry else None
 
     def list_downloads(self) -> dict[str, dict[str, Any]]:
         with self._lock:
             return {mid: entry.to_dict() for mid, entry in self._downloads.items()}
 
-    def is_downloading(self, model_id: str) -> bool:
+    def is_downloading(self, resource_id: str) -> bool:
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             return entry is not None and entry.status in (
                 DownloadStatus.QUEUED,
                 DownloadStatus.DOWNLOADING,
                 DownloadStatus.PAUSED,
             )
 
-    def is_cached(self, model_id: str) -> bool:
+    def is_cached(self, resource_id: str) -> bool:
         """Whether the resource is fully cached on disk (survives restart)."""
-        return is_download_complete(model_id)
+        return is_download_complete(resource_id)
 
-    def cancel(self, model_id: str) -> bool:
+    def cancel(self, resource_id: str) -> bool:
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             if entry and entry.status in (DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING):
                 entry.status = DownloadStatus.CANCELLED
-                task = self._tasks.pop(model_id, None)
+                task = self._tasks.pop(resource_id, None)
                 if task and not task.done():
                     task.cancel()
                 return True
             return False
 
-    def pause(self, model_id: str) -> bool:
+    def pause(self, resource_id: str) -> bool:
         """Pause an in-progress download.
 
         The download can later be resumed with ``resume()``.
@@ -220,15 +220,15 @@ class DownloadManager:
         """
         paused = False
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             if entry and entry.status == DownloadStatus.DOWNLOADING:
                 entry.status = DownloadStatus.PAUSED
                 paused = True
         if paused:
-            self._notify_callbacks(model_id)
+            self._notify_callbacks(resource_id)
         return paused
 
-    def resume(self, model_id: str) -> bool:
+    def resume(self, resource_id: str) -> bool:
         """Resume a paused download.
 
         Re-queues the download so it can continue from where it left off.
@@ -236,24 +236,24 @@ class DownloadManager:
         """
         resumed = False
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             if entry and entry.status == DownloadStatus.PAUSED:
                 entry.status = DownloadStatus.QUEUED
                 resumed = True
         if resumed:
-            self._notify_callbacks(model_id)
+            self._notify_callbacks(resource_id)
         return resumed
 
-    def is_paused(self, model_id: str) -> bool:
+    def is_paused(self, resource_id: str) -> bool:
         """Check if a download is paused."""
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             return entry is not None and entry.status == DownloadStatus.PAUSED
 
-    def verify(self, model_id: str) -> dict[str, Any]:
+    def verify(self, resource_id: str) -> dict[str, Any]:
         """Verify integrity of a cached resource."""
         dest = (
-            Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / model_id
+            Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt")) / resource_id
         )
         valid = dest.exists() and dest.stat().st_size > 0
         return {
@@ -269,7 +269,7 @@ class DownloadManager:
             return self._stats.to_dict()
 
     def _record_download_complete(
-        self, model_id: str, bytes_downloaded: int, elapsed: float, speed: float
+        self, resource_id: str, bytes_downloaded: int, elapsed: float, speed: float
     ) -> None:
         """Record statistics for a completed download."""
         with self._lock:
@@ -284,51 +284,51 @@ class DownloadManager:
             if speed > self._stats.peak_speed:
                 self._stats.peak_speed = speed
 
-    def _record_download_failed(self, model_id: str) -> None:
+    def _record_download_failed(self, resource_id: str) -> None:
         """Record statistics for a failed download."""
         with self._lock:
             self._stats.total_downloads += 1
             self._stats.failed_downloads += 1
 
-    def _record_download_cancelled(self, model_id: str) -> None:
+    def _record_download_cancelled(self, resource_id: str) -> None:
         """Record statistics for a cancelled download."""
         with self._lock:
             self._stats.total_downloads += 1
             self._stats.cancelled_downloads += 1
 
-    def _set_progress(self, model_id: str, **kwargs) -> None:
+    def _set_progress(self, resource_id: str, **kwargs) -> None:
         with self._lock:
-            if model_id not in self._downloads:
-                self._downloads[model_id] = DownloadProgress(
-                    model_id=model_id,
+            if resource_id not in self._downloads:
+                self._downloads[resource_id] = DownloadProgress(
+                    resource_id=resource_id,
                     status=DownloadStatus.QUEUED,
                 )
-            entry = self._downloads[model_id]
+            entry = self._downloads[resource_id]
             for key, value in kwargs.items():
                 if hasattr(entry, key):
                     setattr(entry, key, value)
 
-    def _notify_callbacks(self, model_id: str) -> None:
+    def _notify_callbacks(self, resource_id: str) -> None:
         with self._lock:
-            for cb in self._callbacks.get(model_id, []):
+            for cb in self._callbacks.get(resource_id, []):
                 try:
-                    cb(self._downloads[model_id].to_dict())
+                    cb(self._downloads[resource_id].to_dict())
                 except Exception as e:
                     logger.warning(
                         "download_manager: callback failed",
                         extra={
-                            "model_id": model_id,
+                            "resource_id": resource_id,
                             "error": str(e),
                         },
                     )
 
-    def on_progress(self, model_id: str, callback: Callable) -> None:
+    def on_progress(self, resource_id: str, callback: Callable) -> None:
         with self._lock:
-            self._callbacks.setdefault(model_id, []).append(callback)
+            self._callbacks.setdefault(resource_id, []).append(callback)
 
     async def download(
         self,
-        model_id: str,
+        resource_id: str,
         url: str,
         dest: str | Path = "",
         total_bytes_hint: int = 0,
@@ -339,42 +339,42 @@ class DownloadManager:
         """Download a resource using downcraft.
 
         Args:
-            model_id: Unique identifier for the download.
+            resource_id: Unique identifier for the download.
             url: HTTP/HTTPS URL to download from.
-            dest: Local destination path (default: ~/.cache/sloughgpt/{model_id}).
+            dest: Local destination path (default: ~/.cache/sloughgpt/{resource_id}).
             total_bytes_hint: Expected total bytes (0 = auto-detect).
             checksum: SHA-256 hex string to verify after download.
             compressed: If True, expect LZ4-compressed response.
             max_retries: Number of retry attempts on failure.
 
         Returns:
-            Dict with status, model_id, elapsed_seconds, etc.
+            Dict with status, resource_id, elapsed_seconds, etc.
         """
         if _downcraft is None:
-            return {"status": "failed", "model_id": model_id, "error": "downcraft not installed"}
+            return {"status": "failed", "resource_id": resource_id, "error": "downcraft not installed"}
 
-        if is_download_complete(model_id):
-            return {"status": "already_cached", "model_id": model_id}
+        if is_download_complete(resource_id):
+            return {"status": "already_cached", "resource_id": resource_id}
 
-        if self.is_downloading(model_id):
-            return {"status": "already_downloading", "model_id": model_id}
+        if self.is_downloading(resource_id):
+            return {"status": "already_downloading", "resource_id": resource_id}
 
         # Resolve destination
         if not dest:
             cache_dir = Path(os.environ.get("SLO_CACHE_DIR", Path.home() / ".cache" / "sloughgpt"))
-            dest = cache_dir / model_id
+            dest = cache_dir / resource_id
         else:
             dest = Path(dest)
 
         total_est = total_bytes_hint
 
         self._set_progress(
-            model_id,
+            resource_id,
             status=DownloadStatus.QUEUED,
             total_bytes=total_est,
             started_at=time.time(),
         )
-        self._notify_callbacks(model_id)
+        self._notify_callbacks(resource_id)
 
         from .cancel_manager import OpType, get_cancel_manager
 
@@ -382,17 +382,17 @@ class DownloadManager:
         cancel_event = threading.Event()
         op_id = mgr.register(
             op_type=OpType.DOWNLOAD,
-            label=f"download:{model_id}",
+            label=f"download:{resource_id}",
             cancel_fn=lambda: cancel_event.set(),
         )
         mgr.start(op_id)
 
         task = asyncio.create_task(
             self._download_worker(
-                model_id, url, dest, total_est, checksum, compressed, cancel_event, max_retries
+                resource_id, url, dest, total_est, checksum, compressed, cancel_event, max_retries
             )
         )
-        self._tasks[model_id] = task
+        self._tasks[resource_id] = task
 
         try:
             result = await task
@@ -404,30 +404,30 @@ class DownloadManager:
                 mgr.finish(op_id, result.get("error", "unknown"))
             return result
         except asyncio.CancelledError:
-            self._set_progress(model_id, status=DownloadStatus.CANCELLED)
+            self._set_progress(resource_id, status=DownloadStatus.CANCELLED)
             mgr.finish(op_id, "cancelled")
             try:
                 from .event_buffer import get_event_buffer
 
-                get_event_buffer().record("DOWNLOAD", f"{model_id} cancelled")
+                get_event_buffer().record("DOWNLOAD", f"{resource_id} cancelled")
             except Exception as exc:
                 logger.debug("Failed to record download cancel event: %s", exc)
-            return {"status": "cancelled", "model_id": model_id}
+            return {"status": "cancelled", "resource_id": resource_id}
         except Exception as e:
             self._set_progress(
-                model_id,
+                resource_id,
                 status=DownloadStatus.FAILED,
                 error=str(e),
             )
-            self._notify_callbacks(model_id)
+            self._notify_callbacks(resource_id)
             mgr.finish(op_id, str(e))
             try:
                 from .event_buffer import get_event_buffer
 
-                get_event_buffer().record("ERROR", f"download {model_id} failed: {str(e)[:40]}")
+                get_event_buffer().record("ERROR", f"download {resource_id} failed: {str(e)[:40]}")
             except Exception as exc:
                 logger.debug("Failed to record download error event: %s", exc)
-            return {"status": "failed", "model_id": model_id, "error": str(e)}
+            return {"status": "failed", "resource_id": resource_id, "error": str(e)}
 
     async def download_model(
         self,
@@ -454,14 +454,17 @@ class DownloadManager:
 
         Args:
             model_id: Model id or download id (``"gpt2"``, ``"org/name"``).
+                The facade takes model ids — its callers are model-domain
+                (router, CLI).  Internally it hands the id to the generic
+                surface as ``resource_id``; one vocabulary below this line.
             url: Optional direct HTTP(S) URL — wins over the model-id path.
             dest: Optional destination path for the generic path.
             total_bytes_hint: Expected total bytes (0 = auto-detect).
 
         Returns:
-            Dict with ``status`` (``complete`` / ``already_cached`` /
-            ``failed`` / ``cancelled`` / ``already_downloading``) and
-            ``model_id``.
+            The generic result envelope: ``status`` (``complete`` /
+            ``already_cached`` / ``failed`` / ``cancelled`` /
+            ``already_downloading``) and ``resource_id``.
 
         Note:
             Cancelling flips the entry to cancelled, but an in-flight Hub
@@ -482,7 +485,7 @@ class DownloadManager:
 
     async def download_with(
         self,
-        model_id: str,
+        resource_id: str,
         backend: DownloadBackend,
         total_bytes_hint: int = 0,
     ) -> dict[str, Any]:
@@ -510,14 +513,14 @@ class DownloadManager:
         completed download).
 
         Args:
-            model_id: Model id or download id — the registry key.
+            resource_id: Model id or download id — the registry key.
             backend: Any ``DownloadBackend``; only ``download()`` is called.
             total_bytes_hint: Expected total bytes before the first
                 progress callback (0 = auto-detect).
 
         Returns:
             Dict with ``status`` (``complete`` / ``failed`` / ``cancelled`` /
-            ``already_cached`` / ``already_downloading``) and ``model_id``.
+            ``already_cached`` / ``already_downloading``) and ``resource_id``.
 
         Note:
             Cancelling flips the entry to cancelled once the backend
@@ -525,8 +528,8 @@ class DownloadManager:
             backend's ``download()`` cooperates — the Hub and external
             paths have no cancel hook (same caveat as ``download_model``).
         """
-        if self.is_downloading(model_id):
-            return {"status": "already_downloading", "model_id": model_id}
+        if self.is_downloading(resource_id):
+            return {"status": "already_downloading", "resource_id": resource_id}
 
         started = time.time()
 
@@ -549,40 +552,40 @@ class DownloadManager:
             logger.debug("File complete for %s: %s", mid, file_path)
 
         self._set_progress(
-            model_id,
+            resource_id,
             status=DownloadStatus.QUEUED,
             started_at=started,
             total_bytes=total_bytes_hint,
         )
-        self._notify_callbacks(model_id)
+        self._notify_callbacks(resource_id)
 
         try:
             result = await asyncio.to_thread(
                 backend.download,
-                model_id,
+                resource_id,
                 on_progress=_on_progress,
                 on_file_complete=_on_file_complete,
             )
         except Exception as exc:
-            self._set_progress(model_id, status=DownloadStatus.FAILED, error=str(exc))
-            self._notify_callbacks(model_id)
-            self._record_download_failed(model_id)
-            return {"status": "failed", "model_id": model_id, "error": str(exc)}
+            self._set_progress(resource_id, status=DownloadStatus.FAILED, error=str(exc))
+            self._notify_callbacks(resource_id)
+            self._record_download_failed(resource_id)
+            return {"status": "failed", "resource_id": resource_id, "error": str(exc)}
 
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             cancelled = entry is not None and entry.status == DownloadStatus.CANCELLED
         if cancelled:
-            self._record_download_cancelled(model_id)
-            return {"status": "cancelled", "model_id": model_id}
+            self._record_download_cancelled(resource_id)
+            return {"status": "cancelled", "resource_id": resource_id}
 
         raw_status = str(result.get("status", "complete"))
         if raw_status in ("error", "failed"):
             error = str(result.get("error") or raw_status)
-            self._set_progress(model_id, status=DownloadStatus.FAILED, error=error)
-            self._notify_callbacks(model_id)
-            self._record_download_failed(model_id)
-            return {"status": "failed", "model_id": model_id, "error": error}
+            self._set_progress(resource_id, status=DownloadStatus.FAILED, error=error)
+            self._notify_callbacks(resource_id)
+            self._record_download_failed(resource_id)
+            return {"status": "failed", "resource_id": resource_id, "error": error}
 
         elapsed = time.time() - started
         total_bytes = int(result.get("total_bytes") or 0)
@@ -593,25 +596,25 @@ class DownloadManager:
         }
         if total_bytes:
             progress["total_bytes"] = total_bytes
-        self._set_progress(model_id, **progress)
-        self._notify_callbacks(model_id)
+        self._set_progress(resource_id, **progress)
+        self._notify_callbacks(resource_id)
 
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             bytes_done = entry.bytes_downloaded if entry else 0
             speed = entry.speed_bytes_per_sec if entry else 0
-        self._record_download_complete(model_id, bytes_done, elapsed, speed)
+        self._record_download_complete(resource_id, bytes_done, elapsed, speed)
 
         return {
             "status": "complete" if raw_status == "completed" else raw_status,
-            "model_id": model_id,
+            "resource_id": resource_id,
             "cache_dir": result.get("cache_dir", ""),
             "elapsed_seconds": elapsed,
         }
 
     async def _download_worker(
         self,
-        model_id: str,
+        resource_id: str,
         url: str,
         dest: Path,
         total_bytes_hint: int,
@@ -622,11 +625,11 @@ class DownloadManager:
     ):
         """Run the downcraft download in a thread executor, updating progress."""
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             if entry and entry.status == DownloadStatus.CANCELLED:
-                return {"status": "cancelled", "model_id": model_id}
-        self._set_progress(model_id, status=DownloadStatus.DOWNLOADING)
-        self._notify_callbacks(model_id)
+                return {"status": "cancelled", "resource_id": resource_id}
+        self._set_progress(resource_id, status=DownloadStatus.DOWNLOADING)
+        self._notify_callbacks(resource_id)
         start_time = time.time()
 
         try:
@@ -638,31 +641,31 @@ class DownloadManager:
                     size_str = f" ({total_bytes_hint / 1e9:.1f}GB)"
                 elif total_bytes_hint > 1e6:
                     size_str = f" ({total_bytes_hint / 1e6:.0f}MB)"
-            get_event_buffer().record("DOWNLOAD", f"{model_id} started{size_str}")
+            get_event_buffer().record("DOWNLOAD", f"{resource_id} started{size_str}")
         except Exception as exc:
             logger.debug("Failed to record download start event: %s", exc)
 
         def _progress_cb(bytes_done: int, total: int, speed: float):
             try:
                 with self._lock:
-                    cur = self._downloads.get(model_id)
+                    cur = self._downloads.get(resource_id)
                     if cur and cur.status == DownloadStatus.CANCELLED:
                         return
                 pct = (bytes_done / total * 100) if total > 0 else 0
                 self._set_progress(
-                    model_id,
+                    resource_id,
                     bytes_downloaded=bytes_done,
                     total_bytes=total,
                     speed_bytes_per_sec=speed,
                     percentage=pct,
                     status=DownloadStatus.DOWNLOADING,
                 )
-                self._notify_callbacks(model_id)
+                self._notify_callbacks(resource_id)
             except Exception as e:
                 logger.warning(
                     "download_manager: progress callback failed",
                     extra={
-                        "model_id": model_id,
+                        "resource_id": resource_id,
                         "error": str(e),
                     },
                 )
@@ -671,9 +674,9 @@ class DownloadManager:
         for attempt in range(max_retries + 1):
             # Check cancellation before each attempt
             with self._lock:
-                entry = self._downloads.get(model_id)
+                entry = self._downloads.get(resource_id)
                 if entry and entry.status == DownloadStatus.CANCELLED:
-                    return {"status": "cancelled", "model_id": model_id}
+                    return {"status": "cancelled", "resource_id": resource_id}
 
             def _do_download():
                 def _cancel_check():
@@ -701,30 +704,30 @@ class DownloadManager:
                 last_error = None
                 break
             except InterruptedError:
-                return {"status": "cancelled", "model_id": model_id}
+                return {"status": "cancelled", "resource_id": resource_id}
             except Exception as e:
                 last_error = e
                 if attempt < max_retries:
                     wait = 2**attempt  # exponential backoff: 1s, 2s, 4s
                     logger.warning(
                         "Download %s failed (attempt %d/%d): %s — retrying in %ds",
-                        model_id,
+                        resource_id,
                         attempt + 1,
                         max_retries + 1,
                         e,
                         wait,
                     )
                     self._set_progress(
-                        model_id,
+                        resource_id,
                         status=DownloadStatus.DOWNLOADING,
                         error=f"Retry {attempt + 1}/{max_retries}: {e}",
                     )
-                    self._notify_callbacks(model_id)
+                    self._notify_callbacks(resource_id)
                     await asyncio.sleep(wait)
                 else:
                     logger.error(
                         "Download %s failed after %d attempts: %s",
-                        model_id,
+                        resource_id,
                         max_retries + 1,
                         e,
                     )
@@ -734,59 +737,59 @@ class DownloadManager:
             # forever — the UI card spins at 0% and the model stays locked
             # behind is_downloading(), so no retry can ever start.
             self._set_progress(
-                model_id,
+                resource_id,
                 status=DownloadStatus.FAILED,
                 error=str(last_error),
                 completed_at=time.time(),
             )
-            self._notify_callbacks(model_id)
-            self._record_download_failed(model_id)
-            return {"status": "failed", "model_id": model_id, "error": str(last_error)}
+            self._notify_callbacks(resource_id)
+            self._record_download_failed(resource_id)
+            return {"status": "failed", "resource_id": resource_id, "error": str(last_error)}
 
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             if entry and entry.status == DownloadStatus.CANCELLED:
-                self._record_download_cancelled(model_id)
-                return {"status": "cancelled", "model_id": model_id}
+                self._record_download_cancelled(resource_id)
+                return {"status": "cancelled", "resource_id": resource_id}
 
         elapsed = time.time() - start_time
         self._set_progress(
-            model_id,
+            resource_id,
             status=DownloadStatus.COMPLETE,
             completed_at=time.time(),
             percentage=100.0,
         )
-        self._notify_callbacks(model_id)
+        self._notify_callbacks(resource_id)
 
         # Record statistics
         with self._lock:
-            entry = self._downloads.get(model_id)
+            entry = self._downloads.get(resource_id)
             bytes_downloaded = entry.bytes_downloaded if entry else 0
             speed = entry.speed_bytes_per_sec if entry else 0
-        self._record_download_complete(model_id, bytes_downloaded, elapsed, speed)
+        self._record_download_complete(resource_id, bytes_downloaded, elapsed, speed)
 
         try:
             from .event_buffer import get_event_buffer
 
-            get_event_buffer().record("DOWNLOAD", f"{model_id} complete ({elapsed:.1f}s)")
+            get_event_buffer().record("DOWNLOAD", f"{resource_id} complete ({elapsed:.1f}s)")
         except Exception:
             pass
 
         logger.info(
             "Downloaded %s in %.1fs → %s",
-            model_id,
+            resource_id,
             elapsed,
             dest,
             extra={
                 "op": "download.complete",
                 "dur_ms": int(elapsed * 1000),
                 "ok": True,
-                "download": {"resource": model_id, "elapsed_s": round(elapsed, 1)},
+                "download": {"resource": resource_id, "elapsed_s": round(elapsed, 1)},
             },
         )
         return {
             "status": "complete",
-            "model_id": model_id,
+            "resource_id": resource_id,
             "dest": str(dest),
             "elapsed_seconds": round(elapsed, 1),
         }
