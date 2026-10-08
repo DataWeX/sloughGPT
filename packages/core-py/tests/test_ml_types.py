@@ -356,7 +356,12 @@ class TestPlatform:
         assert mt._cuda_available() is False
 
     def test_cuda_available_with_fake_cupy(self, monkeypatch):
+        # _cuda_available() hardened: importable cupy is not enough, it calls
+        # cp.cuda.runtime.getDeviceCount() (mirrors accelerator detection), so
+        # the fake must expose the runtime surface.
+        runtime = type("Runtime", (), {"getDeviceCount": staticmethod(lambda: 1)})()
         fake = type("M", (), {})()
+        fake.cuda = type("Cuda", (), {"runtime": runtime})()
         monkeypatch.setitem(sys.modules, "cupy", fake)
         assert mt._cuda_available() is True
 

@@ -171,34 +171,62 @@ def cholesky(A: object) -> object:
     return L
 
 
-def solve_triangular(L: object, b: object) -> object:
-    """Solve L @ x = b for lower triangular L."""
+def solve_triangular(L: object, b: object, lower: bool = True) -> object:
+    """Solve L @ x = b for triangular L — forward substitution for lower,
+    back substitution for upper (``lower=False``)."""
     import numpy as np
 
     n = L.shape[0]
-    x = np.zeros(n)
-    for i in range(n):
-        x[i] = (b[i] - sum(L[i, j] * x[j] for j in range(i))) / L[i, i] if L[i, i] != 0 else 0
+    # dtype follows the inputs (float32 in ⇒ float32 out); ints promote to a
+    # float so the division below never truncates.
+    x = np.zeros(n, dtype=np.result_type(np.asarray(L).dtype, np.asarray(b).dtype, np.float32))
+    if lower:
+        for i in range(n):
+            x[i] = (b[i] - sum(L[i, j] * x[j] for j in range(i))) / L[i, i] if L[i, i] != 0 else 0
+    else:
+        for i in range(n - 1, -1, -1):
+            x[i] = (b[i] - sum(L[i, j] * x[j] for j in range(i + 1, n))) / L[i, i] if L[i, i] != 0 else 0
     return x
 
 
 def solve_cholesky(A: object, b: object) -> object:
     """Solve A @ x = b via Cholesky decomposition."""
     L = cholesky(A)
-    y = solve_triangular(L, b)
-    return solve_triangular(L.T, y)
+    y = solve_triangular(L, b, lower=True)
+    return solve_triangular(L.T, y, lower=False)
 
 
-def dominant_eigen(A: object, max_iter: int = 100) -> object:
-    """Compute dominant eigenvalue via power iteration."""
+def dominant_eigen(A: object, n_eigen: int = 1, max_iter: int = 100, tol: float = 1e-10) -> tuple:
+    """Dominant eigenpairs via power iteration with Hotelling deflation.
+
+    Returns ``(vals, vecs)``: ``vals`` shape ``(n_eigen,)`` ordered by
+    descending magnitude, ``vecs`` shape ``(n, n_eigen)`` with unit-norm
+    columns. Eigenvalues use the Rayleigh quotient against the original ``A``
+    so deflated iteration stays faithful for symmetric inputs.
+    """
     import numpy as np
 
+    A = np.asarray(A, dtype=float)
     n = A.shape[0]
-    v = np.ones(n) / np.sqrt(n)
-    for _ in range(max_iter):
-        w = A @ v
-        norm = np.linalg.norm(w)
-        if norm == 0:
-            break
-        v = w / norm
-    return float(v @ A @ v)
+    k = max(1, min(int(n_eigen), n))
+    work = A.copy()
+    vals = np.zeros(k)
+    vecs = np.zeros((n, k))
+    for j in range(k):
+        v = np.ones(n) / np.sqrt(n)
+        lam = 0.0
+        for _ in range(max_iter):
+            w = work @ v
+            norm = np.linalg.norm(w)
+            if norm == 0:
+                break
+            v = w / norm
+            lam_new = float(v @ A @ v)
+            if abs(lam_new - lam) < tol:
+                lam = lam_new
+                break
+            lam = lam_new
+        vals[j] = float(v @ A @ v)
+        vecs[:, j] = v / np.linalg.norm(v)
+        work = work - vals[j] * np.outer(vecs[:, j], vecs[:, j])
+    return vals, vecs
