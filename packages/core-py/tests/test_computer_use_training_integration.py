@@ -17,6 +17,11 @@ from pathlib import Path
 
 import pytest
 
+pytest.importorskip(
+    "playwright.sync_api",
+    reason="playwright not installed in this env — journey suite skipped (card 6e826226)",
+)
+
 # vite :5173 (card e47e19ee retired the stale :3000 default); SLO_WEB_URL overrides.
 BASE = os.environ.get("SLO_WEB_URL") or "http://localhost:5173"
 API = "http://localhost:8000"
