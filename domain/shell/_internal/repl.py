@@ -4096,7 +4096,21 @@ Examples:
             self._print("  Devices not available (not booted?)")
             return
         self._print("  AI Device nodes:")
-        self._print(self.os.devices.list_devices())
+        listing = self.os.devices.list_devices()
+        if isinstance(listing, list):
+            # Kernel manager returns info dicts — summarize, don't dump.
+            rows = []
+            for dev in listing:
+                if not isinstance(dev, dict):
+                    continue
+                name = dev.get("name", "?")
+                # Hardware nodes advertise no description (only `type`/counters).
+                desc = dev.get("description") or dev.get("state") or "hardware device"
+                ops = dev.get("ops")
+                suffix = f"  [{', '.join(ops)}]" if ops else ""
+                rows.append(f"  /dev/{name:<18} {desc}{suffix}".rstrip())
+            listing = "\n".join(rows) if rows else "  (none)"
+        self._print(listing)
 
     # ── Scripting commands ────────────────────────────────────────
 

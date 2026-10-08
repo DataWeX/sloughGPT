@@ -379,7 +379,7 @@ def __getattr__(name):
 ├────────────────────┴────────────────────────────┤
 │              Device System                      │
 │  DeviceBus → DeviceDriver → fd I/O              │
-│  /dev/llm, /dev/embedding, /dev/training        │
+│  /dev/ai (aliases: /dev/llm, /dev/embedding)    │
 ├─────────────────────────────────────────────────┤
 │              VFS Layer                          │
 │  MountTable: /dev/* (devices),                  │

@@ -16667,6 +16667,39 @@ class TestCmdLsdevExtraV2:
             assert "Device nodes" in out
             assert "/dev/null" in out
 
+    def test_lsdev_renders_info_dicts(self, repl):
+        """The kernel manager returns info dicts — render a table, not a repr dump."""
+        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import patch as mp
+
+        mock_dev = MagicMock()
+        mock_dev.list_devices.return_value = [
+            {
+                "name": "ai",
+                "description": "Unified AI device",
+                "ops": ["generate", "embed", "health", "info"],
+            },
+            {"name": "tensor", "state": "READY"},
+        ]
+        with mp.object(type(repl.os), "devices", new_callable=PropertyMock, return_value=mock_dev):
+            out = _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
+            assert "/dev/ai" in out
+            assert "Unified AI device" in out
+            assert "[generate, embed, health, info]" in out
+            assert "/dev/tensor" in out and "READY" in out
+            # A repr dump would look like this — it must not appear.
+            assert "{'name':" not in out
+
+    def test_lsdev_renders_empty_list(self, repl):
+        from unittest.mock import MagicMock, PropertyMock
+        from unittest.mock import patch as mp
+
+        mock_dev = MagicMock()
+        mock_dev.list_devices.return_value = []
+        with mp.object(type(repl.os), "devices", new_callable=PropertyMock, return_value=mock_dev):
+            out = _run_with_io(repl, [], lambda: repl._cmd_lsdev(""))
+            assert "(none)" in out
+
 
 # ── _cmd_events ──────────────────────────────────────────────────────
 

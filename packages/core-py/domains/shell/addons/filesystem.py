@@ -76,6 +76,40 @@ class VFSWriteOnlyFile(VFSEntry):
             logger.debug(result)
 
 
+def _device_result(result: Any) -> str:
+    """Unwrap a driver's ``SyscallResult`` (or a bare string) into text."""
+    if hasattr(result, "success"):
+        if result.success:
+            return str(result.value) if result.value is not None else ""
+        return str(result.error or "")
+    return str(result or "")
+
+
+class VFSDeviceEntry(VFSEntry):
+    """A ``/dev`` node backed by a device driver.
+
+    This is what makes ``cat /dev/ai`` and ``echo prompt > /dev/ai`` reach the
+    driver instead of the inert placeholder every device node used to be.
+    ``read_op`` / ``write_op`` come from the driver's ``vfs_ops(name)``;
+    ``"auto"`` lets the written payload select an operation with an ``<op>:`` prefix.
+    """
+
+    def __init__(self, name: str, driver: Any, read_op: str, write_op: str):
+        super().__init__(name, mode=0o666, size=0)
+        self._driver = driver
+        self._read_op = read_op
+        self._write_op = write_op
+
+    def read(self) -> str:
+        # ``info`` is told which node was opened so an alias card names
+        # itself; the other operations never take the node name as payload.
+        payload = self.name if self._read_op == "info" else ""
+        return _device_result(self._driver.ioctl(self._read_op, payload))
+
+    def write(self, data: str) -> str:
+        return _device_result(self._driver.ioctl(self._write_op, data))
+
+
 class VFSDirectory:
     """Virtual directory listing."""
 
@@ -117,11 +151,25 @@ class VFS:
         self._rebuild_proc_mount()
 
     def _rebuild_dev_mount(self) -> None:
-        """Rebuild /dev/ mount from device manager."""
+        """Rebuild /dev/ mount from device manager.
+
+        Nodes whose driver exposes ``vfs_ops(name)`` become live entries that
+        dispatch read/write to its ``ioctl``; everything else keeps the inert
+        placeholder (the hardware drivers answer ioctls, not reads).
+        Devices that are only ``.names`` (test doubles) get placeholders too.
+        """
         dev = VFSDirectory("dev")
         if self._devices:
+            getter = getattr(self._devices, "get", None)
             for name in self._devices.names:
-                dev.add(VFSEntry(name, mode=0o666, size=0))
+                driver = getter(name) if callable(getter) else None
+                ops = None
+                if driver is not None and hasattr(driver, "vfs_ops"):
+                    ops = driver.vfs_ops(name)
+                if ops is None:
+                    dev.add(VFSEntry(name, mode=0o666, size=0))
+                else:
+                    dev.add(VFSDeviceEntry(name, driver, *ops))
         self._mounts["/dev"] = dev
 
     def _rebuild_proc_mount(self) -> None:
@@ -293,8 +341,10 @@ class VFS:
                 return "Is a directory"
             entry = self._resolve_in_dir(mount_obj, rel)
             if isinstance(entry, VFSEntry):
-                entry.write(data)
-                return None
+                out = entry.write(data)
+                # Ordinary files return None (success, nothing to show);
+                # device nodes return the response they want printed.
+                return out if isinstance(out, str) and out else None
             if isinstance(entry, VFSDirectory):
                 return "Is a directory"
             return "Not found"

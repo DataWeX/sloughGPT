@@ -77,7 +77,7 @@ export function CheckpointList({
             {filtered.map((cp) => (
               <div
                 key={cp.name}
-                className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2.5 text-sm group hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2.5 text-sm group hover:bg-muted/50 transition-colors"
               >
                 <div
                   className="flex-1 min-w-0 cursor-pointer"
