@@ -177,6 +177,6 @@ base64 URL hash takes precedence over the saved source on load.
 | `apps/web/lib/vm-controller.ts`                        | `vmController.run/builtins/info/trainingJob`                            |
 | `tests/core-py/test_vm_rbac.py`                        | RBAC enforcement tests (USER denial, ADMIN allow, full syscall lane)    |
 | `tests/core-py/test_vm_cave_game.py`                   | cave_game program tests (registry, HUD, mine/place, idle exit)          |
-| `apps/api/server/tests/test_vm_console_session.py`     | Session/REPL tests (boot, commands, input sanitizing, SSE lifecycle)    |
+| `tests/api-server/test_vm_console_session.py`          | Session/REPL tests (boot, commands, input sanitizing, SSE lifecycle)    |
 | `scripts/benchmark_vm_shell.py`                        | Shell REPL boot/latency/throughput benchmark                            |
 | `scripts/benchmark_vm_cave_game.py`                    | cave_game render cost — steps/frame, fps, assemble ms, batch-to-halt    |
