@@ -13,4 +13,4 @@ Run the whole thing without stopping, under the AGENTS.md "One-shot execution" r
 4. **Tests are not a stop point** — on failures, group by root cause, fix the code (not the test, unless the test itself is wrong), re-run until green. Only a product decision or deleting user data may stop you — then state the fix you'd apply and wait.
 5. **Full gate** — lint, typecheck, tests; run the relevant `scripts/benchmark_*` if this touches training/inference/quantization/architecture.
 6. **Land it** — merge to main only when green; if unrecoverable, revert the branch and explain why.
-7. **Summary** — changed files, ASSUMPTIONS you made, test + benchmark numbers. Raw logs stay collapsed; lead with the verdict.
+7. **Manager-style report** — the reader is an engineering manager: lead with the verdict (what shipped, did it work), then the major and specifically-decided details — design choices, ASSUMPTIONS, test/bench numbers, open risks. Omit working noise: musings, raw shell commands, tool transcripts. Include a detail only if it's relevant to the decision or an interesting engineering read, and keep even those collapsed/appendix-style.
