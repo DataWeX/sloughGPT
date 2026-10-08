@@ -123,147 +123,155 @@ export function StartupOverlay() {
       )}
     >
       {/* Logo */}
-      <div className="mb-8">
+      <div className="mb-5">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-lg shadow-primary/20">
           <span className="text-white font-bold text-lg">S</span>
         </div>
       </div>
 
-      {/* Stage label */}
-      <h2 className="text-[14px] font-medium text-foreground mb-6">
-        {stuck ? 'Still connecting' : stageLabel}
-      </h2>
+      {/* One column from headline to dots: the gap is the single source of
+          vertical rhythm, and every w-48 row shares the progress bar's edges. */}
+      <div className="flex flex-col items-center gap-3">
+        {/* Stage label */}
+        <h2 className="mb-1.5 text-[14px] font-medium text-foreground">
+          {stuck ? 'Still connecting' : stageLabel}
+        </h2>
 
-      {/* Progress bar */}
-      <div
-        role="progressbar"
-        aria-label="Startup progress"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        {...(isIndeterminate ? {} : { 'aria-valuenow': progressPct })}
-        className="w-48 h-1 rounded-full bg-muted overflow-hidden mb-3"
-      >
-        {isIndeterminate ? (
-          <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-gradient-to-r from-primary to-primary/60" />
-        ) : (
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-300 ease-out"
-            style={{ width: `${progressPct}%` }}
-          />
-        )}
-      </div>
-
-      {/* Progress details */}
-      <div
-        className="flex items-center gap-2 text-[11px] text-muted-foreground/70 mb-4"
-        aria-live="polite"
-      >
-        {!isIndeterminate && startupModelProgress > 0 && (
-          <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
-        )}
-        {startupModelProgressMessage && (
-          <span className="max-w-48 truncate">{startupModelProgressMessage}</span>
-        )}
-        {startupElapsed > 0 && <span className="font-mono">{startupElapsed.toFixed(1)}s</span>}
-      </div>
-
-      {/* Stuck-connecting recovery */}
-      {stuck && (
-        <div role="alert" className="flex flex-col items-center gap-2 mb-4">
-          <p className="text-[11px] text-warning">
-            No response from the server yet — check that the backend is running
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              logStateEvent('overlay_retry', {
-                kind: 'overlay',
-                message: 'overlay_retry reload requested',
-                data: { stage: startupStage },
-              })
-              window.location.reload()
-            }}
-            className="px-4 py-1.5 rounded-full bg-primary text-white text-[12px] font-medium transition-all duration-200 hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Active hooks */}
-      {activeHooks.length > 0 && (
-        <div className="flex flex-col items-center gap-1.5 mb-4">
-          {activeHooks.map((hook: HookStatus) => (
-            <div key={hook.name} className="flex items-center gap-2 text-[10px]">
-              <span className="w-1 h-1 rounded-full bg-warning animate-pulse" />
-              <span className="text-muted-foreground">{HOOK_LABELS[hook.name] ?? hook.name}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Timing breakdown (click to toggle) */}
-      {completedHooks.length > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowDetails(!showDetails)}
-          className="text-[9px] text-muted-foreground/70 hover:text-muted-foreground transition-colors mb-4"
+        {/* Progress bar */}
+        <div
+          role="progressbar"
+          aria-label="Startup progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          {...(isIndeterminate ? {} : { 'aria-valuenow': progressPct })}
+          className="w-48 h-1 rounded-full bg-muted overflow-hidden"
         >
-          {showDetails ? 'Hide details' : 'Show timing'}
-        </button>
-      )}
-
-      {showDetails && completedHooks.length > 0 && (
-        <div className="w-48 space-y-1 mb-4">
-          {completedHooks.map((hook: HookStatus) => (
-            <div key={hook.name} className="flex items-center justify-between text-[9px]">
-              <span className="text-muted-foreground truncate">
-                {HOOK_LABELS[hook.name] ?? hook.name}
-              </span>
-              <span className="text-muted-foreground/70 font-mono ml-2">
-                {hook.duration_seconds}s
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Stage indicators */}
-      <div role="group" aria-label="Startup stages" className="flex items-center gap-1.5">
-        {STAGE_ORDER.map((stage, i) => {
-          const state =
-            stageIndex < 0
-              ? 'unknown'
-              : i < stageIndex
-                ? 'done'
-                : i === stageIndex
-                  ? 'active'
-                  : 'pending'
-          const stateLabel =
-            state === 'done'
-              ? 'done'
-              : state === 'active'
-                ? 'active'
-                : state === 'unknown'
-                  ? 'connecting'
-                  : 'pending'
-          return (
+          {isIndeterminate ? (
+            <div className="sl-bar-shimmer h-full w-1/3 rounded-full bg-gradient-to-r from-primary to-primary/60" />
+          ) : (
             <div
-              key={stage}
-              role="img"
-              aria-label={`Stage ${i + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[stage]} (${stateLabel})`}
-              className={cn(
-                'w-1.5 h-1.5 rounded-full transition-all duration-300',
-                state === 'done' && 'bg-success',
-                state === 'active' && 'bg-primary scale-125 sl-dot-pulse',
-                state === 'pending' && 'bg-border',
-                state === 'unknown' && 'bg-primary/60 sl-dot-wave',
-              )}
-              style={state === 'unknown' ? { animationDelay: `${i * 0.15}s` } : undefined}
+              className="h-full rounded-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-300 ease-out"
+              style={{ width: `${progressPct}%` }}
             />
-          )
-        })}
+          )}
+        </div>
+
+        {/* Progress details — flush with the bar's edges */}
+        <div
+          className="flex w-48 items-center justify-center gap-2 text-[11px] text-muted-foreground/70"
+          aria-live="polite"
+        >
+          {!isIndeterminate && startupModelProgress > 0 && (
+            <span className="font-mono">{Math.round(startupModelProgress * 100)}%</span>
+          )}
+          {startupModelProgressMessage && (
+            <span className="truncate">{startupModelProgressMessage}</span>
+          )}
+          {startupElapsed > 0 && <span className="font-mono">{startupElapsed.toFixed(1)}s</span>}
+        </div>
+
+        {/* Stuck-connecting recovery — may break wider than the column */}
+        {stuck && (
+          <div role="alert" className="flex w-56 flex-col items-center gap-2">
+            <p className="text-[11px] text-warning">
+              No response from the server yet — check that the backend is running
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                logStateEvent('overlay_retry', {
+                  kind: 'overlay',
+                  message: 'overlay_retry reload requested',
+                  data: { stage: startupStage },
+                })
+                window.location.reload()
+              }}
+              className="px-4 py-1.5 rounded-full bg-primary text-white text-[12px] font-medium transition-all duration-200 hover:bg-primary/90 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Active hooks */}
+        {activeHooks.length > 0 && (
+          <div className="flex w-48 flex-col items-center gap-1.5">
+            {activeHooks.map((hook: HookStatus) => (
+              <div key={hook.name} className="flex items-center gap-2 text-[10px]">
+                <span className="w-1 h-1 rounded-full bg-warning animate-pulse" />
+                <span className="text-muted-foreground">{HOOK_LABELS[hook.name] ?? hook.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Timing breakdown — toggle and panel are one group, so expanding
+            adds only the inner gap, never a second block margin. */}
+        {completedHooks.length > 0 && (
+          <div className="flex w-48 flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setShowDetails(!showDetails)}
+              className="text-[9px] text-muted-foreground/70 hover:text-muted-foreground transition-colors"
+            >
+              {showDetails ? 'Hide details' : 'Show timing'}
+            </button>
+
+            {showDetails && (
+              <div className="w-full space-y-1">
+                {completedHooks.map((hook: HookStatus) => (
+                  <div key={hook.name} className="flex items-center justify-between text-[9px]">
+                    <span className="text-muted-foreground truncate">
+                      {HOOK_LABELS[hook.name] ?? hook.name}
+                    </span>
+                    <span className="text-muted-foreground/70 font-mono ml-2">
+                      {hook.duration_seconds}s
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Stage indicators */}
+        <div role="group" aria-label="Startup stages" className="flex items-center gap-1.5">
+          {STAGE_ORDER.map((stage, i) => {
+            const state =
+              stageIndex < 0
+                ? 'unknown'
+                : i < stageIndex
+                  ? 'done'
+                  : i === stageIndex
+                    ? 'active'
+                    : 'pending'
+            const stateLabel =
+              state === 'done'
+                ? 'done'
+                : state === 'active'
+                  ? 'active'
+                  : state === 'unknown'
+                    ? 'connecting'
+                    : 'pending'
+            return (
+              <div
+                key={stage}
+                role="img"
+                aria-label={`Stage ${i + 1} of ${STAGE_ORDER.length}: ${STAGE_LABELS[stage]} (${stateLabel})`}
+                className={cn(
+                  'w-1.5 h-1.5 rounded-full transition-all duration-300',
+                  state === 'done' && 'bg-success',
+                  state === 'active' && 'bg-primary scale-125 sl-dot-pulse',
+                  state === 'pending' && 'bg-border',
+                  state === 'unknown' && 'bg-primary/60 sl-dot-wave',
+                )}
+                style={state === 'unknown' ? { animationDelay: `${i * 0.15}s` } : undefined}
+              />
+            )
+          })}
+        </div>
       </div>
+
       <span className="sr-only" role="status">
         {stuck
           ? 'Still connecting'
