@@ -303,10 +303,13 @@ Rules that fall out:
 
 ### 6.1 Enabling gap
 
-`build_router(spec)` — **not implemented yet**: the contract half exists, the
-route-emission half does not (AGENTS _Endpoint & Transport Rule_). Until it
-exists, every projection is hand-built, so it is the prerequisite in §11, not
-a nice-to-have.
+Projection machinery is **implemented**: `create_router(spec, route, handler)`
+(`infrastructure/contract.py`) emits the HTTP half, and `scripts/gen_ts_contracts.py`
+emits the typed TS half into `apps/web/lib/protocol/contracts.gen.ts` with a
+freshness gate — the `ts-rs` pattern, where a contract change that isn't
+regenerated fails the build rather than the user. What is still hand-built
+(AGENTS _Endpoint & Transport Rule_) are the push transports: SSE frame kinds
+and CLI subcommands.
 
 ### 6.2 Projections
 
@@ -314,7 +317,7 @@ a nice-to-have.
 | --------------------------------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | descriptor → model tool-call      | the model             | Internal/model-facing (tier _a_)                                                                                                                           |
 | descriptor → shell subcommand     | operator, CI, scripts | The headless path; zero rendering                                                                                                                          |
-| descriptor → HTTP route           | remote clients        | `build_router(spec)` output                                                                                                                                |
+| descriptor → HTTP route           | remote clients        | `create_router(spec, route, handler)` output                                                                                                               |
 | descriptor → SSE `phase` frame    | live clients          | Transport, not contract                                                                                                                                    |
 | descriptor → typed TS helper      | the web display       | Via `http-client.ts` — single source of truth, no raw `fetch()`                                                                                            |
 | response tree → display renderers | humans                | WebUI banner/panel (`useBannerStore` + `<GlobalBanner />`, one global banner, deduped by `key`), TUI pane, mobile card — via the node registry (§6 rule 6) |
@@ -413,9 +416,11 @@ stated confidence gate display behavior by itself.
 
 ## 11. Phases
 
-1. **Prerequisite — projection machinery.** `build_router(spec)`: contract
-   half exists, route emission does not (§6.1). Until it lands, every
-   projection is hand-written and drifts.
+1. **Projection machinery — landed.** `create_router(spec, route, handler)`
+   emits the HTTP half and `gen_ts_contracts.py` emits the typed TS half
+   (§6.1), so a descriptor change that isn't re-emitted fails the freshness
+   gate instead of drifting. Remaining gap: SSE frame kinds and CLI
+   subcommands are still hand-built.
 2. **Declare the response tree** — grammar, shared `head`, mode branches —
    as `ToolSpec`-shaped descriptors with JSON Schema `$defs`/`$ref`; views
    (wire JSON, TS types, CLI help, docs) are derived, never stored twice.
