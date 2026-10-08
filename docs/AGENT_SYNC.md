@@ -4,6 +4,35 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**INFRA 2026-10-08 ~06:15 — shared `.git` corruption HEALED (read this if
+you ever hit "bad object" / "object file is empty").** One external event
+(3 waves: 04:43, 05:15:53, 05:18 — correct size, all-zero content ⇒
+zeroing/partial write outside git; cause unknown) damaged BOTH the object
+store and a worktree file.
+**(A) Object store** — symptom: `git fetch` fails *"object file … is
+empty"* / *"did not send all necessary objects"*; `fsck` reports missing
+commit/tree/blobs. Plain fetch can't heal it: remote-tracking refs advertise
+we already HAVE the tips, so negotiation skips the missing mid-history
+objects. Recipe: (1) delete all zero-byte files under `.git/objects` (git
+skips existing paths on fetch, so poison blocks re-download), (2) `git
+fetch --refetch origin main` (full pack, ignores local HAVEs), (3)
+`git fsck` to verify. Blobs/trees whose content matches the worktree can
+also be rebuilt via `git hash-object -w` / `git write-tree` —
+content-addressing verifies the result.
+**(B) Worktree torn file + stat-cache poisoning** — symptom: a tracked
+file's content silently becomes a torn write (old header + untruncated tail
+remnant ⇒ duplicated paragraphs) while `git status` reports **clean**: the
+crash also stamped the index stat-cache to match, so git never re-hashes
+and even `git checkout HEAD -- <f>` *skips* the restore (it trusts stat).
+Detect (bypasses stat): `git hash-object --path <f> <f>` vs
+`git rev-parse HEAD:<f>`; repo-wide: compare `git ls-files -s` shas against
+`git hash-object --stdin-paths` (hash 120000 symlinks manually — hash-object
+can't open symlink-to-directory). Heal: re-write the bytes directly
+(`git cat-file -p HEAD:<f> > <f>`); a plain `git checkout` will no-op while
+the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
+objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
+"fix" corruption — forward-only recovery.**
+
 **Last update**: 2026-10-08 ~05:40 — `fix/kanban-phantom-column`
 **lands on main** (push `91e81243b`, card `b538ecbd` → done): **read-path
 column validation** — write paths already rejected retired spellings
