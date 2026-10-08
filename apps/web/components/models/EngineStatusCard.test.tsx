@@ -66,6 +66,22 @@ describe('EngineStatusCard', () => {
     })
   })
 
+  it('renders fallbacks when the API omits engine stats', async () => {
+    // The pre-contract payload carried only process-guard fields — the card
+    // used to print `undefined MB` and `NaNm`.
+    vi.mocked(modelController.getEngineStatus).mockResolvedValue({
+      enabled: false, pid: null, alive: false, model_id: null,
+      health: {}, metrics: {}, stderr_tail: [],
+    } as never)
+    render(<EngineStatusCard />)
+    await vi.waitFor(() => {
+      expect(screen.queryByText(/NaN/)).toBeNull()
+      expect(screen.queryByText(/undefined/)).toBeNull()
+      expect(screen.getByText('0m')).toBeDefined()
+      expect(screen.getAllByText('—').length).toBeGreaterThan(0)
+    })
+  })
+
   it('shows skeleton loading state', () => {
     vi.mocked(modelController.getEngineStatus).mockReturnValue(new Promise(() => {}))
     const { container } = render(<EngineStatusCard />)

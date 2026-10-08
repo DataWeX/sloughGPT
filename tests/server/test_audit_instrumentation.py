@@ -194,7 +194,25 @@ class TestModelAudit:
         assert first_call_args[0] == "model.download"
         assert first_call_kwargs["resource"] == "gpt2"
         assert first_call_kwargs["detail"] == "started"
-        assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000}
+        assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000, "url": ""}
+
+    @patch("apps.api.server.routers.models.ModelsRouter._run_download")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
+    @patch("infrastructure.auth.get_audit_logger")
+    def test_start_download_logs_url(self, mock_logger, mock_mgr, mock_run, models_client):
+        """An explicit URL download is identifiable in the audit trail."""
+        mgr = MagicMock()
+        mgr.is_cached.return_value = False
+        mgr.is_downloading.return_value = False
+        mock_mgr.return_value = mgr
+        resp = models_client.post(
+            "/models/download",
+            json={"model_id": "xv6-book", "url": "https://host/book.pdf"},
+        )
+        assert resp.status_code == 200
+        first_call_args, first_call_kwargs = mock_logger.return_value.log.call_args_list[0]
+        assert first_call_args[0] == "model.download"
+        assert first_call_kwargs["extra"]["url"] == "https://host/book.pdf"
 
     @patch("domain.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")

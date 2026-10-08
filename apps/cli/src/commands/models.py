@@ -297,7 +297,7 @@ def _cmd_models_download(args):
             mgr.on_progress(args.model_id, _render_progress)
             bar.start()
             try:
-                result = await mgr.download(args.model_id)
+                result = await mgr.download_model(args.model_id)
                 return result
             finally:
                 bar.finish()

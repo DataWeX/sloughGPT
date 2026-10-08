@@ -9,11 +9,11 @@ import { extractErrorMessage } from '@/lib/error-utils'
 import { formatUptime } from '@/lib/chat-utils'
 
 interface EngineStatus {
-  engine: string
-  version: string
-  models_loaded: number
-  uptime_s: number
-  memory_usage_mb: number
+  engine?: string
+  version?: string
+  models_loaded?: number
+  uptime_s?: number
+  memory_usage_mb?: number
 }
 
 export default function EngineStatusCard() {
@@ -94,11 +94,14 @@ export default function EngineStatusCard() {
       }
     >
         <KpiGrid columns={3}>
-          <StatCard label="Engine" value={status.engine} />
-          <StatCard label="Version" value={status.version} />
-          <StatCard label="Models Loaded" value={status.models_loaded} />
-          <StatCard label="Uptime" value={formatUptime(status.uptime_s)} />
-          <StatCard label="Memory" value={`${status.memory_usage_mb} MB`} />
+          <StatCard label="Engine" value={status.engine ?? '—'} />
+          <StatCard label="Version" value={status.version ?? '—'} />
+          <StatCard label="Models Loaded" value={status.models_loaded ?? 0} />
+          <StatCard label="Uptime" value={formatUptime(status.uptime_s ?? 0)} />
+          <StatCard
+            label="Memory"
+            value={status.memory_usage_mb != null ? `${status.memory_usage_mb} MB` : '—'}
+          />
         </KpiGrid>
     </ActionCard>
   )

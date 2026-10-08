@@ -115,6 +115,12 @@ describe('formatUptime', () => {
   it('handles zero', () => {
     expect(formatUptime(0)).toBe('0m')
   })
+
+  it('never renders NaN for missing or invalid input', () => {
+    expect(formatUptime(NaN)).toBe('0m')
+    expect(formatUptime(Number.POSITIVE_INFINITY)).toBe('0m')
+    expect(formatUptime(undefined as unknown as number)).toBe('0m')
+  })
 })
 
 describe('buildLocalPrompt', () => {

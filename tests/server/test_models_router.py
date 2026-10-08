@@ -3,7 +3,7 @@ Tests for the models router — list, load, unload, HF models.
 """
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -401,7 +401,142 @@ class TestStartDownload:
         resp = client.post("/models/download", json={"model_id": "gpt2", "total_bytes_hint": 100})
         assert resp.status_code == 200
         assert resp.json()["message"] == "started"
-        mock_run.assert_called_once_with("gpt2", 100)
+        mock_run.assert_called_once_with("gpt2", 100, "", "")
+
+    @patch("apps.api.server.routers.models.ModelsRouter._run_download")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
+    def test_started_with_url_and_dest(self, mock_mgr, mock_run, client):
+        """An explicit url/dest reaches the background task unchanged."""
+        mgr = MagicMock()
+        mgr.is_cached.return_value = False
+        mgr.is_downloading.return_value = False
+        mock_mgr.return_value = mgr
+        resp = client.post(
+            "/models/download",
+            json={
+                "model_id": "xv6-book",
+                "total_bytes_hint": 750111,
+                "url": "https://pdos.csail.mit.edu/6.828/2024/xv6/book.pdf",
+                "dest": "/tmp/xv6-book.pdf",
+            },
+        )
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "started"
+        mock_run.assert_called_once_with(
+            "xv6-book",
+            750111,
+            "https://pdos.csail.mit.edu/6.828/2024/xv6/book.pdf",
+            "/tmp/xv6-book.pdf",
+        )
+
+    @patch("apps.api.server.routers.models.ModelsRouter._run_download")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
+    def test_started_without_url_keeps_model_shape(self, mock_mgr, mock_run, client):
+        """A plain model download must not require a url (HF path)."""
+        mgr = MagicMock()
+        mgr.is_cached.return_value = False
+        mgr.is_downloading.return_value = False
+        mock_mgr.return_value = mgr
+        resp = client.post("/models/download", json={"model_id": "gpt2"})
+        assert resp.status_code == 200
+        mock_run.assert_called_once_with("gpt2", 0, "", "")
+
+
+class TestRunDownloadWiring:
+    """_run_download must call download_model with keywords, not positionally.
+
+    Regressed 2026-09-16 (a170a7694): ``download(model_id, total_bytes_hint)``
+    put the int hint into ``url`` → ``Invalid URL '0'``.
+    """
+
+    @staticmethod
+    def _manager(result: dict) -> MagicMock:
+        mgr = MagicMock()
+        mgr.download_model = AsyncMock(return_value=result)
+        return mgr
+
+    async def test_url_and_dest_reach_download_model_as_keywords(self):
+        mgr = self._manager({"status": "failed", "model_id": "m", "error": "boom"})
+        with patch(
+            "domain.infrastructure.download_manager.get_download_manager",
+            return_value=mgr,
+        ):
+            await ModelsRouter()._run_download(
+                "m", 7, url="https://host/x.pdf", dest="/tmp/x.pdf"
+            )
+
+        mgr.download_model.assert_awaited_once_with(
+            "m", url="https://host/x.pdf", dest="/tmp/x.pdf", total_bytes_hint=7
+        )
+
+    async def test_no_url_defaults_to_model_path(self):
+        mgr = self._manager({"status": "failed", "model_id": "gpt2", "error": "x"})
+        with patch(
+            "domain.infrastructure.download_manager.get_download_manager",
+            return_value=mgr,
+        ):
+            await ModelsRouter()._run_download("gpt2", 0)
+
+        mgr.download_model.assert_awaited_once_with(
+            "gpt2", url="", dest="", total_bytes_hint=0
+        )
+        # the positional-int bug would have shown up as url=0
+        assert mgr.download_model.call_args.kwargs["url"] == ""
+
+    async def test_download_result_drives_audit_outcome(self):
+        mgr = self._manager({"status": "complete", "model_id": "m"})
+        controller = MagicMock()
+        with (
+            patch(
+                "domain.infrastructure.download_manager.get_download_manager",
+                return_value=mgr,
+            ),
+            patch("apps.api.server.routers.models.safe_audit_log") as audit,
+            # The completed branch auto-loads the model — keep that side
+            # effect mocked or it leaks into later tests' server state.
+            patch("controllers.models.get_models_controller", return_value=controller),
+        ):
+            await ModelsRouter()._run_download("m", 0, url="https://host/x")
+
+        actions = [c.args[0] for c in audit.call_args_list]
+        assert "model.download.complete" in actions
+        controller.load_model.assert_called_once_with("m")
+
+
+class TestEngineStatusContract:
+    """GET /models/engine/status must satisfy EngineStatusCard's declared shape.
+
+    The card reads ``{engine, version, models_loaded, uptime_s,
+    memory_usage_mb}`` but the endpoint returned only the process-guard
+    payload, so every card value was ``undefined`` → ``NaNm`` uptime and
+    ``undefined MB`` memory.
+    """
+
+    def test_declared_engine_stats_present(self, client):
+        resp = client.get("/models/engine/status")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert isinstance(data["engine"], str) and data["engine"]
+        assert isinstance(data["version"], str) and data["version"]
+        assert isinstance(data["models_loaded"], int)
+        assert isinstance(data["uptime_s"], (int, float))
+        assert data["uptime_s"] >= 0
+        assert isinstance(data["memory_usage_mb"], (int, float))
+        assert data["memory_usage_mb"] > 0
+
+    def test_process_guard_payload_preserved(self, client):
+        """The existing subprocess-status consumers must keep working."""
+        data = client.get("/models/engine/status").json()["data"]
+        for key in (
+            "enabled",
+            "pid",
+            "alive",
+            "model_id",
+            "health",
+            "metrics",
+            "stderr_tail",
+        ):
+            assert key in data
 
 
 class TestDownloadStatus:

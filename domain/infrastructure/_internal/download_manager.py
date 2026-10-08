@@ -427,6 +427,123 @@ class DownloadManager:
                 logger.debug("Failed to record download error event: %s", exc)
             return {"status": "failed", "model_id": model_id, "error": str(e)}
 
+    async def download_model(
+        self,
+        model_id: str,
+        url: str = "",
+        dest: str | Path = "",
+        total_bytes_hint: int = 0,
+    ) -> dict[str, Any]:
+        """Download a model by id — direct URL, or the Hub when omitted.
+
+        This is the seam the API router and the CLI call.  Two paths:
+
+        * ``url`` given → the generic single-resource engine (``download()``),
+          which brings resume, integrity verification, pause/resume and
+          cancellation.  The URL travels as a keyword argument: passing it
+          positionally is what turned ``total_bytes_hint`` into
+          ``url=0`` (→ ``Invalid URL '0'``) after ``download()`` grew its
+          ``url`` parameter on 2026-09-16.
+        * no ``url`` → the model is identified by its Hub id, so
+          ``HFDownloadBackend`` (``download_hf_model``) resolves the file
+          list and cache layout.  Progress is mirrored into the registry so
+          ``GET /models/downloads`` surfaces it like any other download.
+
+        Args:
+            model_id: Model id or download id (``"gpt2"``, ``"org/name"``).
+            url: Optional direct HTTP(S) URL — wins over the model-id path.
+            dest: Optional destination path for the generic path.
+            total_bytes_hint: Expected total bytes (0 = auto-detect).
+
+        Returns:
+            Dict with ``status`` (``complete`` / ``already_cached`` /
+            ``failed`` / ``cancelled`` / ``already_downloading``) and
+            ``model_id``.
+
+        Note:
+            Cancelling flips the entry to cancelled, but an in-flight Hub
+            transfer cannot be interrupted (the Hub path has no cancel
+            hook): the entry stays cancelled and the finished files remain
+            cached for the next attempt.
+        """
+        if url:
+            return await self.download(
+                model_id, url=url, dest=dest, total_bytes_hint=total_bytes_hint
+            )
+
+        from .hf_hub import HFDownloadBackend
+
+        if self.is_downloading(model_id):
+            return {"status": "already_downloading", "model_id": model_id}
+
+        backend = HFDownloadBackend()
+        started = time.time()
+
+        def _on_progress(mid: str, done: int, total: int, speed: float) -> None:
+            pct = (done / total * 100) if total > 0 else 0.0
+            self._set_progress(
+                mid,
+                status=DownloadStatus.DOWNLOADING,
+                bytes_downloaded=done,
+                total_bytes=total,
+                percentage=pct,
+                speed_bytes_per_sec=speed,
+            )
+            self._notify_callbacks(mid)
+
+        self._set_progress(
+            model_id,
+            status=DownloadStatus.QUEUED,
+            started_at=started,
+            total_bytes=total_bytes_hint,
+        )
+        self._notify_callbacks(model_id)
+
+        try:
+            result = await asyncio.to_thread(
+                backend.download,
+                model_id,
+                on_progress=_on_progress,
+                on_file_complete=None,
+            )
+        except Exception as exc:
+            self._set_progress(model_id, status=DownloadStatus.FAILED, error=str(exc))
+            self._notify_callbacks(model_id)
+            self._record_download_failed(model_id)
+            return {"status": "failed", "model_id": model_id, "error": str(exc)}
+
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            cancelled = entry is not None and entry.status == DownloadStatus.CANCELLED
+        if cancelled:
+            self._record_download_cancelled(model_id)
+            return {"status": "cancelled", "model_id": model_id}
+
+        elapsed = time.time() - started
+        total_bytes = int(result.get("total_bytes") or 0)
+        progress: dict[str, Any] = {
+            "status": DownloadStatus.COMPLETE,
+            "percentage": 100.0,
+            "completed_at": time.time(),
+        }
+        if total_bytes:
+            progress["total_bytes"] = total_bytes
+        self._set_progress(model_id, **progress)
+        self._notify_callbacks(model_id)
+
+        with self._lock:
+            entry = self._downloads.get(model_id)
+            bytes_done = entry.bytes_downloaded if entry else 0
+            speed = entry.speed_bytes_per_sec if entry else 0
+        self._record_download_complete(model_id, bytes_done, elapsed, speed)
+
+        return {
+            "status": result.get("status", "complete"),
+            "model_id": model_id,
+            "cache_dir": result.get("cache_dir", ""),
+            "elapsed_seconds": elapsed,
+        }
+
     async def _download_worker(
         self,
         model_id: str,
@@ -548,6 +665,16 @@ class DownloadManager:
                     )
 
         if last_error is not None:
+            # Terminal state: without this the entry stays "downloading"
+            # forever — the UI card spins at 0% and the model stays locked
+            # behind is_downloading(), so no retry can ever start.
+            self._set_progress(
+                model_id,
+                status=DownloadStatus.FAILED,
+                error=str(last_error),
+                completed_at=time.time(),
+            )
+            self._notify_callbacks(model_id)
             self._record_download_failed(model_id)
             return {"status": "failed", "model_id": model_id, "error": str(last_error)}
 

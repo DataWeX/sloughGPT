@@ -57,6 +57,11 @@ class ExportRequest(BaseModel):
 class DownloadRequest(BaseModel):
     model_id: str = Field(..., min_length=1, max_length=200)
     total_bytes_hint: int = Field(default=0, ge=0)
+    # Generic-download surface: an explicit URL (and optional destination)
+    # travels straight to DownloadManager.download().  Omitted → the model
+    # id is resolved through the HuggingFace Hub instead.
+    url: str = Field(default="", max_length=2048)
+    dest: str = Field(default="", max_length=1024)
 
 
 class QuantizeRequest(BaseModel):
@@ -639,19 +644,34 @@ class ModelsRouter:
                     data={"model_id": req.model_id}, message="already_downloading"
                 )
 
-            asyncio.create_task(self._run_download(req.model_id, req.total_bytes_hint))
+            asyncio.create_task(
+                self._run_download(req.model_id, req.total_bytes_hint, req.url, req.dest)
+            )
             safe_audit_log(
                 "model.download",
                 resource=req.model_id,
                 detail="started",
                 total_bytes_hint=req.total_bytes_hint,
+                url=req.url,
             )
             return success_response(data={"model_id": req.model_id}, message="started")
         except Exception as e:
             classify_and_raise(e, source="models.download_start")
 
-    async def _run_download(self, model_id: str, total_bytes_hint: int):
-        """Background task that runs the actual download."""
+    async def _run_download(
+        self,
+        model_id: str,
+        total_bytes_hint: int,
+        url: str = "",
+        dest: str = "",
+    ):
+        """Background task that runs the actual download.
+
+        ``url``/``dest`` are passed as keywords — ``download()`` takes a
+        required ``url`` first, so positional wiring put the byte hint into
+        it (``Invalid URL '0'``).  With no ``url`` the model id resolves
+        through the HuggingFace Hub.
+        """
         import time as _time
 
         from controllers.models import get_models_controller
@@ -679,7 +699,12 @@ class ModelsRouter:
             )
 
         try:
-            result = await mgr.download(model_id, total_bytes_hint)
+            result = await mgr.download_model(
+                model_id,
+                url=url,
+                dest=dest,
+                total_bytes_hint=total_bytes_hint,
+            )
             _download_elapsed_ms = (_time.monotonic() - _download_t0) * 1000
 
             if result.get("status") == "complete":
@@ -1712,15 +1737,26 @@ class ModelsRouter:
 
         Returns whether the engine subprocess is enabled, its PID, whether
         the client is connected, the model id, and the last 20 lines of stderr.
+
+        Also carries the engine-stats contract ``EngineStatusCard`` renders
+        (``engine``, ``version``, ``models_loaded``, ``uptime_s``,
+        ``memory_usage_mb``) — without those keys the card printed
+        ``undefined MB`` and ``NaNm``.
         """
         import state as server_state
+        from host_metrics import sample_host_metrics_sync
+        from version import version_info
+
+        from domain.infrastructure.server_state import get_server_state
 
         proc = getattr(server_state, "_inference_engine_proc", None)
         provider = getattr(server_state, "provider", None)
+        model = getattr(server_state, "model", None)
         stderr_tail = list(getattr(server_state, "_inference_engine_stderr", []))
         from domain.infrastructure.inference_client import InferenceClient
 
         is_client = isinstance(provider, InferenceClient)
+        serving = model is not None or provider is not None
         pid = proc.pid if proc is not None else None
         alive = proc.poll() is None if proc is not None else False
         health = {}
@@ -1734,8 +1770,21 @@ class ModelsRouter:
 
                 logging.getLogger("slo.models").warning("Provider health check failed: %s", exc)
                 health = {"type": "error", "error": str(exc)}
+        try:
+            rss_bytes = sample_host_metrics_sync().get("process_rss_bytes")
+        except Exception:
+            rss_bytes = None
         return success_response(
             data={
+                "engine": (
+                    "standalone" if is_client else ("in-process" if serving else "none")
+                ),
+                "version": version_info()["package"],
+                "models_loaded": 1 if serving else 0,
+                "uptime_s": round(float(get_server_state().uptime_seconds), 1),
+                "memory_usage_mb": (
+                    round(rss_bytes / (1024 * 1024), 1) if rss_bytes else 0.0
+                ),
                 "enabled": is_client,
                 "pid": pid,
                 "alive": alive,
