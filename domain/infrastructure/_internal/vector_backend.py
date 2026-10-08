@@ -13,6 +13,7 @@ import multiprocessing.shared_memory as shm
 import os
 import sys
 import time
+from multiprocessing import resource_tracker
 from typing import Any
 
 import numpy as np
@@ -122,6 +123,16 @@ class VectorBE(ComputeBackend):
     def __init__(self, weights: dict[str, np.ndarray], arch: ArchConfig):
         self._arch = arch
         self._n_proc = _N_PROC
+        # Start this process tree's resource tracker BEFORE the pool forks
+        # (card ccad389e). py3.12 registers every SharedMemory create *and*
+        # attach with the tracker; if the first registration happens after
+        # the fork, each forked worker starts its OWN tracker and accumulates
+        # its attach names there — at worker exit those sweeps re-unlink
+        # already-gone names and flood stderr with "/psm_*: [Errno 2]"
+        # UserWarnings. One shared tracker (started here) makes worker
+        # attaches dedup against the creator's entries instead. forkserver
+        # already shares via the spawn prep `tracker_fd`; bare fork does not.
+        resource_tracker.ensure_running()
         self._pool = mp.get_context(_pool_start_method()).Pool(_N_PROC)
 
         # Put all weights into shared memory
@@ -156,12 +167,27 @@ class VectorBE(ComputeBackend):
     def __del__(self):
         if hasattr(self, "_pool") and self._pool:
             self._pool.close()
-        for block in getattr(self, "_shm_blocks", {}).values():
+        for name, block in getattr(self, "_shm_blocks", {}).items():
             try:
                 block.close()
                 block.unlink()
+            except FileNotFoundError:
+                # SharedMemory.unlink() runs shm_unlink BEFORE unregister with
+                # no try/finally — an already-gone file skips the unregister
+                # and the lingering entry warns "/psm_*: [Errno 2]" at tracker
+                # exit. Drop it here (exactly-once: create registered it;
+                # block._name is the exact key stdlib unlink() would send).
+                try:
+                    resource_tracker.unregister(block._name, "shared_memory")
+                except Exception as e:  # pragma: no cover — tracker already gone
+                    logger.debug("Failed to unregister shm %s: %s", name, e, extra={"tag": "INFRA"})
             except Exception as e:
                 logger.debug("Failed to close shared memory block: %s", e, extra={"tag": "INFRA"})
+        # Idempotent: a second __del__ must not unlink/unregister again —
+        # double-unregister makes the tracker's cache.remove() KeyError.
+        blocks = getattr(self, "_shm_blocks", None)
+        if blocks is not None:
+            blocks.clear()
 
     def _get_w(self, name: str) -> np.ndarray:
         """Read a weight tensor from shared memory."""

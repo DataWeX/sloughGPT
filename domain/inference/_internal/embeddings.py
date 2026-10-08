@@ -14,8 +14,9 @@ Usage:
     embedder = Embedder()
     vectors = embedder.embed(["Hello world", "How are you?"])
 
-    # OpenAI
+    # OpenAI (or any OpenAI-compatible endpoint: ollama, LM Studio, vLLM)
     embedder = Embedder(provider="openai", api_key="sk-...")
+    embedder = Embedder(provider="openai", base_url="http://localhost:11434/v1")
     vectors = embedder.embed("Hello world")
 """
 
@@ -95,7 +96,8 @@ class InMemoryEmbedder(BaseEmbedder):
 
 
 class OpenAIEmbedder(BaseEmbedder):
-    """OpenAI embeddings (ada, text-embedding-3-small, text-embedding-3-large)."""
+    """OpenAI embeddings — also works against any OpenAI-compatible endpoint
+    (ollama, LM Studio, vLLM) via ``base_url``."""
 
     DIMENSIONS = {
         "text-embedding-ada-002": 1536,
@@ -108,18 +110,24 @@ class OpenAIEmbedder(BaseEmbedder):
         api_key: str | None = None,
         model: str = "text-embedding-3-small",
         dimensions: int | None = None,
+        base_url: str | None = None,
     ):
-        self.api_key = api_key or get_config().embedding.openai_api_key or None
+        cfg = get_config().embedding
+        self.api_key = api_key or cfg.api_key or cfg.openai_api_key or None
         self.model_name = model
         self.dimensions = dimensions or self.DIMENSIONS.get(model, 1536)
+        self.base_url = base_url or cfg.base_url or None
 
         if not self.api_key:
-            raise ValueError("OpenAI API key required (api_key or OPENAI_API_KEY)")
+            raise ValueError(
+                "OpenAI API key required (api_key arg or config "
+                "embedding.api_key / embedding.openai_api_key)"
+            )
 
         try:
             from openai import OpenAI
 
-            self.client = OpenAI(api_key=self.api_key)
+            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
         except ImportError:
             raise ImportError("pip install openai") from None
 
@@ -158,13 +166,14 @@ class Embedder:
         model: str | None = None,
         api_key: str | None = None,
         dimension: int = 384,
+        base_url: str | None = None,
         **kwargs,
     ):
         provider = provider or get_config().embedding.provider
 
         if provider == "openai":
             model_name = model or "text-embedding-3-small"
-            self._impl = OpenAIEmbedder(api_key=api_key, model=model_name)
+            self._impl = OpenAIEmbedder(api_key=api_key, model=model_name, base_url=base_url)
         else:
             self._impl = InMemoryEmbedder(dimension=dimension)
 

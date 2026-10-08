@@ -4,7 +4,97 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~02:45 — `fix/vite-worker-format` **lands on
+**Last update**: 2026-10-08 ~05:40 — `fix/kanban-phantom-column`
+**lands on main** (push `91e81243b`, card `b538ecbd` → done): **read-path
+column validation** — write paths already rejected retired spellings
+(`67c406ee2`) but `load_board()` — every reader's choke point — accepted
+anything, so a hand-edited `"column": "in-progress"` line produced a card
+`board show` (header-driven) never rendered while `stats` (card-driven)
+counted it: two views, two totals. Now `load_board()` warns + coerces to the
+fallback (`todo`, else first declared) — coerced, never dropped; the card
+becomes visible and consistently counted. Card drifted before pickup: the 3
+phantom cards were already repaired to `wip` (verified, untouched) and C
+follows automatically (stats reads load_board). 4 new tests incl. a
+recurrence guard on the **real** `.kanban/board.jsonl` (would have caught the
+original bug). Gates: RED 3 → GREEN **198 passed** (full app-planner suite),
+ruff clean; DONE-WHEN proven live: show renders **966** card lines == stats
+Total 966 (842/77/32/15 all in vocabulary).
+
+Earlier 2026-10-08 ~05:00: `fix/online-lora-phantom-updates`
+**lands on main** (push `93286c6fe`, card `b83a5788` → done): **phantom
+online-LoRA updates retired** — the loop was dead in production (no engine
+attach path, `engine=None` always) yet counted every buffer drain as a
+successful update with "Updated with N samples" telemetry. DECIDE resolved to
+retire: `apply_to_logits` has **zero production callers** (so even a wired
+engine wouldn't reach inference — wiring is a separate feature card) and real
+backprop needs engine access the interface doesn't expose. Shipped: honest
+applied-vs-skipped accounting (`total_skipped_updates/skipped_samples`,
+`total_updates`/`last_update_time` only move on real applies), shape-mismatched
+gradients skipped instead of raising into the swallow, the pseudo-gradient
+**random-noise fallback removed** (it mutated live weights), `engine_attached`
+stat + not-implemented docstrings. 16 tests new/retargeted — 4 of them were
+baseline reds asserting gradients-from-nothing, now green under the honest
+contract. Gates: RED 8+3 → GREEN **273 passed** across 6 files
+(online_lora/online_train/feedback_domain + feedback_controller/
+workflow_router/quality_guard), ruff + py_compile clean, 0 frontend consumers.
+
+Earlier 2026-10-08 ~04:20: `fix/shm-resource-tracker-warnings`
+**lands on main** (push `f5ccd713a`, card `ccad389e` → done): **resource_tracker
+`/psm_*` warning flood silenced** — root cause *proven* with a tracker-pid probe:
+`VectorBE` forked its Pool before any shm op, so fork-arm workers each started
+their **own** tracker (pid mismatch, SHARED=False) and accumulated attach
+registrations (weights + unique per-dispatch out names) in per-worker caches;
+parent unlinked files first → worker-exit sweeps hit ENOENT → **214 warning
+lines** on the fork arm (99 `Errno 2` + 8 "leaked" notices). Fix, 2 sites with
+worker functions untouched: `resource_tracker.ensure_running()` **before** Pool
+construction (one shared tracker → attaches dedup against the creator's
+entries) + `__del__` `FileNotFoundError` fallback unregistering `block._name`
+(stdlib `unlink()` = shm_unlink *then* unregister, no try/finally) with
+`_shm_blocks.clear()` idempotence (double-unregister KeyErrors the tracker —
+measured). Rejected: worker-side unregister — on the shared tracker it would
+pop the creator's entry. forkserver already shared via spawn prep `tracker_fd`
+(0 lines before and after — the card's "both methods" didn't reproduce here).
+Gates: fork arm **214 → 0 lines** (stderr 0 bytes, same args), both arms
+iters=10 = 0 warnings, `/dev/shm` empty, steady matmul 29.6ms vs 37.4ms RED
+(no regression); `test_vector_backend` **24 passed**; ruff + py_compile clean.
+
+Earlier 2026-10-08 ~03:45: `feat/generic-provider-config` **lands on
+main** (pushes `859b83811` + `226b35352`, card `90839119` → done): **generic
+embedding provider config** — `EmbeddingConfig` gains `api_key` + `base_url`
+(any OpenAI-compatible endpoint: ollama, LM Studio, vLLM) with a bidirectional
+alias mirror so `openai_api_key` reads/writes keep working; env ordering
+covered (`_apply_env_overrides` ends in `model_validate`, so both the legacy
+`SLO_EMBEDDING__OPENAI_API_KEY` and new `SLO_EMBEDDING__API_KEY` resolve);
+`OpenAIEmbedder`/`Embedder` pass `base_url` into the client; `.env.example` +
+example config updated. **Reuse, not rebuild**: the work already existed as
+`bab6c42ed` on `origin/feat/embedding-provider-config` (137 unmerged commits,
+2026-09-29 — card notes even said "delivered: bab6c42ed"), so it was
+cherry-picked (clean). This session added 3 gap tests (legacy-env back-compat,
+precedence, `base_url=None` default) and fixed 5 `FakeClient` fakes in
+`test_embeddings.py` the original commit missed (TypeError on `base_url`, new
+vs baseline). **Disclosure**: the feature first rode into the board-reseal
+commit `859b83811` still staged from the cherry-pick (message says reseal
+only) — contents recorded in `226b35352`'s message; no history rewrite on
+shared main. Gates: red-green proven (pre-feature `HEAD~2`: 9F/2P → 11/11);
+family `test_config` + `test_embedding_config` + `test_embeddings{,2}` = **100
+passed**; ruff + py_compile clean.
+
+Earlier 2026-10-08 ~03:05: `fix/feedback-suite-drift` **lands on
+main** (push `dd83baf9a`, card `37325860` → done): **feedback suite drift
+fixed** — 7 red (card reported 8; the `test_dataclass_field_types` "×2"
+counts once on current main) across two root causes, both test-side, no
+production code touched. (1) `test_feedback_dataclasses` asserted
+`dataclasses.fields().type is float`, but `meta_weights.py`/`model_health.py`
+carry `from __future__ import annotations` (hygiene ratchet) so `f.type` is
+the *string* `"float"` → resolve via `typing.get_type_hints()` (pattern
+verified unique: 0 other sites repo-wide). (2) `test_meta_weights_router`
+was stale vs impl **and** docs (both agree): `k` default is 5, and
+`APIRouter(prefix="/meta-weights")` applies at registration → routes are
+`/meta-weights/ping|get|stats` per `docs/routers.md`. Gates: RED 7 → GREEN
+**153/153** in the two files, full feedback + meta_weights family **547
+passed**, ruff + py_compile clean.
+
+Earlier 2026-10-08 ~02:45: `fix/vite-worker-format` **lands on
 main** (push `3f73ff956`, card `60652af2` → done): **production `vite build`
 unblocked** — explicit `worker: { format: 'es' }` in `apps/web/vite.config.ts`.
 The WebGPU worker is a module worker (`lib/soulnet-webgpu/index.ts:62`, the

@@ -110,7 +110,7 @@ class TestOpenAIEmbedder:
                 return FakeData()
 
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = FakeEmbeddings()
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -133,7 +133,7 @@ class TestOpenAIEmbedder:
                 return FakeData()
 
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = FakeEmbeddings()
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -143,7 +143,7 @@ class TestOpenAIEmbedder:
 
     def test_unknown_model_defaults_dimension(self, monkeypatch):
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = None
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -152,7 +152,7 @@ class TestOpenAIEmbedder:
 
     def test_custom_dimensions(self, monkeypatch):
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = None
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -161,7 +161,7 @@ class TestOpenAIEmbedder:
 
     def test_get_model_name(self, monkeypatch):
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = None
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
