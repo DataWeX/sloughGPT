@@ -159,7 +159,7 @@ class TestCaveGameRuntime:
         _press(vs, "w")
         assert bytes(vs.cpu._mem[px_addr : px_addr + 4]) == before  # wall blocked
         _press(vs, "a")
-        assert " a=01 " in _hud(vs)  # input loop was live all along
+        assert " a=63 " in _hud(vs)  # left turn: 0 -> 63, input loop was live
 
 
 class TestBareVMEnginePath:

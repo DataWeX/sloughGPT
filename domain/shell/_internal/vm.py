@@ -8965,6 +8965,11 @@ class Scheduler:
         """Start scheduling — pick the first process and load it."""
         pid = self.dequeue()
         if pid is None:
+            # Nothing runnable: idle the CPU so run() stops at the last
+            # process's exit instead of decoding stack/padding bytes as code
+            # (SYS_EXIT without a successor used to run into the interrupt
+            # frame and raise InsFault). run() re-enables _running at entry.
+            cpu._running = False
             return
         self._current_pid = pid
         pcb = self._ptable.get(pid)

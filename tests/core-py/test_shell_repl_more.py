@@ -11847,6 +11847,12 @@ class TestCmdVmrunExecutionV2:
         repl._cmd_vmrun("counter")
         assert repl._last_exit_code == 0
 
+    def test_vmrun_registry_program_name(self, repl):
+        """vmrun resolves names from vm_programs.PROGRAMS, not just files."""
+        out = capture_cmd(repl, repl._cmd_vmrun, "--steps=40000 cave_game")
+        assert "[exit:" in out  # ran to the step budget
+        assert "No such file" not in out  # ...and was never treated as a path
+
     def test_vmrun_admin_role(self, repl):
         repl._cmd_vmrun("--admin hello")
         assert repl._last_exit_code == 0

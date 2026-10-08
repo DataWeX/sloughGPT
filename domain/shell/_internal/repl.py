@@ -4532,7 +4532,9 @@ nl: db 10
         Usage: vmrun [--admin|--kernel] [--steps=N] [--debug] <file.asm>
                vmrun [--admin|--kernel] [--steps=N] [--debug] <name>   (built-in)
                echo '<code>' | vmrun [--admin|--kernel] [--steps=N] [--debug]
-        Built-in names: hello, echo, fib, collatz
+        Built-in names: hello, echo, fib, collatz — plus any name from
+        vm_programs.PROGRAMS (see `vmrun --list`); use --steps=N to budget
+        bigger programs (a full frame of cave_game ≈ 65000 steps).
         """
         source = self._piped_input if self._piped_input else ""
         role = "user"
@@ -4560,10 +4562,16 @@ nl: db 10
                 debug = True
                 rest = rest[len("--debug") :].lstrip()
             elif rest.startswith("--list"):
+                from domain.shell._internal.vm_programs import PROGRAMS
+
                 self._print("  Built-in x86 programs:")
                 self._print(f"    {'hello':15s} Print 'Hello from x86 VM!'")
                 self._print(f"    {'count':15s} Count 0 to 9")
                 self._print(f"    {'counter':15s} Count 0 to 4")
+                self._print(f"    {'cave_game':15s} Voxel raycaster (needs --steps=100000)")
+                for name in PROGRAMS:
+                    if name not in ("hello", "count", "counter", "cave_game"):
+                        self._print(f"    {name:15s} (vm_programs.PROGRAMS)")
                 self._last_exit_code = 0
                 return
             else:
@@ -4581,7 +4589,10 @@ nl: db 10
 
         file_or_name = rest if rest else ""
 
-        # Check built-in programs by name
+        # Check built-in programs by name: local REPL samples first, then the
+        # shared vm_programs registry (cave_game, fib, primes, guess, …).
+        from domain.shell._internal.vm_programs import PROGRAMS
+
         builtins = {
             "hello": ShellREPL.HELLO_X86,
             "count": ShellREPL.FIB_X86,
@@ -4589,6 +4600,8 @@ nl: db 10
         }
         if file_or_name and file_or_name in builtins:
             source = builtins[file_or_name]
+        elif file_or_name and file_or_name in PROGRAMS:
+            source = PROGRAMS[file_or_name]
         elif file_or_name:
             try:
                 source = Path(os.path.expanduser(file_or_name)).read_text()
@@ -4603,6 +4616,13 @@ nl: db 10
             self._print("         echo '<code>' | vmrun [--admin|--kernel]")
             self._last_exit_code = 1
             return
+
+        # The assembler defaults to BITS 16 but this CPU is 32-bit protected
+        # mode only: directive-less piped/file code would assemble for the
+        # wrong mode and fault at runtime. Default it to the machine's mode;
+        # an explicit [BITS n] directive in the source still wins.
+        if not re.search(r"\[\s*BITS\s+\d+\s*\]", source, re.IGNORECASE):
+            source = "[BITS 32]\n" + source
 
         try:
             from domain.shell._internal.vm import X86VirtualSystem
