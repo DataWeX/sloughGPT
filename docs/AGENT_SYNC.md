@@ -4,7 +4,27 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~03:45 — `feat/generic-provider-config` **lands on
+**Last update**: 2026-10-08 ~04:20 — `fix/shm-resource-tracker-warnings`
+**lands on main** (push `f5ccd713a`, card `ccad389e` → done): **resource_tracker
+`/psm_*` warning flood silenced** — root cause *proven* with a tracker-pid probe:
+`VectorBE` forked its Pool before any shm op, so fork-arm workers each started
+their **own** tracker (pid mismatch, SHARED=False) and accumulated attach
+registrations (weights + unique per-dispatch out names) in per-worker caches;
+parent unlinked files first → worker-exit sweeps hit ENOENT → **214 warning
+lines** on the fork arm (99 `Errno 2` + 8 "leaked" notices). Fix, 2 sites with
+worker functions untouched: `resource_tracker.ensure_running()` **before** Pool
+construction (one shared tracker → attaches dedup against the creator's
+entries) + `__del__` `FileNotFoundError` fallback unregistering `block._name`
+(stdlib `unlink()` = shm_unlink *then* unregister, no try/finally) with
+`_shm_blocks.clear()` idempotence (double-unregister KeyErrors the tracker —
+measured). Rejected: worker-side unregister — on the shared tracker it would
+pop the creator's entry. forkserver already shared via spawn prep `tracker_fd`
+(0 lines before and after — the card's "both methods" didn't reproduce here).
+Gates: fork arm **214 → 0 lines** (stderr 0 bytes, same args), both arms
+iters=10 = 0 warnings, `/dev/shm` empty, steady matmul 29.6ms vs 37.4ms RED
+(no regression); `test_vector_backend` **24 passed**; ruff + py_compile clean.
+
+Earlier 2026-10-08 ~03:45: `feat/generic-provider-config` **lands on
 main** (pushes `859b83811` + `226b35352`, card `90839119` → done): **generic
 embedding provider config** — `EmbeddingConfig` gains `api_key` + `base_url`
 (any OpenAI-compatible endpoint: ollama, LM Studio, vLLM) with a bidirectional
