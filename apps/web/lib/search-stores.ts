@@ -21,7 +21,7 @@ export const SEARCH_STORES: Record<string, SearchStoreMeta> = {
   training_jobs: {
     label: 'Training Jobs',
     color: 'bg-info/15 text-info dark:bg-info/10 dark:text-info',
-    link: '/training/queue',
+    link: '/training',
     icon: '🧠',
   },
   datasets: {

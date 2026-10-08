@@ -368,13 +368,17 @@ class TestTrainingLifecycle:
 
 
 class TestTrainingSubsystems:
-    """Tests training subsystem pages: analytics, compare, presets, queue, runs, trends."""
+    """Tests training subsystem pages: analytics, compare, presets, runs, trends.
+
+    ``/training/queue`` is deliberately absent: the route never existed and the
+    queue was retired — legacy references redirect to ``/training``
+    (lib/redirects.ts), which ALL_ROUTES already covers.
+    """
 
     ROUTES = [
         ("/training/analytics", "analytics"),
         ("/training/compare", "compare"),
         ("/training/presets", "presets"),
-        ("/training/queue", "queue"),
         ("/training/runs", "runs"),
         ("/training/trends", "trends"),
         ("/training/insights", "insights"),

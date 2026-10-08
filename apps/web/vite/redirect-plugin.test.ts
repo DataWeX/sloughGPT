@@ -20,6 +20,11 @@ function mockRes() {
 }
 
 describe('resolveRedirect / splitTarget', () => {
+  it('redirects the retired training queue to the training hub', () => {
+    // /training/queue never existed as a route; links were dead on arrival.
+    expect(resolveRedirect('/training/queue')).toBe('/training')
+  })
+
   it('maps legacy paths', () => {
     expect(resolveRedirect('/collections')).toBe('/datasets')
     expect(resolveRedirect('/voice')).toBe('/chat?mode=talk')
@@ -34,8 +39,8 @@ describe('resolveRedirect / splitTarget', () => {
     expect(splitTarget('/datasets')).toEqual({ path: '/datasets', search: '' })
   })
 
-  it('has 49 entries matching proxy table', () => {
-    expect(Object.keys(REDIRECTS).length).toBe(49)
+  it('has 50 entries matching proxy table', () => {
+    expect(Object.keys(REDIRECTS).length).toBe(50)
   })
 
   it('maps workspace legacy paths to consolidated routes', () => {

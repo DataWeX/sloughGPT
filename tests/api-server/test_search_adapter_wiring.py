@@ -65,7 +65,7 @@ async def test_training_adapter_resolves_job_store(monkeypatch):
     assert calls == ["ws9"]
     assert len(hits) == 1
     assert hits[0].id == "j1"
-    assert hits[0].locator == "route:/training/queue"
+    assert hits[0].locator == "route:/training"
 
 
 async def test_files_adapter_uses_uploads_mogdb(tmp_path, monkeypatch):
