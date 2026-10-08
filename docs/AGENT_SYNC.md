@@ -4,7 +4,22 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-08 ~02:45 — `fix/vite-worker-format` **lands on
+**Last update**: 2026-10-08 ~03:05 — `fix/feedback-suite-drift` **lands on
+main** (push `dd83baf9a`, card `37325860` → done): **feedback suite drift
+fixed** — 7 red (card reported 8; the `test_dataclass_field_types` "×2"
+counts once on current main) across two root causes, both test-side, no
+production code touched. (1) `test_feedback_dataclasses` asserted
+`dataclasses.fields().type is float`, but `meta_weights.py`/`model_health.py`
+carry `from __future__ import annotations` (hygiene ratchet) so `f.type` is
+the *string* `"float"` → resolve via `typing.get_type_hints()` (pattern
+verified unique: 0 other sites repo-wide). (2) `test_meta_weights_router`
+was stale vs impl **and** docs (both agree): `k` default is 5, and
+`APIRouter(prefix="/meta-weights")` applies at registration → routes are
+`/meta-weights/ping|get|stats` per `docs/routers.md`. Gates: RED 7 → GREEN
+**153/153** in the two files, full feedback + meta_weights family **547
+passed**, ruff + py_compile clean.
+
+Earlier 2026-10-08 ~02:45: `fix/vite-worker-format` **lands on
 main** (push `3f73ff956`, card `60652af2` → done): **production `vite build`
 unblocked** — explicit `worker: { format: 'es' }` in `apps/web/vite.config.ts`.
 The WebGPU worker is a module worker (`lib/soulnet-webgpu/index.ts:62`, the
