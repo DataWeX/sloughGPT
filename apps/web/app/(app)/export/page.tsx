@@ -9,7 +9,6 @@ import {
   CardTitle,
   CardContent,
   Button,
-  Badge,
   IconDownload,
   cn,
   Spinner,
@@ -22,7 +21,7 @@ import { ExportHistoryCard, recordExport } from '@/components/export/ExportHisto
 import { ExportTemplateCard } from '@/components/export/ExportTemplateCard'
 import { ExportProgressCard } from '@/components/export/ExportProgressCard'
 import { ExportScheduleCard } from '@/components/export/ExportScheduleCard'
-import { downloadJson, downloadBlob } from '@/lib/download-utils'
+import { downloadBlob } from '@/lib/download-utils'
 import { apiGet } from '@/lib/http-client'
 
 interface ExportFormat {

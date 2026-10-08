@@ -289,6 +289,50 @@ describe('useTrainingForm', () => {
       expect(body).not.toHaveProperty('checkpoint_name')
       expect(body).not.toHaveProperty('checkpoint_path')
     })
+
+    it('sends the CURRENT native architecture to startAutoTrain (no stale closure)', async () => {
+      // session/checkpoints hoisted OUT of renderHook: stable identities across
+      // renders. The fresh-literal-inside-renderHook fixture recreates the
+      // callback every render (new `checkpoints` identity is a dep), hiding
+      // exactly the staleness this test exists to pin.
+      const session = makeSession()
+      const checkpoints = makeCheckpoints()
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), session, checkpoints, addToast),
+      )
+      // Method first (it IS a dep, so the callback is rebuilt here), then the
+      // architecture sliders — exactly the UI order. If the sliders are
+      // missing from the deps, this callback keeps the values it captured at
+      // setMethod time and Start trains the wrong model size.
+      act(() => result.current.setMethod('native'))
+      act(() => result.current.setNativeEmbed(256))
+      act(() => result.current.setNativeHeads(6))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalledWith(
+        expect.objectContaining({ n_embed: 256, n_head: 6 }),
+      )
+    })
+
+    it('sends the CURRENT LoRA params to the fine-tune job (no stale closure)', async () => {
+      const session = makeSession()
+      const checkpoints = makeCheckpoints()
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), session, checkpoints, addToast),
+      )
+      act(() => result.current.setMethod('finetune'))
+      act(() => result.current.setLoraRank(32))
+      act(() => result.current.setLoraAlpha(64))
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      expect(session.startFineTune).toHaveBeenCalledWith(
+        expect.objectContaining({ loraRank: 32, loraAlpha: 64 }),
+        expect.anything(),
+        expect.any(Function),
+      )
+    })
   })
 
   describe('defaults', () => {
