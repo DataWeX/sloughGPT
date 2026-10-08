@@ -454,6 +454,7 @@ class TestConstants:
             "sys",
             "infra",
             "web",
+            "ui",
         }
         assert set(_WATCHED_OPS.keys()) == expected
 
