@@ -23,7 +23,7 @@ class TestGetMetaWeightsRequest:
 
     def test_defaults(self):
         req = GetMetaWeightsRequest(user_message="hi")
-        assert req.k == 10
+        assert req.k == 5  # schema default (docs/routers.md agrees with impl)
         assert req.user_id == "default"
 
     def test_custom_k(self):
@@ -63,15 +63,17 @@ class TestMetaWeightsRouter:
     def test_router_has_routes(self):
         router = MetaWeightsRouter()
         routes = [r.path for r in router.router.routes]
-        assert "/ping" in routes
-        assert "/get" in routes
-        assert "/stats" in routes
+        # APIRouter(prefix="/meta-weights") is applied at registration —
+        # docs/routers.md documents the full /meta-weights/* paths.
+        assert "/meta-weights/ping" in routes
+        assert "/meta-weights/get" in routes
+        assert "/meta-weights/stats" in routes
 
     def test_ping_route_exists(self):
         router = MetaWeightsRouter()
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/ping":
+            if hasattr(route, "path") and route.path == "/meta-weights/ping":
                 methods.extend(route.methods)
         assert "GET" in methods
 
@@ -79,7 +81,7 @@ class TestMetaWeightsRouter:
         router = MetaWeightsRouter()
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/get":
+            if hasattr(route, "path") and route.path == "/meta-weights/get":
                 methods.extend(route.methods)
         assert "POST" in methods
 
@@ -87,7 +89,7 @@ class TestMetaWeightsRouter:
         router = MetaWeightsRouter()
         methods = []
         for route in router.router.routes:
-            if hasattr(route, "path") and route.path == "/stats":
+            if hasattr(route, "path") and route.path == "/meta-weights/stats":
                 methods.extend(route.methods)
         assert "GET" in methods
 
