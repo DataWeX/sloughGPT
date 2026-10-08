@@ -33,6 +33,20 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-08 ~08:05 — `6e826226` **journey playwright capability
+guard lands** (test suites only, no prod code): all 4 browser journey suites
+now carry a module-level `pytest.importorskip("playwright.sync_api", …)` guard
+BEFORE their driver imports, so a missing playwright = clean capability SKIP
+instead of the 175 fixture-setup ERRORs of the Oct-04 sweep. Meta-test
+`packages/core-py/tests/test_journey_playwright_capability.py` locks both
+invariants (guard wiring/order; poisoned-playwright subprocess → skip with
+reason, never error). Acceptance run under `PYTHONNOUSERSITE=1`: 192
+collected, **0 collection errors**, 133 passed / 59 failed — all 59 are
+`ERR_CONNECTION_REFUSED localhost:3000` (dead Next port; live web = vite
+:5173, port story tracked by `257d310b`/`e157e4f1`). Note: playwright 1.62.0
+is already installed in the conda env (fix 1 was done elsewhere); purging the
+orphaned user-site `tests` package (fix 3) still awaits user approval.
+
 **Last update**: 2026-10-08 ~07:05 — `fix/board-sync-idempotency`
 **lands on main** (card `08baf13f` → done): **notes→board sync is now
 net-idempotent.** `canonical_notes()` in `app_planner/sync.py` collapses
