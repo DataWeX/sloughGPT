@@ -4,7 +4,31 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-06 ~10:45 — `feat/mole-rename` **lands on main**
+**Last update**: 2026-10-08 ~00:35 — `fix/conftest-collection` **lands on
+main** (push `b4ab962e1`, card `5c909109` → done): **conftest-shadowing
+collection fix** — the 8 router test files in `packages/core-py/tests/`
+(self_train/souls/system/health/inference/kb/mobile/models) now import
+`from tests.conftest import build_test_app` instead of the bare
+`from conftest import ...`. Root cause A/B-proven (same commit, same env):
+under `--import-mode=importlib` a bare `conftest` resolves by a fresh
+`sys.path` walk — no `sys.modules['conftest']` seed — and with the
+repo-root config (`-c $PWD/pytest.ini`, or any arg set spanning the repo
+root: the canonical gate shape) the repo-root conftest force-inserts
+`apps/api/server/tests` at the path front, so the walk hit the server-tests
+conftest (no `build_test_app`) instead of the `packages/core-py/conftest.py`
+re-exporter; without `-c` the auto-discovered `packages/core-py/pytest.ini`
+registers the re-exporter under the bare name and it passes. Invocation-
+shape artifact, NOT a code regression (conftest/pytest config byte-identical
+across the window; 3-dir vs 6-dir PYTHONPATH and worktree layout
+irrelevant) — the same adjudication as slog-gates/progress.md. The 3
+`build_test_app` collection errors that reproduced on unmodified main in
+the Mole gate are gone at the source. Gates: RED 8/8 errors under `-c` →
+GREEN 0 collection errors under `-c` / no-`-c` / multi-tree, full
+`packages/core-py/tests --co` = 43073 collected / 0 errors, 28 test-level
+failures byte-identical across shapes and all in `main-baseline-bad.ids`
+(zero new), ruff + py_compile clean; the 3 residual 3-dir `mogdb` errors
+are A/B-proven pre-existing (PYTHONPATH gap, attempt1-era class).
+Earlier 2026-10-06 ~10:45: `feat/mole-rename` **lands on main**
 (merges `78be4e601` + `26e5a1ee0`, card `752b27ab` → done): the full
 **doctor → Mole rebrand** — `domain/core/_internal/doctor/` **merged into
 `mole/`** (one package: probes + report + watch, cycle-safe imports),
