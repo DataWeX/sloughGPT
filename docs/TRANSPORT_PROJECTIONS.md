@@ -42,13 +42,13 @@ entry. FastAPI composes the fragments (`include_router` → `app.openapi()`
 merges), so **the contract itself is modular**. The same descriptor projects
 everywhere else:
 
-| Projection          | Consumer                                                   | Status here                                 |
-| ------------------- | ---------------------------------------------------------- | ------------------------------------------- |
-| HTTP route fragment | web / mobile / SDK clients                                 | ✅ `create_router(spec, route, handler)`   |
-| SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                 |
-| CLI subcommand      | `cli.py` shell                                             | ❌ not projected                            |
-| Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly |
-| TS client helper    | `http-client.ts` (the only API surface allowed)            | ❌ hand-written per endpoint                |
+| Projection          | Consumer                                                   | Status here                                                                          |
+| ------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| HTTP route fragment | web / mobile / SDK clients                                 | ✅ `create_router(spec, route, handler)`                                             |
+| SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                                                          |
+| CLI subcommand      | `cli.py` shell                                             | ❌ not projected                                                                     |
+| Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly                                          |
+| TS client helper    | `http-client.ts` (the only API surface allowed)            | ✅ `gen_ts_contracts.py` → `lib/protocol/contracts.gen.ts` (rest still hand-written) |
 
 **3. Registration — microkernel, not a switchyard.** Each module self-registers
 at boot (import side-effect or a `@tool(descriptor)` decorator — the WordPress

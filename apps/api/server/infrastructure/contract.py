@@ -43,6 +43,7 @@ __all__ = [
     "RouteSpec",
     "create_router",
     "derive_method",
+    "get_contracts",
 ]
 
 CapabilityHandler = Callable[..., Coroutine[Any, Any, Any]]
@@ -166,6 +167,16 @@ class ContractRegistry:
 
 
 REGISTRY = ContractRegistry()
+
+
+def get_contracts() -> list[dict[str, Any]]:
+    """Every descriptor-projected HTTP contract registered so far, sorted.
+
+    The read-back half of the projection: ``GET /contracts`` serves the same
+    inventory filtered by prefix; ``scripts/gen_ts_contracts.py`` reads it whole
+    to emit the TS bindings.
+    """
+    return REGISTRY.routes()
 
 
 def _join(prefix: str, path: str) -> str:
