@@ -33,6 +33,28 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-08 ~09:20 — `2656f858` **closed by reconciliation, not
+rework** + **PYTHONPATH correction (read before judging any red)**: the card
+had already been resolved 2026-10-05 on the ROOT lane's board
+(feat/cave-game-vm; 6-env evidence matrix, "7/21 notifications red NOT
+reproducible — keep as-is", wire test `28fe3261e`, soul_path impl) but that
+board state never merged to main, so main screened it as open — claimed, then
+caught at screening depth: **boards diverge per lane; screen BOTH
+`.kanban/board.jsonl` copies (worktree + main checkout) before claiming.**
+Ported the resolved title/description to main's card, closed with independent
+re-verification: canonical path collects `packages/core-py/tests` 42494 / 0
+errors and `tests/` 3226 / 0 errors; `test_notifications` 26/26 solo.
+**CORRECTION to earlier entries' "13 pre-existing `[mogdb]` failures": those
+were an env artifact, not baseline** — a short PYTHONPATH missing
+`$PWD/packages/mogdb/src` yields 24 collection errors
+(`No module named 'mogdb'`) in the two test roots AND `test_gui[mogdb]`
+failures (43/43 green with the full path). Canonical gate PYTHONPATH =
+`$PWD:$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server:$PWD/packages/mogdb/src:$PWD/apps/cli/src:$PWD/packages/sdk-py`
+(+`$PWD/packages/app-planner/src` for planner). Before attributing mogdb-shaped
+reds to a baseline card (`ca647de2` et al.), re-run with the full path. A
+background full-suite run is in flight for a fresh failure baseline
+(feeding `5473eb90` rotating-victim campaign + `56b49cf1`/`ca167dbd` triage).
+
 **Last update**: 2026-10-08 ~08:05 — `6e826226` **journey playwright capability
 guard lands** (test suites only, no prod code): all 4 browser journey suites
 now carry a module-level `pytest.importorskip("playwright.sync_api", …)` guard
