@@ -24,8 +24,49 @@ const baseForm: TrainingFormState = makeForm({
 const renderStep = (form: TrainingFormState) =>
   render(<ConfigureStep form={form} datasets={datasets} onNext={vi.fn()} onBack={vi.fn()} />)
 
+const checkpoints = {
+  jobs: [],
+  checkpoints: [
+    { name: 'cp-a.soul', path: 'models/auto-training/cp-a.soul', loss: 0.5 },
+    { name: 'twin.soul', path: 'data/user_adapters/twin.soul', loss: 0.25 },
+  ],
+  fetchCheckpoints: vi.fn(),
+  fetchJobs: vi.fn(),
+} as any
+
+const renderWithCheckpoints = (form: TrainingFormState) =>
+  render(
+    <ConfigureStep
+      form={form}
+      datasets={datasets}
+      checkpoints={checkpoints}
+      onNext={vi.fn()}
+      onBack={vi.fn()}
+    />,
+  )
+
 describe('ConfigureStep', () => {
   afterEach(cleanup)
+
+  it('shows the resume select for methods whose start request accepts a checkpoint', () => {
+    renderWithCheckpoints(baseForm)
+    expect(screen.getByText('Resume from checkpoint (optional)')).toBeDefined()
+  })
+
+  it('shows the resume select for native training', () => {
+    renderWithCheckpoints({ ...baseForm, method: 'native' })
+    expect(screen.getByText('Resume from checkpoint (optional)')).toBeDefined()
+  })
+
+  it('hides the resume select for finetune (HF LoRA job, no .soul resume)', () => {
+    renderWithCheckpoints({ ...baseForm, method: 'finetune' })
+    expect(screen.queryByText('Resume from checkpoint (optional)')).toBeNull()
+  })
+
+  it('hides the resume select for vlm (visual trainer, no checkpoint field)', () => {
+    renderWithCheckpoints({ ...baseForm, method: 'vlm' })
+    expect(screen.queryByText('Resume from checkpoint (optional)')).toBeNull()
+  })
 
   it('renders the step title', () => {
     renderStep(baseForm)

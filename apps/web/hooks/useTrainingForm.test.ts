@@ -233,6 +233,62 @@ describe('useTrainingForm', () => {
       })
       expect(session.startVisualTraining).toHaveBeenCalled()
     })
+
+    it('threads the resume row into the start body (name + exact path)', async () => {
+      const checkpoints = {
+        jobs: [],
+        checkpoints: [
+          { name: 'twin.soul', path: 'models/auto-training/twin.soul' },
+          { name: 'addressless' },
+        ],
+        fetchCheckpoints: vi.fn(),
+        fetchJobs: vi.fn(),
+      } as any
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), makeSession(), checkpoints, addToast),
+      )
+      await act(async () => {
+        await result.current.startTraining('models/auto-training/twin.soul')
+      })
+      expect(mockTrainingJobsController.startAutoTrain).toHaveBeenCalledWith(
+        expect.objectContaining({
+          checkpoint_name: 'twin.soul',
+          checkpoint_path: 'models/auto-training/twin.soul',
+        }),
+      )
+    })
+
+    it('sends a bare name untouched when no row carries that address (legacy)', async () => {
+      const checkpoints = {
+        jobs: [],
+        checkpoints: [{ name: 'known', path: 'models/known.soul' }],
+        fetchCheckpoints: vi.fn(),
+        fetchJobs: vi.fn(),
+      } as any
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), makeSession(), checkpoints, addToast),
+      )
+      await act(async () => {
+        await result.current.startTraining('orphan-name')
+      })
+      const body = (mockTrainingJobsController.startAutoTrain as ReturnType<typeof vi.fn>).mock
+        .calls[0][0]
+      expect(body.checkpoint_name).toBe('orphan-name')
+      expect(body).not.toHaveProperty('checkpoint_path')
+    })
+
+    it('omits the checkpoint fields entirely for a fresh run', async () => {
+      const { result } = renderHook(() =>
+        useTrainingForm(makeDatasets('ds1'), makeSession(), makeCheckpoints(), addToast),
+      )
+      await act(async () => {
+        await result.current.startTraining()
+      })
+      const body = (mockTrainingJobsController.startAutoTrain as ReturnType<typeof vi.fn>).mock
+        .calls[0][0]
+      expect(body).not.toHaveProperty('checkpoint_name')
+      expect(body).not.toHaveProperty('checkpoint_path')
+    })
   })
 
   describe('defaults', () => {

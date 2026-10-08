@@ -343,7 +343,7 @@ export function useTrainingForm(
     (method !== 'vlm' || !!datasets.selectedDataset)
 
   const startTraining = useCallback(
-    async (checkpointName?: string) => {
+    async (resumeRef?: string) => {
       trackEvent('training_started', { method, input_mode: inputMode })
 
       if (trainingEpochs < 1 || trainingEpochs > 500) {
@@ -362,7 +362,7 @@ export function useTrainingForm(
       const hasDataset = inputMode === 'dataset' && datasets.selectedDataset
       const hasText = inputMode === 'text' && textInput.trim()
 
-      if (!hasDataset && !hasText && !checkpointName) {
+      if (!hasDataset && !hasText && !resumeRef) {
         addToast('Select a dataset or paste text to train on', 'error')
         return
       }
@@ -390,7 +390,15 @@ export function useTrainingForm(
         learning_rate: trainingLR,
       }
       if (trainingBatchSize) body.batch_size = trainingBatchSize
-      if (checkpointName) body.checkpoint_name = checkpointName
+      if (resumeRef) {
+        // resumeRef is the row's address (path, or a bare name from a legacy
+        // caller): resolve it back to the row so the request carries both the
+        // name and the exact file — a same-named twin must not be name-swept
+        // server-side.
+        const row = checkpoints.checkpoints.find((c) => (c.path ?? c.name) === resumeRef)
+        body.checkpoint_name = row?.name ?? resumeRef
+        if (row?.path) body.checkpoint_path = row.path
+      }
       if (hasDataset) body.dataset = datasets.selectedDataset
       if (hasText) body.source_text = textInput.trim()
 
