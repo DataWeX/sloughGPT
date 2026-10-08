@@ -6,14 +6,18 @@ import React from 'react'
 const mockCompare = vi.fn()
 vi.mock('@/lib/training-controller', () => ({
   trainingJobsController: {
-    compareCheckpoints: (a: string, b: string, prompt: string, tokens?: number) =>
-      mockCompare(a, b, prompt, tokens),
+    compareCheckpoints: (a: string, b: string, prompt: string, opts?: unknown) =>
+      mockCompare(a, b, prompt, opts),
   },
 }))
 
 import { CheckpointCompareDialog } from './CheckpointCompareDialog'
 
-const checkpoints = [{ name: 'cp-1.soul' }, { name: 'cp-2.soul' }, { name: 'cp-3.soul' }]
+const checkpoints = [
+  { name: 'cp-1.soul', path: 'models/checkpoints/cp-1.soul', integrity_hash: 'abcdef1234567890' },
+  { name: 'cp-2.soul', path: 'models/checkpoints/cp-2.soul' },
+  { name: 'cp-3.soul', path: 'models/checkpoints/cp-3.soul' },
+]
 
 const renderDialog = (overrides: Record<string, unknown> = {}) => {
   const addToast = vi.fn()
@@ -51,14 +55,24 @@ describe('CheckpointCompareDialog', () => {
     expect(container.textContent).toBe('')
   })
 
-  it('offers every checkpoint on both sides', () => {
+  it('offers every checkpoint on both sides, addressed by path', () => {
     renderDialog()
     const a = screen.getByLabelText('Checkpoint A') as HTMLSelectElement
     const b = screen.getByLabelText('Checkpoint B') as HTMLSelectElement
-    expect([...a.options].map((o) => o.value)).toEqual(['cp-1.soul', 'cp-2.soul', 'cp-3.soul'])
-    expect([...b.options].map((o) => o.value)).toEqual(['cp-1.soul', 'cp-2.soul', 'cp-3.soul'])
-    expect(a.value).toBe('cp-1.soul')
-    expect(b.value).toBe('cp-2.soul')
+    expect([...a.options].map((o) => o.value)).toEqual([
+      'models/checkpoints/cp-1.soul',
+      'models/checkpoints/cp-2.soul',
+      'models/checkpoints/cp-3.soul',
+    ])
+    expect([...b.options].map((o) => o.value)).toEqual([
+      'models/checkpoints/cp-1.soul',
+      'models/checkpoints/cp-2.soul',
+      'models/checkpoints/cp-3.soul',
+    ])
+    expect(a.value).toBe('models/checkpoints/cp-1.soul')
+    expect(b.value).toBe('models/checkpoints/cp-2.soul')
+    // Short id in the label — the list's way of telling twins apart.
+    expect(a.options[0].text).toContain('· id abcdef12')
   })
 
   it('runs the same prompt against both selections', async () => {
@@ -68,12 +82,17 @@ describe('CheckpointCompareDialog', () => {
     })
     const { addToast } = renderDialog()
 
-    fireEvent.change(screen.getByLabelText('Checkpoint B'), { target: { value: 'cp-3.soul' } })
+    fireEvent.change(screen.getByLabelText('Checkpoint B'), {
+      target: { value: 'models/checkpoints/cp-3.soul' },
+    })
     typePrompt('Say hello')
     fireEvent.click(screen.getByRole('button', { name: 'Compare' }))
 
     await waitFor(() => {
-      expect(mockCompare).toHaveBeenCalledWith('cp-1.soul', 'cp-3.soul', 'Say hello', undefined)
+      expect(mockCompare).toHaveBeenCalledWith('cp-1.soul', 'cp-3.soul', 'Say hello', {
+        pathA: 'models/checkpoints/cp-1.soul',
+        pathB: 'models/checkpoints/cp-3.soul',
+      })
     })
     await waitFor(() => {
       expect(screen.getByText('answer one')).toBeDefined()
@@ -97,7 +116,9 @@ describe('CheckpointCompareDialog', () => {
 
   it('refuses to compare a checkpoint with itself', () => {
     renderDialog()
-    fireEvent.change(screen.getByLabelText('Checkpoint B'), { target: { value: 'cp-1.soul' } })
+    fireEvent.change(screen.getByLabelText('Checkpoint B'), {
+      target: { value: 'models/checkpoints/cp-1.soul' },
+    })
     typePrompt('hello')
     expect((screen.getByRole('button', { name: 'Compare' }) as HTMLButtonElement).disabled).toBe(
       true,

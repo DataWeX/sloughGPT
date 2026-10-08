@@ -58,7 +58,32 @@ class TestCompareEndpoint:
             )
 
         assert resp.status_code == 200
-        mock_cmp.assert_awaited_once_with("x.soul", "y.soul", "Hi", 64)
+        # No addresses given (legacy name-only caller): both sides stay None.
+        mock_cmp.assert_awaited_once_with("x.soul", "y.soul", "Hi", 64, None, None)
+
+    def test_forwards_row_addresses(self):
+        # Each side's path rides the body, so compare runs the file the
+        # caller's row pointed at rather than a same-named sweep match.
+        with patch(
+            "domain.training._internal.service.compare_checkpoints",
+            new_callable=AsyncMock,
+            return_value={"a": {"name": "x", "text": ""}, "b": {"name": "y", "text": ""}},
+        ) as mock_cmp:
+            resp = client.post(
+                "/training/checkpoints/compare",
+                json={
+                    "a": "x.soul",
+                    "b": "y.soul",
+                    "prompt": "Hi",
+                    "path_a": "models/a/x.soul",
+                    "path_b": "models/b/y.soul",
+                },
+            )
+
+        assert resp.status_code == 200
+        mock_cmp.assert_awaited_once_with(
+            "x.soul", "y.soul", "Hi", 128, "models/a/x.soul", "models/b/y.soul"
+        )
 
     def test_rejects_empty_prompt(self):
         resp = client.post(

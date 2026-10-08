@@ -75,8 +75,17 @@ describe('useTrainingCheckpoints', () => {
     mockLoadCheckpoint.mockResolvedValue(undefined)
     const { result } = renderHook(() => useTrainingCheckpoints())
     await result.current.handleLoadCheckpoint('cp1', addToast)
-    expect(mockLoadCheckpoint).toHaveBeenCalledWith('cp1')
+    expect(mockLoadCheckpoint).toHaveBeenCalledWith('cp1', undefined)
     await waitFor(() => expect(result.current.activeCheckpoint).toBe('cp1'))
+    expect(addToast).toHaveBeenCalledWith('Loaded trained version: cp1', 'success')
+  })
+
+  it('handleLoadCheckpoint passes the row address through', async () => {
+    const addToast = vi.fn()
+    mockLoadCheckpoint.mockResolvedValue(undefined)
+    const { result } = renderHook(() => useTrainingCheckpoints())
+    await result.current.handleLoadCheckpoint('cp1', addToast, 'models/checkpoints/cp1.soul')
+    expect(mockLoadCheckpoint).toHaveBeenCalledWith('cp1', 'models/checkpoints/cp1.soul')
     expect(addToast).toHaveBeenCalledWith('Loaded trained version: cp1', 'success')
   })
 

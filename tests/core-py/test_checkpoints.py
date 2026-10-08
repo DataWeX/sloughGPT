@@ -13,6 +13,7 @@ from domain.training._internal.checkpoints import (
     _load_soul_from_path,
     checkpoint_info,
     ckpt_roots,
+    compare_checkpoints,
     delete_checkpoint,
     download_checkpoint_path,
     export_all_metrics,
@@ -525,3 +526,77 @@ class TestTrainedCheckpointSpelling:
 
         assert "legacy_trained.soul.soul" in deleted
         assert not (TRAINED_DIR / "legacy_trained.soul.soul").exists()
+
+
+class TestRowAddressedActions:
+    """Actions carry the row's address, so they touch the file shown.
+
+    A bare name sweeps every root for a first match — with same-named twins
+    in two roots, Load/Compare could act on the other file. The address is
+    optional (CLI/job records still pass names alone) but mandatory-proof:
+    given a bad address, refuse rather than fall back to the sweep.
+    """
+
+    @pytest.mark.asyncio
+    async def test_compare_addresses_each_side_by_path(self, monkeypatch):
+        built: list[tuple[str, str | None]] = []
+
+        class _FakeProvider:
+            async def chat(self, *_args, **_kwargs):
+                return "ok"
+
+        async def _fake_build(name, path=None):
+            built.append((name, path))
+            return _FakeProvider(), {"name": name}
+
+        monkeypatch.setattr(
+            "domain.training._internal.checkpoints.build_checkpoint_provider", _fake_build
+        )
+
+        result = await compare_checkpoints(
+            "twin",
+            "twin",
+            "hi",
+            path_a="models/checkpoints/a/twin.soul",
+            path_b="models/lora/b/twin.soul",
+        )
+
+        assert built == [
+            ("twin", "models/checkpoints/a/twin.soul"),
+            ("twin", "models/lora/b/twin.soul"),
+        ]
+        assert result["a"]["text"] == "ok"
+        assert result["b"]["text"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_compare_without_paths_stays_name_based(self, monkeypatch):
+        built: list[tuple[str, str | None]] = []
+
+        class _FakeProvider:
+            async def chat(self, *_args, **_kwargs):
+                return "ok"
+
+        async def _fake_build(name, path=None):
+            built.append((name, path))
+            return _FakeProvider(), {"name": name}
+
+        monkeypatch.setattr(
+            "domain.training._internal.checkpoints.build_checkpoint_provider", _fake_build
+        )
+
+        await compare_checkpoints("left", "right", "hi")
+
+        # Legacy callers (CLI, job records) get exactly the old contract.
+        assert built == [("left", None), ("right", None)]
+
+    @pytest.mark.asyncio
+    async def test_delete_by_path_refuses_a_directory(self):
+        # A path param can address a directory squatting in a root;
+        # unlink() on it would raise. Refuse — files only.
+        squat = CHECKPOINTS_DIR / "squat.soul"
+        squat.mkdir()
+
+        deleted = await delete_checkpoint("squat.soul", path=str(squat))
+
+        assert deleted == []
+        assert squat.is_dir()

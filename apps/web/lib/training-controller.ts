@@ -531,8 +531,11 @@ export const trainingJobsController = {
     })
   },
 
-  async loadCheckpoint(name: string): Promise<{ success: boolean }> {
-    return apiPost(`/training/checkpoints/${encodeURIComponent(name)}/load`)
+  async loadCheckpoint(name: string, path?: string): Promise<{ success: boolean }> {
+    // `path` is the row's own address: without it the server sweeps every
+    // search root for this name and may serve a same-named twin.
+    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+    return apiPost(`/training/checkpoints/${encodeURIComponent(name)}/load${qs}`)
   },
 
   /** Same prompt against two checkpoints — neither is served to chat. */
@@ -540,13 +543,17 @@ export const trainingJobsController = {
     a: string,
     b: string,
     prompt: string,
-    maxNewTokens = 128,
+    opts?: { maxNewTokens?: number; pathA?: string; pathB?: string },
   ): Promise<{ a: { name: string; text: string }; b: { name: string; text: string } }> {
     return apiPost('/training/checkpoints/compare', {
       a,
       b,
       prompt,
-      max_new_tokens: maxNewTokens,
+      max_new_tokens: opts?.maxNewTokens ?? 128,
+      // Row addresses: each side runs against the file it was picked from;
+      // a bad path is refused server-side rather than name-swept.
+      ...(opts?.pathA ? { path_a: opts.pathA } : {}),
+      ...(opts?.pathB ? { path_b: opts.pathB } : {}),
     })
   },
 
@@ -563,8 +570,9 @@ export const trainingJobsController = {
     return { deleted: results.filter((r) => r.status === 'fulfilled').length }
   },
 
-  async downloadCheckpoint(name: string): Promise<Blob> {
-    const res = await authFetch(`/training/checkpoints/${encodeURIComponent(name)}/download`)
+  async downloadCheckpoint(name: string, path?: string): Promise<Blob> {
+    const qs = path ? `?path=${encodeURIComponent(path)}` : ''
+    const res = await authFetch(`/training/checkpoints/${encodeURIComponent(name)}/download${qs}`)
     if (!res.ok) throw new Error(`Download failed (${res.status})`)
     return res.blob()
   },

@@ -418,6 +418,10 @@ async def delete_checkpoint(name: str, path: str | None = None) -> list[str]:
         # the scan lists from it.
         if root is TRAINED_DIR and not is_trained_checkpoint(resolved.name):
             return False
+        # A path param can address anything inside a root, including a
+        # directory squatting where a file should be — only files delete.
+        if not resolved.is_file():
+            return False
         resolved.unlink()
         meta = Path(str(resolved) + ".meta.json")
         if meta.exists():
@@ -518,16 +522,23 @@ _COMPARE_SAMPLING = {"temperature": 0.7, "top_p": 0.85, "top_k": 40, "repetition
 
 
 async def compare_checkpoints(
-    name_a: str, name_b: str, prompt: str, max_new_tokens: int = 128
+    name_a: str,
+    name_b: str,
+    prompt: str,
+    max_new_tokens: int = 128,
+    path_a: str | None = None,
+    path_b: str | None = None,
 ) -> dict:
     """Same prompt against two checkpoints, side by side.
 
     Neither checkpoint is registered: the served model is untouched and each
-    provider is released as soon as its answer is in.
+    provider is released as soon as its answer is in. `path_a`/`path_b` are
+    the rows' own addresses, so each side runs the file it was asked for —
+    a bad path is refused, never silently swapped for a name-sweep match.
     """
     results: dict[str, dict] = {}
-    for key, name in (("a", name_a), ("b", name_b)):
-        provider, info = await build_checkpoint_provider(name)
+    for key, name, path in (("a", name_a, path_a), ("b", name_b, path_b)):
+        provider, info = await build_checkpoint_provider(name, path)
         try:
             text = await provider.chat(
                 [{"role": "user", "content": prompt}],

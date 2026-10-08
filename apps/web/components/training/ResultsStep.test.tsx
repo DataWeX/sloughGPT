@@ -212,7 +212,11 @@ describe('ResultsStep', () => {
     screen.getByText('Try it now').click()
 
     await vi.waitFor(() => {
-      expect(cps.handleLoadCheckpoint).toHaveBeenCalledWith('cp-2', addToast)
+      expect(cps.handleLoadCheckpoint).toHaveBeenCalledWith(
+        'cp-2',
+        addToast,
+        'models/checkpoints/cp-2.soul',
+      )
       expect(mockPush).toHaveBeenCalledWith('/chat')
     })
   })
@@ -225,7 +229,11 @@ describe('ResultsStep', () => {
     screen.getByText('Try it now').click()
 
     await vi.waitFor(() => {
-      expect(cps.handleLoadCheckpoint).toHaveBeenCalledWith('cp-2', expect.any(Function))
+      expect(cps.handleLoadCheckpoint).toHaveBeenCalledWith(
+        'cp-2',
+        expect.any(Function),
+        'models/checkpoints/cp-2.soul',
+      )
     })
     expect(mockPush).not.toHaveBeenCalled()
   })
@@ -316,7 +324,11 @@ describe('ResultsStep', () => {
     const addToast = vi.fn()
     renderStep({ ...checkpointsWithData, handleLoadCheckpoint }, addToast)
     screen.getAllByText('Load')[0].click()
-    expect(handleLoadCheckpoint).toHaveBeenCalledWith('cp-1', addToast)
+    expect(handleLoadCheckpoint).toHaveBeenCalledWith(
+      'cp-1',
+      addToast,
+      'models/checkpoints/cp-1.soul',
+    )
   })
 
   it('includes interrupted jobs in Recent runs with Interrupted badge', () => {

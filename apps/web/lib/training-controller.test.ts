@@ -428,6 +428,56 @@ describe('trainingJobsController.loadCheckpoint', () => {
     expect(result.success).toBe(true)
     expect(apiClient.apiPost).toHaveBeenCalledWith('/training/checkpoints/my-checkpoint/load')
   })
+
+  it('sends the row address as ?path so only that file is served', async () => {
+    apiClient.apiPost.mockResolvedValue({ success: true })
+    await trainingJobsController.loadCheckpoint(
+      'my-checkpoint',
+      'models/checkpoints/my-checkpoint.soul',
+    )
+    expect(apiClient.apiPost).toHaveBeenCalledWith(
+      '/training/checkpoints/my-checkpoint/load?path=models%2Fcheckpoints%2Fmy-checkpoint.soul',
+    )
+  })
+})
+
+describe('trainingJobsController.compareCheckpoints', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('POSTs names plus max_new_tokens by default', async () => {
+    apiClient.apiPost.mockResolvedValue({
+      a: { name: 'a', text: 'x' },
+      b: { name: 'b', text: 'y' },
+    })
+    await trainingJobsController.compareCheckpoints('left', 'right', 'hello')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/checkpoints/compare', {
+      a: 'left',
+      b: 'right',
+      prompt: 'hello',
+      max_new_tokens: 128,
+    })
+  })
+
+  it("carries each side's row address as path_a/path_b", async () => {
+    apiClient.apiPost.mockResolvedValue({
+      a: { name: 'a', text: 'x' },
+      b: { name: 'b', text: 'y' },
+    })
+    await trainingJobsController.compareCheckpoints('twin', 'twin', 'hello', {
+      pathA: 'models/a/twin.soul',
+      pathB: 'models/b/twin.soul',
+    })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/checkpoints/compare', {
+      a: 'twin',
+      b: 'twin',
+      prompt: 'hello',
+      max_new_tokens: 128,
+      path_a: 'models/a/twin.soul',
+      path_b: 'models/b/twin.soul',
+    })
+  })
 })
 
 describe('trainingJobsController.deleteCheckpoint', () => {

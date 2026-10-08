@@ -778,11 +778,19 @@ class TrainingEngine:
 
         return await checkpoint_info(name, path=path)
 
-    async def checkpoint_compare(self, a: str, b: str, prompt: str, max_new_tokens: int) -> Any:
+    async def checkpoint_compare(
+        self,
+        a: str,
+        b: str,
+        prompt: str,
+        max_new_tokens: int,
+        path_a: str | None = None,
+        path_b: str | None = None,
+    ) -> Any:
         """Run the same prompt against two checkpoints."""
         from domain.training._internal.service import compare_checkpoints
 
-        return await compare_checkpoints(a, b, prompt, max_new_tokens)
+        return await compare_checkpoints(a, b, prompt, max_new_tokens, path_a, path_b)
 
     async def checkpoint_all_data(self) -> Any:
         """Full metrics payload for every checkpoint (export)."""

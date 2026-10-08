@@ -359,7 +359,7 @@ describe('ResultsStep', () => {
   it('calls handleLoadCheckpoint when Load is clicked', () => {
     const handleLoadCheckpoint = vi.fn()
     const checkpoints = makeCheckpoints({
-      checkpoints: [{ name: 'cp-1', loss: 0.5 }],
+      checkpoints: [{ name: 'cp-1', path: 'models/checkpoints/cp-1.soul', loss: 0.5 }],
       handleLoadCheckpoint,
     })
     render(
@@ -371,7 +371,11 @@ describe('ResultsStep', () => {
       />,
     )
     screen.getByText('Load').closest('button')!.click()
-    expect(handleLoadCheckpoint).toHaveBeenCalledWith('cp-1', expect.any(Function))
+    expect(handleLoadCheckpoint).toHaveBeenCalledWith(
+      'cp-1',
+      expect.any(Function),
+      'models/checkpoints/cp-1.soul',
+    )
   })
 
   it('calls goToTrain when Train more is clicked', () => {

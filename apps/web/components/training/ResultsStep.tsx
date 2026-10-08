@@ -104,7 +104,10 @@ export function ResultsStep({
     if (!tryNowTarget || trying) return
     setTrying(true)
     try {
-      const loaded = await checkpoints.handleLoadCheckpoint(tryNowTarget, addToast)
+      // The row's address resolved at click time — try-now must serve the
+      // row shown, not whichever same-named file a sweep finds first.
+      const targetPath = checkpoints.checkpoints.find((c) => c.name === tryNowTarget)?.path
+      const loaded = await checkpoints.handleLoadCheckpoint(tryNowTarget, addToast, targetPath)
       if (loaded) router.push('/chat')
     } finally {
       setTrying(false)
@@ -251,7 +254,7 @@ export function ResultsStep({
                       size="sm"
                       variant="ghost"
                       className="h-6 text-[10px]"
-                      onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast)}
+                      onClick={() => checkpoints.handleLoadCheckpoint(cp.name, addToast, cp.path)}
                     >
                       Load
                     </Button>

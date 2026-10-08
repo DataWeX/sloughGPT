@@ -21,7 +21,9 @@ export interface CompareSide {
 interface CheckpointCompareDialogProps {
   open: boolean
   onClose: () => void
-  checkpoints: { name: string }[]
+  // Rows, not bare names: the selects are valued by path so two same-named
+  // twins stay distinct choices, labelled with the short id like the list.
+  checkpoints: { name: string; path: string; integrity_hash?: string }[]
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
 }
 
@@ -40,21 +42,31 @@ export function CheckpointCompareDialog({
 
   useEffect(() => {
     if (!open) return
-    setA((prev) => prev || checkpoints[0]?.name || '')
-    setB((prev) => prev || checkpoints[1]?.name || checkpoints[0]?.name || '')
+    setA((prev) => prev || checkpoints[0]?.path || '')
+    setB((prev) => prev || checkpoints[1]?.path || checkpoints[0]?.path || '')
   }, [open, checkpoints])
+
+  const rowA = checkpoints.find((cp) => cp.path === a)
+  const rowB = checkpoints.find((cp) => cp.path === b)
 
   // Same question, different weights — picking one checkpoint twice would
   // just print the same answer twice.
-  const canRun = Boolean(a && b && a !== b && prompt.trim() && !loading)
+  const canRun = Boolean(rowA && rowB && rowA.path !== rowB.path && prompt.trim() && !loading)
 
   const handleRun = async () => {
-    if (!canRun) return
+    if (!canRun || !rowA || !rowB) return
     setLoading(true)
     setError(null)
     setResult(null)
     try {
-      const res = await trainingJobsController.compareCheckpoints(a, b, prompt.trim())
+      // Each side carries its row's address, so compare runs the exact
+      // files shown even when names collide across roots.
+      const res = await trainingJobsController.compareCheckpoints(
+        rowA.name,
+        rowB.name,
+        prompt.trim(),
+        { pathA: rowA.path, pathB: rowB.path },
+      )
       setResult(res)
     } catch (e) {
       const msg = formatToastError(e, 'Could not compare checkpoints')
@@ -91,8 +103,9 @@ export function CheckpointCompareDialog({
               aria-label="Checkpoint A"
             >
               {checkpoints.map((cp) => (
-                <option key={cp.name} value={cp.name}>
+                <option key={cp.path} value={cp.path}>
                   {cp.name}
+                  {cp.integrity_hash ? ` · id ${cp.integrity_hash.slice(0, 8)}` : ''}
                 </option>
               ))}
             </select>
@@ -108,8 +121,9 @@ export function CheckpointCompareDialog({
               aria-label="Checkpoint B"
             >
               {checkpoints.map((cp) => (
-                <option key={cp.name} value={cp.name}>
+                <option key={cp.path} value={cp.path}>
                   {cp.name}
+                  {cp.integrity_hash ? ` · id ${cp.integrity_hash.slice(0, 8)}` : ''}
                 </option>
               ))}
             </select>

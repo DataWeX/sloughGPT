@@ -650,6 +650,9 @@ class CompareCheckpointsRequest(BaseModel):
     b: str = Field(..., min_length=1, max_length=255)
     prompt: str = Field(..., min_length=1, max_length=4000)
     max_new_tokens: int = Field(default=128, ge=1, le=1024)
+    # Each side's row address — absent for legacy name-only callers.
+    path_a: str | None = Field(default=None, max_length=1024)
+    path_b: str | None = Field(default=None, max_length=1024)
 
 
 @router.post("/training/checkpoints/compare")
@@ -662,7 +665,7 @@ async def training_compare_checkpoints(req: CompareCheckpointsRequest):
 
     try:
         result = await get_training_engine().checkpoint_compare(
-            req.a, req.b, req.prompt, req.max_new_tokens
+            req.a, req.b, req.prompt, req.max_new_tokens, path_a=req.path_a, path_b=req.path_b
         )
         return success_response(data=result)
     except Exception as e:

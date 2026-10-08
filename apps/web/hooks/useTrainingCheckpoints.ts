@@ -23,6 +23,7 @@ export interface UseTrainingCheckpointsReturn {
   handleLoadCheckpoint: (
     name: string,
     addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+    path?: string,
   ) => Promise<boolean>
   handleDeleteCheckpoint: (
     name: string,
@@ -85,9 +86,10 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     async (
       name: string,
       addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+      path?: string,
     ): Promise<boolean> => {
       try {
-        await trainingJobsController.loadCheckpoint?.(name)
+        await trainingJobsController.loadCheckpoint?.(name, path)
         setActiveCheckpoint(name)
         trackEvent('checkpoint_loaded', { name })
         addToast(`Loaded trained version: ${name}`, 'success')
