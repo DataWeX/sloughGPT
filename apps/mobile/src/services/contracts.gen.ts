@@ -2,7 +2,7 @@
 // Regenerate after changing any descriptor:
 //   PYTHONPATH="$PWD:$PWD/packages/mogdb/src:$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" \
 //     python scripts/gen_ts_contracts.py
-// Freshness gate: tests/api-server/test_ts_contracts.py::test_ts_contract_projection_is_fresh
+// Freshness gate: tests/contract/test_ts_contracts.py::test_ts_contract_projection_is_fresh
 
 /** JSON Schema view of a capability's parameters (`ToolSpec.params` projection). */
 export interface JsonSchema {
@@ -29,18 +29,48 @@ export interface ContractDescriptor {
 }
 
 export const CONTRACTS = {
-  "contracts/list": {
-    "auth_scope": "public",
-    "description": "List every descriptor-projected HTTP contract registered at boot",
+  "consciousness.personality_history": {
+    "auth_scope": "authenticated",
+    "description": "Personality evolution history derived from episodes (voice and trait trends).",
+    "idempotent": true,
+    "method": "GET",
+    "module": "routers.personality",
+    "name": "consciousness.personality_history",
+    "operation_id": "consciousness.personality_history.get",
+    "params": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    },
+    "path": "/consciousness/personality/history",
+    "result": {
+      "properties": {
+        "history": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "labels": {
+          "type": "object"
+        }
+      },
+      "type": "object"
+    },
+    "version": "1"
+  },
+  "contracts.list": {
+    "auth_scope": "authenticated",
+    "description": "List capability contracts registered through the descriptor mechanism.",
     "idempotent": true,
     "method": "GET",
     "module": "routers.contracts",
-    "name": "contracts/list",
-    "operation_id": "contracts/list.get",
+    "name": "contracts.list",
+    "operation_id": "contracts.list.get",
     "params": {
       "properties": {
-        "name": {
-          "description": "Case-insensitive substring to filter descriptor names",
+        "prefix": {
+          "description": "Only return contracts whose route path starts with this prefix.",
           "type": "string"
         }
       },
@@ -48,7 +78,20 @@ export const CONTRACTS = {
       "type": "object"
     },
     "path": "/contracts",
-    "result": null,
+    "result": {
+      "properties": {
+        "contracts": {
+          "items": {
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "count": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "version": "1"
   },
 } as const satisfies Record<string, ContractDescriptor>

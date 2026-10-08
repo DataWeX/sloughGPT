@@ -2,8 +2,31 @@
 // Regenerate after changing any descriptor:
 //   PYTHONPATH="$PWD:$PWD/packages/mogdb/src:$PWD/packages/downcraft:$PWD/packages/core-py:$PWD/apps/api/server" \
 //     python scripts/gen_ts_contracts.py
-// Freshness gate: apps/api/server/tests/test_contracts.py::test_ts_contract_projection_is_fresh
-import type { ContractDescriptor } from './types'
+// Freshness gate: tests/contract/test_ts_contracts.py::test_ts_contract_projection_is_fresh
+
+/** JSON Schema view of a capability's parameters (`ToolSpec.params` projection). */
+export interface JsonSchema {
+  type?: string
+  properties?: Record<string, unknown>
+  required?: readonly string[]
+  items?: unknown
+  [key: string]: unknown
+}
+
+/** One capability crossing, exactly as the backend registry declares it. */
+export interface ContractDescriptor {
+  name: string
+  version: string
+  auth_scope: string
+  idempotent: boolean
+  description: string
+  method: string
+  path: string
+  operation_id: string
+  module: string
+  params: JsonSchema
+  result: JsonSchema | null
+}
 
 export const CONTRACTS = {
   "consciousness.personality_history": {

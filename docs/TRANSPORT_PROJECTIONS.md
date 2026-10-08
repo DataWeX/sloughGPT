@@ -107,7 +107,7 @@ Registering a capability is a **registry entry, never an endpoint project**.
 | `create_router(spec, route, handler)` emission | ✅ `infrastructure/contract.py` — pilot: `GET /contracts`                      |
 | Boot-time self-registration                   | ✅ generated `routers/_manifest.py` + `scripts/gen_router_manifest.py --check`  |
 | CI contract check (descriptor + OpenAPI diff) | ✅ descriptor/registry blocking, route-baseline diff report-only (parity script still reports the doc backlog) |
-| TS projection of the contract                 | ❌ `http-client.ts` hand-writes every endpoint                                  |
+| TS projection of the contract                 | ✅ `scripts/gen_ts_contracts.py` → `contracts.gen.ts` for web, SDK and mobile (freshness gated by `tests/contract/test_ts_contracts.py`); consumers still hand-write their calls |
 
 Grandfather note: `get_all_routers()`'s deferred-import list exists for a real
 reason (90 s → 8 s cold start) — self-registration must preserve lazy loading,
