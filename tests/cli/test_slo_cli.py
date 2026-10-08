@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-sys.path.insert(0, str(StdPath(__file__).resolve().parents[2] / "apps" / "cli" / "src" / "src"))
+sys.path.insert(0, str(StdPath(__file__).resolve().parents[2] / "apps" / "cli" / "src"))
 
 # Import the framework from cli.py
 from core.framework import (
