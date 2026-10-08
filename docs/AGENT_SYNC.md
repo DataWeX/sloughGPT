@@ -33,6 +33,25 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-08 ~12:05 — `257d310b` **closed (container-port truth
+documented; prod deploy health was dead).** Truth: the web container listens
+on **:3000 inside** both image paths (Next `ENV PORT=3000`/`EXPOSE 3000`;
+vite image = nginx `listen 3000` + `/health`) ⇒ compose `3000:3000`,
+`nginx.prod.conf` `server web:3000` and all in-container healthchecks are
+VALID. But `docker-compose.prod.yml` publishes **only nginx :80/:443** (no
+host :8000/:3000; grafana/prometheus internal — grafana's `:3000/api/health`
+is its own in-network default), so `infra/scripts/deploy.sh`'s host curls
+could never pass: every prod deploy died at *"API health check failed"*
+under `set -e`. Fixed: health now reads container health (`docker inspect`,
+target-aware, 180s), `deploy()` no longer passes `all` to compose up, the
+Grafana endpoint help line corrected, and a **"Port map (container truth)"
+section added to `docs/engineering-overview.md`** (live systemd :5173 stack
+≠ dev compose ≠ prod compose). `.env.example` `NEXTAUTH_URL=:3000` left as-is
+(correct for the dev-compose Next path; documented). Validation: `bash -n`
+×2 + python-YAML structural assertions (the `docker compose config`
+equivalent — no docker CLI on this host), 16/16; live systemd stack
+untouched.
+
 **Last update**: 2026-10-08 ~11:55 — `ca167dbd` **closed (test suite resilience
 landed)**: (a) `pytest.ini` now sets `timeout = 120` + `timeout_method =
 signal` for ALL sessions — proven by a synthetic `sleep(300)` test failing
