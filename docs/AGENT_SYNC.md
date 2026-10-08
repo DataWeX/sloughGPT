@@ -4,7 +4,70 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
-**Last update**: 2026-10-06 ~10:45 — `feat/mole-rename` **lands on main**
+**Last update**: 2026-10-08 ~02:45 — `fix/vite-worker-format` **lands on
+main** (push `3f73ff956`, card `60652af2` → done): **production `vite build`
+unblocked** — explicit `worker: { format: 'es' }` in `apps/web/vite.config.ts`.
+The WebGPU worker is a module worker (`lib/soulnet-webgpu/index.ts:62`, the
+only `new Worker` site) and vite ≤7 defaults `worker.format: 'iife'`, which
+code-splitting builds reject. Nuance found while verifying: the shared lock
+resolves **two** vites — `apps/web` → 8.3.0 (rolldown, canonical
+`npm run build:vite`, was already green) and root → 7.3.6 (the path the
+Oct-04 sweep hit, bare `vite build` / checkouts without
+`apps/web/node_modules`); explicit `'es'` makes the build green on **both**
+(exit 0, `dist-vite/` + ESM worker chunk, entry wiring intact). Also: `.wt-mole`
+was the only worktree missing the standard `node_modules` bridges — repointed
+`apps/web/node_modules` (empty dir; only a regenerable vitest cache, backed
+up) + worktree-root symlink to the shared root copy, matching the exact
+pattern all 7 other `.wt-*` worktrees use (no install, no new tree). Gates:
+RED vite7 exit 1 → GREEN both vites, `tsc --noEmit` clean, vitest
+`test:lib` 1517/1517. Covers the forward risk for `870ab1bad`'s CI
+"Vite build" step.
+
+Earlier 2026-10-08 ~02:12: `fix/tokens-router-nonederef` **lands on
+main** (push `d50dafa15`, card `f01852a3` → done): **tokens router identity
+fix** — all 6 `/tokens/*` endpoints crashed in every auth mode:
+`require_auth_if_enabled` returns `None` when `SLO_AUTH_REQUIRED` is off (dev
+default) → `auth_user["id"]` raised `TypeError` (caught → AppError 500), and
+JWT payloads carry `sub`, so auth-**on** raised `KeyError` too. tokens.py was
+the only router in the server with unconditional `auth_user["id"]` derefs.
+Fix = `_resolve_user_id()` None-safe claim fallback `sub → id → username →
+"anonymous"` (mirrors errors.ingest / api_keys / users) — endpoints stay
+functional with auth off; no 401-when-anonymous exists anywhere to copy.
+Tests 12F → **13/13** (fixture now registers `register_app_error_handler`,
+overrides the auth dependency to scope accounts by `X-User-Id` — the approach
+from orphaned unmerged `ee1ba337f`, rescued — resets the billing singleton
+per test, unwraps the `["data"]` envelope, asserts **422** for pydantic field
+violations per `exception_handlers.py` contract, not 400) + new `TestAuthDisabled`
+regression test. Router-family A/B on identical env: origin/main 111 failed →
+fixed 98, comm diff = **zero new ids**; ruff + py_compile clean. Note: family-
+shape failures in `test_self_train`/`test_settings` are baseline path drift
+(old `tests/server/` ids, card `d2803a3c`) — pass 55/55 standalone.
+
+Earlier 2026-10-08 ~00:35: `fix/conftest-collection` **lands on
+main** (push `b4ab962e1`, card `5c909109` → done): **conftest-shadowing
+collection fix** — the 8 router test files in `packages/core-py/tests/`
+(self_train/souls/system/health/inference/kb/mobile/models) now import
+`from tests.conftest import build_test_app` instead of the bare
+`from conftest import ...`. Root cause A/B-proven (same commit, same env):
+under `--import-mode=importlib` a bare `conftest` resolves by a fresh
+`sys.path` walk — no `sys.modules['conftest']` seed — and with the
+repo-root config (`-c $PWD/pytest.ini`, or any arg set spanning the repo
+root: the canonical gate shape) the repo-root conftest force-inserts
+`apps/api/server/tests` at the path front, so the walk hit the server-tests
+conftest (no `build_test_app`) instead of the `packages/core-py/conftest.py`
+re-exporter; without `-c` the auto-discovered `packages/core-py/pytest.ini`
+registers the re-exporter under the bare name and it passes. Invocation-
+shape artifact, NOT a code regression (conftest/pytest config byte-identical
+across the window; 3-dir vs 6-dir PYTHONPATH and worktree layout
+irrelevant) — the same adjudication as slog-gates/progress.md. The 3
+`build_test_app` collection errors that reproduced on unmodified main in
+the Mole gate are gone at the source. Gates: RED 8/8 errors under `-c` →
+GREEN 0 collection errors under `-c` / no-`-c` / multi-tree, full
+`packages/core-py/tests --co` = 43073 collected / 0 errors, 28 test-level
+failures byte-identical across shapes and all in `main-baseline-bad.ids`
+(zero new), ruff + py_compile clean; the 3 residual 3-dir `mogdb` errors
+are A/B-proven pre-existing (PYTHONPATH gap, attempt1-era class).
+Earlier 2026-10-06 ~10:45: `feat/mole-rename` **lands on main**
 (merges `78be4e601` + `26e5a1ee0`, card `752b27ab` → done): the full
 **doctor → Mole rebrand** — `domain/core/_internal/doctor/` **merged into
 `mole/`** (one package: probes + report + watch, cycle-safe imports),
