@@ -435,6 +435,10 @@ class TestBaselineCompare:
         assert result["regressions"] == []
 
 
+# Every test here shells out via _run (subprocess timeout=600); the global
+# pytest-timeout default of 120s (ca167dbd) kills legitimately running
+# benchmark CLIs under load — part of Run5's timeout cluster (card 56b49cf1).
+@pytest.mark.timeout(600)
 class TestModelsCli:
     """CLI-level --models multi-model comparison."""
 
@@ -1001,6 +1005,11 @@ class TestBaseline:
         assert out["deltas"]["tiny:int8"]["cold_start_s"]["regressed"] is False
         assert out["deltas"]["tiny:int8"]["warm_median_s"]["delta"] == 1.5
 
+    # _run's subprocess allows 600s; the global 120s pytest-timeout was
+    # killing these mid-benchmark (Run5 "44 timeouts" cluster, card
+    # 56b49cf1). Timeout marks go on the CLI-spawning tests only so the
+    # pure-python compare tests keep the fast 120s hang ceiling.
+    @pytest.mark.timeout(600)
     def test_baseline_cli_creates_then_validates(self, tmp_path):
         """First run writes the baseline; second run passes with no regressions."""
         bl = tmp_path / "bl.json"
@@ -1012,6 +1021,7 @@ class TestBaseline:
         assert second.returncode == 0, second.stderr
         assert "No regressions vs baseline" in second.stdout
 
+    @pytest.mark.timeout(600)
     def test_baseline_cli_json_block(self, tmp_path):
         """--baseline --json emits a baseline block with exists flag."""
         bl = tmp_path / "bl2.json"
@@ -1023,6 +1033,7 @@ class TestBaseline:
         assert data["baseline"]["exists"] is True
         assert data["baseline"]["regressions"] == []
 
+    @pytest.mark.timeout(600)
     def test_baseline_cli_exit_1_on_regression(self, tmp_path):
         """A fabricated high-compression baseline forces exit code 1."""
         bl = tmp_path / "bl3.json"
@@ -1047,6 +1058,7 @@ class TestBaseline:
         assert result.returncode == 1
         assert "Regression" in result.stdout
 
+    @pytest.mark.timeout(600)
     def test_baseline_report_section(self, tmp_path):
         """--report writes the baseline section."""
         bl = tmp_path / "bl4.json"

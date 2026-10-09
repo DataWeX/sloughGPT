@@ -91,8 +91,12 @@ class TestLifecycle:
         sr = _make_system_router()
         mock_mgr = MagicMock()
         mock_mgr.get_results.return_value = {"phase": "ready", "profile": "default"}
+        # Patch the consumer read point: the handler does a function-local
+        # `from domain.infrastructure import get_lifecycle_manager`, and the
+        # facade binds the name eagerly, so patching _internal.lifecycle
+        # never reaches it (the real manager's "init" phase leaked through).
         with patch(
-            "domain.infrastructure._internal.lifecycle.get_lifecycle_manager", return_value=mock_mgr
+            "domain.infrastructure.get_lifecycle_manager", return_value=mock_mgr
         ):
             client = TestClient(_app(sr))
             resp = client.get("/system/lifecycle")
@@ -102,7 +106,7 @@ class TestLifecycle:
     def test_lifecycle_unavailable(self):
         sr = _make_system_router()
         with patch(
-            "domain.infrastructure._internal.lifecycle.get_lifecycle_manager",
+            "domain.infrastructure.get_lifecycle_manager",
             side_effect=RuntimeError("not init"),
         ):
             client = TestClient(_app(sr), raise_server_exceptions=False)
@@ -126,6 +130,10 @@ class TestExecutor:
         sr = _make_system_router()
         mock_inst = MagicMock()
         mock_inst.active_count.return_value = 2
+        # The handler reads the public .max_workers (the TrainingExecutor
+        # property); the private _max_workers alone leaves it as an
+        # auto-MagicMock that the envelope serializes to [].
+        mock_inst.max_workers = 4
         mock_inst._max_workers = 4
         mock_inst._jobs = {"j1": {}, "j2": {}}
         mock_inst.list_jobs.return_value = [{"id": "j1"}, {"id": "j2"}]
@@ -224,8 +232,12 @@ class TestTailOutput:
         mock_buf.tail_dicts.return_value = [{"text": "line1"}]
         mock_buf.count = 1
         mock_buf.seq = 1
+        # Consumer read point: the handler does `from domain.infrastructure
+        # import get_server_buffer`, and the facade binds it eagerly — the
+        # _internal-level patch never installed this fake (real empty
+        # buffer leaked through, lines == []).
         with patch(
-            "domain.infrastructure._internal.output_buffer.get_server_buffer", return_value=mock_buf
+            "domain.infrastructure.get_server_buffer", return_value=mock_buf
         ):
             client = TestClient(_app(sr))
             resp = client.get("/system/output")

@@ -107,16 +107,41 @@ class TestE2ETrainingTrigger:
         assert all(checks.values())
 
     async def test_training_page_has_config_elements(self, agent):
-        """Check that training page has configuration elements."""
+        """Check that training page has configuration elements.
+
+        The page was redesigned into a guided 4-step wizard (Data ->
+        Configure -> Train -> Results); the config fields now live behind
+        step 2 instead of on the page surface, so walk there first.
+        """
         await agent.navigate("/training")
-        time.sleep(2)
-        body = await agent.get_body_text()
+        # Hydrate poll (same pattern as the navigate test): a fixed sleep
+        # lands while the route chunk is still suspending under load.
+        body = ""
+        for _ in range(30):
+            body = await agent.get_body_text()
+            if "guided setup" in body.lower():
+                break
+            await asyncio.sleep(0.5)
+
+        step = await agent.click_button("Configure")
+        assert step.found, "guided-wizard Configure step chip not found"
+        for _ in range(30):
+            body = await agent.get_body_text()
+            if "epoch" in body.lower() or "iterations" in body.lower():
+                break
+            await asyncio.sleep(0.5)
+        low = body.lower()
 
         config_elements = {
-            "has_method": any(w in body.lower() for w in ["method", "sft", "finetune"]),
-            "has_epochs": any(w in body.lower() for w in ["epoch", "iterations"]),
-            "has_lr": any(w in body.lower() for w in ["learning rate", "lr"]),
-            "has_batch": any(w in body.lower() for w in ["batch"]),
+            # Step 2 exposes the method CHOICES as presets (Quick test,
+            # Fine-tune LoRA, ...); the "Method" label itself only appears
+            # in the step-3 summary, which needs a dataset selected first.
+            "has_method": any(
+                w in low for w in ["method", "sft", "finetune", "fine-tune", "preset"]
+            ),
+            "has_epochs": any(w in low for w in ["epoch", "iterations"]),
+            "has_lr": any(w in low for w in ["learning rate", "lr"]),
+            "has_batch": any(w in low for w in ["batch"]),
         }
 
         ok(
@@ -149,7 +174,17 @@ class TestE2ETrainingTrigger:
     async def test_datasets_page_import_flow(self, agent):
         """Test the datasets import flow."""
         await agent.navigate("/datasets")
-        time.sleep(1)
+        # Wait for the page (not just the route) before clicking: a fixed
+        # sleep lands while the route chunk suspends, and force=True then
+        # dispatches the click before the handler is wired, so the
+        # import dialog never opens. Verified: once "Add file" is on
+        # screen, click -> role=dialog opens deterministically.
+        body = ""
+        for _ in range(30):
+            body = await agent.get_body_text()
+            if "add file" in body.lower():
+                break
+            await asyncio.sleep(0.5)
 
         import_btn = await agent.click_button("Add file")
         ok("e2e_datasets_import_button", import_btn.found)
