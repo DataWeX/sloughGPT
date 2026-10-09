@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 # Add CLI src to path once for all tests in this directory
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..", "apps", "cli", "src"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "cli", "src"))
 
 
 @pytest.fixture
