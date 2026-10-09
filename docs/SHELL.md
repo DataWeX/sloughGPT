@@ -705,13 +705,13 @@ which the next segment reads. The final segment prints to stdout.
 ```bash
 # Unit tests (148 tests)
 cd packages/core-py
-python3 -m pytest tests/test_shell_repl.py -v
+python3 -m pytest ../../tests/core-py/test_shell_repl.py -v
 
 # Integration tests (30 tests, requires running API server)
-python3 -m pytest tests/test_shell_integration.py -v
+python3 -m pytest ../../tests/core-py/test_shell_integration.py -v
 
 # Both
-python3 -m pytest tests/test_shell_repl.py tests/test_shell_integration.py -v
+python3 -m pytest ../../tests/core-py/test_shell_repl.py ../../tests/core-py/test_shell_integration.py -v
 ```
 
 ### Test Coverage
