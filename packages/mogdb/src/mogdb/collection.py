@@ -118,14 +118,13 @@ class Collection:
             has_snapshot = self._compacted_path.exists()
             legacy_snapshot = False
             if has_snapshot:
-                snap_lines, q = durability.read_records_locked(
+                snap_records, q = durability.read_records_locked(
                     self._compacted_path,
                     corrupt_stem=self.name,
                     sidecar_dir=self._db_path,
                 )
                 quarantined += q
-                for i, raw in enumerate(snap_lines):
-                    entry = json.loads(raw)
+                for i, entry in enumerate(snap_records):
                     if i == 0 and isinstance(entry.get("_mogdb_meta"), dict):
                         seq = entry["_mogdb_meta"].get("seq")
                         self._watermark = seq if isinstance(seq, int) else None
@@ -140,14 +139,13 @@ class Collection:
                     legacy_snapshot = True
 
             if self._journal_path.exists():
-                j_lines, q = durability.read_records_locked(
+                j_records, q = durability.read_records_locked(
                     self._journal_path,
                     corrupt_stem=self.name,
                     sidecar_dir=self._db_path,
                 )
                 quarantined += q
-                for raw in j_lines:
-                    entry = json.loads(raw)
+                for entry in j_records:
                     seq = entry.get("seq")
                     has_seq = isinstance(seq, int)
                     if has_seq:

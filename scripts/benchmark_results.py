@@ -52,6 +52,16 @@ REGRESSION_THRESHOLDS = {
         # cold imports left for the background model-load thread = race risk
         "preload_warnings": (0, "abs"),
     },
+    "storage": {
+        # MogDB journal durability (scripts/benchmark_mogdb_journal.py):
+        # higher-is-better insert rate, lower-is-better replay/compact times.
+        # Deliberately looser than latency's — journal throughput on this host
+        # swings ~±20% with background load — so the pin catches structural
+        # losses (dropped fsync batching, doubled writes), not churn.
+        "insert_rec_per_s": (25.0, "rel"),
+        "reopen_s": (50.0, "rel"),
+        "compact_s": (50.0, "rel"),
+    },
 }
 
 
@@ -171,7 +181,7 @@ def load_result(path: Path) -> dict:
 
 
 # higher-is-better metric names (a drop means regression)
-HIGHER_IS_BETTER = {"overall", "response_rate"}
+HIGHER_IS_BETTER = {"overall", "response_rate", "insert_rec_per_s"}
 
 
 def _threshold(kind: str, metric: str) -> tuple:
@@ -321,6 +331,12 @@ HISTORY_FIELDS = {
     "latency": (("mean", "mean_ms"), ("p50", "p50_ms"), ("p95", "p95_ms")),
     "startup": (("health", "time_to_health_s"), ("ready", "time_to_ready_s")),
     "execution": (("dispatch", "dispatch_us"), ("threads", "peak_threads")),
+    "storage": (
+        ("ins/s", "insert_rec_per_s"),
+        ("µs/op", "insert_us_per_op"),
+        ("reopen", "reopen_s"),
+        ("compact", "compact_s"),
+    ),
 }
 
 
@@ -493,7 +509,7 @@ def main() -> int:
     p_rec.add_argument(
         "--kind",
         required=True,
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "storage"],
     )
     p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
@@ -504,7 +520,7 @@ def main() -> int:
 
     p_h = sub.add_parser("history", help="list stored runs")
     p_h.add_argument(
-        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
+        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup", "storage"]
     )
     p_h.set_defaults(fn=do_history)
 
@@ -512,7 +528,7 @@ def main() -> int:
     p_c.add_argument(
         "--kind",
         default="stability",
-        choices=["stability", "latency", "execution", "training", "startup"],
+        choices=["stability", "latency", "execution", "training", "startup", "storage"],
     )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)

@@ -337,3 +337,73 @@ def test_history_without_kind_lists_every_kind_with_runs(tmp_results, capsys):
     assert "── execution:" in out
     assert "── latency:" in out
     assert "── versions:" not in out
+
+
+# ── storage kind (MogDB journal durability, card 35f2ad61) ──────────────────
+
+
+def test_history_renders_storage_keys(tmp_results, capsys):
+    """storage kind renders its flat journal metrics, not the '?' fallback."""
+    write_result(
+        tmp_results,
+        "storage",
+        "mogdb-journal",
+        metrics={
+            "insert_rec_per_s": 11122,
+            "insert_us_per_op": 89.91,
+            "reopen_s": 0.4003,
+            "compact_s": 0.2289,
+        },
+    )
+
+    assert br.do_history(_HistArgs("storage")) == 0
+    out = capsys.readouterr().out
+    assert "ins/s=11122" in out
+    assert "reopen=0.4003" in out
+    assert "compact=0.2289" in out
+    assert "mean=?" not in out
+
+
+def test_storage_regression_detection_is_direction_aware():
+    """rec/s drops beyond 25% fail; drift within machine-load noise passes.
+
+    Journal throughput on this host swings ~±20% with load (fsync-on measured
+    90-385 rec/s across quiet vs busy windows), so storage thresholds are
+    deliberately looser than latency's — the pin catches structural losses
+    (a dropped fsync, a per-line double write), not background churn.
+    """
+    old = {"metrics": {"insert_rec_per_s": 13263, "reopen_s": 0.30, "compact_s": 0.24}}
+    big_drop = {"metrics": {"insert_rec_per_s": 8000, "reopen_s": 0.31, "compact_s": 0.25}}
+    noise = {"metrics": {"insert_rec_per_s": 11122, "reopen_s": 0.40, "compact_s": 0.23}}
+
+    assert br.is_regression("storage", big_drop, old) is True
+    assert br.is_regression("storage", noise, old) is False
+
+
+def test_storage_compare_reports_delta_and_exit_ok(tmp_results, capsys):
+    """compare on kind=storage prints tracked deltas and passes within budget."""
+    write_result(
+        tmp_results,
+        "storage",
+        "mogdb-journal",
+        metrics={"insert_rec_per_s": 13263, "reopen_s": 0.30, "compact_s": 0.24},
+    )
+    # second write is newest (mtime), so compare sees 13263 -> 11122
+    write_result(
+        tmp_results,
+        "storage",
+        "mogdb-journal",
+        metrics={"insert_rec_per_s": 11122, "reopen_s": 0.40, "compact_s": 0.23},
+    )
+
+    args = _CmpArgs("storage", "previous")
+    assert br.do_compare(args) == 0
+    out = capsys.readouterr().out
+    assert "insert_rec_per_s" in out
+    assert "no regression" in out
+
+
+class _CmpArgs:
+    def __init__(self, kind, vs):
+        self.kind = kind
+        self.vs = vs
