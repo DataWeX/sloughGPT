@@ -74,6 +74,11 @@ _STREAM_PUT_TIMEOUT_S = 30.0
 # treat it as wedged (stale resp_q data + blocked feeder) and restart it.
 _STALL_TIMEOUT_S = 30.0
 
+# Parent-side: after the child dies during startup, how long to keep looking
+# for its ``("error", ...)`` payload. mp.Queue delivery runs through a feeder
+# thread, so the child's last message can land just after it is reaped.
+_STARTUP_ERROR_DRAIN_S = 2.0
+
 _session_ids = itertools.count(1)
 
 
@@ -867,9 +872,16 @@ class ModelWorkerProcess:
         self._health.alive = True
         self._health.started_at = self._started_at
 
-        # Wait for ready signal (use startup timeout, not generate timeout)
-        deadline = time.time() + self._startup_timeout
+        # Wait for ready signal (use startup timeout, not generate timeout).
+        # There are three ways to lose, and they are not the same event: the
+        # child can report ``dead``, the OS can report it gone, or the
+        # deadline can pass with no ready signal. The old code reported all
+        # three as "failed to start within {startup_timeout}s" — a configured
+        # constant, not the elapsed time, and never the child's cause.
+        started = time.time()
+        deadline = started + self._startup_timeout
         ready = False
+        death: str | None = None
         while time.time() < deadline:
             try:
                 msg, val = self._hb_q.get(timeout=0.5)
@@ -878,16 +890,19 @@ class ModelWorkerProcess:
                     ready = True
                     break
                 elif msg == "dead":
+                    death = "child reported dead"
                     break
             except queue.Empty:
                 if not self._process.is_alive():
+                    death = "child exited"
                     break
                 continue
 
         if not ready:
-            raise RuntimeError(
-                f"Worker[{self.worker_id}]: failed to start within {self._startup_timeout}s"
-            )
+            message = self._startup_failure_message(death, started)
+            logger.error("%s", message, extra={"tag": "INFRA"})
+            self._abandon_failed_start(death is not None)
+            raise RuntimeError(message)
 
         logger.info(
             "Worker[%s]: ready (pid=%d, backend=%s)",
@@ -896,6 +911,88 @@ class ModelWorkerProcess:
             self.backend,
             extra={"tag": "INFRA"},
         )
+
+    def _startup_failure_message(self, death: str | None, started: float) -> str:
+        """Build the ``start()`` failure message.
+
+        Args:
+            death: How the ready-wait ended — ``child reported dead`` or
+                ``child exited`` — or None when the deadline passed instead.
+            started: Launch timestamp, so the elapsed time shown is measured
+                rather than the configured timeout.
+
+        The child posts ``("error", None, ...)`` on the response queue just
+        before it exits; startup only ever watched the heartbeat queue, so
+        that payload — the actual cause — used to be dropped for the caller.
+        """
+        elapsed = time.time() - started
+        if death is not None and self._process is not None:
+            # Reap first: ``exitcode`` is None until the child is collected, and
+            # reporting the exit status is the point of this branch.
+            try:
+                self._process.join(timeout=1.0)
+            except Exception:
+                pass
+        how = death or "no ready signal"
+        parts = [f"Worker[{self.worker_id}]: failed to start — {how} after {elapsed:.1f}s"]
+        # getattr: this runs on the error path, where a missing attribute on a
+        # stand-in must not mask the failure being reported.
+        exitcode = getattr(self._process, "exitcode", None) if self._process else None
+        if death is None:
+            parts.append(f"startup_timeout={self._startup_timeout}s")
+        elif exitcode is not None:
+            parts.append(f"exitcode={exitcode}")
+        message = " ".join(parts)
+        cause = self._drain_startup_error()
+        if cause:
+            message += f": {cause}"
+        return message
+
+    def _drain_startup_error(self) -> str | None:
+        """Read the child's ``("error", ...)`` payload, if it sent one.
+
+        mp.Queue delivery runs through a feeder thread, so a child's last
+        message can land shortly after the process itself is gone — hence the
+        bounded retry instead of a single read.
+        """
+        if self._resp_q is None:
+            return None
+        deadline = time.time() + _STARTUP_ERROR_DRAIN_S
+        while time.time() < deadline:
+            try:
+                item = self._resp_q.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            except (OSError, ValueError, EOFError):
+                return None
+            if not item:
+                continue
+            msg, *rest = item
+            _session, data = self._split_resp(msg, rest)
+            if msg == "error":
+                return str(data) if data else "worker reported an error"
+        return None
+
+    def _abandon_failed_start(self, crashed: bool) -> None:
+        """Reap a child that never became ready so it cannot outlive the failure.
+
+        ``start()`` has raised, so the caller discards this worker object;
+        without a stop the not-ready child keeps its weights resident for the
+        lifetime of the server.
+        """
+        self._health.alive = False
+        self._health.crashed = crashed
+        if crashed:
+            self._health.crash_count += 1
+        try:
+            self.stop()
+        except Exception as exc:
+            logger.warning(
+                "Worker[%s]: cleanup after failed start: %s",
+                self.worker_id,
+                exc,
+                extra={"tag": "INFRA"},
+            )
 
     def stop(self, timeout: float = 10.0) -> None:
         """Stop the worker subprocess."""

@@ -640,7 +640,23 @@ class ProcessGuard:
             self.max_restarts,
         )
         time.sleep(self.restart_delay)
-        self._launch_worker()
+        try:
+            self._launch_worker()
+        except Exception as exc:
+            # A failed launch still spends a restart attempt. Otherwise the
+            # budget never advances while start() keeps failing and this
+            # exception kills the monitor thread, so supervision goes silent
+            # instead of reporting exhaustion.
+            self._restart_count += 1
+            logger.error(
+                "ProcessGuard[%s]: restart failed (%d/%d): %s",
+                self.worker_id,
+                self._restart_count,
+                self.max_restarts,
+                exc,
+                extra={"worker_id": self.worker_id},
+            )
+            return
         self._restart_count += 1
         if fire_callbacks:
             for cb in self._restart_callbacks:
