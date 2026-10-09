@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .atomic import atomic_write_text
 
 logger = logging.getLogger("dev-notes")
 
@@ -151,7 +152,7 @@ class _FileBackend:
         return notes
 
     def put(self, note: Note) -> None:
-        (self._dir / f"{note.id}.md").write_text(note.to_markdown())
+        atomic_write_text(self._dir / f"{note.id}.md", note.to_markdown())
 
     def delete_id(self, note_id: str) -> bool:
         path = self._dir / f"{note_id}.md"

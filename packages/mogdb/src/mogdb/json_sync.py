@@ -25,6 +25,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import durability
 from .collection import Collection
 
 logger = logging.getLogger("slo.mogdb.json_sync")
@@ -103,39 +104,18 @@ class SyncableCollection:
             logger.warning("failed to bootstrap from %s: %s", self._json_path.name, e)
 
     def _sync_to_json(self) -> None:
-        """Write all collection documents to the JSON file atomically."""
+        """Write all collection documents to the JSON file atomically + durably."""
         docs = self._col.find()
         # Use .json.gz for compressed files, .json for plain
-        if self._json_path.suffix == ".gz":
-            tmp_path = self._json_path.with_suffix(".json.gz.tmp")
-            try:
+        try:
+            payload = json.dumps(docs, indent=2, default=str).encode("utf-8")
+            if self._json_path.suffix == ".gz":
                 import gzip
 
-                with gzip.open(tmp_path, "wt", encoding="utf-8") as f:
-                    json.dump(docs, f, indent=2, default=str)
-                tmp_path.replace(self._json_path)
-            except OSError as e:
-                logger.warning("failed to sync %s to JSON: %s", self._col.name, e)
-            finally:
-                if tmp_path.exists():
-                    try:
-                        tmp_path.unlink()
-                    except OSError:
-                        pass
-        else:
-            tmp_path = self._json_path.with_suffix(".json.tmp")
-            try:
-                with open(tmp_path, "w") as f:
-                    json.dump(docs, f, indent=2, default=str)
-                tmp_path.replace(self._json_path)
-            except OSError as e:
-                logger.warning("failed to sync %s to JSON: %s", self._col.name, e)
-            finally:
-                if tmp_path.exists():
-                    try:
-                        tmp_path.unlink()
-                    except OSError:
-                        pass
+                payload = gzip.compress(payload)
+            durability.atomic_write(self._json_path, payload)
+        except OSError as e:
+            logger.warning("failed to sync %s to JSON: %s", self._col.name, e)
 
     def _on_write(self) -> None:
         """Called after every write operation to sync to JSON.

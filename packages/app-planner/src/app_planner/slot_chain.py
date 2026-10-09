@@ -35,6 +35,8 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+from .atomic import append_lines, atomic_write_text
+
 RETIRED_FIELDS = ("chain_hash", "chain_prev", "chain_index")
 SLOT_FIELDS = ("slot_position", "note_hashes", "notes_hash", "slot_prev", "slot_hash")
 
@@ -103,10 +105,7 @@ def write_board(path: str | Path, raws: list[str], objs: dict[int, dict], dirty:
             out.append(json.dumps(objs[i], ensure_ascii=False))
         else:
             out.append(raw)
-    tmp = Path(str(path) + ".tmp")
-    tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
-    os.replace(tmp, path)
-
+    atomic_write_text(path, "\n".join(out) + "\n")
 
 # ── Inputs ───────────────────────────────────────────────────────────────
 
@@ -279,9 +278,10 @@ def apply_board(board_path: str | Path, notes_home: str | Path | None = None) ->
         dirty.add(meta_idx)
 
     if new_nodes:
-        with open(hist, "a", encoding="utf-8") as fh:
-            for node in new_nodes:
-                fh.write(json.dumps(node, ensure_ascii=False) + "\n")
+        append_lines(
+            hist,
+            [json.dumps(node, ensure_ascii=False) + "\n" for node in new_nodes],
+        )
     if dirty:
         write_board(board_path, raws, objs, dirty)
     return {
