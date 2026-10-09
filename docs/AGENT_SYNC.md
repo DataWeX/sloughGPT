@@ -410,7 +410,27 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `344168b4f`)
+## Landed on main (origin/main = `bf0be96b9`)
+
+- **2026-10-09 · Run5 test-vs-impl drift triage closed** (card `56b49cf1`,
+  ~300 baseline reds → 0, 6 commits): `853691a4e` gpu_linalg 40→0 (IMPL fix —
+  `solve_triangular(lower=/dtype=)` + a real `solve_cholesky` L.T bug +
+  `dominant_eigen` restore; dashboard `_WATCHED_OPS`+ui; ml_types fake_cupy),
+  `0e36c1658` all 18 new-vs-known A/B'd — 6 flakes + 12 real (11 env-drift:
+  cupy_cuda12x appeared mid-baseline on the GTX1050 box → hermetic
+  `cpu_only`/`sys.modules` patches; 1 stale mock: `models.set_precision`
+  reads `domain.slolib.get_accelerator`), `04c74046a` merged **orphaned**
+  `fix/shell-repl-tests` (14 commits, no owning card — shell_repl_more 83→0,
+  tui_live 42→0, mobile 16→0, native_engine_real 41→0; 249 red → 7 known),
+  `7eda5403d` e2e_training_trigger 2→0 (`/training` is now the guided 4-step
+  wizard; the datasets test must poll for "Add file" before clicking — also
+  resolves two Oct-3 journey-census residuals), `023d35842` system_router
+  4→0 (function-local facade imports defeat `_internal` patches; executor
+  mock needed the public `.max_workers`), `7740ea6e2` quantization CLI tests
+  got `timeout(600)` matching `_run`'s subprocess contract. Do-not-duplicate
+  map + overlap flag (`9a85ff304` on `fix/gpu-accelerator-linalg-api`
+  re-restores the same linalg pair) in the card body; the `33773fce` executor
+  should cherry-pick `ff06a8d1b`/`ee1ba337f` rather than redo vm/ua/companion.
 
 - **2026-10-04 · `feat/wip-column-rename` lands — the kanban column is `wip`,
   never `in_progress` (hard cutover).** Card `ffaea823` → done; ff `3f8465164`
@@ -811,3 +831,16 @@ git push -u origin feat/<name>   # push your own branch when done
   board, then `move_card(<full-uuid>, <col>)` + `compute_chains()`), and
   `move_card` matches the id **exactly** (an 8-hex prefix returns `False`
   silently; resolve the full uuid first).
+- **Eagerly-bound facade names defeat `_internal`-level mock patches**: a
+  handler's function-local `from domain.infrastructure import X` reads the
+  FACADE attribute at call time, but the facade bound it eagerly at import
+  (`domain/infrastructure/__init__.py`) — patching
+  `domain.infrastructure._internal.<mod>.X` only replaces the `_internal`
+  module attr and never installs the fake; real state leaks through
+  (`{"phase": "init"}`, empty buffer lines, `precision: []` via
+  auto-MagicMock coercion in the envelope). Patch the **consumer read
+  point** (`domain.infrastructure.X`) per `2368d4aa3`. This cost 12+ reds
+  across models_router, system_router and dashboard in the Oct-9 cycle
+  alone — and when a mock IS installed, set the **public** attribute the
+  handler reads (`.max_workers`, not `_max_workers`) or the envelope
+  silently turns the auto-MagicMock into `[]`.
