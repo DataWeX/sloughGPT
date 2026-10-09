@@ -100,18 +100,28 @@ def test_quant_core_import_failure_falls_back_to_numpy(monkeypatch):
         def __getattr__(self, name):
             raise ImportError(f"cannot import name {name!r} from fake wrapper")
 
+    # reload() re-executes quantization.py inside the SAME module dict, so
+    # every class is replaced by a fresh object while modules that did
+    # `from quantization import QuantMode` keep their original binding —
+    # Enum equality is identity-based, so a reload left in place turns
+    # unrelated later tests into order-dependent failures (the 3
+    # TestQuantine/TestQuantizeStateDict cases in test_quantized_matmul).
+    # Reloading again cannot bring the original classes back either:
+    # snapshot the dict and restore it verbatim.
+    saved = dict(q.__dict__)
     monkeypatch.setitem(
         sys.modules, "domain.infrastructure._internal.quant_core.wrapper", _Broken()
     )
-    importlib.reload(q)
     try:
+        importlib.reload(q)
         assert q._c_matmul is q._numpy_fallback
         assert q._c_matmul_int4 is q._int4_numpy_fallback
     finally:
         monkeypatch.setitem(
             sys.modules, "domain.infrastructure._internal.quant_core.wrapper", wrapper
         )
-        importlib.reload(q)
+        q.__dict__.clear()
+        q.__dict__.update(saved)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
