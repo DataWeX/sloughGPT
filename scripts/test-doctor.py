@@ -966,11 +966,7 @@ def _pd_resolve(fname: str, node: ast.AST) -> str | None:
         and node.args[0].func.attr == "dirname"
     ):
         da = node.args[0].args
-        if not (
-            da
-            and isinstance(da[0], ast.Name)
-            and da[0].id == "__file__"
-        ):
+        if not (da and isinstance(da[0], ast.Name) and da[0].id == "__file__"):
             # dirname(<some_module>.__file__) -- base is unknown statically
             return None
         parts = [
@@ -1024,18 +1020,14 @@ def _pd_is_file_anchor(node: ast.AST) -> bool:
         node = node.value
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Path":
         return bool(
-            node.args
-            and isinstance(node.args[0], ast.Name)
-            and node.args[0].id == "__file__"
+            node.args and isinstance(node.args[0], ast.Name) and node.args[0].id == "__file__"
         )
     return False
 
 
 def _pd_uses_file(node: ast.AST) -> bool:
     """True if the expression references __file__ at all."""
-    return any(
-        isinstance(n, ast.Name) and n.id == "__file__" for n in ast.walk(node)
-    )
+    return any(isinstance(n, ast.Name) and n.id == "__file__" for n in ast.walk(node))
 
 
 def _pd_sites() -> tuple[list[tuple[str, int, str]], int]:
@@ -1101,9 +1093,7 @@ def cmd_path_drift(verbose: bool = False) -> int:
 
     _p(f"  {_dim(f'{good} site(s) resolve to an existing path')}\n")
     if skipped:
-        _p(
-            f"  {_dim(f'{skipped} expression(s) skipped (not __file__-anchored)')}\n"
-        )
+        _p(f"  {_dim(f'{skipped} expression(s) skipped (not __file__-anchored)')}\n")
 
     if not bad:
         _p(f"  {_green('clean')}\n\n")
@@ -1113,13 +1103,9 @@ def cmd_path_drift(verbose: bool = False) -> int:
     for f, ln, p in bad:
         _p(f"    {_y}{f}:{ln}{_r}\n")
         _p(f"      -> {_dim(p)}\n")
-    _p(
-        f"\n  {_dim('These stay latent while tests/conftest.py independently inserts')}\n"
-    )
+    _p(f"\n  {_dim('These stay latent while tests/conftest.py independently inserts')}\n")
     _p(f"  {_dim('the right directory, so imports resolve and the suite stays green.')}\n")
-    _p(
-        f"  {_dim('They break the moment that conftest changes. Caused by dcb2a5eaf')}\n"
-    )
+    _p(f"  {_dim('They break the moment that conftest changes. Caused by dcb2a5eaf')}\n")
     _p(f"  {_dim('(four test roots -> one) when path depth changed under the files.')}\n\n")
     return 1
 
