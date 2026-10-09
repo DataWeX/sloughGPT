@@ -228,13 +228,17 @@ class CompanionRouter:
         self, preset_id: str = Body(...), auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         """Apply a preset personality."""
-        # Seed first, exactly as list_presets does: on a fresh store the four
-        # default presets do not exist yet, and without this the very first
-        # POST /preset after an empty-data install answered 404 for "warm".
-        _seed_default_presets()
         db = _get_db()
         col = db.collection("presets")
         preset = col.find_one({"id": preset_id})
+        if not preset:
+            # Seed only on a miss: _seed_default_presets() itself no-ops unless
+            # the collection is empty, so this repairs the fresh-install case
+            # (the four defaults did not exist yet, and the first POST /preset
+            # answered 404 for "warm") without a count() round-trip on the
+            # happy path.
+            _seed_default_presets()
+            preset = col.find_one({"id": preset_id})
         if not preset:
             raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
         companion = self._get_companion()
