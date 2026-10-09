@@ -22,10 +22,32 @@ from domain.context._internal.managers import (
 
 @pytest.fixture(autouse=True)
 def _isolate_trait_config():
-    """Mock MogDB init so TraitWeightsConfig starts clean each test."""
-    mock_db = MagicMock()
+    """In-memory MogDB fake: clean per test, persistence still observable.
+
+    The previous fake was a bare MagicMock with find_one -> None, which
+    mocked persistence AWAY: set() wrote into the void and every reload
+    saw an empty store, making test_set_persists impossible (born red).
+    The stateful fake below stores documents per-test so
+    instance-to-instance round-trips work while still touching no real
+    MogDB or files (card 20260924_031).
+    """
+    store: dict[str, dict] = {}
     mock_col = MagicMock()
-    mock_col.find_one.return_value = None
+    mock_col.find_one.side_effect = lambda query, **kw: (
+        dict(store[query["_key"]]) if query.get("_key") in store else None
+    )
+
+    def _insert(doc, **kw):
+        store[doc["_key"]] = dict(doc)
+
+    def _update(query, update, **kw):
+        key = query["_key"]
+        store.setdefault(key, {"_key": key})
+        store[key].update(update.get("$set", {}))
+
+    mock_col.insert_one.side_effect = _insert
+    mock_col.update_one.side_effect = _update
+    mock_db = MagicMock()
     mock_db.collection.return_value = mock_col
     with patch.object(TraitWeightsConfig, "_init_mogdb", return_value=mock_db):
         yield

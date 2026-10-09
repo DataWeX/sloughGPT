@@ -143,8 +143,15 @@ class TestTraitWeightsConfig:
 
     def test_update_from_feedback_with_negation(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        before = cfg.get("formality")
         cfg.update_from_feedback("thumbs_down", user_message="not formal please")
-        assert cfg.get("formality") <= 0.5
+        # Committed contract: negation FLIPS the rating's delta on the
+        # negated traits (update_from_feedback docstring "Negations flip
+        # the direction" + canonical passing twin
+        # test_update_from_feedback.py::test_negation_flips_traits).
+        # The original assertion (<= 0.5) contradicted that twin and was
+        # born red in bbd7214df — synced per card 20260924_031.
+        assert cfg.get("formality") > before
 
     def test_update_from_feedback_short_response(self, tmp_path):
         cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
@@ -419,8 +426,16 @@ class TestTaskManager:
         assert mode["label"] == "Methodical"
 
     def test_get_mode_exploratory(self, tmp_path):
+        # curiosity=0.9 matches the committed sibling contract in
+        # test_update_from_feedback.py::test_get_mode_exploratory: with
+        # default curiosity the scorer gives Creative 0.735 > Exploratory
+        # 0.705 (stable since birth), so the original inputs made this
+        # test born red — synced per card 20260924_031.
         tm = TaskManager(
-            _make_cfg({"creative_divergence": 0.8, "systematic_planning": 0.1}, tmp_path)
+            _make_cfg(
+                {"creative_divergence": 0.8, "systematic_planning": 0.1, "curiosity": 0.9},
+                tmp_path,
+            )
         )
         mode = tm.get_mode()
         assert mode["label"] == "Exploratory"
@@ -469,7 +484,13 @@ class TestMemoryManager:
     def test_should_consolidate_below(self, tmp_path):
         mm = MemoryManager(_make_cfg({"learning_adaptability": 0.9}, tmp_path))
         threshold = mm.memory_importance_threshold
-        assert mm.should_consolidate(threshold - 0.01) is True
+        # Committed contract (managers.py): importance >= threshold
+        # consolidates ("Minimum importance score"), so just-below must be
+        # False. The original assertion (below -> True) was mathematically
+        # impossible under >= and born red in bbd7214df — synced per card
+        # 20260924_031.
+        assert mm.should_consolidate(threshold) is True
+        assert mm.should_consolidate(threshold - 0.01) is False
 
     def test_apply_memory_context_empty(self, tmp_path):
         mm = MemoryManager(TraitWeightsConfig(path=str(tmp_path / "t.json")))
