@@ -410,7 +410,29 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `55bae17f0`)
+## Landed on main (origin/main = `1d95ba665`)
+
+- **2026-10-09 · trait-weights born-red tests synced** (card
+  `20260924_031_sync-session-feedback-batch`, fix `94615612c`, gate 1124
+  passed/0 failed vs baseline 1120/4): all 4 reds broken at birth in
+  `bbd7214df` ("staging local changes", Aug 30, never verified) with impl
+  stable since — synced tests to committed contracts, zero runtime change:
+  the Sep-6 `_isolate_trait_config` fixture mocked persistence away
+  (`find_one -> None`) → **stateful in-memory fake** (clean per test,
+  round-trips observable); the negation test contradicted the passing twin
+  `test_negation_flips_traits` + docstring (**committed contract = negation
+  FLIPS the rating delta**) → test synced, runtime untouched — product
+  follow-up flagged (flip semantics debatable, would touch
+  `domain/feedback/_internal/workflow.py`); exploratory-mode inputs synced
+  to the committed sibling (default curiosity makes Creative win 0.735 vs
+  0.705); consolidate-below asserted a mathematically impossible
+  `below → True` under `>= threshold` → boundary contract (at/below).
+  **Pattern: "wip: staging local changes before stash merge" commits are
+  unverified by definition — treat tests born there as suspect.** Also
+  screened `d2803a3c` (2 competing pytest.ini + 55 dup basenames): its
+  whole fix is in flight on the active `dcb2a5eaf` test-root-consolidation
+  branch stack (826-file move, branches committed today) — adjudication
+  recorded on the card, work deliberately NOT duplicated.
 
 - **2026-10-09 · packaging egg_info hard-fail fixed** (card `56cf354c`,
   fix `b53487b3b`, gate 18 passed + wheel build): `a29f5d5b8` retargeted include
