@@ -179,6 +179,7 @@ class ExternalDownloadBackend(DownloadBackend):
             dest.parent.mkdir(parents=True, exist_ok=True)
 
             url = self._file_url(resource_id, file_path)
+            file_bytes = 0
 
             def _progress(bytes_written: int, expected: int, _file=f):
                 current = bytes_done + bytes_written
@@ -213,6 +214,10 @@ class ExternalDownloadBackend(DownloadBackend):
 
                 from .download_backend import write_sha_sidecar
 
+                # ``_progress`` reports ``bytes_done + bytes_written``, and
+                # ``bytes_done`` only advances once a file is finished.  Pass the
+                # bytes written *so far in this file* so ticks climb instead of
+                # repeating the last chunk's size.
                 try:
                     hasher = hashlib.sha256()
                     req = urllib.request.Request(url)
@@ -224,7 +229,8 @@ class ExternalDownloadBackend(DownloadBackend):
                                     break
                                 out.write(chunk)
                                 hasher.update(chunk)
-                                _progress(len(chunk), file_size)
+                                file_bytes += len(chunk)
+                                _progress(file_bytes, file_size)
                 except Exception as e:
                     return {
                         "status": "error",
@@ -251,7 +257,9 @@ class ExternalDownloadBackend(DownloadBackend):
                 write_sha_sidecar(dest, actual)
                 completed.append({"path": file_path, "size": file_size, "sha256": actual})
 
-            bytes_done += file_size
+            # Prefer bytes actually written over the manifest's declared size:
+            # manifests may omit ``size`` (0), which would stall the running total.
+            bytes_done += file_bytes if file_bytes else file_size
             on_file_complete(resource_id, str(dest))
 
         try:
