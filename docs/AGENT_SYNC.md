@@ -410,7 +410,24 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `0a2733760`)
+## Landed on main (origin/main = `215a6eb6b`)
+
+- **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
+  `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
+  dashboard was a stale duplicate of `logs`' (byte-identical PROCESSES loop, missing
+  MODEL/sparklines/errors/compact). New **`run_dashboard()` in `commands/logs.py` is
+  the single dashboard path**, called by `logs --dashboard`, a **hidden `monitor`
+  migration alias** (same flags, stderr merge notice, absent from help listings —
+  `_ClickCommandWrapper` now propagates `click.hidden`), and `train monitor`
+  (repointed off the deleted module). UX rules applied: `_load_color` graded
+  cpu/mem thresholds, err red-when-nonzero, GEN/MODEL colored, non-running processes
+  print a colored status word (`_status_color`), empty sections omitted, health
+  score folded into SERVER. **Gotchas:** (1) `logs.py` source contains literal
+  `\u2588`/`\u2026` *escape text* — edit anchors must dodge those lines (Edit-tool
+  JSON-decodes `\uXXXX` into the char and silently mismatches); (2) root `./cli.py`
+  shadows `apps/cli/src/cli.py` on `PYTHONPATH` — tests must
+  `sys.path.insert(0, src)` like `test_logs_syslog.py`; (3) asserting "`monitor` not
+  in help" by substring is a false positive — `logs`' help text contains "monitor".
 
 - **2026-10-09 · header screenshot tests** (card `ec2ae5c1`, fix
   `731aaa6de`, gate 2 passed/65.7s on the live :5173 stack): the 2026-08-30
