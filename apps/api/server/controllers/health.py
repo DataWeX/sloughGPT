@@ -18,11 +18,11 @@ _health_start_time = datetime.now()
 def _get_executor_stats() -> dict[str, Any] | None:
     """Get TrainingExecutor pool stats if available."""
     try:
-        from domain.training._internal.executor import _instance, get_training_executor
+        from domain.training import peek_training_executor
 
-        if _instance is None:
+        ex = peek_training_executor()
+        if ex is None:
             return None
-        ex = get_training_executor()
         return {
             "active_jobs": ex.active_count(),
             "max_workers": ex._max_workers,
@@ -256,7 +256,7 @@ def _get_model_device() -> str | None:
 def _get_lifecycle_info() -> dict[str, Any]:
     """Get lifecycle phase and profile info from the lifecycle manager."""
     try:
-        from domain.infrastructure._internal.lifecycle import get_lifecycle_manager
+        from domain.infrastructure import get_lifecycle_manager
 
         mgr = get_lifecycle_manager()
         return {
@@ -292,7 +292,7 @@ def _get_inference_stats() -> dict[str, Any]:
 def _get_quantization_info() -> dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
-        from domain.models._internal.provider import get_provider
+        from domain.models import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:
@@ -322,7 +322,7 @@ def _get_kv_session_info() -> dict[str, Any]:
     tokens, TTL). Returns ``{"enabled": False}`` when no provider exposes it.
     """
     try:
-        from domain.models._internal.provider import get_provider
+        from domain.models import get_provider
 
         provider = get_provider("slonet-native")
         if provider is None:
@@ -570,7 +570,7 @@ class HealthController:
         gpu_info: dict[str, Any] = {}
         degraded: list[str] = []
         try:
-            from domain.slolib._internal.gpu import get_accelerator
+            from domain.slolib import get_accelerator
 
             acc = get_accelerator()
             gpu_info = {

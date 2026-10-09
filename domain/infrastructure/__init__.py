@@ -31,13 +31,15 @@ from domain.infrastructure._internal.event_bus import (
 from domain.infrastructure._internal.lifecycle import (
     LifecycleManager,
     LifecyclePhase,
-    get_lifecycle_manager,
 )
 from domain.infrastructure._internal.output_buffer import get_server_buffer
 
 _LAZY_IMPORTS = {
     "get_event_buffer": ("._internal.event_buffer", "get_event_buffer"),
     "get_server_buffer": ("._internal.output_buffer", "get_server_buffer"),
+    "get_lifecycle_manager": ("._internal.lifecycle", "get_lifecycle_manager"),
+    "try_register": ("._internal.artifact_registry", "try_register"),
+    "SLNCCompiler": ("._internal.slnc.compiler", "SLNCCompiler"),
     "DatasetRepository": ("._internal.entity_repositories", "DatasetRepository"),
     "KnowledgeRepository": ("._internal.entity_repositories", "KnowledgeRepository"),
     "artifact_registry": ("._internal.artifact_registry", None),
@@ -74,6 +76,8 @@ __all__ = [
     "emit_error_event",
     "get_event_buffer",
     "get_server_buffer",
+    "try_register",
+    "SLNCCompiler",
     "DatasetRepository",
     "KnowledgeRepository",
 ]
