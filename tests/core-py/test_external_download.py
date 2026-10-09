@@ -211,3 +211,111 @@ class TestExternalDownloadDownload:
             result = backend.download("model", None, None)
             assert result["status"] == "error"
             assert "no files" in result["error"]
+
+    def test_plain_path_progress_is_cumulative(self, tmp_path):
+        """Uncompressed downloads must report cumulative bytes, not the last chunk.
+
+        ``_progress`` computes ``current = bytes_done + bytes_written``.  In the
+        plain path ``bytes_done`` was only incremented after a file *finished*,
+        and the loop passed ``len(chunk)`` — so a 200 KB file served in 64 KB
+        chunks reported 64 KB on every tick instead of 64/128/192/200 KB, and
+        the bar never advanced within a file.
+        """
+        backend = ExternalDownloadBackend("http://localhost:8000", compressed=False)
+
+        file_size = 200_000
+        manifest = {"files": [{"path": "model.bin", "size": file_size, "sha256": ""}]}
+
+        payload = bytes(range(256)) * (file_size // 256)
+        payload += b"\x00" * (file_size - len(payload))
+
+        class _FakeResponse:
+            def __init__(self):
+                self._pos = 0
+
+            def read(self, n):
+                chunk = payload[self._pos : self._pos + n]
+                self._pos += len(chunk)
+                return chunk
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        progress: list[tuple[int, int]] = []
+        with (
+            patch.object(backend, "_fetch_manifest", return_value=manifest),
+            patch.object(backend, "_cache_dir", return_value=tmp_path / "out"),
+            patch("urllib.request.urlopen", return_value=_FakeResponse()),
+        ):
+            result = backend.download(
+                "model",
+                on_progress=lambda mid, done, total, speed: progress.append((done, total)),
+                on_file_complete=lambda mid, path: None,
+            )
+
+        assert result["status"] == "completed"
+        assert progress, "no progress callbacks fired"
+
+        dones = [done for done, _ in progress]
+        assert dones == sorted(dones), f"progress went backwards: {dones}"
+        assert len(set(dones)) > 1, (
+            f"progress never advanced within the file (last chunk only): {dones}"
+        )
+        assert dones[-1] == file_size, f"final progress {dones[-1]} != {file_size}"
+
+    def test_plain_path_progress_accumulates_across_files(self, tmp_path):
+        """A second file's progress must continue from the first file's bytes."""
+        backend = ExternalDownloadBackend("http://localhost:8000", compressed=False)
+
+        sizes = [100_000, 50_000]
+        manifest = {
+            "files": [
+                {"path": "a.bin", "size": sizes[0], "sha256": ""},
+                {"path": "b.bin", "size": sizes[1], "sha256": ""},
+            ]
+        }
+
+        class _FakeResponse:
+            def __init__(self, length: int):
+                self._data = b"x" * length
+                self._pos = 0
+
+            def read(self, n):
+                chunk = self._data[self._pos : self._pos + n]
+                self._pos += len(chunk)
+                return chunk
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+        # urlopen is called once per manifest entry — serve each file its own size.
+        served = iter(sizes)
+        progress: list[tuple[int, int]] = []
+        with (
+            patch.object(backend, "_fetch_manifest", return_value=manifest),
+            patch.object(backend, "_cache_dir", return_value=tmp_path / "out"),
+            patch(
+                "urllib.request.urlopen",
+                side_effect=lambda *a, **k: _FakeResponse(next(served)),
+            ),
+        ):
+            result = backend.download(
+                "model",
+                on_progress=lambda mid, done, total, speed: progress.append((done, total)),
+                on_file_complete=lambda mid, path: None,
+            )
+
+        assert result["status"] == "completed"
+        total = sum(sizes)
+        assert progress[-1][0] == total, f"final progress {progress[-1][0]} != {total}"
+        dones = [done for done, _ in progress]
+        assert dones == sorted(dones), f"progress went backwards: {dones}"
+        # The second file must push past the first file's total, not restart at 0.
+        assert max(dones) == total
+        assert min(dones) >= sizes[0] or len(set(dones)) > 1

@@ -18,10 +18,20 @@ _REPO_ROOT: Path | None = None
 
 
 def _get_repo_root() -> Path:
-    """Resolve repo root once per process."""
+    """Resolve repo root once per process.
+
+    Uses the shared marker walk (``apps/`` + ``packages/``) rather than a
+    hand-counted ``parents[N]``: this file sits 5 levels below the root, so the
+    old ``parents[5]`` landed one directory *above* the repo and every pooled
+    store (``uploads_mogdb``, ``companion_mogdb``, ``experiments_*``,
+    ``auth_mogdb``) was written outside it — split from the in-repo
+    ``<repo>/data`` that ``auth.py`` and ``docstore.py`` use.
+    """
     global _REPO_ROOT
     if _REPO_ROOT is None:
-        _REPO_ROOT = Path(__file__).resolve().parents[5]
+        from domain.shared import find_repo_root
+
+        _REPO_ROOT = find_repo_root(Path(__file__).resolve())
     return _REPO_ROOT
 
 
