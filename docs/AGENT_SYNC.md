@@ -410,7 +410,26 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `79882584d`)
+## Landed on main (origin/main = `55bae17f0`)
+
+- **2026-10-09 · packaging egg_info hard-fail fixed** (card `56cf354c`,
+  fix `b53487b3b`, gate 18 passed + wheel build): `a29f5d5b8` retargeted include
+  patterns `domains*`→`domain*` but left `package_dir`/`where` on the old layout —
+  after the dual-tree deletion, discovery found `domain` at the repo root and
+  `{"" = "packages/core-py"}` mapped it to the nonexistent dir → the documented
+  `pip install -e ".[dev]"` could not build. **Three configs had drifted** (setup.py
+  still on the core root + deleted `apps.cli.sloughgpt`; pyproject 3 find roots
+  under 1 map; installed editable finder maps deleted `domains` tree with no
+  `domain` entry). Fix: pyproject = single source root (`package-dir {"" = "."}`,
+  `where = ["."]`, exclude `*.tests*` so `apps.cli.tests` can't leak), `setup.py`
+  = thin `setup()` shim; `tests/test_packaging_config.py` pins 4 invariants incl.
+  the literal egg_info trap. `pip wheel --no-deps` proves it: 4.09 MB wheel,
+  domain=618 files, console script intact. **Not done (needs approval):** actually
+  reinstalling the editable package — the live env's finder still maps the deleted
+  `domains` tree (runtime unaffected: PYTHONPATH covers `domain`). Part B of the
+  card (pytest.ini pythonpath / mixed-root conftest collision) verified
+  **fixed-elsewhere** on main; the surviving TraitWeights contract-drift cluster
+  (4F in `domain.context._internal.managers`) handed to card `20260924_031`.
 
 - **2026-10-09 · "Never-run areas" reds closed** (card `c59d5be7`,
   dup `ffdb5151` marked; fix `9d7c77f79`, gate 133 passed/4 skipped/0 failed):
