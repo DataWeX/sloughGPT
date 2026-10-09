@@ -39,7 +39,7 @@ COLS = 80
 _STALE_REDRAW = pytest.mark.skip(
     reason=(
         "product bug graphics.py:431 Framebuffer.composite(): default-space "
-        'cells are transparent, so layer.clear() cannot erase painted cells '
+        "cells are transparent, so layer.clear() cannot erase painted cells "
         "(stale glyphs survive redraw). Assertion left asserting the correct "
         "behaviour."
     )
@@ -350,10 +350,12 @@ class _TuiSession:
             # buffering=1 (line) matches the tty semantics the interpreter gives
             # its own sys.stdout; the default would be 8192-byte block buffering
             # and frames would sit unflushed until wait_until() times out.
-            sys.stdout = open(1, "w", encoding="utf-8", errors="replace",
-                              closefd=False, buffering=1)
-            sys.stderr = open(2, "w", encoding="utf-8", errors="replace",
-                              closefd=False, buffering=1)
+            sys.stdout = open(
+                1, "w", encoding="utf-8", errors="replace", closefd=False, buffering=1
+            )
+            sys.stderr = open(
+                2, "w", encoding="utf-8", errors="replace", closefd=False, buffering=1
+            )
             winsz = struct.pack("HHHH", self.rows, self.cols, 0, 0)
             fcntl.ioctl(1, termios.TIOCSWINSZ, winsz)
 
