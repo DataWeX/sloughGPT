@@ -53,6 +53,10 @@ def test_repo_root_is_not_a_parent_of_the_repo() -> None:
 
 def test_get_db_paths_land_inside_repo(monkeypatch, tmp_path) -> None:
     """Both the DB path and its sync dir must live under <repo>/data."""
+    # The api-server conftest sets SLO_DATA_DIR to keep suites off the live
+    # store; this test asserts the default (unredirected) layout.
+    monkeypatch.delenv("SLO_DATA_DIR", raising=False)
+
     captured: dict[str, str] = {}
 
     class _FakeDB:
@@ -93,3 +97,55 @@ def test_module_is_importable_without_side_effects() -> None:
     """Importing db_pool must not create or touch any data directory."""
     assert "infrastructure.db_pool" in sys.modules
     assert db_pool._POOL == {}, "importing db_pool populated the pool"
+
+
+def test_slo_data_dir_redirects_pooled_stores(monkeypatch, tmp_path) -> None:
+    """``SLO_DATA_DIR`` must redirect every pooled store away from <repo>/data.
+
+    Without this, API-server suites that POST fixtures write ``test-*``/``dup-*``
+    documents into the live production stores.
+    """
+    redirect = tmp_path / "scratch"
+    monkeypatch.setenv("SLO_DATA_DIR", str(redirect))
+
+    captured: dict[str, str] = {}
+
+    class _FakeDB:
+        def __init__(self, db_path: str, *, sync_dir: str | None = None) -> None:
+            captured["db_path"] = db_path
+            captured["sync_dir"] = sync_dir
+
+    import mogdb
+
+    monkeypatch.setattr(mogdb, "MogDB", _FakeDB)
+
+    db_pool.get_db("companion_mogdb")
+
+    assert Path(captured["db_path"]) == redirect / "companion_mogdb"
+    assert Path(captured["sync_dir"]) == redirect / "companion_json"
+    for key in ("db_path", "sync_dir"):
+        assert not Path(captured[key]).is_relative_to(_TRUE_ROOT / "data"), (
+            f"{key} still points into the live <repo>/data tree"
+        )
+
+
+def test_default_data_root_is_repo_data(monkeypatch) -> None:
+    """With no override, stores stay under the real <repo>/data."""
+    monkeypatch.delenv("SLO_DATA_DIR", raising=False)
+    assert db_pool._data_root() == _TRUE_ROOT / "data"
+
+
+def test_slo_data_dir_changes_the_pool_key(monkeypatch, tmp_path) -> None:
+    """A redirected store must not share the singleton with the live one."""
+    import mogdb
+
+    class _FakeDB:
+        def __init__(self, db_path: str, *, sync_dir: str | None = None) -> None:
+            pass
+
+    monkeypatch.setattr(mogdb, "MogDB", _FakeDB)
+
+    live = db_pool.get_db("uploads_mogdb")
+    monkeypatch.setenv("SLO_DATA_DIR", str(tmp_path / "scratch"))
+    redirected = db_pool.get_db("uploads_mogdb")
+    assert live is not redirected, "the override reused the live pooled instance"

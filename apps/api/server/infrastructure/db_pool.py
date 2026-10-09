@@ -35,6 +35,18 @@ def _get_repo_root() -> Path:
     return _REPO_ROOT
 
 
+def _data_root() -> Path:
+    """Directory pooled stores live under — ``<repo>/data`` unless overridden.
+
+    ``SLO_DATA_DIR`` (same shape as the existing ``SLO_CACHE_DIR``) redirects
+    every pooled store at once.  Tests use it to keep their fixtures out of the
+    live ``data/`` tree, which previously accumulated ``test-*``/``dup-*``/``del-*``
+    junk from every suite run.
+    """
+    override = os.environ.get("SLO_DATA_DIR", "").strip()
+    return Path(override) if override else _get_repo_root() / "data"
+
+
 # Process-wide singleton cache: (db_path, sync_path) -> MogDB instance
 _POOL: dict[tuple[str, str], MogDB] = {}
 
@@ -55,9 +67,9 @@ def get_db(db_name: str, *, sync_dir_name: str | None = None) -> MogDB:
     if sync_dir_name is None:
         sync_dir_name = db_name.replace("_mogdb", "_json")
 
-    repo_root = _get_repo_root()
-    db_path = os.path.join(repo_root, "data", db_name)
-    sync_path = os.path.join(repo_root, "data", sync_dir_name)
+    data_root = _data_root()
+    db_path = os.path.join(data_root, db_name)
+    sync_path = os.path.join(data_root, sync_dir_name)
 
     key = (db_path, sync_path)
     if key not in _POOL:
