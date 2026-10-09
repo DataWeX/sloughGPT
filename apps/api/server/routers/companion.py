@@ -237,8 +237,8 @@ class CompanionRouter:
             # the collection is empty, so this repairs the fresh-install case
             # (the four defaults did not exist yet, and the first POST /preset
             # answered 404 for "warm") without a count() round-trip on the
-            # happy path.
-            _seed_default_presets()
+            # happy path. Off-loop because the fresh-install path inserts.
+            await asyncio.to_thread(_seed_default_presets)
             preset = col.find_one({"id": preset_id})
         if not preset:
             raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
@@ -289,7 +289,8 @@ class CompanionRouter:
     @endpoint("companion.list_presets")
     async def list_presets(self) -> dict:
         """Return the list of available companion presets."""
-        _seed_default_presets()
+        # Seeding inserts the defaults on a fresh install — off the loop.
+        await asyncio.to_thread(_seed_default_presets)
         presets = _load_presets()
         return success_response(data={"presets": presets})
 

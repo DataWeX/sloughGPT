@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import secrets
@@ -179,13 +180,18 @@ class ApiKeysRouter:
         self, req: CreateKeyRequest, auth_user: dict = Depends(require_auth_if_enabled)
     ) -> dict:
         workspace_id, user_id = self._get_workspace_user(auth_user)
-        key = self._manager.create(
-            req.name,
-            scopes=req.scopes,
-            expires_at=req.expires_at,
-            workspace_id=workspace_id,
-            user_id=user_id,
-        )
+
+        def _store():
+            return self._manager.create(
+                req.name,
+                scopes=req.scopes,
+                expires_at=req.expires_at,
+                workspace_id=workspace_id,
+                user_id=user_id,
+            )
+
+        # create() journals + fsyncs under the store lock — off the loop.
+        key = await asyncio.to_thread(_store)
         return success_response(data=key)
 
     @endpoint("api_keys.list")
@@ -204,7 +210,8 @@ class ApiKeysRouter:
     @endpoint("api_keys.delete")
     async def delete_key(self, key_id: str) -> dict:
         try:
-            self._manager.revoke(key_id)
+            # revoke() journals + fsyncs under the store lock.
+            await asyncio.to_thread(self._manager.revoke, key_id)
         except ValueError as e:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
         return success_response(data={"revoked": True})
@@ -212,7 +219,8 @@ class ApiKeysRouter:
     @endpoint("api_keys.rotate")
     async def rotate_key(self, key_id: str) -> dict:
         try:
-            new_key = self._manager.rotate(key_id)
+            # rotate() revokes then creates — two journal appends + fsyncs.
+            new_key = await asyncio.to_thread(self._manager.rotate, key_id)
         except ValueError as e:
             raise_error(str(e), "E_NOT_FOUND", status_code=404)
         return success_response(data=new_key)
