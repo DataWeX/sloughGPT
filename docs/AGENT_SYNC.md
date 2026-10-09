@@ -412,6 +412,21 @@ git push -u origin feat/<name>   # push your own branch when done
 
 ## Landed on main (origin/main = `1d95ba665`)
 
+- **2026-10-09 · docs truth-up (Group D of `b22e878a`)** (branch
+  `fix/doc-claim-rot`, card `b22e878a` Group D): corrected 8 stale doc claims
+  against origin/main cd9db5d35 — ROADMAP g7/g8 (voyager→avion:
+  packages/voyager is now a shim, real lib packages/avion 29 test files/7
+  backends), g10 (consciousness 500 fixed, router uses domain.cognition
+  facade), PROD_ENG bad-example blocks marked historical + router count
+  22→58, DOC_VS_CODE_GAP_AUDIT table re-measured via
+  check_docs_api_parity.py (607 routes/58 routers in parity; routers.md
+  drift 120→129 owned by G1 card 34b396b7). Claims 4 (consciousness wired)
+  and 7 (USER_JOURNEYS results path) already correct on main — no edit.
+  Note: routers are 0 domain.*._internal on main (ratchet baseline empty);
+  the card's '13 routers' audit described the diverged db-pool branch;
+  controllers still 30 _internal refs (models/datasets/feedback/health) =
+  Groups B/C remain.
+
 - **2026-10-09 · trait-weights born-red tests synced** (card
   `20260924_031_sync-session-feedback-batch`, fix `94615612c`, gate 1124
   passed/0 failed vs baseline 1120/4): all 4 reds broken at birth in
