@@ -29,7 +29,7 @@ Install from the **repository root** so imports resolve: `python3 -m pip install
 
 For **npm** work (`sdk-ts/typescript-sdk/` and **`apps/web/`**), use the **Node** version in **`.nvmrc`** at the repo root (`nvm use` / `fnm use`; matches CI).
 
-For **`sdk-py/`** changes, run **`python3 -m pytest tests/test_sdk.py`** (CI job **`sdk-test-py`**).
+For **`sdk-py/`** changes, run **`python3 -m pytest tests/test_sdk.py`** (CI job **`test-sdk-py`**).
 
 For **`standards/`** changes, run **`python3 scripts/validate_standards_schemas.py`** (**`jsonschema`** is included in **`python3 -m pip install -e ".[dev]"`**; otherwise **`python3 -m pip install jsonschema`**). CI job **`standards-schemas`**.
 

@@ -17,6 +17,7 @@ on:
       - "packages/chargectl/**"
       - "packages/downcraft/**"
       - "packages/infra-lib/**"
+      - "packages/standards/**"
       - ".github/workflows/packages.yml"
   pull_request:
     paths:
@@ -26,6 +27,7 @@ on:
       - "packages/chargectl/**"
       - "packages/downcraft/**"
       - "packages/infra-lib/**"
+      - "packages/standards/**"
       - ".github/workflows/packages.yml"
   workflow_dispatch:
 
@@ -99,3 +101,21 @@ jobs:
         run: >
           python -m pytest "${{ matrix.path }}/tests"
           -q --tb=short -p no:cacheprovider
+
+  # packages/README.md has promised a `standards-schemas` CI job, but no
+  # workflow defined one -- the promise was unbacked. Wired up here.
+  # validate_standards_schemas.py returns 1 when jsonschema is missing, so a
+  # broken install fails loudly instead of validating nothing and passing.
+  standards-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install jsonschema
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install jsonschema
+      - name: Validate standards examples
+        run: python scripts/validate_standards_schemas.py
