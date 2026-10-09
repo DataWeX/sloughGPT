@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import subprocess
 import time as _time
 from collections.abc import AsyncGenerator
@@ -145,16 +146,61 @@ class FromSessionsRequest(BaseModel):
     session_ids: list[str] | None = None
 
 
+_CONDA_ENV_NAME = "sloughgpt"
+
+
+def _conda_python_candidates() -> list[Path]:
+    """Interpreter candidates from the conda install, best-first.
+
+    Prefers an *active* ``sloughgpt`` env, then derives the default env
+    location from whichever conda is on PATH — so this works wherever conda
+    is installed instead of assuming ``~/miniconda3``.
+    """
+    candidates: list[Path] = []
+
+    prefix = os.environ.get("CONDA_PREFIX", "")
+    if prefix:
+        p = Path(prefix)
+        if p.name == _CONDA_ENV_NAME:
+            candidates.append(p / "bin" / "python")
+        candidates.append(p / "envs" / _CONDA_ENV_NAME / "bin" / "python")
+
+    conda_exe = os.environ.get("CONDA_EXE", "")
+    if conda_exe:
+        root = Path(conda_exe).parent.parent
+        candidates.append(root / "envs" / _CONDA_ENV_NAME / "bin" / "python")
+
+    # CONDA_PREFIX/CONDA_EXE can both derive the same path — keep it unique
+    # so the candidate list reads as distinct options, not a repeated guess.
+    return list(dict.fromkeys(candidates))
+
+
 def _training_python(repo_root: Path) -> Path:
     """Interpreter the training subprocess runs under — the one owner of that path.
 
-    ``.venv`` is the *only* environment precondition either training endpoint
-    has, and it is gitignored, so it is absent on a fresh clone. Both call sites
-    used to inline ``repo_root / ".venv" / "bin" / "python3"``, which left an
-    SSE-flow test that already mocked ``subprocess.Popen`` still hitting a real
-    ``Path.exists()`` — that test passed only where a local ``.venv`` happened
-    to exist, and failed with ``E_ENV_MISSING`` where it did not.
+    Training needs the project environment (torch, transformers, the pinned dep
+    set), so it resolves to the conda ``sloughgpt`` env that AGENTS.md pins as
+    the project interpreter. ``SLO_TRAINING_PYTHON`` overrides it explicitly.
+
+    ``.venv`` survives only as a last-resort fallback: it is gitignored, so it
+    is absent on a fresh clone, and both endpoints used to hard-code it. That
+    left an SSE-flow test which already mocked ``subprocess.Popen`` still
+    hitting a real ``Path.exists()`` — it passed only where a local ``.venv``
+    happened to exist and failed with ``E_ENV_MISSING`` everywhere else.
+
+    Deliberately returns the best *candidate* rather than silently substituting
+    ``sys.executable``: the caller's pre-flight ``exists()`` is what raises
+    E_ENV_MISSING, so a missing env stays a loud error instead of quietly
+    spawning training in whatever interpreter happens to be serving the API.
     """
+    override = os.environ.get("SLO_TRAINING_PYTHON")
+    if override:
+        return Path(override)
+
+    for candidate in _conda_python_candidates():
+        if candidate.exists():
+            return candidate
+
     return repo_root / ".venv" / "bin" / "python3"
 
 

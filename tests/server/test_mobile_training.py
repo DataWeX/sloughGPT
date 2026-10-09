@@ -493,3 +493,76 @@ class TestParamValidation:
 
     def test_export_wrong_method_is_405(self):
         assert client.post("/mobile/train/export").status_code == 405
+
+
+class TestTrainingPython:
+    """The training interpreter resolves to the project conda env, not .venv.
+
+    Training needs torch/transformers and the pinned dep set, so it must run in
+    the conda ``sloughgpt`` env AGENTS.md pins as the project interpreter.
+    ``.venv`` is gitignored and absent on a fresh clone — hard-coding it is what
+    made these endpoints 500 with E_ENV_MISSING.
+    """
+
+    def test_override_wins(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.setenv("SLO_TRAINING_PYTHON", "/opt/custom/bin/python")
+        assert _training_python(tmp_path) == Path("/opt/custom/bin/python")
+
+    def test_active_conda_env_is_preferred(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+        env_python = tmp_path / "envs" / "sloughgpt" / "bin" / "python"
+        env_python.parent.mkdir(parents=True)
+        env_python.touch()
+        monkeypatch.setenv("CONDA_PREFIX", str(tmp_path / "envs" / "sloughgpt"))
+
+        assert _training_python(tmp_path) == env_python
+
+    def test_base_conda_prefix_derives_env_path(self, monkeypatch, tmp_path):
+        # CONDA_PREFIX pointing at *base* conda: envs live underneath it.
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+        env_python = tmp_path / "envs" / "sloughgpt" / "bin" / "python"
+        env_python.parent.mkdir(parents=True)
+        env_python.touch()
+        monkeypatch.setenv("CONDA_PREFIX", str(tmp_path))
+
+        assert _training_python(tmp_path) == env_python
+
+    def test_conda_exe_derives_env_path(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
+        env_python = tmp_path / "envs" / "sloughgpt" / "bin" / "python"
+        env_python.parent.mkdir(parents=True)
+        env_python.touch()
+        monkeypatch.setenv("CONDA_EXE", str(tmp_path / "bin" / "conda"))
+
+        assert _training_python(tmp_path) == env_python
+
+    def test_falls_back_to_venv_when_no_conda(self, monkeypatch, tmp_path):
+        from apps.api.server.routers.mobile import _training_python
+
+        monkeypatch.delenv("SLO_TRAINING_PYTHON", raising=False)
+        monkeypatch.delenv("CONDA_PREFIX", raising=False)
+        monkeypatch.delenv("CONDA_EXE", raising=False)
+
+        assert _training_python(tmp_path) == tmp_path / ".venv" / "bin" / "python3"
+
+    def test_candidates_are_deduped(self, monkeypatch, tmp_path):
+        # CONDA_PREFIX and CONDA_EXE can derive the same path; the list must
+        # not present the same interpreter twice.
+        from apps.api.server.routers.mobile import _conda_python_candidates
+
+        monkeypatch.setenv("CONDA_PREFIX", str(tmp_path))
+        monkeypatch.setenv("CONDA_EXE", str(tmp_path / "bin" / "conda"))
+        candidates = _conda_python_candidates()
+
+        assert len(candidates) == len(set(candidates))
