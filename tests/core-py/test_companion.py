@@ -185,13 +185,15 @@ class TestCompanionSystem:
 
     def test_adjust_for_mood_down(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.5
+        # Traits are configured through set_personality(), which also refreshes
+        # _base_traits — the anchor mood deltas are applied against.
+        c.set_personality(warmth=0.5)
         c.adjust_for_mood("down")
         assert c.traits.warmth == pytest.approx(0.7)
 
     def test_adjust_for_mood_upset(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.9
+        c.set_personality(warmth=0.9)
         c.adjust_for_mood("upset")
         # min(1.0, 0.9 + 0.2) = 1.0
         assert c.traits.warmth == pytest.approx(1.0)
@@ -204,7 +206,7 @@ class TestCompanionSystem:
 
     def test_adjust_for_mood_excited(self):
         c = CompanionSystem()
-        c.traits.warmth = 0.8
+        c.set_personality(warmth=0.8)
         c.adjust_for_mood("excited")
         assert c.traits.warmth == pytest.approx(0.9)
 
