@@ -410,7 +410,23 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `1d95ba665`)
+## Landed on main (origin/main = `0a2733760`)
+
+- **2026-10-09 · header screenshot tests** (card `ec2ae5c1`, fix
+  `731aaa6de`, gate 2 passed/65.7s on the live :5173 stack): the 2026-08-30
+  "screenshot our headers across pages" ask had a capture script
+  (`apps/web/scripts/screenshot_headers.py`, manual, `:3010`, no
+  assertions) but nothing ran it as a test. New
+  `tests/test_header_screenshots.py` **importlib-loads the script (reuse,
+  no copy)**: 8-page nav slice + 3 viewports + one basic interaction
+  (click `a[href="/chat"]` → assert `location.pathname` → post-click
+  shot), asserting PNG magic/size/width/**≥30 unique colors** (blank-shell
+  detector). Slow-marked + `timeout(300)`, skips without a live stack
+  (`SLO_WEB_URL`/`:5173`, same contract as `test_user_journeys`).
+  **Gotcha:** avion's source path (`packages/avion/src`) must be on
+  `sys.path` *before* `pytest.importorskip("avion")` or the module
+  skips itself; the script's hardcoded `:3010` is the Cypress/Next e2e
+  port — the live stack is vite `:5173` (retarget via module global).
 
 - **2026-10-09 · trait-weights born-red tests synced** (card
   `20260924_031_sync-session-feedback-batch`, fix `94615612c`, gate 1124
