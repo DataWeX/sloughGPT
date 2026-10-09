@@ -82,7 +82,13 @@ Documentation = "https://github.com/iamtowbee/sloughGPT#readme"
 Repository = "https://github.com/iamtowbee/sloughGPT"
 
 [tool.setuptools]
-package-dir = {"" = "packages/core-py", "apps" = "apps"}
+# Dual-tree consolidation moved `domain` from packages/core-py/domains to the
+# repo root (cards 20260924_047..058), but package-dir still mapped the whole
+# tree under packages/core-py — discovery found `domain` via the "." root and
+# the map pointed it at the deleted packages/core-py/domain, hard-failing
+# `python setup.py egg_info` (card 56cf354c). Single source root: package-dir
+# and packages.find must agree, and setup.py is a thin shim over this file.
+package-dir = {"" = "."}
 include-package-data = true
 
 [tool.setuptools.package-data]
@@ -90,9 +96,9 @@ domain = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 apps = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 
 [tool.setuptools.packages.find]
-where = ["packages/core-py", "packages", "."]
+where = ["."]
 include = ["domain*", "utils*", "apps*", "memory*"]
-exclude = ["tests*", "apps.web*"]
+exclude = ["tests*", "*.tests*", "apps.web*"]
 
 [tool.black]
 line-length = 100
