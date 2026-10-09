@@ -23,6 +23,7 @@ import faulthandler
 import logging
 import os
 import sys
+import threading
 import time
 import warnings
 from contextlib import asynccontextmanager
@@ -217,6 +218,12 @@ async def lifespan(app_inst: FastAPI):
         _cancel_stack_dump_timer()
 
 
+# Periodic stack-dump timer state (GIL-held mode); see
+# _install_stack_dump_timer / _stack_dump_loop below.
+_stack_dump_stop: threading.Event | None = None
+_stack_dump_thread: threading.Thread | None = None
+
+
 def _install_stack_dump_timer() -> None:
     """Periodically dump all thread stacks to stderr when ``SLO_DUMP_STACKS=1``.
 
@@ -225,29 +232,89 @@ def _install_stack_dump_timer() -> None:
     loop). Off by default; interval configurable via ``SLO_DUMP_STACKS_INTERVAL``
     seconds (default 30).
 
+    Default mode is GIL-held: a daemon thread calls
+    ``faulthandler.dump_traceback()`` while holding the GIL, so the walk can
+    never observe another thread's frame being pushed/popped underneath it.
+    faulthandler's native timer (``dump_traceback_later``) dumps *without*
+    the GIL — it works during a total-GIL wedge, but on CPython 3.11+ frames
+    live on each thread's native C stack, so the GIL-less walk races frame
+    push/pop and can SEGV the process inside the dump itself (slough-api
+    crashed 10x from this on Oct 8-9 2026; every crash left the API dead
+    ~5 min while the ~1GB core was written). Opt in with
+    ``SLO_DUMP_STACKS_GILLESS=1`` only while actively debugging a wedge and
+    accept the crash risk.
+
     Side effects:
-        - registers a faulthandler repeating timer dumping to stderr
+        - starts the GIL-held dumper daemon thread (default), or
+        - registers faulthandler's native watchdog timer (gilless opt-in)
     """
     if os.environ.get("SLO_DUMP_STACKS", "0").lower() not in ("1", "true", "yes"):
         return
+    import threading
+
+    global _stack_dump_stop, _stack_dump_thread
     try:
         interval = float(os.environ.get("SLO_DUMP_STACKS_INTERVAL", "30"))
-        faulthandler.dump_traceback_later(interval, repeat=True)
+        _cancel_stack_dump_timer()  # idempotent re-install
+        if os.environ.get("SLO_DUMP_STACKS_GILLESS", "0").lower() in ("1", "true", "yes"):
+            faulthandler.dump_traceback_later(interval, repeat=True)
+            mode = "gilless-UNSAFE"
+        else:
+            _stack_dump_stop = threading.Event()
+            _stack_dump_thread = threading.Thread(
+                target=_stack_dump_loop,
+                args=(interval, _stack_dump_stop),
+                daemon=True,
+                name="stack-dump",
+            )
+            _stack_dump_thread.start()
+            mode = "gil-held"
         logger.info(
-            "faulthandler stack dump active every %ss (SLO_DUMP_STACKS=1)",
+            "faulthandler stack dump active every %ss (SLO_DUMP_STACKS=1, mode=%s)",
             interval,
+            mode,
             extra={"tag": "START"},
         )
     except Exception as exc:
         logger.warning("faulthandler stack dump not installed: %s", exc, extra={"tag": "START"})
 
 
+def _stack_dump_loop(interval: float, stop: threading.Event) -> None:
+    """Dump all thread stacks to stderr every ``interval``s until ``stop``.
+
+    Runs as a daemon thread; ``faulthandler.dump_traceback`` executes under
+    this thread's GIL, which freezes every other thread's frame chain for
+    the duration of the walk — the race that made the GIL-less native timer
+    SEGV cannot occur here.
+
+    Emits the same ``Timeout (h:mm:ss)!`` header as faulthandler's native
+    timer so existing journal greps keep matching.
+    """
+    while not stop.wait(interval):
+        try:
+            secs = int(interval)
+            sys.stderr.write(
+                "Timeout (%d:%02d:%02d)!\n" % (secs // 3600, (secs % 3600) // 60, secs % 60)
+            )
+            sys.stderr.flush()
+            faulthandler.dump_traceback(sys.stderr, all_threads=True)
+            sys.stderr.flush()
+        except Exception as exc:
+            # Diagnostics must never kill their own thread — log and retry.
+            logger.warning("stack dump failed: %s", exc, extra={"tag": "START"})
+
+
 def _cancel_stack_dump_timer() -> None:
-    """Cancel the faulthandler dump timer installed by ``_install_stack_dump_timer``."""
+    """Cancel the stack dump timer (GIL-held thread and/or native timer)."""
+    global _stack_dump_stop, _stack_dump_thread
     try:
         faulthandler.cancel_dump_traceback_later()
     except Exception as e:
         logger.warning("Faulthandler cancel failed: %s", e)
+    if _stack_dump_stop is not None:
+        _stack_dump_stop.set()
+    _stack_dump_stop = None
+    _stack_dump_thread = None
 
 
 # ── FastAPI application ─────────────────────────────────────────────
