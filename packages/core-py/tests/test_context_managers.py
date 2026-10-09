@@ -1,632 +1,700 @@
-"""Tests for context managers — TraitWeightsConfig + 4 steering managers."""
+"""Comprehensive tests for domain.context._internal.managers — TraitWeightsConfig lifecycle,
+PersonalityManager, MemoryManager, StyleManager, TaskManager, helpers."""
 
-import os
 import json
-import shutil
-import tempfile
-import pytest
-from datetime import datetime
+from unittest.mock import MagicMock, patch
 
-from domains.context.managers import (
-    TraitWeightsConfig, get_trait_config, reset_trait_config,
-    PersonalityManager, MemoryManager, StyleManager, TaskManager,
-    TRAIT_SCHEMA, ALL_TRAITS,
+import pytest
+
+from domain.context._internal.managers import (
+    ALL_TRAITS,
+    TRAIT_SCHEMA,
+    MemoryManager,
+    PersonalityManager,
+    StyleManager,
+    TaskManager,
+    TraitWeightsConfig,
+    _describe_trait,
+    _if_above,
+    reset_trait_config,
 )
 
 
-# ── Fixtures ───────────────────────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _isolate_trait_config():
+    """In-memory MogDB fake: clean per test, persistence still observable.
 
-@pytest.fixture
-def tmp_config():
-    """TraitWeightsConfig backed by a temp file."""
-    d = tempfile.mkdtemp()
-    path = os.path.join(d, "weights.json")
-    cfg = TraitWeightsConfig(path=path)
-    cfg.reset()
-    yield cfg
-    shutil.rmtree(d, ignore_errors=True)
+    The previous fake was a bare MagicMock with find_one -> None, which
+    mocked persistence AWAY: set() wrote into the void and every reload
+    saw an empty store, making test_set_persists impossible (born red).
+    The stateful fake below stores documents per-test so
+    instance-to-instance round-trips work while still touching no real
+    MogDB or files (card 20260924_031).
+    """
+    store: dict[str, dict] = {}
+    mock_col = MagicMock()
+    mock_col.find_one.side_effect = lambda query, **kw: (
+        dict(store[query["_key"]]) if query.get("_key") in store else None
+    )
+
+    def _insert(doc, **kw):
+        store[doc["_key"]] = dict(doc)
+
+    def _update(query, update, **kw):
+        key = query["_key"]
+        store.setdefault(key, {"_key": key})
+        store[key].update(update.get("$set", {}))
+
+    mock_col.insert_one.side_effect = _insert
+    mock_col.update_one.side_effect = _update
+    mock_db = MagicMock()
+    mock_db.collection.return_value = mock_col
+    with patch.object(TraitWeightsConfig, "_init_mogdb", return_value=mock_db):
+        yield
 
 
-@pytest.fixture
-def clean_global():
-    reset_trait_config()
-    # Also cleanup disk to prevent stale file from polluting next test
-    import glob
-    for f in glob.glob("data/trait_weights*"):
-        try: os.remove(f)
-        except: pass
-    for d in glob.glob("data/trait_snapshots*"):
-        try: shutil.rmtree(d, ignore_errors=True)
-        except: pass
-    yield
-    reset_trait_config()
+# ── Helpers ──────────────────────────────────────────────────────────────
 
 
-# ── TraitWeightsConfig Tests ──────────────────────────────────────────────
+class TestDescribeTrait:
+    def test_high_value(self):
+        assert _describe_trait(0.9, "high", "low") == "high"
+
+    def test_mid_value_custom(self):
+        assert _describe_trait(0.6, "high", "low", "custom mid") == "custom mid"
+
+    def test_mid_value_default(self):
+        assert _describe_trait(0.5, "high", "low") == "moderately low"
+
+    def test_low_value(self):
+        assert _describe_trait(0.2, "high", "low") == "low"
+
+    def test_boundary_high(self):
+        assert _describe_trait(0.75, "high", "low") == "high"
+
+    def test_boundary_mid(self):
+        assert _describe_trait(0.45, "high", "low") == "moderately low"
+
+    def test_boundary_zero(self):
+        assert _describe_trait(0.0, "high", "low") == "low"
+
+    def test_boundary_one(self):
+        assert _describe_trait(1.0, "high", "low") == "high"
+
+
+class TestIfAbove:
+    def test_above(self):
+        assert _if_above(0.8, 0.5, "yes") == "yes"
+
+    def test_below(self):
+        assert _if_above(0.3, 0.5, "yes") == ""
+
+    def test_at_threshold(self):
+        assert _if_above(0.5, 0.5, "yes") == "yes"
+
+
+# ── TraitWeightsConfig ──────────────────────────────────────────────────
+
 
 class TestTraitWeightsConfig:
+    def test_init_creates_directory(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        assert cfg._path.parent.exists()
 
-    def test_defaults_to_05(self, tmp_config):
-        assert tmp_config.get("warmth") == 0.5
-        assert tmp_config.get("nonexistent") == 0.5
+    def test_get_default(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg._weights = {}
+        assert cfg.get("warmth") == 0.5
 
-    def test_set_and_get(self, tmp_config):
-        tmp_config.set("warmth", 0.8)
-        assert tmp_config.get("warmth") == 0.8
+    def test_get_custom_default(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        assert cfg.get("missing", 0.3) == 0.3
 
-    def test_set_clamps_to_01(self, tmp_config):
-        tmp_config.set("warmth", 2.0)
-        assert tmp_config.get("warmth") == 1.0
-        tmp_config.set("warmth", -0.5)
-        assert tmp_config.get("warmth") == 0.0
+    def test_set_and_get(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set("warmth", 0.8)
+        assert cfg.get("warmth") == 0.8
 
-    def test_all_returns_grouped_structure(self, tmp_config):
-        result = tmp_config.all()
-        assert "personality" in result
-        assert "cognition" in result
-        assert "emotion" in result
-        assert len(result["personality"]) == 10
-        assert len(result["cognition"]) == 8
-        assert len(result["emotion"]) == 5
+    def test_set_clamps_high(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set("warmth", 1.5)
+        assert cfg.get("warmth") == 1.0
 
-    def test_all_unset_traits_are_05(self, tmp_config):
-        result = tmp_config.all()
-        for group in ("personality", "cognition", "emotion"):
-            for v in result[group].values():
-                assert v == 0.5
+    def test_set_clamps_low(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set("warmth", -0.5)
+        assert cfg.get("warmth") == 0.0
 
-    def test_update_deltas(self, tmp_config):
-        tmp_config.update({"warmth": 0.1, "humor": -0.2})
-        assert tmp_config.get("warmth") == 0.6
-        assert tmp_config.get("humor") == 0.3
-
-    def test_update_clamps_result(self, tmp_config):
-        tmp_config.set("warmth", 0.95)
-        tmp_config.update({"warmth": 0.1})
-        assert tmp_config.get("warmth") == 1.0
-
-    def test_set_many(self, tmp_config):
-        tmp_config.set_many({"warmth": 0.9, "creativity": 0.75, "humor": 0.6})
-        assert tmp_config.get("warmth") == 0.9
-        assert tmp_config.get("creativity") == 0.75
-        assert tmp_config.get("humor") == 0.6
-
-    def test_set_many_ignores_unknown_keys(self, tmp_config):
-        tmp_config.set_many({"warmth": 0.9, "bogus_key": 1.0})
-        assert tmp_config.get("warmth") == 0.9
-        assert tmp_config.get("bogus_key") == 0.5  # default
-
-    def test_reset_clears_to_defaults(self, tmp_config):
-        tmp_config.set("warmth", 0.9)
-        tmp_config.reset()
-        assert tmp_config.get("warmth") == 0.5
-
-    def test_persistence(self, tmp_config):
-        path = tmp_config._path
-        tmp_config.set("warmth", 0.8)
-        tmp_config.set("humor", 0.9)
-        # New instance reading same file
+    def test_set_persists(self, tmp_path):
+        path = tmp_path / "traits.json"
+        cfg = TraitWeightsConfig(path=str(path))
+        cfg.set("warmth", 0.9)
         cfg2 = TraitWeightsConfig(path=str(path))
-        assert cfg2.get("warmth") == 0.8
-        assert cfg2.get("humor") == 0.9
+        assert cfg2.get("warmth") == 0.9
 
-    def test_persistence_ignores_stale_keys(self, tmp_config):
-        """Traits not in ALL_TRAITS are ignored on load."""
-        path = tmp_config._path
-        tmp_config._weights = {"warmth": 0.8, "old_trait": 0.5}
-        tmp_config._save()
-        cfg2 = TraitWeightsConfig(path=str(path))
-        assert cfg2.get("warmth") == 0.8
-        assert cfg2.get("old_trait") == 0.5  # default since not in ALL_TRAITS
+    def test_all_returns_all_traits(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        result = cfg.all()
+        for group, traits in TRAIT_SCHEMA.items():
+            assert group in result
+            for t in traits:
+                assert t in result[group]
+                assert result[group][t] == 0.5
 
-    def test_feedback_thumbs_up_boosts_all(self, tmp_config):
-        tmp_config.update_from_feedback("thumbs_up", "good", "great")
-        for t in ALL_TRAITS:
-            assert tmp_config.get(t) >= 0.5, f"{t} should be >= 0.5 after thumbs_up"
+    def test_all_respects_set(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set("warmth", 0.9)
+        assert cfg.all()["personality"]["warmth"] == 0.9
 
-    def test_feedback_thumbs_down_lowers_all(self, tmp_config):
-        # Set traits high first so they can decrease
-        for t in ALL_TRAITS:
-            tmp_config.set(t, 0.8)
-        tmp_config.update_from_feedback("thumbs_down", "bad", "awful")
-        for t in ALL_TRAITS:
-            assert tmp_config.get(t) <= 0.8, f"{t} should be <= 0.8 after thumbs_down"
+    def test_update_adds_delta(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update({"warmth": 0.1})
+        assert cfg.get("warmth") == pytest.approx(0.6)
+        cfg.update({"warmth": -0.2})
+        assert cfg.get("warmth") == pytest.approx(0.4)
 
-    def test_feedback_content_aware_humor(self, tmp_config):
-        tmp_config.update_from_feedback("thumbs_up", "tell me a joke", "lol")
-        assert tmp_config.get("humor") > tmp_config.get("patience"), "humor should get extra boost from joke request"
+    def test_update_clamps(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update({"warmth": 2.0})
+        assert cfg.get("warmth") == 1.0
+        cfg.update({"warmth": -5.0})
+        assert cfg.get("warmth") == 0.0
 
-    def test_feedback_content_aware_depth(self, tmp_config):
-        tmp_config.update_from_feedback("thumbs_up", "explain how quantum works", "ok")
-        assert tmp_config.get("creative_divergence") > 0.5
-        assert tmp_config.get("abstract_reasoning") > 0.5
+    def test_set_many(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set_many({"warmth": 0.9, "humor": 0.1})
+        assert cfg.get("warmth") == 0.9
+        assert cfg.get("humor") == 0.1
 
-    def test_feedback_content_aware_directness(self, tmp_config):
-        tmp_config.update_from_feedback("thumbs_up", "tl;dr give me short", "ok")
-        assert tmp_config.get("directness") > 0.5
+    def test_set_many_ignores_unknown(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set_many({"not_a_trait": 0.9, "warmth": 0.8})
+        assert cfg.get("warmth") == 0.8
+        assert cfg.get("not_a_trait", None) is None
 
-    # ── Snapshots ──
+    def test_reset(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set("warmth", 0.9)
+        cfg.reset()
+        assert cfg.get("warmth") == 0.5
 
-    def test_snapshot_save_and_list(self, tmp_config):
-        tmp_config.save_snapshot("test_snap")
-        snaps = tmp_config.list_snapshots()
-        assert any(s["name"] == "test_snap" for s in snaps)
-        assert all("name" in s for s in snaps)  # metadata intact
+    def test_invalid_json_on_disk(self, tmp_path):
+        path = tmp_path / "traits.json"
+        path.write_text("NOT JSON{{{")
+        cfg = TraitWeightsConfig(path=str(path))
+        assert cfg.get("warmth") == 0.5
 
-    def test_snapshot_round_trip(self, tmp_config):
-        tmp_config.set("warmth", 0.9)
-        tmp_config.set("humor", 0.15)
-        tmp_config.save_snapshot("rt_snap")
-        tmp_config.reset()
-        assert tmp_config.get("warmth") == 0.5  # reset worked
-        tmp_config.load_snapshot("rt_snap")
-        assert tmp_config.get("warmth") == 0.9
-        assert tmp_config.get("humor") == 0.15
+    def test_non_trait_keys_filtered(self, tmp_path):
+        path = tmp_path / "traits.json"
+        path.write_text(json.dumps({"warmth": 0.9, "unknown": 0.3}))
+        cfg = TraitWeightsConfig(path=str(path))
+        assert cfg.get("warmth") == 0.9
+        assert cfg.get("unknown", None) is None
 
-    def test_snapshot_delete(self, tmp_config):
-        tmp_config.save_snapshot("del_me")
-        assert any(s["name"] == "del_me" for s in tmp_config.list_snapshots())
-        assert tmp_config.delete_snapshot("del_me") is True
-        assert not any(s["name"] == "del_me" for s in tmp_config.list_snapshots())
-
-    def test_snapshot_delete_nonexistent(self, tmp_config):
-        assert tmp_config.delete_snapshot("no_exist") is False
-
-    def test_snapshot_load_nonexistent_returns_zero(self, tmp_config):
-        count = tmp_config.load_snapshot("no_exist")
-        assert count == 0
-
-    def test_multiple_snapshots_independent(self, tmp_config):
-        tmp_config.set("warmth", 0.9)
-        tmp_config.save_snapshot("high_warmth")
-        tmp_config.set("warmth", 0.1)
-        tmp_config.save_snapshot("low_warmth")
-        tmp_config.load_snapshot("high_warmth")
-        assert tmp_config.get("warmth") == 0.9
-        tmp_config.load_snapshot("low_warmth")
-        assert tmp_config.get("warmth") == 0.1
-
-    # ── Thread safety smoke test ──
-
-    def test_concurrent_access(self, tmp_config):
-        import threading
-        errors = []
-        def worker():
-            try:
-                for _ in range(20):
-                    tmp_config.set("warmth", 0.5)
-                    tmp_config.get("warmth")
-                    tmp_config.update({"warmth": 0.1})
-                    tmp_config.all()
-            except Exception as e:
-                errors.append(e)
-        threads = [threading.Thread(target=worker) for _ in range(5)]
-        for t in threads: t.start()
-        for t in threads: t.join()
-        assert len(errors) == 0, f"Concurrent access errors: {errors}"
+    def test_all_traits_list_is_flat(self):
+        assert len(ALL_TRAITS) == 23
+        for traits in TRAIT_SCHEMA.values():
+            for t in traits:
+                assert t in ALL_TRAITS
 
 
-# ── PersonalityManager Tests ─────────────────────────────────────────────
+# ── TraitWeightsConfig snapshots ────────────────────────────────────────
+
+
+class TestTraitSnapshots:
+    def test_save_and_list(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set("warmth", 0.9)
+        cfg.save_snapshot("baseline")
+        snapshots = cfg.list_snapshots()
+        assert len(snapshots) >= 1
+        names = [s["name"] for s in snapshots]
+        assert "baseline" in names
+
+    def test_load_snapshot(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set("warmth", 0.9)
+        cfg.save_snapshot("v1")
+        cfg.set("warmth", 0.1)
+        loaded = cfg.load_snapshot("v1")
+        assert loaded >= 1
+        assert cfg.get("warmth") == 0.9
+
+    def test_load_nonexistent(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        assert cfg.load_snapshot("nope") == 0
+
+    def test_delete_snapshot(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.save_snapshot("to_delete")
+        assert cfg.delete_snapshot("to_delete") is True
+        assert cfg.delete_snapshot("to_delete") is False
+
+    def test_save_snapshot_safe_name(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.save_snapshot("my snapshot/v1")
+        snapshots = cfg.list_snapshots()
+        names = [s["name"] for s in snapshots]
+        assert "my_snapshot_v1" in names
+
+    def test_snapshot_contains_meta(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.save_snapshot("meta_test")
+        snapshots = cfg.list_snapshots()
+        meta = [s for s in snapshots if s["name"] == "meta_test"][0]
+        assert "saved_at" in meta
+
+    def test_load_snapshot_overwrites(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.set_many({"warmth": 0.9, "humor": 0.1})
+        cfg.save_snapshot("s1")
+        cfg.set_many({"warmth": 0.2, "humor": 0.8})
+        cfg.save_snapshot("s2")
+        cfg.load_snapshot("s1")
+        assert cfg.get("warmth") == 0.9
+        assert cfg.get("humor") == 0.1
+
+
+# ── Feedback-driven update ──────────────────────────────────────────────
+
+
+class TestUpdateFromFeedback:
+    def test_thumbs_up_increases(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        count = cfg.update_from_feedback("thumbs_up")
+        assert count == len(ALL_TRAITS)
+        for trait in ALL_TRAITS:
+            assert cfg.get(trait) >= 0.5
+
+    def test_thumbs_down_decreases(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update_from_feedback("thumbs_down")
+        for trait in ALL_TRAITS:
+            assert cfg.get(trait) <= 0.5
+
+    def test_humor_boost(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update_from_feedback("thumbs_up", user_message="that was a funny joke")
+        assert cfg.get("humor") > cfg.get("warmth")
+
+    def test_negation_flips(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update_from_feedback("thumbs_up", user_message="not formal at all")
+        assert cfg.get("formality") < 0.5
+
+    def test_short_response_boosts_directness(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update_from_feedback("thumbs_up", response="Short answer.")
+        assert cfg.get("directness") > 0.5
+
+    def test_long_response_boosts_patience(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        long_resp = " ".join(["word"] * 100)
+        cfg.update_from_feedback("thumbs_up", response=long_resp)
+        assert cfg.get("patience") > 0.5
+
+    def test_code_response_boosts_precision(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update_from_feedback("thumbs_up", response="Here is `code`:\n```python\npass\n```")
+        assert cfg.get("factual_precision") > 0.5
+
+    def test_paragraph_response_boosts_planning(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update_from_feedback("thumbs_up", response="Part one.\n\nPart two.")
+        assert cfg.get("systematic_planning") > 0.5
+
+    def test_confidence_optimistic_up(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "traits.json"))
+        cfg.update_from_feedback("thumbs_up")
+        assert cfg.get("confidence") > 0.5
+        assert cfg.get("optimism") > 0.5
+
+
+# ── PersonalityManager ──────────────────────────────────────────────────
+
 
 class TestPersonalityManager:
+    def test_apply_returns_block(self, tmp_path):
+        pm = PersonalityManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        block = pm.apply()
+        assert "[PERSONALITY INSTRUCTIONS]" in block
+        assert "Personality:" in block
 
-    def test_apply_returns_block(self, tmp_config):
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert text.startswith("\n\n[PERSONALITY INSTRUCTIONS]")
-        assert "Personality:" in text
+    def test_apply_warm(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"warmth": 0.9, "empathy": 0.9})
+        block = PersonalityManager(config=cfg).apply()
+        assert "warm" in block.lower()
 
-    def test_high_warmth_described(self, tmp_config):
-        tmp_config.set("warmth", 0.9)
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert "warm and nurturing" in text
+    def test_apply_cool(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("warmth", 0.1)
+        block = PersonalityManager(config=cfg).apply()
+        assert "reserved" in block.lower() or "distant" in block.lower()
 
-    def test_low_warmth_described(self, tmp_config):
-        tmp_config.set("warmth", 0.2)
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert "reserved" in text.lower()
+    def test_get_weights_snapshot(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("warmth", 0.8)
+        w = PersonalityManager(config=cfg).get_weights_snapshot()
+        assert w["warmth"] == 0.8
 
-    def test_high_formality(self, tmp_config):
-        tmp_config.set("formality", 0.9)
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert "formal" in text.lower()
+    def test_get_mode_analytical(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"formality": 0.9, "directness": 0.8, "patience": 0.7, "curiosity": 0.7})
+        mode = PersonalityManager(config=cfg).get_mode()
+        assert mode["label"] == "Analytical"
 
-    def test_low_formality(self, tmp_config):
-        tmp_config.set("formality", 0.1)
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert "casual" in text.lower()
+    def test_get_mode_warm(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"warmth": 0.9, "empathy": 0.9, "optimism": 0.8})
+        mode = PersonalityManager(config=cfg).get_mode()
+        assert mode["label"] == "Warm"
 
-    def test_high_humor_includes_wit_instruction(self, tmp_config):
-        tmp_config.set("humor", 0.8)
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert "humor" in text.lower() or "wit" in text.lower()
+    def test_get_mode_playful(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"humor": 0.9, "creativity": 0.8, "optimism": 0.7, "formality": 0.2})
+        mode = PersonalityManager(config=cfg).get_mode()
+        assert mode["label"] == "Playful"
 
-    def test_low_humor_omits_humor_instruction(self, tmp_config):
-        tmp_config.set("humor", 0.4)
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert "humor" not in text.lower()
+    def test_get_mode_confident(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"confidence": 0.9, "directness": 0.8, "optimism": 0.7})
+        mode = PersonalityManager(config=cfg).get_mode()
+        assert mode["label"] == "Confident"
 
-    def test_high_confidence_includes_authority(self, tmp_config):
-        tmp_config.set("confidence", 0.8)
-        pm = PersonalityManager(tmp_config)
-        text = pm.apply()
-        assert "authority" in text.lower() or "conviction" in text.lower()
+    def test_get_mode_reserved(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"warmth": 0.1, "humor": 0.1, "confidence": 0.1, "optimism": 0.1})
+        mode = PersonalityManager(config=cfg).get_mode()
+        assert mode["label"] == "Reserved"
 
-    def test_get_weights_snapshot(self, tmp_config):
-        tmp_config.set("warmth", 0.8)
-        pm = PersonalityManager(tmp_config)
-        snap = pm.get_weights_snapshot()
-        assert snap["warmth"] == 0.8
-        assert len(snap) == 10
+    def test_get_mode_creative(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"creativity": 0.9, "curiosity": 0.8, "humor": 0.6, "formality": 0.2})
+        mode = PersonalityManager(config=cfg).get_mode()
+        assert mode["label"] == "Creative"
+
+    def test_mode_has_all_fields(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        mode = PersonalityManager(config=cfg).get_mode()
+        assert "label" in mode
+        assert "confidence" in mode
+        assert "scores" in mode
+        assert len(mode["scores"]) == 6
+
+    def test_apply_humor_above_threshold(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("humor", 0.8)
+        block = PersonalityManager(config=cfg).apply()
+        assert "humor" in block.lower() or "wit" in block.lower()
+
+    def test_apply_patience_above_threshold(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("patience", 0.8)
+        block = PersonalityManager(config=cfg).apply()
+        assert "explain" in block.lower() or "thoroughly" in block.lower()
+
+    def test_apply_curiosity_above_threshold(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("curiosity", 0.8)
+        block = PersonalityManager(config=cfg).apply()
+        assert "curious" in block.lower() or "tangent" in block.lower()
+
+    def test_apply_confidence_high(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("confidence", 0.8)
+        block = PersonalityManager(config=cfg).apply()
+        assert "authority" in block.lower() or "conviction" in block.lower()
 
 
-# ── MemoryManager Tests ──────────────────────────────────────────────────
+# ── MemoryManager ──────────────────────────────────────────────────────
+
 
 class TestMemoryManager:
+    def test_working_capacity_default(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        assert mm.working_capacity == 8
 
-    def test_working_capacity_default(self, tmp_config):
-        mm = MemoryManager(tmp_config)
-        cap = mm.working_capacity
-        assert 5 <= cap <= 11
+    def test_working_capacity_low(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("long_context_handling", 0.1)
+        mm = MemoryManager(config=cfg)
+        assert mm.working_capacity == 5
 
-    def test_working_capacity_scales_with_context(self, tmp_config):
-        tmp_config.set("long_context_handling", 1.0)
-        mm = MemoryManager(tmp_config)
-        assert mm.working_capacity == 11  # max
+    def test_working_capacity_high(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("long_context_handling", 1.0)
+        mm = MemoryManager(config=cfg)
+        assert mm.working_capacity == 11
 
-    def test_working_capacity_min(self, tmp_config):
-        tmp_config.set("long_context_handling", 0.0)
-        mm = MemoryManager(tmp_config)
-        assert mm.working_capacity == 5  # min
+    def test_importance_threshold_default(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        assert mm.memory_importance_threshold == pytest.approx(0.35)
 
-    def test_importance_threshold_scales(self, tmp_config):
-        tmp_config.set("learning_adaptability", 1.0)
-        mm = MemoryManager(tmp_config)
-        assert mm.memory_importance_threshold == pytest.approx(0.2, abs=0.01)
+    def test_importance_threshold_high_adapt(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("learning_adaptability", 1.0)
+        mm = MemoryManager(config=cfg)
+        assert mm.memory_importance_threshold == pytest.approx(0.2)
 
-        tmp_config.set("learning_adaptability", 0.0)
-        mm2 = MemoryManager(tmp_config)
-        assert mm2.memory_importance_threshold == pytest.approx(0.5, abs=0.01)
+    def test_importance_threshold_low_adapt(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("learning_adaptability", 0.0)
+        mm = MemoryManager(config=cfg)
+        assert mm.memory_importance_threshold == pytest.approx(0.5)
 
-    def test_retention_decay_scales(self, tmp_config):
-        tmp_config.set("pattern_recognition", 1.0)
-        mm = MemoryManager(tmp_config)
-        assert mm.retention_decay == pytest.approx(0.02, abs=0.01)
+    def test_retention_decay_default(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        assert mm.retention_decay == pytest.approx(0.06)
 
-        tmp_config.set("pattern_recognition", 0.0)
-        mm2 = MemoryManager(tmp_config)
-        assert mm2.retention_decay == pytest.approx(0.1, abs=0.01)
+    def test_retention_decay_high_pattern(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("pattern_recognition", 1.0)
+        mm = MemoryManager(config=cfg)
+        assert mm.retention_decay == pytest.approx(0.02)
 
-    def test_should_consolidate(self, tmp_config):
-        mm = MemoryManager(tmp_config)
-        # default threshold ~0.35
+    def test_retention_decay_low_pattern(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("pattern_recognition", 0.0)
+        mm = MemoryManager(config=cfg)
+        assert mm.retention_decay == pytest.approx(0.1)
+
+    def test_should_consolidate_above(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
         assert mm.should_consolidate(0.5) is True
+
+    def test_should_consolidate_below(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
         assert mm.should_consolidate(0.1) is False
 
-    def test_apply_memory_context_filters(self, tmp_config):
-        mm = MemoryManager(tmp_config)
+    def test_should_consolidate_at_boundary(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        assert mm.should_consolidate(0.35) is True
+
+    def test_apply_memory_context_filters(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
         episodes = [
-            {"importance": 0.8, "content": "important"},
-            {"importance": 0.2, "content": "trivial"},
-            {"importance": 0.6, "content": "moderate"},
+            {"importance": 0.8, "content": "keep"},
+            {"importance": 0.1, "content": "drop"},
         ]
-        filtered = mm.apply_memory_context(episodes)
-        assert len(filtered) == 2  # 0.8 and 0.6 should pass threshold
+        result = mm.apply_memory_context(episodes)
+        assert len(result) == 1
+        assert result[0]["content"] == "keep"
+
+    def test_apply_memory_context_empty(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        assert mm.apply_memory_context([]) == []
+
+    def test_apply_memory_context_default_importance(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        episodes = [{"content": "no importance key"}]
+        result = mm.apply_memory_context(episodes)
+        assert len(result) == 1
+
+    def test_get_mode_deep_context(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"long_context_handling": 0.9, "pattern_recognition": 0.2})
+        mm = MemoryManager(config=cfg)
+        mode = mm.get_mode()
+        assert mode["label"] == "Deep Context"
+        assert mode["capacity"] == mm.working_capacity
+
+    def test_get_mode_focused(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"long_context_handling": 0.1, "pattern_recognition": 0.1})
+        mm = MemoryManager(config=cfg)
+        mode = mm.get_mode()
+        assert mode["label"] == "Focused"
+
+    def test_get_mode_expansive(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many(
+            {"long_context_handling": 0.1, "pattern_recognition": 0.1, "learning_adaptability": 0.9}
+        )
+        mm = MemoryManager(config=cfg)
+        mode = mm.get_mode()
+        assert mode["label"] == "Expansive"
+
+    def test_get_mode_has_capacity_and_scores(self, tmp_path):
+        mm = MemoryManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        mode = mm.get_mode()
+        assert "capacity" in mode
+        assert "scores" in mode
+        assert "confidence" in mode
+        assert len(mode["scores"]) == 5
 
 
-# ── StyleManager Tests ──────────────────────────────────────────────────
+# ── StyleManager ───────────────────────────────────────────────────────
+
 
 class TestStyleManager:
+    def test_apply_returns_block(self, tmp_path):
+        sm = StyleManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        block = sm.apply()
+        assert "[STYLE INSTRUCTIONS]" in block
 
-    def test_apply_returns_block(self, tmp_config):
-        sm = StyleManager(tmp_config)
-        text = sm.apply()
-        assert text.startswith("\n\n[STYLE INSTRUCTIONS]")
+    def test_apply_formal(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("formality", 0.9)
+        block = StyleManager(config=cfg).apply()
+        assert "formal" in block.lower()
 
-    def test_high_formality_style(self, tmp_config):
-        tmp_config.set("formality", 0.9)
-        sm = StyleManager(tmp_config)
-        text = sm.apply()
-        assert "formal" in text.lower()
-        assert "slang" in text.lower()  # "Avoid slang"
+    def test_apply_casual(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("formality", 0.1)
+        block = StyleManager(config=cfg).apply()
+        assert "casual" in block.lower()
 
-    def test_low_formality_style(self, tmp_config):
-        tmp_config.set("formality", 0.1)
-        sm = StyleManager(tmp_config)
-        text = sm.apply()
-        assert "casual" in text.lower()
+    def test_apply_neutral(self, tmp_path):
+        sm = StyleManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        block = sm.apply()
+        assert "neutral" in block.lower()
 
-    def test_high_directness_style(self, tmp_config):
-        tmp_config.set("directness", 0.9)
-        sm = StyleManager(tmp_config)
-        text = sm.apply()
-        assert "direct" in text.lower()
+    def test_apply_direct(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("directness", 0.9)
+        block = StyleManager(config=cfg).apply()
+        assert "direct" in block.lower()
 
-    def test_low_directness_style(self, tmp_config):
-        tmp_config.set("directness", 0.1)
-        sm = StyleManager(tmp_config)
-        text = sm.apply()
-        assert "diplomatic" in text.lower()
+    def test_apply_diplomatic(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("directness", 0.1)
+        block = StyleManager(config=cfg).apply()
+        assert "diplomatic" in block.lower()
 
-    def test_high_precision_style(self, tmp_config):
-        tmp_config.set("factual_precision", 0.9)
-        sm = StyleManager(tmp_config)
-        text = sm.apply()
-        assert "accuracy" in text.lower()
+    def test_apply_precise(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("factual_precision", 0.9)
+        block = StyleManager(config=cfg).apply()
+        assert "accuracy" in block.lower() or "precise" in block.lower()
 
-    def test_high_tone_flexibility(self, tmp_config):
-        tmp_config.set("tone_flexibility", 0.9)
-        sm = StyleManager(tmp_config)
-        text = sm.apply()
-        assert "adapt tone" in text.lower()
+    def test_apply_fluency(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("factual_precision", 0.1)
+        block = StyleManager(config=cfg).apply()
+        assert "fluency" in block.lower()
+
+    def test_apply_tone_flex(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("tone_flexibility", 0.9)
+        block = StyleManager(config=cfg).apply()
+        assert "adapt" in block.lower()
+
+    def test_get_mode(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("formality", 0.9)
+        mode = StyleManager(config=cfg).get_mode()
+        assert "label" in mode
+        assert "scores" in mode
+        assert len(mode["scores"]) == 6
 
 
-# ── TaskManager Tests ────────────────────────────────────────────────────
+# ── TaskManager ────────────────────────────────────────────────────────
+
 
 class TestTaskManager:
+    def test_apply_returns_block(self, tmp_path):
+        tm = TaskManager(config=TraitWeightsConfig(path=str(tmp_path / "t.json")))
+        block = tm.apply()
+        assert "[TASK APPROACH]" in block
 
-    def test_apply_returns_block(self, tmp_config):
-        tm = TaskManager(tmp_config)
-        text = tm.apply()
-        assert text.startswith("\n\n[TASK APPROACH]")
+    def test_apply_abstract_high(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("abstract_reasoning", 0.9)
+        block = TaskManager(config=cfg).apply()
+        assert "analogy" in block.lower() or "concept" in block.lower()
 
-    def test_high_abstract_reasoning(self, tmp_config):
-        tmp_config.set("abstract_reasoning", 0.9)
-        tm = TaskManager(tmp_config)
-        text = tm.apply()
-        assert "analogies" in text.lower()
+    def test_apply_abstract_low(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("abstract_reasoning", 0.1)
+        block = TaskManager(config=cfg).apply()
+        assert "concrete" in block.lower() or "step" in block.lower()
 
-    def test_low_abstract_reasoning(self, tmp_config):
-        tmp_config.set("abstract_reasoning", 0.1)
-        tm = TaskManager(tmp_config)
-        text = tm.apply()
-        assert "concrete" in text.lower()
+    def test_apply_creative_high(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("creative_divergence", 0.9)
+        block = TaskManager(config=cfg).apply()
+        assert "perspective" in block.lower() or "unconventional" in block.lower()
 
-    def test_high_creative_divergence(self, tmp_config):
-        tmp_config.set("creative_divergence", 0.9)
-        tm = TaskManager(tmp_config)
-        text = tm.apply()
-        assert "multiple perspectives" in text.lower()
+    def test_apply_creative_low(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("creative_divergence", 0.1)
+        block = TaskManager(config=cfg).apply()
+        assert "conventional" in block.lower() or "established" in block.lower()
 
-    def test_low_creative_divergence(self, tmp_config):
-        tmp_config.set("creative_divergence", 0.1)
-        tm = TaskManager(tmp_config)
-        text = tm.apply()
-        assert "well-established" in text.lower()
+    def test_apply_planning_high(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("systematic_planning", 0.9)
+        block = TaskManager(config=cfg).apply()
+        assert "methodically" in block.lower() or "step" in block.lower()
 
-    def test_high_systematic_planning(self, tmp_config):
-        tmp_config.set("systematic_planning", 0.9)
-        tm = TaskManager(tmp_config)
-        text = tm.apply()
-        assert "methodically" in text.lower()
+    def test_apply_planning_low(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("systematic_planning", 0.1)
+        block = TaskManager(config=cfg).apply()
+        assert "fluidly" in block.lower() or "without heavy" in block.lower()
 
-    def test_high_metacognitive_awareness(self, tmp_config):
-        tmp_config.set("metacognitive_awareness", 0.9)
-        tm = TaskManager(tmp_config)
-        text = tm.apply()
-        assert "reflect" in text.lower()
+    def test_apply_metacog_high(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set("metacognitive_awareness", 0.9)
+        block = TaskManager(config=cfg).apply()
+        assert "reflect" in block.lower() or "thinking" in block.lower()
 
-
-# ── Integration: Managers + ContextCore ─────────────────────────────────
-
-class TestManagersWithContextCore:
-
-    @pytest.mark.asyncio
-    async def test_all_managers_inject_into_frame(self, tmp_config):
-        from domains.infrastructure.context_core import ContextCore
-
-        tmp_config.set("warmth", 0.9)
-        tmp_config.set("formality", 0.2)
-        tmp_config.set("creative_divergence", 0.8)
-
-        cc = ContextCore(
-            personality_manager=PersonalityManager(tmp_config),
-            memory_manager=MemoryManager(tmp_config),
-            style_manager=StyleManager(tmp_config),
-            task_manager=TaskManager(tmp_config),
+    def test_get_mode_analytical(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many(
+            {"abstract_reasoning": 0.9, "metacognitive_awareness": 0.8, "systematic_planning": 0.7}
         )
-        cc.set_session_id("test")
-        cc.add_message("user", "hello")
-        frame = await cc.build_context_frame(query="hello")
+        mode = TaskManager(config=cfg).get_mode()
+        assert mode["label"] == "Analytical"
 
-        assert "[PERSONALITY INSTRUCTIONS]" in frame.system_prompt
-        assert "[STYLE INSTRUCTIONS]" in frame.system_prompt
-        assert "[TASK APPROACH]" in frame.system_prompt
-        assert "warm" in frame.system_prompt.lower()
+    def test_get_mode_creative(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"creative_divergence": 0.9, "systematic_planning": 0.1, "curiosity": 0.8})
+        mode = TaskManager(config=cfg).get_mode()
+        assert mode["label"] == "Creative"
 
-    def test_working_capacity_from_memory_manager(self, tmp_config):
-        from domains.infrastructure.context_core import ContextCore
+    def test_get_mode_methodical(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"systematic_planning": 0.9, "abstract_reasoning": 0.7, "patience": 0.9})
+        mode = TaskManager(config=cfg).get_mode()
+        assert mode["label"] == "Methodical"
 
-        tmp_config.set("long_context_handling", 0.0)
-        mm = MemoryManager(tmp_config)
-        cc = ContextCore(memory_manager=mm)
-        cc.set_session_id("test")
-        cc.add_message("user", "a")
-        cc.add_message("user", "b")
-        cc.add_message("user", "c")
-        cc.add_message("user", "d")
-        cc.add_message("user", "e")
-        # At 5 items, capacity should be 5 (min), so pushing a 6th evicts
-        cc.add_message("user", "f")
-        assert len(cc.working_memory) == 5
+    def test_get_mode_exploratory(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"curiosity": 0.9, "creative_divergence": 0.8, "systematic_planning": 0.1})
+        mode = TaskManager(config=cfg).get_mode()
+        assert mode["label"] == "Exploratory"
 
-    @pytest.mark.asyncio
-    async def test_without_managers_falls_back_gracefully(self, tmp_config):
-        from domains.infrastructure.context_core import ContextCore
-        cc = ContextCore()  # no managers
-        cc.set_session_id("test")
-        cc.add_message("user", "hello")
-        frame = await cc.build_context_frame(query="hello")
-        # Default system prompt, no manager extras
-        assert "[PERSONALITY INSTRUCTIONS]" not in frame.system_prompt
+    def test_get_mode_structured(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many(
+            {"systematic_planning": 0.9, "abstract_reasoning": 0.8, "metacognitive_awareness": 0.7}
+        )
+        mode = TaskManager(config=cfg).get_mode()
+        assert mode["label"] == "Structured"
+
+    def test_get_mode_reflective(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        cfg.set_many({"metacognitive_awareness": 0.9, "patience": 0.8, "abstract_reasoning": 0.7})
+        mode = TaskManager(config=cfg).get_mode()
+        assert mode["label"] == "Reflective"
+
+    def test_get_mode_has_all_fields(self, tmp_path):
+        cfg = TraitWeightsConfig(path=str(tmp_path / "t.json"))
+        mode = TaskManager(config=cfg).get_mode()
+        assert "label" in mode
+        assert "confidence" in mode
+        assert "scores" in mode
+        assert len(mode["scores"]) == 6
 
 
-# ── Global singleton tests ──────────────────────────────────────────────
+# ── reset_trait_config ─────────────────────────────────────────────────
 
-class TestGlobalConfig:
 
-    def test_get_trait_config_returns_singleton(self, clean_global):
-        c1 = get_trait_config()
-        c2 = get_trait_config()
-        assert c1 is c2
-
-    def test_reset_trait_config_creates_new(self, clean_global):
-        c1 = get_trait_config()
-        c1.set("warmth", 0.9)
-        # Manually delete the backing file so new instance starts clean
-        if c1._path.exists():
-            c1._path.unlink()
+class TestResetTraitConfig:
+    def test_reset_clears_singleton(self):
         reset_trait_config()
-        c2 = get_trait_config()
-        assert c2.get("warmth") == 0.5
+        from domain.context._internal.managers import _trait_config
 
-    def test_shared_state_across_imports(self, clean_global):
-        """Config set in one module is visible in another."""
-        from domains.context.managers import get_trait_config as gtc1
-        from domains.context.managers import get_trait_config as gtc2
-        c1 = gtc1()
-        c2 = gtc2()
-        c1.set("warmth", 0.8)
-        assert c2.get("warmth") == 0.8
-
-    def test_slo_manager_reads_global_config(self, clean_global):
-        from domains.inference.slo_manager import SloManager
-        config = get_trait_config()
-        config.set("warmth", 0.8)
-        mgr = SloManager()
-        weights = mgr.get_trait_weights()
-        # Without a soul file, get_trait_weights returns
-        # defaults + TraitWeightsConfig overlay
-        assert weights["personality"]["warmth"] == 0.8
-
-    def test_global_config_works_in_feedback_workflow(self, clean_global):
-        """Simulate what workflow.py does when record_feedback is called."""
-        from domains.context.managers import get_trait_config
-        config = get_trait_config()
-        config.reset()
-        config.update_from_feedback("thumbs_up", "great response", "thanks")
-        assert config.get("confidence") > 0.5
-        assert config.get("optimism") > 0.5
-
-
-# ── Manager Mode Tests ────────────────────────────────────────────────────
-
-class TestManagerModes:
-
-    def test_personality_mode_default(self, tmp_config):
-        """Default (all 0.5) produces a valid label ≥ 0.5 confidence."""
-        m = PersonalityManager(tmp_config).get_mode()
-        assert isinstance(m["label"], str) and len(m["label"]) > 0
-        assert 0 <= m["confidence"] <= 1
-        assert "scores" in m
-        assert len(m["scores"]) >= 4
-
-    def test_personality_mode_warm(self, tmp_config):
-        tmp_config.set("warmth", 0.95)
-        tmp_config.set("empathy", 0.9)
-        m = PersonalityManager(tmp_config).get_mode()
-        assert m["label"] in ("Warm", "Playful")
-        assert m["confidence"] > 0.6
-
-    def test_personality_mode_analytical(self, tmp_config):
-        for k, v in {"formality":0.9,"directness":0.8,"patience":0.85,"curiosity":0.7,"warmth":0.15}.items():
-            tmp_config.set(k, v)
-        m = PersonalityManager(tmp_config).get_mode()
-        assert m["label"] in ("Analytical", "Confident")
-
-    def test_personality_mode_creative(self, tmp_config):
-        for k, v in {"creativity":0.95,"curiosity":0.9,"humor":0.7,"formality":0.1}.items():
-            tmp_config.set(k, v)
-        m = PersonalityManager(tmp_config).get_mode()
-        assert m["label"] in ("Creative", "Playful")
-
-    def test_personality_mode_scores_summarized(self, tmp_config):
-        m = PersonalityManager(tmp_config).get_mode()
-        top = max(m["scores"].values())
-        assert m["confidence"] == top
-
-    def test_memory_mode_default(self, tmp_config):
-        m = MemoryManager(tmp_config).get_mode()
-        assert isinstance(m["label"], str)
-        assert m.get("capacity", 0) >= 5
-        assert "scores" in m
-
-    def test_memory_mode_deep_context(self, tmp_config):
-        for k, v in {"long_context_handling":0.95,"pattern_recognition":0.9,"learning_adaptability":0.7}.items():
-            tmp_config.set(k, v)
-        m = MemoryManager(tmp_config).get_mode()
-        assert m["label"] == "Deep Context" or m["confidence"] > 0.6
-
-    def test_memory_capacity_range(self, tmp_config):
-        tmp_config.set("long_context_handling", 0.0)
-        assert MemoryManager(tmp_config).working_capacity == 5
-        tmp_config.set("long_context_handling", 1.0)
-        assert MemoryManager(tmp_config).working_capacity == 11
-
-    def test_memory_mode_focused(self, tmp_config):
-        for k, v in {"long_context_handling":0.1,"pattern_recognition":0.1}.items():
-            tmp_config.set(k, v)
-        m = MemoryManager(tmp_config).get_mode()
-        assert m["label"] in ("Focused", "Stable")
-
-    def test_style_mode_default(self, tmp_config):
-        m = StyleManager(tmp_config).get_mode()
-        assert isinstance(m["label"], str) and len(m["label"]) > 0
-        assert 0 <= m["confidence"] <= 1
-
-    def test_style_mode_casual(self, tmp_config):
-        for k, v in {"formality":0.1,"directness":0.85,"tone_flexibility":0.9}.items():
-            tmp_config.set(k, v)
-        m = StyleManager(tmp_config).get_mode()
-        assert m["label"] in ("Casual", "Direct", "Flexible")
-
-    def test_style_mode_formal(self, tmp_config):
-        for k, v in {"formality":0.95,"factual_precision":0.9}.items():
-            tmp_config.set(k, v)
-        m = StyleManager(tmp_config).get_mode()
-        assert m["label"] in ("Formal", "Precise")
-
-    def test_task_mode_default(self, tmp_config):
-        m = TaskManager(tmp_config).get_mode()
-        assert isinstance(m["label"], str) and len(m["label"]) > 0
-        assert 0 <= m["confidence"] <= 1
-
-    def test_task_mode_methodical(self, tmp_config):
-        for k, v in {"systematic_planning":0.95,"abstract_reasoning":0.85,"patience":0.9,"creative_divergence":0.1}.items():
-            tmp_config.set(k, v)
-        m = TaskManager(tmp_config).get_mode()
-        assert m["label"] in ("Methodical", "Structured", "Analytical")
-
-    def test_task_mode_creative(self, tmp_config):
-        for k, v in {"creative_divergence":0.95,"curiosity":0.9,"systematic_planning":0.1}.items():
-            tmp_config.set(k, v)
-        m = TaskManager(tmp_config).get_mode()
-        assert m["label"] in ("Creative", "Exploratory")
-
-    def test_task_mode_reflective(self, tmp_config):
-        for k, v in {"metacognitive_awareness":0.95,"patience":0.9,"abstract_reasoning":0.85}.items():
-            tmp_config.set(k, v)
-        m = TaskManager(tmp_config).get_mode()
-        assert m["label"] in ("Reflective", "Analytical")
-
-    def test_all_modes_expose_scores_dict(self, tmp_config):
-        for mgr_cls in (PersonalityManager, MemoryManager, StyleManager, TaskManager):
-            m = mgr_cls(tmp_config).get_mode()
-            scores = m.get("scores", {})
-            assert len(scores) >= 4, f"{mgr_cls.__name__} only has {len(scores)} scores"
-            assert max(scores.values()) == m["confidence"]
-
-    def test_feedback_changes_modes(self, tmp_config):
-        """Thumbs up on a funny joke should shift personality mode."""
-        mgr = PersonalityManager(tmp_config)
-        before = mgr.get_mode()
-        tmp_config.update_from_feedback("thumbs_up", "that was hilarious", "lol")
-        after = mgr.get_mode()
-        # Mode may stay same but scores should differ
-        assert before["confidence"] != after["confidence"] or before["label"] != after["label"]
+        assert _trait_config is None

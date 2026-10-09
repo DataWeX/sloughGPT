@@ -80,7 +80,7 @@ export const agentsController = {
     try {
       for await (const event of streamSSE('/agents/orchestrate', { body: { goal, context, agent_ids: agentIds ?? [] }, signal })) {
         if (event.status === 'error') {
-          callbacks.onError(event.message || (event.data?.error as string) || 'Orchestration failed')
+          callbacks.onError(event.message || (event.data?.error as string) || 'Could not orchestration')
           return
         }
 

@@ -12,8 +12,24 @@ vi.mock('@/lib/controllers', () => ({
 const noop = () => {}
 
 const MOCK_DATASETS = [
-  { id: '1', name: 'ds1', description: 'first', total_samples: 100, file_count: 1, total_chars: 5000, imported_at: '2024-01-01' },
-  { id: '2', name: 'ds2', description: 'second', total_samples: 200, file_count: 2, total_chars: 10000, imported_at: '2024-01-02' },
+  {
+    id: '1',
+    name: 'ds1',
+    description: 'first',
+    total_samples: 100,
+    file_count: 1,
+    total_chars: 5000,
+    imported_at: '2024-01-01',
+  },
+  {
+    id: '2',
+    name: 'ds2',
+    description: 'second',
+    total_samples: 200,
+    file_count: 2,
+    total_chars: 10000,
+    imported_at: '2024-01-02',
+  },
 ]
 
 afterEach(() => {
@@ -34,7 +50,9 @@ describe('useTrainingDatasets', () => {
   it('fetchDatasets loads datasets from controller', async () => {
     mockList.mockResolvedValue(MOCK_DATASETS)
     const { result } = renderHook(() => useTrainingDatasets(noop))
-    await act(async () => { await result.current.fetchDatasets() })
+    await act(async () => {
+      await result.current.fetchDatasets()
+    })
     expect(result.current.datasets).toEqual(MOCK_DATASETS)
     expect(result.current.loadingDatasets).toBe(false)
   })
@@ -43,9 +61,11 @@ describe('useTrainingDatasets', () => {
     const addToast = vi.fn()
     mockList.mockRejectedValue(new Error('fail'))
     const { result } = renderHook(() => useTrainingDatasets(addToast))
-    await act(async () => { await result.current.fetchDatasets() })
+    await act(async () => {
+      await result.current.fetchDatasets()
+    })
     expect(result.current.datasets).toEqual([])
-    expect(addToast).toHaveBeenCalledWith('Failed to fetch datasets', 'error')
+    expect(addToast).toHaveBeenCalledWith('Could not fetch datasets: fail', 'error')
   })
 
   it('setSelectedDataset updates selectedDataset', () => {
@@ -62,18 +82,28 @@ describe('useTrainingDatasets', () => {
 
   it('setDatasetPreview stores preview data', () => {
     const { result } = renderHook(() => useTrainingDatasets(noop))
-    const preview = { dataset_id: 'test', samples: [{ content: 'test', path: '', language: 'en', size: 4 }], total_samples: 1, total_chars: 4, languages: { en: 1 } }
+    const preview = {
+      dataset_id: 'test',
+      samples: [{ content: 'test', path: '', language: 'en', size: 4 }],
+      total_samples: 1,
+      total_chars: 4,
+      languages: { en: 1 },
+    }
     act(() => result.current.setDatasetPreview(preview))
     expect(result.current.datasetPreview).toEqual(preview)
   })
 
   it('loadingDatasets is true during fetch and false after', async () => {
-    mockList.mockImplementation(() => new Promise(r => setTimeout(r, 10)))
+    mockList.mockImplementation(() => new Promise((r) => setTimeout(r, 10)))
     const { result } = renderHook(() => useTrainingDatasets(noop))
     let promise: Promise<void>
-    act(() => { promise = result.current.fetchDatasets() })
+    act(() => {
+      promise = result.current.fetchDatasets()
+    })
     expect(result.current.loadingDatasets).toBe(true)
-    await act(async () => { await promise })
+    await act(async () => {
+      await promise
+    })
     expect(result.current.loadingDatasets).toBe(false)
   })
 })

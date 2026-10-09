@@ -7,17 +7,16 @@ thumbs_down records, then runs HFDPOTrainer.train() and asserts:
   - pairs are built from the store
   - chosen log-prob increases and rejected log-prob decreases (preference learned)
 """
+
 import os
 import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "packages", "core-py"))
 
-import numpy as np
-
-import domains.feedback.database as database
-from domains.feedback.hf_dpo import HFDPOTrainer
-from domains.training.slonet import SloLSTM
+import domain.feedback._internal.database as database
+from domain.feedback._internal.hf_dpo import HFDPOTrainer
+from domain.training._internal.slonet import SloLSTM
 
 
 class CharTokenizer:

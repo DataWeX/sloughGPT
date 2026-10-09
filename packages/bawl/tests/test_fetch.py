@@ -1,7 +1,8 @@
 """Tests for bawl.fetch"""
 
-from bawl.fetch import fetch, _throttle
 import time
+
+from bawl.fetch import _throttle, fetch
 
 
 def test_fetch_real():
@@ -15,7 +16,7 @@ def test_fetch_bad_url():
 
 
 def test_throttle():
-    t0 = time.time()
+    time.time()
     _throttle("test.local", 0.1)
     t1 = time.time()
     _throttle("test.local", 0.1)

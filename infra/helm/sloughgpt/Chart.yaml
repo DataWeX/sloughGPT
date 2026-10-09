@@ -1,0 +1,16 @@
+apiVersion: v2
+name: sloughgpt
+description: SloughGPT — self-hosted LLM infrastructure platform
+type: application
+version: 0.1.0
+appVersion: "0.3.0"
+keywords:
+  - llm
+  - ai
+  - inference
+  - training
+home: https://github.com/DataWeX/sloughGPT
+sources:
+  - https://github.com/DataWeX/sloughGPT
+maintainers:
+  - name: DataWeX

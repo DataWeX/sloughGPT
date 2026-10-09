@@ -2,17 +2,20 @@
 Tests for the VM router — run assembly, list builtins, VM info.
 """
 
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.vm import router
 
 
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -36,19 +39,21 @@ class TestVmRun:
         assert body["status"] == "empty"
 
     def test_503_when_vm_module_unavailable(self, client):
-        import apps.api.server.routers.vm as vm_mod
-        original = vm_mod.__builtins__
+
         import builtins
+
         real_import = builtins.__import__
+
         def block_vm(name, *a, **kw):
-            if name.startswith("domains.shell.vm"):
+            if name == "domain.shell" or name.startswith("domain.shell."):
                 raise ImportError("no vm")
             return real_import(name, *a, **kw)
+
         builtins.__import__ = block_vm
         try:
             resp = client.post("/vm/run", json={"source": "mov eax, 1"})
             assert resp.status_code == 503
-            assert "VM module not available" in resp.json()["detail"]
+            assert "VM module not available" in resp.json()["error"]
         finally:
             builtins.__import__ = real_import
 
@@ -81,34 +86,50 @@ class TestVmRun:
         assert body["success"] is True or body["status"] == "spawn_failed"
 
     def test_keyboard_input(self, client):
-        resp = client.post("/vm/run", json={
-            "source": "mov eax, 1",
-            "keyboard_input": "abc",
-        })
+        resp = client.post(
+            "/vm/run",
+            json={
+                "source": "mov eax, 1",
+                "keyboard_input": "abc",
+            },
+        )
         assert resp.status_code == 200
 
     def test_debug_returns_trace(self, client):
-        resp = client.post("/vm/run", json={
-            "source": "mov eax, 1",
-            "debug": True,
-        })
+        resp = client.post(
+            "/vm/run",
+            json={
+                "source": "mov eax, 1",
+                "debug": True,
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body.get("trace") is not None
 
     def test_invalid_memory_size_returns_422(self, client):
-        resp = client.post("/vm/run", json={
-            "source": "hlt",
-            "memory_size": 42,
-        })
+        resp = client.post(
+            "/vm/run",
+            json={
+                "source": "hlt",
+                "memory_size": 42,
+            },
+        )
         assert resp.status_code == 422
 
     def test_response_schema(self, client):
         resp = client.post("/vm/run", json={"source": "hlt"})
         body = resp.json()
         required = [
-            "success", "exit_code", "steps_executed", "elapsed_ms",
-            "output", "registers", "eip", "eip_hex", "status",
+            "success",
+            "exit_code",
+            "steps_executed",
+            "elapsed_ms",
+            "output",
+            "registers",
+            "eip",
+            "eip_hex",
+            "status",
         ]
         for field in required:
             assert field in body, f"missing field: {field}"
@@ -183,7 +204,7 @@ class TestVmRun:
         assert "keyboard_buffer" in body
         assert "memory_dump" in body
 
-    @patch("domains.shell.vm.X86VirtualSystem")
+    @patch("domain.shell.X86VirtualSystem")
     def test_spawn_failed_path(self, mock_vs_cls, client):
         vs = mock_vs_cls.return_value
         vs.spawn.return_value = None
@@ -194,7 +215,7 @@ class TestVmRun:
         assert body["status"] == "spawn_failed"
         assert "Failed to spawn" in body["error"]
 
-    @patch("domains.shell.vm.X86VirtualSystem")
+    @patch("domain.shell.X86VirtualSystem")
     def test_no_process_path(self, mock_vs_cls, client):
         vs = mock_vs_cls.return_value
         vs.spawn.return_value = 1
@@ -205,15 +226,11 @@ class TestVmRun:
         assert body["success"] is False
         assert body["status"] == "no_process"
 
-    @patch("domains.shell.vm.X86VirtualSystem")
+    @patch("domain.shell.X86VirtualSystem")
     def test_run_error_path(self, mock_vs_cls, client):
         mock_vs_cls.side_effect = RuntimeError("vm crashed")
         resp = client.post("/vm/run", json={"source": "hlt"})
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is False
-        assert body["status"] == "error"
-        assert "vm crashed" in body["error"]
+        assert resp.status_code == 500
 
 
 # ── GET /vm/builtins ──────────────────────────────────────────────────────────
@@ -225,12 +242,12 @@ class TestVmBuiltins:
     def test_returns_10_programs(self, client):
         resp = client.get("/vm/builtins")
         assert resp.status_code == 200
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         assert len(programs) >= 10
 
     def test_programs_have_name_and_description(self, client):
         resp = client.get("/vm/builtins")
-        programs = resp.json()["programs"]
+        programs = resp.json()["data"]["programs"]
         for p in programs:
             assert "name" in p
             assert "description" in p
@@ -243,12 +260,12 @@ class TestVmBuiltins:
 
     def test_builtin_names_unique(self, client):
         resp = client.get("/vm/builtins")
-        names = [p["name"] for p in resp.json()["programs"]]
+        names = [p["name"] for p in resp.json()["data"]["programs"]]
         assert len(names) == len(set(names))
 
     def test_all_builtin_descriptions_nonempty(self, client):
         resp = client.get("/vm/builtins")
-        for p in resp.json()["programs"]:
+        for p in resp.json()["data"]["programs"]:
             assert len(p["description"]) > 0
 
 
@@ -261,7 +278,7 @@ class TestVmInfo:
     def test_returns_required_fields(self, client):
         resp = client.get("/vm/info")
         assert resp.status_code == 200
-        body = resp.json()
+        body = resp.json()["data"]
         assert "isa" in body
         assert "max_steps" in body
         assert "registers" in body
@@ -269,13 +286,13 @@ class TestVmInfo:
 
     def test_registers_include_eax_esp(self, client):
         resp = client.get("/vm/info")
-        regs = resp.json()["registers"]
+        regs = resp.json()["data"]["registers"]
         assert "EAX" in regs
         assert "ESP" in regs
 
     def test_features_list_nonempty(self, client):
         resp = client.get("/vm/info")
-        features = resp.json()["features"]
+        features = resp.json()["data"]["features"]
         assert len(features) > 0
         assert isinstance(features, list)
 
@@ -285,11 +302,11 @@ class TestVmInfo:
 
     def test_default_isa_fields(self, client):
         resp = client.get("/vm/info")
-        body = resp.json()
+        body = resp.json()["data"]
         assert body["max_steps"] == 1000000
         assert body["default_memory"] == 0x100000
         assert body["max_memory"] == 0x1000000
 
     def test_x86_32_isa(self, client):
         resp = client.get("/vm/info")
-        assert resp.json()["isa"] == "x86-32"
+        assert resp.json()["data"]["isa"] == "x86-32"

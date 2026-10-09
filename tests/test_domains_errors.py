@@ -1,10 +1,10 @@
-"""``domains.errors`` — domain exceptions and prompt guards (no HTTP)."""
+"""``domain.errors`` — domain exceptions and prompt guards (no HTTP)."""
 
 from __future__ import annotations
 
 import pytest
 
-from domains.errors import (
+from domain.errors._internal.errors import (
     EmptyPromptError,
     InvalidGenerationInputError,
     SloughGPTDomainError,
@@ -20,7 +20,7 @@ def test_require_non_empty_prompt_empty_raises() -> None:
     with pytest.raises(EmptyPromptError) as ei:
         require_non_empty_prompt("")
     assert ei.value.http_status == 422
-    assert ei.value.code == "empty_prompt"
+    assert ei.value.code == "E_VAL_FIELD"
 
 
 def test_require_non_empty_prompt_whitespace_raises() -> None:

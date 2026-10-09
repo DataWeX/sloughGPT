@@ -4,13 +4,12 @@ import json
 
 import pytest
 
-from domains.training.dataset_manifest import (
+from domain.training._internal.dataset_manifest import (
     ManifestError,
     _glob_train_files,
     load_manifest,
     resolve_training_data_path,
 )
-
 
 MINIMAL_MANIFEST = {
     "schema_version": "1.0",

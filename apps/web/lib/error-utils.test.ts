@@ -22,12 +22,12 @@ describe('extractErrorMessage', () => {
     expect(extractErrorMessage(null)).toBe('Unknown error')
   })
 
-  it('returns default fallback for number', () => {
-    expect(extractErrorMessage(42)).toBe('Unknown error')
+  it('converts number to string', () => {
+    expect(extractErrorMessage(42)).toBe('42')
   })
 
-  it('returns default fallback for object', () => {
-    expect(extractErrorMessage({ code: 500 })).toBe('Unknown error')
+  it('serializes object to JSON when no known error properties', () => {
+    expect(extractErrorMessage({ code: 500 })).toBe('{"code":500}')
   })
 
   it('returns custom fallback when provided', () => {

@@ -16,18 +16,46 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
 import { createStore } from 'zustand/vanilla'
 import { createSSEStream, type SSEEnvelope } from '@/lib/sse-client'
 import type { HealthStatus } from '@/lib/model-controller'
 import { systemController, type DetailedHealth } from '@/lib/system-controller'
 import { PUBLIC_API_URL } from '@/lib/config'
+import { trackEvent } from '@/lib/dev-log'
+import { logStateEvent } from '@/lib/state-events'
 
-export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloading'
+export type ConnectionStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
+
+export type StartupStage = 'init' | 'critical' | 'ready' | 'background' | 'unknown'
+
+export interface HookStatus {
+  name: string
+  stage: StartupStage
+  status: 'pending' | 'running' | 'ok' | 'timeout' | 'error'
+  duration_seconds: number
+  error: string | null
+}
+
+export interface StagedLoaderStatus {
+  stage: StartupStage
+  stage_value: number
+  elapsed_seconds: number
+  model_progress: number
+  model_progress_message: string
+  errors: Record<string, string>
+  hooks: Record<string, HookStatus>
+  stages: Record<string, { hooks: string[]; time: number | null }>
+}
 
 export interface LiveHealthSnapshot {
   model_loaded: boolean
   model_loading: boolean
+  startup_stage: StartupStage
+  startup_stage_value: number
+  startup_elapsed: number
+  startup_model_progress: number
+  startup_model_progress_message: string
+  startup_hooks: Record<string, HookStatus>
   model_type: string | null
   device: string | null
   soul: string | null
@@ -38,6 +66,7 @@ export interface LiveHealthSnapshot {
   error_count: number
   tokens_per_sec: number
   avg_latency_ms: number
+  p95_latency_ms: number
   requests_per_minute: number
   total_tokens: number
   avg_tokens_per_request: number
@@ -50,13 +79,26 @@ export interface LiveHealthSnapshot {
   num_parameters: number | null
   quantization: unknown | null
   training_pool: { active_jobs: number; max_workers: number; total_tracked: number } | null
-  model_metrics: Array<{ model: string; count: number; total_tokens: number; tokens_per_sec: number; avg_tokens: number }>
+  model_metrics: Array<{
+    model: string
+    count: number
+    total_tokens: number
+    tokens_per_sec: number
+    avg_tokens: number
+  }>
   model_events: Array<{ type: string; model: string; detail: string; ts: number }>
   rate_violations: Array<{ path: string; count: number; limit: number; ts: number }>
   health_history: Array<{ score: number; status: string; ts: number }>
   memory_history: Array<{ rss_mb: number; virtual_mb: number; system_percent: number; ts: number }>
   path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
-  recent_errors: Array<{ path: string; method: string; status: number; message: string; error_type: string; ts: number }>
+  recent_errors: Array<{
+    path: string
+    method: string
+    status: number
+    message: string
+    error_type: string
+    ts: number
+  }>
 }
 
 export interface LiveStatusState {
@@ -88,6 +130,8 @@ export interface LiveStatusState {
 const FALLBACK_POLL_MS = 8000
 const MAX_FAILURES_BEFORE_RELOAD = 6
 const RELOAD_DELAY_MS = 2000
+const MAX_RELOADS = 3
+const RELOAD_WINDOW_MS = 120_000 // 2 minutes
 
 /**
  * Map the full /health/detailed response onto the live snapshot shape.
@@ -95,9 +139,19 @@ const RELOAD_DELAY_MS = 2000
  */
 export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
   const healthScore = d.health_score ?? { score: 0, status: 'unknown' }
+  const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as
+    StagedLoaderStatus | undefined
+  const rawStage = stagedLoader?.stage ?? 'unknown'
   return {
     model_loaded: Boolean(d.model_loaded),
     model_loading: Boolean(d.model_loading),
+    // Same hardening as the SSE path: unknown + loaded model ⇒ background.
+    startup_stage: rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage,
+    startup_stage_value: stagedLoader?.stage_value ?? 0,
+    startup_elapsed: stagedLoader?.elapsed_seconds ?? 0,
+    startup_model_progress: stagedLoader?.model_progress ?? 0,
+    startup_model_progress_message: stagedLoader?.model_progress_message ?? '',
+    startup_hooks: stagedLoader?.hooks ?? {},
     model_type: d.model_type ?? null,
     device: d.device ?? null,
     soul: d.soul ?? null,
@@ -108,6 +162,7 @@ export function mapDetailedToSnapshot(d: DetailedHealth): LiveHealthSnapshot {
     error_count: Number(d.error_count) || 0,
     tokens_per_sec: Number(d.tokens_per_sec) || 0,
     avg_latency_ms: Number(d.avg_latency_ms) || 0,
+    p95_latency_ms: Number(d.p95_latency_ms) || 0,
     requests_per_minute: Number(d.requests_per_minute) || 0,
     total_tokens: Number(d.total_tokens) || 0,
     avg_tokens_per_request: Number(d.avg_tokens_per_request) || 0,
@@ -139,13 +194,65 @@ export const liveStatusStore = createStore<LiveStatusState>((set) => ({
   lastError: null,
   ready: false,
 
-  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
-  setHealth: (health) => set((s) => ({ health, lastUpdate: Date.now(), failureCount: 0, lastError: null, ready: s.ready || true })),
+  setConnectionStatus: (connectionStatus) =>
+    set((s) => {
+      if (s.connectionStatus !== connectionStatus) {
+        trackEvent('connection_status_changed', { from: s.connectionStatus, to: connectionStatus })
+        logStateEvent('connection_status_changed', {
+          kind: 'connection',
+          from: s.connectionStatus,
+          to: connectionStatus,
+        })
+      }
+      return { connectionStatus }
+    }),
+  setHealth: (health) =>
+    set((s) => {
+      const prev = s.health
+      const prevStage = prev?.startup_stage ?? 'unknown'
+      const nextStage = health.startup_stage ?? 'unknown'
+      if (prevStage !== nextStage) {
+        trackEvent('startup_stage_changed', { from: prevStage, to: nextStage })
+        logStateEvent('startup_stage_changed', {
+          kind: 'startup',
+          from: prevStage,
+          to: nextStage,
+          data: {
+            model_loaded: health.model_loaded,
+            progress: health.startup_model_progress,
+          },
+        })
+      }
+      if ((prev?.model_loaded ?? false) !== health.model_loaded) {
+        logStateEvent('health_model_loaded_changed', {
+          kind: 'health',
+          from: String(prev?.model_loaded ?? false),
+          to: String(health.model_loaded),
+          data: { model_type: health.model_type ?? undefined },
+        })
+      }
+      return {
+        health,
+        lastUpdate: Date.now(),
+        failureCount: 0,
+        lastError: null,
+        ready: s.ready || true,
+      }
+    }),
   setHealthLegacy: (healthLegacy) => set({ healthLegacy }),
   setFailureCount: (failureCount) => set({ failureCount }),
   incrementFailures: () => set((s) => ({ failureCount: s.failureCount + 1 })),
   setReady: (ready) => set({ ready }),
-  reset: () => set({ connectionStatus: 'connecting', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0, lastError: null, ready: false }),
+  reset: () =>
+    set({
+      connectionStatus: 'connecting',
+      health: null,
+      healthLegacy: null,
+      lastUpdate: null,
+      failureCount: 0,
+      lastError: null,
+      ready: false,
+    }),
 }))
 
 /**
@@ -166,19 +273,49 @@ export function initLiveStatus(): () => void {
       try {
         const h = await systemController.getDetailedHealth()
         if (h && h !== null) {
-          liveStatusStore.getState().setHealthLegacy({ status: 'healthy', model_loaded: h.model_loaded, model_type: h.model_type || '', summary: '', inference_count: h.inference_count, is_inferencing: h.inference?.is_inferencing })
+          const hadFailures = liveStatusStore.getState().failureCount > 0
+          liveStatusStore
+            .getState()
+            .setHealthLegacy({
+              status: 'healthy',
+              model_loaded: h.model_loaded,
+              model_type: h.model_type || '',
+              summary: '',
+              inference_count: h.inference_count,
+              is_inferencing: h.inference?.is_inferencing,
+            })
           liveStatusStore.getState().setConnectionStatus('connected')
           // Convert full detailed health to the live snapshot shape
           const snap = mapDetailedToSnapshot(h)
           liveStatusStore.getState().setHealth(snap)
+          if (hadFailures) {
+            logStateEvent('health_fallback_recovered', {
+              kind: 'health',
+              message: 'health_fallback_recovered connected',
+            })
+          }
         } else {
+          const first = liveStatusStore.getState().failureCount === 0
           liveStatusStore.getState().setHealthLegacy('offline')
           liveStatusStore.getState().incrementFailures()
+          if (first) {
+            logStateEvent('health_fallback_empty', {
+              kind: 'health',
+              message: 'health_fallback_empty offline',
+            })
+          }
           checkReload()
         }
       } catch {
+        const first = liveStatusStore.getState().failureCount === 0
         liveStatusStore.getState().setHealthLegacy('offline')
         liveStatusStore.getState().incrementFailures()
+        if (first) {
+          logStateEvent('health_fallback_error', {
+            kind: 'health',
+            message: 'health_fallback_error offline',
+          })
+        }
         checkReload()
       }
     }
@@ -200,6 +337,31 @@ export function initLiveStatus(): () => void {
   function checkReload() {
     const { failureCount } = liveStatusStore.getState()
     if (failureCount >= MAX_FAILURES_BEFORE_RELOAD) {
+      // Reload-loop protection: track reloads in sessionStorage.
+      // If we've reloaded MAX_RELOADS times within RELOAD_WINDOW_MS,
+      // stop reloading and show an error instead of creating an infinite loop.
+      const now = Date.now()
+      const storageKey = 'slo-reload-count'
+      const storageTimeKey = 'slo-reload-window-start'
+      let reloadCount = parseInt(sessionStorage.getItem(storageKey) || '0', 10)
+      let windowStart = parseInt(sessionStorage.getItem(storageTimeKey) || '0', 10)
+
+      if (!windowStart || now - windowStart > RELOAD_WINDOW_MS) {
+        // New window — reset counter
+        reloadCount = 0
+        windowStart = now
+      }
+
+      if (reloadCount >= MAX_RELOADS) {
+        // Too many reloads — show error state, don't reload again
+        liveStatusStore.getState().setConnectionStatus('error')
+        return
+      }
+
+      reloadCount++
+      sessionStorage.setItem(storageKey, String(reloadCount))
+      sessionStorage.setItem(storageTimeKey, String(windowStart))
+
       liveStatusStore.getState().setConnectionStatus('reloading')
       setTimeout(() => {
         if (!_stopped) window.location.reload()
@@ -213,9 +375,22 @@ export function initLiveStatus(): () => void {
     _receivedHealthEvent = true
     stopFallbackPoll()
     const d = envelope.data as Partial<LiveHealthSnapshot>
+    const stagedLoader = (d as unknown as Record<string, unknown>).startup_progress as StagedLoaderStatus | undefined
+    // Hardening: very old / minimal snapshots omit every startup field, which
+    // used to pin the StartupOverlay on "Connecting" forever. A loaded model
+    // means startup finished — resolve to "background" (overlay-clearing).
+    const rawStage = stagedLoader?.stage ?? d.startup_stage ?? 'unknown'
+    const resolvedStage = rawStage === 'unknown' && Boolean(d.model_loaded) ? 'background' : rawStage
     const snap: LiveHealthSnapshot = {
       model_loaded: Boolean(d.model_loaded),
       model_loading: Boolean(d.model_loading),
+      startup_stage: resolvedStage,
+      startup_stage_value: stagedLoader?.stage_value ?? d.startup_stage_value ?? 0,
+      startup_elapsed: stagedLoader?.elapsed_seconds ?? d.startup_elapsed ?? 0,
+      startup_model_progress: stagedLoader?.model_progress ?? d.startup_model_progress ?? 0,
+      startup_model_progress_message:
+        stagedLoader?.model_progress_message ?? d.startup_model_progress_message ?? '',
+      startup_hooks: stagedLoader?.hooks ?? d.startup_hooks ?? {},
       model_type: d.model_type ?? null,
       device: d.device ?? null,
       soul: d.soul ?? null,
@@ -226,6 +401,7 @@ export function initLiveStatus(): () => void {
       error_count: Number(d.error_count) || 0,
       tokens_per_sec: Number(d.tokens_per_sec) || 0,
       avg_latency_ms: Number(d.avg_latency_ms) || 0,
+      p95_latency_ms: Number(d.p95_latency_ms) || 0,
       requests_per_minute: Number(d.requests_per_minute) || 0,
       total_tokens: Number(d.total_tokens) || 0,
       avg_tokens_per_request: Number(d.avg_tokens_per_request) || 0,
@@ -234,30 +410,60 @@ export function initLiveStatus(): () => void {
       health_score: Number(d.health_score) || 0,
       health_status: String(d.health_status || 'unknown'),
       health_summary: String(d.health_summary || ''),
-      diagnoses: Array.isArray(d.diagnoses) ? d.diagnoses as Array<{ check: string; severity: string; score: number; message: string }> : [],
+      diagnoses: Array.isArray(d.diagnoses)
+        ? (d.diagnoses as Array<{
+            check: string
+            severity: string
+            score: number
+            message: string
+          }>)
+        : [],
       num_parameters: d.num_parameters != null ? Number(d.num_parameters) : null,
       quantization: d.quantization ?? null,
       training_pool: d.training_pool ?? null,
       model_metrics: Array.isArray(d.model_metrics)
-        ? d.model_metrics as Array<{ model: string; count: number; total_tokens: number; tokens_per_sec: number; avg_tokens: number }>
+        ? (d.model_metrics as Array<{
+            model: string
+            count: number
+            total_tokens: number
+            tokens_per_sec: number
+            avg_tokens: number
+          }>)
         : [],
       model_events: Array.isArray(d.model_events)
-        ? d.model_events as Array<{ type: string; model: string; detail: string; ts: number }>
+        ? (d.model_events as Array<{ type: string; model: string; detail: string; ts: number }>)
         : [],
       rate_violations: Array.isArray(d.rate_violations)
-        ? d.rate_violations as Array<{ path: string; count: number; limit: number; ts: number }>
+        ? (d.rate_violations as Array<{ path: string; count: number; limit: number; ts: number }>)
         : [],
       health_history: Array.isArray(d.health_history)
-        ? d.health_history as Array<{ score: number; status: string; ts: number }>
+        ? (d.health_history as Array<{ score: number; status: string; ts: number }>)
         : [],
       memory_history: Array.isArray(d.memory_history)
-        ? d.memory_history as Array<{ rss_mb: number; virtual_mb: number; system_percent: number; ts: number }>
+        ? (d.memory_history as Array<{
+            rss_mb: number
+            virtual_mb: number
+            system_percent: number
+            ts: number
+          }>)
         : [],
       path_latencies: Array.isArray(d.path_latencies)
-        ? d.path_latencies as Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
+        ? (d.path_latencies as Array<{
+            path: string
+            avg_ms: number
+            count: number
+            p95_ms: number
+          }>)
         : [],
       recent_errors: Array.isArray(d.recent_errors)
-        ? d.recent_errors as Array<{ path: string; method: string; status: number; message: string; error_type: string; ts: number }>
+        ? (d.recent_errors as Array<{
+            path: string
+            method: string
+            status: number
+            message: string
+            error_type: string
+            ts: number
+          }>)
         : [],
     }
     liveStatusStore.getState().setHealth(snap)
@@ -278,18 +484,25 @@ export function initLiveStatus(): () => void {
   function onError(_err: Error) {
     liveStatusStore.getState().incrementFailures()
     liveStatusStore.getState().setConnectionStatus('connecting')
+    logStateEvent('sse_error', {
+      kind: 'sse',
+      message: `sse_error ${_err?.message ?? 'stream failed'}`,
+      data: { message: _err?.message ?? 'stream failed' },
+    })
     checkReload()
   }
 
   function onOpen() {
     liveStatusStore.getState().reset()
     liveStatusStore.getState().setConnectionStatus('connected')
+    logStateEvent('sse_open', { kind: 'sse', message: 'sse_open connected' })
   }
 
   function onClose() {
     if (_stopped) return
     // SSE disconnected — start fallback poll
     liveStatusStore.getState().setConnectionStatus('connecting')
+    logStateEvent('sse_close', { kind: 'sse', message: 'sse_close → fallback poll' })
     stopFallbackPoll()
     startFallbackPoll()
   }
@@ -353,6 +566,16 @@ export function useLiveStatus() {
     live: connectionStatus === 'connected' && health !== null,
     /** True once health endpoint first responds — gates feature polling hooks */
     ready,
+    /** Current startup stage (init/critical/ready/background) */
+    startupStage: health?.startup_stage ?? 'unknown',
+    /** Elapsed seconds since startup began */
+    startupElapsed: health?.startup_elapsed ?? 0,
+    /** Model load progress (0.0 to 1.0) */
+    startupModelProgress: health?.startup_model_progress ?? 0,
+    /** Model load progress message */
+    startupModelProgressMessage: health?.startup_model_progress_message ?? '',
+    /** Startup hook statuses */
+    startupHooks: health?.startup_hooks ?? {},
   }
 }
 

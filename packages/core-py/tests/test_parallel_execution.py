@@ -1,13 +1,12 @@
 """Tests for TrainingExecutor, InferencePool dynamic sizing, and pugqeep integration."""
 
 import asyncio
-import time
 import threading
+import time
 from unittest.mock import patch
 
 import numpy as np
 import pytest
-
 
 # ── TrainingExecutor tests ──────────────────────────────────────────
 
@@ -16,7 +15,7 @@ class TestTrainingExecutor:
     """Core executor functionality."""
 
     def test_submit_and_complete(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         results = []
@@ -34,7 +33,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_concurrency_limit(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         running = []
@@ -54,7 +53,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_cancel_queued_job(self):
-        from domains.training.executor import TrainingExecutor, JobStatus
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=1)
         evt = threading.Event()
@@ -73,7 +72,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_is_cancelled_flag(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         check_results = []
@@ -93,7 +92,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_list_jobs(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -110,7 +109,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_tree_id_tracking(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -124,7 +123,7 @@ class TestTrainingExecutor:
         exec_.shutdown(wait=True)
 
     def test_purge_completed(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -145,7 +144,7 @@ class TestTrainingExecutorEdgeBranches:
     """Remaining branch coverage: result_type, call_args, failures, cancel edge."""
 
     def test_to_dict_non_dict_result(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -160,7 +159,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_submit_with_call_args(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         seen = {}
@@ -169,13 +168,13 @@ class TestTrainingExecutorEdgeBranches:
             seen.update(kw)
             return {}
 
-        job_id = exec_.submit(fn, "call_args_job", _call_args={"a": 1, "b": 2}, c=3)
+        exec_.submit(fn, "call_args_job", _call_args={"a": 1, "b": 2}, c=3)
         time.sleep(0.1)
         assert seen == {"a": 1, "b": 2, "c": 3}
         exec_.shutdown(wait=True)
 
     def test_failed_job_records_error(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=1)
 
@@ -190,7 +189,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_point_storage_exception_is_swallowed(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -202,7 +201,10 @@ class TestTrainingExecutorEdgeBranches:
             return {"w": np.random.randn(32).astype(np.float32)}
 
         job_id = exec_.submit_training(
-            train_fn, "bad_lib", tree_id="t", point_library=BadLibrary(),
+            train_fn,
+            "bad_lib",
+            tree_id="t",
+            point_library=BadLibrary(),
         )
         status = None
         for _ in range(50):
@@ -214,7 +216,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_result_summary_none_cases(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         assert exec_.result_summary("unknown") is None
@@ -235,7 +237,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_result_summary_completed_dict(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -253,7 +255,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_active_count(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=1)
         evt = threading.Event()
@@ -270,14 +272,14 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_cancel_unknown_job_returns_false(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
         assert exec_.cancel("no_such_job") is False
         exec_.shutdown(wait=True)
 
     def test_cancel_completed_job_returns_false(self):
-        from domains.training.executor import TrainingExecutor
+        from domain.training._internal.executor import TrainingExecutor
 
         exec_ = TrainingExecutor(max_workers=2)
 
@@ -290,7 +292,7 @@ class TestTrainingExecutorEdgeBranches:
         exec_.shutdown(wait=True)
 
     def test_get_training_executor_singleton(self):
-        import domains.training.executor as exmod
+        import domain.training._internal.executor as exmod
 
         old = exmod._instance
         try:
@@ -305,7 +307,7 @@ class TestTrainingExecutorEdgeBranches:
                 ex1.shutdown(wait=True)
 
     def test_get_training_executor_double_check_race(self):
-        import domains.training.executor as exmod
+        import domain.training._internal.executor as exmod
 
         old = exmod._instance
         new_exec = exmod.TrainingExecutor(max_workers=1)
@@ -345,7 +347,7 @@ class TestCompressCheckpointBranches:
     """Failure paths in compress_checkpoint()."""
 
     def test_missing_file_returns_none(self):
-        from domains.training.executor import compress_checkpoint
+        from domain.training._internal.executor import compress_checkpoint
 
         assert compress_checkpoint("/nonexistent/checkpoint.soul") is None
 
@@ -353,9 +355,10 @@ class TestCompressCheckpointBranches:
         import sys
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
 
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.pugqeep", None)
+        from domain.training._internal import executor as exmod
+
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.pugqeep", None)
         with tempfile.TemporaryDirectory() as tmpdir:
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
@@ -364,10 +367,13 @@ class TestCompressCheckpointBranches:
     def test_model_none_returns_none(self):
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
 
-        with patch("domains.training.slonet.import_from_sou", return_value=None), \
-                tempfile.TemporaryDirectory() as tmpdir:
+        from domain.training._internal import executor as exmod
+
+        with (
+            patch("domain.training._internal.slonet.import_from_sou", return_value=None),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
             assert exmod.compress_checkpoint(soul_path) is None
@@ -375,10 +381,16 @@ class TestCompressCheckpointBranches:
     def test_load_failure_returns_none(self):
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
 
-        with patch("domains.training.slonet.import_from_sou", side_effect=RuntimeError("corrupt")), \
-                tempfile.TemporaryDirectory() as tmpdir:
+        from domain.training._internal import executor as exmod
+
+        with (
+            patch(
+                "domain.training._internal.slonet.import_from_sou",
+                side_effect=RuntimeError("corrupt"),
+            ),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
             assert exmod.compress_checkpoint(soul_path) is None
@@ -386,14 +398,17 @@ class TestCompressCheckpointBranches:
     def test_weights_converted_to_ndarray(self):
         import tempfile
         from pathlib import Path
-        from domains.training import executor as exmod
+
+        from domain.training._internal import executor as exmod
 
         class FakeModel:
             def state_dict(self):
                 return {"w": [1.0, 2.0, 3.0]}
 
-        with patch("domains.training.slonet.import_from_sou", return_value=FakeModel()), \
-                tempfile.TemporaryDirectory() as tmpdir:
+        with (
+            patch("domain.training._internal.slonet.import_from_sou", return_value=FakeModel()),
+            tempfile.TemporaryDirectory() as tmpdir,
+        ):
             soul_path = str(Path(tmpdir) / "x.soul")
             Path(soul_path).write_text("x")
             stats = exmod.compress_checkpoint(soul_path, n_clusters=2)
@@ -408,7 +423,7 @@ class TestPGQTrainingIntegration:
     """Test submit_training on the PGQ facade."""
 
     def test_submit_training_routes_to_tree(self):
-        from domains.infrastructure.pugqeep import PGQ
+        from domain.infrastructure._internal.pugqeep import PGQ
 
         pgq = PGQ(name="test_train")
         results = []
@@ -425,7 +440,7 @@ class TestPGQTrainingIntegration:
         assert results[0]["tree_id"] == "test_train"
 
     def test_submit_training_stores_points(self):
-        from domains.infrastructure.pugqeep import PGQ
+        from domain.infrastructure._internal.pugqeep import PGQ
 
         pgq = PGQ(name="test_points")
 
@@ -445,7 +460,7 @@ class TestPGQTrainingIntegration:
         assert pgq.library.has("layer2.weight")
 
     def test_cancel_training(self):
-        from domains.infrastructure.pugqeep import PGQ
+        from domain.infrastructure._internal.pugqeep import PGQ
 
         pgq = PGQ(name="test_cancel")
         evt = threading.Event()
@@ -472,7 +487,7 @@ class TestInferencePoolDynamic:
     @pytest.mark.asyncio
     async def test_default_size_from_cpu_count(self):
         from apps.api.server.infrastructure.inference_pool import InferencePool
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure._internal.resource_manager import get_resource_manager
 
         InferencePool._instance = None
         pool = await InferencePool.get_instance()
@@ -510,7 +525,7 @@ class TestModelServerReadSemaphore:
     """Test read semaphore for concurrent tokenization."""
 
     def test_read_semaphore_created(self):
-        from domains.infrastructure.model_server import ModelServer
+        from domain.infrastructure._internal.model_server import ModelServer
 
         server = ModelServer(max_concurrent=1, enable_warmup=False)
         loop = asyncio.new_event_loop()
@@ -520,11 +535,12 @@ class TestModelServerReadSemaphore:
         loop.close()
 
     def test_tokenize_uses_read_semaphore(self):
-        from domains.infrastructure.model_server import ModelServer
+        from domain.infrastructure._internal.model_server import ModelServer
 
         class FakeTokenizer:
             eos_token_id = 0
             pad_token_id = 0
+
             def __call__(self, text, **kwargs):
                 return {"input_ids": [[1, 2, 3]]}
 

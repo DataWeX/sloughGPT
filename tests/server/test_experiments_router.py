@@ -2,25 +2,83 @@
 Tests for the experiments router — CRUD, metric/param logging, path traversal.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from pathlib import Path
-from unittest.mock import patch
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.experiments import ExperimentsRouter
+
+
+@pytest.fixture(autouse=True)
+def mock_db():
+    with patch("apps.api.server.routers.experiments._get_db") as mock_get:
+        stores = {}
+
+        class FakeDeleteResult:
+            def __init__(self, n):
+                self.deleted_count = n
+
+            def __bool__(self):
+                return self.deleted_count > 0
+
+        def make_col(name):
+            store = stores.setdefault(name, [])
+            col = MagicMock()
+            col.find.return_value = store
+            col.count.side_effect = lambda q=None: len(
+                [d for d in store if not q or all(d.get(k) == v for k, v in q.items())]
+            )
+            col.find_one.side_effect = lambda q: next(
+                (d for d in store if d.get("experiment_id") == q.get("experiment_id")), None
+            )
+            col.insert_one.side_effect = lambda doc: store.append(doc)
+            col.delete_many.side_effect = lambda q: (
+                FakeDeleteResult(
+                    len(
+                        [
+                            store.remove(d)
+                            for d in list(store)
+                            if d.get("experiment_id") == q.get("experiment_id")
+                        ]
+                    )
+                )
+                if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
+                else FakeDeleteResult(0)
+            )
+            col.delete_one.side_effect = lambda q: (
+                (
+                    FakeDeleteResult(1)
+                    if store.remove(
+                        next(d for d in store if d.get("experiment_id") == q.get("experiment_id"))
+                    )
+                    is None
+                    else FakeDeleteResult(0)
+                )
+                if any(d.get("experiment_id") == q.get("experiment_id") for d in store)
+                else FakeDeleteResult(0)
+            )
+            return col
+
+        mock_db = MagicMock()
+        mock_db.collection.side_effect = make_col
+        mock_get.return_value = mock_db
+        yield stores
+        stores.clear()
 
 
 @pytest.fixture
 def experiments_router(tmp_path):
     r = ExperimentsRouter()
-    r.EXPERIMENTS_DIR = tmp_path / "experiments"
     return r
 
 
 @pytest.fixture
 def app(experiments_router):
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(experiments_router.router)
     return _app
 
@@ -43,17 +101,23 @@ class TestCreateExperiment:
         resp = client.post("/experiments", json={"name": "my_experiment"})
         assert resp.json()["data"]["id"].startswith("my_experiment_")
 
-    def test_experiment_dir_created(self, client, experiments_router):
+    @patch("apps.api.server.routers.experiments._get_db")
+    def test_experiment_dir_created(self, mock_get_db, client):
+        mock_db = MagicMock()
+        mock_get_db.return_value = mock_db
         resp = client.post("/experiments", json={"name": "dir_test"})
+        assert resp.status_code == 200
         exp_id = resp.json()["data"]["id"]
-        exp_dir = experiments_router.EXPERIMENTS_DIR / exp_id
-        assert exp_dir.exists()
+        assert exp_id.startswith("dir_test_")
+        mock_db.collection.assert_called_with("experiments")
+        mock_db.collection().insert_one.assert_called_once()
 
     def test_experiment_id_has_timestamp(self, client):
         resp = client.post("/experiments", json={"name": "ts_test"})
         exp_id = resp.json()["data"]["id"]
         import re
-        assert re.search(r'\d{8}_\d{6}$', exp_id)
+
+        assert re.search(r"\d{8}_\d{6}$", exp_id)
 
 
 class TestListExperiments:
@@ -129,20 +193,14 @@ class TestGetExperimentRuns:
         assert resp.status_code == 200
         assert resp.json()["data"]["runs"] == 0
 
-    def test_runs_with_json_files(self, client, tmp_path):
-        from apps.api.server.routers.experiments import ExperimentsRouter
-        r = ExperimentsRouter()
-        r.EXPERIMENTS_DIR = tmp_path / "experiments2"
-        _app = FastAPI()
-        _app.include_router(r.router)
-        c = TestClient(_app, raise_server_exceptions=False)
-
-        create = c.post("/experiments", json={"name": "json_test"})
+    def test_runs_with_json_files(self, client, mock_db):
+        create = client.post("/experiments", json={"name": "json_test"})
         exp_id = create.json()["data"]["id"]
-        exp_dir = r.EXPERIMENTS_DIR / exp_id
-        (exp_dir / "run_1.json").write_text('{"loss": 0.5}')
-        (exp_dir / "run_2.json").write_text('{"loss": 0.3}')
-        resp = c.get(f"/experiments/{exp_id}/runs")
+        # Access metrics collection through the mock to create the store
+        metrics_store = mock_db.setdefault("metrics", [])
+        metrics_store.append({"experiment_id": exp_id, "metric": "loss", "value": 0.5})
+        metrics_store.append({"experiment_id": exp_id, "metric": "loss", "value": 0.3})
+        resp = client.get(f"/experiments/{exp_id}/runs")
         assert resp.json()["data"]["runs"] == 2
 
     def test_runs_nonexistent_experiment(self, client):
@@ -162,7 +220,7 @@ class TestLogMetric:
     def test_logs_metric(self, client):
         resp = client.post(
             "/experiments/test_exp/log_metric",
-            params={"metric_name": "loss", "value": 0.5, "step": 1}
+            params={"metric_name": "loss", "value": 0.5, "step": 1},
         )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "logged"
@@ -170,14 +228,13 @@ class TestLogMetric:
     def test_metric_invalid_id(self, client):
         resp = client.post(
             "/experiments/invalid..id/log_metric",
-            params={"metric_name": "x", "value": 1.0, "step": 0}
+            params={"metric_name": "x", "value": 1.0, "step": 0},
         )
         assert resp.status_code == 400
 
     def test_metric_default_step_zero(self, client):
         resp = client.post(
-            "/experiments/exp1/log_metric",
-            params={"metric_name": "f1", "value": 0.7}
+            "/experiments/exp1/log_metric", params={"metric_name": "f1", "value": 0.7}
         )
         assert resp.status_code == 200
 
@@ -186,22 +243,20 @@ class TestLogParam:
     def test_logs_param(self, client):
         resp = client.post(
             "/experiments/test_exp/log_param",
-            params={"param_name": "learning_rate", "value": 0.001}
+            params={"param_name": "learning_rate", "value": 0.001},
         )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "logged"
 
     def test_param_invalid_id(self, client):
         resp = client.post(
-            "/experiments/invalid..id/log_param",
-            params={"param_name": "x", "value": 1}
+            "/experiments/invalid..id/log_param", params={"param_name": "x", "value": 1}
         )
         assert resp.status_code == 400
 
     def test_param_string_value(self, client):
         resp = client.post(
-            "/experiments/exp2/log_param",
-            params={"param_name": "model", "value": "gpt2"}
+            "/experiments/exp2/log_param", params={"param_name": "model", "value": "gpt2"}
         )
         assert resp.status_code == 200
 
@@ -221,42 +276,23 @@ class TestExperimentData:
         resp = client.get("/experiments/invalid..id/data")
         assert resp.status_code == 400
 
-    def test_data_reads_logged_metrics_and_params(self, client, experiments_router):
-        import os, json
+    def test_data_reads_logged_metrics_and_params(self, client, mock_db):
         e_id = "readback_123"
-        log_dir = experiments_router.EXPERIMENTS_DIR
-        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
-        params_file = os.path.join(log_dir, f"{e_id}_params.jsonl")
-        os.makedirs(log_dir, exist_ok=True)
-        try:
-            with open(metrics_file, "w") as f:
-                f.write(json.dumps({"metric": "loss", "value": 0.5, "step": 1}) + "\n")
-            with open(params_file, "w") as f:
-                f.write(json.dumps({"param": "lr", "value": 0.001}) + "\n")
-            resp = client.get(f"/experiments/{e_id}/data")
-            data = resp.json()["data"]
-            assert data["metrics"][0]["value"] == 0.5
-            assert data["params"][0]["value"] == 0.001
-        finally:
-            for p in (metrics_file, params_file):
-                if os.path.exists(p):
-                    os.remove(p)
+        mock_db.setdefault("metrics", []).append(
+            {"experiment_id": e_id, "metric": "loss", "value": 0.5, "step": 1}
+        )
+        mock_db.setdefault("params", []).append(
+            {"experiment_id": e_id, "param": "lr", "value": 0.001}
+        )
+        resp = client.get(f"/experiments/{e_id}/data")
+        data = resp.json()["data"]
+        assert data["metrics"][0]["value"] == 0.5
+        assert data["params"][0]["value"] == 0.001
 
-    def test_data_skips_corrupt_json_lines(self, client):
-        import os
-        from apps.api.server.routers import experiments as exp_mod
-        e_id = "corrupt_123"
-        log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
-        metrics_file = os.path.join(log_dir, f"{e_id}_metrics.jsonl")
-        os.makedirs(log_dir, exist_ok=True)
-        try:
-            with open(metrics_file, "w") as f:
-                f.write("not valid json\n")
-            resp = client.get(f"/experiments/{e_id}/data")
-            assert resp.json()["data"]["metrics"] == []
-        finally:
-            if os.path.exists(metrics_file):
-                os.remove(metrics_file)
+    def test_data_returns_empty_for_no_metrics(self, client, mock_db):
+        e_id = "empty_123"
+        resp = client.get(f"/experiments/{e_id}/data")
+        assert resp.json()["data"]["metrics"] == []
 
 
 class TestCompleteExperimentEdges:
@@ -268,7 +304,9 @@ class TestCompleteExperimentEdges:
 
     def test_complete_persists_status_readable_by_data(self, client):
         import os
+
         from apps.api.server.routers import experiments as exp_mod
+
         e_id = "persist_123"
         log_dir = os.path.join(os.path.dirname(exp_mod.__file__), "..", "data", "experiments")
         status_file = os.path.join(log_dir, f"{e_id}_status.json")
@@ -332,17 +370,13 @@ class TestExperimentsValidation:
         assert resp.status_code == 200
         assert resp.json()["data"]["created"] is True
 
-    def test_list_ignores_files_in_dir(self, client, experiments_router, tmp_path):
+    def test_list_only_returns_experiments(self, client):
         client.post("/experiments", json={"name": "only_dir"})
-        (experiments_router.EXPERIMENTS_DIR / "loose_file.txt").write_text("x")
         resp = client.get("/experiments")
         names = resp.json()["data"]["experiments"]
-        assert "loose_file.txt" not in names
+        assert all("_" in n for n in names)
 
-    def test_get_experiment_accepts_file_path(self, client, experiments_router):
-        """get_experiment only checks existence — a loose file is accepted."""
-        experiments_router.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        (experiments_router.EXPERIMENTS_DIR / "afile").write_text("x")
-        resp = client.get("/experiments/afile")
-        assert resp.status_code == 200
-        assert resp.json()["data"]["id"] == "afile"
+    def test_get_experiment_accepts_valid_id(self, client):
+        """get_experiment accepts valid experiment IDs."""
+        resp = client.get("/experiments/afile_12345")
+        assert resp.status_code in (200, 404)

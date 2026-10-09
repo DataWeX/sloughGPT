@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, memo } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, Area, ComposedChart } from 'recharts'
 import type { LiveHealthSnapshot } from '@/hooks/useLiveStatus'
 
@@ -69,8 +70,8 @@ function TrendTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
-export function TrendChart({ liveHealth }: TrendChartProps) {
-  const data = buildPoints(liveHealth)
+export const TrendChart = memo(function TrendChart({ liveHealth }: TrendChartProps) {
+  const data = useMemo(() => buildPoints(liveHealth), [liveHealth])
 
   if (!data.length) {
     return (
@@ -85,22 +86,22 @@ export function TrendChart({ liveHealth }: TrendChartProps) {
       <ComposedChart data={data}>
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" opacity={0.5} />
         <XAxis
-          dataKey="ago"
-          tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-          interval="preserveStartEnd"
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          yAxisId="left"
-          domain={[0, 100]}
-          tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
-          width={35}
-          tickLine={false}
-          axisLine={false}
-        />
-        <YAxis
-          yAxisId="right"
+            dataKey="ago"
+            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+            interval="preserveStartEnd"
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            yAxisId="left"
+            domain={[0, 100]}
+            tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
+            width={35}
+            tickLine={false}
+            axisLine={false}
+          />
+          <YAxis
+            yAxisId="right"
           orientation="right"
           tick={{ fontSize: 10, fill: 'var(--muted-foreground)' }}
           width={45}
@@ -142,4 +143,4 @@ export function TrendChart({ liveHealth }: TrendChartProps) {
       </ComposedChart>
     </ResponsiveContainer>
   )
-}
+})

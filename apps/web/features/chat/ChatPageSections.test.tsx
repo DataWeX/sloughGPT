@@ -124,6 +124,8 @@ function makeController(overrides?: Partial<ChatPageController>): ChatPageContro
     setWriteTone: vi.fn(),
     writeType: '',
     setWriteType: vi.fn(),
+    rewriteStyle: '',
+    setRewriteStyle: vi.fn(),
     decideStructure: '',
     setDecideStructure: vi.fn(),
     explainDifficulty: '',

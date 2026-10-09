@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from 'react'
 import { Slider } from '@sloughgpt/strui'
 import { deriveArchetype } from './PersonalitySummary'
+import { SOUL_GROUPS } from './soul-constants'
 
 interface TraitEditorProps {
   traitWeights: Record<string, Record<string, number>>
@@ -10,11 +11,7 @@ interface TraitEditorProps {
   onReset: () => void
 }
 
-const GROUPS: { key: string; label: string; color: string }[] = [
-  { key: 'personality', label: 'Personality', color: 'rgb(var(--primary))' },
-  { key: 'cognition', label: 'Cognition', color: 'rgb(var(--chart-4))' },
-  { key: 'emotion', label: 'Emotion', color: 'rgb(var(--destructive))' },
-]
+const GROUPS = SOUL_GROUPS
 
 function formatTraitName(name: string): string {
   return name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())

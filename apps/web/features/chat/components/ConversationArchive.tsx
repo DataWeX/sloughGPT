@@ -111,6 +111,7 @@ export const ConversationArchive = memo(function ConversationArchive({
                       className="h-6 w-6"
                       onClick={() => onRestore(conv.id)}
                       title="Restore"
+                      aria-label="Restore conversation"
                     >
                       <IconRefresh className="h-3 w-3" />
                     </Button>
@@ -121,6 +122,7 @@ export const ConversationArchive = memo(function ConversationArchive({
                       className="h-6 w-6"
                       onClick={() => onArchive(conv.id)}
                       title="Archive"
+                      aria-label="Archive conversation"
                     >
                       <IconDownload className="h-3 w-3" />
                     </Button>
@@ -134,6 +136,7 @@ export const ConversationArchive = memo(function ConversationArchive({
                     )}
                     onClick={() => handleDelete(conv.id)}
                     title={confirmDelete === conv.id ? 'Click again to confirm' : 'Delete'}
+                    aria-label={confirmDelete === conv.id ? 'Confirm delete conversation' : 'Delete conversation'}
                   >
                     <IconX className="h-3 w-3" />
                   </Button>

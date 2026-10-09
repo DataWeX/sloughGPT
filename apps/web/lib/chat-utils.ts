@@ -11,13 +11,24 @@ export interface ChatMessage {
   content: string
   timestamp: Date
   images?: ImageAttachment[]
+  audio?: AudioAttachment
+  reactions?: Record<string, number>
   isError?: boolean
+  pinned?: boolean
+  toolCalls?: Array<{ id?: string; name?: string; arguments?: string; status?: string }>
 }
 
 export interface ImageAttachment {
   id: string
   dataUrl: string
   name: string
+}
+
+export interface AudioAttachment {
+  id: string
+  url: string
+  durationMs: number
+  waveform?: number[]
 }
 
 export interface ChatSession {
@@ -141,4 +152,8 @@ export function formatUptime(seconds: number): string {
   if (d > 0) return `${d}d ${h}h ${m}m`
   if (h > 0) return `${h}h ${m}m`
   return `${m}m`
+}
+
+export function shortModelName(id: string): string {
+  return id.includes('/') ? id.split('/').pop() || id : id
 }

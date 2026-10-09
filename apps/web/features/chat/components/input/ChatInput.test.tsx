@@ -25,6 +25,20 @@ vi.mock('./ChatInputRow', () => ({
   ),
 }))
 
+vi.mock('@/hooks/useLocale', () => ({
+  useLocale: () => ({ t: (key: string) => key, locale: 'en' }),
+}))
+
+vi.mock('@/hooks/useConsciousnessStatus', () => ({
+  useConsciousnessStatus: () => ({ status: null }),
+  getConsciousnessLevelLabel: () => 'Off',
+  getQualiaMood: () => '',
+}))
+
+vi.mock('@/lib/consciousness-controller', () => ({
+  consciousnessController: { listPersonas: async () => ({ personas: [] }), activatePersona: async () => {} },
+}))
+
 import { ChatInput } from './ChatInput'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 
@@ -63,7 +77,7 @@ describe('ChatInput', () => {
   it('shows API offline placeholder when health is offline', () => {
     const { container } = render(<ChatInput {...base} health={'offline' as unknown as ApiHealthSnapshot} />)
     const row = container.querySelector('[data-testid="chat-input-row"]')
-    expect(row?.textContent).toContain('placeholder: API offline...')
+    expect(row?.textContent).toContain('placeholder: Service offline...')
   })
 
   it('shows Loading model... when no model loaded', () => {

@@ -9,7 +9,6 @@ No mocks, no stubs, no third-party installs.
 """
 
 import asyncio
-import ctypes
 import json
 import os
 import struct
@@ -18,12 +17,12 @@ import zlib
 import numpy as np
 import pytest
 
-from domains.infrastructure.slnc.spec import compute_header_size
-from domains.inference.slonet_provider import (
+from domain.inference._internal.slonet_provider import (
     SloNetChatProvider,
     _get_slo_layernorm,
     _split_fused_qkv,
 )
+from domain.infrastructure._internal.slnc.spec import compute_header_size
 
 # Quantine on tiny random weights can hit float32 scale overflows; these
 # RuntimeWarnings come from real quantization math, not test failures.
@@ -77,11 +76,22 @@ def _build_slnc(path, weights, config):
         cur += arr.nbytes
         entries.append(arr)
     data_offset = header_size + len(table)
-    meta = struct.pack(
-        "<10I",
-        N_LAYER, N_EMBD, N_HEAD, N_INNER, VOCAB, NPOS,
-        N_LAYER, NPOS, len(weights), data_offset,
-    ) + b"\x00" * 24
+    meta = (
+        struct.pack(
+            "<10I",
+            N_LAYER,
+            N_EMBD,
+            N_HEAD,
+            N_INNER,
+            VOCAB,
+            NPOS,
+            N_LAYER,
+            NPOS,
+            len(weights),
+            data_offset,
+        )
+        + b"\x00" * 24
+    )
     with open(path, "wb") as f:
         f.write(b"SLNC")
         f.write(struct.pack("<I", 1))
@@ -183,7 +193,8 @@ def test_init_raises_typeerror():
 
 
 def test_get_slo_layernorm_caches_class():
-    from domains.training.slonet import SloLayerNorm
+    from domain.training._internal.slonet import SloLayerNorm
+
     assert _get_slo_layernorm() is SloLayerNorm
     assert _get_slo_layernorm() is SloLayerNorm
 
@@ -279,8 +290,12 @@ def test_chat_stream_server_attached(provider):
     provider.set_server(server)
 
     async def _collect():
-        return [t async for t in provider.chat_stream(
-            [{"role": "user", "content": "hello"}], max_tokens=5)]
+        return [
+            t
+            async for t in provider.chat_stream(
+                [{"role": "user", "content": "hello"}], max_tokens=5
+            )
+        ]
 
     tokens = asyncio.run(_collect())
     assert isinstance(tokens, list) and tokens
@@ -298,8 +313,12 @@ def test_generate_sync_direct(provider):
 
 def test_chat_stream_no_server_real_streaming(provider):
     async def _collect():
-        return [t async for t in provider.chat_stream(
-            [{"role": "user", "content": "hello"}], max_tokens=5)]
+        return [
+            t
+            async for t in provider.chat_stream(
+                [{"role": "user", "content": "hello"}], max_tokens=5
+            )
+        ]
 
     tokens = asyncio.run(_collect())
     assert isinstance(tokens, list) and tokens
@@ -336,7 +355,7 @@ def test_generate_batch_real(provider):
 
 @pytest.fixture
 def avx2_available(monkeypatch):
-    monkeypatch.setattr("domains.infrastructure.quant_core.wrapper.HAS_AVX2", True)
+    monkeypatch.setattr("domain.infrastructure._internal.quant_core.wrapper.HAS_AVX2", True)
 
 
 @pytest.fixture
@@ -396,14 +415,16 @@ def test_fused_gemm_generation_bit_identical(quantized_provider, monkeypatch):
     packs = [(b.attn._fused_qkv(), b.ff._fused_gate_up()) for b in model.blocks]
     assert any(p[0] is not None or p[1] is not None for p in packs), "fusion packs not built"
 
-    monkeypatch.setattr("domains.training.slonet._fuse_quant_weights", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "domain.training._internal.slonet._fuse_quant_weights", lambda *a, **k: None
+    )
     unfused = gen()
     np.testing.assert_array_equal(fused, unfused)
 
 
 def test_quantize_skipped_without_avx2(slnc, tmp_path, monkeypatch):
     monkeypatch.setenv("HF_HOME", str(tmp_path))
-    monkeypatch.setattr("domains.infrastructure.quant_core.wrapper.HAS_AVX2", False)
+    monkeypatch.setattr("domain.infrastructure._internal.quant_core.wrapper.HAS_AVX2", False)
     _build_tokenizer(str(tmp_path))
     provider = SloNetChatProvider.from_slnc(slnc, model_id="gpt2", quantize=True)
     assert provider.quantization_report() == {"quantized": False}
@@ -467,8 +488,12 @@ def test_lazy_from_slnc_release_before_load(lazy_provider):
 
 def test_lazy_from_slnc_chat_stream_cross_turn_kv(lazy_provider):
     async def _collect(session_id):
-        return [t async for t in lazy_provider.chat_stream(
-            [{"role": "user", "content": "hello"}], max_tokens=4, session_id=session_id)]
+        return [
+            t
+            async for t in lazy_provider.chat_stream(
+                [{"role": "user", "content": "hello"}], max_tokens=4, session_id=session_id
+            )
+        ]
 
     asyncio.run(_collect("s1"))
     stats = lazy_provider.session_stats()

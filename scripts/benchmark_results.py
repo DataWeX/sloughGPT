@@ -11,13 +11,16 @@ Usage:
     python scripts/benchmark_results.py history [--kind latency]
     python scripts/benchmark_results.py compare [--kind latency] [--vs previous|first]
 """
+
+from __future__ import annotations
+
 import argparse
 import json
 import subprocess
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Optional
+
+from domain.shared import utc_now_iso
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "data" / "benchmark_results"
@@ -37,15 +40,30 @@ REGRESSION_THRESHOLDS = {
         "mean_ms": (20.0, "rel"),
         "p95_ms": (20.0, "rel"),
     },
+    "execution": {
+        # fire-and-forget dispatch / execution-consolidation stage 1
+        "dispatch_us": (50.0, "rel"),
+        "peak_threads": (2, "abs"),
+    },
+    "startup": {
+        # spawn → GET /health; the CLI kills the server past API_STARTUP_TIMEOUT
+        "time_to_health_s": (20.0, "rel"),
+        "time_to_ready_s": (20.0, "rel"),
+        # cold imports left for the background model-load thread = race risk
+        "preload_warnings": (0, "abs"),
+    },
 }
 
 
-def git_commit() -> Optional[str]:
+def git_commit() -> str | None:
     """Return short git commit of repo root, or None."""
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
-            cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=5,
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return out.stdout.strip() or None
     except Exception:
@@ -54,7 +72,7 @@ def git_commit() -> Optional[str]:
 
 def timestamp() -> str:
     """Return ISO timestamp with timezone."""
-    return datetime.now(timezone.utc).isoformat()
+    return utc_now_iso()
 
 
 def results_path(kind: str, model: str, stamp: str) -> Path:
@@ -63,7 +81,7 @@ def results_path(kind: str, model: str, stamp: str) -> Path:
     return RESULTS_DIR / kind / f"{safe_model}_{stamp}.json"
 
 
-def collect_records(kind: str) -> List[Path]:
+def collect_records(kind: str) -> list[Path]:
     """Return all stored result files for a kind, newest first."""
     d = RESULTS_DIR / kind
     if not d.exists():
@@ -90,9 +108,19 @@ def _extract_from_stability(raw: str) -> dict:
 def _run_stability(url: str, runs: int) -> dict:
     """Execute benchmark_stability.py and capture its JSON report."""
     out = subprocess.run(
-        [sys.executable, "scripts/benchmark_stability.py", "--runs", str(runs), "--json",
-         "--url", url],
-        cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=3600,
+        [
+            sys.executable,
+            "scripts/benchmark_stability.py",
+            "--runs",
+            str(runs),
+            "--json",
+            "--url",
+            url,
+        ],
+        cwd=str(REPO_ROOT),
+        capture_output=True,
+        text=True,
+        timeout=3600,
     )
     if out.returncode != 0 and "Error" in out.stdout:
         raise RuntimeError(f"stability benchmark failed: {out.stdout[-500:]}")
@@ -116,11 +144,19 @@ def _run_latency(url: str, runs: int, update_baseline: bool) -> dict:
                 key = key.replace(" ", "_").replace("ms", "ms")
             if key in ("mean", "min", "max", "p50", "p95", "sample_count"):
                 try:
-                    metrics["mean_ms" if key == "mean" else
-                            "min_ms" if key == "min" else
-                            "max_ms" if key == "max" else
-                            "p50_ms" if key == "p50" else
-                            "p95_ms" if key == "p95" else key] = float(val.strip())
+                    metrics[
+                        "mean_ms"
+                        if key == "mean"
+                        else "min_ms"
+                        if key == "min"
+                        else "max_ms"
+                        if key == "max"
+                        else "p50_ms"
+                        if key == "p50"
+                        else "p95_ms"
+                        if key == "p95"
+                        else key
+                    ] = float(val.strip())
                 except ValueError:
                     pass
     if not metrics:
@@ -223,6 +259,18 @@ def do_record(args) -> int:
             data = _run_stability(args.url, args.runs)
         elif kind == "latency":
             data = _run_latency(args.url, args.runs, update_baseline=False)
+        elif kind == "startup":
+            print(
+                "[ERR] startup kind requires --json-file (from benchmark_startup.py)",
+                file=sys.stderr,
+            )
+            return 1
+        elif kind == "training":
+            print(
+                "[ERR] training kind requires --json-file (from benchmark_slonet_training.py)",
+                file=sys.stderr,
+            )
+            return 1
         else:
             print(f"[ERR] unknown kind {kind}", file=sys.stderr)
             return 1
@@ -266,7 +314,7 @@ def do_record(args) -> int:
 
 def do_history(args) -> int:
     """List stored runs."""
-    for kind in ([args.kind] if args.kind else ["stability", "latency"]):
+    for kind in [args.kind] if args.kind else ["stability", "latency"]:
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -275,12 +323,27 @@ def do_history(args) -> int:
             model = r.get("model", "?")
             if kind == "stability":
                 sc = r.get("score", {})
-                print(f"  {stamp}  {model:<24} overall={sc.get('overall', '?'):<4} "
-                      f"passed={'✓' if r.get('passed') else '✗'}  {p.name}")
+                print(
+                    f"  {stamp}  {model:<24} overall={sc.get('overall', '?'):<4} "
+                    f"passed={'✓' if r.get('passed') else '✗'}  {p.name}"
+                )
+            elif kind == "training":
+                ms = r.get("metrics", {})
+                if isinstance(ms, dict):
+                    ms = [ms]
+                for c in ms:
+                    conf = c.get("config") if isinstance(c, dict) else "?"
+                    gate = c.get("gate_converged") if isinstance(c, dict) else None
+                    final = c.get("final_loss") if isinstance(c, dict) else None
+                    print(
+                        f"  {stamp}  {conf:<10} gate={'✓' if gate else '✗'} final={final}  {p.name}"
+                    )
             else:
                 m = r.get("metrics", {})
-                print(f"  {stamp}  {model:<24} mean={m.get('mean_ms', '?'):<7} "
-                      f"p95={m.get('p95_ms', '?'):<7}  {p.name}")
+                print(
+                    f"  {stamp}  {model:<24} mean={m.get('mean_ms', '?'):<7} "
+                    f"p95={m.get('p95_ms', '?'):<7}  {p.name}"
+                )
     return 0
 
 
@@ -288,8 +351,7 @@ def do_compare(args) -> int:
     """Compare newest run against a prior run and report regressions."""
     runs = collect_records(args.kind)
     if len(runs) < 2:
-        print(f"[INFO] need ≥2 runs of kind '{args.kind}' to compare "
-              f"(have {len(runs)})")
+        print(f"[INFO] need ≥2 runs of kind '{args.kind}' to compare (have {len(runs)})")
         return 0
 
     new = load_result(runs[0])
@@ -298,10 +360,34 @@ def do_compare(args) -> int:
     else:
         old = load_result(runs[1])
 
+    print(
+        f"── compare {args.kind}: {old.get('timestamp', '?')[:19]} → {new.get('timestamp', '?')[:19]} ──"
+    )
+
+    if args.kind == "training":
+
+        def _best_final(r):
+            ms = r.get("metrics", {})
+            if isinstance(ms, dict):
+                ms = [ms]
+            vals = [
+                float(c.get("final_loss"))
+                for c in ms
+                if isinstance(c, dict) and c.get("final_loss") is not None
+            ]
+            return min(vals) if vals else None
+
+        nf, of = _best_final(new), _best_final(old)
+        print(f"  best_final_loss        {of:<10} → {nf:<10}")
+        if nf is not None and of is not None and nf > of * 1.5:
+            print("  → [FAIL] training final_loss regressed vs prior run")
+            return 1
+        print("  → [OK] no regression vs prior run")
+        return 0
+
     deltas = _regression_deltas(args.kind, new, old)
     regressed = is_regression(args.kind, new, old)
 
-    print(f"── compare {args.kind}: {old.get('timestamp','?')[:19]} → {new.get('timestamp','?')[:19]} ──")
     for metric, delta in deltas.items():
         nv = _dig(new, metric)
         ov = _dig(old, metric)
@@ -328,9 +414,12 @@ def main() -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_rec = sub.add_parser("record", help="record a benchmark run")
-    p_rec.add_argument("--kind", required=True, choices=["stability", "latency"])
-    p_rec.add_argument("--json-file", default=None,
-                       help="existing JSON output file to ingest")
+    p_rec.add_argument(
+        "--kind",
+        required=True,
+        choices=["stability", "latency", "execution", "training", "startup"],
+    )
+    p_rec.add_argument("--json-file", default=None, help="existing JSON output file to ingest")
     p_rec.add_argument("--url", default="http://localhost:8000")
     p_rec.add_argument("--runs", type=int, default=20)
     p_rec.add_argument("--model", default=None, help="model name (latency only)")
@@ -338,11 +427,17 @@ def main() -> int:
     p_rec.set_defaults(fn=do_record)
 
     p_h = sub.add_parser("history", help="list stored runs")
-    p_h.add_argument("--kind", default=None, choices=["stability", "latency"])
+    p_h.add_argument(
+        "--kind", default=None, choices=["stability", "latency", "execution", "training", "startup"]
+    )
     p_h.set_defaults(fn=do_history)
 
     p_c = sub.add_parser("compare", help="compare newest vs prior run")
-    p_c.add_argument("--kind", default="stability", choices=["stability", "latency"])
+    p_c.add_argument(
+        "--kind",
+        default="stability",
+        choices=["stability", "latency", "execution", "training", "startup"],
+    )
     p_c.add_argument("--vs", default="previous", choices=["previous", "first"])
     p_c.set_defaults(fn=do_compare)
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, memo } from 'react'
-import { Button, Checkbox, IconX, IconCheck } from '@sloughgpt/strui'
+import { Button, Checkbox, IconX } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
 
@@ -101,6 +101,7 @@ export const SessionComparison = memo(function SessionComparison({
           value={leftId}
           onChange={(e) => setLeftId(e.target.value)}
           className="flex-1 text-xs bg-transparent border rounded px-2 py-1"
+          aria-label="Left session"
         >
           {sessions.map(s => (
             <option key={s.id} value={s.id}>{s.title}</option>
@@ -111,6 +112,7 @@ export const SessionComparison = memo(function SessionComparison({
           value={rightId}
           onChange={(e) => setRightId(e.target.value)}
           className="flex-1 text-xs bg-transparent border rounded px-2 py-1"
+          aria-label="Right session"
         >
           {sessions.map(s => (
             <option key={s.id} value={s.id}>{s.title}</option>

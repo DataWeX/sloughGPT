@@ -1,21 +1,21 @@
 """Tests for the auto-memory layer (MemoryService + KnowledgeMemoryProvider)."""
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
-from pathlib import Path
-
-from domains.memory.memory_config import MemoryConfig
-from domains.memory.memory_provider import KnowledgeMemoryProvider
-from domains.memory.memory_service import MemoryService, get_memory_service
-from domains.learner.knowledge import KnowledgeMemory
+from domain.learner._internal.knowledge import KnowledgeMemory
+from domain.memory._internal.config import MemoryConfig
+from domain.memory._internal.provider import KnowledgeMemoryProvider
+from domain.memory._internal.service import MemoryService, get_memory_service
 
 
 @pytest.fixture(autouse=True)
 def isolated_paths(tmp_path, monkeypatch):
     """Keep persistence off the real data dir (repo-root anchored)."""
-    from domains.learner import knowledge as K
+    from domain.memory._internal import knowledge_store as K
+
     monkeypatch.setattr(K, "KNOWLEDGE_DIR", tmp_path)
     monkeypatch.setattr(K, "FEED_STATE_PATH", tmp_path / "feeds.json")
     monkeypatch.setattr(K, "VISITED_PATH", tmp_path / "visited.json")
@@ -36,10 +36,13 @@ def service(provider):
 
 class TestRemember:
     def test_returns_true_when_facts_stored(self, service):
-        assert service.remember(
-            "Tell me about machine learning",
-            "Machine learning learns patterns from data. Gradient descent is the optimizer.",
-        ) is True
+        assert (
+            service.remember(
+                "Tell me about machine learning",
+                "Machine learning learns patterns from data. Gradient descent is the optimizer.",
+            )
+            is True
+        )
 
     def test_returns_false_for_empty_turn(self, service):
         assert service.remember("", "") is False
@@ -193,7 +196,8 @@ class TestRetrieve:
         for i in range(6):
             service.store(
                 f"Machine learning topic number {i} about models and training data",
-                "ml", "task",
+                "ml",
+                "task",
             )
         results = service.retrieve("machine learning models", limit=3)
         assert len(results) <= 3
@@ -214,7 +218,10 @@ class TestStore:
 
     def test_store_duplicate_returns_false(self, service):
         service.store("Duplicate fact about gravity pulling objects", "science", "task")
-        assert service.store("Duplicate fact about gravity pulling objects", "science", "task") is False
+        assert (
+            service.store("Duplicate fact about gravity pulling objects", "science", "task")
+            is False
+        )
 
     def test_store_empty_content_returns_false(self, service):
         assert service.store("", "science", "task") is False
@@ -314,13 +321,16 @@ class TestConsolidation:
 
     def test_consolidate_removes_near_duplicate_keeps_longest(self, service):
         service.store(
-            "Machine learning learns patterns from data.", "ml", "task",
+            "Machine learning learns patterns from data.",
+            "ml",
+            "task",
         )
         service.store(
             "Machine learning learns patterns from data very effectively.",
-            "ml", "task",
+            "ml",
+            "task",
         )
-        from domains.memory.consolidation import plan_consolidation
+        from domain.memory._internal.consolidation import plan_consolidation
 
         plan = plan_consolidation(service.list_all(limit=100), threshold=0.80)
         assert plan["removed_count"] == 1
@@ -333,7 +343,7 @@ class TestConsolidation:
     def test_consolidate_distinct_facts_untouched(self, service):
         service.store("Machine learning learns patterns from data.", "ml", "task")
         service.store("The octopus has three hearts and blue blood.", "biology", "task")
-        from domains.memory.consolidation import plan_consolidation
+        from domain.memory._internal.consolidation import plan_consolidation
 
         plan = plan_consolidation(service.list_all(limit=100), threshold=0.80)
         assert plan["removed_count"] == 0
@@ -347,10 +357,13 @@ class TestProvider:
         assert provider.store_turn("message", "") is False
 
     def test_store_turn_persists_facts(self, provider):
-        assert provider.store_turn(
-            "explain photosynthesis",
-            "Photosynthesis is the process plants use to convert light into chemical energy stored in glucose.",
-        ) is True
+        assert (
+            provider.store_turn(
+                "explain photosynthesis",
+                "Photosynthesis is the process plants use to convert light into chemical energy stored in glucose.",
+            )
+            is True
+        )
         assert provider.stats().get("total_facts", 0) >= 1
 
     def test_retrieve_returns_results(self, provider):
@@ -373,7 +386,10 @@ class TestSetEnabled:
         assert service.enabled is True
 
     def test_disabled_service_skips_remember(self, service):
-        turn = ("Tell me about machine learning", "Machine learning learns patterns from data. Gradient descent is the optimizer.")
+        turn = (
+            "Tell me about machine learning",
+            "Machine learning learns patterns from data. Gradient descent is the optimizer.",
+        )
         service.set_enabled(False)
         assert service.remember(*turn) is False
         service.set_enabled(True)
@@ -398,6 +414,118 @@ class TestSetEnabled:
             config.set_enabled(original)
 
 
+class TestUpdate:
+    def test_update_existing_item(self, service):
+        service.store("Original fact about pandas eating bamboo", "animals", "task")
+        items = service.list_all(limit=10)
+        target = items[0]
+        assert (
+            service.update(target["id"], "Updated fact about pandas eating bamboo leaves") is True
+        )
+        refreshed = [i for i in service.list_all(limit=10) if i["id"] == target["id"]]
+        assert refreshed[0]["content"] == "Updated fact about pandas eating bamboo leaves"
+
+    def test_update_disabled_returns_false(self, provider):
+        service = MemoryService(
+            provider=provider,
+            config=MemoryConfig(enabled=False),
+        )
+        assert service.update("any_id", "some content") is False
+
+    def test_update_unknown_id_returns_false(self, service):
+        service.store("A fact about the ocean depths", "nature", "task")
+        assert service.update("fact_999_nonexistent", "replacement text") is False
+
+    def test_update_empty_content_returns_false(self, service):
+        service.store("A fact about the desert sun", "nature", "task")
+        items = service.list_all(limit=10)
+        assert service.update(items[0]["id"], "") is False
+        assert service.update(items[0]["id"], "   ") is False
+
+    def test_update_with_topic(self, service):
+        service.store("Fact about neural networks in brains", "ml", "task")
+        items = service.list_all(limit=10)
+        target = items[0]
+        assert (
+            service.update(target["id"], "Updated fact about neural networks", topic="neuroscience")
+            is True
+        )
+        refreshed = [i for i in service.list_all(limit=10) if i["id"] == target["id"]]
+        assert refreshed[0]["topic"] == "neuroscience"
+
+    def test_update_preserves_other_items(self, service):
+        service.store("Fact one about coral reefs", "ocean", "task")
+        service.store("Fact two about tidal patterns", "ocean", "task")
+        items = service.list_all(limit=10)
+        target = items[0]
+        service.update(target["id"], "Revised fact one about coral reefs")
+        remaining = service.list_all(limit=10)
+        assert len(remaining) == 2
+
+
+class TestConfigSnapshot:
+    def test_snapshot_returns_all_keys(self, service):
+        snap = service.config_snapshot()
+        expected_keys = {
+            "enabled",
+            "min_chars",
+            "max_facts",
+            "store_path",
+            "sync_remember",
+            "consolidation_threshold",
+            "maintenance_interval_minutes",
+            "archive_retention_days",
+        }
+        assert expected_keys.issubset(set(snap.keys()))
+
+    def test_snapshot_reflects_current_config(self, service):
+        snap = service.config_snapshot()
+        assert snap["enabled"] is True
+        assert snap["min_chars"] == 80
+        assert snap["max_facts"] == 5
+        assert snap["consolidation_threshold"] == 0.80
+
+    def test_snapshot_changes_after_set_enabled(self, service):
+        service.set_enabled(False)
+        snap = service.config_snapshot()
+        assert snap["enabled"] is False
+        service.set_enabled(True)
+
+
+class TestSetArchiveRetention:
+    def test_set_archive_retention_updates_config(self, service):
+        service.set_archive_retention(14)
+        snap = service.config_snapshot()
+        assert snap["archive_retention_days"] == 14.0
+
+    def test_set_archive_retention_zero(self, service):
+        service.set_archive_retention(0)
+        snap = service.config_snapshot()
+        assert snap["archive_retention_days"] == 0.0
+
+    def test_set_archive_retention_negative_clamped_to_zero(self, service):
+        service.set_archive_retention(-5)
+        snap = service.config_snapshot()
+        assert snap["archive_retention_days"] == 0.0
+
+
+class TestListAll:
+    def test_list_all_empty_store(self, service):
+        assert service.list_all(limit=10) == []
+
+    def test_list_all_respects_limit(self, service):
+        for i in range(8):
+            service.store(f"Fact {i} about astronomy and telescopes", "space", "task")
+        assert len(service.list_all(limit=3)) == 3
+
+    def test_list_all_disabled_returns_empty(self, provider):
+        service = MemoryService(
+            provider=provider,
+            config=MemoryConfig(enabled=False),
+        )
+        assert service.list_all(limit=50) == []
+
+
 class TestChatWiring:
     """Contract test: the chat post-gen path must call memory.remember().
 
@@ -405,11 +533,13 @@ class TestChatWiring:
     in every environment). Guards against the wiring being silently removed.
     """
 
-    _ROUTER = Path(__file__).resolve().parents[3] / "apps" / "api" / "server" / "routers" / "inference.py"
+    _ROUTER = (
+        Path(__file__).resolve().parents[3] / "apps" / "api" / "server" / "routers" / "inference.py"
+    )
 
     def test_router_imports_memory_service(self):
         src = self._ROUTER.read_text()
-        assert "from domains.memory.memory_service import get_memory_service" in src
+        assert "from domain.memory import get_memory_service" in src
 
     def test_router_invokes_remember_facts_in_post_gen(self):
         src = self._ROUTER.read_text()

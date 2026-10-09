@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { ActionCard, Card, CardHeader, CardTitle, CardContent, Button, Textarea, StatCard, KpiGrid } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
+import { SectionLabel } from '@/components/composed/SectionLabel'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { voiceController, type VoiceStatus } from '@/lib/voice-controller'
 import { VoicePresetCard } from '@/components/voice/VoicePresetCard'
 import { useToastStore } from '@/lib/toast-store'
@@ -19,17 +21,19 @@ export function VoiceSection() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
+    let active = true
     voiceController.getStatus()
-      .then(d => setStatus(d))
-      .catch(() => { addToast('Failed to load voice status', 'error') })
-      .finally(() => setLoading(false))
+      .then(d => { if (active) setStatus(d) })
+      .catch(() => { if (active) addToast('Could not load voice status', 'error') })
+      .finally(() => { if (active) setLoading(false) })
+    return () => { active = false }
   }, [])
 
   const handleRefreshStatus = async () => {
     try {
       setStatus(await voiceController.getStatus())
     } catch {
-      addToast('Failed to refresh voice status', 'error')
+      addToast('Could not refresh voice status', 'error')
     }
   }
 
@@ -46,7 +50,7 @@ export function VoiceSection() {
       }
       setLastResult({ duration_ms: data.duration_ms, backend: data.backend, sample_rate: data.sample_rate })
       setTtsCount(c => c + 1)
-      if (data.audio && data.backend === 'hf-model') {
+      if (data.audio && data.backend !== 'browser-fallback') {
         const audio = new Audio(`data:audio/wav;base64,${data.audio}`)
         audioRef.current = audio
         audio.play().catch(() => {}) // autoplay policy — expected
@@ -57,7 +61,7 @@ export function VoiceSection() {
         }
       }
     } catch (err) {
-      setTtsError(err instanceof Error ? err.message : 'TTS failed')
+      setTtsError(err instanceof Error ? err.message : 'Could not tts')
     } finally {
       setGenerating(false)
     }
@@ -66,7 +70,7 @@ export function VoiceSection() {
   return (
     <>
       <div className="flex items-center justify-between border-b border-border/30 pb-2 pt-1">
-        <h2 className="text-base font-medium">Text to Speech</h2>
+        <SectionLabel>Text to Speech</SectionLabel>
       </div>
 
       {loading ? (
@@ -77,37 +81,36 @@ export function VoiceSection() {
         </KpiGrid>
       ) : (
         <KpiGrid>
-          <StatCard label="Server TTS" value={status?.server_tts ? 'Available' : 'Unavailable'} />
+          <StatCard label="Text-to-Speech" value={status?.server_tts ? 'Available' : 'Unavailable'} />
           <StatCard label="Model" value={status?.model ?? 'None'} />
           <StatCard label="TTS Calls" value={ttsCount} />
         </KpiGrid>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">TTS Backend</CardTitle>
-          <Button size="sm" variant="ghost" onClick={handleRefreshStatus}>
+      <ActionCard
+        title="TTS Backend"
+        actions={
+          <Button size="sm" variant="ghost" onClick={handleRefreshStatus} aria-label="Refresh TTS status">
             <IconRefresh className="h-4 w-4" />
           </Button>
-        </CardHeader>
-        <CardContent>
+        }
+      >
           {status ? (
             <div className="space-y-3">
               <KpiGrid columns={4}>
-                <StatCard label="Server" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
+                <StatCard label="Service" value={<span className={status.server_tts ? 'text-success' : 'text-muted-foreground'}>{status.server_tts ? 'Online' : 'Offline'}</span>} />
                 <StatCard label="Model" value={status.model ?? '—'} />
                 <StatCard label="Fallback" value="Browser" />
                 <StatCard label="Status" value={<span className={status.error ? 'text-destructive' : 'text-success'}>{status.error ? 'Error' : 'Ready'}</span>} />
               </KpiGrid>
               {status.error && (
-                <div className="text-xs text-destructive bg-destructive/5 rounded-md p-2">{status.error}</div>
+                <StatusBanner variant="error" message={status.error} dismissible={false} />
               )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">Could not load TTS status.</p>
           )}
-        </CardContent>
-      </Card>
+      </ActionCard>
 
       <VoicePresetCard />
 
@@ -133,7 +136,7 @@ export function VoiceSection() {
             )}
           </div>
           {ttsError && (
-            <div className="text-xs text-destructive">{ttsError}</div>
+            <StatusBanner variant="error" message={ttsError} dismissible={false} />
           )}
         </CardContent>
       </Card>
@@ -144,8 +147,8 @@ export function VoiceSection() {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground space-y-1">
-            <p>Server-side TTS uses HuggingFace bark-small model when available.</p>
-            <p>Falls back to browser native speechSynthesis if server model is unavailable.</p>
+            <p>Text-to-speech uses HuggingFace bark-small model when available.</p>
+            <p>Falls back to browser native speechSynthesis if the model is unavailable.</p>
             <p>Voice input is available in the chat page via the microphone button.</p>
           </div>
         </CardContent>

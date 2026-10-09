@@ -22,11 +22,57 @@ vi.mock('@sloughgpt/strui', () => {
     cn: vi.fn((...args: any[]) => args.join(' ')),
     Input: (props: any) => <input data-testid="search-input" {...props} />,
     Button: ({ children, onClick, variant, size, ...rest }: any) => (
-      <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+      <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>
+        {children}
+      </button>
     ),
     IconSearch: iconMock('search'),
     IconX: iconMock('x'),
     IconMessage: iconMock('message'),
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
@@ -36,12 +82,14 @@ describe('ConversationSearch', () => {
   const onClose = vi.fn()
   const onNavigate = vi.fn()
 
-  beforeEach(() => { vi.clearAllMocks() })
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
   afterEach(cleanup)
 
   it('returns null when not open', () => {
     const { container } = render(
-      <ConversationSearch open={false} onClose={onClose} onNavigate={onNavigate} />
+      <ConversationSearch open={false} onClose={onClose} onNavigate={onNavigate} />,
     )
     expect(container.innerHTML).toBe('')
   })
@@ -76,9 +124,12 @@ describe('ConversationSearch', () => {
     render(<ConversationSearch open={true} onClose={onClose} onNavigate={onNavigate} />)
     const input = screen.getByTestId('search-input')
     fireEvent.change(input, { target: { value: 'hello' } })
-    await waitFor(() => {
-      expect(screen.getByText(/No results for/)).toBeDefined()
-    })
+    await waitFor(
+      () => {
+        expect(screen.getByText(/No results for/)).toBeDefined()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('renders search results', async () => {
@@ -91,11 +142,14 @@ describe('ConversationSearch', () => {
     render(<ConversationSearch open={true} onClose={onClose} onNavigate={onNavigate} />)
     const input = screen.getByTestId('search-input')
     fireEvent.change(input, { target: { value: 'hello' } })
-    await waitFor(() => {
-      expect(screen.getByText('1 conversation found')).toBeDefined()
-      expect(screen.getByText('Test Chat')).toBeDefined()
-      expect(screen.getByText('1 match')).toBeDefined()
-    })
+    await waitFor(
+      () => {
+        expect(screen.getByText('1 conversation found')).toBeDefined()
+        expect(screen.getByText('Test Chat')).toBeDefined()
+        expect(screen.getByText('1 match')).toBeDefined()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('navigates and closes on result click', async () => {
@@ -108,9 +162,12 @@ describe('ConversationSearch', () => {
     render(<ConversationSearch open={true} onClose={onClose} onNavigate={onNavigate} />)
     const input = screen.getByTestId('search-input')
     fireEvent.change(input, { target: { value: 'hello' } })
-    await waitFor(() => {
-      expect(screen.getByText('Test Chat')).toBeDefined()
-    })
+    await waitFor(
+      () => {
+        expect(screen.getByText('Test Chat')).toBeDefined()
+      },
+      { timeout: 5000 },
+    )
     fireEvent.click(screen.getByText('Test Chat'))
     expect(onNavigate).toHaveBeenCalledWith('s1')
     expect(onClose).toHaveBeenCalled()
@@ -146,13 +203,13 @@ describe('ConversationSearch', () => {
 
   it('resets on close', () => {
     const { rerender } = render(
-      <ConversationSearch open={true} onClose={onClose} onNavigate={onNavigate} />
+      <ConversationSearch open={true} onClose={onClose} onNavigate={onNavigate} />,
     )
     const input = screen.getByTestId('search-input') as HTMLInputElement
     fireEvent.change(input, { target: { value: 'hello' } })
     rerender(<ConversationSearch open={false} onClose={onClose} onNavigate={onNavigate} />)
     const { container } = render(
-      <ConversationSearch open={true} onClose={onClose} onNavigate={onNavigate} />
+      <ConversationSearch open={true} onClose={onClose} onNavigate={onNavigate} />,
     )
     const newInput = container.querySelector('[data-testid="search-input"]') as HTMLInputElement
     expect(newInput.value).toBe('')

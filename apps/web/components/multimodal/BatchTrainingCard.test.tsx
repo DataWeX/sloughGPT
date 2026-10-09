@@ -9,7 +9,44 @@ vi.mock('@sloughgpt/strui', async () => {
     ProgressBar: ({ value, max, variant }: any) => (
       <div data-testid="progress-bar" data-value={value} data-max={max} data-variant={variant} />
     ),
-  }
+  
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}
 })
 
 import BatchTrainingCard from './BatchTrainingCard'
@@ -48,7 +85,7 @@ describe('BatchTrainingCard', () => {
 
   it('renders server directory input', () => {
     render(<BatchTrainingCard batchUploading={false} trainStatus={null} onFileUpload={mockOnFileUpload} onDirUpload={mockOnDirUpload} />)
-    expect(screen.getByPlaceholderText('/path/to/images on server')).toBeDefined()
+    expect(screen.getByPlaceholderText('/path/to/images')).toBeDefined()
   })
 
   it('Train from directory button disabled when input is empty', () => {
@@ -59,14 +96,14 @@ describe('BatchTrainingCard', () => {
 
   it('enables Train from directory when path entered', () => {
     render(<BatchTrainingCard batchUploading={false} trainStatus={null} onFileUpload={mockOnFileUpload} onDirUpload={mockOnDirUpload} />)
-    fireEvent.change(screen.getByPlaceholderText('/path/to/images on server'), { target: { value: '/data/imgs' } })
+    fireEvent.change(screen.getByPlaceholderText('/path/to/images'), { target: { value: '/data/imgs' } })
     const btn = screen.getByText('Train from directory').closest('button')!
     expect(btn.disabled).toBe(false)
   })
 
   it('calls onDirUpload with path when Train from directory clicked', () => {
     render(<BatchTrainingCard batchUploading={false} trainStatus={null} onFileUpload={mockOnFileUpload} onDirUpload={mockOnDirUpload} />)
-    fireEvent.change(screen.getByPlaceholderText('/path/to/images on server'), { target: { value: '/data/imgs' } })
+    fireEvent.change(screen.getByPlaceholderText('/path/to/images'), { target: { value: '/data/imgs' } })
     fireEvent.click(screen.getByText('Train from directory'))
     expect(mockOnDirUpload).toHaveBeenCalledWith('/data/imgs')
   })

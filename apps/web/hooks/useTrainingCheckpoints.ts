@@ -4,6 +4,8 @@ import { useState, useCallback } from 'react'
 import { trainingJobsController } from '@/lib/controllers'
 import type { Checkpoint } from '@/lib/souls-controller'
 import type { TrainingBuild, TrainingJob } from '@/lib/training-controller'
+import { logger, trackEvent } from '@/lib/dev-log'
+import { formatToastError } from '@/lib/error-utils'
 
 export interface UseTrainingCheckpointsReturn {
   checkpoints: Checkpoint[]
@@ -18,8 +20,14 @@ export interface UseTrainingCheckpointsReturn {
   fetchCheckpoints: () => Promise<void>
   fetchBuilds: () => Promise<void>
   fetchJobs: () => Promise<void>
-  handleLoadCheckpoint: (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => Promise<void>
-  handleDeleteCheckpoint: (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => Promise<void>
+  handleLoadCheckpoint: (
+    name: string,
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+  ) => Promise<void>
+  handleDeleteCheckpoint: (
+    name: string,
+    addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+  ) => Promise<void>
 }
 
 export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
@@ -36,46 +44,84 @@ export function useTrainingCheckpoints(): UseTrainingCheckpointsReturn {
     try {
       const data = await trainingJobsController.listCheckpoints()
       setCheckpoints(data)
-    } catch { /* ignore */ }
-    finally { setLoadingCheckpoints(false) }
+    } catch (e) {
+      logger.warning('Could not checkpoints fetch', {
+        exception: String(e instanceof Error ? e.message : e),
+      })
+    } finally {
+      setLoadingCheckpoints(false)
+    }
   }, [])
 
   const fetchBuilds = useCallback(async () => {
     try {
       const data = await trainingJobsController.listBuilds()
-      setBuilds(data)
-    } catch { /* ignore */ }
-    finally { setLoadingBuilds(false) }
+      setBuilds(data ?? [])
+    } catch (e) {
+      logger.warning('Could not checkpoints builds fetch', {
+        exception: String(e instanceof Error ? e.message : e),
+      })
+    } finally {
+      setLoadingBuilds(false)
+    }
   }, [])
 
   const fetchJobs = useCallback(async () => {
-    try { setJobs(await trainingJobsController.list()) }
-    catch { /* ignore */ }
-    finally { setLoadingJobs(false) }
+    try {
+      setJobs((await trainingJobsController.list()) ?? [])
+    } catch (e) {
+      logger.warning('Could not checkpoints jobs fetch', {
+        exception: String(e instanceof Error ? e.message : e),
+      })
+    } finally {
+      setLoadingJobs(false)
+    }
   }, [])
 
-  const handleLoadCheckpoint = useCallback(async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
-    try {
-      await trainingJobsController.loadCheckpoint?.(name)
-      setActiveCheckpoint(name)
-      addToast(`Loaded trained version: ${name}`, 'success')
-    } catch { addToast('Failed to load trained version', 'error') }
-  }, [])
+  const handleLoadCheckpoint = useCallback(
+    async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
+      try {
+        await trainingJobsController.loadCheckpoint?.(name)
+        setActiveCheckpoint(name)
+        trackEvent('checkpoint_loaded', { name })
+        addToast(`Loaded trained version: ${name}`, 'success')
+      } catch (e) {
+        addToast(formatToastError(e, 'Could not load trained version'), 'error')
+      }
+    },
+    [],
+  )
 
-  const handleDeleteCheckpoint = useCallback(async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
-    if (!confirm(`Delete trained version "${name}"?`)) return
-    try {
-      await trainingJobsController.deleteCheckpoint?.(name)
-      setCheckpoints(prev => prev.filter(c => c.name !== name))
-      setActiveCheckpoint(prev => prev === name ? null : prev)
-      addToast(`Deleted ${name}`, 'success')
-    } catch { addToast('Failed to delete trained version', 'error') }
-  }, [])
+  const handleDeleteCheckpoint = useCallback(
+    async (name: string, addToast: (msg: string, type?: 'success' | 'error' | 'info') => void) => {
+      if (!confirm(`Delete trained version "${name}"?`)) return
+      try {
+        await trainingJobsController.deleteCheckpoint?.(name)
+        setCheckpoints((prev) => prev.filter((c) => c.name !== name))
+        setActiveCheckpoint((prev) => (prev === name ? null : prev))
+        trackEvent('checkpoint_deleted', { name })
+        addToast(`Deleted ${name}`, 'success')
+      } catch (e) {
+        addToast(formatToastError(e, 'Could not delete trained version'), 'error')
+      }
+    },
+    [],
+  )
 
   return {
-    checkpoints, loadingCheckpoints, activeCheckpoint, builds, loadingBuilds, jobs, loadingJobs,
-    setActiveCheckpoint, setCheckpoints,
-    fetchCheckpoints, fetchBuilds, fetchJobs,
-    handleLoadCheckpoint, handleDeleteCheckpoint,
+    checkpoints,
+    loadingCheckpoints,
+    activeCheckpoint,
+    builds,
+    loadingBuilds,
+    jobs,
+    loadingJobs,
+    setActiveCheckpoint,
+    setCheckpoints,
+    fetchCheckpoints,
+    fetchBuilds,
+    fetchJobs,
+    handleLoadCheckpoint,
+    handleDeleteCheckpoint,
   }
 }

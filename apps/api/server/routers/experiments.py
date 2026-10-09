@@ -1,20 +1,42 @@
 """
 Experiments Router - ML experiment tracking
-"""
-from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import Optional, Any
-from datetime import datetime, timezone
-import json
-import re
-from pathlib import Path
 
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+Uses MogDB as the storage engine with automatic JSON sync.
+Each experiment, metric, param, and status is a MogDB document.
+The JSON files are written to data/experiments_json/ for human readability.
+"""
+
+from __future__ import annotations
+
+import logging
+import re
+from datetime import datetime
+from typing import Any
+
+from fastapi import APIRouter, Depends, Query
+from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.shared import utc_now_iso
+
+logger = logging.getLogger("slo.routers.experiments")
 
 
 class ExperimentCreate(BaseModel):
-    name: str
-    config: Optional[dict] = None
+    name: str = Field(..., min_length=1, max_length=200, pattern=r"^[a-zA-Z0-9_\- ]+$")
+    config: dict | None = None
+
+
+def _get_db():
+    from infrastructure.db_pool import get_db
+
+    return get_db("experiments_mogdb")
 
 
 class ExperimentsRouter:
@@ -22,179 +44,259 @@ class ExperimentsRouter:
 
     def __init__(self):
         self.router = APIRouter(prefix="/experiments", tags=["experiments"])
-        self.REPO_ROOT = Path(__file__).parent.parent.parent.parent
-        self.EXPERIMENTS_DIR = self.REPO_ROOT / "data" / "experiments"
-        self._VALID_EXP_ID = re.compile(r'^[a-zA-Z0-9_\-]+$')
+        self._VALID_EXP_ID = re.compile(r"^[a-zA-Z0-9_\-]+$")
         self._register_routes()
 
     def _register_routes(self):
         self.router.add_api_route("", self.create_experiment, methods=["POST"])
         self.router.add_api_route("", self.list_experiments, methods=["GET"])
+        self.router.add_api_route("/compare", self.compare_experiments, methods=["GET"])
         self.router.add_api_route("/{experiment_id}", self.get_experiment, methods=["GET"])
         self.router.add_api_route("/{experiment_id}", self.delete_experiment, methods=["DELETE"])
-        self.router.add_api_route("/{experiment_id}/runs", self.get_experiment_runs, methods=["GET"])
-        self.router.add_api_route("/{experiment_id}/data", self.get_experiment_data, methods=["GET"])
-        self.router.add_api_route("/{experiment_id}/complete", self.complete_experiment, methods=["POST"])
+        self.router.add_api_route(
+            "/{experiment_id}/runs", self.get_experiment_runs, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/{experiment_id}/data", self.get_experiment_data, methods=["GET"]
+        )
+        self.router.add_api_route(
+            "/{experiment_id}/complete", self.complete_experiment, methods=["POST"]
+        )
         self.router.add_api_route("/{experiment_id}/log_metric", self.log_metric, methods=["POST"])
         self.router.add_api_route("/{experiment_id}/log_param", self.log_param, methods=["POST"])
 
-    async def create_experiment(self, req: ExperimentCreate) -> dict:
-        """Create a new ML experiment with a timestamped directory.
-
-        Generates a unique experiment ID from the name and current timestamp,
-        creates the experiment directory under data/experiments/, and returns
-        the experiment metadata.
-
-        Args:
-            req: ExperimentCreate with name (required) and optional config dict.
-
-        Returns:
-            Success envelope with id, name, and created flag.
-
-        Side effects:
-            - Creates a directory under data/experiments/ for the experiment.
-            - Writes an audit log entry for the creation.
-        """
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    @endpoint("experiments.create")
+    async def create_experiment(
+        self, req: ExperimentCreate, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Create a new ML experiment."""
         exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        exp_dir = self.EXPERIMENTS_DIR / exp_id
-        exp_dir.mkdir(exist_ok=True)
+        db = _get_db()
+        col = db.collection("experiments")
+        col.insert_one(
+            {
+                "experiment_id": exp_id,
+                "name": req.name,
+                "config": req.config or {},
+                "status": "created",
+            }
+        )
         safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
         return success_response(data={"id": exp_id, "name": req.name, "created": True})
 
+    @endpoint("experiments.list")
     async def list_experiments(self) -> dict:
-        """List all ML experiments stored on disk.
+        """List all ML experiments."""
+        db = _get_db()
+        col = db.collection("experiments")
+        docs = col.find()
+        exp_ids = sorted({d.get("experiment_id", "") for d in docs})
+        return success_response(data={"experiments": exp_ids, "count": len(exp_ids)})
 
-        Scans the data/experiments/ directory for subdirectories, each
-        representing an experiment, and returns their names.
-
-        Returns:
-            Success envelope with experiments array and count.
-        """
-        if not self.EXPERIMENTS_DIR.exists():
-            return success_response(data={"experiments": [], "count": 0})
-        exps = [d.name for d in self.EXPERIMENTS_DIR.iterdir() if d.is_dir()]
-        return success_response(data={"experiments": exps, "count": len(exps)})
-
+    @endpoint("experiments.get")
     async def get_experiment(self, experiment_id: str) -> dict:
-        """Retrieve metadata for a single experiment by its ID.
+        """Retrieve metadata for a single experiment."""
+        if not self._VALID_EXP_ID.match(experiment_id) or ".." in experiment_id:
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+        db = _get_db()
+        col = db.collection("experiments")
+        doc = col.find_one({"experiment_id": experiment_id})
+        if not doc:
+            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
+        return success_response(
+            data={"id": experiment_id, "name": doc.get("name"), "config": doc.get("config", {})}
+        )
 
-        Validates the experiment ID format and checks that the directory
-        exists under data/experiments/.
-
-        Args:
-            experiment_id: The unique experiment identifier.
-
-        Returns:
-            Success envelope with id and filesystem path.
-
-        Raises:
-            400 if the experiment ID is invalid.
-            404 if the experiment directory is not found.
-        """
-        if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-        if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-            raise HTTPException(status_code=404, detail="Experiment not found")
-        return success_response(data={"id": experiment_id, "path": str(path)})
-
-    async def delete_experiment(self, experiment_id: str) -> dict:
+    @endpoint("experiments.delete")
+    async def delete_experiment(
+        self, experiment_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Delete an experiment and all its data."""
-        import shutil
-        if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-        if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-            raise HTTPException(status_code=404, detail="Experiment not found")
-        shutil.rmtree(path)
+        if not self._VALID_EXP_ID.match(experiment_id) or ".." in experiment_id:
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+        db = _get_db()
+        # Delete experiment metadata
+        exp_col = db.collection("experiments")
+        deleted = exp_col.delete_many({"experiment_id": experiment_id})
+        # Delete associated metrics
+        metrics_col = db.collection("metrics")
+        metrics_col.delete_many({"experiment_id": experiment_id})
+        # Delete associated params
+        params_col = db.collection("params")
+        params_col.delete_many({"experiment_id": experiment_id})
+        # Delete associated status
+        status_col = db.collection("status")
+        status_col.delete_many({"experiment_id": experiment_id})
+        if not deleted:
+            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("experiment.delete", resource=experiment_id)
         return success_response(data={"id": experiment_id, "deleted": True})
 
+    @endpoint("experiments.runs")
     async def get_experiment_runs(self, experiment_id: str) -> dict:
-        """Get runs for an experiment"""
-        if not self._VALID_EXP_ID.match(experiment_id) or '..' in experiment_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        path = (self.EXPERIMENTS_DIR / experiment_id).resolve()
-        if not path.exists() or not str(path).startswith(str(self.EXPERIMENTS_DIR.resolve())):
-            raise HTTPException(status_code=404, detail="Experiment not found")
-        runs = list(path.glob("*.json"))
-        return success_response(data={"runs": len(runs)})
+        """Get run count for an experiment."""
+        if not self._VALID_EXP_ID.match(experiment_id) or ".." in experiment_id:
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+        db = _get_db()
+        col = db.collection("experiments")
+        doc = col.find_one({"experiment_id": experiment_id})
+        if not doc:
+            raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
+        # Count metrics as a proxy for runs
+        metrics_col = db.collection("metrics")
+        count = metrics_col.count({"experiment_id": experiment_id})
+        return success_response(data={"runs": count})
 
+    @endpoint("experiments.data")
     async def get_experiment_data(self, experiment_id: str) -> dict:
         """Get logged metrics and params for an experiment."""
         e_id = experiment_id
-        if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        metrics_file = self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl"
-        params_file = self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl"
-        status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
-        metrics = []
-        params = []
-        status = None
-        if metrics_file.exists():
-            with open(metrics_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            metrics.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            pass
-        if params_file.exists():
-            with open(params_file) as f:
-                for line in f:
-                    line = line.strip()
-                    if line:
-                        try:
-                            params.append(json.loads(line))
-                        except json.JSONDecodeError:
-                            pass
-        if status_file.exists():
-            with open(status_file) as f:
-                try:
-                    status = json.load(f)
-                except json.JSONDecodeError:
-                    pass
-        return success_response(data={"id": e_id, "metrics": metrics, "params": params, "status": status})
+        if not self._VALID_EXP_ID.match(e_id) or ".." in e_id:
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+        db = _get_db()
+        metrics_col = db.collection("metrics")
+        params_col = db.collection("params")
+        status_col = db.collection("status")
 
-    async def complete_experiment(self, experiment_id: str) -> dict:
-        """Mark experiment as complete and persist status to disk."""
+        metrics = metrics_col.find({"experiment_id": e_id})
+        params = params_col.find({"experiment_id": e_id})
+        status_doc = status_col.find_one({"experiment_id": e_id})
+
+        return success_response(
+            data={
+                "id": e_id,
+                "metrics": metrics,
+                "params": params,
+                "status": status_doc,
+            }
+        )
+
+    @endpoint("experiments.complete")
+    async def complete_experiment(
+        self, experiment_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Mark experiment as complete."""
         e_id = experiment_id
-        if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        status_file = self.EXPERIMENTS_DIR / f"{e_id}_status.json"
+        if not self._VALID_EXP_ID.match(e_id) or ".." in e_id:
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+        db = _get_db()
+        status_col = db.collection("status")
+        existing = status_col.find_one({"experiment_id": e_id})
         status_data = {
             "experiment_id": e_id,
             "status": "completed",
-            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "completed_at": utc_now_iso(),
         }
-        with open(status_file, "w") as f:
-            json.dump(status_data, f)
+        if existing:
+            status_col.update_one(
+                {"experiment_id": e_id},
+                {"$set": {"status": "completed", "completed_at": status_data["completed_at"]}},
+            )
+        else:
+            status_col.insert_one(status_data)
+        safe_audit_log("experiment.complete", resource=e_id)
         return success_response(data={"id": e_id, "status": "completed"})
 
-    async def log_metric(self, experiment_id: str, metric_name: str, value: float, step: int = 0) -> dict:
+    @endpoint("experiments.compare")
+    async def compare_experiments(
+        self, ids: str = Query(..., description="Comma-separated experiment IDs")
+    ) -> dict:
+        """Compare metrics across multiple experiments."""
+        exp_ids = [eid.strip() for eid in ids.split(",") if eid.strip()]
+        if len(exp_ids) < 2:
+            raise_error("Provide at least 2 experiment IDs", "E_BAD_REQUEST", status_code=400)
+        if len(exp_ids) > 10:
+            raise_error("Maximum 10 experiments to compare", "E_BAD_REQUEST", status_code=400)
+        for eid in exp_ids:
+            if not self._VALID_EXP_ID.match(eid) or ".." in eid:
+                raise_error(f"Invalid experiment ID: {eid}", "E_BAD_REQUEST", status_code=400)
+
+        db = _get_db()
+        metrics_col = db.collection("metrics")
+        params_col = db.collection("params")
+
+        results = {}
+        for eid in exp_ids:
+            # Aggregate: last value per metric name, all params merged
+            metric_docs = metrics_col.find({"experiment_id": eid})
+            param_docs = params_col.find({"experiment_id": eid})
+            metric_summary = {}
+            for m in metric_docs:
+                metric_summary[m.get("metric", "")] = m.get("value")
+            param_dict = {}
+            for p in param_docs:
+                param_dict[p.get("param", "")] = p.get("value")
+            results[eid] = {"metrics": metric_summary, "params": param_dict}
+
+        all_metric_keys = sorted(set().union(*(r["metrics"].keys() for r in results.values())))
+        all_param_keys = sorted(set().union(*(r["params"].keys() for r in results.values())))
+
+        comparison = {
+            "experiments": exp_ids,
+            "metrics": {eid: results[eid]["metrics"] for eid in exp_ids},
+            "params": {eid: results[eid]["params"] for eid in exp_ids},
+            "metric_keys": all_metric_keys,
+            "param_keys": all_param_keys,
+        }
+        return success_response(data=comparison)
+
+    @endpoint("experiments.log_metric")
+    async def log_metric(
+        self,
+        experiment_id: str,
+        metric_name: str,
+        value: float,
+        step: int = 0,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Log a metric for an experiment."""
         e_id = experiment_id
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        entry = {"experiment_id": e_id, "metric": metric_name, "value": value, "step": step, "timestamp": datetime.now(timezone.utc).isoformat()}
-        with open(self.EXPERIMENTS_DIR / f"{e_id}_metrics.jsonl", "a") as f:
-            f.write(json.dumps(entry) + "\n")
-        return success_response(data={"status": "logged", "experiment_id": e_id, "metric": metric_name})
+        if not self._VALID_EXP_ID.match(e_id) or ".." in e_id:
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+        db = _get_db()
+        col = db.collection("metrics")
+        col.insert_one(
+            {
+                "experiment_id": e_id,
+                "metric": metric_name,
+                "value": value,
+                "step": step,
+                "timestamp": utc_now_iso(),
+            }
+        )
+        safe_audit_log(
+            "experiment.log_metric", resource=e_id, detail=f"metric={metric_name} value={value}"
+        )
+        return success_response(
+            data={"status": "logged", "experiment_id": e_id, "metric": metric_name}
+        )
 
-    async def log_param(self, experiment_id: str, param_name: str, value: Any) -> dict:
+    @endpoint("experiments.log_param")
+    async def log_param(
+        self,
+        experiment_id: str,
+        param_name: str = Query(..., min_length=1, max_length=200),
+        value: Any = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
         """Log a parameter for an experiment."""
         e_id = experiment_id
-        self.EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-        if not self._VALID_EXP_ID.match(e_id) or '..' in e_id:
-            raise HTTPException(status_code=400, detail="Invalid experiment ID")
-        entry = {"experiment_id": e_id, "param": param_name, "value": value, "timestamp": datetime.now(timezone.utc).isoformat()}
-        with open(self.EXPERIMENTS_DIR / f"{e_id}_params.jsonl", "a") as f:
-            f.write(json.dumps(entry) + "\n")
-        return success_response(data={"status": "logged", "experiment_id": e_id, "param": param_name})
+        if not self._VALID_EXP_ID.match(e_id) or ".." in e_id:
+            raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
+        db = _get_db()
+        col = db.collection("params")
+        col.insert_one(
+            {
+                "experiment_id": e_id,
+                "param": param_name,
+                "value": value,
+                "timestamp": utc_now_iso(),
+            }
+        )
+        safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")
+        return success_response(
+            data={"status": "logged", "experiment_id": e_id, "param": param_name}
+        )
 
 
 router = ExperimentsRouter().router

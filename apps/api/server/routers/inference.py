@@ -1,44 +1,56 @@
 """
 Inference Router - Chat and text generation endpoints
 """
-from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
-from fastapi.responses import StreamingResponse, FileResponse
-from pydantic import BaseModel, Field
-from typing import Optional, List, AsyncIterator
-from pathlib import Path
+
+from __future__ import annotations
+
 import json
 import logging
 import threading
+import time
+from collections.abc import AsyncIterator, Collection
+from pathlib import Path
+from typing import Any
 
-from schemas.common import success_response, raise_error, classify_and_raise
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
+from fastapi.responses import FileResponse, StreamingResponse
+from infrastructure.auth import require_auth_if_enabled
+from infrastructure.sse_fallback import sse_error, sse_token
+from infrastructure.sse_fallback import sse_event as _sse_event
+from pydantic import BaseModel, Field
+from schemas.common import classify_and_raise, raise_error, safe_audit_log, success_response
+
+from config import ServerConfig
+from config import gen_config as _gen_config
+from domain.agents import get_agent_system, get_tool_registry
+from domain.core import get_rag_service
+from domain.feedback import get_response_tracker
+from domain.infrastructure import AppError
+from domain.infrastructure.cancel_manager import OpType, get_cancel_manager
+from domain.infrastructure.conversation_log import capture
+from domain.infrastructure.request_coalescer import get_coalescer
+from domain.infrastructure.server_state import get_server_state
+from domain.knowledge import KnowledgeFact, get_knowledge_memory
+from domain.learner import extract_and_store, get_learner
+from domain.memory import get_memory_service
+from domain.models import KnowledgeProcessor, apply_processors, get_provider
 
 logger = logging.getLogger("slo.inference")
 
-try:
-    from domains.api.sse_envelope import sse_event as _sse_event, sse_token, sse_error
-except ImportError:
-    import json as _json
-    def _sse_event(stream, phase, status, data=None, meta=None, message=""):
-        return "data: " + _json.dumps({
-            "stream": stream, "phase": phase, "status": status,
-            "data": data or {}, "meta": meta or {}, "message": message,
-        }) + "\n\n"
-    def sse_token(stream, token, done=False, meta=None, elapsed_ms=None) -> dict:
-        """sse_token."""
-        phase = "STREAMING"
-        status = "complete" if done else "working"
-        m = dict(meta) if meta else {}
-        if done and elapsed_ms is not None:
-            m["elapsed_ms"] = round(elapsed_ms, 1)
-        return _sse_event(stream, phase, status, {"token": token}, m, "")
-    def sse_error(stream, phase, error, meta=None) -> dict:
-        """sse_error."""
-        return _sse_event(stream, phase, "error", {"error": error}, meta or {}, f"Error: {error}")
+cfg = ServerConfig.from_env()
 import asyncio
 import datetime
-import uuid
-import time
 import sys as _sys
+import uuid
 
 # Ensure server parent dir is on path for host_metrics import (used in /info)
 _server_parent = str(Path(__file__).parent.parent)
@@ -47,51 +59,227 @@ if _server_parent not in _sys.path:
 
 
 def _model_ready() -> bool:
-    """True when a model or a lazy guard-backed provider is available.
+    """True when a model is actually materialized and ready for inference.
 
-    Lazy mode deliberately leaves ``server_state.model`` as ``None`` while the
-    ProcessGuard worker serves inference — readiness must also accept a
-    registered provider so guarded inference is not blocked.
+    Checks multiple sources because different load paths store the model
+    in different locations:
+    1. ``state.model`` — set by eager-load paths.
+    2. ``state.provider._model`` — set when eager load materializes weights.
+    3. Core ``ServerState.model.get()`` — set by the lazy-guard path.
+    4. ``state.provider`` is not None — lazy-guard provider delegates to subprocess.
     """
     import state as server_state
-    return server_state.model is not None or server_state.provider is not None
+
+    if server_state.model is not None:
+        return True
+    provider = server_state.provider
+    if provider is not None and getattr(provider, "_model", None) is not None:
+        return True
+    # Lazy-guard path: provider lives in the core ServerState singleton
+    # but state.__dict__["model"] stays None.
+    from domain.infrastructure.server_state import get_server_state
+
+    core_model = get_server_state().model.get()
+    if core_model is not None:
+        return True
+    # Lazy-guard: provider is set but model is in subprocess — can still serve
+    if provider is not None:
+        return True
+    return False
+
+
+def _get_model_status() -> dict:
+    """Return a structured model status with ready flag, reason, and error code.
+
+    Returns one of:
+      {"ready": True}
+      {"ready": False, "reason": "...", "code": "...", "status": 503}
+    """
+    if _model_ready():
+        return {"ready": True}
+
+    from startup_progress import STARTUP_PHASE
+
+    from config import ServerConfig
+
+    cfg = ServerConfig.from_env()
+    phase = STARTUP_PHASE.get("phase", "unknown")
+    raw = getattr(cfg, "autoload_model", "") or ""
+    autoload_disabled = not raw or raw.lower() in ("false", "0", "none", "no", "off", "disable")
+
+    if autoload_disabled:
+        model_name = getattr(cfg, "default_model", "") or "none"
+        return {
+            "ready": False,
+            "reason": f"No model loaded. Autoload is disabled. Set SLO_AUTOLOAD_MODEL={model_name} to enable.",
+            "code": "E_NO_MODEL",
+            "status": 503,
+        }
+
+    if phase != "ready":
+        msg = STARTUP_PHASE.get("message", "Starting...")
+        step = STARTUP_PHASE.get("step", 0)
+        total = STARTUP_PHASE.get("total", 9)
+        return {
+            "ready": False,
+            "reason": f"Server starting — {msg} (step {step}/{total})",
+            "code": "E_STARTING",
+            "status": 503,
+        }
+
+    # Phase is ready but model isn't materialized — still loading in background
+    return {
+        "ready": False,
+        "reason": "Model still loading — please wait.",
+        "code": "E_MODEL_LOADING",
+        "status": 503,
+    }
+
+
+def _estimate_tokens(text: str) -> int:
+    """Rough token estimate: ~4 chars per token for English text."""
+    return max(1, len(text) // 4)
+
+
+def _chunk_replay(text: str, size: int = 40) -> list[str]:
+    """Split cached text into SSE replay chunks without altering whitespace.
+
+    Replay must concatenate back to the exact cached text — newlines and
+    multi-space runs included — so reconnects render identically to the
+    original stream.
+    """
+    if not text:
+        return []
+    return [text[i : i + size] for i in range(0, len(text), size)]
+
+
+def _trim_messages_to_budget(
+    messages: list[dict[str, Any]], max_context: int, max_new_tokens: int
+) -> list[dict[str, Any]]:
+    """Trim oldest non-system messages to fit within context budget.
+
+    Budget = max_context - max_new_tokens (reserved for generation).
+    Preserves system messages, trims oldest user/assistant pairs first.
+    """
+    budget = max_context - max_new_tokens
+    system_msgs = [m for m in messages if m.get("role") == "system"]
+    non_system = [m for m in messages if m.get("role") != "system"]
+
+    system_tokens = sum(_estimate_tokens(m.get("content", "")) for m in system_msgs)
+    remaining = budget - system_tokens
+
+    if remaining <= 0:
+        return system_msgs
+
+    kept: list[dict[str, Any]] = []
+    total = 0
+    for msg in reversed(non_system):
+        msg_tokens = _estimate_tokens(msg.get("content", ""))
+        if total + msg_tokens > remaining:
+            break
+        kept.append(msg)
+        total += msg_tokens
+
+    kept.reverse()
+    return system_msgs + kept
+
+
+_memory_pressure_cache: str | None = None
+_memory_pressure_cache_ts: float = 0.0
+_memory_pressure_lock = threading.Lock()
+
+
+def _check_memory_pressure() -> str | None:
+    """Return an error message if system memory is critically low, else None.
+
+    Delegates to MemoryPressureMonitor (the single source of truth for
+    pressure thresholds and cleanup). Caches the result for 2 seconds
+    to avoid repeated monitor checks during burst requests.
+    """
+    global _memory_pressure_cache, _memory_pressure_cache_ts
+    now = time.time()
+    with _memory_pressure_lock:
+        if _memory_pressure_cache is not None and now - _memory_pressure_cache_ts < 2.0:
+            return _memory_pressure_cache if _memory_pressure_cache else None
+    try:
+        from domain.infrastructure.memory_pressure import (
+            PressureLevel,
+            get_memory_pressure_monitor,
+        )
+
+        monitor = get_memory_pressure_monitor()
+        level = monitor.check()
+        if level == PressureLevel.EMERGENCY:
+            import psutil
+
+            mem = psutil.virtual_memory()
+            result = f"System memory at {mem.percent:.0f}% — too low for safe inference. Free some memory and retry."
+            with _memory_pressure_lock:
+                _memory_pressure_cache = result
+                _memory_pressure_cache_ts = now
+            return result
+    except ImportError:
+        logger.debug("Memory pressure module not available")
+    except Exception as exc:
+        logger.warning("Memory pressure check failed: %s", exc)
+    with _memory_pressure_lock:
+        _memory_pressure_cache = ""
+        _memory_pressure_cache_ts = now
+    return None
 
 
 class CreateSessionRequest(BaseModel):
     """Schema for creating a new chat session."""
-    session_id: Optional[str] = None
-    name: Optional[str] = Field(None, max_length=200)
-    model: Optional[str] = None
+
+    session_id: str | None = None
+    name: str | None = Field(None, max_length=200)
+    model: str | None = None
+
 
 class UpsertSessionRequest(BaseModel):
     """Schema for updating session metadata."""
-    name: Optional[str] = Field(None, max_length=200)
-    archived: Optional[bool] = None
-    starred: Optional[bool] = None
-    pinned: Optional[bool] = None
+
+    name: str | None = Field(None, max_length=200)
+    archived: bool | None = None
+    starred: bool | None = None
+    pinned: bool | None = None
 
 
 class Message(BaseModel):
-    role: str
-    content: str
+    role: str = Field(..., pattern=r"^(user|assistant|system)$")
+    content: str = Field(..., min_length=1, max_length=100000)
 
 
 class ChatRequest(BaseModel):
-    messages: List[Message]
+    messages: list[Message]
     model: str = "qwen2.5-0.5b-instruct"
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=128, ge=1, le=2048)
+    max_new_tokens: int | None = Field(
+        default=None, ge=1, le=2048, description="Alias for max_tokens (frontend compat)"
+    )
     top_p: float = Field(default=0.85, ge=0.0, le=1.0)
     top_k: int = Field(default=40, ge=0, le=500)
     repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
-    session_id: Optional[str] = None
-    user_id: Optional[str] = None
-    system_prompt: Optional[str] = None
-    knowledge: Optional[List[str]] = None
-    images: Optional[List[str]] = Field(default=None, description="Base64 encoded images")
-    use_context_core: bool = Field(default=True, description="Use ContextCore for multi-layer context")
-    use_rag: bool = Field(default=True, description="Use production RAG for document-grounded responses")
-    agent_id: Optional[str] = Field(default=None, description="Agent ID for role-based system instructions")
+    session_id: str | None = None
+    user_id: str | None = None
+    system_prompt: str | None = None
+    knowledge: list[str] | None = None
+    images: list[str] | None = Field(default=None, description="Base64 encoded images")
+    use_context_core: bool = Field(
+        default=True, description="Use ContextCore for multi-layer context"
+    )
+    use_rag: bool = Field(
+        default=True, description="Use production RAG for document-grounded responses"
+    )
+    agent_id: str | None = Field(
+        default=None, description="Agent ID for role-based system instructions"
+    )
+
+    def model_post_init(self, __context: Any) -> None:
+        """Resolve max_new_tokens alias into max_tokens."""
+        if self.max_new_tokens is not None and self.max_tokens == 128:
+            object.__setattr__(self, "max_tokens", self.max_new_tokens)
 
 
 class ChatResponse(BaseModel):
@@ -100,24 +288,110 @@ class ChatResponse(BaseModel):
     done: bool = True
 
 
+class ChatControlRequest(BaseModel):
+    session_id: str
+    action: str = Field(..., pattern=r"^(cancel|approve|context)$")
+    tool_name: str | None = None
+    approved: bool | None = None
+    context: str | None = None
+
+
+# In-memory store for pending control requests per session
+_chat_control_store: dict[str, dict] = {}
+_chat_control_lock = threading.Lock()
+_CHAT_CONTROL_TTL = 300  # 5 minutes
+
+
+def get_chat_control(session_id: str) -> dict | None:
+    """Get and consume pending control for a session."""
+    with _chat_control_lock:
+        entry = _chat_control_store.pop(session_id, None)
+        if entry and time.time() - entry.get("_ts", 0) > _CHAT_CONTROL_TTL:
+            return None
+        return entry
+
+
+def set_chat_control(session_id: str, control: dict) -> None:
+    """Set pending control for a session."""
+    import time as _time
+
+    with _chat_control_lock:
+        control["_ts"] = _time.time()
+        _chat_control_store[session_id] = control
+        # Evict expired entries
+        if len(_chat_control_store) > 100:
+            now = _time.time()
+            expired = [
+                k
+                for k, v in _chat_control_store.items()
+                if now - v.get("_ts", 0) > _CHAT_CONTROL_TTL
+            ]
+            for k in expired:
+                del _chat_control_store[k]
+
+
+# Cache for partial chat responses (for Last-Event-ID reconnection)
+_chat_response_cache: dict[str, dict] = {}
+_chat_cache_lock = threading.Lock()
+_CHAT_CACHE_MAX_SESSIONS = 100
+_CHAT_CACHE_MAX_AGE_S = 300  # 5 minutes
+
+
+def get_chat_response_cache(session_id: str) -> dict | None:
+    """Get cached response for a session."""
+    import time
+
+    with _chat_cache_lock:
+        entry = _chat_response_cache.get(session_id)
+        if entry and time.time() - entry.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S:
+            _chat_response_cache.pop(session_id, None)
+            return None
+        return entry
+
+
+def set_chat_response_cache(session_id: str, response: dict) -> None:
+    """Cache a partial response for a session."""
+    import time
+
+    with _chat_cache_lock:
+        # Purge old entries if cache is full
+        if len(_chat_response_cache) >= _CHAT_CACHE_MAX_SESSIONS:
+            now = time.time()
+            expired = [
+                k
+                for k, v in _chat_response_cache.items()
+                if now - v.get("timestamp", 0) > _CHAT_CACHE_MAX_AGE_S
+            ]
+            for k in expired[:10]:  # Remove up to 10 expired entries
+                _chat_response_cache.pop(k, None)
+        _chat_response_cache[session_id] = {**response, "timestamp": time.time()}
+
+
+def clear_chat_response_cache(session_id: str) -> None:
+    """Clear cached response for a session."""
+    with _chat_cache_lock:
+        _chat_response_cache.pop(session_id, None)
+
+
 class ContextInspectorResponse(BaseModel):
     system_prompt: str
-    session_messages: List[dict]
-    working_memory: List[dict]
-    semantic_keys: List[str]
+    session_messages: list[dict]
+    working_memory: list[dict]
+    semantic_keys: list[str]
     episodic_count: int
     sensory_buffer_size: int
-    last_frame: Optional[dict]
+    last_frame: dict | None
 
 
 class GenerateRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., min_length=1, max_length=50000)
     max_new_tokens: int = Field(default=256, ge=1, le=2048)
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=0.85, ge=0.0, le=1.0)
     top_k: int = Field(default=40, ge=0, le=500)
     repetition_penalty: float = Field(default=1.15, ge=0.5, le=2.0)
     model: str = "qwen2.5-0.5b-instruct"
+    response_format: str | None = Field(default=None, description='"text" or "json"')
 
 
 class GenerateResponse(BaseModel):
@@ -127,6 +401,7 @@ class GenerateResponse(BaseModel):
 
 
 # ── Pure module-level helpers (no instance state) ──
+
 
 def _count_tokens(text: str, server_state) -> int:
     """Count real tokens using the loaded tokenizer, falling back to word count.
@@ -147,12 +422,17 @@ def _count_tokens(text: str, server_state) -> int:
     return len(text.split())
 
 
-def _extract_user_message(messages: List[Message]) -> Optional[str]:
+def _extract_user_message(messages: list[Message]) -> str | None:
     """Extract the last user message from conversation."""
     for msg in reversed(messages):
         if msg.role == "user":
             return msg.content or None
     return None
+
+
+_META_WEIGHT_CACHE: dict[str, tuple[float, dict]] = {}
+_META_WEIGHT_CACHE_TTL = 5.0  # seconds
+_META_WEIGHT_CACHE_LOCK = threading.Lock()
 
 
 def _apply_meta_weights(
@@ -162,117 +442,513 @@ def _apply_meta_weights(
     repetition_penalty: float,
     user_message: str,
     user_id: str = "default",
+    explicit: Collection[str] = (),
 ) -> dict:
     """Apply feedback-driven meta-weight adjustments to generation parameters.
 
-    Looks up similar past messages in the feedback database and adjusts
-    temperature, top_p, top_k, and repetition_penalty accordingly.
+    Looks up similar past messages in the feedback database and derives a
+    *nudge* -- the distance from the neutral baseline -- for temperature,
+    top_p, top_k and repetition_penalty. Nudges are cached for 5 seconds to
+    avoid repeated similarity searches.
 
-    Returns a dict of adjusted parameters to pass to the provider.
+    `explicit` names the parameters the caller actually sent (pydantic request
+    models pass `model_fields_set`). Those pass through verbatim: a
+    server-side heuristic may only move parameters the caller left at their
+    default, because an explicitly-set value is user intent and outranks a
+    derived one.
+
+    Returns a dict of parameters to pass to the provider.
     """
-    try:
-        from domains.feedback.meta_weights import get_meta_weight_manager
-        manager = get_meta_weight_manager()
-        adj = manager.get_adjustment(
-            user_message=user_message, k=5, user_id=user_id,
-        )
-        return {
-            "temperature": adj.temperature,
-            "top_p": adj.top_p,
-            "top_k": adj.top_k,
-            "repetition_penalty": adj.repetition_penalty,
-        }
-    except Exception as e:
-        logger.debug("Meta-weight adjustment failed: %s", e)
-        return {
-            "temperature": temperature,
-            "top_p": top_p,
-            "top_k": top_k,
-            "repetition_penalty": repetition_penalty,
-        }
+    import time
+
+    requested = {
+        "temperature": temperature,
+        "top_p": top_p,
+        "top_k": top_k,
+        "repetition_penalty": repetition_penalty,
+    }
+    cache_key = f"{user_id}:{hash(user_message)}"
+    now = time.monotonic()
+
+    # The cache holds the NUDGE, never the merged result. The nudge depends
+    # only on the message and user, while the merge depends on which fields
+    # THIS request set explicitly -- caching merged output would leak one
+    # request's explicit set into another's.
+    nudge: dict[str, float] | None = None
+    with _META_WEIGHT_CACHE_LOCK:
+        cached = _META_WEIGHT_CACHE.get(cache_key)
+        if cached is not None and now - cached[0] < _META_WEIGHT_CACHE_TTL:
+            nudge = cached[1]
+
+    if nudge is None:
+        try:
+            from domain.feedback import get_meta_weight_manager
+
+            manager = get_meta_weight_manager()
+            adj = manager.get_adjustment(
+                user_message=user_message,
+                k=5,
+                user_id=user_id,
+            )
+            neutral = manager.neutral_weights
+            nudge = {
+                "temperature": adj.temperature - neutral.temperature,
+                "top_p": adj.top_p - neutral.top_p,
+                "top_k": adj.top_k - neutral.top_k,
+                "repetition_penalty": adj.repetition_penalty - neutral.repetition_penalty,
+            }
+            if adj.temperature > 1.2 or adj.top_k < 10:
+                logger.warning(
+                    "Meta-weight adjustment produced extreme values: temp=%.2f top_k=%d user=%s",
+                    adj.temperature,
+                    adj.top_k,
+                    user_id,
+                    extra={
+                        "tag": "INF",
+                        "context": {
+                            "temperature": adj.temperature,
+                            "top_k": adj.top_k,
+                            "user_id": user_id,
+                        },
+                    },
+                )
+            with _META_WEIGHT_CACHE_LOCK:
+                _META_WEIGHT_CACHE[cache_key] = (now, nudge)
+                if len(_META_WEIGHT_CACHE) > 1000:
+                    logger.info(
+                        "Meta-weight cache overflow, clearing %d entries",
+                        len(_META_WEIGHT_CACHE),
+                    )
+                    safe_audit_log(
+                        "inference.meta_weight_cache_clear",
+                        resource="meta_weight_cache",
+                        detail=f"entries_cleared={len(_META_WEIGHT_CACHE)}",
+                    )
+                    _META_WEIGHT_CACHE.clear()
+        except Exception as e:
+            logger.debug("Meta-weight adjustment failed: %s", e)
+            nudge = {}  # no signal -- the request's own values stand
+
+    return {
+        param: value if param in explicit else value + nudge.get(param, 0)
+        for param, value in requested.items()
+    }
 
 
 def _enrich_knowledge(user_msg: str, auto_search: bool = True, max_facts: int = 5) -> dict:
     """Search learned knowledge + optionally live web search. Returns {facts, source, topics}."""
     try:
-        from domains.learner.knowledge_augmenter import enrich_with_knowledge
+        from domain.learner import enrich_with_knowledge
+
         return enrich_with_knowledge(user_msg, auto_search=auto_search, max_facts=max_facts)
     except Exception as e:
-        logger.warning("Knowledge enrichment failed: %s", e, extra={"tag": "INF", "context": {"error": str(e)}})
-        return {"facts": [], "source": "none", "topics": []}
+        logger.warning(
+            "Knowledge enrichment failed: %s", e, extra={"tag": "INF", "context": {"error": str(e)}}
+        )
+        return {"facts": [], "source": "error", "topics": [], "error": str(e)}
 
 
-def _search_sessions_sync(q: str, limit: int) -> list:
-    """Synchronous full-text search across session files on disk."""
-    q_lower = q.lower().strip()
-    results = []
+# ── In-memory session search index ──────────────────────────────────────────
 
-    search_dirs: list[Path] = []
-    sessions_dir = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
-    if sessions_dir.is_dir():
-        search_dirs.append(sessions_dir)
-    conv_dir = Path(__file__).parent.parent.parent.parent / "data" / "conversations"
-    if conv_dir.is_dir():
-        search_dirs.append(conv_dir)
-    seen = set()
 
-    for sdir in search_dirs:
-        if not sdir.is_dir():
-            continue
-        for f in sorted(sdir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
-            if len(results) >= limit:
-                break
+class SessionSearchIndex:
+    """Caches session file contents in memory for fast search.
+
+    Only re-reads files whose mtime has changed since last index build.
+    Thread-safe for concurrent reads; rebuilds are serialized.
+    """
+
+    def __init__(self, max_age_seconds: float = 5.0) -> None:
+        self._max_age = max_age_seconds
+        self._lock = threading.Lock()
+        self._last_build: float = 0.0
+        # sid → {name, messages, created_at, updated_at, file_path}
+        self._entries: dict[str, dict[str, Any]] = {}
+
+    def search(self, q: str, limit: int = 20) -> list[dict[str, Any]]:
+        """Search cached sessions. Rebuilds index if stale."""
+        now = time.monotonic()
+        if now - self._last_build > self._max_age:
+            self._rebuild()
+        return self._query(q.lower().strip(), limit)
+
+    def _rebuild(self) -> None:
+        with self._lock:
+            # Double-check after acquiring lock
+            if time.monotonic() - self._last_build <= self._max_age:
+                return
+            self._scan_files()
+            self._last_build = time.monotonic()
+
+    def _scan_files(self) -> None:
+        base = Path(__file__).parent.parent.parent.parent / "data"
+        search_dirs = [base / "chat_sessions", base / "conversations"]
+
+        # Collect all current file mtimes
+        current_files: dict[str, Path] = {}
+        for sdir in search_dirs:
+            if not sdir.is_dir():
+                continue
+            for f in sdir.glob("*.json"):
+                sid = f.stem
+                if sid not in current_files:
+                    current_files[sid] = f
+
+        # Remove entries for deleted files
+        stale = set(self._entries.keys()) - set(current_files.keys())
+        for sid in stale:
+            del self._entries[sid]
+
+        # Add or update entries
+        for sid, fpath in current_files.items():
             try:
-                data = json.loads(f.read_text())
-                sid = data.get("id") or data.get("session_id") or f.stem
-                if sid in seen:
-                    continue
-                seen.add(sid)
-                name = data.get("name", "") or ""
-                messages = data.get("messages", [])
-                matches = []
-
-                if q_lower in name.lower():
-                    matches.append({"role": "session", "content": name, "timestamp": data.get("updated_at", "")})
-
-                for msg in messages:
-                    content = msg.get("content", "")
-                    if q_lower in content.lower():
-                        matches.append({
-                            "role": msg.get("role", "unknown"),
-                            "content": content,
-                            "timestamp": msg.get("timestamp", ""),
-                        })
-
-                if matches:
-                    results.append({
-                        "id": sid,
-                        "name": name or sid,
-                        "created_at": data.get("created_at", ""),
-                        "updated_at": data.get("updated_at", ""),
-                        "match_count": len(matches),
-                        "matches": matches[:3],
-                    })
+                mtime = fpath.stat().st_mtime
+            except OSError:
+                continue
+            existing = self._entries.get(sid)
+            if existing and existing.get("_mtime") == mtime:
+                continue  # unchanged
+            try:
+                data = json.loads(fpath.read_text())
+                self._entries[sid] = {
+                    "id": data.get("id") or data.get("session_id") or sid,
+                    "name": data.get("name", "") or "",
+                    "created_at": data.get("created_at", ""),
+                    "updated_at": data.get("updated_at", ""),
+                    "messages": data.get("messages", []),
+                    "_mtime": mtime,
+                }
             except (json.JSONDecodeError, OSError):
                 continue
 
-    return results
+    def _query(self, q_lower: str, limit: int) -> list[dict[str, Any]]:
+        if not q_lower:
+            return []
+        results: list[dict[str, Any]] = []
+        max_matches_per_session = 3
+
+        # Sort by updated_at descending for most-recent-first
+        sorted_entries = sorted(
+            self._entries.values(),
+            key=lambda e: e.get("updated_at", ""),
+            reverse=True,
+        )
+
+        for entry in sorted_entries:
+            if len(results) >= limit:
+                break
+            name = entry["name"]
+            messages = entry["messages"]
+            matches: list[dict[str, str]] = []
+
+            if q_lower in name.lower():
+                matches.append(
+                    {
+                        "role": "session",
+                        "content": name,
+                        "timestamp": entry.get("updated_at", ""),
+                    }
+                )
+
+            for msg in messages:
+                if len(matches) >= max_matches_per_session:
+                    break
+                content = msg.get("content", "")
+                if q_lower in content.lower():
+                    matches.append(
+                        {
+                            "role": msg.get("role", "unknown"),
+                            "content": content,
+                            "timestamp": msg.get("timestamp", ""),
+                        }
+                    )
+
+            if matches:
+                results.append(
+                    {
+                        "id": entry["id"],
+                        "name": name or entry["id"],
+                        "created_at": entry.get("created_at", ""),
+                        "updated_at": entry.get("updated_at", ""),
+                        "match_count": len(matches),
+                        "matches": matches[:3],
+                    }
+                )
+
+        return results
+
+
+_session_search_index = SessionSearchIndex()
+
+
+def _search_sessions_sync(q: str, limit: int) -> list:
+    """Full-text search across session files using in-memory index."""
+    return _session_search_index.search(q, limit)
 
 
 # ── FileRepository-backed session store ──
-from domains.infrastructure.repository import FileRepository, Serializer
+from domain.infrastructure.repository import FileRepository, Serializer
 
 
 class _SessionDictSerializer(Serializer[dict]):
     """JSON serializer for session dict data."""
 
+    _REQUIRED_KEYS = {"id", "messages"}
+
     def serialize(self, obj: dict) -> dict:
-        """serialize."""
-        return obj
+        if not isinstance(obj, dict):
+            raise ValueError(f"Session must be a dict, got {type(obj).__name__}")
+        result = dict(obj)
+        if "id" not in result:
+            result["id"] = str(uuid.uuid4())
+        if "messages" not in result:
+            result["messages"] = []
+        return result
 
     def deserialize(self, data: dict) -> dict:
-        """deserialize."""
-        return data
+        if not isinstance(data, dict):
+            raise ValueError(f"Session data must be a dict, got {type(data).__name__}")
+        result = dict(data)
+        if "id" not in result:
+            result["id"] = str(uuid.uuid4())
+        if "messages" not in result:
+            result["messages"] = []
+        return result
+
+
+def _inject_knowledge_items(knowledge_list: list[str]) -> int:
+    """Store injected knowledge items in vector store. Returns count stored."""
+    import time as _time
+
+    mem = get_knowledge_memory()
+    stored = 0
+    for k in knowledge_list:
+        if k and len(k) > 10:
+            fact = KnowledgeFact(
+                content=k,
+                topic="injected",
+                source="injected",
+                timestamp=_time.time(),
+                importance=0.7,
+            )
+            if mem.add_fact(fact):
+                stored += 1
+    return stored
+
+
+def _prepare_provider_messages(
+    messages: list[Message],
+    images: list[str] | None,
+    user_msg: str,
+) -> list[dict[str, Any]]:
+    """Build provider messages list, injecting images into the last user message."""
+    provider_messages = [{"role": m.role, "content": m.content} for m in messages]
+    if images:
+        content_parts: list[dict[str, Any]] = [{"type": "text", "text": user_msg}]
+        for img_data in images:
+            content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
+        for i in range(len(provider_messages) - 1, -1, -1):
+            if provider_messages[i]["role"] == "user":
+                provider_messages[i]["content"] = content_parts
+                break
+    return provider_messages
+
+
+async def _build_context_frame(
+    ctx_core: Any,
+    session_id: str,
+    user_msg: str,
+    corr_id: str,
+) -> tuple[Any, dict]:
+    """Build context frame from ContextCore. Returns (frame, context_info)."""
+    context_info = {}
+    frame = None
+
+    skip_context = False
+    try:
+        if get_memory_service().stats().get("total_facts", 0) == 0:
+            skip_context = True
+    except Exception as e:
+        logger.debug("Knowledge memory check failed: %s", e)
+
+    if not skip_context:
+        ctx_core.set_session_id(session_id)
+        ctx_core.add_message("user", user_msg)
+        try:
+            frame = await asyncio.wait_for(
+                ctx_core.build_context_frame(
+                    include_rag=True,
+                    include_memory=True,
+                    query=user_msg,
+                ),
+                timeout=5.0,
+            )
+        except TimeoutError:
+            logger.warning(
+                "CHAT_PIPELINE corr=%s step=CONTEXTCORE_BUILD timeout=5.0s",
+                corr_id,
+            )
+            frame = None
+
+        if frame is not None:
+            context_info = {
+                "layers": [l.layer_type for l in frame.layers],
+                "total_tokens": frame.total_tokens,
+                "max_tokens": frame.max_tokens,
+            }
+
+    return frame, context_info
+
+
+def _consciousness_post_process(user_msg: str, full_response: str) -> dict[str, Any]:
+    """Level-gated consciousness post-processing for one chat response.
+
+    Returns {"narrative": str, "level": int}; empty narrative means nothing
+    to surface. Best-effort: any failure disables the event for this turn.
+    """
+    try:
+        from domain.core import get_consciousness
+
+        _ce = get_consciousness()
+        if not _ce.config.is_enabled():
+            return {"narrative": "", "level": 0}
+        narrative = _ce.process(user_msg or "", full_response)
+        _ce.save()
+        return {"narrative": narrative or "", "level": _ce.config.level}
+    except Exception as e:
+        logger.debug("Consciousness post-processing skipped: %s", e)
+        return {"narrative": "", "level": 0}
+
+
+def _run_post_gen_tasks(
+    full_response: str,
+    user_msg: str,
+    session_id: str,
+    start_time: datetime.datetime,
+    req: ChatRequest,
+    ctx_core: Any,
+    bg_tasks_lock: Any,
+    bg_tasks: Any,
+    bg_tasks_discard: Any,
+    corr_id: str,
+) -> dict[str, Any]:
+    """Launch fire-and-forget background tasks after chat generation completes.
+
+    Returns the consciousness post-process result for the caller to surface
+    as a CONSCIOUSNESS SSE event.
+    """
+    import state as _pgs_state
+
+    from domain.core import get_rag_service as _pgs_rag
+
+    duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
+    tokens = len(full_response.split())
+
+    def _track(task_name):
+        def _cb(fut):
+            try:
+                fut.result()
+            except Exception as e:
+                logger.debug("Post-gen task %s failed: %s", task_name, e)
+
+        return _cb
+
+    # RAG verification
+    if req.use_rag and full_response.strip():
+        try:
+            rag_svc = _pgs_rag()
+            if rag_svc.stats().get("total_chunks", 0) > 0:
+                t = asyncio.create_task(
+                    asyncio.to_thread(rag_svc.verify_and_ground, full_response, user_msg or "")
+                )
+                with bg_tasks_lock:
+                    bg_tasks.add(t)
+                t.add_done_callback(bg_tasks_discard)
+        except Exception as e:
+            logger.debug("RAG verification skipped: %s", e)
+
+    # Conversation capture
+    try:
+        t = asyncio.create_task(
+            asyncio.to_thread(
+                capture,
+                user_msg or "",
+                full_response,
+                model=_pgs_state.model_type or req.model,
+                tokens_generated=tokens,
+                elapsed_ms=duration_ms,
+                temperature=req.temperature,
+                meta={"session_id": session_id},
+            )
+        )
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("Failed to capture conversation: %s", e)
+
+    # Response tracking
+    try:
+        tracker = get_response_tracker()
+        t = asyncio.create_task(
+            asyncio.to_thread(
+                tracker.log,
+                user_message=user_msg or "",
+                assistant_response=full_response,
+                model=req.model,
+                config={"temperature": req.temperature, "max_tokens": req.max_tokens},
+                session_id=session_id,
+                user_id=req.user_id or "default",
+                tokens_generated=tokens,
+                duration_ms=duration_ms,
+                has_images=bool(req.images),
+            )
+        )
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("ResponseTracker.log failed: %s", e)
+
+    # Inference metrics
+    try:
+        get_server_state().record_inference(
+            tokens=tokens,
+            elapsed_ms=duration_ms,
+            model=_pgs_state.model_type or req.model,
+        )
+    except Exception as e:
+        logger.warning("Failed to record inference metrics: %s", e)
+
+    # ContextCore response
+    if ctx_core and req.use_context_core:
+        try:
+            ctx_core.add_response(full_response, model=req.model)
+        except Exception as e:
+            logger.warning("ContextCore.add_response failed: %s", e)
+
+    # Continual learner ingest
+    try:
+        t = asyncio.create_task(
+            asyncio.to_thread(get_learner().ingest_conversation, [(user_msg, full_response)])
+        )
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("Continual learner ingest failed: %s", e)
+
+    # Entity extraction
+    try:
+        t = asyncio.create_task(extract_and_store(user_msg or "", full_response))
+        with bg_tasks_lock:
+            bg_tasks.add(t)
+        t.add_done_callback(bg_tasks_discard)
+    except Exception as e:
+        logger.warning("Entity extraction failed: %s", e)
+
+    # Consciousness post-processing (narrative surfaced by the caller)
+    return _consciousness_post_process(user_msg, full_response)
 
 
 class InferenceRouter:
@@ -282,14 +958,15 @@ class InferenceRouter:
         self.router = APIRouter(prefix="", tags=["inference"])
 
         self._BG_TASKS: set = set()
+        self._bg_tasks_lock = threading.Lock()
 
         _SESSIONS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "chat_sessions"
-        _SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
         self._SESSIONS_DIR = _SESSIONS_DIR
 
         _VOICE_DIR = Path(__file__).parent.parent.parent.parent / "data" / "voice_messages"
-        _VOICE_DIR.mkdir(parents=True, exist_ok=True)
         self._VOICE_DIR = _VOICE_DIR
+
+        self._dirs_created = False
 
         self._session_repo = FileRepository[dict](
             directory=str(self._SESSIONS_DIR),
@@ -297,9 +974,12 @@ class InferenceRouter:
             key_suffix=".json",
         )
 
-        self._session_cache: Optional[list] = None
+        self._session_cache: list | None = None
         self._session_cache_ts: float = 0
-        self._session_cache_ttl = 2.0
+        self._session_cache_ttl = 5.0
+
+        self._session_metadata_cache: list | None = None
+        self._session_metadata_cache_ts: float = 0
 
         self._session_memory_cache: dict[str, dict] = {}
         self._SESSION_CACHE_MAX = 500
@@ -309,14 +989,30 @@ class InferenceRouter:
         self._context_core = None
         self._vector_store_ref = None
 
-        self._background_flush_task: Optional[asyncio.Task] = None
+        self._background_flush_task: asyncio.Task | None = None
 
         self._register_routes()
+
+    def _bg_tasks_lock_discard(self, task: asyncio.Task) -> None:
+        """Thread-safe discard callback for background tasks."""
+        with self._bg_tasks_lock:
+            self._BG_TASKS.discard(task)
+
+    def _ensure_dirs(self):
+        """Create session/voice directories on first access (lazy)."""
+        if self._dirs_created:
+            return
+        self._SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+        self._VOICE_DIR.mkdir(parents=True, exist_ok=True)
+        self._dirs_created = True
 
     # ── Internal helpers ──
 
     def _session_cache_put(self, session_id: str, data: dict) -> None:
-        if len(self._session_memory_cache) >= self._SESSION_CACHE_MAX and session_id not in self._session_memory_cache:
+        if (
+            len(self._session_memory_cache) >= self._SESSION_CACHE_MAX
+            and session_id not in self._session_memory_cache
+        ):
             oldest = next(iter(self._session_memory_cache))
             del self._session_memory_cache[oldest]
         self._session_memory_cache[session_id] = data
@@ -324,27 +1020,39 @@ class InferenceRouter:
     def _get_context_core(self):
         if self._context_core is None:
             try:
-                from domains.infrastructure.context_core import get_context_core
+                from domain.infrastructure.context_core import get_context_core
+
                 self._context_core = get_context_core()
             except ImportError:
                 return None
-        if self._context_core and self._vector_store_ref and self._context_core._vector_store is None:
+        if (
+            self._context_core
+            and self._vector_store_ref
+            and self._context_core._vector_store is None
+        ):
             try:
-                from domains.inference.vector_store import simple_embed
+                from domain.inference import simple_embed
+
                 self._context_core.set_vector_store(self._vector_store_ref, simple_embed)
             except Exception as e:
-                logger.debug("Vector store connection failed: %s", e)
+                logger.warning("Vector store connection failed: %s", e)
         return self._context_core
 
     def set_vector_store_ref(self, store) -> dict:
         """set_vector_store_ref."""
         self._vector_store_ref = store
+        return {"status": "ok"}
 
     def _load_session_from_disk(self, session_id: str) -> dict:
         data = self._session_repo.get(session_id)
         if data is not None:
             return data
-        return {"id": session_id, "messages": [], "created_at": datetime.datetime.now().isoformat(), "updated_at": datetime.datetime.now().isoformat()}
+        return {
+            "id": session_id,
+            "messages": [],
+            "created_at": datetime.datetime.now().isoformat(),
+            "updated_at": datetime.datetime.now().isoformat(),
+        }
 
     def _get_session(self, session_id: str) -> dict:
         self._start_background_flush()
@@ -369,37 +1077,104 @@ class InferenceRouter:
         try:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, self._session_repo.save, session_id, data_copy)
-        except Exception as exc:
-            logger.warning("Disk write failed for session %s: %s", session_id, exc, extra={"tag": "REQ"})
-        finally:
             self._session_dirty.discard(session_id)
+        except Exception as exc:
+            logger.warning(
+                "Disk write failed for session %s: %s — will retry on next flush",
+                session_id,
+                exc,
+                extra={"tag": "REQ"},
+            )
 
     async def flush_dirty_sessions(self) -> int:
-        """flush_dirty_sessions."""
-        dirty = list(self._session_dirty)
-        if not dirty:
-            return 0
-        await asyncio.gather(*[self._flush_session_to_disk(sid) for sid in dirty], return_exceptions=True)
-        return len(dirty)
+        try:
+            """flush_dirty_sessions."""
+            dirty = list(self._session_dirty)
+            if not dirty:
+                return 0
+            await asyncio.gather(
+                *[self._flush_session_to_disk(sid) for sid in dirty], return_exceptions=True
+            )
+            return len(dirty)
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.flush_dirty_sessions")
 
     def _start_background_flush(self) -> None:
         if self._background_flush_task is not None and not self._background_flush_task.done():
             return
+
         async def _flush_loop():
             while True:
                 await asyncio.sleep(10)
                 try:
                     await self.flush_dirty_sessions()
                 except Exception as e:
-                    logger.debug("Background session flush failed: %s", e)
+                    logger.warning("Background session flush failed: %s", e)
+
         try:
             self._background_flush_task = asyncio.create_task(_flush_loop())
-        except RuntimeError:
-            pass
+        except RuntimeError as e:
+            logger.warning("Failed to start background session flush: %s", e, extra={"tag": "REQ"})
+
+    def _build_session_metadata_index(self) -> list:
+        """Build a lightweight metadata index without loading full message content.
+
+        Reads only the first 4KB of each file to extract id, name, updated_at,
+        created_at, and message_count. Falls back to full read if partial parse fails.
+        """
+        self._ensure_dirs()
+        now = time.time()
+        if (
+            self._session_metadata_cache is not None
+            and now - self._session_metadata_cache_ts < self._session_cache_ttl
+        ):
+            return self._session_metadata_cache
+
+        metadata = []
+        for sdir in [self._SESSIONS_DIR, self._SESSIONS_DIR.parent / "conversations"]:
+            if not sdir.is_dir():
+                continue
+            for f in sdir.glob("*.json"):
+                try:
+                    with open(f) as fh:
+                        raw = fh.read(4096)
+                    if not raw.strip():
+                        continue
+                    # Try to parse the partial JSON for header fields
+                    data = json.loads(raw)
+                    sid = data.get("id") or data.get("session_id") or f.stem
+                    name = data.get("name", "") or ""
+                    messages = data.get("messages", [])
+                    # If messages array is truncated, count from file size heuristic
+                    msg_count = len(messages)
+                    if not name and messages:
+                        name = messages[0].get("content", "").split("\n")[0][:60]
+                    if not name:
+                        name = sid
+                    metadata.append(
+                        {
+                            "id": sid,
+                            "name": name,
+                            "created_at": data.get("created_at", ""),
+                            "updated_at": data.get("updated_at", "") or data.get("created_at", ""),
+                            "message_count": msg_count,
+                        }
+                    )
+                except (json.JSONDecodeError, OSError):
+                    continue
+
+        metadata.sort(key=lambda x: x.get("updated_at", ""), reverse=True)
+        self._session_metadata_cache = metadata
+        self._session_metadata_cache_ts = now
+        return metadata
 
     def _build_session_cache(self) -> list:
         now = time.time()
-        if self._session_cache is not None and now - self._session_cache_ts < self._session_cache_ttl:
+        if (
+            self._session_cache is not None
+            and now - self._session_cache_ts < self._session_cache_ttl
+        ):
             return self._session_cache
         sessions = []
         for sid in self._session_repo.keys():
@@ -425,20 +1200,51 @@ class InferenceRouter:
 
     # ── Route handlers ──
 
-    async def generate(self, req: GenerateRequest) -> GenerateResponse:
+    async def generate(
+        self, req: GenerateRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> GenerateResponse:
         """generate."""
-        from domains.models.provider import get_provider
-        from startup_progress import STARTUP_PHASE
+
         import state as _gen_state
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            raise HTTPException(status_code=503, detail="Model still loading — please wait.")
+        ms = _get_model_status()
+        if not ms["ready"]:
+            raise_error(
+                ms["reason"],
+                ms["code"],
+                status_code=ms["status"],
+            )
+
+        mem_err = _check_memory_pressure()
+        if mem_err:
+            raise_error(mem_err, "E_MEMORY_PRESSURE", status_code=503)
 
         provider = get_provider("default")
         if provider is None:
-            raise HTTPException(status_code=503, detail="No provider available")
+            raise_error(
+                "No provider available — load a model first", "E_INFRA_REGISTRY", status_code=503
+            )
 
-        provider_messages = [{"role": "user", "content": req.prompt}]
+        prompt_text = req.prompt
+        if req.response_format == "json":
+            prompt_text = (
+                f"{req.prompt}\n\n"
+                "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
+            )
+        provider_messages = [{"role": "user", "content": prompt_text}]
+
+        # Cognitive reasoning context injection from SloEngine
+        try:
+            import state as _gen_state2
+
+            soul_engine = _gen_state2.soul_engine
+            if soul_engine and soul_engine._soul:
+                reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
+                if reasoning_text.strip():
+                    provider_messages.insert(0, {"role": "system", "content": reasoning_text})
+        except Exception:
+            pass
+
         try:
             _t0 = time.monotonic()
             gen_params = _apply_meta_weights(
@@ -447,7 +1253,25 @@ class InferenceRouter:
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
+                explicit=req.model_fields_set,
             )
+
+            import state as _gen_state
+
+            _coalescer = get_coalescer()
+            _coalesce_key = _coalescer.hash(
+                provider_messages, gen_params, req.max_new_tokens, _gen_state.model_type
+            )
+            existing = await _coalescer.start(_coalesce_key)
+            if existing is not None:
+                await existing.event.wait()
+                if existing.error is not None:
+                    raise existing.error
+                result = existing.result
+                tokens = _count_tokens(result, _gen_state)
+                actual_model = _gen_state.model_type or req.model
+                return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
+
             result = await provider.chat(
                 provider_messages,
                 max_tokens=req.max_new_tokens,
@@ -467,79 +1291,198 @@ class InferenceRouter:
             tokens = _count_tokens(result, _gen_state)
             actual_model = _gen_state.model_type or req.model
             try:
-                from domains.infrastructure.server_state import get_server_state
-                get_server_state().record_inference(tokens=tokens, elapsed_ms=0, model=actual_model)
+                get_server_state().record_inference(
+                    tokens=tokens,
+                    elapsed_ms=round((time.monotonic() - _t0) * 1000, 1),
+                    model=actual_model,
+                )
             except Exception as e:
-                logger.debug("Failed to record inference metrics: %s", e)
+                logger.warning("Failed to record inference metrics: %s", e)
             try:
-                from domains.infrastructure.conversation_log import capture
                 capture(
                     req.prompt,
                     result,
                     model=actual_model,
                     tokens_generated=tokens,
                     elapsed_ms=(time.monotonic() - _t0) * 1000,
-                    temperature=req.temperature,
+                    temperature=gen_params["temperature"],
                 )
             except Exception as e:
-                logger.debug("Failed to capture conversation: %s", e)
+                logger.warning("Failed to capture conversation: %s", e)
+            await _coalescer.complete(_coalesce_key, result)
             return GenerateResponse(text=result, model=actual_model, tokens_generated=tokens)
         except Exception as e:
+            try:
+                await _coalescer.complete_error(_coalesce_key, e)
+            except Exception as coalescer_err:
+                logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
+            logger.warning("Generate failed: %s", e, extra={"tag": "INF"})
             classify_and_raise(e, source="generate")
 
-    async def generate_stream(self, req: GenerateRequest, request: Request) -> StreamingResponse:
+    async def generate_stream(
+        self,
+        req: GenerateRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> StreamingResponse:
         """generate_stream."""
-        from startup_progress import STARTUP_PHASE
         import state as _stream_state
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
+        ms = _get_model_status()
+        if not ms["ready"]:
+
             async def error_stream() -> AsyncIterator[str]:
                 """error_stream."""
-                yield sse_error("generate", "IDLE", "Model still loading — please wait.")
+                yield sse_error(
+                    "generate",
+                    "IDLE",
+                    ms["reason"],
+                    code=ms["code"],
+                    http_status=ms["status"],
+                )
+
             return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+        mem_err = _check_memory_pressure()
+        if mem_err:
+
+            async def oom_stream() -> AsyncIterator[str]:
+                yield sse_error(
+                    "generate", "IDLE", mem_err, code="E_MEMORY_PRESSURE", http_status=503
+                )
+
+            return StreamingResponse(oom_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
             """generate."""
-            from domains.models.provider import get_provider
+            _gen_corr_id = f"gen-{int(time.time() * 1000) % 100000}"
+
             provider = get_provider("default")
             if provider is None:
-                yield sse_error("generate", "IDLE", "No provider available")
+                yield sse_error(
+                    "generate",
+                    "IDLE",
+                    "No provider available — load a model first",
+                    code="E_INFRA_REGISTRY",
+                    http_status=503,
+                )
                 return
 
-            provider_messages = [{"role": "user", "content": req.prompt}]
+            cancel_event = threading.Event()
+            _mgr = get_cancel_manager()
+            _op_id = _mgr.register(
+                OpType.INFERENCE,
+                f"generate:{req.prompt[:40]}",
+                cancel_fn=lambda: cancel_event.set(),
+            )
+            _mgr.start(_op_id)
+
+            prompt_text = req.prompt
+            if req.response_format == "json":
+                prompt_text = (
+                    f"{req.prompt}\n\n"
+                    "Respond ONLY with valid JSON. No markdown, no explanation, no code fences."
+                )
+            provider_messages = [{"role": "user", "content": prompt_text}]
+
+            # Cognitive reasoning context injection from SloEngine
+            try:
+                soul_engine = _stream_state.soul_engine
+                if soul_engine and soul_engine._soul:
+                    reasoning_text = soul_engine._build_reasoning_chain_text(req.prompt)
+                    if reasoning_text.strip():
+                        provider_messages.insert(0, {"role": "system", "content": reasoning_text})
+            except Exception:
+                pass
+
             start = datetime.datetime.now()
             token_count = 0
             collected = []
             _token_gen_start = time.time()
-            _max_token_wait_s = 120.0
+            _max_token_wait_s = cfg.generate_timeout
             _heartbeat_interval_s = 10.0
             _last_heartbeat = time.time()
             _batch: list[str] = []
             _batch_start = time.time()
             _BATCH_MAX = 5
             _BATCH_INTERVAL_S = 0.005
+            _token_count = 0
             gen_params = _apply_meta_weights(
                 temperature=req.temperature,
                 top_p=req.top_p,
                 top_k=req.top_k,
                 repetition_penalty=req.repetition_penalty,
                 user_message=req.prompt,
+                explicit=req.model_fields_set,
             )
+
+            _coalescer = get_coalescer()
+            _coalesce_key = _coalescer.hash(
+                provider_messages, gen_params, req.max_new_tokens, _stream_state.model_type
+            )
+            existing = await _coalescer.start(_coalesce_key)
+            if existing is not None:
+                await existing.event.wait()
+                if existing.error is not None:
+                    yield sse_error(
+                        "generate",
+                        "ERROR",
+                        str(existing.error),
+                        code="E_INFRA_GENERATION",
+                        http_status=500,
+                    )
+                    return
+                cached = existing.result or ""
+                for chunk in _chunk_replay(cached):
+                    yield sse_token("generate", chunk)
+                _mgr.finish(_op_id)
+                yield sse_token(
+                    "generate",
+                    "",
+                    done=True,
+                    meta={"tokens": len(cached.split()), "cached": True},
+                )
+                return
+
             try:
                 async for token in provider.chat_stream(
                     provider_messages,
                     max_tokens=req.max_new_tokens,
+                    cancel_event=cancel_event,
                     **gen_params,
                 ):
-                    if await request.is_disconnected():
-                        logger.info("Client disconnected from generate stream", extra={"tag": "INF"})
+                    if cancel_event.is_set() or await request.is_disconnected():
+                        cancel_event.set()
+                        logger.info(
+                            "Client disconnected from generate stream", extra={"tag": "INF"}
+                        )
+                        _mgr.finish(_op_id)
                         return
                     if token:
+                        if _token_count == 0:
+                            _first_token_ms = (time.time() - _token_gen_start) * 1000
+                            logger.info(
+                                "GEN_FIRST_TOKEN corr=%s after=%.1fms",
+                                _gen_corr_id,
+                                _first_token_ms,
+                                extra={
+                                    "tag": "INF",
+                                    "context": {
+                                        "corr": _gen_corr_id,
+                                        "elapsed_ms": round(_first_token_ms, 1),
+                                    },
+                                },
+                            )
                         _token_gen_start = time.time()
                         token_count += 1
+                        _token_count += 1
                         collected.append(token)
                         _batch.append(token)
-                        if len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
+                        if (
+                            _token_count == 1
+                            or len(_batch) >= _BATCH_MAX
+                            or (time.time() - _batch_start) >= _BATCH_INTERVAL_S
+                        ):
                             yield sse_token("generate", "".join(_batch))
                             _batch = []
                             _batch_start = time.time()
@@ -550,275 +1493,624 @@ class InferenceRouter:
                             _last_heartbeat = now
                     elapsed_since_token = time.time() - _token_gen_start
                     if elapsed_since_token > _max_token_wait_s:
-                        logger.warning("Generate stream stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
-                        yield sse_error("generate", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                        logger.warning(
+                            "Generate stream stalled for %.1fs (limit=%.1fs) corr=%s",
+                            elapsed_since_token,
+                            _max_token_wait_s,
+                            _gen_corr_id,
+                            extra={
+                                "tag": "INF",
+                                "context": {
+                                    "corr": _gen_corr_id,
+                                    "elapsed_s": round(elapsed_since_token, 1),
+                                    "limit_s": _max_token_wait_s,
+                                },
+                            },
+                        )
+                        cancel_event.set()
+                        _mgr.finish(_op_id, "timeout")
+                        yield sse_error(
+                            "generate",
+                            "TIMEOUT",
+                            f"Generation stalled for {elapsed_since_token:.0f}s",
+                            code="MODEL_TIMEOUT",
+                            http_status=504,
+                        )
                         return
                 if _batch:
                     yield sse_token("generate", "".join(_batch))
                     _batch = []
             except Exception as e:
-                classify_and_raise(e, source="generate_stream")
-                yield sse_error("generate", "STREAMING", err.user_message)
-                return
+                try:
+                    await _coalescer.complete_error(_coalesce_key, e)
+                except Exception as coalescer_err:
+                    logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
+                _mgr.finish(_op_id, str(e))
+                logger.warning("Generate stream failed: %s", e, extra={"tag": "INF"})
+                err_code = (
+                    "E_MEMORY_PRESSURE"
+                    if isinstance(e, RuntimeError) and "memory" in str(e).lower()
+                    else "E_INFRA_GENERATION"
+                )
+                http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
+                yield sse_error("generate", "ERROR", str(e), code=err_code, http_status=http_status)
             elapsed = (datetime.datetime.now() - start).total_seconds() * 1000
             try:
-                from domains.infrastructure.server_state import get_server_state
                 get_server_state().record_inference(
-                    tokens=token_count, elapsed_ms=elapsed, model=_stream_state.model_type or req.model
+                    tokens=token_count,
+                    elapsed_ms=elapsed,
+                    model=_stream_state.model_type or req.model,
                 )
             except Exception as e:
-                logger.debug("Failed to record inference metrics: %s", e)
+                logger.warning("Failed to record inference metrics: %s", e)
             try:
-                from domains.infrastructure.conversation_log import capture
                 capture(
                     req.prompt,
                     "".join(collected),
                     model=_stream_state.model_type or req.model,
                     tokens_generated=token_count,
                     elapsed_ms=elapsed,
-                    temperature=req.temperature,
+                    temperature=gen_params["temperature"],
                 )
             except Exception as e:
-                logger.debug("Failed to capture conversation: %s", e)
-            yield sse_token("generate", "", done=True, meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)})
+                logger.warning("Failed to capture conversation: %s", e)
+            full_response = "".join(collected)
+            await _coalescer.complete(_coalesce_key, full_response)
+            _mgr.finish(_op_id)
+            yield sse_token(
+                "generate",
+                "",
+                done=True,
+                meta={"tokens": token_count, "elapsed_ms": round(elapsed, 1)},
+            )
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
+    async def ws_generate(self, websocket: WebSocket) -> None:
+        """WebSocket endpoint for real-time token streaming.
+
+        Protocol:
+          1. Client connects and sends auth message: {"api_key": "..."} or {"token": "..."}
+          2. Server responds: {"status": "authenticated"} or {"status": "error", "error": "..."}
+          3. Client sends generate requests: {"prompt": "...", "max_tokens": 100, "temperature": 0.8}
+          4. Server streams tokens: {"token": "..."}
+          5. Server sends completion: {"done": true, "status": "done", "text": "...full text"}
+          6. Server sends error: {"status": "error", "error": "..."}
+        """
+        await websocket.accept()
+
+        try:
+            raw = await asyncio.wait_for(websocket.receive_text(), timeout=30.0)
+            msg = json.loads(raw)
+        except (TimeoutError, json.JSONDecodeError) as e:
+            try:
+                await websocket.send_json(
+                    {"status": "error", "error": f"Invalid auth message: {e}"}
+                )
+            except Exception:
+                pass
+            await websocket.close()
+            return
+
+        api_key = msg.get("api_key") or msg.get("token")
+        if not api_key:
+            try:
+                await websocket.send_json({"status": "error", "error": "Missing api_key or token"})
+            except Exception:
+                pass
+            await websocket.close()
+            return
+
+        import os as _ws_os
+
+        auth_required = _ws_os.environ.get("SLO_AUTH_REQUIRED", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+        )
+
+        if auth_required:
+            from infrastructure.auth import get_jwt_auth
+
+            jwt_auth = get_jwt_auth()
+            try:
+                jwt_auth.verify_token(api_key)
+            except Exception:
+                try:
+                    await websocket.send_json({"status": "error", "error": "Invalid token"})
+                except Exception:
+                    pass
+                await websocket.close()
+                return
+        else:
+            from routers.security import ApiKeyManager
+
+            try:
+                _key_mgr = ApiKeyManager()
+                if not _key_mgr.validate(api_key):
+                    try:
+                        await websocket.send_json({"status": "error", "error": "Invalid API key"})
+                    except Exception:
+                        pass
+                    await websocket.close()
+                    return
+            except Exception as e:
+                logger.debug("API key validation skipped (manager unavailable): %s", e)
+
+        try:
+            await websocket.send_json({"status": "authenticated"})
+        except Exception:
+            return
+
+        logger.info("WebSocket /ws/generate connected", extra={"tag": "INF"})
+
+        while True:
+            try:
+                raw = await websocket.receive_text()
+                msg = json.loads(raw)
+            except WebSocketDisconnect:
+                logger.info("WebSocket /ws/generate disconnected", extra={"tag": "INF"})
+                return
+            except json.JSONDecodeError as e:
+                try:
+                    await websocket.send_json({"status": "error", "error": f"Invalid JSON: {e}"})
+                except Exception:
+                    return
+                continue
+
+            if msg.get("type") == "ping":
+                try:
+                    await websocket.send_json({"type": "pong"})
+                except Exception:
+                    return
+                continue
+
+            prompt = msg.get("prompt")
+            if not prompt:
+                try:
+                    await websocket.send_json({"status": "error", "error": "Missing prompt field"})
+                except Exception:
+                    return
+                continue
+
+            max_tokens = msg.get("max_tokens", 256)
+            temperature = msg.get("temperature", 0.7)
+            top_p = msg.get("top_p", 0.85)
+            top_k = msg.get("top_k", 40)
+            repetition_penalty = msg.get("repetition_penalty", 1.15)
+
+            import state as _ws_gen_state
+
+            ms = _get_model_status()
+            if not ms["ready"]:
+                try:
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "error": ms["reason"],
+                            "code": ms["code"],
+                        }
+                    )
+                except Exception:
+                    return
+                continue
+
+            mem_err = _check_memory_pressure()
+            if mem_err:
+                try:
+                    await websocket.send_json({"status": "error", "error": mem_err})
+                except Exception:
+                    return
+                continue
+
+            provider = get_provider("default")
+            if provider is None:
+                try:
+                    await websocket.send_json(
+                        {
+                            "status": "error",
+                            "error": "No provider available — load a model first",
+                        }
+                    )
+                except Exception:
+                    return
+                continue
+
+            provider_messages = [{"role": "user", "content": prompt}]
+            # A WebSocket frame carries no pydantic model, so a parameter is
+            # "explicit" exactly when the client included it in the frame.
+            _ws_explicit = {
+                k for k in ("temperature", "top_p", "top_k", "repetition_penalty") if k in msg
+            }
+            gen_params = _apply_meta_weights(
+                temperature=temperature,
+                top_p=top_p,
+                top_k=top_k,
+                repetition_penalty=repetition_penalty,
+                user_message=prompt,
+                explicit=_ws_explicit,
+            )
+
+            collected: list[str] = []
+            try:
+                async for token in provider.chat_stream(
+                    provider_messages,
+                    max_tokens=max_tokens,
+                    **gen_params,
+                ):
+                    if token:
+                        collected.append(token)
+                        try:
+                            await websocket.send_json({"token": token})
+                        except Exception:
+                            logger.info(
+                                "WebSocket client disconnected during stream", extra={"tag": "INF"}
+                            )
+                            return
+
+                full_text = "".join(collected)
+                try:
+                    await websocket.send_json(
+                        {
+                            "done": True,
+                            "status": "done",
+                            "text": full_text,
+                        }
+                    )
+                except Exception:
+                    return
+
+                token_count = _count_tokens(full_text, _ws_gen_state)
+                actual_model = _ws_gen_state.model_type or msg.get("model", "default")
+                try:
+                    get_server_state().record_inference(
+                        tokens=token_count,
+                        elapsed_ms=0,
+                        model=actual_model,
+                    )
+                except Exception as e:
+                    logger.warning("Failed to record inference metrics: %s", e)
+                try:
+                    capture(
+                        prompt,
+                        full_text,
+                        model=actual_model,
+                        tokens_generated=token_count,
+                        temperature=gen_params["temperature"],
+                    )
+                except Exception as e:
+                    logger.warning("Failed to capture conversation: %s", e)
+
+            except Exception as e:
+                logger.warning("WebSocket generate failed: %s", e, extra={"tag": "INF"})
+                try:
+                    await websocket.send_json({"status": "error", "error": str(e)})
+                except Exception:
+                    return
+
     async def get_info(self) -> dict:
-        """get_info."""
-        from host_metrics import sample_host_metrics_async
-        import state as server_state
+        try:
+            """get_info."""
+            import state as server_state
+            from host_metrics import sample_host_metrics_async
 
-        data = {
-            "api_version": "1.0.0",
-            "model": {
-                "type": server_state.model_type,
-                "loaded": server_state.model is not None or server_state.provider is not None,
-            },
-        }
+            data = {
+                "api_version": "1.0.0",
+                "model": {
+                    "type": server_state.model_type,
+                    "loaded": server_state.model is not None or server_state.provider is not None,
+                },
+            }
 
-        mrl = server_state.model_request_logger
-        if mrl is not None:
-            data["model"]["request_stats"] = mrl.get_stats()
+            mrl = server_state.model_request_logger
+            if mrl is not None:
+                data["model"]["request_stats"] = mrl.get_stats()
 
-        host = await sample_host_metrics_async()
-        if host is not None:
-            data["host"] = host
+            host = await sample_host_metrics_async()
+            if host is not None:
+                data["host"] = host
 
-        cp = server_state.checkpoint
-        if cp:
-            data["model"].update({
-                "vocab_size": len(cp.get("stoi", {})) if isinstance(cp, dict) else 0,
-                "chars": len(cp.get("chars", [])) if isinstance(cp, dict) else 0,
-            })
+            cp = server_state.checkpoint
+            if cp:
+                data["model"].update(
+                    {
+                        "vocab_size": len(cp.get("stoi", {})) if isinstance(cp, dict) else 0,
+                        "chars": len(cp.get("chars", [])) if isinstance(cp, dict) else 0,
+                    }
+                )
 
-        se = server_state.soul_engine
-        cs = server_state.current_soul
-        if se is not None and getattr(se, 'is_loaded', False):
-            data["soul_engine"] = se.get_stats()
+            se = server_state.soul_engine
+            if se is not None and getattr(se, "is_loaded", False):
+                data["soul_engine"] = se.get_stats()
 
-        return data
+            return data
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_info")
 
     async def get_info_soul(self) -> dict:
-        """get_info_soul."""
-        import state as server_state
-        cs = server_state.current_soul
-        if not cs:
-            return {}
-        soul_info = {}
         try:
-            soul_info["soul"] = {
-                "name": cs.name if hasattr(cs, "name") else "",
-                "description": cs.description if hasattr(cs, "description") else "",
-                "integrity_hash": getattr(cs, "integrity_hash", ""),
-                "born_at": getattr(cs, "born_at", ""),
-                "tags": getattr(cs, "tags", []),
-                "certifications": getattr(cs, "certifications", []),
-            }
+            """get_info_soul."""
+            import state as server_state
+
+            cs = server_state.current_soul
+            if not cs:
+                return success_response(data={})
+            soul_info = {}
+            try:
+                soul_info["soul"] = {
+                    "name": cs.name if hasattr(cs, "name") else "",
+                    "description": cs.description if hasattr(cs, "description") else "",
+                    "integrity_hash": getattr(cs, "integrity_hash", ""),
+                    "born_at": getattr(cs, "born_at", ""),
+                    "tags": getattr(cs, "tags", []),
+                    "certifications": getattr(cs, "certifications", []),
+                }
+            except Exception as e:
+                logger.debug("Failed to build soul info: %s", e)
+            return success_response(data=soul_info)
+
         except Exception as e:
-            logger.debug("Failed to build soul info: %s", e)
-        return soul_info
+            classify_and_raise(e, source="inference.get_info_soul")
 
     async def root(self) -> dict:
-        """root."""
-        import state as server_state
-        soul_name = None
-        if server_state.soul_engine is not None and getattr(server_state.soul_engine, 'slo', None):
-            soul_name = server_state.soul_engine.slo.name
-        elif server_state.current_soul and hasattr(server_state.current_soul, "name"):
-            soul_name = server_state.current_soul.name
-        return {
-            "name": "SloughGPT API",
-            "version": "1.0.0",
-            "status": "running",
-            "model": server_state.model_type,
-            "soul_loaded": soul_name,
-            "soul_engine_active": server_state.soul_engine is not None and getattr(server_state.soul_engine, 'is_loaded', False),
-            "endpoints": {
-                "generate": "/generate (POST)",
-                "v1_infer": "/v1/infer (POST) — SloughGPT Standard v1 envelope",
-                "generate_stream": "/generate/stream (POST)",
-                "generate_ws": "/ws/generate (WebSocket)",
-                "load_soul": "/load-soul (POST) - loads into SloEngine",
-                "soul": "/soul (GET)",
-                "models": "/models (GET)",
-                "datasets": "/datasets (GET)",
-                "train_resolve": "/train/resolve (POST) — preview manifest → data_path",
-                "info": "/info (GET)",
-            },
-        }
+        try:
+            """root."""
+            import state as server_state
+
+            soul_name = None
+            if server_state.soul_engine is not None and getattr(
+                server_state.soul_engine, "slo", None
+            ):
+                soul_name = server_state.soul_engine.slo.name
+            elif server_state.current_soul and hasattr(server_state.current_soul, "name"):
+                soul_name = server_state.current_soul.name
+            return success_response(
+                data={
+                    "name": "SloughGPT API",
+                    "version": "1.0.0",
+                    "status": "running",
+                    "model": server_state.model_type,
+                    "soul_loaded": soul_name,
+                    "soul_engine_active": server_state.soul_engine is not None
+                    and getattr(server_state.soul_engine, "is_loaded", False),
+                    "endpoints": {
+                        "generate": "/generate (POST)",
+                        "v1_infer": "/v1/infer (POST) — SloughGPT Standard v1 envelope",
+                        "generate_stream": "/generate/stream (POST)",
+                        "generate_ws": "/ws/generate (WebSocket)",
+                        "load_soul": "/load-soul (POST) - loads into SloEngine",
+                        "soul": "/soul (GET)",
+                        "models": "/models (GET)",
+                        "datasets": "/datasets (GET)",
+                        "train_resolve": "/train/resolve (POST) — preview manifest → data_path",
+                        "info": "/info (GET)",
+                    },
+                }
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.root")
 
     async def list_chat_tools(self) -> dict:
-        """list_chat_tools."""
         try:
-            from domains.agents.tools import get_tool_registry
-            return {"tools": get_tool_registry().list_tools()}
+            """list_chat_tools."""
+            try:
+                return success_response(data={"tools": get_tool_registry().list_tools()})
+            except Exception as e:
+                logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
+                return success_response(data={"tools": []})
+
         except Exception as e:
-            logger.warning("Failed to list tools: %s", e, extra={"tag": "INF"})
-            return {"tools": []}
+            classify_and_raise(e, source="inference.list_chat_tools")
 
-    async def chat_stream(self, req: ChatRequest, request: Request) -> StreamingResponse:
+    async def chat_stream(
+        self, req: ChatRequest, request: Request, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> StreamingResponse:
         """chat_stream."""
-        from startup_progress import STARTUP_PHASE
+        corr_id = request.scope.get("correlation_id", "-")
+        logger.info(
+            "CHAT_STREAM ENTER corr=%s session=%s msgs=%d images=%d max_tokens=%d temp=%.2f",
+            corr_id,
+            req.session_id,
+            len(req.messages),
+            len(req.images or []),
+            req.max_tokens,
+            req.temperature,
+            extra={
+                "tag": "CHAT",
+                "context": {
+                    "corr": corr_id,
+                    "session_id": req.session_id,
+                    "msg_count": len(req.messages),
+                    "has_images": bool(req.images),
+                    "max_tokens": req.max_tokens,
+                    "temperature": req.temperature,
+                    "use_context": req.use_context_core,
+                    "use_rag": req.use_rag,
+                },
+            },
+        )
 
-        import state as _check_state
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            phase = STARTUP_PHASE.get("phase", "unknown")
-            if phase == "ready":
-                msg = "Model still loading — please wait."
-            else:
-                msg = f"Server starting (phase: {phase}). Please wait."
+        ms = _get_model_status()
+        if not ms["ready"]:
+
             async def error_stream() -> AsyncIterator[str]:
                 """error_stream."""
-                yield sse_error("chat", "IDLE", msg)
+                yield sse_error(
+                    "chat", "IDLE", ms["reason"], code=ms["code"], http_status=ms["status"]
+                )
+
             return StreamingResponse(error_stream(), media_type="text/event-stream")
+
+        mem_err = _check_memory_pressure()
+        if mem_err:
+            get_server_state().record_memory_pressure_block()
+
+            async def oom_stream() -> AsyncIterator[str]:
+                yield sse_error("chat", "IDLE", mem_err, code="E_MEMORY_PRESSURE", http_status=503)
+
+            return StreamingResponse(oom_stream(), media_type="text/event-stream")
 
         async def generate() -> AsyncIterator[str]:
             """generate."""
-            logger.debug("chat_stream.generate() ENTERED")
+            corr_id = request.scope.get("correlation_id", "-")
+            logger.debug("chat_stream.generate() ENTERED corr=%s", corr_id)
+
+            # Check for Last-Event-ID header for reconnection
+            last_event_id_raw = request.headers.get("last-event-id")
+            try:
+                last_event_id = int(last_event_id_raw) if last_event_id_raw else 0
+            except (ValueError, TypeError):
+                last_event_id = 0
+            if last_event_id:
+                session_id = req.session_id or "default"
+                cached = get_chat_response_cache(session_id)
+                if cached and cached.get("event_counter", 0) > last_event_id:
+                    # Replay cached response from the point of disconnection
+                    logger.info(
+                        "Replaying cached response for session %s from event %s",
+                        session_id,
+                        last_event_id,
+                    )
+                    cached_counter = last_event_id
+                    for token in cached.get("tokens", []):
+                        cached_counter += 1
+                        yield sse_token("chat", token)
+                    if cached.get("complete"):
+                        yield sse_token("chat", "", done=True)
+                    return
+
             cancel_event = threading.Event()
             user_msg = _extract_user_message(req.messages)
             if not user_msg:
-                yield sse_error("chat", "IDLE", "No user message")
+                yield sse_error(
+                    "chat", "IDLE", "No user message", code="E_VAL_REQUEST", http_status=400
+                )
                 return
+
+            _mgr = get_cancel_manager()
+            _op_id = _mgr.register(
+                OpType.INFERENCE,
+                f"chat:{user_msg[:40]}",
+                cancel_fn=lambda: cancel_event.set(),
+            )
+            _mgr.start(_op_id)
 
             start_time = datetime.datetime.now()
 
-            logger.debug("chat_stream: yielding thinking event")
-            yield _sse_event("chat", "STREAMING", "thinking",
-                data={}, message="Thinking...")
+            yield _sse_event("chat", "STREAMING", "thinking", data={}, message="Thinking...")
 
             if req.knowledge:
                 try:
-                    def _store_knowledge(k_list):
-                        from domains.learner.knowledge import get_knowledge_memory, KnowledgeFact
-                        import time
-                        mem = get_knowledge_memory()
-                        stored = 0
-                        for k in k_list:
-                            if k and len(k) > 10:
-                                fact = KnowledgeFact(content=k, topic="injected", source="injected",
-                                                     timestamp=time.time(), importance=0.7)
-                                if mem.add_fact(fact):
-                                    stored += 1
-                        return stored
-                    stored = await asyncio.to_thread(_store_knowledge, req.knowledge)
+                    stored = await asyncio.to_thread(_inject_knowledge_items, req.knowledge)
                     if stored:
-                        logger.info("Stored %d injected knowledge items in vector store", stored, extra={"tag": "INF", "context": {"count": stored}})
+                        logger.info(
+                            "Stored %d injected knowledge items in vector store",
+                            stored,
+                            extra={"tag": "INF", "context": {"count": stored}},
+                        )
                 except Exception as e:
-                    logger.warning("Failed to store injected knowledge: %s", e, extra={"tag": "INF", "context": {"error": str(e)}})
+                    logger.warning(
+                        "Failed to store injected knowledge: %s",
+                        e,
+                        extra={"tag": "INF", "context": {"error": str(e)}},
+                    )
 
-            provider_messages = [{"role": m.role, "content": m.content} for m in req.messages]
-            if req.images:
-                content_parts = [{"type": "text", "text": user_msg}]
-                for img_data in req.images:
-                    content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
-                for i in range(len(provider_messages) - 1, -1, -1):
-                    if provider_messages[i]["role"] == "user":
-                        provider_messages[i]["content"] = content_parts
-                        break
+            provider_messages = _prepare_provider_messages(req.messages, req.images, user_msg)
 
-            session_id = req.session_id or f"session_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+            session_id = (
+                req.session_id or f"session_{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+            )
 
             session_data = self._get_session(session_id)
-            session_data.setdefault("messages", []).append({
-                "role": "user",
-                "content": user_msg,
-                "timestamp": datetime.datetime.now().isoformat(),
-            })
+            session_data.setdefault("messages", []).append(
+                {
+                    "role": "user",
+                    "content": user_msg,
+                    "timestamp": datetime.datetime.now().isoformat(),
+                }
+            )
+
+            logger.debug(
+                "CHAT_PIPELINE corr=%s step=SESSION_LOADED session=%s",
+                corr_id,
+                session_id,
+                extra={
+                    "tag": "CHAT",
+                    "context": {
+                        "corr": corr_id,
+                        "step": "SESSION_LOADED",
+                        "session_id": session_id,
+                    },
+                },
+            )
 
             ctx_core = self._get_context_core()
             context_info = {}
             frame = None
-            skip_context = False
             if ctx_core and req.use_context_core:
-                try:
-                    from domains.memory.memory_service import get_memory_service
-                    if get_memory_service().stats().get("total_facts", 0) == 0 and not req.knowledge:
-                        skip_context = True
-                except Exception as e:
-                    logger.debug("Knowledge memory check failed: %s", e)
-            if ctx_core and req.use_context_core and not skip_context:
-                ctx_core.set_session_id(session_id)
-                ctx_core.add_message("user", user_msg)
-                try:
-                    frame = await asyncio.wait_for(
-                        ctx_core.build_context_frame(
-                            include_rag=True,
-                            include_memory=True,
-                            query=user_msg,
-                        ),
-                        timeout=5.0,
-                    )
-                except asyncio.TimeoutError:
-                    logger.debug("Context frame building timed out, proceeding without context")
-                    frame = None
-                context_info = {
-                    "layers": [l.layer_type for l in frame.layers],
-                    "total_tokens": frame.total_tokens,
-                    "max_tokens": frame.max_tokens,
-                }
-                if frame.system_prompt:
+                frame, context_info = await _build_context_frame(
+                    ctx_core,
+                    session_id,
+                    user_msg,
+                    corr_id,
+                )
+                if frame is not None and frame.system_prompt:
                     for i, m in enumerate(provider_messages):
                         if m["role"] == "system":
-                            provider_messages[i] = {"role": "system", "content": frame.system_prompt}
+                            provider_messages[i] = {
+                                "role": "system",
+                                "content": frame.system_prompt,
+                            }
                             break
                     else:
-                        provider_messages.insert(0, {"role": "system", "content": frame.system_prompt})
+                        provider_messages.insert(
+                            0, {"role": "system", "content": frame.system_prompt}
+                        )
 
             # Production RAG: query for relevant context from ingested documents
             rag_context = ""
-            rag_info = {}
             if req.use_rag:
                 try:
-                    from domains.cognitive.rag_service import get_rag_service
-                    rag_svc = get_rag_service()
-                    if rag_svc.stats().get("total_chunks", 0) > 0:
-                        rag_result = await asyncio.to_thread(rag_svc.query, user_msg, 5)
-                        if rag_result.get("num_results", 0) > 0:
-                            rag_context = rag_result["context"]
-                            rag_info = {
-                                "num_results": rag_result["num_results"],
-                                "results": [
-                                    {"score": r["score"], "rank": r["rank"], "source": r["metadata"].get("source", "unknown")}
-                                    for r in rag_result.get("results", [])
-                                ],
-                            }
-                            # Inject RAG context into system prompt or as a user context message
-                            rag_block = f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{rag_context}"
-                            # Prepend as user context before the conversation
-                            provider_messages.insert(0, {"role": "system", "content": rag_block})
-                            logger.debug("RAG injected %d passages into chat context", rag_result["num_results"])
+                    from domain.core import is_rag_service_ready
+
+                    if not is_rag_service_ready():
+                        logger.debug("RAG service not ready yet, skipping query")
+                    else:
+                        rag_svc = await asyncio.wait_for(
+                            asyncio.to_thread(get_rag_service), timeout=10.0
+                        )
+                        if rag_svc.stats().get("total_chunks", 0) > 0:
+                            rag_result = await asyncio.wait_for(
+                                asyncio.to_thread(rag_svc.query, user_msg, 5), timeout=15.0
+                            )
+                            if rag_result.get("num_results", 0) > 0:
+                                rag_context = rag_result["context"]
+                                # Inject RAG context into system prompt or as a user context message
+                                rag_block = f"[KNOWLEDGE BASE - Retrieved {rag_result['num_results']} relevant passages]\n\n{rag_context}"
+                                # Prepend as user context before the conversation
+                                provider_messages.insert(
+                                    0, {"role": "system", "content": rag_block}
+                                )
+                                logger.debug(
+                                    "RAG injected %d passages into chat context",
+                                    rag_result["num_results"],
+                                )
                 except Exception as e:
                     logger.debug("RAG query skipped: %s", e)
+                    if corr_id:
+                        yield sse_error("chat", "RAG_ERROR", str(e), code="RAG_ERROR")
 
             if req.agent_id:
                 try:
-                    from domains.agents.system import get_agent_system
                     agent_sys = get_agent_system()
                     agent_instructions = agent_sys.get_instructions(req.agent_id)
                     if agent_instructions:
-                        agent_msg = {"role": "system", "content": f"[AGENT: {req.agent_id}]\n{agent_instructions}"}
+                        agent_msg = {
+                            "role": "system",
+                            "content": f"[AGENT: {req.agent_id}]\n{agent_instructions}",
+                        }
                         replaced = False
                         for i, m in enumerate(provider_messages):
                             if m["role"] == "system" and m["content"].startswith("[AGENT:"):
@@ -827,25 +2119,72 @@ class InferenceRouter:
                                 break
                         if not replaced:
                             provider_messages.insert(0, agent_msg)
-                except Exception:
-                    logger.warning("Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"})
+                except Exception as exc:
+                    logger.warning(
+                        "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
+                    )
+                    yield _sse_event(
+                        "chat",
+                        "AGENT",
+                        "error",
+                        data={"error": str(exc)},
+                        message=f"Agent instruction injection failed: {exc}",
+                    )
+
+            # Cognitive reasoning context injection from SloEngine
+            try:
+                import state as _cs_state
+
+                soul_engine = _cs_state.soul_engine
+                if soul_engine and soul_engine._soul:
+                    reasoning_text = soul_engine._build_reasoning_chain_text(user_msg or "")
+                    if reasoning_text.strip():
+                        cognitive_msg = {
+                            "role": "system",
+                            "content": reasoning_text,
+                        }
+                        # Insert after system prompt but before user messages
+                        insert_idx = 0
+                        for i, m in enumerate(provider_messages):
+                            if m["role"] == "system":
+                                insert_idx = i + 1
+                                break
+                        provider_messages.insert(insert_idx, cognitive_msg)
+                        logger.debug(
+                            "Cognitive reasoning context injected into chat (idx=%d)",
+                            insert_idx,
+                        )
+            except Exception as _cog_err:
+                logger.debug("Cognitive context injection skipped: %s", _cog_err)
 
             tool_result_data = None
             try:
-                from domains.agents.tools import get_tool_registry
+                logger.debug(
+                    "CHAT_PIPELINE corr=%s step=TOOL_DETECT start",
+                    corr_id,
+                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "TOOL_DETECT"}},
+                )
                 tool_reg = get_tool_registry()
                 tool_intent = tool_reg.detect_tool_intent(user_msg)
                 if tool_intent:
                     tool_name, tool_args = tool_intent
                     spec = tool_reg.get(tool_name)
                     if spec and spec.requires_approval:
-                        yield _sse_event("chat", "TOOL_APPROVAL", "pending",
+                        yield _sse_event(
+                            "chat",
+                            "TOOL_APPROVAL",
+                            "pending",
                             data={"tool": tool_name, "args": tool_args, "requires_approval": True},
-                            message=f"Approval needed: {tool_name}")
+                            message=f"Approval needed: {tool_name}",
+                        )
                     else:
-                        yield _sse_event("chat", "TOOL", "working",
+                        yield _sse_event(
+                            "chat",
+                            "TOOL",
+                            "working",
                             data={"tool": tool_name, "args": tool_args, "status": "executing"},
-                            message=f"Running tool: {tool_name}")
+                            message=f"Running tool: {tool_name}",
+                        )
                         result = await tool_reg.execute(tool_name, tool_args)
                         tool_result_data = {
                             "tool": tool_name,
@@ -855,28 +2194,59 @@ class InferenceRouter:
                             "duration_ms": round(result.duration_ms, 1),
                         }
                         if result.success:
-                            yield _sse_event("chat", "TOOL", "complete",
+                            yield _sse_event(
+                                "chat",
+                                "TOOL",
+                                "complete",
                                 data=tool_result_data,
-                                message=f"Tool {tool_name} completed in {result.duration_ms:.0f}ms")
-                            provider_messages.append({
-                                "role": "system",
-                                "content": f"[TOOL RESULT: {tool_name}]\n{result.output}\n[/TOOL RESULT]"
-                            })
+                                message=f"Tool {tool_name} completed in {result.duration_ms:.0f}ms",
+                            )
+                            provider_messages.append(
+                                {
+                                    "role": "system",
+                                    "content": f"[TOOL RESULT: {tool_name}]\n{result.output}\n[/TOOL RESULT]",
+                                }
+                            )
                         else:
-                            yield _sse_event("chat", "TOOL", "error",
+                            yield _sse_event(
+                                "chat",
+                                "TOOL",
+                                "error",
                                 data=tool_result_data,
-                                message=f"Tool {tool_name} failed: {result.error}")
-                            provider_messages.append({
-                                "role": "system",
-                                "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]"
-                            })
-            except Exception:
+                                message=f"Tool {tool_name} failed: {result.error}",
+                            )
+                            provider_messages.append(
+                                {
+                                    "role": "system",
+                                    "content": f"[TOOL RESULT: {tool_name}]\nError: {result.error}\n[/TOOL RESULT]",
+                                }
+                            )
+            except Exception as exc:
                 logger.warning("Tool execution failed", exc_info=True, extra={"tag": "INF"})
+                yield _sse_event(
+                    "chat",
+                    "TOOL",
+                    "error",
+                    data={"error": str(exc)},
+                    message=f"Tool execution failed: {exc}",
+                )
+            logger.debug(
+                "CHAT_PIPELINE corr=%s step=TOOL_DETECT done",
+                corr_id,
+                extra={
+                    "tag": "CHAT",
+                    "context": {"corr": corr_id, "step": "TOOL_DETECT", "result": "DONE"},
+                },
+            )
 
             if context_info:
-                yield _sse_event("chat", "STREAMING", "working",
+                yield _sse_event(
+                    "chat",
+                    "STREAMING",
+                    "working",
                     data={"context": context_info},
-                    message=f"{len(context_info.get('layers', []))} context layers")
+                    message=f"{len(context_info.get('layers', []))} context layers",
+                )
 
             frame_context = []
             if frame:
@@ -887,36 +2257,141 @@ class InferenceRouter:
             knowledge_retrieved = []
             if not frame_context:
                 try:
-                    enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH start",
+                        corr_id,
+                        extra={
+                            "tag": "CHAT",
+                            "context": {"corr": corr_id, "step": "KNOWLEDGE_ENRICH"},
+                        },
+                    )
+                    enrichment = await asyncio.wait_for(
+                        asyncio.to_thread(_enrich_knowledge, user_msg, False, 5),
+                        timeout=10.0,
+                    )
                     if enrichment.get("facts"):
                         knowledge_retrieved = enrichment["facts"]
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH done facts=%d",
+                        corr_id,
+                        len(knowledge_retrieved),
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "KNOWLEDGE_ENRICH",
+                                "result": "DONE",
+                                "facts": len(knowledge_retrieved),
+                            },
+                        },
+                    )
                 except Exception as e:
-                    logger.debug("Knowledge enrichment failed: %s", e)
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_ENRICH error=%s",
+                        corr_id,
+                        e,
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "KNOWLEDGE_ENRICH",
+                                "result": "ERROR",
+                                "error": str(e),
+                            },
+                        },
+                    )
+                    yield sse_error("chat", "KNOWLEDGE_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
             all_knowledge = knowledge_retrieved + frame_context + (req.knowledge or [])
             if all_knowledge:
                 try:
-                    from domains.models.provider import KnowledgeProcessor, apply_processors
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC start count=%d",
+                        corr_id,
+                        len(all_knowledge),
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "KNOWLEDGE_PROC",
+                                "count": len(all_knowledge),
+                            },
+                        },
+                    )
                     k_proc = KnowledgeProcessor(knowledge=all_knowledge)
                     provider_messages = await apply_processors(provider_messages, [k_proc])
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC done",
+                        corr_id,
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "KNOWLEDGE_PROC",
+                                "result": "DONE",
+                            },
+                        },
+                    )
                 except Exception as e:
-                    logger.debug("Knowledge processor failed: %s", e)
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=KNOWLEDGE_PROC error=%s",
+                        corr_id,
+                        e,
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "KNOWLEDGE_PROC",
+                                "result": "ERROR",
+                                "error": str(e),
+                            },
+                        },
+                    )
+                    yield sse_error("chat", "KNOWLEDGE_PROC_ERROR", str(e), code="KNOWLEDGE_ERROR")
 
             try:
-                from domains.models.provider import get_provider
+                from domain.core import get_consciousness
+
+                _ce = get_consciousness()
+                if _ce.config.is_enabled():
+                    _ce.qualia.experience(user_msg or "")
+                    _q = _ce.qualia.current.to_dict()
+                    _status = _ce.get_status()
+                    yield _sse_event(
+                        "chat",
+                        "CONSCIOUSNESS",
+                        "active",
+                        data={
+                            "level": _status.get("level", 0),
+                            "qualia": _q,
+                            "beliefs": _status.get("beliefs", {}),
+                        },
+                        message="Consciousness state updated",
+                    )
+            except Exception as _ce_err:
+                logger.debug("Consciousness SSE emit skipped: %s", _ce_err)
+
+            try:
+                logger.debug(
+                    "CHAT_PIPELINE corr=%s step=PROVIDER_SETUP start",
+                    corr_id,
+                    extra={"tag": "CHAT", "context": {"corr": corr_id, "step": "PROVIDER_SETUP"}},
+                )
+
                 provider = get_provider("default")
 
                 if provider is not None:
                     full_response_parts: list[str] = []
                     logger.debug("chat_stream: about to call provider.chat_stream()")
                     _token_gen_start = time.time()
-                    _max_token_wait_s = 120.0
+                    _max_token_wait_s = cfg.generate_timeout
                     _heartbeat_interval_s = 10.0
                     _last_heartbeat = time.time()
                     _batch: list[str] = []
                     _batch_start = time.time()
                     _BATCH_MAX = 5
                     _BATCH_INTERVAL_S = 0.005
+                    _token_count = 0
                     gen_params = _apply_meta_weights(
                         temperature=req.temperature,
                         top_p=req.top_p,
@@ -924,9 +2399,143 @@ class InferenceRouter:
                         repetition_penalty=req.repetition_penalty,
                         user_message=user_msg or "",
                         user_id=req.user_id or "default",
+                        explicit=req.model_fields_set,
+                    )
+
+                    import state as _cs_state
+
+                    _coalescer = get_coalescer()
+                    _coalesce_key = _coalescer.hash(
+                        provider_messages, gen_params, req.max_tokens, _cs_state.model_type
+                    )
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=COALESCER_START key=%s",
+                        corr_id,
+                        _coalesce_key[:16],
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "COALESCER_START",
+                                "key": _coalesce_key[:16],
+                            },
+                        },
+                    )
+                    existing = await _coalescer.start(_coalesce_key)
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=COALESCER_START done existing=%s",
+                        corr_id,
+                        existing is not None,
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "COALESCER_START",
+                                "result": "DONE",
+                                "existing": existing is not None,
+                            },
+                        },
+                    )
+                    if existing is not None:
+                        logger.debug(
+                            "CHAT_PIPELINE corr=%s step=COALESCER_JOIN existing_key=%s",
+                            corr_id,
+                            _coalesce_key[:16],
+                            extra={
+                                "tag": "CHAT",
+                                "context": {
+                                    "corr": corr_id,
+                                    "step": "COALESCER_JOIN",
+                                    "key": _coalesce_key[:16],
+                                },
+                            },
+                        )
+                        await existing.event.wait()
+                        logger.debug(
+                            "CHAT_PIPELINE corr=%s step=COALESCER_JOIN done error=%s",
+                            corr_id,
+                            existing.error,
+                            extra={
+                                "tag": "CHAT",
+                                "context": {
+                                    "corr": corr_id,
+                                    "step": "COALESCER_JOIN",
+                                    "result": "DONE",
+                                    "error": str(existing.error) if existing.error else None,
+                                },
+                            },
+                        )
+                        if existing.error is not None:
+                            yield sse_error(
+                                "chat",
+                                "ERROR",
+                                str(existing.error),
+                                code="E_INFRA_GENERATION",
+                                http_status=500,
+                            )
+                            return
+                        cached = existing.result or ""
+                        for chunk in _chunk_replay(cached):
+                            yield sse_token("chat", chunk)
+                        _mgr.finish(_op_id)
+                        yield sse_token("chat", "", done=True)
+                        return
+
+                    # Event ID counter for Last-Event-ID reconnection
+                    _event_counter = 0
+                    _cached_tokens: list[str] = []
+
+                    logger.debug(
+                        "CHAT_PIPELINE corr=%s step=COALESCER_WAIT done ready_for_provider",
+                        corr_id,
+                        extra={
+                            "tag": "CHAT",
+                            "context": {
+                                "corr": corr_id,
+                                "step": "COALESCER_WAIT",
+                                "result": "DONE",
+                            },
+                        },
                     )
                     try:
+                        # Enforce context window budget
+                        _orig_count = len(provider_messages)
+                        provider_messages = _trim_messages_to_budget(
+                            provider_messages,
+                            _gen_config.max_context_length,
+                            req.max_tokens,
+                        )
+                        _trimmed = _orig_count - len(provider_messages)
+                        if _trimmed:
+                            logger.info(
+                                "CHAT_CONTEXT_TRIM corr=%s trimmed=%d msgs_keep=%d budget=%d",
+                                corr_id,
+                                _trimmed,
+                                len(provider_messages),
+                                _gen_config.max_context_length - req.max_tokens,
+                            )
                         try:
+                            _control_check_interval = 0.1  # Check for controls every 100ms
+                            _last_control_check = time.time()
+                            logger.info(
+                                "CHAT_PROVIDER_CALL corr=%s provider=%s session=%s msg_count=%d max_tokens=%d",
+                                corr_id,
+                                "default",
+                                session_id,
+                                len(provider_messages),
+                                req.max_tokens,
+                                extra={
+                                    "tag": "CHAT",
+                                    "context": {
+                                        "corr": corr_id,
+                                        "provider": "default",
+                                        "session_id": session_id,
+                                        "msg_count": len(provider_messages),
+                                        "max_tokens": req.max_tokens,
+                                        "gen_params": gen_params,
+                                    },
+                                },
+                            )
                             async for token in provider.chat_stream(
                                 provider_messages,
                                 max_tokens=req.max_tokens,
@@ -936,13 +2545,88 @@ class InferenceRouter:
                             ):
                                 if await request.is_disconnected():
                                     cancel_event.set()
-                                    logger.info("Client disconnected from chat stream (request)", extra={"tag": "INF", "context": {"session_id": session_id}})
+                                    # Cache partial response for reconnection
+                                    set_chat_response_cache(
+                                        session_id,
+                                        {
+                                            "tokens": _cached_tokens,
+                                            "complete": False,
+                                            "event_counter": _event_counter,
+                                        },
+                                    )
+                                    logger.info(
+                                        "Client disconnected from chat stream (request)",
+                                        extra={"tag": "INF", "context": {"session_id": session_id}},
+                                    )
+                                    _mgr.finish(_op_id)
                                     return
+
+                                # Check for control messages periodically
+                                now = time.time()
+                                if now - _last_control_check >= _control_check_interval:
+                                    _last_control_check = now
+                                    control = get_chat_control(session_id)
+                                    if control:
+                                        if control["action"] == "cancel":
+                                            cancel_event.set()
+                                            _mgr.finish(_op_id)
+                                            yield _sse_event(
+                                                "chat",
+                                                "CONTROL",
+                                                "cancelled",
+                                                data={"action": "cancel"},
+                                                message="Stream cancelled by user",
+                                            )
+                                            return
+                                        elif control["action"] == "approve":
+                                            yield _sse_event(
+                                                "chat",
+                                                "CONTROL",
+                                                "approved",
+                                                data={
+                                                    "tool": control.get("tool_name"),
+                                                    "approved": control.get("approved", True),
+                                                },
+                                                message=f"Tool approval: {control.get('tool_name')}",
+                                            )
+                                        elif control["action"] == "context":
+                                            yield _sse_event(
+                                                "chat",
+                                                "CONTROL",
+                                                "context",
+                                                data={"context": control.get("context")},
+                                                message="Context injected",
+                                            )
+
                                 if token:
+                                    if _token_count == 0:
+                                        _first_token_elapsed_ms = (
+                                            time.time() - _token_gen_start
+                                        ) * 1000
+                                        logger.info(
+                                            "CHAT_FIRST_TOKEN corr=%s session=%s after=%.1fms",
+                                            corr_id,
+                                            session_id,
+                                            _first_token_elapsed_ms,
+                                            extra={
+                                                "tag": "CHAT",
+                                                "context": {
+                                                    "corr": corr_id,
+                                                    "elapsed_ms": round(_first_token_elapsed_ms, 1),
+                                                },
+                                            },
+                                        )
                                     _token_gen_start = time.time()
                                     full_response_parts.append(token)
+                                    _cached_tokens.append(token)
                                     _batch.append(token)
-                                    if len(_batch) >= _BATCH_MAX or (time.time() - _batch_start) >= _BATCH_INTERVAL_S:
+                                    _token_count += 1
+                                    if (
+                                        _token_count == 1
+                                        or len(_batch) >= _BATCH_MAX
+                                        or (time.time() - _batch_start) >= _BATCH_INTERVAL_S
+                                    ):
+                                        _event_counter += 1
                                         yield sse_token("chat", "".join(_batch))
                                         _batch = []
                                         _batch_start = time.time()
@@ -953,44 +2637,171 @@ class InferenceRouter:
                                         _last_heartbeat = now
                                 elapsed_since_token = time.time() - _token_gen_start
                                 if elapsed_since_token > _max_token_wait_s:
-                                    logger.warning("Token generation stalled for %.1fs, aborting", elapsed_since_token, extra={"tag": "INF"})
+                                    logger.warning(
+                                        "Token generation stalled for %.1fs (limit=%.1fs), aborting corr=%s session=%s",
+                                        elapsed_since_token,
+                                        _max_token_wait_s,
+                                        corr_id,
+                                        session_id,
+                                        extra={
+                                            "tag": "INF",
+                                            "context": {
+                                                "corr": corr_id,
+                                                "session_id": session_id,
+                                                "elapsed_s": round(elapsed_since_token, 1),
+                                                "limit_s": _max_token_wait_s,
+                                            },
+                                        },
+                                    )
                                     cancel_event.set()
-                                    yield sse_error("chat", "TIMEOUT", f"Generation stalled for {elapsed_since_token:.0f}s")
+                                    _mgr.finish(_op_id, "timeout")
+                                    yield sse_error(
+                                        "chat",
+                                        "TIMEOUT",
+                                        f"Generation stalled for {elapsed_since_token:.0f}s",
+                                        code="MODEL_TIMEOUT",
+                                        http_status=504,
+                                    )
                                     return
                             if _batch:
                                 yield sse_token("chat", "".join(_batch))
                                 _batch = []
                             yield sse_token("chat", "", done=True)
+                            logger.info(
+                                "CHAT_STREAM_DONE corr=%s session=%s tokens=%d events=%d",
+                                corr_id,
+                                session_id,
+                                _token_count,
+                                _event_counter,
+                                extra={
+                                    "tag": "CHAT",
+                                    "context": {
+                                        "corr": corr_id,
+                                        "session_id": session_id,
+                                        "tokens": _token_count,
+                                        "events": _event_counter,
+                                    },
+                                },
+                            )
+                            # Cache complete response for potential reconnection
+                            set_chat_response_cache(
+                                session_id,
+                                {
+                                    "tokens": _cached_tokens,
+                                    "complete": True,
+                                    "event_counter": _event_counter,
+                                },
+                            )
                         except GeneratorExit:
                             cancel_event.set()
-                            logger.info("Client disconnected from chat stream", extra={"tag": "INF", "context": {"session_id": session_id}})
+                            # Cache partial response on generator exit
+                            set_chat_response_cache(
+                                session_id,
+                                {
+                                    "tokens": _cached_tokens,
+                                    "complete": False,
+                                    "event_counter": _event_counter,
+                                },
+                            )
+                            _mgr.finish(_op_id)
+                            logger.info(
+                                "Client disconnected from chat stream",
+                                extra={"tag": "INF", "context": {"session_id": session_id}},
+                            )
                             return
                     except Exception as e:
-                        classify_and_raise(e, source="chat_stream_provider")
-                        logger.error("Provider chat_stream error: %s", e, exc_info=True, extra={"tag": "INF", "context": {"session_id": session_id, "error": str(e), "error_code": err.code}})
-                        yield sse_error("chat", err.code, err.user_message)
-                        return
+                        try:
+                            await _coalescer.complete_error(_coalesce_key, e)
+                        except Exception as coalescer_err:
+                            logger.debug("Coalescer error cleanup failed: %s", coalescer_err)
+                        _mgr.finish(_op_id, str(e))
+                        logger.error(
+                            "CHAT_STREAM_ERROR corr=%s session=%s error=%s tokens_received=%d",
+                            corr_id,
+                            session_id,
+                            str(e),
+                            _token_count,
+                            extra={
+                                "tag": "CHAT",
+                                "context": {
+                                    "corr": corr_id,
+                                    "session_id": session_id,
+                                    "error": str(e),
+                                    "tokens_received": _token_count,
+                                    "error_type": type(e).__name__,
+                                },
+                            },
+                        )
+                        err_code = (
+                            "E_MEMORY_PRESSURE"
+                            if isinstance(e, RuntimeError) and "memory" in str(e).lower()
+                            else "E_INFRA_GENERATION"
+                        )
+                        http_status = 503 if err_code == "E_MEMORY_PRESSURE" else 500
+                        yield sse_error(
+                            "chat", "ERROR", str(e), code=err_code, http_status=http_status
+                        )
                 else:
-                    yield sse_error("chat", "STREAMING", "No inference provider loaded")
+                    yield sse_error(
+                        "chat",
+                        "STREAMING",
+                        "No inference provider loaded",
+                        code="E_INFRA_REGISTRY",
+                        http_status=503,
+                    )
+                    return
 
                 full_response = "".join(full_response_parts)
+                await _coalescer.complete(_coalesce_key, full_response)
 
                 if session_id not in self._session_deleted:
-                    session_data["messages"].append({
-                        "role": "assistant",
-                        "content": full_response,
-                        "timestamp": datetime.datetime.now().isoformat(),
-                    })
+                    session_data["messages"].append(
+                        {
+                            "role": "assistant",
+                            "content": full_response,
+                            "timestamp": datetime.datetime.now().isoformat(),
+                        }
+                    )
                     self._save_session(session_id, session_data)
                     await self._flush_session_to_disk(session_id)
                 else:
-                    logger.info("Session %s was deleted during generation, skipping save", session_id, extra={"tag": "INF"})
+                    logger.info(
+                        "Session %s was deleted during generation, skipping save",
+                        session_id,
+                        extra={"tag": "INF"},
+                    )
+
+                _consciousness_result = _run_post_gen_tasks(
+                    full_response,
+                    user_msg or "",
+                    session_id,
+                    start_time,
+                    req,
+                    ctx_core,
+                    self._bg_tasks_lock,
+                    self._BG_TASKS,
+                    self._bg_tasks_lock_discard,
+                    corr_id,
+                )
+
+                if _consciousness_result.get("narrative"):
+                    yield _sse_event(
+                        "chat",
+                        "CONSCIOUSNESS",
+                        "complete",
+                        data={
+                            "level": _consciousness_result["level"],
+                            "self_insight": _consciousness_result["narrative"],
+                        },
+                        message="Reflection updated",
+                    )
 
                 _memory_stored = False
                 _memory_fact = None
                 try:
-                    from domains.memory.memory_service import get_memory_service
-                    _memory_facts = await get_memory_service().remember_facts_async(user_msg or "", full_response)
+                    _memory_facts = await get_memory_service().remember_facts_async(
+                        user_msg or "", full_response
+                    )
                     _memory_stored = len(_memory_facts) > 0
                     if _memory_stored:
                         _memory_fact = _memory_facts[0]
@@ -999,176 +2810,137 @@ class InferenceRouter:
 
                 if _memory_stored:
                     yield _sse_event(
-                        "chat", "MEMORY", "success",
+                        "chat",
+                        "MEMORY",
+                        "success",
                         data={"stored": True, "fact": _memory_fact, "facts": _memory_facts},
                         message="New fact remembered",
                     )
 
-                duration_ms = int((datetime.datetime.now() - start_time).total_seconds() * 1000)
-                tokens = len(full_response.split())
-                _post_gen_tasks = []
-
-                # Production RAG: verify response against knowledge base
-                rag_verification = None
-                if req.use_rag and full_response.strip():
-                    try:
-                        from domains.cognitive.rag_service import get_rag_service
-                        rag_svc = get_rag_service()
-                        if rag_svc.stats().get("total_chunks", 0) > 0:
-                            rag_verification = await asyncio.to_thread(
-                                rag_svc.verify_and_ground, full_response, user_msg or "",
-                            )
-                    except Exception as e:
-                        logger.debug("RAG verification skipped: %s", e)
-
-                try:
-                    from domains.infrastructure.conversation_log import capture
-                    capture(
-                        user_msg or "",
-                        full_response,
-                        model=_check_state.model_type or req.model,
-                        tokens_generated=tokens,
-                        elapsed_ms=duration_ms,
-                        temperature=req.temperature,
-                        meta={"session_id": session_id},
-                    )
-                except Exception as e:
-                    logger.debug("Failed to capture conversation: %s", e)
-
-                try:
-                    from domains.feedback.response_tracker import get_response_tracker
-                    tracker = get_response_tracker()
-                    _post_gen_tasks.append(asyncio.to_thread(
-                        tracker.log,
-                        user_message=user_msg or "",
-                        assistant_response=full_response,
-                        model=req.model,
-                        config={"temperature": req.temperature, "max_tokens": req.max_tokens},
-                        session_id=session_id,
-                        user_id=req.user_id or "default",
-                        tokens_generated=tokens,
-                        duration_ms=duration_ms,
-                        has_images=bool(req.images),
-                    ))
-                except Exception as e:
-                    logger.debug("ResponseTracker.log failed: %s", e)
-
-                try:
-                    from domains.infrastructure.server_state import get_server_state
-                    _post_gen_tasks.append(asyncio.to_thread(
-                        get_server_state().record_inference,
-                        tokens=tokens, elapsed_ms=duration_ms, model=_check_state.model_type or req.model,
-                    ))
-                except Exception as e:
-                    logger.debug("Failed to record inference metrics: %s", e)
-
-                if ctx_core and req.use_context_core:
-                    _post_gen_tasks.append(asyncio.to_thread(ctx_core.add_response, full_response, model=req.model))
-
-                try:
-                    from domains.learner import get_learner
-                    _post_gen_tasks.append(asyncio.to_thread(
-                        get_learner().ingest_conversation, [(user_msg, full_response)]
-                    ))
-                except Exception as e:
-                    logger.debug("Continual learner ingest failed: %s", e)
-
-                if _post_gen_tasks:
-                    await asyncio.gather(*_post_gen_tasks, return_exceptions=True)
-
-                # Send RAG verification results as a separate SSE event
-                if rag_verification is not None:
-                    yield _sse_event(
-                        "chat", "RAG_VERIFICATION", "success",
-                        data={
-                            "confidence": rag_verification.get("confidence", 0),
-                            "is_verified": rag_verification.get("is_verified", False),
-                            "hallucination_rate": rag_verification.get("verification", {}).get("hallucination_rate", 0),
-                            "citations": rag_verification.get("citations", ""),
-                            "grounded_claims": len(rag_verification.get("verification", {}).get("grounded_claims", [])),
-                            "hallucinated_claims": len(rag_verification.get("verification", {}).get("hallucinations", [])),
-                        },
-                        message="RAG grounding verification complete",
-                    )
-
-                try:
-                    from domains.learner.entity_extractor import extract_and_store
-                    task = asyncio.create_task(extract_and_store(user_msg or "", full_response))
-                    self._BG_TASKS.add(task)
-                    task.add_done_callback(self._BG_TASKS.discard)
-                except Exception as e:
-                    logger.debug("Entity extraction failed: %s", e)
-
-                logger.info("Chat stream: generated %d chars", len(full_response), extra={"tag": "INF", "context": {"char_count": len(full_response), "session_id": session_id}})
+                logger.info(
+                    "Chat stream: generated %d chars",
+                    len(full_response),
+                    extra={
+                        "tag": "INF",
+                        "context": {"char_count": len(full_response), "session_id": session_id},
+                    },
+                )
+                _mgr.finish(_op_id)
 
             except Exception as e:
-                classify_and_raise(e, source="chat_stream_outer")
-                yield sse_error("chat", err.code, err.user_message)
-                yield sse_token("chat", "", done=True)
+                _mgr.finish(_op_id, str(e))
+                logger.warning("Chat stream outer failed: %s", e, extra={"tag": "INF"})
+                from domain.infrastructure import classify_exception
+
+                classified = classify_exception(e)
+                err_code = classified.code or "E_INFRA_GENERATION"
+                http_status = getattr(classified, "http_status", None) or 500
+                yield sse_error("chat", "ERROR", str(e), code=err_code, http_status=http_status)
 
         return StreamingResponse(generate(), media_type="text/event-stream")
 
     async def inspect_context(self) -> dict:
-        """inspect_context."""
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        return ctx_core.get_context_inspector()
+        try:
+            """inspect_context."""
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            return ctx_core.get_context_inspector()
 
-    async def store_fact(self, key: str, value: str) -> dict:
-        """store_fact."""
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        ctx_core.store_fact(key, value)
-        return {"stored": key}
+        except Exception as e:
+            classify_and_raise(e, source="inference.inspect_context")
+
+    async def store_fact(
+        self, key: str, value: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """store_fact."""
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            ctx_core.store_fact(key, value)
+            return success_response(data={"stored": key})
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.store_fact")
 
     async def get_facts(self, query: str = "") -> dict:
-        """get_facts."""
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        if query:
-            return {"facts": ctx_core.search_semantic(query)}
-        return {"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]}
+        try:
+            """get_facts."""
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            if query:
+                return success_response(data={"facts": ctx_core.search_semantic(query)})
+            return success_response(
+                data={"facts": [{"key": k, **v} for k, v in ctx_core.semantic_memory.items()]}
+            )
 
-    async def reset_context(self, all: bool = False) -> dict:
-        """reset_context."""
-        self._context_core = None
-        ctx_core = self._get_context_core()
-        if not ctx_core:
-            raise_error("ContextCore not available", "E_INFRA_STARTUP")
-        if all:
-            ctx_core.reset_all()
-        else:
-            ctx_core.reset_session()
-        return {"reset": "session" if not all else "all"}
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_facts")
 
-    async def chat(self, req: ChatRequest) -> ChatResponse:
+    async def reset_context(
+        self, all: bool = False, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """reset_context."""
+            self._context_core = None
+            ctx_core = self._get_context_core()
+            if not ctx_core:
+                raise_error("ContextCore not available", "E_INFRA_STARTUP")
+            if all:
+                ctx_core.reset_all()
+                safe_audit_log("inference.reset_context", resource="context", detail="scope=all")
+            else:
+                ctx_core.reset_session()
+                safe_audit_log(
+                    "inference.reset_context", resource="context", detail="scope=session"
+                )
+            return success_response(data={"reset": "session" if not all else "all"})
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.reset_context")
+
+    async def chat(
+        self, req: ChatRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> ChatResponse:
         """chat."""
-        from domains import get_chat_domain
-        from startup_progress import STARTUP_PHASE
+        _chat_t0 = time.monotonic()
         import state as _chat_state
 
-        if STARTUP_PHASE.get("phase") != "ready" or not _model_ready():
-            raise HTTPException(status_code=503, detail="Model still loading — please wait.")
+        from domain import get_chat_domain
+
+        ms = _get_model_status()
+        if not ms["ready"]:
+            raise_error(
+                ms["reason"],
+                ms["code"],
+                status_code=ms["status"],
+            )
+
+        mem_err = _check_memory_pressure()
+        if mem_err:
+            raise_error(mem_err, "E_MEMORY_PRESSURE", status_code=503)
 
         try:
-            from domains.models.provider import get_provider
             _router = get_provider("default")
-            _server = getattr(_router, '_server', None)
+            _server = getattr(_router, "_server", None)
             if _server is not None:
-                _cb = getattr(_server, '_circuit_breaker', None)
+                _cb = getattr(_server, "_circuit_breaker", None)
                 if _cb is not None and _cb.state.value == "open":
-                    raise HTTPException(status_code=503, detail="Model is degraded — circuit breaker open. Please wait or reload the model.")
-        except HTTPException:
-            raise
+                    raise_error(
+                        "Model is degraded — circuit breaker open. Please wait or reload the model.",
+                        "E_BAD_REQUEST",
+                        status_code=503,
+                    )
+        except AppError as e:
+            classify_and_raise(e, source="inference.chat")
         except Exception as e:
             logger.debug("Circuit breaker check failed: %s", e)
 
         user_msg = _extract_user_message(req.messages)
         if not user_msg:
-            raise HTTPException(status_code=400, detail="No user message")
+            raise_error("No user message", "E_BAD_REQUEST", status_code=400)
 
         system_prompt = req.system_prompt or ""
 
@@ -1187,23 +2959,40 @@ class InferenceRouter:
 
         if req.agent_id:
             try:
-                from domains.agents.system import get_agent_system
                 agent_sys = get_agent_system()
                 agent_instructions = agent_sys.get_instructions(req.agent_id)
                 if agent_instructions:
-                    system_prompt = f"{system_prompt}\n\n[AGENT: {req.agent_id}]\n{agent_instructions}" if system_prompt else f"[AGENT: {req.agent_id}]\n{agent_instructions}"
+                    system_prompt = (
+                        f"{system_prompt}\n\n[AGENT: {req.agent_id}]\n{agent_instructions}"
+                        if system_prompt
+                        else f"[AGENT: {req.agent_id}]\n{agent_instructions}"
+                    )
             except Exception:
-                logger.warning("Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"})
+                logger.warning(
+                    "Failed to inject agent instructions", exc_info=True, extra={"tag": "INF"}
+                )
+                # Non-streaming path: log but continue (no SSE channel to send error)
 
         if req.knowledge:
             knowledge_str = "\n".join(f"- {k}" for k in req.knowledge)
-            system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}" if system_prompt else f"Use the following context to answer:\n{knowledge_str}"
+            system_prompt = (
+                f"{system_prompt}\n\nUse the following context to answer:\n{knowledge_str}"
+                if system_prompt
+                else f"Use the following context to answer:\n{knowledge_str}"
+            )
 
         try:
-            enrichment = await asyncio.to_thread(_enrich_knowledge, user_msg, False, 5)
+            enrichment = await asyncio.wait_for(
+                asyncio.to_thread(_enrich_knowledge, user_msg, False, 5),
+                timeout=10.0,
+            )
             if enrichment.get("facts"):
                 k_text = "\n".join(f"- {f}" for f in enrichment["facts"])
-                system_prompt = f"{system_prompt}\n\nUse the following context to answer:\n{k_text}" if system_prompt else f"Use the following context to answer:\n{k_text}"
+                system_prompt = (
+                    f"{system_prompt}\n\nUse the following context to answer:\n{k_text}"
+                    if system_prompt
+                    else f"Use the following context to answer:\n{k_text}"
+                )
         except Exception as e:
             logger.debug("Knowledge enrichment failed: %s", e)
 
@@ -1215,6 +3004,11 @@ class InferenceRouter:
                 repetition_penalty=req.repetition_penalty,
                 user_message=user_msg,
                 user_id=req.user_id or "default",
+                explicit=req.model_fields_set,
+            )
+            # Enforce context window budget before delegating to domain
+            messages = _trim_messages_to_budget(
+                messages, _gen_config.max_context_length, req.max_tokens
             )
             result = await asyncio.wait_for(
                 chat_domain.respond(
@@ -1228,7 +3022,7 @@ class InferenceRouter:
                 ),
                 timeout=60.0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return ChatResponse(
                 message="Generation timed out. Try a shorter prompt or fewer tokens.",
                 session_id=req.session_id or "default",
@@ -1236,26 +3030,27 @@ class InferenceRouter:
             )
 
         try:
-            from domains.infrastructure.server_state import get_server_state
             tokens = _count_tokens(result.text, _chat_state)
+            _chat_elapsed_ms = round((time.monotonic() - _chat_t0) * 1000, 1)
             get_server_state().record_inference(
-                tokens=tokens, elapsed_ms=0, model=_chat_state.model_type or req.model
+                tokens=tokens,
+                elapsed_ms=_chat_elapsed_ms,
+                model=_chat_state.model_type or req.model,
             )
         except Exception as e:
-            logger.debug("Failed to record inference metrics: %s", e)
+            logger.warning("Failed to record inference metrics: %s", e)
 
         try:
-            from domains.infrastructure.conversation_log import capture
             capture(
                 user_msg or "",
                 result.text,
                 model=_chat_state.model_type or req.model,
                 tokens_generated=_count_tokens(result.text, _chat_state),
-                temperature=req.temperature,
+                temperature=gen_params["temperature"],
                 meta={"session_id": req.session_id or "default"},
             )
         except Exception as e:
-            logger.debug("Failed to capture conversation: %s", e)
+            logger.warning("Failed to capture conversation: %s", e)
 
         return ChatResponse(
             message=result.text,
@@ -1268,114 +3063,207 @@ class InferenceRouter:
         session_id: str,
         file: UploadFile = File(...),
         duration_ms: int = Form(0),
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """send_voice_message."""
+        self._ensure_dirs()
         if not file.content_type or not file.content_type.startswith("audio/"):
-            raise HTTPException(status_code=400, detail="Only audio files accepted")
+            raise_error("Only audio files accepted", "E_BAD_REQUEST", status_code=400)
 
         msg_id = str(uuid.uuid4())
         session_msg_dir = (self._VOICE_DIR / session_id).resolve()
         if not str(session_msg_dir).startswith(str(self._VOICE_DIR.resolve())):
-            raise HTTPException(status_code=400, detail="Invalid session ID")
-        session_msg_dir.mkdir(parents=True, exist_ok=True)
+            raise_error("Invalid session ID", "E_BAD_REQUEST", status_code=400)
+        await asyncio.to_thread(session_msg_dir.mkdir, parents=True, exist_ok=True)
         ext = Path(file.filename or "audio.m4a").suffix or ".m4a"
         audio_path = session_msg_dir / f"{msg_id}{ext}"
 
         content = await file.read()
-        audio_path.write_bytes(content)
+        await asyncio.to_thread(audio_path.write_bytes, content)
 
         session_data = self._get_session(session_id)
-        session_data.setdefault("messages", []).append({
-            "role": "user",
-            "content": "[Voice Message]",
-            "audio_path": f"{session_id}/{msg_id}{ext}",
-            "audio_duration_ms": duration_ms,
-            "timestamp": datetime.datetime.now().isoformat(),
-            "_voice": True,
-        })
+        session_data.setdefault("messages", []).append(
+            {
+                "role": "user",
+                "content": "[Voice Message]",
+                "audio_path": f"{session_id}/{msg_id}{ext}",
+                "audio_duration_ms": duration_ms,
+                "timestamp": datetime.datetime.now().isoformat(),
+                "_voice": True,
+            }
+        )
         self._save_session(session_id, session_data)
 
-        return success_response(data={
-            "message_id": msg_id,
-            "audio_path": f"{session_id}/{msg_id}{ext}",
-            "session_id": session_id,
-        })
+        return success_response(
+            data={
+                "message_id": msg_id,
+                "audio_path": f"{session_id}/{msg_id}{ext}",
+                "session_id": session_id,
+            }
+        )
 
     async def get_voice_audio(self, session_id: str, message_id: str) -> dict:
-        """get_voice_audio."""
-        base = self._VOICE_DIR.resolve()
-        audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
-        if not str(audio_path).startswith(str(base)):
-            raise HTTPException(status_code=403, detail="Invalid path")
-        if not audio_path.exists():
-            for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
-                candidate = audio_path.parent / f"{audio_path.stem}{ext}"
-                if candidate.exists():
-                    audio_path = candidate
-                    break
-            else:
-                raise HTTPException(status_code=404, detail="Audio not found")
-        return FileResponse(str(audio_path), media_type="audio/m4a")
+        try:
+            """get_voice_audio."""
+            self._ensure_dirs()
+            base = self._VOICE_DIR.resolve()
+            audio_path = (self._VOICE_DIR / session_id / message_id).resolve()
+            if not str(audio_path).startswith(str(base)):
+                raise_error("Invalid path", "E_AUTH_FORBIDDEN", status_code=403)
 
-    async def list_sessions(self, archived: Optional[bool] = None) -> dict:
-        """list_sessions."""
-        sessions = await asyncio.to_thread(self._build_session_cache)
-        if archived is not None:
-            sessions = [s for s in sessions if s.get("archived", False) == archived]
-        return success_response(data=sessions)
+            def _resolve():
+                if audio_path.exists():
+                    return audio_path
+                for ext in [".m4a", ".wav", ".mp3", ".ogg", ".webm"]:
+                    candidate = audio_path.parent / f"{audio_path.stem}{ext}"
+                    if candidate.exists():
+                        return candidate
+                return None
 
-    async def search_sessions(self, q: str = "", limit: int = 20) -> dict:
-        """search_sessions."""
-        if not q.strip():
-            return success_response(data=[], meta={"query": q, "total": 0})
-        results = await asyncio.to_thread(_search_sessions_sync, q, limit)
-        return success_response(data=results, meta={"query": q, "total": len(results)})
+            resolved = await asyncio.to_thread(_resolve)
+            if resolved is None:
+                raise_error("Audio not found", "E_NOT_FOUND", status_code=404)
+            return FileResponse(str(resolved), media_type="audio/m4a")
 
-    async def get_current_session(self) -> dict:
-        """get_current_session."""
-        sessions = await asyncio.to_thread(self._build_session_cache)
-        if not sessions:
-            return success_response(data=None)
-        return success_response(data=sessions[0])
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_voice_audio")
 
-    async def upsert_session(self, session_id: str, req: UpsertSessionRequest) -> dict:
-        """upsert_session."""
-        existing = self._get_session(session_id)
-        update_data = req.model_dump(exclude_none=True)
-        for key, value in update_data.items():
-            existing[key] = value
-        self._save_session(session_id, existing)
-        await self._flush_session_to_disk(session_id)
-        return success_response(data={"session_id": session_id}, message="saved")
+    async def list_sessions(
+        self,
+        archived: bool | None = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        try:
+            """list_sessions."""
+            sessions = await asyncio.to_thread(self._build_session_metadata_index)
+            if archived is not None:
+                sessions = [s for s in sessions if s.get("archived", False) == archived]
+            # Filter by user_id if auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    sessions = [s for s in sessions if s.get("user_id", "") == user_id]
+            return success_response(data=sessions)
 
-    async def create_session(self, req: CreateSessionRequest) -> dict:
+        except Exception as e:
+            classify_and_raise(e, source="inference.list_sessions")
+
+    async def search_sessions(
+        self,
+        q: str = "",
+        limit: int = 20,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        try:
+            """search_sessions."""
+            if not q.strip():
+                return success_response(data=[], meta={"query": q, "total": 0})
+            results = await asyncio.to_thread(_search_sessions_sync, q, limit)
+            # Filter by user_id if auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    results = [s for s in results if s.get("user_id", "") == user_id]
+            return success_response(data=results, meta={"query": q, "total": len(results)})
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.search_sessions")
+
+    async def get_current_session(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """get_current_session."""
+            sessions = await asyncio.to_thread(self._build_session_cache)
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id:
+                    sessions = [s for s in sessions if s.get("user_id", "") == user_id]
+            if not sessions:
+                return success_response(data=None)
+            return success_response(data=sessions[0])
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_current_session")
+
+    async def upsert_session(
+        self,
+        session_id: str,
+        req: UpsertSessionRequest,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> dict:
+        try:
+            """upsert_session."""
+            existing = self._get_session(session_id)
+            update_data = req.model_dump(exclude_none=True)
+            for key, value in update_data.items():
+                existing[key] = value
+            self._save_session(session_id, existing)
+            await self._flush_session_to_disk(session_id)
+            return success_response(data={"session_id": session_id}, message="saved")
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.upsert_session")
+
+    async def create_session(
+        self, req: CreateSessionRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """create_session."""
         try:
             session_id = req.session_id or str(uuid.uuid4())
             session_data = req.model_dump(exclude_none=True)
             session_data["session_id"] = session_id
+            # Attach user_id from auth
+            if auth_user:
+                session_data["user_id"] = auth_user.get("sub", "")
             self._save_session(session_id, session_data)
             await self._flush_session_to_disk(session_id)
+            safe_audit_log("inference.session_create", resource=session_id)
             return success_response(data={"session_id": session_id}, message="created")
         except Exception as exc:
+            logger.warning("Create session failed: %s", exc, extra={"tag": "INF"})
             classify_and_raise(exc, source="create_session")
 
-    async def get_session(self, session_id: str) -> dict:
-        """get_session."""
-        data = self._get_session(session_id)
-        if not data.get("messages"):
-            raise HTTPException(status_code=404, detail="Session not found")
-        return success_response(data=data)
+    async def get_session(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """get_session."""
+            data = self._get_session(session_id)
+            if not data.get("messages"):
+                raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            # Verify user owns this session when auth is enabled
+            if auth_user:
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            return success_response(data=data)
 
-    async def delete_session(self, session_id: str) -> dict:
-        """delete_session."""
-        if self._session_repo.delete(session_id):
-            self._session_memory_cache.pop(session_id, None)
-            self._session_dirty.discard(session_id)
-            self._session_deleted.add(session_id)
-            self._clear_session_kv(session_id)
-            return success_response(data={"session_id": session_id}, message="deleted")
-        raise HTTPException(status_code=404, detail="Session not found")
+        except Exception as e:
+            classify_and_raise(e, source="inference.get_session")
+
+    async def delete_session(
+        self, session_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """delete_session."""
+            # Verify user owns this session when auth is enabled
+            if auth_user:
+                data = self._get_session(session_id)
+                user_id = auth_user.get("sub", "")
+                if user_id and data.get("user_id", "") != user_id:
+                    raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+            if self._session_repo.delete(session_id):
+                self._session_memory_cache.pop(session_id, None)
+                self._session_dirty.discard(session_id)
+                self._session_deleted.add(session_id)
+                if len(self._session_deleted) > 1000:
+                    self._session_deleted = set(list(self._session_deleted)[-500:])
+                self._clear_session_kv(session_id)
+                safe_audit_log("inference.session_delete", resource=session_id)
+                return success_response(data={"session_id": session_id}, message="deleted")
+            raise_error("Session not found", "E_NOT_FOUND", status_code=404)
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.delete_session")
 
     def _clear_session_kv(self, session_id: str):
         """Drop cross-turn KV state for a deleted session.
@@ -1385,71 +3273,256 @@ class InferenceRouter:
         TTL eviction and risk stale-context reuse if the id is recycled.
         """
         try:
-            from domains.models.provider import get_provider
             provider = get_provider("slonet-native")
             if provider is None:
                 provider = get_provider("slonet")
             if provider is not None and hasattr(provider, "clear_session"):
                 provider.clear_session(session_id)
         except Exception as exc:
-            logger.warning("Failed to clear KV state for session %s: %s",
-                           session_id, exc, extra={"tag": "KV"})
+            logger.warning(
+                "Failed to clear KV state for session %s: %s", session_id, exc, extra={"tag": "KV"}
+            )
 
-    async def chat_suggestions(self) -> dict:
-        """chat_suggestions."""
-        return success_response(data=[
-            {"text": "What can you help me with?", "icon": "chat"},
-            {"text": "Tell me about yourself", "icon": "user"},
-            {"text": "Write a short poem", "icon": "pen"},
-            {"text": "Explain quantum computing simply", "icon": "atom"},
-            {"text": "Help me debug my code", "icon": "bug"},
-            {"text": "Summarize a topic for me", "icon": "document"},
-        ])
+    async def chat_suggestions(self, auth_user: dict = Depends(require_auth_if_enabled)) -> dict:
+        try:
+            """chat_suggestions."""
+            return success_response(
+                data=[
+                    {"text": "What can you help me with?", "icon": "chat"},
+                    {"text": "Tell me about yourself", "icon": "user"},
+                    {"text": "Write a short poem", "icon": "pen"},
+                    {"text": "Explain quantum computing simply", "icon": "atom"},
+                    {"text": "Help me debug my code", "icon": "bug"},
+                    {"text": "Summarize a topic for me", "icon": "document"},
+                ]
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.chat_suggestions")
 
     async def list_model_providers(self) -> dict:
-        """list_model_providers."""
-        from domains.models.provider import list_providers, get_provider
+        try:
+            """list_model_providers."""
+            from domain.models import get_provider, list_providers
 
-        result = {}
-        for name in list_providers():
-            provider = get_provider(name)
-            if provider is not None:
-                try:
-                    caps = provider.capabilities
-                    result[name] = {
-                        "model_id": provider.model_id,
-                        "capabilities": {
-                            "chat": caps.chat,
-                            "streaming": caps.streaming,
-                            "embedding": caps.embedding,
-                            "vision": caps.vision,
-                        },
-                        "metadata": provider.metadata,
-                    }
-                except Exception:
-                    result[name] = {"model_id": str(provider)}
-            else:
-                result[name] = {"error": "provider not found"}
-        return success_response(data=result)
+            result = {}
+            for name in list_providers():
+                provider = get_provider(name)
+                if provider is not None:
+                    try:
+                        caps = provider.capabilities
+                        result[name] = {
+                            "model_id": provider.model_id,
+                            "capabilities": {
+                                "chat": caps.chat,
+                                "streaming": caps.streaming,
+                                "embedding": caps.embedding,
+                                "vision": caps.vision,
+                            },
+                            "metadata": provider.metadata,
+                        }
+                    except Exception as exc:
+                        logger.warning(
+                            "Provider '%s' capability query failed: %s",
+                            name,
+                            exc,
+                            extra={"tag": "INF"},
+                        )
+                        result[name] = {"model_id": str(provider), "error": str(exc)}
+                else:
+                    result[name] = {"error": "provider not found"}
+            return success_response(data=result)
 
-    # ── Route registration ──
+        # ── Operations (CancelManager) ──
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.list_model_providers")
+
+    async def list_operations(self, type: str | None = None) -> dict:
+        try:
+            """List all tracked operations (active + recently finished).
+
+            Args:
+                type: Optional filter by operation type (training, inference, download, etc.)
+
+            Returns:
+                Dict with 'operations' list and 'counts' by status.
+            """
+
+            mgr = get_cancel_manager()
+            op_type = OpType(type) if type else None
+            all_ops = mgr.list_all(op_type=op_type)
+            return success_response(
+                data={
+                    "operations": [op.to_dict() for op in all_ops],
+                    "counts": mgr.count(op_type=op_type),
+                }
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.list_operations")
+
+    async def cancel_operation(
+        self, op_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """Cancel a single operation by ID.
+
+            Args:
+                op_id: The operation ID to cancel.
+
+            Returns:
+                Dict with cancel result.
+            """
+
+            mgr = get_cancel_manager()
+            found = mgr.get(op_id)
+            if not found:
+                raise_error("Operation not found", "E_NOT_FOUND", status_code=404)
+            if mgr.cancel(op_id):
+                safe_audit_log("inference.operation_cancel", resource=op_id)
+                return success_response(data=found.to_dict(), message="cancelled")
+            raise_error(
+                f"Cannot cancel operation in '{found.status.value}' state",
+                "E_CANCEL_FAILED",
+                status_code=409,
+            )
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.cancel_operation")
+
+    async def cancel_all_operations(
+        self, type: str | None = None, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """Cancel all active operations, optionally filtered by type.
+
+            Args:
+                type: Optional filter by operation type.
+
+            Returns:
+                Dict with list of cancelled operation IDs.
+            """
+
+            mgr = get_cancel_manager()
+            op_type = OpType(type) if type else None
+            cancelled = mgr.cancel_all(op_type=op_type)
+            safe_audit_log(
+                "inference.operation_cancel_all",
+                detail=f"count={len(cancelled)} type={type or 'all'}",
+            )
+            return success_response(data={"cancelled": cancelled, "count": len(cancelled)})
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.cancel_all_operations")
+
+    async def purge_operations(
+        self, max_age_s: float = 3600.0, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """Remove finished operations older than max_age_s."""
+            import time as _time
+
+            _t0 = _time.monotonic()
+            removed = get_cancel_manager().purge(max_age_s=max_age_s)
+            _elapsed_ms = (_time.monotonic() - _t0) * 1000
+            safe_audit_log(
+                "inference.purge_operations",
+                detail=f"removed={removed} max_age={max_age_s}s elapsed={_elapsed_ms:.0f}ms",
+            )
+            return success_response(data={"purged": removed, "elapsed_ms": round(_elapsed_ms, 1)})
+
+        # ── Route registration ──
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.purge_operations")
+
+    async def chat_control(
+        self, req: ChatControlRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """chat_control - Send control messages to active chat streams.
+
+        Actions:
+        - cancel: Cancel the active stream for this session
+        - approve: Approve/deny a tool execution
+        - context: Inject additional context into the stream
+        """
+        try:
+            session_id = req.session_id
+
+            if req.action == "cancel":
+                # Find and cancel active inference operations for this session
+                mgr = get_cancel_manager()
+                active = mgr.list_active(op_type=OpType.INFERENCE)
+                cancelled = False
+                for op in active:
+                    if session_id in op.get("label", ""):
+                        mgr.cancel(op["id"])
+                        cancelled = True
+                        logger.info(
+                            "Cancelled chat stream for session %s", session_id, extra={"tag": "INF"}
+                        )
+                        break
+                if not cancelled:
+                    logger.debug("No active stream found for session %s", session_id)
+                return success_response(data={"cancelled": cancelled, "session_id": session_id})
+
+            elif req.action == "approve":
+                # Store approval for the streaming endpoint to pick up
+                set_chat_control(
+                    session_id,
+                    {
+                        "action": "approve",
+                        "tool_name": req.tool_name,
+                        "approved": req.approved if req.approved is not None else True,
+                    },
+                )
+                logger.info(
+                    "Stored tool approval for session %s: %s=%s",
+                    session_id,
+                    req.tool_name,
+                    req.approved,
+                )
+                return success_response(data={"stored": True, "session_id": session_id})
+
+            elif req.action == "context":
+                # Store context injection for the streaming endpoint to pick up
+                set_chat_control(
+                    session_id,
+                    {
+                        "action": "context",
+                        "context": req.context,
+                    },
+                )
+                logger.info("Stored context injection for session %s", session_id)
+                return success_response(data={"stored": True, "session_id": session_id})
+
+            raise_error(f"Unknown action: {req.action}", code="E_BAD_REQUEST", status_code=400)
+
+        except Exception as e:
+            classify_and_raise(e, source="inference.chat_control")
 
     def _register_routes(self):
         r = self.router
-        r.add_api_route("/inference/generate", self.generate, methods=["POST"], response_model=GenerateResponse)
+        r.add_api_route(
+            "/inference/generate", self.generate, methods=["POST"], response_model=GenerateResponse
+        )
         r.add_api_route("/inference/generate/stream", self.generate_stream, methods=["POST"])
         r.add_api_route("/info", self.get_info, methods=["GET"])
         r.add_api_route("/info/soul", self.get_info_soul, methods=["GET"])
         r.add_api_route("/", self.root, methods=["GET"])
         r.add_api_route("/chat/tools", self.list_chat_tools, methods=["GET"])
         r.add_api_route("/chat/stream", self.chat_stream, methods=["POST"])
+        r.add_api_route("/chat/control", self.chat_control, methods=["POST"])
         r.add_api_route("/context/inspect", self.inspect_context, methods=["GET"])
         r.add_api_route("/context/fact", self.store_fact, methods=["POST"])
         r.add_api_route("/context/facts", self.get_facts, methods=["GET"])
         r.add_api_route("/context/reset", self.reset_context, methods=["POST"])
         r.add_api_route("/chat", self.chat, methods=["POST"], response_model=ChatResponse)
         r.add_api_route("/chat/voice/{session_id}", self.send_voice_message, methods=["POST"])
-        r.add_api_route("/chat/audio/{session_id}/{message_id}", self.get_voice_audio, methods=["GET"])
+        r.add_api_route(
+            "/chat/audio/{session_id}/{message_id}", self.get_voice_audio, methods=["GET"]
+        )
         r.add_api_route("/chat/sessions", self.list_sessions, methods=["GET"])
         r.add_api_route("/chat/sessions/search", self.search_sessions, methods=["GET"])
         r.add_api_route("/chat/sessions/current", self.get_current_session, methods=["GET"])
@@ -1457,18 +3530,44 @@ class InferenceRouter:
         r.add_api_route("/chat/sessions", self.create_session, methods=["POST"])
         r.add_api_route("/chat/sessions/{session_id}", self.get_session, methods=["GET"])
         r.add_api_route("/chat/sessions/{session_id}", self.delete_session, methods=["DELETE"])
-        r.add_api_route("/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/chat/suggestions", self.chat_suggestions, methods=["GET"])
         r.add_api_route("/providers", self.list_model_providers, methods=["GET"])
+        r.add_api_route("/operations", self.list_operations, methods=["GET"])
+        r.add_api_route("/cancel/{op_id}", self.cancel_operation, methods=["POST"])
+        r.add_api_route("/cancel-all", self.cancel_all_operations, methods=["POST"])
+        r.add_api_route("/operations/purge", self.purge_operations, methods=["POST"])
+        r.add_api_websocket_route("/ws/generate", self.ws_generate)
 
 
 _instance = InferenceRouter()
 router = _instance.router
 
+
 def set_vector_store_ref(ref) -> dict:
     """set_vector_store_ref."""
     return _instance.set_vector_store_ref(ref)
 
+
 def flush_dirty_sessions() -> dict:
     """flush_dirty_sessions."""
     return _instance.flush_dirty_sessions()
+
+
+def build_session_metadata_index() -> list:
+    """Public facade over the inference router's session-metadata index.
+
+    Lets the mobile BFF reuse the shared chat-session read-model without
+    reaching into router internals (shared-core contract: translate at the
+    edge, never into the core).
+    """
+    return _instance._build_session_metadata_index()
+
+
+async def handle_chat(req: ChatRequest) -> ChatResponse:
+    """Public facade over the shared chat handler.
+
+    Used by in-process consumers (mobile BFF offline sync) so they ride the
+    same chat kernel the web client calls over HTTP, instead of reaching
+    into router internals.
+    """
+    return await _instance.chat(req)

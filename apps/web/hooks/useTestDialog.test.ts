@@ -5,8 +5,12 @@ import { renderHook, act, cleanup } from '@testing-library/react'
 import { useTestDialog } from './useTestDialog'
 
 const mockGenerate = vi.fn()
+const mockGenerateStream = vi.fn()
 vi.mock('@/lib/generate-controller', () => ({
-  generateController: { generate: (...args: unknown[]) => mockGenerate(...args) },
+  generateController: {
+    generate: (...args: unknown[]) => mockGenerate(...args),
+    generateStream: (...args: unknown[]) => mockGenerateStream(...args),
+  },
 }))
 
 afterEach(() => {
@@ -45,23 +49,29 @@ describe('useTestDialog', () => {
     expect(mockGenerate).not.toHaveBeenCalled()
   })
 
-  it('handleTestModel calls generate and sets structured result', async () => {
-    mockGenerate.mockResolvedValue({ text: 'hello world', model: 'gpt2', tokens_generated: 3 })
+  it('handleTestModel calls generateStream and sets structured result', async () => {
+    mockGenerateStream.mockImplementation(async (opts: any, onToken: any, onComplete: any) => {
+      onToken('hello ')
+      onToken('world')
+      onComplete()
+    })
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })
-    expect(mockGenerate).toHaveBeenCalledTimes(1)
+    expect(mockGenerateStream).toHaveBeenCalledTimes(1)
     expect(result.current.testResult).toEqual({
       prompt: 'hi',
       response: 'hello world',
-      model: 'gpt2',
-      tokens_generated: 3,
+      model: '',
+      tokens_generated: 0,
       error: '',
     })
   })
 
-  it('handleTestModel shows error when generate rejects', async () => {
-    mockGenerate.mockRejectedValue(new Error('network down'))
+  it('handleTestModel shows error when generateStream rejects', async () => {
+    mockGenerateStream.mockImplementation(async (opts: any, onToken: any, onComplete: any, onError: any) => {
+      onError('network down')
+    })
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })
@@ -74,8 +84,8 @@ describe('useTestDialog', () => {
     })
   })
 
-  it('handleTestModel shows error when generate throws error field', async () => {
-    mockGenerate.mockRejectedValue(new Error('model not loaded'))
+  it('handleTestModel shows error when generateStream throws', async () => {
+    mockGenerateStream.mockRejectedValue(new Error('model not loaded'))
     const { result } = renderHook(() => useTestDialog())
     act(() => result.current.setTestPrompt('hi'))
     await act(async () => { await result.current.handleTestModel() })

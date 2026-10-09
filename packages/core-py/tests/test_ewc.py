@@ -8,19 +8,19 @@ Covers:
 """
 
 import numpy as np
-import pytest
-from domains.training.slonet import Tensor, SloLinear, SloNet
-from domains.training.ewc import (
-    EWCParameters,
-    TaskSnapshot,
+
+from domain.training._internal.ewc import (
     DiagonalFisherEstimator,
     EwcContinualLearner,
+    EWCParameters,
+    TaskSnapshot,
     _as_array,
-    _scalar,
-    _zero_grad,
     _batch_size,
+    _scalar,
     _unpack_batch,
+    _zero_grad,
 )
+from domain.training._internal.slonet import SloLinear, SloNet, Tensor
 
 
 class TestHelpers:

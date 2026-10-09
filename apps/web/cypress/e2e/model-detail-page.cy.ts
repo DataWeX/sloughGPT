@@ -14,14 +14,14 @@ describe('Model detail page', () => {
       // Either shows model details or a 404 / error
       expect(
         text.includes('Model') ||
-        text.includes('Not Found') ||
-        text.includes('not found') ||
-        text.includes('Error')
-      ).to.be.true
+          text.includes('Not Found') ||
+          text.includes('not found') ||
+          text.includes('Error'),
+      ).to.equal(true)
     })
   })
 
-  it('shows a back navigation link', () => {
-    cy.get('a[href="/models"]').should('exist')
+  it('shows a back navigation button', () => {
+    cy.contains('button', 'Back').should('exist')
   })
 })

@@ -24,7 +24,7 @@ sloughGPT/
 
 ## Core Packages
 
-### `packages/core-py/domains/` - Domain Logic
+### `domain/` - Domain Logic
 
 | Module | Purpose |
 |--------|---------|
@@ -55,11 +55,11 @@ Same as Python SDK, for JS/TS applications.
 
 ### Trainer
 
-**Canonical:** `domains.training.train_pipeline.SloughGPTTrainer`
-**Protocol:** `domains.training.trainer_protocol.TrainerProtocol`
+**Canonical:** `domain.training._internal.train_pipeline.SloughGPTTrainer`
+**Protocol:** `domain.training._internal.trainer_protocol.TrainerProtocol`
 
 ```python
-from domains.training import SloughGPTTrainer
+from domain.training import SloughGPTTrainer
 
 trainer = SloughGPTTrainer(data_path="data.txt")
 trainer.train()
@@ -67,13 +67,13 @@ trainer.train()
 
 ### Training Config
 
-**Canonical:** `domains.training.train_pipeline.TrainerConfig`
+**Canonical:** `domain.training._internal.train_pipeline.TrainerConfig`
 
 All other `TrainingConfig` classes are deprecated.
 
 ### Model
 
-**Canonical:** `domains.models.SloughGPTModel`
+**Canonical:** `domain.models.SloughGPTModel`
 
 Uses:
 - Rotary Position Embeddings (RoPE)
@@ -83,7 +83,7 @@ Uses:
 
 ### TextDataset
 
-**Canonical:** `domains.training.train_pipeline.TextDataset`
+**Canonical:** `domain.training._internal.train_pipeline.TextDataset`
 
 ## Deprecated/Unified Classes
 
@@ -100,43 +100,43 @@ Uses:
 
 ### TextDataset (4 copies → 1)
 
-Consolidate into `domains/training/train_pipeline.py`:
-- `domains/training/unified_training.py`
-- `domains/training/train_pipeline.py`
+Consolidate into `domain/training/_internal/train_pipeline.py`:
+- `domain/training/unified_training.py`
+- `domain/training/_internal/train_pipeline.py`
 
 ### RAG System
 
-Choose canonical: `domains/infrastructure/rag.RAGSystem`
+Choose canonical: `domain/infrastructure/rag.RAGSystem`
 
 Deprecate:
-- `domains/cognitive/rag.ProductionRAG`
-- `domains/inference/streaming.StreamingRAG`
-- `domains/cognitive/grounding.RAGGrounder`
+- `domain/cognitive/rag.ProductionRAG`
+- `domain/inference/streaming.StreamingRAG`
+- `domain/cognitive/grounding.RAGGrounder`
 
 ### KnowledgeGraph
 
-Choose canonical: `domains/cognitive/knowledge_graph_v2.KnowledgeGraph`
+Choose canonical: `domain/cognitive/knowledge_graph_v2.KnowledgeGraph`
 
 Deprecate:
-- `domains/cognitive/knowledge_graph.KnowledgeGraph` (v1)
-- `domains/infrastructure/rag.SLOKnowledgeGraph`
+- `domain/cognitive/knowledge_graph.KnowledgeGraph` (v1)
+- `domain/infrastructure/rag.SLOKnowledgeGraph`
 
 ### BM25
 
-Choose canonical: `domains/infrastructure/rag.BM25`
+Choose canonical: `domain/infrastructure/rag.BM25`
 
 Deprecate:
-- `domains/cognitive/rag.BM25Indexer`
+- `domain/cognitive/rag.BM25Indexer`
 
 ### InferenceEngine
 
-**Canonical:** `domains/inference/engine.InferenceEngine`
+**Canonical:** `domain/inference/engine.InferenceEngine`
 
 **Deprecated:**
-- `domains/training/inference_engine.InferenceEngine` → use canonical
+- `domain/training/inference_engine.InferenceEngine` → use canonical
 
 **Removed:**
-- `domains/ml_infrastructure/model_serving.py` → entirely unused (contained duplicate InferenceEngine + generic ModelServer)
+- `domain/ml_infrastructure/model_serving.py` → entirely unused (contained duplicate InferenceEngine + generic ModelServer)
 
 ## Public API Contracts
 
@@ -196,7 +196,7 @@ python3 -m pytest tests/ -q
 
 ```python
 # Absolute imports within package
-from domains.training import SloughGPTTrainer
+from domain.training import SloughGPTTrainer
 
 # Relative imports within same package
 from .models import SloughGPTModel
@@ -271,7 +271,7 @@ GGUF models handled by llama.cpp:
 - **llama-cpp-python**: Primary (if installed)
 - **llama-cli**: Subprocess fallback
 
-Located at `packages/core-py/domains/inference/llama_engine.py`:
+Located at `domain/inference/llama_engine.py`:
 - `LlamaInferenceEngine`: Main engine
 - `LlamaCLIInferenceEngine`: CLI subprocess
 - `detect_gpu()`: Detect Metal/CUDA GPU

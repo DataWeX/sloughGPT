@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
 import { SoulEngineWorker, createSoulEngine, createSoulEngineWorker } from './index'
 import { createWorkerHandler, registerWorker, type WorkerScope } from './worker'
-import { makeLstmSou, makeWebGPU, stubWorker } from './__test-helper'
+import { makeLstmSou, makeTransformerSou, makeWebGPU, stubWorker } from './__test-helper'
 import type { SoulNetConfig } from './engine'
 
 const CFG: SoulNetConfig = { embedDim: 2, hiddenDim: 2, vocabSize: 3, numLayers: 1, charset: 'abc' }
@@ -66,7 +66,7 @@ describe('createSoulEngine', () => {
   it('inits, loads a URL, and generates tokens', async () => {
     makeWebGPU(new Float32Array([0, 0]))
     const sou = makeLstmSou({ e: 2, h: 2, v: 3, nl: 1 }, { p7: new Float32Array([1, 5, 2]) })
-    vi.stubGlobal('fetch', vi.fn(async () => ({ arrayBuffer: async () => sou })))
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou })))
     const engine = await createSoulEngine('https://models.example/friendly.sou', CFG)
     expect(engine.ready).toBe(true)
     const tokens: string[] = []
@@ -83,7 +83,7 @@ describe('worker.ts protocol', () => {
   it('answers init/load/generate/reset and errors on unknown types', async () => {
     makeWebGPU(new Float32Array([0, 0]))
     const sou = makeLstmSou({ e: 2, h: 2, v: 3, nl: 1 })
-    vi.stubGlobal('fetch', vi.fn(async () => ({ arrayBuffer: async () => sou })))
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou })))
     const post = vi.fn()
     const onmessage = createWorkerHandler({ postMessage: post, onmessage: null })
     const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
@@ -138,5 +138,71 @@ describe('worker.ts protocol', () => {
       data: { type: 'generate' },
     } as unknown as MessageEvent)
     expect(post).toHaveBeenCalledWith({ type: 'error', message: 'Not initialized' })
+  })
+
+  it('loads transformer checkpoint and generates tokens', async () => {
+    makeWebGPU(new Float32Array([0, 0, 0, 0]))
+    const sou = makeTransformerSou({ e: 4, L: 2, ff: 8, v: 3 })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou })))
+    const post = vi.fn()
+    const onmessage = createWorkerHandler({ postMessage: post, onmessage: null })
+    const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
+
+    await onmessage(msg({ type: 'init' }))
+    expect(post).toHaveBeenCalledWith({ type: 'ready' })
+
+    post.mockClear()
+    await onmessage(msg({ type: 'load', url: 'https://models.example/baby.sou' }))
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'loaded', metadata: expect.any(Object) }),
+    )
+
+    post.mockClear()
+    await onmessage(msg({ type: 'generate', prompt: '', maxTokens: 2, temperature: 0 }))
+    expect(post).toHaveBeenCalledWith({ type: 'token', token: expect.any(String) })
+    expect(post).toHaveBeenCalledWith({ type: 'done' })
+  })
+
+  it('loads LSTM checkpoint and generates tokens', async () => {
+    makeWebGPU(new Float32Array([0, 0]))
+    const sou = makeLstmSou({ e: 2, h: 2, v: 3, nl: 1 })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou })))
+    const post = vi.fn()
+    const onmessage = createWorkerHandler({ postMessage: post, onmessage: null })
+    const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
+
+    await onmessage(msg({ type: 'init' }))
+    expect(post).toHaveBeenCalledWith({ type: 'ready' })
+
+    post.mockClear()
+    await onmessage(msg({ type: 'load', url: 'https://models.example/lstm.sou' }))
+    expect(post).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'loaded', metadata: expect.any(Object) }),
+    )
+
+    post.mockClear()
+    await onmessage(msg({ type: 'generate', prompt: '', maxTokens: 2, temperature: 0 }))
+    expect(post).toHaveBeenCalledWith({ type: 'token', token: expect.any(String) })
+    expect(post).toHaveBeenCalledWith({ type: 'done' })
+  })
+
+  it('passes eosToken to engine.generate()', async () => {
+    makeWebGPU(new Float32Array([0, 0]))
+    const sou = makeLstmSou({ e: 2, h: 2, v: 3, nl: 1 }, { p7: new Float32Array([1, 5, 2]) })
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, arrayBuffer: async () => sou })))
+    const post = vi.fn()
+    const onmessage = createWorkerHandler({ postMessage: post, onmessage: null })
+    const msg = (data: Record<string, unknown>) => ({ data }) as unknown as MessageEvent
+
+    await onmessage(msg({ type: 'init' }))
+    await onmessage(msg({ type: 'load', url: 'https://models.example/lstm.sou' }))
+
+    // Token 1 is 'b' (argmax). eosToken=1 should stop immediately.
+    post.mockClear()
+    await onmessage(msg({ type: 'generate', prompt: '', maxTokens: 10, temperature: 0, eosToken: 1 }))
+    // Should get 'done' without any 'token' messages
+    const tokenCalls = post.mock.calls.filter(c => c[0].type === 'token')
+    expect(tokenCalls).toHaveLength(0)
+    expect(post).toHaveBeenCalledWith({ type: 'done' })
   })
 })

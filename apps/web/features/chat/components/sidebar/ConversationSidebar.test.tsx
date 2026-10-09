@@ -43,8 +43,56 @@ vi.mock('@sloughgpt/strui', () => {
     AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
     AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
     AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
-  }
+  
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}
 })
+
+const { chatDBMock } = vi.hoisted(() => {
+  const kv: Record<string, string> = {}
+  const chatDBMock = {
+    getKV: vi.fn(async (key: string) => kv[key] ?? undefined),
+    setKV: vi.fn(async (key: string, value: string) => { kv[key] = value }),
+  }
+  return { chatDBMock }
+})
+
+vi.mock('@/lib/db', () => ({ chatDB: chatDBMock }))
 
 import { ConversationSidebar } from './ConversationSidebar'
 import type { Conversation } from '@/lib/session-controller'
@@ -367,8 +415,7 @@ describe('ConversationSidebar', () => {
     expect(updatedBtn.className).toContain('text-primary')
   })
 
-  it('persists sort preference across remounts', () => {
-    localStorage.clear()
+  it('persists sort preference across remounts', async () => {
     const conversations = [
       createConv('1', { name: 'Zebra', updated_at: '2026-01-01' }),
       createConv('2', { name: 'Apple', updated_at: '2026-01-02' }),
@@ -377,13 +424,18 @@ describe('ConversationSidebar', () => {
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
     fireEvent.click(screen.getByLabelText('Sort conversations'))
     fireEvent.click(screen.getByText('Name'))
-    expect(localStorage.getItem('sloughgpt:sidebar-sort')).toBe('name')
+    await vi.waitFor(() => {
+      expect(chatDBMock.setKV).toHaveBeenCalledWith('sloughgpt:sidebar-sort', 'name')
+    })
     cleanup()
 
-    // Second render: sort should persist from localStorage as 'name' (non-default)
+    // Second render: sort should persist from chatDB as 'name' (non-default)
+    chatDBMock.getKV.mockImplementation(async (key: string) => key === 'sloughgpt:sidebar-sort' ? 'name' : '')
     render(<ConversationSidebar {...defaultProps} conversations={conversations} />)
-    const sortBtn = screen.getByLabelText('Sort conversations')
-    expect(sortBtn.className).toContain('text-primary')
+    await vi.waitFor(() => {
+      const sortBtn = screen.getByLabelText('Sort conversations')
+      expect(sortBtn.className).toContain('text-primary')
+    })
     // Items should appear in name order
     const items = screen.getAllByText(/^(Apple|Zebra)$/)
     expect(items[0]).toHaveProperty('textContent', 'Apple')

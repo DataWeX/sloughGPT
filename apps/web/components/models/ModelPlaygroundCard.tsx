@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
@@ -16,24 +16,41 @@ export default function ModelPlaygroundCard({ activeRuntimeId }: ModelPlayground
   const [testPrompt, setTestPrompt] = useState('')
   const [testOutput, setTestOutput] = useState('')
   const [testGenerating, setTestGenerating] = useState(false)
+  const [testStreaming, setTestStreaming] = useState(false)
   const [testTemp, setTestTemp] = useState(0.7)
   const [testMaxTokens, setTestMaxTokens] = useState(100)
+  const streamingRef = useRef(false)
 
   const handleTestGenerate = async () => {
     if (!testPrompt.trim() || !activeRuntimeId) return
     setTestGenerating(true)
+    setTestStreaming(true)
     setTestOutput('')
+    streamingRef.current = true
+
     try {
-      const result = await generateController.generate({
-        prompt: testPrompt,
-        max_new_tokens: testMaxTokens,
-        temperature: testTemp,
-      })
-      setTestOutput(result.text || 'No output')
+      await generateController.generateStream(
+        {
+          prompt: testPrompt,
+          max_new_tokens: testMaxTokens,
+          temperature: testTemp,
+        },
+        (token) => {
+          if (!streamingRef.current) return
+          setTestOutput(prev => prev + token)
+        },
+        () => {},
+        (error) => {
+          if (!streamingRef.current) return
+          setTestOutput(`Error: ${error}`)
+        },
+      )
     } catch (err) {
       setTestOutput(`Error: ${extractErrorMessage(err)}`)
     } finally {
+      streamingRef.current = false
       setTestGenerating(false)
+      setTestStreaming(false)
     }
   }
 
@@ -63,13 +80,14 @@ export default function ModelPlaygroundCard({ activeRuntimeId }: ModelPlayground
             {testGenerating ? 'Generating...' : 'Generate'}
           </Button>
           {testOutput && (
-            <Button size="sm" variant="ghost" onClick={() => { setTestOutput(''); setTestPrompt('') }}>Clear</Button>
+            <Button size="sm" variant="ghost" onClick={() => { setTestOutput(''); setTestPrompt(''); streamingRef.current = false }}>Clear</Button>
           )}
         </div>
         {testGenerating && <div className="text-xs text-muted-foreground animate-pulse">Generating...</div>}
-        {testOutput && !testGenerating && (
+        {testOutput && (
           <pre className="text-sm bg-muted/30 rounded-lg p-3 whitespace-pre-wrap break-words max-h-48 overflow-y-auto border border-border/40">
             {testOutput}
+            {testStreaming && <span className="inline-block w-1.5 h-3 bg-primary/70 animate-pulse ml-0.5" />}
           </pre>
         )}
       </CardContent>

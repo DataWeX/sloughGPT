@@ -1,0 +1,180 @@
+[
+  {
+    "ts": "2026-10-02T19:19:12+0100",
+    "payload": "8 MiB synthetic download records",
+    "bytes": 8388608,
+    "tier1": [
+      {
+        "codec": "identity",
+        "raw_bytes": 8388608,
+        "wire_bytes": 8388608,
+        "ratio": 1.0,
+        "enc_mibs": 954.1,
+        "dec_mibs": null
+      },
+      {
+        "codec": "slz4-lv1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1791931,
+        "ratio": 0.2136,
+        "enc_mibs": 173.7,
+        "dec_mibs": 253.4
+      },
+      {
+        "codec": "slz4-lv6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1568613,
+        "ratio": 0.187,
+        "enc_mibs": 60.7,
+        "dec_mibs": 263.5
+      },
+      {
+        "codec": "slz4-lv16",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1565022,
+        "ratio": 0.1866,
+        "enc_mibs": 8.0,
+        "dec_mibs": 186.1
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1090648,
+        "ratio": 0.13,
+        "enc_mibs": 63.2,
+        "dec_mibs": 324.5
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1046140,
+        "ratio": 0.1247,
+        "enc_mibs": 280.2,
+        "dec_mibs": 867.8
+      }
+    ],
+    "tier2": [
+      {
+        "scenario": "file.bin-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.068,
+        "mibs": 118.4,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.243,
+        "mibs": 32.9,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.bin-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.065,
+        "mibs": 122.5,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.264,
+        "mibs": 30.3,
+        "sha_ok": true
+      }
+    ]
+  },
+  {
+    "ts": "2026-10-03T07:41:28+0100",
+    "payload": "8 MiB synthetic download records",
+    "bytes": 8388608,
+    "tier1": [
+      {
+        "codec": "identity",
+        "raw_bytes": 8388608,
+        "wire_bytes": 8388608,
+        "ratio": 1.0,
+        "enc_mibs": 1111.9,
+        "dec_mibs": null
+      },
+      {
+        "codec": "slz4-lv1",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1791931,
+        "ratio": 0.2136,
+        "enc_mibs": 201.2,
+        "dec_mibs": 302.2
+      },
+      {
+        "codec": "slz4-lv6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1568613,
+        "ratio": 0.187,
+        "enc_mibs": 68.0,
+        "dec_mibs": 288.2
+      },
+      {
+        "codec": "slz4-lv16",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1565022,
+        "ratio": 0.1866,
+        "enc_mibs": 9.6,
+        "dec_mibs": 308.0
+      },
+      {
+        "codec": "gzip-6",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1090648,
+        "ratio": 0.13,
+        "enc_mibs": 77.0,
+        "dec_mibs": 316.4
+      },
+      {
+        "codec": "zstd-3",
+        "raw_bytes": 8388608,
+        "wire_bytes": 1046140,
+        "ratio": 0.1247,
+        "enc_mibs": 305.9,
+        "dec_mibs": 1051.9
+      }
+    ],
+    "tier2": [
+      {
+        "scenario": "file.bin-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.047,
+        "mibs": 168.8,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-oneshot",
+        "bytes": 8388608,
+        "attempts": 1,
+        "wall_s": 0.172,
+        "mibs": 46.4,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.bin-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.044,
+        "mibs": 180.3,
+        "sha_ok": true
+      },
+      {
+        "scenario": "file.lz4-interrupted",
+        "bytes": 8388608,
+        "attempts": 2,
+        "wall_s": 0.216,
+        "mibs": 37.0,
+        "sha_ok": true
+      }
+    ]
+  }
+]

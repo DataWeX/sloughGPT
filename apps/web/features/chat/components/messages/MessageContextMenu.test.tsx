@@ -11,6 +11,44 @@ vi.mock('@sloughgpt/strui', () => ({
   IconStar: ({ className }: any) => <span className={className}>star</span>,
   IconTrash: ({ className }: any) => <span className={className}>trash</span>,
   IconPin: ({ className }: any) => <span className={className}>pin</span>,
+  IconMessage: ({ className }: any) => <span className={className}>message</span>,
+
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { MessageContextMenu } from './MessageContextMenu'
@@ -219,5 +257,52 @@ describe('MessageContextMenu', () => {
     renderWithMenu({ onSaveToKnowledge: undefined })
     openMenu()
     expect(screen.queryByText('Save to knowledge')).toBeNull()
+  })
+
+  it('shows "Add note" when hasNote is false', () => {
+    renderWithMenu({ hasNote: false, onAddNote: vi.fn() })
+    openMenu()
+    expect(screen.getByText('Add note')).toBeDefined()
+  })
+
+  it('shows "Edit note" when hasNote is true', () => {
+    renderWithMenu({ hasNote: true, onAddNote: vi.fn() })
+    openMenu()
+    expect(screen.getByText('Edit note')).toBeDefined()
+  })
+
+  it('calls onAddNote with messageId when note item clicked', () => {
+    const onAddNote = vi.fn()
+    renderWithMenu({ hasNote: false, onAddNote })
+    openMenu()
+    fireEvent.click(screen.getByText('Add note'))
+    expect(onAddNote).toHaveBeenCalledWith('msg-1')
+  })
+
+  it('does not show note item when onAddNote is not provided', () => {
+    renderWithMenu({ onAddNote: undefined })
+    openMenu()
+    expect(screen.queryByText('Add note')).toBeNull()
+    expect(screen.queryByText('Edit note')).toBeNull()
+  })
+
+  it('navigates with Home key to first item', () => {
+    renderWithMenu()
+    openMenu()
+    const menu = screen.getByRole('menu')
+    const items = menu.querySelectorAll('[role="menuitem"]:not([disabled])')
+    expect(items.length).toBeGreaterThan(1)
+    fireEvent.keyDown(menu, { key: 'Home' })
+    expect(document.activeElement).toBe(items[0])
+  })
+
+  it('navigates with End key to last item', () => {
+    renderWithMenu()
+    openMenu()
+    const menu = screen.getByRole('menu')
+    const items = menu.querySelectorAll('[role="menuitem"]:not([disabled])')
+    expect(items.length).toBeGreaterThan(1)
+    fireEvent.keyDown(menu, { key: 'End' })
+    expect(document.activeElement).toBe(items[items.length - 1])
   })
 })

@@ -1,7 +1,7 @@
 """
 Token-tree commands - train, encode, decode, and query a TokenTree tokenizer.
 
-All commands are thin wrappers over the core ``domains.training.token_tree``
+All commands are thin wrappers over the core ``domain.training._internal.token_tree``
 module (infrastructure before endpoints): training materializes BPE merges as
 a tree, and every query handler (encode/decode/similar/lineage/embedding/
 path) descends the tree or its Point-generated embeddings.
@@ -11,12 +11,12 @@ from pathlib import Path
 
 import numpy as np
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 
-from domains.training.token_tree import TokenTree
-from domains.training.token_tree_manager import get_token_tree_manager
+from domain.training._internal.token_tree import TokenTree
+from domain.training._internal.token_tree_manager import get_token_tree_manager
 
 
 def _resolve_corpus_file(path_or_name: str) -> Path:
@@ -36,10 +36,10 @@ def _resolve_corpus_file(path_or_name: str) -> Path:
     if p.is_file():
         return p
     name = path_or_name.strip("/")
-    for candidate in (Path("datasets") / name / "input.txt", Path(name)):
+    for candidate in (Path("data") / name / "input.txt", Path(name)):
         if candidate.is_file():
             return candidate
-    available = sorted(d.name for d in Path("datasets").glob("*") if d.is_dir())
+    available = sorted(d.name for d in Path("data").glob("*") if d.is_dir())
     hint = f" Available datasets: {', '.join(available)}." if available else ""
     log.error(f"Corpus not found: {path_or_name}.{hint}")
     sys.exit(2)

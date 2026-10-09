@@ -18,9 +18,8 @@ live‑updating scenario where new JSONL files appear while training is running.
 """
 
 import json
-import os
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, List, Tuple, Optional
 
 import torch
 
@@ -39,14 +38,15 @@ class SimpleTokenizer:
         self.itos = {i: c for c, i in self.stoi.items()}
         self.vocab_size = len(chars)
 
-    def encode(self, text: str) -> List[int]:
+    def encode(self, text: str) -> list[int]:
         return [self.stoi[c] for c in text if c in self.stoi]
 
-    def decode(self, ids: List[int]) -> str:
+    def decode(self, ids: list[int]) -> str:
         return "".join(self.itos.get(i, "") for i in ids)
 
 
 from torch.utils.data import IterableDataset
+
 
 class LiveJSONLDataset(IterableDataset):
     """Iterable dataset that streams token blocks from JSONL files.
@@ -63,21 +63,20 @@ class LiveJSONLDataset(IterableDataset):
         ``block_size * 100``.
     """
 
-    def __init__(self, data_dir: str, block_size: int, buffer_size: Optional[int] = None):
+    def __init__(self, data_dir: str, block_size: int, buffer_size: int | None = None):
         super().__init__()
         self.data_dir = Path(data_dir)
         self.block_size = block_size
         self.buffer_size = buffer_size or block_size * 100
-        self._tokenizer: Optional[SimpleTokenizer] = None
-        self._buffer: List[int] = []
+        self._tokenizer: SimpleTokenizer | None = None
+        self._buffer: list[int] = []
         self._seen_files: set[Path] = set()
 
     # ---------------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------------
     def _build_tokenizer(self, sample_text: str) -> None:
-        """Create the ``SimpleTokenizer`` from a sample of text.
-        """
+        """Create the ``SimpleTokenizer`` from a sample of text."""
         self._tokenizer = SimpleTokenizer(sample_text)
 
     def _load_new_files(self) -> None:
@@ -90,7 +89,7 @@ class LiveJSONLDataset(IterableDataset):
             if file_path in self._seen_files:
                 continue
             try:
-                with open(file_path, "r", encoding="utf-8") as fp:
+                with open(file_path, encoding="utf-8") as fp:
                     for line in fp:
                         line = line.strip()
                         if not line:
@@ -109,9 +108,8 @@ class LiveJSONLDataset(IterableDataset):
                 # If the file disappears while we are reading, just ignore it
                 continue
 
-    def _maybe_yield_block(self) -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
-        """Return the next ``(input, target)`` block if enough tokens are cached.
-        """
+    def _maybe_yield_block(self) -> tuple[torch.Tensor, torch.Tensor] | None:
+        """Return the next ``(input, target)`` block if enough tokens are cached."""
         if len(self._buffer) < self.block_size + 1:
             return None
         # Extract a block of size ``block_size`` and the shifted target
@@ -126,17 +124,19 @@ class LiveJSONLDataset(IterableDataset):
     # ---------------------------------------------------------------------
     # Public iterator protocol
     # ---------------------------------------------------------------------
-    def __iter__(self) -> Iterator[Tuple[torch.Tensor, torch.Tensor]]:
+    def __iter__(self) -> Iterator[tuple[torch.Tensor, torch.Tensor]]:
         # Initialise tokenizer on first iteration using a quick sample of the data
         if self._tokenizer is None:
             # Grab a small snippet from the first available file (if any)
             sample_text = ""
             for p in self.data_dir.glob("*.jsonl"):
                 try:
-                    with open(p, "r", encoding="utf-8") as fp:
+                    with open(p, encoding="utf-8") as fp:
                         for line in fp:
                             obj = json.loads(line.strip())
-                            sample_text += obj.get("prompt", "") + "\n" + obj.get("completion", "") + "\n"
+                            sample_text += (
+                                obj.get("prompt", "") + "\n" + obj.get("completion", "") + "\n"
+                            )
                             if len(sample_text) > 1000:
                                 break
                 except Exception:

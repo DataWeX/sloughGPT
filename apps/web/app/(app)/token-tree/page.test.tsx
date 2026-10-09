@@ -42,26 +42,94 @@ vi.mock('@sloughgpt/strui', () => {
   return {
     cn: (...a: any[]) => a.join(' '),
     Button: ({ children, onClick, disabled, variant, className }: any) => (
-      <button onClick={onClick} disabled={disabled} data-variant={variant} className={className}>{children}</button>
+      <button onClick={onClick} disabled={disabled} data-variant={variant} className={className}>
+        {children}
+      </button>
     ),
-    Card: passthrough, CardContent: passthrough, CardHeader: passthrough,
+    Card: passthrough,
+    CardContent: passthrough,
+    CardHeader: passthrough,
     CardTitle: ({ children }: any) => <div>{children}</div>,
     Input: ({ value, onChange, placeholder, className, type, onKeyDown }: any) => (
-      <input value={value} onChange={onChange} placeholder={placeholder} className={className} type={type} onKeyDown={onKeyDown} />
+      <input
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={className}
+        type={type}
+        onKeyDown={onKeyDown}
+      />
     ),
     Label: ({ children, className }: any) => <label className={className}>{children}</label>,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
 vi.mock('@/components/PageContainer', () => ({
   PageContainer: ({ children, title, subtitle, headerRight }: any) => (
-    <div data-testid="page-container"><h1>{title}</h1><p>{subtitle}</p><div>{headerRight}</div>{children}</div>
+    <div data-testid="page-container">
+      <h1>{title}</h1>
+      <p>{subtitle}</p>
+      <div>{headerRight}</div>
+      {children}
+    </div>
   ),
 }))
 
 import TokenTreePage from './page'
 
-const baseStats = { trained: false, vocab_size: 0, num_merges: 0, embedding_points: 0, num_base_tokens: 0, embedding_compression_ratio: 0, embed_dim: 0 }
+const baseStats = {
+  trained: false,
+  vocab_size: 0,
+  num_merges: 0,
+  embedding_points: 0,
+  num_base_tokens: 0,
+  embedding_compression_ratio: 0,
+  embed_dim: 0,
+}
 
 describe('TokenTreePage', () => {
   afterEach(() => {
@@ -79,17 +147,31 @@ describe('TokenTreePage', () => {
   it('fetches stats on mount', async () => {
     mockGetStats.mockResolvedValue(baseStats)
     render(<TokenTreePage />)
-    await waitFor(() => {
-      expect(mockGetStats).toHaveBeenCalled()
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockGetStats).toHaveBeenCalled()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('displays stats', async () => {
-    mockGetStats.mockResolvedValue({ ...baseStats, trained: true, vocab_size: 256, num_merges: 100, embedding_points: 50, embedding_compression_ratio: 1.5, embed_dim: 64 })
+    mockGetStats.mockResolvedValue({
+      ...baseStats,
+      trained: true,
+      vocab_size: 256,
+      num_merges: 100,
+      embedding_points: 50,
+      embedding_compression_ratio: 1.5,
+      embed_dim: 64,
+    })
     render(<TokenTreePage />)
-    await waitFor(() => {
-      expect(screen.getByText('Yes')).toBeInTheDocument()
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(screen.getByText('Yes')).toBeInTheDocument()
+      },
+      { timeout: 5000 },
+    )
     expect(screen.getAllByText('256').length).toBeGreaterThanOrEqual(1)
     expect(screen.getAllByText('100').length).toBeGreaterThanOrEqual(1)
   })
@@ -112,21 +194,35 @@ describe('TokenTreePage', () => {
     mockTrain.mockResolvedValue({ vocab_size: 128, embedding_points: 20 })
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Train Token Tree'))
-    await waitFor(() => {
-      expect(mockTrain).toHaveBeenCalled()
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockTrain).toHaveBeenCalled()
+      },
+      { timeout: 5000 },
+    )
     expect(mockAddToast).toHaveBeenCalledWith('Trained \u2014 128 vocab, 20 embeddings', 'success')
   })
 
   it('loads vocab when Vocabulary tab clicked', async () => {
     mockGetStats.mockResolvedValue(baseStats)
-    mockGetVocab.mockResolvedValue({ entries: [{ id: 0, token: 'alpha', freq: 100, is_special: false, is_merged: false }], total: 1 })
+    mockGetVocab.mockResolvedValue({
+      entries: [{ id: 0, token: 'alpha', freq: 100, is_special: false, is_merged: false }],
+      total: 1,
+    })
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Vocabulary'))
-    await waitFor(() => {
-      expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
-    }, { timeout: 5000 })
-    expect(screen.getByText('alpha')).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(mockGetVocab).toHaveBeenCalledWith(50, 0)
+      },
+      { timeout: 5000 },
+    )
+    await waitFor(
+      () => {
+        expect(screen.getByText('alpha')).toBeInTheDocument()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('loads merges when Merges tab clicked', async () => {
@@ -134,20 +230,33 @@ describe('TokenTreePage', () => {
     mockGetMerges.mockResolvedValue([{ rank: 1, left: 'x', right: 'y', token: 'xy', count: 50 }])
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Merges'))
-    await waitFor(() => {
-      expect(mockGetMerges).toHaveBeenCalledWith(30, '')
-    }, { timeout: 5000 })
-    expect(screen.getByText('xy')).toBeInTheDocument()
+    await waitFor(
+      () => {
+        expect(mockGetMerges).toHaveBeenCalledWith(30, '')
+      },
+      { timeout: 5000 },
+    )
+    await waitFor(
+      () => {
+        expect(screen.getByText('xy')).toBeInTheDocument()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('loads saved trees when Saved tab clicked', async () => {
     mockGetStats.mockResolvedValue(baseStats)
-    mockListSaved.mockResolvedValue([{ name: 'v1', vocab_size: 128, num_merges: 50, saved_at: '2024-01-01' }])
+    mockListSaved.mockResolvedValue([
+      { name: 'v1', vocab_size: 128, num_merges: 50, saved_at: '2024-01-01' },
+    ])
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Saved'))
-    await waitFor(() => {
-      expect(mockListSaved).toHaveBeenCalled()
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockListSaved).toHaveBeenCalled()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('shows empty saved state', async () => {
@@ -155,33 +264,55 @@ describe('TokenTreePage', () => {
     mockListSaved.mockResolvedValue([])
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Saved'))
-    await waitFor(() => {
-      expect(screen.getByText('No saved trees.')).toBeInTheDocument()
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(screen.getByText('No saved trees.')).toBeInTheDocument()
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('finds similar tokens', async () => {
     mockGetStats.mockResolvedValue(baseStats)
-    mockSimilar.mockResolvedValue({ query: 'test', neighbors: [{ id: 1, token: 'test', score: 0.99 }] })
+    mockSimilar.mockResolvedValue({
+      query: 'test',
+      neighbors: [{ id: 1, token: 'test', score: 0.99 }],
+    })
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Similar'))
     fireEvent.change(screen.getByPlaceholderText('Enter a token...'), { target: { value: 'test' } })
     fireEvent.click(screen.getByText('Find'))
-    await waitFor(() => {
-      expect(mockSimilar).toHaveBeenCalledWith('test', 10)
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockSimilar).toHaveBeenCalledWith('test', 10)
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('gets embedding', async () => {
     mockGetStats.mockResolvedValue(baseStats)
-    mockGetEmbedding.mockResolvedValue({ token: 'hello', dim: 64, norm: 1.0, top: [[0.5, 0], [0.3, 1]] })
+    mockGetEmbedding.mockResolvedValue({
+      token: 'hello',
+      dim: 64,
+      norm: 1.0,
+      top: [
+        [0.5, 0],
+        [0.3, 1],
+      ],
+    })
     render(<TokenTreePage />)
     fireEvent.click(screen.getByText('Embedding'))
-    fireEvent.change(screen.getByPlaceholderText('Enter a token...'), { target: { value: 'hello' } })
+    fireEvent.change(screen.getByPlaceholderText('Enter a token...'), {
+      target: { value: 'hello' },
+    })
     fireEvent.click(screen.getByText('Get Embedding'))
-    await waitFor(() => {
-      expect(mockGetEmbedding).toHaveBeenCalledWith('hello', 8)
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockGetEmbedding).toHaveBeenCalledWith('hello', 8)
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('compares tokens', async () => {
@@ -189,8 +320,12 @@ describe('TokenTreePage', () => {
     mockCompare.mockResolvedValue({
       a: { name: 'tree', stats: {} },
       b: { name: 'forest', stats: {} },
-      shared_tokens: 5, only_a_tokens: 2, only_b_tokens: 3,
-      shared_merges: 4, only_a_merges: 1, only_b_merges: 2,
+      shared_tokens: 5,
+      only_a_tokens: 2,
+      only_b_tokens: 3,
+      shared_merges: 4,
+      only_a_merges: 1,
+      only_b_merges: 2,
       shared_examples: [['ab', 10]],
       only_a_examples: [['cd', 5]],
       only_b_examples: [['ef', 3]],
@@ -206,20 +341,29 @@ describe('TokenTreePage', () => {
     fireEvent.change(textboxes[textboxes.length - 1], { target: { value: 'forest' } })
     const compareButtons = screen.getAllByText('Compare')
     fireEvent.click(compareButtons[compareButtons.length - 1])
-    await waitFor(() => {
-      expect(mockCompare).toHaveBeenCalledWith('tree', 'forest', 10)
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockCompare).toHaveBeenCalledWith('tree', 'forest', 10)
+      },
+      { timeout: 5000 },
+    )
   })
 
   it('refreshes on Refresh click', async () => {
     mockGetStats.mockResolvedValue(baseStats)
     render(<TokenTreePage />)
-    await waitFor(() => {
-      expect(mockGetStats).toHaveBeenCalledTimes(1)
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockGetStats).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 5000 },
+    )
     fireEvent.click(screen.getByText('Refresh'))
-    await waitFor(() => {
-      expect(mockGetStats).toHaveBeenCalledTimes(2)
-    }, { timeout: 5000 })
+    await waitFor(
+      () => {
+        expect(mockGetStats).toHaveBeenCalledTimes(2)
+      },
+      { timeout: 5000 },
+    )
   })
 })

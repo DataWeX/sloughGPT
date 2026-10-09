@@ -1,4 +1,5 @@
 import json
+
 from test_support import get_test_client
 
 
@@ -7,7 +8,7 @@ def _parse_sse_line(line: str) -> dict:
     line = line.strip()
     if not line.startswith("data: "):
         return {}
-    json_part = line[len("data: "):]
+    json_part = line[len("data: ") :]
     try:
         return json.loads(json_part)
     except json.JSONDecodeError:
@@ -26,7 +27,7 @@ def test_regenerate_uses_stored_context():
     assert data["status"] == "stored"
 
     # Trigger regeneration – model is likely not loaded in the test env, so we expect a model‑not‑loaded error
-    resp = client.post(f"/session/{session_id}/regenerate", json={})
+    resp = client.post(f"/chat/{session_id}/regenerate", json={})
     assert resp.status_code == 200
 
     # The response is a streaming SSE; collect the first few events

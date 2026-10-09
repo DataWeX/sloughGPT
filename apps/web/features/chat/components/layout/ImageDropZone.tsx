@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, type ReactNode } from 'react'
+import { useState, useCallback, useEffect, memo, type ReactNode } from 'react'
 import { cn, IconUpload } from '@sloughgpt/strui'
 
 const TEXT_EXTENSIONS = new Set([
@@ -30,7 +30,7 @@ interface FileDropZoneProps {
   children: ReactNode
 }
 
-export function ImageDropZone({ onImageDropped, onTextDropped, onPDFDropped, children }: FileDropZoneProps) {
+export const ImageDropZone = memo(function ImageDropZone({ onImageDropped, onTextDropped, onPDFDropped, children }: FileDropZoneProps) {
   const [dragOver, setDragOver] = useState(false)
 
   useEffect(() => {
@@ -116,4 +116,4 @@ export function ImageDropZone({ onImageDropped, onTextDropped, onPDFDropped, chi
       )}
     </div>
   )
-}
+})

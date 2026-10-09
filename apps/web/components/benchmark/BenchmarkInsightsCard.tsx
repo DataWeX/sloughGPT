@@ -1,11 +1,11 @@
 'use client'
 
-import { Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
+import { cn, Card, CardHeader, CardTitle, CardContent } from '@sloughgpt/strui'
 import type { BenchmarkResult } from '@/lib/benchmark-controller'
 
 interface BenchmarkInsightsCardProps {
   metrics: BenchmarkResult | null
-  quality: { coherence_score: number; quality_score: number; repetition_rate: number } | null
+  quality: { coherence_score: number; quality_score: number; repetition_rate: number; total_responses?: number; avg_length?: number } | null
   stats: { total: number; avg_tokens: number } | null
 }
 
@@ -45,28 +45,28 @@ export function BenchmarkInsightsCard({ metrics, quality, stats }: BenchmarkInsi
           {quality && (
             <div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Quality</div>
-              <div className={`text-lg font-semibold ${qualityInfo?.color}`}>{(quality.quality_score * 100).toFixed(0)}%</div>
+              <div className={cn('text-sm font-semibold', qualityInfo?.color)}>{(quality.quality_score * 100).toFixed(0)}%</div>
               <div className="text-[10px] text-muted-foreground">{qualityInfo?.label}</div>
             </div>
           )}
           {quality && (
             <div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Coherence</div>
-              <div className={`text-lg font-semibold ${coherenceInfo?.color}`}>{(quality.coherence_score * 100).toFixed(0)}%</div>
+              <div className={cn('text-sm font-semibold', coherenceInfo?.color)}>{(quality.coherence_score * 100).toFixed(0)}%</div>
               <div className="text-[10px] text-muted-foreground">{coherenceInfo?.label}</div>
             </div>
           )}
           {perplexity != null && (
             <div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Perplexity</div>
-              <div className="text-lg font-semibold">{perplexity.toFixed(2)}</div>
+              <div className="text-sm font-semibold">{perplexity.toFixed(2)}</div>
               <div className="text-[10px] text-muted-foreground">{perplexity < 20 ? 'Low' : perplexity < 50 ? 'Medium' : 'High'}</div>
             </div>
           )}
           {throughput != null && (
             <div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Throughput</div>
-              <div className="text-lg font-semibold">{throughput.toFixed(1)}</div>
+              <div className="text-sm font-semibold">{throughput.toFixed(1)}</div>
               <div className="text-[10px] text-muted-foreground">tokens/sec</div>
             </div>
           )}

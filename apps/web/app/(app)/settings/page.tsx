@@ -15,16 +15,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  Badge,
   IconRefresh,
   Skeleton,
+  STRUI_VERSION,
+  VersionInspector,
 } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button, cn } from '@sloughgpt/strui'
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Textarea } from '@sloughgpt/strui'
 import { Slider } from '@sloughgpt/strui'
 import { Switch } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
+import { SettingsChatDefaultsCard } from '@/components/settings/SettingsChatDefaultsCard'
+import { SettingsMemoryCard } from '@/components/settings/SettingsMemoryCard'
+import { SettingsSystemHealthCard } from '@/components/settings/SettingsSystemHealthCard'
+import { SettingsBackupRestoreCard } from '@/components/settings/SettingsBackupRestoreCard'
+import { SettingsExternalProviderCard } from '@/components/settings/SettingsExternalProviderCard'
 import { ToggleGroup as ToggleGroupRadix, ToggleGroupItem } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { useSettings, useUpdateSettings, DEFAULT_SETTINGS } from '@/lib/store'
@@ -37,9 +45,22 @@ import { chatDB } from '@/lib/db'
 import { CURRENT_SESSION_KEY } from '@/lib/chat-utils'
 import { modelController } from '@/lib/model-controller'
 import { formatUptime } from '@/lib/chat-utils'
+import { ServingProfilesCard } from '@/components/ServingProfilesCard'
 import { downloadJson, importFile } from '@/lib/download-utils'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 import { settingsSchema } from '@/lib/validation-schemas'
+
+const WEB_VERSION = '3.0.0'
+
+function VersionBadge({ label, version }: { label: string; version?: string | null }) {
+  if (!version) return null
+  return (
+    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-5 text-muted-foreground border-border/40">
+      {label} {version}
+    </Badge>
+  )
+}
 
 function SettingsSlider({
   label, value, onChange, min, max, step, formatValue,
@@ -98,6 +119,8 @@ export default function SettingsPage() {
     }
   }, [])
 
+  useRefreshShortcut(fetchHealth)
+
   useEffect(() => { fetchHealth() }, [fetchHealth])
 
   const fetchProcessGuard = useCallback(async () => {
@@ -115,14 +138,14 @@ export default function SettingsPage() {
       setProcessGuard(status)
       addToast(enabled ? 'Process isolation enabled' : 'Process isolation disabled', 'success')
     } catch (e: unknown) {
-      addToast(extractErrorMessage(e, 'Failed to toggle process guard'), 'error')
+      addToast(extractErrorMessage(e, 'Could not toggle process guard'), 'error')
     }
   }
 
   const isOnline = apiHealth !== null && apiHealth !== 'offline'
   const apiOk = isOnline && (apiHealth.status === 'healthy' || detailed?.status === 'healthy')
-  const modelLoaded = isOnline && (apiHealth.model_loaded || detailed?.model_loaded)
-  const modelType = isOnline ? (apiHealth.model_type || detailed?.model_type) : null
+  const modelLoaded = isOnline ? Boolean(apiHealth.model_loaded || detailed?.model_loaded) : false
+  const modelType = isOnline ? (apiHealth.model_type || detailed?.model_type) ?? null : null
 
   const handleTestConnection = async () => {
     setConnectionTest({ status: 'testing' })
@@ -136,7 +159,7 @@ export default function SettingsPage() {
         setConnectionTest({ status: 'error', error: 'Unexpected response' })
       }
     } catch (e: unknown) {
-      setConnectionTest({ status: 'error', error: extractErrorMessage(e, 'Connection failed') })
+      setConnectionTest({ status: 'error', error: extractErrorMessage(e, 'Could not connection') })
     }
   }
 
@@ -173,7 +196,7 @@ export default function SettingsPage() {
               <ToggleGroupItem value="dark">Dark</ToggleGroupItem>
               <ToggleGroupItem value="system">System</ToggleGroupItem>
             </ToggleGroupRadix>
-            <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card">
+            <div className="mt-3 p-3 rounded-lg border border-border/40 bg-card">
               <div className="flex items-center gap-2 mb-2">
                 <div className="h-3 w-3 rounded-full bg-primary" />
                 <div className="h-2 w-16 rounded bg-muted" />
@@ -188,13 +211,18 @@ export default function SettingsPage() {
               </div>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Palette */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Palette</CardTitle>
-            <CardDescription>Full-spectrum color palette</CardDescription>
+            <div>
+              <CardTitle className="text-base">Palette</CardTitle>
+              <CardDescription>Full-spectrum color palette</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -210,7 +238,7 @@ export default function SettingsPage() {
                 </Button>
               ))}
             </div>
-            <div className="mt-3 p-3 rounded-lg border border-border/50 bg-card">
+            <div className="mt-3 p-3 rounded-lg border border-border/40 bg-card">
               <div className="flex items-center gap-2 mb-2">
                 <div className="h-3 w-3 rounded-full bg-primary" />
                 <div className="h-2 w-16 rounded bg-muted" />
@@ -225,13 +253,18 @@ export default function SettingsPage() {
               </div>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Language */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Language</CardTitle>
-            <CardDescription>Interface language</CardDescription>
+            <div>
+              <CardTitle className="text-base">Language</CardTitle>
+              <CardDescription>Interface language</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
@@ -249,18 +282,24 @@ export default function SettingsPage() {
               ))}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Connection */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Connection</CardTitle>
-            <CardDescription>API server and authentication</CardDescription>
+            <div>
+              <CardTitle className="text-base">Connection</CardTitle>
+              <CardDescription>Service connection and authentication</CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium">API URL</label>
+              <label htmlFor="settings-api-url" className="text-sm font-medium">API URL</label>
               <Input
+                id="settings-api-url"
                 value={settings.apiUrl}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   updateSettings({ apiUrl: e.target.value })
@@ -275,19 +314,20 @@ export default function SettingsPage() {
                   }
                 }}
                 placeholder={PUBLIC_API_URL}
-                className={`font-mono text-xs ${settingsErrors.apiUrl ? 'border-destructive ring-destructive/20' : ''}`}
-                aria-label="API server URL"
+                className={cn('font-mono text-xs', settingsErrors.apiUrl && 'border-destructive ring-destructive/20')}
+                aria-label="Service URL"
                 aria-invalid={!!settingsErrors.apiUrl}
                 aria-describedby={settingsErrors.apiUrl ? 'apiurl-error' : undefined}
               />
               {settingsErrors.apiUrl && (
-                <p id="apiurl-error" className="text-[10px] text-destructive" role="alert">{settingsErrors.apiUrl}</p>
+                <p id="apiurl-error" className="text-xs text-destructive" role="alert">{settingsErrors.apiUrl}</p>
               )}
-              <p className="text-[11px] text-muted-foreground">Backend server address. Changes take effect on next request.</p>
+              <p className="text-[11px] text-muted-foreground">Service address. Changes take effect on next request.</p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">HuggingFace Token</label>
+              <label htmlFor="settings-hf-token" className="text-sm font-medium">HuggingFace Token</label>
               <Input
+                id="settings-hf-token"
                 type="password"
                 value={settings.hfToken}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateSettings({ hfToken: e.target.value })}
@@ -309,106 +349,46 @@ export default function SettingsPage() {
               )}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={detailed?.versions?.api} />
+          </CardFooter>
         </Card>
+
+        {/* External model provider (OpenRouter / OpenAI-compatible) — separate from service API URL + HF token */}
+        <SettingsExternalProviderCard version={WEB_VERSION} />
 
         {/* Chat defaults */}
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle className="text-base">Chat defaults</CardTitle>
-              <CardDescription>Default model and generation settings</CardDescription>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SettingsSlider
-                label="Temperature"
-                value={settings.defaultTemp}
-                onChange={(v) => updateSettings({ defaultTemp: v })}
-                min={0}
-                max={2}
-                step={0.1}
-              />
-              <SettingsSlider
-                label="Max tokens"
-                value={settings.defaultMaxTokens}
-                onChange={(v) => updateSettings({ defaultMaxTokens: v })}
-                min={50}
-                max={1000}
-                step={50}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <SettingsSlider
-                label="Top-P"
-                value={settings.defaultTopP}
-                onChange={(v) => updateSettings({ defaultTopP: v })}
-                min={0}
-                max={1}
-                step={0.05}
-              />
-              <SettingsSlider
-                label="Top-K"
-                value={settings.defaultTopK}
-                onChange={(v) => updateSettings({ defaultTopK: v })}
-                min={0}
-                max={100}
-                step={5}
-              />
-            </div>
-            <div className="flex items-center justify-between pt-2">
-              <div>
-                <p className="text-sm font-medium">Streaming</p>
-                <p className="text-xs text-muted-foreground">Show tokens as they are generated</p>
-              </div>
-              <Switch
-                checked={settings.streaming}
-                onCheckedChange={(checked) => updateSettings({ streaming: checked })}
-                aria-label="Toggle streaming"
-              />
-            </div>
-            <div className="pt-2">
-              <SettingsSlider
-                label="Auto-collapse messages longer than"
-                value={settings.collapsibleMessageLength}
-                onChange={(v) => updateSettings({ collapsibleMessageLength: v })}
-                min={0}
-                max={2000}
-                step={50}
-                formatValue={(v) => v === 0 ? 'Disabled' : `${v} chars`}
-              />
-            </div>
-            <div className="flex items-center justify-between pt-3 border-t border-border/40">
-              <p className="text-xs text-muted-foreground">Reset generation defaults</p>
-              <Button size="sm" variant="ghost" className="h-8 text-xs text-muted-foreground" onClick={() => updateSettings({ defaultTemp: DEFAULT_SETTINGS.defaultTemp, defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens, defaultTopP: DEFAULT_SETTINGS.defaultTopP, defaultTopK: DEFAULT_SETTINGS.defaultTopK })}>
-                Reset
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <SettingsChatDefaultsCard
+          temperature={settings.defaultTemp ?? 0.7}
+          maxTokens={settings.defaultMaxTokens ?? 512}
+          topP={settings.defaultTopP ?? 0.9}
+          topK={settings.defaultTopK ?? 50}
+          streaming={settings.streaming ?? true}
+          collapsibleMessageLength={settings.collapsibleMessageLength ?? 0}
+          onTemperatureChange={(v) => updateSettings({ defaultTemp: v })}
+          onMaxTokensChange={(v) => updateSettings({ defaultMaxTokens: v })}
+          onTopPChange={(v) => updateSettings({ defaultTopP: v })}
+          onTopKChange={(v) => updateSettings({ defaultTopK: v })}
+          onStreamingChange={(v) => updateSettings({ streaming: v })}
+          onCollapsibleMessageLengthChange={(v) => updateSettings({ collapsibleMessageLength: v })}
+          onReset={() => updateSettings({ defaultTemp: DEFAULT_SETTINGS.defaultTemp, defaultMaxTokens: DEFAULT_SETTINGS.defaultMaxTokens, defaultTopP: DEFAULT_SETTINGS.defaultTopP, defaultTopK: DEFAULT_SETTINGS.defaultTopK })}
+          version={WEB_VERSION}
+        />
 
         {/* Memory */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Memory</CardTitle>
-            <CardDescription>Custom instructions included with every prompt</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Textarea
-              className="min-h-[120px]"
-              placeholder="e.g., You are a helpful coding assistant. Keep responses concise..."
-              value={settings.customContext}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => updateSettings({ customContext: e.target.value })}
-              aria-label="Custom instructions"
-            />
-          </CardContent>
-        </Card>
+        <SettingsMemoryCard
+          customContext={settings.customContext ?? ''}
+          onChange={(v) => updateSettings({ customContext: v })}
+          version={WEB_VERSION}
+        />
 
         {/* Chat commands reference */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Chat commands</CardTitle>
-            <CardDescription>Type <kbd className="inline-flex items-center rounded border border-border/40 bg-muted px-1.5 py-0.5 text-[11px] font-mono">/</kbd> in chat to open the command palette</CardDescription>
+            <div>
+              <CardTitle className="text-base">Chat commands</CardTitle>
+              <CardDescription>Type <kbd className="inline-flex items-center rounded border border-border/40 bg-muted px-1.5 py-0.5 text-[11px] font-mono">/</kbd> in chat to open the command palette</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
@@ -436,13 +416,18 @@ export default function SettingsPage() {
               ))}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* Keyboard shortcuts */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Keyboard shortcuts</CardTitle>
-            <CardDescription>Global shortcuts available on any page</CardDescription>
+            <div>
+              <CardTitle className="text-base">Keyboard shortcuts</CardTitle>
+              <CardDescription>Global shortcuts available on any page</CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
@@ -453,6 +438,7 @@ export default function SettingsPage() {
                 ['Ctrl+K', 'Command palette'],
                 ['Ctrl+Shift+F', 'Search conversations'],
                 ['Ctrl+Shift+A', 'Open settings'],
+                ['Ctrl+Shift+M', 'Toggle dark mode'],
                 ['?', 'Show keyboard shortcuts'],
                 ['Esc', 'Close dialog / Cancel'],
               ].map(([key, desc]) => (
@@ -463,100 +449,32 @@ export default function SettingsPage() {
               ))}
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
 
         {/* System health */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">System health</CardTitle>
-            <CardDescription>Backend status and resource usage</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {healthError && !detailed && !metrics ? (
-              <div className="text-center py-6">
-                <p className="text-sm text-destructive mb-3">Could not connect to server</p>
-                <Button size="sm" variant="outline" onClick={fetchHealth}>
-                  <IconRefresh className="h-3.5 w-3.5 mr-1.5" />
-                  Retry
-                </Button>
-              </div>
-            ) : (
-              <>
-            {/* Top row: API + Model + Uptime + Responses */}
-            <KpiGrid columns={4}>
-              <StatCard
-                label="API"
-                value={<span className="font-mono">{apiOk ? 'Healthy' : 'Error'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${apiOk ? 'bg-success' : 'bg-destructive'}`} />}
-              />
-              <StatCard
-                label="Model"
-                value={<span className="font-mono text-xs">{modelLoaded ? (modelType || 'Loaded') : 'None'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${modelLoaded ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
-              />
-              <StatCard
-                label="Uptime"
-                value={<span className="font-mono">{formatUptime(detailed?.uptime_seconds ?? 0)}</span>}
-              />
-              <StatCard
-                label="Responses"
-                value={<span className="font-mono">{String(detailed?.inference?.inference_count ?? 0)}</span>}
-              />
-            </KpiGrid>
-
-            {/* Resource rows */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <StatCard
-                label="CPU"
-                value={<span className="font-mono">{metrics ? `${metrics.cpu_percent}%` : '...'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.cpu_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
-              />
-              <StatCard
-                label="Memory"
-                value={<span className="font-mono">{metrics ? `${(metrics.memory_used_gb ?? 0).toFixed(1)} / ${(metrics.memory_total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(metrics?.memory_percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <StatCard
-                label="Disk"
-                value={<span className="font-mono">{disk ? `${(disk.used_gb ?? 0).toFixed(0)} / ${(disk.total_gb ?? 0).toFixed(0)} GB` : '...'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${(disk?.percent ?? 0) > 80 ? 'bg-warning' : 'bg-success'}`} />}
-              />
-              <StatCard
-                label="GPU"
-                value={<span className="font-mono text-xs">{detailed?.gpu ? `${detailed.gpu.backend.toUpperCase()} · ${detailed.gpu.tier}` : 'None'}</span>}
-                icon={<span className={`inline-block w-2 h-2 rounded-full ${detailed?.gpu ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
-              />
-            </div>
-
-            {/* Platform info */}
-            {info && (
-              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground font-mono flex flex-wrap gap-x-4 gap-y-1">
-                <span>{info.platform} {info.platform_release}</span>
-                <span>{info.architecture}</span>
-                <span>{info.processor}</span>
-                <span>{info.cpu_count} cores</span>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <Button variant="ghost" size="sm" className="text-xs" onClick={fetchHealth}>
-                Refresh health
-              </Button>
-              <span className="text-xs text-muted-foreground font-mono">v1.0.0</span>
-            </div>
-            </>
-            )}
-          </CardContent>
-        </Card>
+        <SettingsSystemHealthCard
+          apiOk={apiOk}
+          modelLoaded={modelLoaded}
+          modelType={modelType}
+          detailed={detailed}
+          metrics={metrics}
+          disk={disk}
+          info={info}
+          healthError={healthError}
+          onRefresh={fetchHealth}
+        />
 
         {/* System info */}
         {info && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">System information</CardTitle>
-              <CardDescription>Detailed platform and environment details</CardDescription>
+              <div>
+                <CardTitle className="text-base">System information</CardTitle>
+                <CardDescription>Detailed platform and environment details</CardDescription>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -582,48 +500,33 @@ export default function SettingsPage() {
                 </div>
               </div>
             </CardContent>
+            <CardFooter className="justify-end">
+              <VersionBadge label="torch" version={detailed?.versions?.torch} />
+            </CardFooter>
           </Card>
         )}
 
-        {/* Export / Import settings */}
+        {/* Version Inspector */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Backup & restore</CardTitle>
-            <CardDescription>Export your settings to a file, or import from a backup</CardDescription>
+            <CardTitle className="text-base">Version inspector</CardTitle>
+            <CardDescription>Strui component ↔ backend feature version alignment</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => {
-                downloadJson(settings, 'sloughgpt-settings.json')
-                addToast('Settings exported', 'success')
-              }}>Export settings</Button>
-              <Button size="sm" variant="outline" onClick={async () => {
-                const file = await importFile('.json')
-                if (!file) return
-                try {
-                  const text = await file.text()
-                  const raw = JSON.parse(text)
-                  const valid: Record<string, unknown> = {}
-                  if (typeof raw.apiUrl === 'string') valid.apiUrl = raw.apiUrl
-                  if (typeof raw.hfToken === 'string') valid.hfToken = raw.hfToken
-                  if (typeof raw.defaultTemp === 'number') valid.defaultTemp = raw.defaultTemp
-                  if (typeof raw.defaultMaxTokens === 'number') valid.defaultMaxTokens = raw.defaultMaxTokens
-                  if (typeof raw.defaultTopP === 'number') valid.defaultTopP = raw.defaultTopP
-                  if (typeof raw.defaultTopK === 'number') valid.defaultTopK = raw.defaultTopK
-                  if (['dark', 'light', 'system'].includes(raw.theme)) valid.theme = raw.theme
-                  if (typeof raw.streaming === 'boolean') valid.streaming = raw.streaming
-                  if (typeof raw.customContext === 'string') valid.customContext = raw.customContext
-                  if (typeof raw.collapsibleMessageLength === 'number') valid.collapsibleMessageLength = raw.collapsibleMessageLength
-                  if (Object.keys(valid).length === 0) throw new Error('No valid settings found')
-                  updateSettings(valid)
-                  addToast('Settings imported', 'success')
-                } catch {
-                  addToast('Invalid settings file', 'error')
-                }
-              }}>Import settings</Button>
+            <VersionInspector backendFeatures={detailed?.versions?.features} />
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-border/40">
+              <p className="text-xs text-muted-foreground">Component ↔ feature version sync</p>
+              <span className="text-xs text-muted-foreground font-mono">strui {STRUI_VERSION}</span>
             </div>
           </CardContent>
         </Card>
+
+        {/* Backup & restore */}
+        <SettingsBackupRestoreCard
+          settings={settings as unknown as Record<string, unknown>}
+          onImport={(valid) => updateSettings(valid)}
+          version={WEB_VERSION}
+        />
 
         {/* Process isolation */}
         <Card>
@@ -657,8 +560,30 @@ export default function SettingsPage() {
                     <span className="font-mono text-xs">{processGuard.model_id}</span>
                   </div>
                 )}
+                {processGuard.health && (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Alive</span>
+                      <span className={processGuard.health.alive ? 'text-success' : 'text-destructive'}>
+                        {processGuard.health.alive ? 'Yes' : 'No'}
+                      </span>
+                    </div>
+                    {processGuard.health.memory_mb !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Memory</span>
+                        <span className="font-mono text-xs">{processGuard.health.memory_mb} MB</span>
+                      </div>
+                    )}
+                    {processGuard.health.restarts !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">Restarts</span>
+                        <span className="font-mono text-xs">{processGuard.health.restarts}</span>
+                      </div>
+                    )}
+                  </>
+                )}
                 <p className="text-xs text-muted-foreground pt-1">
-                  Process isolation runs the model in a subprocess. If it crashes, the server survives and restarts it automatically. Uses ~2 GB more RAM.
+                  Process isolation runs the model in a subprocess. If it crashes, the app survives and restarts it automatically. Uses ~2 GB more RAM.
                 </p>
               </div>
             ) : (
@@ -669,13 +594,92 @@ export default function SettingsPage() {
               </div>
             )}
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={detailed?.versions?.package} />
+          </CardFooter>
+        </Card>
+
+        {/* Serving profiles */}
+        <ServingProfilesCard />
+
+        {/* Training config */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Training</CardTitle>
+            <CardDescription>Default training parameters</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Preferred model</label>
+                <Input
+                  value={settings.trainingPreferredModel || ''}
+                  onChange={(e) => updateSettings({ trainingPreferredModel: e.target.value })}
+                  placeholder="e.g. slo-1.6b"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Preferred method</label>
+                <Input
+                  value={settings.trainingPreferredMethod || ''}
+                  onChange={(e) => updateSettings({ trainingPreferredMethod: e.target.value })}
+                  placeholder="e.g. finetune"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Max checkpoints</label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={settings.trainingMaxCheckpoints ?? 10}
+                  onChange={(e) => updateSettings({ trainingMaxCheckpoints: parseInt(e.target.value) || 10 })}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Auto-train threshold</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={settings.trainingAutoTrainThreshold ?? 0.8}
+                  onChange={(e) => updateSettings({ trainingAutoTrainThreshold: parseFloat(e.target.value) || 0.8 })}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Auto-train</p>
+                <p className="text-xs text-muted-foreground">Automatically train when data quality exceeds threshold</p>
+              </div>
+              <Switch
+                checked={settings.trainingAutoTrain ?? false}
+                onCheckedChange={(checked) => updateSettings({ trainingAutoTrain: checked })}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Enable outcome tracking</p>
+                <p className="text-xs text-muted-foreground">Record training runs for adaptive learning</p>
+              </div>
+              <Switch
+                checked={settings.trainingEnableTracking ?? true}
+                onCheckedChange={(checked) => updateSettings({ trainingEnableTracking: checked })}
+              />
+            </div>
+          </CardContent>
         </Card>
 
         {/* Danger zone */}
         <Card className="border-destructive/30">
           <CardHeader>
-            <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
-            <CardDescription>Irreversible actions</CardDescription>
+            <div>
+              <CardTitle className="text-base text-destructive">Danger zone</CardTitle>
+              <CardDescription>Irreversible actions</CardDescription>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between">
@@ -724,6 +728,9 @@ export default function SettingsPage() {
               </AlertDialog>
             </div>
           </CardContent>
+          <CardFooter className="justify-end">
+            <VersionBadge label="v" version={WEB_VERSION} />
+          </CardFooter>
         </Card>
     </PageContainer>
   )

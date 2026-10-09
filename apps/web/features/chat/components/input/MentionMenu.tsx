@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { agentsController, modelController } from '@/lib/controllers'
+import { logger } from '@/lib/dev-log'
 
 interface MentionItem {
   id: string
@@ -38,8 +39,8 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
   useEffect(() => {
     let cancelled = false
     Promise.all([
-      agentsController.list().catch(() => []),
-      modelController.list().catch(() => []),
+      agentsController.list().catch((e) => { logger.debug('Could not load agents for mention menu', { e }); return [] }),
+      modelController.list().catch((e) => { logger.debug('Could not load models for mention menu', { e }); return [] }),
     ]).then(([agentsRes, models]) => {
       if (cancelled) return
       const agentItems: MentionItem[] = (Array.isArray(agentsRes) ? agentsRes : []).map((a: { id: string; name: string; description?: string }) => ({
@@ -136,6 +137,7 @@ export function MentionMenu({ value, onInsert, onClose }: MentionMenuProps) {
         <button
           key={`${item.type}-${item.id}`}
           ref={el => { itemRefs.current[i] = el }}
+          type="button"
           role="option"
           aria-selected={i === selectedIndex}
           onClick={() => select(item)}

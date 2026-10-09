@@ -205,6 +205,7 @@ function _forwardSingle(
   maxNewTokens: number,
   eosToken: number,
   onToken?: OnTokenCallback,
+  signal?: AbortSignal,
 ): string {
   const cfg = cp.config;
   const w = cp.weights;
@@ -221,6 +222,7 @@ function _forwardSingle(
   let prompt = Array.from(tokens);
 
   for (let step = 0; step < maxNewTokens; step++) {
+    if (signal?.aborted) break
     // Embedding lookup
     const seqLen = step === 0 ? prompt.length : 1;
     const emb = new Float32Array(seqLen * nEmb);
@@ -375,7 +377,7 @@ function _forwardSingle(
       }
     }
 
-    // Top-P
+    // Top-P (nucleus sampling)
     if (topP < 1) {
       const indexed: Array<{v: number; i: number}> = [];
       for (let i = 0; i < lastLogits.length; i++) indexed.push({v: lastLogits[i], i});
@@ -384,10 +386,14 @@ function _forwardSingle(
       for (let i = 0; i < indexed.length; i++) probsArr[i] = indexed[i].v;
       const probs = softmax(probsArr);
       let cum = 0;
-      for (const item of indexed) {
-        cum += probs[item.i];
-        if (cum > topP) {
-          lastLogits[item.i] = -Infinity;
+      let cutoff = false;
+      for (let pos = 0; pos < indexed.length; pos++) {
+        if (!cutoff) {
+          cum += probs[pos];
+          if (cum > topP) cutoff = true;
+        }
+        if (cutoff) {
+          lastLogits[indexed[pos].i] = -Infinity;
         }
       }
     }
@@ -445,7 +451,7 @@ export async function loadCheckpoint(name: string): Promise<void> {
 
   // Download from server
   const baseUrl = await getApiUrl();
-  const res = await fetch(`${baseUrl}/auto-train/checkpoints/${encodeURIComponent(name)}/export-mobile`);
+  const res = await fetch(`${baseUrl}/training/checkpoints/${encodeURIComponent(name)}/export-mobile`);
   if (!res.ok) throw new Error(`Failed to load checkpoint: ${res.status}`);
   const data: MobileExportResponse = await res.json();
 
@@ -472,15 +478,25 @@ export function unload(): void {
   _loaded = null;
 }
 
+/** Load a pre-computed flat weight array with config (used by sou-loader). */
+export function loadFlatWeights(
+  config: MobileExportConfig,
+  weights: Float32Array,
+): void {
+  const [cos, sin] = precomputeFreqs(config.n_embed / config.n_head, config.block_size, 10000);
+  _loaded = { config, weights, cos, sin };
+}
+
 /** Generate text using the loaded SloNet model. */
 export async function generate(
   prompt: string,
   maxNewTokens = 64,
-  temperature = 0.8,
+  temperature = 0.7,
   topK = 40,
-  topP = 0.9,
+  topP = 0.85,
   eosToken = 0,
   onToken?: OnTokenCallback,
+  signal?: AbortSignal,
 ): Promise<LocalGenerateResult> {
   if (!_loaded) throw new Error('No checkpoint loaded');
 
@@ -497,6 +513,7 @@ export async function generate(
     maxNewTokens,
     eosToken,
     onToken,
+    signal,
   );
 
   return {

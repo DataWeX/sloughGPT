@@ -60,9 +60,9 @@ describe('FeedbackScreen', () => {
   it('shows stats cards', async () => {
     const mockApi = require('../../services/api-client').api;
     mockApi.get
-      .mockResolvedValueOnce({total: 100, positive: 80, negative: 20})
+      .mockResolvedValueOnce({thumbs_up: 80, thumbs_down: 20, total: 100, up_ratio: 0.8})
       .mockResolvedValueOnce({active: true, pending_count: 5, completed_count: 95, last_run: null})
-      .mockResolvedValueOnce({total_pairs: 50, synced: 40, pending: 10});
+      .mockResolvedValueOnce({conversations: []});
     const {getByText} = await render(<FeedbackScreen />);
     await waitFor(() => {
       expect(getByText('100')).toBeTruthy();

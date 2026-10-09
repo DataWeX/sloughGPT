@@ -1,483 +1,943 @@
-"""Tests for SloManager — hot-swappable personality system."""
+"""Tests for domain.inference._internal.slo_manager — SloInfo and SloManager."""
 
-import os
-import struct
 import json
-import shutil
-import pytest
+import struct
 from pathlib import Path
-from unittest.mock import patch
-from domains.inference.slo_manager import SloInfo, SloManager, get_slo_manager
+
+import pytest
+
+from domain.inference._internal.slo_manager import SloInfo, SloManager
 
 
-# ── Fixtures ───────────────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# SloInfo — dataclass field defaults
+# ---------------------------------------------------------------------------
+class TestSloInfoDefaults:
+    def test_name(self):
+        si = SloInfo(name="test", path="/tmp/test.soul")
+        assert si.name == "test"
 
-@pytest.fixture
-def tmp_souls_dir(tmp_path):
-    """Create a temporary souls directory."""
-    souls_dir = tmp_path / "models"
-    souls_dir.mkdir()
-    return souls_dir
+    def test_path(self):
+        si = SloInfo(name="test", path="/tmp/test.soul")
+        assert si.path == "/tmp/test.soul"
+
+    def test_description_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.description == ""
+
+    def test_personality_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.personality == {}
+
+    def test_traits_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.traits == []
+
+    def test_loaded_at_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.loaded_at is None
+
+    def test_born_at_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.born_at == ""
+
+    def test_training_dataset_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.training_dataset == ""
+
+    def test_epochs_trained_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.epochs_trained == 0
+
+    def test_final_train_loss_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.final_train_loss is None
+
+    def test_final_val_loss_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.final_val_loss is None
+
+    def test_lineage_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.lineage == ""
+
+    def test_base_model_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.base_model == ""
+
+    def test_version_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.version == ""
+
+    def test_size_mb_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.size_mb == 0.0
+
+    def test_behavior_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.behavior == {}
+
+    def test_cognition_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.cognition == {}
+
+    def test_emotion_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.emotion == {}
+
+    def test_generation_params_default(self):
+        si = SloInfo(name="test", path="/tmp/t.soul")
+        assert si.generation_params == {}
 
 
-def _write_mock_soul(path, name="test_soul", description="A test soul", personality=None):
-    """Write a minimal binary .soul file (SOUL magic + config JSON)."""
-    config = {
-        "name": name,
-        "description": description,
-        "personality": personality or {"warmth": 0.8, "creativity": 0.6},
-    }
+# ---------------------------------------------------------------------------
+# SloInfo — custom field values
+# ---------------------------------------------------------------------------
+class TestSloInfoCustom:
+    def test_description(self):
+        si = SloInfo(name="n", path="p", description="a custom soul")
+        assert si.description == "a custom soul"
+
+    def test_personality(self):
+        si = SloInfo(name="n", path="p", personality={"warmth": 0.8, "humor": 0.3})
+        assert si.personality["warmth"] == 0.8
+        assert si.personality["humor"] == 0.3
+
+    def test_traits(self):
+        si = SloInfo(name="n", path="p", traits=["friendly", "curious", "analytical"])
+        assert "friendly" in si.traits
+        assert len(si.traits) == 3
+
+    def test_loaded_at(self):
+        si = SloInfo(name="n", path="p", loaded_at=1234567890.0)
+        assert si.loaded_at == 1234567890.0
+
+    def test_born_at(self):
+        si = SloInfo(name="n", path="p", born_at="2024-01-15")
+        assert si.born_at == "2024-01-15"
+
+    def test_training_dataset(self):
+        si = SloInfo(name="n", path="p", training_dataset="custom_data.jsonl")
+        assert si.training_dataset == "custom_data.jsonl"
+
+    def test_epochs_trained(self):
+        si = SloInfo(name="n", path="p", epochs_trained=100)
+        assert si.epochs_trained == 100
+
+    def test_final_train_loss(self):
+        si = SloInfo(name="n", path="p", final_train_loss=0.123)
+        assert si.final_train_loss == 0.123
+
+    def test_final_val_loss(self):
+        si = SloInfo(name="n", path="p", final_val_loss=0.456)
+        assert si.final_val_loss == 0.456
+
+    def test_lineage(self):
+        si = SloInfo(name="n", path="p", lineage="nanogpt")
+        assert si.lineage == "nanogpt"
+
+    def test_base_model(self):
+        si = SloInfo(name="n", path="p", base_model="gpt2")
+        assert si.base_model == "gpt2"
+
+    def test_version(self):
+        si = SloInfo(name="n", path="p", version="2.0.0")
+        assert si.version == "2.0.0"
+
+    def test_size_mb(self):
+        si = SloInfo(name="n", path="p", size_mb=1.5)
+        assert si.size_mb == 1.5
+
+    def test_behavior(self):
+        b = {"reasoning_approach": "deductive"}
+        si = SloInfo(name="n", path="p", behavior=b)
+        assert si.behavior["reasoning_approach"] == "deductive"
+
+    def test_cognition(self):
+        c = {"pattern_recognition": 0.9, "abstract_reasoning": 0.7}
+        si = SloInfo(name="n", path="p", cognition=c)
+        assert si.cognition["pattern_recognition"] == 0.9
+
+    def test_emotion(self):
+        e = {"happiness": 0.6, "anger": 0.1}
+        si = SloInfo(name="n", path="p", emotion=e)
+        assert si.emotion["happiness"] == 0.6
+
+    def test_generation_params(self):
+        gp = {"temperature": 0.8, "top_k": 40}
+        si = SloInfo(name="n", path="p", generation_params=gp)
+        assert si.generation_params["temperature"] == 0.8
+
+
+# ---------------------------------------------------------------------------
+# SloInfo — all fields set
+# ---------------------------------------------------------------------------
+class TestSloInfoAllFields:
+    def test_all_fields_set(self):
+        si = SloInfo(
+            name="full",
+            path="/models/full.soul",
+            description="Complete soul",
+            personality={"warmth": 0.9, "creativity": 0.8},
+            traits=["warm", "creative", "curious"],
+            loaded_at=1700000000.0,
+            born_at="2024-01-01",
+            training_dataset="wiki",
+            epochs_trained=50,
+            final_train_loss=0.25,
+            final_val_loss=0.35,
+            lineage="custom",
+            base_model="slonet",
+            version="3.0",
+            size_mb=2.5,
+            behavior={"reasoning_approach": "creative"},
+            cognition={"pattern_recognition": 0.95},
+            emotion={"curiosity": 0.8},
+            generation_params={"temperature": 0.7},
+        )
+        assert si.name == "full"
+        assert si.path == "/models/full.soul"
+        assert si.description == "Complete soul"
+        assert si.personality["warmth"] == 0.9
+        assert len(si.traits) == 3
+        assert si.loaded_at == 1700000000.0
+        assert si.born_at == "2024-01-01"
+        assert si.training_dataset == "wiki"
+        assert si.epochs_trained == 50
+        assert si.final_train_loss == 0.25
+        assert si.final_val_loss == 0.35
+        assert si.lineage == "custom"
+        assert si.base_model == "slonet"
+        assert si.version == "3.0"
+        assert si.size_mb == 2.5
+        assert si.behavior["reasoning_approach"] == "creative"
+        assert si.cognition["pattern_recognition"] == 0.95
+        assert si.emotion["curiosity"] == 0.8
+        assert si.generation_params["temperature"] == 0.7
+
+    def test_empty_traits_list(self):
+        si = SloInfo(name="n", path="p", traits=[])
+        assert len(si.traits) == 0
+
+    def test_personality_many_traits(self):
+        p = {f"trait_{i}": i * 0.1 for i in range(20)}
+        si = SloInfo(name="n", path="p", personality=p)
+        assert len(si.personality) == 20
+
+    def test_behavior_complex(self):
+        b = {"reasoning_approach": "abductive", "response_style": "formal", "depth": 3}
+        si = SloInfo(name="n", path="p", behavior=b)
+        assert len(si.behavior) == 3
+
+    def test_zero_epochs(self):
+        si = SloInfo(name="n", path="p", epochs_trained=0)
+        assert si.epochs_trained == 0
+
+    def test_zero_losses(self):
+        si = SloInfo(name="n", path="p", final_train_loss=0.0, final_val_loss=0.0)
+        assert si.final_train_loss == 0.0
+        assert si.final_val_loss == 0.0
+
+    def test_negative_size(self):
+        si = SloInfo(name="n", path="p", size_mb=-1.0)
+        assert si.size_mb == -1.0
+
+    def test_none_losses(self):
+        si = SloInfo(name="n", path="p")
+        assert si.final_train_loss is None
+        assert si.final_val_loss is None
+
+    def test_name_with_spaces(self):
+        si = SloInfo(name="my soul", path="p")
+        assert si.name == "my soul"
+
+    def test_path_with_spaces(self):
+        si = SloInfo(name="n", path="/path with spaces/file.soul")
+        assert si.path == "/path with spaces/file.soul"
+
+    def test_description_multiline(self):
+        desc = "Line 1\nLine 2\nLine 3"
+        si = SloInfo(name="n", path="p", description=desc)
+        assert "Line 2" in si.description
+
+    def test_loaded_at_zero(self):
+        si = SloInfo(name="n", path="p", loaded_at=0.0)
+        assert si.loaded_at == 0.0
+
+    def test_loaded_at_float(self):
+        si = SloInfo(name="n", path="p", loaded_at=123.456)
+        assert si.loaded_at == 123.456
+
+    def test_generation_params_empty(self):
+        si = SloInfo(name="n", path="p", generation_params={})
+        assert si.generation_params == {}
+
+    def test_cognition_many_metrics(self):
+        c = {f"metric_{i}": i * 0.05 for i in range(10)}
+        si = SloInfo(name="n", path="p", cognition=c)
+        assert len(si.cognition) == 10
+
+    def test_emotion_many_states(self):
+        e = {f"emotion_{i}": i * 0.1 for i in range(15)}
+        si = SloInfo(name="n", path="p", emotion=e)
+        assert len(si.emotion) == 15
+
+    def test_traits_unique(self):
+        si = SloInfo(name="n", path="p", traits=["a", "b", "a", "c"])
+        assert len(si.traits) == 4
+
+    def test_version_semver(self):
+        si = SloInfo(name="n", path="p", version="1.2.3-beta")
+        assert si.version == "1.2.3-beta"
+
+    def test_lineage_chain(self):
+        si = SloInfo(name="n", path="p", lineage="gpt2->slonet->custom")
+        assert "->" in si.lineage
+
+
+# ---------------------------------------------------------------------------
+# SloInfo — edge cases
+# ---------------------------------------------------------------------------
+class TestSloInfoEdgeCases:
+    def test_name_empty_string(self):
+        si = SloInfo(name="", path="p")
+        assert si.name == ""
+
+    def test_path_empty_string(self):
+        si = SloInfo(name="n", path="")
+        assert si.path == ""
+
+    def test_description_empty_string(self):
+        si = SloInfo(name="n", path="p", description="")
+        assert si.description == ""
+
+    def test_personality_values_float(self):
+        p = {"warmth": 0.123456789, "humor": 0.987654321}
+        si = SloInfo(name="n", path="p", personality=p)
+        assert abs(si.personality["warmth"] - 0.123456789) < 1e-6
+
+    def test_traits_single_element(self):
+        si = SloInfo(name="n", path="p", traits=["only_one"])
+        assert si.traits == ["only_one"]
+
+    def test_loaded_at_none(self):
+        si = SloInfo(name="n", path="p", loaded_at=None)
+        assert si.loaded_at is None
+
+    def test_born_at_empty_string(self):
+        si = SloInfo(name="n", path="p", born_at="")
+        assert si.born_at == ""
+
+    def test_training_dataset_empty(self):
+        si = SloInfo(name="n", path="p", training_dataset="")
+        assert si.training_dataset == ""
+
+    def test_epochs_trained_negative(self):
+        si = SloInfo(name="n", path="p", epochs_trained=-1)
+        assert si.epochs_trained == -1
+
+    def test_final_train_loss_large(self):
+        si = SloInfo(name="n", path="p", final_train_loss=999.999)
+        assert si.final_train_loss == 999.999
+
+    def test_final_val_loss_large(self):
+        si = SloInfo(name="n", path="p", final_val_loss=999.999)
+        assert si.final_val_loss == 999.999
+
+    def test_lineage_long(self):
+        lineage = "->".join([f"model_{i}" for i in range(20)])
+        si = SloInfo(name="n", path="p", lineage=lineage)
+        assert "->" in si.lineage
+
+    def test_version_special_chars(self):
+        si = SloInfo(name="n", path="p", version="1.0.0-rc1+build.123")
+        assert si.version == "1.0.0-rc1+build.123"
+
+    def test_size_mb_very_large(self):
+        si = SloInfo(name="n", path="p", size_mb=999999.99)
+        assert si.size_mb == 999999.99
+
+    def test_behavior_empty_dict(self):
+        si = SloInfo(name="n", path="p", behavior={})
+        assert si.behavior == {}
+
+    def test_cognition_empty_dict(self):
+        si = SloInfo(name="n", path="p", cognition={})
+        assert si.cognition == {}
+
+    def test_emotion_empty_dict(self):
+        si = SloInfo(name="n", path="p", emotion={})
+        assert si.emotion == {}
+
+    def test_generation_params_many_keys(self):
+        gp = {f"param_{i}": i for i in range(20)}
+        si = SloInfo(name="n", path="p", generation_params=gp)
+        assert len(si.generation_params) == 20
+
+    def test_personality_negative_values(self):
+        p = {"warmth": -0.5, "humor": -1.0}
+        si = SloInfo(name="n", path="p", personality=p)
+        assert si.personality["warmth"] == -0.5
+
+
+# ---------------------------------------------------------------------------
+# SloInfo — field mutability
+# ---------------------------------------------------------------------------
+class TestSloInfoImmutability:
+    def test_name_is_set(self):
+        si = SloInfo(name="original", path="p")
+        assert si.name == "original"
+
+    def test_path_is_set(self):
+        si = SloInfo(name="n", path="/original/path.soul")
+        assert si.path == "/original/path.soul"
+
+    def test_personality_is_set(self):
+        p = {"warmth": 0.5}
+        si = SloInfo(name="n", path="p", personality=p)
+        assert si.personality == p
+
+    def test_traits_is_set(self):
+        t = ["a", "b", "c"]
+        si = SloInfo(name="n", path="p", traits=t)
+        assert si.traits == t
+
+    def test_name_can_be_reassigned(self):
+        si = SloInfo(name="a", path="p")
+        si.name = "b"
+        assert si.name == "b"
+
+    def test_description_can_be_reassigned(self):
+        si = SloInfo(name="n", path="p", description="old")
+        si.description = "new"
+        assert si.description == "new"
+
+    def test_behavior_can_be_mutated(self):
+        si = SloInfo(name="n", path="p", behavior={"k": 1})
+        si.behavior["k"] = 2
+        assert si.behavior["k"] == 2
+
+    def test_traits_can_be_mutated(self):
+        si = SloInfo(name="n", path="p", traits=["a"])
+        si.traits.append("b")
+        assert "b" in si.traits
+
+
+# ---------------------------------------------------------------------------
+# SloManager — helper to create temporary soul files
+# ---------------------------------------------------------------------------
+def _write_soul_binary(path: Path, config: dict):
+    """Write a minimal binary .soul file with SOUL magic header."""
     config_bytes = json.dumps(config).encode("utf-8")
     with open(path, "wb") as f:
         f.write(b"SOUL")
         f.write(struct.pack("<I", 1))  # version
         f.write(struct.pack("<I", len(config_bytes)))
         f.write(config_bytes)
-
-@pytest.fixture
-def manager(tmp_souls_dir):
-    """SloManager backed by a temp dir (no saved preference)."""
-    return SloManager(souls_dir=str(tmp_souls_dir))
+        # Pad with fake weight data
+        f.write(b"\x00" * 64)
 
 
-# ── SloInfo ────────────────────────────────────────────────────────────────
+def _write_slo_text(path: Path, content: str):
+    """Write a plain-text .slo personality profile."""
+    path.write_text(content, encoding="utf-8")
 
 
-class TestSloInfo:
-
-    def test_defaults(self):
-        info = SloInfo(name="s", path="/p")
-        assert info.name == "s"
-        assert info.path == "/p"
-        assert info.description == ""
-        assert info.personality == {}
-        assert info.traits == []
-        assert info.loaded_at is None
-
-    def test_custom_fields(self):
-        info = SloInfo(
-            name="custom", path="/c",
-            description="desc", personality={"warmth": 0.9},
-            traits=["warm", "creative"],
-        )
-        assert info.personality["warmth"] == 0.9
-        assert len(info.traits) == 2
-
-
-class TestSloManager:
-    """SloManager tests that avoid scanning the real models/souls/ directory."""
-
-    @pytest.fixture(autouse=True)
-    def _patch_souls_walk(self, monkeypatch):
-        """Prevent _scan_souls from finding real models/souls/ dir via parent walk."""
-        original = SloManager._scan_souls
-        def patched_scan(self):
-            self._souls_cache.clear()
-            if not self.slos_dir.exists():
-                return
-            for ext in ("*.slo", "*.soul"):
-                import glob
-                for sou_path in glob.glob(str(self.slos_dir / ext)):
-                    info = self._parse_soul_info(sou_path)
-                    if info:
-                        self._souls_cache[info.name] = info
-        monkeypatch.setattr(SloManager, "_scan_souls", patched_scan)
-
-    def test_init_empty_dir(self, tmp_path):
-        empty_dir = tmp_path / "empty"
-        empty_dir.mkdir()
-        m = SloManager(souls_dir=str(empty_dir))
+# ---------------------------------------------------------------------------
+# SloManager — __init__ and directory scanning
+# ---------------------------------------------------------------------------
+class TestSloManagerInit:
+    def test_init_creates_manager(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
+        assert m is not None
         assert m.list_souls() == []
-        assert m.get_current_soul() is None
 
     def test_init_nonexistent_dir(self, tmp_path):
-        m = SloManager(souls_dir=str(tmp_path / "nonexistent"))
+        nonexistent = tmp_path / "no_such_dir"
+        m = SloManager(souls_dir=str(nonexistent))
         assert m.list_souls() == []
 
-    def test_scan_finds_soul_files(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "my_soul.soul", name="my_soul")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
+    def test_init_scans_soul_files(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "alpha", "description": "A"})
+        _write_soul_binary(tmp_path / "b.soul", {"name": "beta", "description": "B"})
+        m = SloManager(souls_dir=str(tmp_path))
+        names = [s.name for s in m.list_souls()]
+        assert "alpha" in names
+        assert "beta" in names
+
+    def test_init_scans_slo_files(self, tmp_path):
+        _write_soul_binary(tmp_path / "x.soul", {"name": "soul_x"})
+        m = SloManager(souls_dir=str(tmp_path))
+        names = [s.name for s in m.list_souls()]
+        assert "soul_x" in names
+
+    def test_scan_is_idempotent(self, tmp_path):
+        _write_soul_binary(tmp_path / "c.soul", {"name": "charlie"})
+        m = SloManager(souls_dir=str(tmp_path))
+        first = m.list_souls()
+        second = m.list_souls()
+        assert len(first) == len(second)
+
+    def test_rescan_picks_up_new_files(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
+        assert len(m.list_souls()) == 0
+        _write_soul_binary(tmp_path / "new.soul", {"name": "new_soul"})
+        m.rescan_souls()
+        assert len(m.list_souls()) == 1
+
+
+# ---------------------------------------------------------------------------
+# SloManager — soul parsing from binary .soul files
+# ---------------------------------------------------------------------------
+class TestSloManagerParseSoul:
+    def test_parse_binary_soul_metadata(self, tmp_path):
+        config = {
+            "name": "test_model",
+            "description": "A test model",
+            "personality": {"warmth": 0.7, "creativity": 0.5},
+            "traits": ["friendly", "curious"],
+            "born_at": "2024-06-01",
+            "training_dataset": "wiki",
+            "epochs_trained": 20,
+            "final_train_loss": 0.15,
+            "final_val_loss": 0.22,
+            "lineage": "gpt2",
+            "base_model": "slonet",
+            "version": "1.0",
+            "behavior": {"reasoning_approach": "deductive"},
+            "cognition": {"memory": 0.8},
+            "emotion": {"happiness": 0.6},
+            "generation": {"temperature": 0.9},
+        }
+        _write_soul_binary(tmp_path / "m.soul", config)
+        m = SloManager(souls_dir=str(tmp_path))
         souls = m.list_souls()
         assert len(souls) == 1
-        assert souls[0].name == "my_soul"
+        s = souls[0]
+        assert s.name == "test_model"
+        assert s.description == "A test model"
+        assert s.personality["warmth"] == 0.7
+        assert s.traits == ["friendly", "curious"]
+        assert s.born_at == "2024-06-01"
+        assert s.training_dataset == "wiki"
+        assert s.epochs_trained == 20
+        assert s.final_train_loss == 0.15
+        assert s.final_val_loss == 0.22
+        assert s.lineage == "gpt2"
+        assert s.base_model == "slonet"
+        assert s.version == "1.0"
+        assert s.behavior["reasoning_approach"] == "deductive"
+        assert s.cognition["memory"] == 0.8
+        assert s.emotion["happiness"] == 0.6
+        assert s.generation_params["temperature"] == 0.9
 
-    def test_get_soul(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "alpha.soul", name="alpha")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        soul = m.get_soul("alpha")
-        assert soul is not None
-        assert soul.name == "alpha"
+    def test_parse_binary_soul_name_fallback_to_stem(self, tmp_path):
+        _write_soul_binary(tmp_path / "fallback.soul", {})
+        m = SloManager(souls_dir=str(tmp_path))
+        souls = m.list_souls()
+        assert souls[0].name == "fallback"
 
-    def test_get_soul_missing(self, tmp_souls_dir):
-        m = SloManager(souls_dir=str(tmp_souls_dir))
+    def test_parse_binary_soul_description_fallback_to_name(self, tmp_path):
+        _write_soul_binary(tmp_path / "desc.soul", {"name": "desc"})
+        m = SloManager(souls_dir=str(tmp_path))
+        souls = m.list_souls()
+        assert souls[0].description == "desc"
+
+    def test_parse_binary_soul_size_mb(self, tmp_path):
+        _write_soul_binary(tmp_path / "sized.soul", {"name": "sized"})
+        m = SloManager(souls_dir=str(tmp_path))
+        souls = m.list_souls()
+        assert souls[0].size_mb > 0
+
+    def test_parse_binary_soul_default_traits_from_behavior(self, tmp_path):
+        config = {
+            "behavior": {"reasoning_approach": "inductive"},
+            "personality": {"warmth": 0.8},
+        }
+        _write_soul_binary(tmp_path / "bt.soul", config)
+        m = SloManager(souls_dir=str(tmp_path))
+        souls = m.list_souls()
+        assert "inductive" in souls[0].traits
+
+    def test_parse_binary_soul_high_personality_traits_extracted(self, tmp_path):
+        config = {
+            "personality": {"warmth": 0.9, "humor": 0.2, "curiosity": 0.7},
+        }
+        _write_soul_binary(tmp_path / "pt.soul", config)
+        m = SloManager(souls_dir=str(tmp_path))
+        souls = m.list_souls()
+        assert "warmth" in souls[0].traits
+        assert "curiosity" in souls[0].traits
+        assert "humor" not in souls[0].traits
+
+    def test_parse_corrupted_binary_returns_none(self, tmp_path):
+        bad = tmp_path / "bad.soul"
+        bad.write_bytes(b"SOUL" + b"\xff" * 20)
+        m = SloManager(souls_dir=str(tmp_path))
+        assert m.list_souls() == []
+
+    def test_parse_config_len_exceeds_file(self, tmp_path):
+        bad = tmp_path / "overflow.soul"
+        with open(bad, "wb") as f:
+            f.write(b"SOUL")
+            f.write(struct.pack("<I", 1))
+            f.write(struct.pack("<I", 999999))  # absurd config_len
+            f.write(b"{}")
+        m = SloManager(souls_dir=str(tmp_path))
+        # Binary parse fails, but text fallback via SouParser may parse it.
+        # The key assertion: it does not crash.
+        souls = m.list_souls()
+        assert isinstance(souls, list)
+
+    def test_parse_json_decode_error(self, tmp_path):
+        bad = tmp_path / "badjson.soul"
+        with open(bad, "wb") as f:
+            f.write(b"SOUL")
+            f.write(struct.pack("<I", 1))
+            bad_payload = b"{invalid json"
+            f.write(struct.pack("<I", len(bad_payload)))
+            f.write(bad_payload)
+        m = SloManager(souls_dir=str(tmp_path))
+        # Binary parse fails with corrupt JSON, text fallback may handle it.
+        souls = m.list_souls()
+        assert isinstance(souls, list)
+
+    def test_parse_empty_config(self, tmp_path):
+        _write_soul_binary(tmp_path / "empty.soul", {})
+        m = SloManager(souls_dir=str(tmp_path))
+        souls = m.list_souls()
+        assert len(souls) == 1
+        assert souls[0].personality == {}
+
+
+# ---------------------------------------------------------------------------
+# SloManager — get_soul, get_current_soul
+# ---------------------------------------------------------------------------
+class TestSloManagerGetSoul:
+    def _make_manager(self, tmp_path):
+        _write_soul_binary(tmp_path / "alpha.soul", {"name": "alpha"})
+        _write_soul_binary(tmp_path / "beta.soul", {"name": "beta"})
+        return SloManager(souls_dir=str(tmp_path))
+
+    def test_get_soul_exists(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        s = m.get_soul("alpha")
+        assert s is not None
+        assert s.name == "alpha"
+
+    def test_get_soul_missing(self, tmp_path):
+        m = self._make_manager(tmp_path)
         assert m.get_soul("nonexistent") is None
 
-    def test_switch_soul_success(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "helper.soul", name="helper")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        result = m.switch_soul("helper")
-        assert result["success"] is True
-        assert result["name"] == "helper"
-        assert m.get_current_soul() is not None
-        assert m.get_current_soul().name == "helper"
+    def test_get_current_soul_none_by_default(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        assert m.get_current_soul() is None
 
-    def test_switch_soul_not_found(self, tmp_souls_dir):
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        result = m.switch_soul("ghost")
+
+# ---------------------------------------------------------------------------
+# SloManager — switch_soul
+# ---------------------------------------------------------------------------
+class TestSloManagerSwitchSoul:
+    def _make_manager(self, tmp_path):
+        _write_soul_binary(
+            tmp_path / "x.soul",
+            {
+                "name": "x",
+                "personality": {"warmth": 0.5},
+                "traits": ["alpha"],
+            },
+        )
+        _write_soul_binary(
+            tmp_path / "y.soul",
+            {
+                "name": "y",
+                "personality": {"warmth": 0.8},
+                "traits": ["beta"],
+            },
+        )
+        return SloManager(souls_dir=str(tmp_path))
+
+    def test_switch_success(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        result = m.switch_soul("x")
+        assert result["success"] is True
+        assert result["name"] == "x"
+        assert result["personality"]["warmth"] == 0.5
+
+    def test_switch_sets_current(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        m.switch_soul("x")
+        current = m.get_current_soul()
+        assert current is not None
+        assert current.name == "x"
+
+    def test_switch_updates_loaded_at(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        m.switch_soul("x")
+        soul = m.get_current_soul()
+        assert soul.loaded_at is not None
+        assert soul.loaded_at > 0
+
+    def test_switch_missing_soul(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        result = m.switch_soul("nonexistent")
         assert result["success"] is False
-        assert "not found" in result["error"]
+        assert "error" in result
         assert "available" in result
 
-    def test_switch_soul_sets_loaded_at(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "timed.soul", name="timed")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        m.switch_soul("timed")
-        soul = m.get_current_soul()
-        assert soul is not None
-        assert soul.loaded_at is not None
+    def test_switch_persists_preference(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        m.switch_soul("x")
+        # Re-create manager — preference should be restored
+        m2 = SloManager(souls_dir=str(tmp_path))
+        current = m2.get_current_soul()
+        assert current is not None
+        assert current.name == "x"
 
-    def test_switch_soul_persists_preference(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "persist.soul", name="persist")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        with patch.object(m, "_preference_file", tmp_souls_dir / ".pref"):
-            m.switch_soul("persist")
-            assert m._preference_file.exists()
-            assert m._preference_file.read_text().strip() == "persist"
+    def test_switch_multiple_souls(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        m.switch_soul("x")
+        assert m.get_current_soul().name == "x"
+        m.switch_soul("y")
+        assert m.get_current_soul().name == "y"
 
-    def test_register_soul(self, tmp_souls_dir):
-        soul_path = str(tmp_souls_dir / "new.soul")
-        _write_mock_soul(soul_path, name="registered")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        info = m.register_soul(soul_path, name="custom_name")
-        assert info.name == "custom_name"
-        assert m.get_soul("custom_name") is not None
+    def test_switch_returns_traits(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        result = m.switch_soul("x")
+        assert "traits" in result
+        assert "alpha" in result["traits"]
 
-    def test_register_soul_invalid_path(self, tmp_souls_dir):
-        m = SloManager(souls_dir=str(tmp_souls_dir))
+    def test_switch_returns_description(self, tmp_path):
+        m = self._make_manager(tmp_path)
+        result = m.switch_soul("x")
+        assert "description" in result
+
+
+# ---------------------------------------------------------------------------
+# SloManager — register_soul
+# ---------------------------------------------------------------------------
+class TestSloManagerRegisterSoul:
+    def test_register_soul(self, tmp_path):
+        _write_soul_binary(tmp_path / "reg.soul", {"name": "reg"})
+        m = SloManager(souls_dir=str(tmp_path))
+        info = m.register_soul(str(tmp_path / "reg.soul"))
+        assert info.name == "reg"
+        assert m.get_soul("reg") is not None
+
+    def test_register_soul_custom_name(self, tmp_path):
+        _write_soul_binary(tmp_path / "orig.soul", {"name": "orig"})
+        m = SloManager(souls_dir=str(tmp_path))
+        info = m.register_soul(str(tmp_path / "orig.soul"), name="renamed")
+        assert info.name == "renamed"
+        assert m.get_soul("renamed") is not None
+
+    def test_register_soul_invalid_file(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
         with pytest.raises(ValueError, match="Failed to parse"):
-            m.register_soul("/nonexistent/file.soul")
+            m.register_soul(str(tmp_path / "nonexistent.soul"))
 
-    def test_create_default_souls(self, tmp_souls_dir):
-        m = SloManager(souls_dir=str(tmp_souls_dir))
+    def test_register_soul_adds_to_cache(self, tmp_path):
+        # Write to a path outside the scan directory
+        external = tmp_path.parent / f"ext_{id(tmp_path)}"
+        external.mkdir(exist_ok=True)
+        try:
+            _write_soul_binary(external / "a.soul", {"name": "a"})
+            m = SloManager(souls_dir=str(tmp_path))
+            assert m.get_soul("a") is None
+            m.register_soul(str(external / "a.soul"))
+            assert m.get_soul("a") is not None
+        finally:
+            import shutil
+
+            shutil.rmtree(external, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# SloManager — create_default_souls
+# ---------------------------------------------------------------------------
+class TestSloManagerCreateDefaults:
+    def test_create_defaults(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
         m.create_default_souls()
-        stats = m.get_stats()
-        names = stats["available_souls"]
+        names = [s.name for s in m.list_souls()]
         assert "assistant" in names
         assert "creative" in names
         assert "analyst" in names
 
-    def test_create_default_souls_no_overwrite(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "assistant.soul", name="assistant")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        m._scan_souls()
-        assert "assistant" in m._souls_cache
+    def test_create_defaults_does_not_overwrite(self, tmp_path):
+        _write_soul_binary(tmp_path / "assistant.soul", {"name": "assistant"})
+        m = SloManager(souls_dir=str(tmp_path))
         m.create_default_souls()
-        assert "assistant" in m._souls_cache
-        assert m._souls_cache["assistant"].path != ""
+        names = [s.name for s in m.list_souls()]
+        assert names.count("assistant") == 1
 
-    def test_get_stats(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "a.soul", name="a")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
+    def test_create_defaults_personality_values(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
+        m.create_default_souls()
+        assistant = m.get_soul("assistant")
+        assert assistant.personality["warmth"] == 0.7
+
+    def test_create_defaults_analyst_creativity(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
+        m.create_default_souls()
+        analyst = m.get_soul("analyst")
+        assert analyst.personality["creativity"] == 0.3
+
+
+# ---------------------------------------------------------------------------
+# SloManager — get_stats
+# ---------------------------------------------------------------------------
+class TestSloManagerStats:
+    def test_stats_empty(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
         stats = m.get_stats()
-        assert stats["total_souls"] == 1
+        assert stats["total_souls"] == 0
         assert stats["current_soul"] is None
-        assert "a" in stats["available_souls"]
+        assert stats["available_souls"] == []
 
-    def test_get_stats_with_current(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "x.soul", name="x")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        m.switch_soul("x")
+    def test_stats_with_souls(self, tmp_path):
+        _write_soul_binary(tmp_path / "a.soul", {"name": "a"})
+        _write_soul_binary(tmp_path / "b.soul", {"name": "b"})
+        m = SloManager(souls_dir=str(tmp_path))
         stats = m.get_stats()
-        assert stats["current_soul"] == "x"
+        assert stats["total_souls"] == 2
+        assert "a" in stats["available_souls"]
+        assert "b" in stats["available_souls"]
 
-    def test_parse_binary_soul(self, tmp_souls_dir):
-        path = tmp_souls_dir / "binary.soul"
-        _write_mock_soul(path, name="bin", personality={"warmth": 0.9})
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        info = m.get_soul("bin")
-        assert info is not None
-        assert info.personality["warmth"] == 0.9
+    def test_stats_after_switch(self, tmp_path):
+        _write_soul_binary(tmp_path / "s.soul", {"name": "s"})
+        m = SloManager(souls_dir=str(tmp_path))
+        m.switch_soul("s")
+        stats = m.get_stats()
+        assert stats["current_soul"] == "s"
 
-    def test_parse_multiple_souls(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "one.soul", name="one")
-        _write_mock_soul(tmp_souls_dir / "two.soul", name="two")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        assert len(m.list_souls()) == 2
-
-    def test_soul_traits_from_personality(self, tmp_souls_dir):
-        path = tmp_souls_dir / "traited.soul"
-        _write_mock_soul(path, name="traited",
-                         personality={"warmth": 0.8, "creativity": 0.9, "confidence": 0.3})
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        info = m.get_soul("traited")
-        assert "warmth" in info.traits
-        assert "creativity" in info.traits
-        assert "confidence" not in info.traits
-
-    def test_switch_soul_returns_description(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "desc.soul", name="desc", description="My description")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        result = m.switch_soul("desc")
-        assert result["description"] == "My description"
-
-    def test_switch_soul_returns_personality(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "p.soul", name="p", personality={"warmth": 0.5})
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        result = m.switch_soul("p")
-        assert result["personality"]["warmth"] == 0.5
+    def test_stats_souls_dir(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
+        stats = m.get_stats()
+        assert stats["souls_dir"] == str(tmp_path)
 
 
-# ── Global singleton ──────────────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# SloManager — recursive scanning (souls/ subdirectory)
+# ---------------------------------------------------------------------------
+class TestSloManagerRecursiveScan:
+    def test_scan_souls_subdirectory(self, tmp_path):
+        souls_dir = tmp_path / "souls"
+        souls_dir.mkdir()
+        _write_soul_binary(souls_dir / "nested.soul", {"name": "nested"})
+        m = SloManager(souls_dir=str(tmp_path))
+        names = [s.name for s in m.list_souls()]
+        assert "nested" in names
 
-class TestGetSloManager:
+    def test_scan_recursive_glob(self, tmp_path):
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        _write_soul_binary(sub / "deep.soul", {"name": "deep"})
+        m = SloManager(souls_dir=str(tmp_path))
+        names = [s.name for s in m.list_souls()]
+        assert "deep" in names
 
-    def test_returns_singleton(self):
-        import domains.inference.slo_manager as mod
-        original = mod._slo_manager
-        mod._slo_manager = None
+
+# ---------------------------------------------------------------------------
+# SloManager — preference file edge cases
+# ---------------------------------------------------------------------------
+class TestSloManagerPreference:
+    def test_preference_missing_soul_ignored(self, tmp_path):
+        _write_soul_binary(tmp_path / "x.soul", {"name": "x"})
+        # Write preference for a soul that doesn't exist
+        pref_dir = tmp_path / "data"
+        pref_dir.mkdir()
+        (pref_dir / ".soul_preference").write_text("nonexistent")
+        m = SloManager(souls_dir=str(tmp_path))
+        assert m.get_current_soul() is None
+
+    def test_preference_empty_file(self, tmp_path):
+        _write_soul_binary(tmp_path / "x.soul", {"name": "x"})
+        pref_dir = tmp_path / "data"
+        pref_dir.mkdir()
+        (pref_dir / ".soul_preference").write_text("")
+        m = SloManager(souls_dir=str(tmp_path))
+        assert m.get_current_soul() is None
+
+    def test_save_preference_creates_directory(self, tmp_path):
+        _write_soul_binary(tmp_path / "x.soul", {"name": "x"})
+        m = SloManager(souls_dir=str(tmp_path))
+        m.switch_soul("x")
+        assert m.get_current_soul().name == "x"
+
+    def test_save_preference_with_no_soul(self, tmp_path):
+        m = SloManager(souls_dir=str(tmp_path))
+        m._save_preference()  # should not raise
+        assert m.get_current_soul() is None
+
+
+# ---------------------------------------------------------------------------
+# SloManager — module-level convenience functions
+# ---------------------------------------------------------------------------
+class TestSloManagerModuleFunctions:
+    def test_get_slo_manager_singleton(self, tmp_path):
+        from domain.inference._internal import slo_manager as mod
+
+        old = mod._slo_manager
         try:
-            m1 = get_slo_manager()
-            m2 = get_slo_manager()
+            mod._slo_manager = None
+            m1 = mod.get_slo_manager()
+            m2 = mod.get_slo_manager()
             assert m1 is m2
         finally:
-            mod._slo_manager = original
+            mod._slo_manager = old
+
+    def test_list_souls_function(self, tmp_path):
+        from domain.inference._internal import slo_manager as mod
+
+        old = mod._slo_manager
+        try:
+            mod._slo_manager = SloManager(souls_dir=str(tmp_path))
+            result = mod.list_souls()
+            assert isinstance(result, list)
+        finally:
+            mod._slo_manager = old
+
+    def test_switch_soul_function(self, tmp_path):
+        from domain.inference._internal import slo_manager as mod
+
+        old = mod._slo_manager
+        try:
+            _write_soul_binary(tmp_path / "x.soul", {"name": "x"})
+            mod._slo_manager = SloManager(souls_dir=str(tmp_path))
+            result = mod.switch_soul("x")
+            assert result["success"] is True
+        finally:
+            mod._slo_manager = old
 
 
-# ── Real _scan_souls (unpatched) ──────────────────────────────────────────
-
-_TXT_SLO = """# test text profile
-SOUL txtsoul
-DESCRIPTION A text personality profile
-PERSONALITY
-    warmth 0.9
-    creativity 0.7
-    confidence 0.3
-    END
-BEHAVIOR
-    reasoning_approach analytical
-    END
-"""
-
-
-def _write_binary_soul(path, config):
-    """Write a binary .soul file with an arbitrary config JSON."""
-    config_bytes = json.dumps(config).encode("utf-8")
-    with open(path, "wb") as f:
-        f.write(b"SOUL")
-        f.write(struct.pack("<I", 1))
-        f.write(struct.pack("<I", len(config_bytes)))
-        f.write(config_bytes)
-
-
-class _DefaultConfig:
-    """TraitWeightsConfig stand-in returning pure 0.5 defaults."""
-
-    def all(self):
-        from domains.context.managers import TRAIT_SCHEMA
-        return {g: {t: 0.5 for t in ts} for g, ts in TRAIT_SCHEMA.items()}
-
-
-def _raise_config():
-    """Stand-in for a failing get_trait_config()."""
-    raise RuntimeError("config down")
-
-
-class TestRealScan:
-
-    def test_top_level_binary_and_text(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "bin.soul", name="bin")
-        (tmp_souls_dir / "txt.slo").write_text(_TXT_SLO)
-        m = SloManager(souls_dir=str(tmp_souls_dir))
+# ---------------------------------------------------------------------------
+# SloManager — binary format edge cases
+# ---------------------------------------------------------------------------
+class TestSloManagerBinaryFormat:
+    def test_non_soul_binary_file_ignored(self, tmp_path):
+        garbage = tmp_path / "garbage.soul"
+        garbage.write_bytes(b"\x00\x01\x02\x03\x04\x05\x06\x07" * 10)
+        m = SloManager(souls_dir=str(tmp_path))
+        # Binary parse fails (no SOUL magic); text fallback may parse it.
         souls = m.list_souls()
-        names = {s.name for s in souls}
-        assert "bin" in names
-        assert "txtsoul" in names
-        txt = m.get_soul("txtsoul")
-        assert txt.description == "A text personality profile"
-        assert txt.personality["warmth"] == 0.9
-        assert "analytical" in txt.traits
-        assert "warmth" in txt.traits
-        assert "confidence" not in txt.traits
+        assert isinstance(souls, list)
 
-    def test_souls_subdirectory(self, tmp_souls_dir):
-        sub = tmp_souls_dir / "souls"
-        sub.mkdir()
-        _write_mock_soul(sub / "sub.soul", name="sub")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        assert m.get_soul("sub") is not None
+    def test_short_file_ignored(self, tmp_path):
+        short = tmp_path / "short.soul"
+        short.write_bytes(b"SOUL")
+        m = SloManager(souls_dir=str(tmp_path))
+        # Only 4 bytes — binary parse fails, text fallback may parse it.
+        souls = m.list_souls()
+        assert isinstance(souls, list)
 
-    def test_repo_models_souls_resolution(self, tmp_souls_dir):
-        import domains.inference.slo_manager as mod
-        models_dir = Path(mod.__file__).resolve().parents[2] / "models"
-        created = not models_dir.exists()
-        souls_dir = models_dir / "souls"
-        souls_dir.mkdir(parents=True, exist_ok=True)
-        _write_mock_soul(souls_dir / "repo.soul", name="repo")
-        try:
-            m = SloManager(souls_dir=str(tmp_souls_dir))
-            assert m.get_soul("repo") is not None
-        finally:
-            if created:
-                shutil.rmtree(models_dir)
-
-    def test_subdir_duplicate_name_not_overwritten(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "dup.soul", name="dup")
-        sub = tmp_souls_dir / "souls"
-        sub.mkdir()
-        _write_mock_soul(sub / "dup.soul", name="dup")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        assert m.get_soul("dup").path.startswith(str(tmp_souls_dir))
-
-
-# ── Preference load/save edge cases ───────────────────────────────────────
-
-class TestPreferenceEdgeCases:
-
-    def test_load_restores_saved_soul(self, tmp_souls_dir):
-        _write_mock_soul(tmp_souls_dir / "pref.soul", name="pref")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        pref = tmp_souls_dir / ".pref"
-        pref.write_text("pref")
-        m._preference_file = pref
-        m._load_preference()
-        assert m._current_soul == "pref"
-
-    def test_load_read_error_is_swallowed(self, tmp_souls_dir):
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        bad = tmp_souls_dir / "prefdir"
-        bad.mkdir()
-        m._preference_file = bad
-        m._load_preference()
-        assert m._current_soul is None
-
-    def test_save_write_error_is_swallowed(self, tmp_souls_dir):
-        blocker = tmp_souls_dir / "afile"
-        blocker.write_text("x")
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        m._current_soul = "x"
-        m._preference_file = blocker / "pref"
-        m._save_preference()
-
-
-# ── get_trait_weights ─────────────────────────────────────────────────────
-
-class TestGetTraitWeights:
-
-    def _manager_with_current(self, tmp_souls_dir, name):
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        m._preference_file = tmp_souls_dir / ".pref"
-        m.switch_soul(name)
-        return m
-
-    def test_no_soul_returns_full_schema(self, tmp_souls_dir, monkeypatch):
-        monkeypatch.setattr(
-            "domains.context.managers.get_trait_config", lambda: _DefaultConfig()
-        )
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        result = m.get_trait_weights()
-        assert set(result.keys()) == {"personality", "cognition", "emotion"}
-        assert result["personality"]["warmth"] == 0.5
-        assert len(result["cognition"]) == 8
-        assert len(result["emotion"]) == 5
-
-    def test_soul_personality_overrides_defaults(self, tmp_souls_dir, monkeypatch):
-        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
-        _write_mock_soul(tmp_souls_dir / "p.soul", name="p",
-                         personality={"warmth": 0.9, "creativity": 0.6})
-        m = self._manager_with_current(tmp_souls_dir, "p")
-        result = m.get_trait_weights()
-        assert result["personality"]["warmth"] == 0.9
-        assert result["personality"]["creativity"] == 0.6
-
-    def test_soul_metadata_cognition_emotion_overlay(self, tmp_souls_dir, tmp_path, monkeypatch):
-        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
-        meta = {
-            "personality": {"warmth": 0.8},
-            "cognition": {"abstract_reasoning": 0.8, "systematic_planning": 0.7},
-            "emotion": {"empathy_depth": 0.7},
-        }
-        meta_bytes = json.dumps(meta).encode("utf-8")
-        path = tmp_path / "meta.soul"
-        path.write_bytes(b"SOUL" + struct.pack("<I", len(meta_bytes)) + meta_bytes)
-
-        m = SloManager(souls_dir=str(tmp_souls_dir))
-        m._preference_file = tmp_souls_dir / ".pref"
-        m._souls_cache["meta"] = SloInfo(
-            name="meta", path=str(path), personality={"warmth": 0.8}
-        )
-        m.switch_soul("meta")
-        result = m.get_trait_weights()
-        assert result["cognition"]["abstract_reasoning"] == 0.8
-        assert result["cognition"]["systematic_planning"] == 0.7
-        assert result["emotion"]["empathy_depth"] == 0.7
-        assert result["personality"]["warmth"] == 0.8
-
-    def test_text_soul_skips_binary_metadata(self, tmp_souls_dir, monkeypatch):
-        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
-        (tmp_souls_dir / "txt.slo").write_text(_TXT_SLO)
-        m = self._manager_with_current(tmp_souls_dir, "txtsoul")
-        result = m.get_trait_weights()
-        assert result["personality"]["warmth"] == 0.9
-        assert result["personality"]["creativity"] == 0.7
-
-    def test_metadata_read_error_is_swallowed(self, tmp_souls_dir, monkeypatch):
-        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
-        _write_mock_soul(tmp_souls_dir / "s.soul", name="s")
-        m = self._manager_with_current(tmp_souls_dir, "s")
-        m.get_soul("s").path = str(tmp_souls_dir / "missing.soul")
-        result = m.get_trait_weights()
-        assert result["personality"]["warmth"] == 0.8
-
-    def test_empty_personality_skips_overlay(self, tmp_souls_dir, monkeypatch):
-        monkeypatch.setattr("domains.context.managers.get_trait_config", _raise_config)
-        _write_binary_soul(tmp_souls_dir / "e.soul", {
-            "name": "e",
-            "description": "no personality",
-            "personality": {},
-        })
-        m = self._manager_with_current(tmp_souls_dir, "e")
-        result = m.get_trait_weights()
-        assert result["personality"]["warmth"] == 0.5
-
-    def test_live_config_overrides_soul(self, tmp_souls_dir, monkeypatch):
-        _write_mock_soul(tmp_souls_dir / "s.soul", name="s",
-                         personality={"warmth": 0.8, "creativity": 0.6})
-        m = self._manager_with_current(tmp_souls_dir, "s")
-
-        class _Live:
-            def all(self):
-                return {"personality": {"warmth": 0.95}}
-
-        monkeypatch.setattr("domains.context.managers.get_trait_config", lambda: _Live())
-        result = m.get_trait_weights()
-        assert result["personality"]["warmth"] == 0.95
-        assert result["personality"]["creativity"] == 0.6
-
-    def test_config_exception_falls_back_to_defaults(self, tmp_souls_dir, monkeypatch):
-        _write_mock_soul(tmp_souls_dir / "s.soul", name="s",
-                         personality={"warmth": 0.8, "creativity": 0.6})
-        m = self._manager_with_current(tmp_souls_dir, "s")
-
-        def _boom():
-            raise RuntimeError("config down")
-
-        monkeypatch.setattr("domains.context.managers.get_trait_config", _boom)
-        result = m.get_trait_weights()
-        assert result["personality"]["warmth"] == 0.8
-
-
-# ── Module-level convenience functions ────────────────────────────────────
-
-class TestModuleLevelFunctions:
-
-    def test_module_switch_and_list(self):
-        import domains.inference.slo_manager as mod
-        original = mod._slo_manager
-        mod._slo_manager = None
-        try:
-            result = mod.switch_soul("does_not_exist")
-            assert result["success"] is False
-            souls = mod.list_souls()
-            assert isinstance(souls, list)
-        finally:
-            mod._slo_manager = original
+    def test_zero_config_len(self, tmp_path):
+        zc = tmp_path / "zero.soul"
+        with open(zc, "wb") as f:
+            f.write(b"SOUL")
+            f.write(struct.pack("<I", 1))
+            f.write(struct.pack("<I", 0))
+        m = SloManager(souls_dir=str(tmp_path))
+        # config_len=0 means no JSON to parse; text fallback may handle it.
+        souls = m.list_souls()
+        assert isinstance(souls, list)

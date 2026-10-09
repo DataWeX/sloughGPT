@@ -252,23 +252,36 @@ export class SloughGPTClient {
   // ============ Health & Info ============
 
   async health(): Promise<HealthStatus> {
-    return this.request<HealthStatus>('GET', '/health');
+    const data = await this.request<unknown>('GET', '/health');
+    return this.unwrap(data) as HealthStatus;
   }
 
   async liveness(): Promise<{ status: string }> {
-    return this.request('GET', '/health/live');
+    const data = await this.request<unknown>('GET', '/health/live');
+    return this.unwrap(data) as { status: string };
   }
 
   async readiness(): Promise<{ status: string; model_loaded: boolean }> {
-    return this.request('GET', '/health/ready');
+    const data = await this.request<unknown>('GET', '/health/ready');
+    return this.unwrap(data) as { status: string; model_loaded: boolean };
   }
 
   async detailedHealth(): Promise<Record<string, unknown>> {
-    return this.request('GET', '/health/detailed');
+    const data = await this.request<unknown>('GET', '/health/detailed');
+    return this.unwrap(data) as Record<string, unknown>;
   }
 
   async info(): Promise<SystemInfo> {
-    return this.request<SystemInfo>('GET', '/info');
+    const data = await this.request<unknown>('GET', '/info');
+    const raw = (this.unwrap(data) as Record<string, unknown>) ?? {};
+    const model = (raw.model as Record<string, unknown>) ?? {};
+    return {
+      version: (raw.api_version as string) ?? (raw.version as string),
+      model: {
+        type: model.type as string,
+        loaded: model.loaded as boolean,
+      },
+    } as SystemInfo;
   }
 
   // ============ Inference & Generation ============
@@ -324,9 +337,28 @@ export class SloughGPTClient {
 
       for (const line of lines) {
         if (line.startsWith('data:')) {
-          const data = line.slice(5).trim();
-          if (data && data !== '[DONE]') {
-            yield data;
+          const payload = line.slice(5).trim();
+          if (payload && payload !== '[DONE]') {
+            let envelope: {
+              stream?: string;
+              status?: string;
+              data?: { token?: string; error?: string };
+              message?: string;
+            };
+            try {
+              envelope = JSON.parse(payload);
+            } catch {
+              continue;
+            }
+            if (envelope.status === 'error') {
+              throw new SloughGPTError(
+                envelope.data?.error || envelope.message || 'Stream error',
+                500,
+              );
+            }
+            if (envelope.data?.token) {
+              yield envelope.data.token;
+            }
           }
         }
       }
@@ -336,6 +368,7 @@ export class SloughGPTClient {
   async chat(request: ChatRequest): Promise<ChatResult> {
     this.log('info', `Chat: ${request.messages.length} messages`);
     const raw = await this.request<{
+      message?: string;
       text?: string;
       model?: string;
       tokens_generated?: number;
@@ -349,7 +382,7 @@ export class SloughGPTClient {
       top_k: request.top_k ?? 50,
     });
 
-    const content = raw.text ?? '';
+    const content = raw.message ?? raw.text ?? '';
     if (raw.error && !content) {
       throw new SloughGPTError(raw.error, 400);
     }
@@ -433,7 +466,13 @@ export class SloughGPTClient {
   // ============ Models ============
 
   async listModels(): Promise<ModelInfo[]> {
-    return this.request<ModelInfo[]>('GET', '/models');
+    const data = await this.request<unknown>('GET', '/models');
+    const unwrapped = this.unwrap(data);
+    if (Array.isArray(unwrapped)) {
+      return unwrapped as ModelInfo[];
+    }
+    const obj = (unwrapped ?? data) as Record<string, unknown>;
+    return (obj.models as ModelInfo[]) ?? [];
   }
 
   async loadModel(modelId: string): Promise<{ status: string }> {
@@ -483,7 +522,7 @@ export class SloughGPTClient {
   }
 
   async *regenerateStream(sessionId: string): AsyncGenerator<string, void, unknown> {
-    const url = `${this.baseUrl}/session/${sessionId}/regenerate`;
+    const url = `${this.baseUrl}/chat/${sessionId}/regenerate`;
     const response = await fetch(url, { method: 'POST', headers: this.headers });
     if (!response.ok) throw new SloughGPTError(`HTTP ${response.status}`, response.status);
 
@@ -515,7 +554,13 @@ export class SloughGPTClient {
   // ============ Souls ============
 
   async listSouls(): Promise<SoulProfile[]> {
-    return this.request<SoulProfile[]>('GET', '/souls');
+    const data = await this.request<unknown>('GET', '/souls');
+    const unwrapped = this.unwrap(data);
+    if (Array.isArray(unwrapped)) {
+      return unwrapped as SoulProfile[];
+    }
+    const obj = (unwrapped ?? data) as Record<string, unknown>;
+    return (obj.souls as SoulProfile[]) ?? [];
   }
 
   async getCurrentSoul(): Promise<SoulProfile> {
@@ -523,9 +568,9 @@ export class SloughGPTClient {
   }
 
   async switchSoul(name: string, checkpointName?: string): Promise<Record<string, unknown>> {
-    const body: Record<string, unknown> = {};
+    const body: Record<string, unknown> = { name };
     if (checkpointName) body.checkpoint_name = checkpointName;
-    return this.request('POST', `/souls/switch/${name}`, body);
+    return this.request('POST', '/souls/switch', body);
   }
 
   // ============ Knowledge ============
@@ -645,27 +690,27 @@ export class SloughGPTClient {
   // ============ Auto-Train ============
 
   async startAutoTrain(config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    return this.request('POST', '/auto-train/start', config);
+    return this.request('POST', '/training/start', config);
   }
 
   async stopAutoTrain(): Promise<Record<string, unknown>> {
-    return this.request('POST', '/auto-train/stop');
+    return this.request('POST', '/training/stop');
   }
 
   async getAutoTrainStatus(): Promise<Record<string, unknown>> {
-    return this.request('GET', '/auto-train/status');
+    return this.request('GET', '/training/status');
   }
 
   async listAutoTrainCheckpoints(): Promise<Record<string, unknown>[]> {
-    return this.request<Record<string, unknown>[]>('GET', '/auto-train/checkpoints');
+    return this.request<Record<string, unknown>[]>('GET', '/training/checkpoints');
   }
 
   async deleteAutoTrainCheckpoint(name: string): Promise<Record<string, unknown>> {
-    return this.request('DELETE', `/auto-train/checkpoints/${name}`);
+    return this.request('DELETE', `/training/checkpoints/${name}`);
   }
 
   async loadAutoTrainCheckpoint(name: string): Promise<Record<string, unknown>> {
-    return this.request('POST', `/auto-train/checkpoints/${name}/load`);
+    return this.request('POST', `/training/checkpoints/${name}/load`);
   }
 
   // ============ Feedback ============
@@ -687,7 +732,8 @@ export class SloughGPTClient {
   // ============ Metrics ============
 
   async metrics(): Promise<MetricsData> {
-    return this.request<MetricsData>('GET', '/metrics');
+    const data = await this.request<unknown>('GET', '/metrics');
+    return this.unwrap(data) as MetricsData;
   }
 
   // ============ Experiments ============
@@ -801,10 +847,107 @@ export class SloughGPTClient {
     return this.unwrap(data) as Record<string, unknown>;
   }
 
+  // ============ Auto-train ============
+
+  async getAutoTrainSettingsStatus(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/settings/training/auto-train/status');
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async updateAutoTrainSettingsConfig(params: { threshold?: number; interval_s?: number }): Promise<Record<string, unknown>> {
+    const qs = new URLSearchParams();
+    if (params.threshold !== undefined) qs.set('threshold', String(params.threshold));
+    if (params.interval_s !== undefined) qs.set('interval_s', String(params.interval_s));
+    const q = qs.toString();
+    const data = await this.request<Record<string, unknown>>('PATCH', `/settings/training/auto-train/config${q ? `?${q}` : ''}`);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async getTrainingAnalytics(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/settings/training/analytics');
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  // ============ Docstore ============
+
+  async listDocstoreDocs(collection: string): Promise<unknown[]> {
+    const data = await this.request<Record<string, unknown>>('GET', `/docstore/${collection}`);
+    return (data.data ?? data) as unknown[];
+  }
+
+  async getDocstoreDoc(collection: string, docId: string): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', `/docstore/${collection}/${docId}`);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async putDocstoreDoc(collection: string, docId: string, docData: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('PUT', `/docstore/${collection}/${docId}`, docData);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async patchDocstoreDoc(collection: string, docId: string, docData: Record<string, unknown>): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('PATCH', `/docstore/${collection}/${docId}`, docData);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async deleteDocstoreDoc(collection: string, docId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/docstore/${collection}/${docId}`);
+  }
+
+  async clearDocstoreCollection(collection: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/docstore/${collection}`);
+  }
+
+  async bulkPutDocstore(collection: string, docs: Record<string, unknown>[]): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', `/docstore/${collection}/bulk`, docs);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  // ============ Collections ============
+
+  async listCollections(): Promise<unknown[]> {
+    const data = await this.request<Record<string, unknown>>('GET', '/collections');
+    return (data.data ?? data) as unknown[];
+  }
+
+  async getCollection(collectionId: string): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', `/collections/${collectionId}`);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async createCollection(name: string, options: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', '/collections/create', { name, ...options });
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async deleteCollection(collectionId: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/collections/${collectionId}`);
+  }
+
+  async runCollection(collectionId: string, options: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', '/collections/run', { pipeline_id: collectionId, ...options });
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async collectFromCollection(collectionId: string, options: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('POST', `/collections/${collectionId}/collect`, options);
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
+  async getCollectionRecords(collectionId: string): Promise<unknown[]> {
+    const data = await this.request<Record<string, unknown>>('GET', `/collections/${collectionId}/records`);
+    return (data.data ?? data) as unknown[];
+  }
+
+  async getCollectionStats(): Promise<Record<string, unknown>> {
+    const data = await this.request<Record<string, unknown>>('GET', '/collections/stats');
+    return this.unwrap(data) as Record<string, unknown>;
+  }
+
   // ============ Auth ============
 
-  async getToken(username: string, password: string): Promise<unknown> {
-    return this.request('POST', '/auth/token', { username, password });
+  async getToken(apiKey: string): Promise<unknown> {
+    return this.request('POST', '/auth/token', { api_key: apiKey });
   }
 
   async refreshToken(refreshToken: string): Promise<unknown> {
@@ -836,6 +979,183 @@ export class SloughGPTClient {
     return this.request('GET', '/benchmark/stats');
   }
 
+  // ============ Settings ============
+
+  async getSettings(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings');
+  }
+
+  async getGenerationSettings(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings/generation');
+  }
+
+  async updateGenerationSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request('PATCH', '/settings/generation', updates);
+  }
+
+  async getVoiceSettings(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings/voice');
+  }
+
+  async updateVoiceSettings(updates: Record<string, unknown>): Promise<Record<string, unknown>> {
+    return this.request('PATCH', '/settings/voice', updates);
+  }
+
+  async resetSettings(): Promise<Record<string, unknown>> {
+    return this.request('POST', '/settings/reset');
+  }
+
+  async getAdaptiveInsights(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/settings/adaptive/insights');
+  }
+
+  async exportTrainingHistory(format: string = 'json', limit: number = 0): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/history/export?format=${format}&limit=${limit}`);
+  }
+
+  async generateModelCard(name: string, params: Record<string, unknown> = {}): Promise<{ card: Record<string, unknown>; markdown: string }> {
+    return this.request('POST', '/settings/model-card', { name, ...params });
+  }
+
+  async getDashboardSummary(): Promise<Record<string, unknown>> {
+    return this.request('GET', '/dashboard/summary');
+  }
+
+  async compareTrainingRuns(runA: string, runB: string): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/compare?run_a=${runA}&run_b=${runB}`);
+  }
+
+  async getBatchTrainingStatus(): Promise<{ jobs: Array<Record<string, unknown>>; summary: { total: number; running: number; queued: number; completed: number; failed: number } }> {
+    return this.request('GET', '/settings/training/batch-status');
+  }
+
+  async listTrainingPresets(): Promise<{ presets: Array<Record<string, unknown>> }> {
+    return this.request('GET', '/settings/training/presets');
+  }
+
+  async getTrainingPreset(name: string): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/presets/${name}`);
+  }
+
+  async applyTrainingPreset(name: string): Promise<Record<string, unknown>> {
+    return this.request('POST', `/settings/training/presets/${name}/apply`);
+  }
+
+  async getTrainingRun(runId: string): Promise<Record<string, unknown>> {
+    return this.request('GET', `/settings/training/runs/${runId}`);
+  }
+
+  async deleteTrainingRun(runId: string): Promise<{ deleted: boolean; run_id: string }> {
+    return this.request('DELETE', `/settings/training/runs/${runId}`);
+  }
+
+  async filterTrainingRuns(params: {
+    model?: string;
+    method?: string;
+    converged?: boolean;
+    min_quality?: number;
+    limit?: number;
+  } = {}): Promise<{ runs: Array<Record<string, unknown>>; count: number }> {
+    const qs = new URLSearchParams();
+    if (params.model) qs.set('model', params.model);
+    if (params.method) qs.set('method', params.method);
+    if (params.converged !== undefined) qs.set('converged', String(params.converged));
+    if (params.min_quality !== undefined) qs.set('min_quality', String(params.min_quality));
+    if (params.limit) qs.set('limit', String(params.limit));
+    return this.request('GET', `/settings/training/runs?${qs.toString()}`);
+  }
+
+  async clearTrainingHistory(): Promise<{ cleared: boolean; removed_count: number }> {
+    return this.request('POST', '/settings/training/history/clear');
+  }
+
+  async addRunTag(runId: string, tag: string): Promise<Record<string, unknown>> {
+    return this.request('POST', `/settings/training/runs/${runId}/tags?tag=${encodeURIComponent(tag)}`);
+  }
+
+  async removeRunTag(runId: string, tag: string): Promise<Record<string, unknown>> {
+    return this.request('DELETE', `/settings/training/runs/${runId}/tags/${encodeURIComponent(tag)}`);
+  }
+
+  async setRunNotes(runId: string, notes: string): Promise<Record<string, unknown>> {
+    return this.request('PUT', `/settings/training/runs/${runId}/notes?notes=${encodeURIComponent(notes)}`);
+  }
+
+  async getAllTags(): Promise<{ tags: string[] }> {
+    return this.request('GET', '/settings/training/tags');
+  }
+
+  async getRunsByTag(tag: string): Promise<{ runs: Array<Record<string, unknown>>; count: number; tag: string }> {
+    return this.request('GET', `/settings/training/tags/${encodeURIComponent(tag)}`);
+  }
+
+  async exportTrainingRun(runId: string, format: string = 'json'): Promise<{ run_id: string; format: string; content: string }> {
+    return this.request('GET', `/settings/training/runs/${runId}/export?format=${format}`);
+  }
+
+  async toggleBookmark(runId: string): Promise<Record<string, unknown>> {
+    return this.request('POST', `/settings/training/runs/${runId}/bookmark`);
+  }
+
+  async getBookmarkedRuns(): Promise<{ runs: Array<Record<string, unknown>>; count: number }> {
+    return this.request('GET', '/settings/training/bookmarks');
+  }
+
+  async duplicateTrainingRun(runId: string, newRunId: string = ''): Promise<Record<string, unknown>> {
+    const params = newRunId ? `?new_run_id=${encodeURIComponent(newRunId)}` : '';
+    return this.request('POST', `/settings/training/runs/${runId}/duplicate${params}`);
+  }
+
+  async bulkDeleteRuns(runIds: string[]): Promise<{ deleted_count: number; requested: number }> {
+    const ids = runIds.join(',');
+    return this.request('POST', `/settings/training/runs/bulk/delete?run_ids=${encodeURIComponent(ids)}`);
+  }
+
+  async bulkAddTag(runIds: string[], tag: string): Promise<{ updated_count: number; tag: string }> {
+    const ids = runIds.join(',');
+    return this.request('POST', `/settings/training/runs/bulk/tag?run_ids=${encodeURIComponent(ids)}&tag=${encodeURIComponent(tag)}`);
+  }
+
+  async bulkBookmark(runIds: string[], bookmarked: boolean = true): Promise<{ updated_count: number; bookmarked: boolean }> {
+    const ids = runIds.join(',');
+    return this.request('POST', `/settings/training/runs/bulk/bookmark?run_ids=${encodeURIComponent(ids)}&bookmarked=${bookmarked}`);
+  }
+
+  // ============ VQA ============
+
+  async askQuestion(imageFile: File, question: string): Promise<{ answer: string; question: string; elapsed_ms: number }> {
+    const fd = new FormData();
+    fd.append('file', imageFile);
+    fd.append('question', question);
+    return this.request('POST', '/multimodal/ask', fd);
+  }
+
+  async detectObjects(imageFile: File): Promise<{ objects: Array<{ label: string; bbox: number[]; confidence: number }> }> {
+    const fd = new FormData();
+    fd.append('file', imageFile);
+    return this.request('POST', '/multimodal/detect', fd);
+  }
+
+  async analyzePdf(pdfFile: File, question?: string): Promise<{ analysis: string; filename: string }> {
+    const fd = new FormData();
+    fd.append('file', pdfFile);
+    fd.append('question', question || 'Analyze this document.');
+    return this.request('POST', '/multimodal/pdf/upload', fd);
+  }
+
+  async processVideo(videoFile: File, numFrames: number = 16): Promise<{ caption: string; num_frames: number }> {
+    const fd = new FormData();
+    fd.append('file', videoFile);
+    fd.append('num_frames', String(numFrames));
+    return this.request('POST', '/multimodal/process-video', fd);
+  }
+
+  async synthesizeSpeech(text: string): Promise<{ audio: string; text: string; duration_sec: number }> {
+    const fd = new FormData();
+    fd.append('text', text);
+    return this.request('POST', '/multimodal/synthesize-speech', fd);
+  }
+
   // ============ Convenience Methods ============
 
   async quickGenerate(prompt: string): Promise<string> {
@@ -848,6 +1168,165 @@ export class SloughGPTClient {
       messages: [{ role: 'user', content: message }],
     });
     return result.message.content;
+  }
+
+  // ============ Security ============
+
+  async getSecurityKeys(): Promise<any[]> {
+    const response = await this.request('GET', '/security/keys');
+    return Array.isArray(response) ? response : response.keys || response;
+  }
+
+  async createSecurityKey(name: string, scopes?: string[], expiresInDays?: number): Promise<any> {
+    const body: any = { name };
+    if (scopes) body.scopes = scopes;
+    if (expiresInDays !== undefined) body.expires_in_days = expiresInDays;
+    return this.request('POST', '/security/keys', body);
+  }
+
+  async getSecurityKey(keyId: string): Promise<any> {
+    return this.request('GET', `/security/keys/${keyId}`);
+  }
+
+  async deleteSecurityKey(keyId: string): Promise<any> {
+    return this.request('DELETE', `/security/keys/${keyId}`);
+  }
+
+  async rotateSecurityKey(keyId: string): Promise<any> {
+    return this.request('POST', `/security/keys/${keyId}/rotate`);
+  }
+
+  async validateSecurityKey(key: string): Promise<any> {
+    return this.request('POST', '/security/keys/validate', { key });
+  }
+
+  // ============ Tenants ============
+
+  async listTenants(): Promise<any[]> {
+    const response = await this.request('GET', '/tenants');
+    return Array.isArray(response) ? response : response.tenants || response;
+  }
+
+  async getTenant(tenantId: string): Promise<any> {
+    return this.request('GET', `/tenants/${tenantId}`);
+  }
+
+  async createTenant(name: string, options?: Record<string, any>): Promise<any> {
+    return this.request('POST', '/tenants', { name, ...options });
+  }
+
+  async updateTenant(tenantId: string, options: Record<string, any>): Promise<any> {
+    return this.request('PUT', `/tenants/${tenantId}`, options);
+  }
+
+  async deleteTenant(tenantId: string): Promise<any> {
+    return this.request('DELETE', `/tenants/${tenantId}`);
+  }
+
+  async getTenantStats(tenantId: string): Promise<any> {
+    return this.request('GET', `/tenants/${tenantId}/stats`);
+  }
+
+  // ============ Profiles ============
+
+  async listProfiles(): Promise<any[]> {
+    const response = await this.request('GET', '/profiles');
+    return Array.isArray(response) ? response : response.profiles || response;
+  }
+
+  async getProfile(profileId: string): Promise<any> {
+    return this.request('GET', `/profiles/${profileId}`);
+  }
+
+  async applyProfile(profileId: string): Promise<any> {
+    return this.request('POST', '/profiles/apply', { profile_id: profileId });
+  }
+
+  async getActiveProfile(): Promise<any> {
+    return this.request('GET', '/profiles/active');
+  }
+
+  async recommendProfile(): Promise<any> {
+    return this.request('GET', '/profiles/recommend');
+  }
+
+  // ============ Workspaces ============
+
+  async listWorkspaces(): Promise<any[]> {
+    const response = await this.request('GET', '/workspaces');
+    return Array.isArray(response) ? response : response.workspaces || response;
+  }
+
+  async getWorkspace(workspaceId: string): Promise<any> {
+    return this.request('GET', `/workspaces/${workspaceId}`);
+  }
+
+  async createWorkspace(name: string, options?: Record<string, any>): Promise<any> {
+    return this.request('POST', '/workspaces', { name, ...options });
+  }
+
+  async addWorkspaceMember(workspaceId: string, userId: string, role: string = 'member'): Promise<any> {
+    return this.request('POST', `/workspaces/${workspaceId}/members`, { user_id: userId, role });
+  }
+
+  async openwebuiDatasets(): Promise<any[]> {
+    const response = await this.request('GET', '/openwebui/datasets');
+    return response.datasets;
+  }
+
+  async openwebuiCheckpoints(): Promise<any[]> {
+    const response = await this.request('GET', '/openwebui/checkpoints');
+    return response.checkpoints;
+  }
+
+  async openwebuiStartTraining(datasetId: string, method: string = 'finetune'): Promise<any> {
+    return this.request('POST', '/openwebui/training/start', { dataset_id: datasetId, method });
+  }
+
+  async openwebuiStopTraining(): Promise<any> {
+    return this.request('POST', '/openwebui/training/stop');
+  }
+
+  async openwebuiTrainingStatus(): Promise<any> {
+    return this.request('GET', '/openwebui/training/status');
+  }
+
+  // ============ Cloud Training ============
+
+  async cloudTrainingJobs(limit: number = 10): Promise<any[]> {
+    const response = await this.request('GET', `/cloud-training/jobs?limit=${limit}`);
+    return response.jobs;
+  }
+
+  async cloudTrainingSubmit(provider: string = 'local', datasetId: string = ''): Promise<any> {
+    return this.request('POST', '/cloud-training/submit', { provider, dataset_id: datasetId });
+  }
+
+  async cloudTrainingStatus(jobId: string): Promise<any> {
+    return this.request('GET', `/cloud-training/${jobId}/status`);
+  }
+
+  async cloudTrainingCancel(jobId: string): Promise<any> {
+    return this.request('POST', `/cloud-training/${jobId}/cancel`);
+  }
+
+  // ============ Plugins ============
+
+  async pluginsList(): Promise<any[]> {
+    const response = await this.request('GET', '/plugins');
+    return response.plugins;
+  }
+
+  async pluginsEnable(pluginName: string): Promise<any> {
+    return this.request('POST', `/plugins/${pluginName}/enable`);
+  }
+
+  async pluginsDisable(pluginName: string): Promise<any> {
+    return this.request('POST', `/plugins/${pluginName}/disable`);
+  }
+
+  async pluginsReload(): Promise<any> {
+    return this.request('POST', '/plugins/reload');
   }
 }
 

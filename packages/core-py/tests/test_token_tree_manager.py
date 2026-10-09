@@ -2,12 +2,13 @@
 
 import pytest
 
-from domains.training.token_tree_manager import (
+import domain.training._internal.token_tree_manager as token_tree_manager_module
+from domain.training._internal.token_tree_manager import (
     DEFAULT_CORPUS,
+    TokenTree,
     TokenTreeManager,
     get_token_tree_manager,
 )
-import domains.training.token_tree_manager as token_tree_manager_module
 
 
 @pytest.fixture(autouse=True)
@@ -42,6 +43,56 @@ class TestLazyTraining:
         assert get_token_tree_manager() is TokenTreeManager.get_instance()
 
 
+class TestDefaultCache:
+    """Persisted default tree: cached on first train, loaded (not retrained) later."""
+
+    def _purge_cache(self):
+        cache_dir = token_tree_manager_module._SAVE_DIR / "_cache"
+        if cache_dir.exists():
+            import shutil
+
+            shutil.rmtree(cache_dir)
+
+    def test_default_tree_is_persisted_to_cache(self):
+        self._purge_cache()
+        first = TokenTreeManager.get_instance()
+        tree = first.get_tree(vocab_size=64, embed_dim=8)
+        assert tree.is_trained
+        cache_path = first._default_cache_path(64, 8)
+        assert (str(cache_path) + ".meta.json").endswith("_default_v64_e8.meta.json")
+        # The cache lives under _cache/ and must never surface as a saved tree.
+        saved = first.list_saved()
+        assert not any(
+            entry["name"].startswith("_cache_") or "_default_" in entry["name"] for entry in saved
+        )
+
+    def test_cold_start_reuses_cache(self):
+        self._purge_cache()
+        first = TokenTreeManager.get_instance()
+        expected = first.get_tree(vocab_size=64, embed_dim=8)
+        assert expected.is_trained
+
+        # Simulate a fresh process: new singleton with no in-memory tree
+        # must reconstruct from the persisted cache instead of retraining.
+        TokenTreeManager._instance = None
+        second = TokenTreeManager.get_instance()
+        tree = second.get_tree(vocab_size=64, embed_dim=8)
+        assert tree is not expected
+        assert tree.encode("the quick brown fox") == expected.encode("the quick brown fox")
+        assert second._load_cached_default(64, 8) is not None
+
+    def test_cache_is_param_keyed(self):
+        self._purge_cache()
+        first = TokenTreeManager.get_instance()
+        a = first.get_tree(vocab_size=64, embed_dim=8)
+
+        TokenTreeManager._instance = None
+        second = TokenTreeManager.get_instance()
+        b = second.get_tree(vocab_size=32, embed_dim=8)
+        assert a.vocab_size != b.vocab_size
+        assert second._default_cache_path(64, 8) != second._default_cache_path(32, 8)
+
+
 class TestExplicitTrain:
     def test_train_replaces_tree(self):
         mgr = TokenTreeManager.get_instance()
@@ -62,7 +113,8 @@ class TestExplicitTrain:
 
 class TestAdopt:
     def test_adopt_replaces_current_tree(self):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
+
         mgr = TokenTreeManager.get_instance()
         before = mgr.get_tree(vocab_size=32)
         external = TokenTree().train(["zzz zzz qux qux"], vocab_size=16, min_frequency=1)
@@ -72,8 +124,9 @@ class TestAdopt:
         assert mgr.get_tree() is not before
 
     def test_adopt_tree_saves_and_queries(self, tmp_path, monkeypatch):
-        from domains.training.token_tree import TokenTree
-        monkeypatch.setattr("domains.training.token_tree_manager._SAVE_DIR", tmp_path)
+        from domain.training._internal.token_tree import TokenTree
+
+        monkeypatch.setattr("domain.training._internal.token_tree_manager._SAVE_DIR", tmp_path)
         mgr = TokenTreeManager.get_instance()
         external = TokenTree().train(["the quick brown fox"], vocab_size=32, min_frequency=1)
         mgr.adopt(external)
@@ -223,6 +276,59 @@ class TestMatrixSummary:
         out = mgr.matrix_summary(top_k=4)
         assert out["matrix"] is None
         assert out["most_energetic"] == []
+
+
+class TestManagerResultCache:
+    def test_similar_is_memoized(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.similar("quick")
+        assert mgr.similar("quick") is first
+
+    def test_embedding_info_is_memoized(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.embedding_info("quick")
+        assert mgr.embedding_info("quick") is first
+
+    def test_matrix_summary_is_memoized(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.matrix_summary(top_k=4)
+        assert mgr.matrix_summary(top_k=4) is first
+
+    def test_top_k_is_part_of_the_key(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        assert mgr.matrix_summary(top_k=2) is not mgr.matrix_summary(top_k=4)
+
+    def test_training_a_new_tree_drops_cache(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        first = mgr.similar("quick")
+        mgr.train(["apple banana apple banana"], vocab_size=32, embed_dim=8)
+        second = mgr.similar("apple")
+        assert first is not second
+        assert mgr._result_cache_tree_id == id(mgr.get_tree())
+
+    def test_unknown_token_is_not_cached(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        with pytest.raises(KeyError):
+            mgr.similar("zzz-no-such-token")
+        with pytest.raises(KeyError):
+            mgr.similar("zzz-no-such-token")
+        assert all("zzz-no-such-token" not in k for k in mgr._result_cache)
+
+    def test_lru_evicts_beyond_cap(self):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        mgr._result_cache_max = 2
+        mgr.similar("quick")
+        mgr.similar("quick", top_k=3)
+        mgr.similar("quick", top_k=5)
+        similar_keys = [k for k in mgr._result_cache if k.startswith("similar:")]
+        assert len(similar_keys) == 2
 
 
 class TestTopMerges:
@@ -441,3 +547,78 @@ class TestCompare:
                 mgr.compare(bad, "plain")
             with pytest.raises(ValueError):
                 mgr.compare("plain", bad)
+
+
+class TestServerResponseCache:
+    """stats/top_merges/search_merges/vocab_entries must be memoized per tree
+    (like similar/embedding_info/matrix_summary already are). These four are the
+    heavy paths behind the WRN slow-request logs on /token-tree/stats (~3.1s)
+    and /token-tree/merges (~1.3s): they recomputed full-tree math every
+    request instead of routing through the manager's per-tree LRU.
+    """
+
+    def _wrap_tree(self, tree) -> None:
+        """Install recompute counters on a tree instance.
+
+        All spies share one ``self._calls`` dict so tests can wrap a post-adopt
+        tree and still reason about cumulative recomputes.
+        """
+        if not hasattr(self, "_calls"):
+            self._calls = {"stats": 0, "top_merges": 0, "search_merges": 0, "vocab_entries": 0}
+
+        for name in self._calls:
+            orig = getattr(tree, name)
+
+            def spy(*args, _n=name, _o=orig, **kwargs):
+                self._calls[_n] += 1
+                return _o(*args, **kwargs)
+
+            setattr(tree, name, spy)
+
+    def _fresh(self, vocab_size: int = 102):
+        mgr = TokenTreeManager.get_instance()
+        mgr.train(list(DEFAULT_CORPUS), vocab_size=vocab_size, embed_dim=8)
+        self._wrap_tree(mgr.get_tree())
+        return mgr
+
+    def test_stats_cached_across_requests(self):
+        mgr = self._fresh()
+        a = mgr.stats()
+        b = mgr.stats()
+        assert a is b
+        assert self._calls["stats"] == 1
+
+    def test_top_merges_cached_across_requests(self):
+        mgr = self._fresh()
+        a = mgr.top_merges(top_n=10)
+        b = mgr.top_merges(top_n=10)
+        assert a is b
+        assert self._calls["top_merges"] == 1
+
+    def test_search_merges_cached_per_query(self):
+        mgr = self._fresh()
+        a = mgr.search_merges("quick", limit=10)
+        b = mgr.search_merges("quick", limit=10)
+        assert a is b
+        c = mgr.search_merges("fox", limit=8)
+        assert c is not a
+        assert self._calls["search_merges"] == 2
+
+    def test_vocab_entries_cached_per_page(self):
+        mgr = self._fresh()
+        a = mgr.vocab_entries(offset=0, limit=50)
+        b = mgr.vocab_entries(offset=0, limit=50)
+        assert a is b
+        c = mgr.vocab_entries(offset=50, limit=50)
+        assert c is not a
+        assert self._calls["vocab_entries"] == 2
+
+    def test_cache_invalidated_on_adopt(self):
+        mgr = self._fresh()
+        first = mgr.stats()
+        other = TokenTree().train(list(DEFAULT_CORPUS), vocab_size=64, embed_dim=8)
+        mgr.adopt(other)
+        self._wrap_tree(mgr.get_tree())  # spy the *new* tree post-adopt
+        second = mgr.stats()
+        assert second is not first  # identity proves cache was dropped
+        assert self._calls["stats"] == 2  # ...and the new tree actually recomputed

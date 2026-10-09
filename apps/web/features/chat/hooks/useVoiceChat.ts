@@ -187,12 +187,20 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   const settingsRef = useRef(settings)
 
   // Keep settings ref in sync
-  useEffect(() => { settingsRef.current = settings }, [settings])
+  useEffect(() => {
+    settingsRef.current = settings
+  }, [settings])
 
   // Keep refs in sync
-  useEffect(() => { onMessageRef.current = onMessage }, [onMessage])
-  useEffect(() => { onExchangeRef.current = onExchange }, [onExchange])
-  useEffect(() => { stateRef.current = state }, [state])
+  useEffect(() => {
+    onMessageRef.current = onMessage
+  }, [onMessage])
+  useEffect(() => {
+    onExchangeRef.current = onExchange
+  }, [onExchange])
+  useEffect(() => {
+    stateRef.current = state
+  }, [state])
 
   // ── Interrupt detection ─────────────────────────────────────────────
 
@@ -242,7 +250,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
     audioMonitorRef.current.onLevel = null
     setMicLevel(0)
     if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach(t => t.stop())
+      micStreamRef.current.getTracks().forEach((t) => t.stop())
       micStreamRef.current = null
     }
   }, [])
@@ -349,141 +357,147 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
 
   // ── Speak response aloud (with interrupt support) ───────────────────
 
-  const speakResponse = useCallback(async (text: string): Promise<void> => {
-    speakingRef.current = true
-    startInterruptDetection()
+  const speakResponse = useCallback(
+    async (text: string): Promise<void> => {
+      speakingRef.current = true
+      startInterruptDetection()
 
-    try {
-      // Try server-side TTS first
-      const result = await voiceController.tts(text)
-      if (result.backend === 'hf-model' && result.audio) {
-        await voiceController.playAudio(result.audio, result.sample_rate)
+      try {
+        // Try server-side TTS first
+        const result = await voiceController.tts(text)
+        if (result.audio && result.backend !== 'browser-fallback') {
+          await voiceController.playAudio(result.audio, result.sample_rate)
+          speakingRef.current = false
+          stopInterruptDetection()
+          return
+        }
+      } catch {
+        // Fall through to browser TTS
+      }
+
+      // Browser speechSynthesis fallback — speak in sentences for interruptibility
+      if (!('speechSynthesis' in window)) {
         speakingRef.current = false
         stopInterruptDetection()
         return
       }
-    } catch {
-      // Fall through to browser TTS
-    }
 
-    // Browser speechSynthesis fallback — speak in sentences for interruptibility
-    if (!('speechSynthesis' in window)) {
+      const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text]
+      const { rate, pitch, voiceName } = settingsRef.current
+      for (const sentence of sentences) {
+        if (!speakingRef.current) break // interrupted
+        await new Promise<void>((resolve) => {
+          const utterance = new SpeechSynthesisUtterance(sentence.trim())
+          utterance.rate = rate
+          utterance.pitch = pitch
+          // Select voice by name if specified
+          if (voiceName) {
+            const voice = window.speechSynthesis.getVoices().find((v) => v.name === voiceName)
+            if (voice) utterance.voice = voice
+          }
+          utterance.onend = () => resolve()
+          utterance.onerror = () => resolve()
+          window.speechSynthesis.speak(utterance)
+        })
+      }
+
       speakingRef.current = false
       stopInterruptDetection()
-      return
-    }
-
-    const sentences = text.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [text]
-    const { rate, pitch, voiceName } = settingsRef.current
-    for (const sentence of sentences) {
-      if (!speakingRef.current) break // interrupted
-      await new Promise<void>((resolve) => {
-        const utterance = new SpeechSynthesisUtterance(sentence.trim())
-        utterance.rate = rate
-        utterance.pitch = pitch
-        // Select voice by name if specified
-        if (voiceName) {
-          const voice = window.speechSynthesis.getVoices().find(v => v.name === voiceName)
-          if (voice) utterance.voice = voice
-        }
-        utterance.onend = () => resolve()
-        utterance.onerror = () => resolve()
-        window.speechSynthesis.speak(utterance)
-      })
-    }
-
-    speakingRef.current = false
-    stopInterruptDetection()
-  }, [startInterruptDetection, stopInterruptDetection])
+    },
+    [startInterruptDetection, stopInterruptDetection],
+  )
 
   // ── Handle Submit (text → AI → speak) ──────────────────────────────
 
-  const handleSubmit = useCallback(async (text: string) => {
-    if (!text) return
-    setState('processing')
-    setResponseText('')
-    setErrorMessage(null)
+  const handleSubmit = useCallback(
+    async (text: string) => {
+      if (!text) return
+      setState('processing')
+      setResponseText('')
+      setErrorMessage(null)
 
-    onMessageRef.current(text)
+      onMessageRef.current(text)
 
-    // Create abort controller for interruptible generation
-    const controller = new AbortController()
-    abortControllerRef.current = controller
+      // Create abort controller for interruptible generation
+      const controller = new AbortController()
+      abortControllerRef.current = controller
 
-    try {
-      let fullResponse = ''
-      let sentenceBuffer = ''
-      let sentenceQueue: string[] = []
-      let speaking = false
+      try {
+        let fullResponse = ''
+        let sentenceBuffer = ''
+        const sentenceQueue: string[] = []
+        let speaking = false
 
-      const flushSentence = async (sentence: string) => {
-        if (!sentence.trim()) return
-        if (settingsRef.current.streamingTTS && !speakingRef.current) {
-          speaking = true
-          setState('speaking')
-          await speakResponse(sentence.trim())
-          speaking = false
-          if (stateRef.current === 'speaking') setState('processing')
-        }
-      }
-
-      for await (const token of chatController.stream(text)) {
-        fullResponse += token
-        setResponseText(fullResponse)
-
-        if (settingsRef.current.streamingTTS) {
-          // Accumulate tokens and detect sentence boundaries
-          sentenceBuffer += token
-          const sentenceMatch = sentenceBuffer.match(/^[^.!?]*[.!?]\s*/)
-          if (sentenceMatch) {
-            const sentence = sentenceMatch[0]
-            sentenceBuffer = sentenceBuffer.slice(sentence.length)
-            await flushSentence(sentence)
+        const flushSentence = async (sentence: string) => {
+          if (!sentence.trim()) return
+          if (settingsRef.current.streamingTTS && !speakingRef.current) {
+            speaking = true
+            setState('speaking')
+            await speakResponse(sentence.trim())
+            speaking = false
+            if (stateRef.current === 'speaking') setState('processing')
           }
         }
-      }
 
-      // Speak any remaining text in the buffer
-      if (settingsRef.current.streamingTTS && sentenceBuffer.trim()) {
-        await flushSentence(sentenceBuffer)
-      }
+        for await (const token of chatController.stream(text)) {
+          fullResponse += token
+          setResponseText(fullResponse)
 
-      // Record exchange
-      const exchange: VoiceExchange = {
-        id: `voice-${Date.now()}`,
-        userText: text,
-        assistantText: fullResponse,
-        timestamp: Date.now(),
-      }
-      conversationRef.current = [...conversationRef.current, exchange]
-      setConversation([...conversationRef.current])
-      onExchangeRef.current?.(exchange)
+          if (settingsRef.current.streamingTTS) {
+            // Accumulate tokens and detect sentence boundaries
+            sentenceBuffer += token
+            const sentenceMatch = sentenceBuffer.match(/^[^.!?]*[.!?]\s*/)
+            if (sentenceMatch) {
+              const sentence = sentenceMatch[0]
+              sentenceBuffer = sentenceBuffer.slice(sentence.length)
+              await flushSentence(sentence)
+            }
+          }
+        }
 
-      // If streaming TTS already spoke everything, just finish
-      if (settingsRef.current.streamingTTS && speakingRef.current) {
-        // Wait for any in-progress speech to finish
-      } else if (fullResponse && fullResponse.length > 1) {
-        // Non-streaming: speak full response
-        setState('speaking')
-        await speakResponse(fullResponse)
-      }
+        // Speak any remaining text in the buffer
+        if (settingsRef.current.streamingTTS && sentenceBuffer.trim()) {
+          await flushSentence(sentenceBuffer)
+        }
 
-      // Auto-resume listening
-      if (settingsRef.current.autoResume) {
-        setState('idle')
-        setTimeout(() => startListening(), AUTO_RESUME_DELAY_MS)
-      } else {
-        setState('idle')
+        // Record exchange
+        const exchange: VoiceExchange = {
+          id: `voice-${Date.now()}`,
+          userText: text,
+          assistantText: fullResponse,
+          timestamp: Date.now(),
+        }
+        conversationRef.current = [...conversationRef.current, exchange]
+        setConversation([...conversationRef.current])
+        onExchangeRef.current?.(exchange)
+
+        // If streaming TTS already spoke everything, just finish
+        if (settingsRef.current.streamingTTS && speakingRef.current) {
+          // Wait for any in-progress speech to finish
+        } else if (fullResponse && fullResponse.length > 1) {
+          // Non-streaming: speak full response
+          setState('speaking')
+          await speakResponse(fullResponse)
+        }
+
+        // Auto-resume listening
+        if (settingsRef.current.autoResume) {
+          setState('idle')
+          setTimeout(() => startListening(), AUTO_RESUME_DELAY_MS)
+        } else {
+          setState('idle')
+        }
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name !== 'AbortError') {
+          setErrorMessage(e.message || 'Could not generation')
+          setState('error')
+        }
+      } finally {
+        abortControllerRef.current = null
       }
-    } catch (e: unknown) {
-      if (e instanceof Error && e.name !== 'AbortError') {
-        setErrorMessage(e.message || 'Generation failed')
-        setState('error')
-      }
-    } finally {
-      abortControllerRef.current = null
-    }
-  }, [startListening, speakResponse])
+    },
+    [startListening, speakResponse],
+  )
 
   // ── Push-to-talk (hold spacebar to listen) ────────────────────────
 
@@ -497,7 +511,10 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
       if (e.code !== 'Space' || e.repeat) return
 
       e.preventDefault()
-      if (!pushToTalkActiveRef.current && (stateRef.current === 'idle' || stateRef.current === 'error')) {
+      if (
+        !pushToTalkActiveRef.current &&
+        (stateRef.current === 'idle' || stateRef.current === 'error')
+      ) {
         pushToTalkActiveRef.current = true
         startListening()
       }
@@ -547,7 +564,7 @@ export function useVoiceChat({ onMessage, onExchange }: VoiceChatCallbacks) {
   // ── Settings update ─────────────────────────────────────────────────
 
   const updateSettings = useCallback((partial: Partial<VoiceSettings>) => {
-    setSettingsState(prev => ({ ...prev, ...partial }))
+    setSettingsState((prev) => ({ ...prev, ...partial }))
   }, [])
 
   // ── Cleanup on unmount ────────────────────────────────────────────

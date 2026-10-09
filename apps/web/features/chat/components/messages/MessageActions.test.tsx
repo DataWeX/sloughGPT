@@ -2,6 +2,64 @@
  */
 import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  IconCopy: (props: any) => <span data-testid="icon-copy" {...props} />,
+  IconCheck: (props: any) => <span data-testid="icon-check" {...props} />,
+  IconRefresh: (props: any) => <span data-testid="icon-refresh" {...props} />,
+  IconEdit: (props: any) => <span data-testid="icon-edit" {...props} />,
+  IconStar: (props: any) => <span data-testid="icon-star" {...props} />,
+  IconTrash: (props: any) => <span data-testid="icon-trash" {...props} />,
+  IconThumbUp: (props: any) => <span data-testid="icon-thumb-up" {...props} />,
+  IconThumbDown: (props: any) => <span data-testid="icon-thumb-down" {...props} />,
+  IconSpeaker: (props: any) => <span data-testid="icon-speaker" {...props} />,
+  IconRewrite: (props: any) => <span data-testid="icon-rewrite" {...props} />,
+  IconExplain: (props: any) => <span data-testid="icon-explain" {...props} />,
+  IconTranslate: (props: any) => <span data-testid="icon-translate" {...props} />,
+  IconPlay: (props: any) => <span data-testid="icon-play" {...props} />,
+  IconMapPin: (props: any) => <span data-testid="icon-map-pin" {...props} />,
+  IconCheckCircle: (props: any) => <span data-testid="icon-check-circle" {...props} />,
+
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}))
+
 import { MessageActions } from './MessageActions'
 
 afterEach(() => {
@@ -192,7 +250,7 @@ describe('MessageActions', () => {
     expect(screen.queryByRole('button', { name: /delete message/i })).not.toBeInTheDocument()
   })
 
-  it('calls onDelete with messageId when delete clicked', () => {
+  it('calls onDelete with messageId when delete clicked', async () => {
     const onDelete = vi.fn()
     render(<MessageActions content="text" messageId="m1" onDelete={onDelete} />)
     fireEvent.click(screen.getByRole('button', { name: /delete message/i }))

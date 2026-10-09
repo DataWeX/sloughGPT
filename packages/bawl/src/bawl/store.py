@@ -19,8 +19,9 @@ Usage:
 
 import json
 import sys
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator, Union
+from typing import Union
 
 from .parse import Page
 

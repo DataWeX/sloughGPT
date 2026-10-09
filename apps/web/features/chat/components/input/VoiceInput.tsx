@@ -32,7 +32,6 @@ interface SpeechRecognitionAlternative {
 }
 
 interface SpeechRecognition extends EventTarget {
-  new (): SpeechRecognition
   continuous: boolean
   interimResults: boolean
   lang: string
@@ -45,15 +44,20 @@ interface SpeechRecognition extends EventTarget {
   onresult: ((event: SpeechRecognitionEvent) => void) | null
 }
 
+interface SpeechRecognitionCtor {
+  new (): SpeechRecognition
+}
+
 declare global {
   interface Window {
-    SpeechRecognition?: SpeechRecognition
-    webkitSpeechRecognition?: SpeechRecognition
+    SpeechRecognition?: SpeechRecognitionCtor
+    webkitSpeechRecognition?: SpeechRecognitionCtor
   }
 }
 
 interface VoiceInputProps {
   onTranscript: (text: string) => void
+  onAudioRecorded?: (blob: Blob) => void
   onSend?: () => void
   disabled?: boolean
 }
@@ -66,19 +70,26 @@ function WaveformIcon({ className, isActive }: { className?: string; isActive: b
   return <AudioWaveform className={className} isActive={isActive} />
 }
 
-export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) {
+export function VoiceInput({ onTranscript, onAudioRecorded, onSend, disabled }: VoiceInputProps) {
   const [isListening, setIsListening] = useState(false)
   const [isBrowserSupported, setIsBrowserSupported] = useState(false)
   const [isServerSupported, setIsServerSupported] = useState(false)
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
 
   useEffect(() => {
+    let active = true
     setIsBrowserSupported('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
-    multimodalController.getCapabilities().then(caps => {
-      if (caps.speech_to_text) setIsServerSupported(true)
-    }).catch(() => /* voice capabilities unavailable — browser-only mode */ {})
+    multimodalController
+      .getCapabilities()
+      .then((caps) => {
+        if (active && caps.speech_to_text) setIsServerSupported(true)
+      })
+      .catch(() => /* voice capabilities unavailable — browser-only mode */ {})
+    return () => {
+      active = false
+    }
   }, [])
 
   const startBrowserListening = useCallback(() => {
@@ -125,24 +136,30 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
       }
 
       mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop())
+        stream.getTracks().forEach((t) => t.stop())
         setIsListening(false)
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         if (blob.size === 0) return
-        const fd = new FormData()
-        fd.append('file', blob, 'recording.webm')
-        fd.append('language', 'en')
+
+        // Pass audio blob to parent for voice message saving
+        if (onAudioRecorded) {
+          onAudioRecorded(blob)
+        }
+
         try {
           const result = await multimodalController.transcribeAudio(blob as File)
           if (result.text) onTranscript(result.text)
         } catch (err) {
           const msg = extractErrorMessage(err)
           if (msg.includes('501') || msg.includes('not available')) {
-            addToast('Server speech recognition not available — use Chrome or Edge for browser voice input', 'error')
+            addToast(
+              'Speech recognition not available — use Chrome or Edge for browser voice input',
+              'error',
+            )
           } else {
-            addToast('Audio transcription failed', 'error')
+            addToast('Could not audio transcription', 'error')
           }
-          logger.error('Audio transcription failed', { exception: String(err) })
+          logger.error('Could not audio transcription', { exception: String(err) })
         }
       }
 
@@ -158,9 +175,9 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
       } else {
         addToast('Could not access microphone', 'error')
       }
-      logger.error('Microphone access failed', { exception: String(err) })
+      logger.error('Could not microphone access', { exception: String(err) })
     }
-  }, [onTranscript])
+  }, [onTranscript, onAudioRecorded])
 
   const toggleListening = useCallback(() => {
     if (isListening) {
@@ -173,7 +190,13 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
     } else if (isServerSupported) {
       startServerListening()
     }
-  }, [isListening, isBrowserSupported, isServerSupported, startBrowserListening, startServerListening])
+  }, [
+    isListening,
+    isBrowserSupported,
+    isServerSupported,
+    startBrowserListening,
+    startServerListening,
+  ])
 
   const supported = isBrowserSupported || isServerSupported
 
@@ -184,13 +207,7 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
       </span>
       {isListening && (
         <div className="hidden sm:flex items-center px-1" aria-hidden="true">
-          <VoiceWaveform
-            level={0.6}
-            bars={12}
-            variant="mic"
-            width={48}
-            height={20}
-          />
+          <VoiceWaveform level={0.6} bars={12} variant="mic" width={48} height={20} />
         </div>
       )}
       <Button
@@ -199,15 +216,25 @@ export function VoiceInput({ onTranscript, onSend, disabled }: VoiceInputProps) 
         onClick={toggleListening}
         disabled={disabled || !supported}
         className={cn(
-          "h-10 w-10 transition-all duration-200",
-          isListening
-            ? "text-destructive hover:text-destructive"
-            : "text-muted-foreground",
-          (disabled || !supported) && "opacity-50 cursor-not-allowed"
+          'h-10 w-10 transition-all duration-200',
+          isListening ? 'text-destructive hover:text-destructive' : 'text-muted-foreground',
+          (disabled || !supported) && 'opacity-50 cursor-not-allowed',
         )}
-        aria-label={isListening ? "Stop listening" : supported ? "Start voice input" : "Voice input unavailable — use Chrome or Edge"}
+        aria-label={
+          isListening
+            ? 'Stop listening'
+            : supported
+              ? 'Start voice input'
+              : 'Voice input unavailable — use Chrome or Edge'
+        }
         aria-pressed={isListening}
-        title={!supported ? 'Voice input requires Chrome, Edge, or Safari' : isListening ? 'Stop listening' : 'Voice input'}
+        title={
+          !supported
+            ? 'Voice input requires Chrome, Edge, or Safari'
+            : isListening
+              ? 'Stop listening'
+              : 'Voice input'
+        }
       >
         {isListening ? (
           <WaveformIcon className="h-5 w-5" isActive={true} />

@@ -45,7 +45,12 @@ interface DialogRootProps {
   children: ReactNode
 }
 
-function Dialog({ open: controlledOpen, defaultOpen = false, onOpenChange, children }: DialogRootProps) {
+function Dialog({
+  open: controlledOpen,
+  defaultOpen = false,
+  onOpenChange,
+  children,
+}: DialogRootProps) {
   const [internalOpen, setInternalOpen] = useState(defaultOpen)
   const isControlled = controlledOpen !== undefined
   const open = isControlled ? controlledOpen : internalOpen
@@ -70,41 +75,45 @@ function Dialog({ open: controlledOpen, defaultOpen = false, onOpenChange, child
 
 /* ── Trigger ────────────────────────────────────────────────────── */
 
-const DialogTrigger = forwardRef<HTMLButtonElement, HTMLAttributes<HTMLButtonElement> & { asChild?: boolean }>(
-  ({ onClick, asChild, children, ...props }, ref) => {
-    const { onOpenChange } = useDialogContext()
+const DialogTrigger = forwardRef<
+  HTMLButtonElement,
+  HTMLAttributes<HTMLButtonElement> & { asChild?: boolean }
+>(({ onClick, asChild, children, ...props }, ref) => {
+  const { onOpenChange } = useDialogContext()
 
-    const triggerProps = {
+  const triggerProps = {
+    ref,
+    type: 'button' as const,
+    'aria-haspopup': 'dialog' as const,
+    onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
+      onClick?.(e)
+      onOpenChange(true)
+    },
+  }
+
+  if (asChild && children && typeof children === 'object' && 'props' in children) {
+    const child = children as ReactElement<Record<string, unknown>>
+    const childProps = child.props as Record<string, unknown>
+    const childOnClick = childProps.onClick as
+      ((e: ReactMouseEvent<HTMLButtonElement>) => void) | undefined
+    return cloneElement(child, {
+      ...triggerProps,
+      ...childProps,
       ref,
-      type: 'button' as const,
-      'aria-haspopup': 'dialog' as const,
       onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
+        childOnClick?.(e)
         onClick?.(e)
         onOpenChange(true)
       },
-    }
+    })
+  }
 
-    if (asChild && children && typeof children === 'object' && 'props' in children) {
-      const child = children as ReactElement
-      return cloneElement(child, {
-        ...triggerProps,
-        ...child.props,
-        ref,
-        onClick: (e: ReactMouseEvent<HTMLButtonElement>) => {
-          child.props.onClick?.(e)
-          onClick?.(e)
-          onOpenChange(true)
-        },
-      })
-    }
-
-    return (
-      <button {...triggerProps} {...props}>
-        {children}
-      </button>
-    )
-  },
-)
+  return (
+    <button {...triggerProps} {...props}>
+      {children}
+    </button>
+  )
+})
 DialogTrigger.displayName = 'DialogTrigger'
 
 /* ── Portal ─────────────────────────────────────────────────────── */
@@ -146,25 +155,42 @@ DialogOverlay.displayName = 'DialogOverlay'
 const DialogContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => {
     const { open, onOpenChange, titleId, descriptionId } = useDialogContext()
-    const contentRef = useRef<HTMLDivElement>(null)
     const previousActiveElement = useRef<HTMLElement | null>(null)
+
+    // The node only exists once the portal has mounted, so effects key off it
+    // instead of assuming the content is in the tree on the first render.
+    const [contentNode, setContentNode] = useState<HTMLDivElement | null>(null)
+
+    const assignRef = useCallback(
+      (n: HTMLDivElement | null) => {
+        setContentNode(n)
+        if (typeof ref === 'function') ref(n)
+        else if (ref) ref.current = n
+      },
+      [ref],
+    )
 
     // Store previously focused element and restore on close
     useLayoutEffect(() => {
-      if (open) {
-        previousActiveElement.current = document.activeElement as HTMLElement
+      if (open && contentNode) {
+        if (!previousActiveElement.current) {
+          previousActiveElement.current = document.activeElement as HTMLElement
+        }
         // Focus the content
-        requestAnimationFrame(() => {
-          const focusable = contentRef.current?.querySelector<HTMLElement>(
+        const raf = requestAnimationFrame(() => {
+          const focusable = contentNode.querySelector<HTMLElement>(
             'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
           )
           focusable?.focus()
         })
-      } else if (previousActiveElement.current) {
+        return () => cancelAnimationFrame(raf)
+      }
+      if (!open && previousActiveElement.current) {
         previousActiveElement.current.focus()
         previousActiveElement.current = null
       }
-    }, [open])
+      return undefined
+    }, [open, contentNode])
 
     // Escape key
     useEffect(() => {
@@ -181,14 +207,12 @@ const DialogContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>
 
     // Focus trap
     useEffect(() => {
-      if (!open) return
-      const container = contentRef.current
-      if (!container) return
+      if (!open || !contentNode) return
 
       const handler = (e: KeyboardEvent) => {
         if (e.key !== 'Tab') return
 
-        const focusable = container.querySelectorAll<HTMLElement>(
+        const focusable = contentNode.querySelectorAll<HTMLElement>(
           'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
         )
         if (focusable.length === 0) return
@@ -211,7 +235,7 @@ const DialogContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>
 
       document.addEventListener('keydown', handler)
       return () => document.removeEventListener('keydown', handler)
-    }, [open])
+    }, [open, contentNode])
 
     // Prevent body scroll when open
     useEffect(() => {
@@ -226,38 +250,47 @@ const DialogContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>
     if (!open) return null
 
     return (
-      <div
-        ref={(node) => {
-          ;(contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node
-          if (typeof ref === 'function') ref(node)
-          else if (ref) ref.current = node
-        }}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={descriptionId}
-        className={cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-6 text-foreground shadow-xl',
-          'rounded-lg',
-          'max-h-[min(90dvh,56.25rem)] overflow-y-auto',
-          'animate-in fade-in-0 zoom-in-95 duration-200',
-          className,
-        )}
-        {...props}
-      >
-        {children}
-        <button
-          type="button"
-          aria-label="Close"
-          className="absolute right-4 top-4 rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2"
-          onClick={() => onOpenChange(false)}
+      <DialogPortal>
+        <div
+          ref={assignRef}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          className={cn(
+            'fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border bg-background p-6 text-foreground shadow-xl',
+            'rounded-lg',
+            'max-h-[min(90dvh,56.25rem)] overflow-y-auto',
+            'animate-in fade-in-0 zoom-in-95 duration-200',
+            className,
+          )}
+          {...props}
         >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-          <span className="sr-only">Close</span>
-        </button>
-      </div>
+          {children}
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute right-4 top-4 rounded-md opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:ring-offset-2"
+            onClick={() => onOpenChange(false)}
+          >
+            <svg
+              className="h-4 w-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+            <span className="sr-only">Close</span>
+          </button>
+        </div>
+      </DialogPortal>
     )
   },
 )
@@ -290,13 +323,25 @@ function DialogHeader({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 }
 
 function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)} {...props} />
+  return (
+    <div
+      className={cn('flex flex-col-reverse gap-2 sm:flex-row sm:justify-end', className)}
+      {...props}
+    />
+  )
 }
 
 const DialogTitle = forwardRef<HTMLHeadingElement, HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => {
     const { titleId } = useDialogContext()
-    return <h2 ref={ref} id={titleId} className={cn('text-lg font-semibold leading-none tracking-tight', className)} {...props} />
+    return (
+      <h2
+        ref={ref}
+        id={titleId}
+        className={cn('text-lg font-semibold leading-none tracking-tight', className)}
+        {...props}
+      />
+    )
   },
 )
 DialogTitle.displayName = 'DialogTitle'
@@ -304,7 +349,14 @@ DialogTitle.displayName = 'DialogTitle'
 const DialogDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<HTMLParagraphElement>>(
   ({ className, ...props }, ref) => {
     const { descriptionId } = useDialogContext()
-    return <p ref={ref} id={descriptionId} className={cn('text-sm text-muted-foreground', className)} {...props} />
+    return (
+      <p
+        ref={ref}
+        id={descriptionId}
+        className={cn('text-sm text-muted-foreground', className)}
+        {...props}
+      />
+    )
   },
 )
 DialogDescription.displayName = 'DialogDescription'

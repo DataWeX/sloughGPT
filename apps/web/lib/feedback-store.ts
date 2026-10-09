@@ -8,6 +8,7 @@ import type { UserAdapterStats } from './user-adapters-controller'
 import { useErrorStore, addGlobalError } from './error-store'
 import { useApiMonitor } from './api-monitor-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { trackEvent } from '@/lib/dev-log'
 
 interface FeedbackState {
   stats: FeedbackStats | null
@@ -40,6 +41,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
   error: null,
 
   recordFeedback: async (params) => {
+    trackEvent('feedback_recorded', { rating: params.rating, conversation_id: params.conversationId })
     set({ isLoading: true, error: null })
     try {
       await feedbackController.recordFeedbackWorkflow(params)
@@ -48,7 +50,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
       set({ isLoading: false })
       return true
     } catch (err) {
-      const error = extractErrorMessage(err, 'Failed to record feedback')
+      const error = extractErrorMessage(err, 'Could not record feedback')
       if (useApiMonitor.getState().status === 'reloading') return false
       addGlobalError(err, 'Feedback')
       set({ isLoading: false, error })
@@ -70,8 +72,8 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
 
   fetchAdapterStats: async () => {
     try {
-      const adapterStats = await userAdaptersController.list()
-      set({ adapterStats })
+      const res = await userAdaptersController.list()
+      set({ adapterStats: res?.stats ?? null })
     } catch (err) {
       if (useApiMonitor.getState().status === 'reloading') return
       const msg = extractErrorMessage(err)
@@ -101,7 +103,7 @@ export const useFeedbackStore = create<FeedbackState>()((set, get) => ({
       set({ isLoading: false })
       return true
     } catch (err) {
-      const error = extractErrorMessage(err, 'Failed to trigger action')
+      const error = extractErrorMessage(err, 'Could not trigger action')
       useErrorStore.getState().addError(err, { source: 'Workflow Action' })
       set({ isLoading: false, error })
       return false

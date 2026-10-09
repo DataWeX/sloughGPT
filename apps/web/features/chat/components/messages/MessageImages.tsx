@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import { cn } from '@sloughgpt/strui'
 import { ImageLightbox } from './ImageLightbox'
 import type { ImageAttachment } from './../input/ImageUpload'
@@ -10,7 +10,7 @@ interface MessageImagesProps {
   role: 'user' | 'assistant'
 }
 
-export function MessageImages({ images, role }: MessageImagesProps) {
+export const MessageImages = memo(function MessageImages({ images, role }: MessageImagesProps) {
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null)
 
   if (!images || images.length === 0) return null
@@ -46,4 +46,4 @@ export function MessageImages({ images, role }: MessageImagesProps) {
       )}
     </>
   )
-}
+})

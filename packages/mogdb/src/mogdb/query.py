@@ -15,8 +15,7 @@ Supports MongoDB-style query operators::
 """
 
 import re
-from typing import Any, Dict, List
-
+from typing import Any
 
 _TYPE_MAP = {
     "string": str,
@@ -69,7 +68,6 @@ def _compare(value: Any, op: str, expected: Any) -> bool:
         return isinstance(expected, list) and value not in expected
     if op == "$regex":
         if isinstance(expected, str):
-            flags = 0
             # $options is handled at a higher level — this is just the regex itself
             return bool(re.search(expected, str(value)))
         return False
@@ -96,7 +94,7 @@ def _compare(value: Any, op: str, expected: Any) -> bool:
     return True
 
 
-def _match_ops(value: Any, ops: Dict[str, Any]) -> bool:
+def _match_ops(value: Any, ops: dict[str, Any]) -> bool:
     """Match a value against multiple operators (e.g. ``{"$gt": 5, "$lt": 10}``).
 
     Handles ``$regex`` + ``$options`` combination.
@@ -130,7 +128,7 @@ def _match_ops(value: Any, ops: Dict[str, Any]) -> bool:
     return True
 
 
-def _get_field(doc: Dict[str, Any], field: str) -> Any:
+def _get_field(doc: dict[str, Any], field: str) -> Any:
     """Get nested field value via dot-separated path."""
     parts = field.split(".")
     current: Any = doc
@@ -142,7 +140,7 @@ def _get_field(doc: Dict[str, Any], field: str) -> Any:
     return current
 
 
-def match_document(doc: Dict[str, Any], query: Dict[str, Any]) -> bool:
+def match_document(doc: dict[str, Any], query: dict[str, Any]) -> bool:
     """Return True if *doc* matches the MongoDB-style *query*.
 
     Operates as an implicit ``$and`` at the top level.
@@ -169,9 +167,7 @@ def match_document(doc: Dict[str, Any], query: Dict[str, Any]) -> bool:
 
         value = _get_field(doc, field)
 
-        if isinstance(condition, dict) and any(
-            k.startswith("$") for k in condition
-        ):
+        if isinstance(condition, dict) and any(k.startswith("$") for k in condition):
             if not _match_ops(value, condition):
                 return False
         else:

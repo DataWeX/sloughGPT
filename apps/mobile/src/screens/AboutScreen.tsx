@@ -3,6 +3,7 @@ import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
 import {ScreenShell} from '../components/ScreenShell';
 import {Icon} from '../components/Icon';
+import {APP_VERSION} from '../constants';
 
 const FEATURES = [
   {icon: 'message-circle', label: 'Real-time chat with streaming'},
@@ -33,7 +34,7 @@ export function AboutScreen() {
           SloughGPT
         </Text>
         <Text fontSize={13} color="$color10" marginTop={4}>
-          v1.0.0
+          v{APP_VERSION}
         </Text>
       </YStack>
 

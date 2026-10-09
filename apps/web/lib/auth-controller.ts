@@ -4,6 +4,17 @@ export interface UserInfo {
   id: string
   username: string
   email: string
+  role: string
+  status: string
+  tenant_id: string
+}
+
+export interface WorkspaceInfo {
+  id: string
+  name: string
+  tenant_id: string
+  description: string
+  role: string
 }
 
 export interface AuthResponse {
@@ -12,7 +23,9 @@ export interface AuthResponse {
 }
 
 export interface VerifyResponse {
-  data: { valid: boolean }
+  valid: boolean
+  subject?: string
+  expires?: number
 }
 
 export const authController = {
@@ -34,5 +47,16 @@ export const authController = {
     return apiPost<VerifyResponse>('/auth/verify', undefined, {
       headers: { Authorization: `Bearer ${token}` },
     })
+  },
+
+  async getWorkspaces(token: string): Promise<WorkspaceInfo[]> {
+    try {
+      const resp = await apiGet<{ data: WorkspaceInfo[] }>('/workspaces', undefined, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      return resp.data ?? []
+    } catch {
+      return []
+    }
   },
 }

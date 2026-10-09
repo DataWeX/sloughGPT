@@ -4,6 +4,7 @@ import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: vi.fn((...args: any[]) => args.join(' ')),
+  Spinner: () => <span data-testid="spinner">loading</span>,
   IconX: () => <span data-testid="icon-x">x</span>,
   IconEye: () => <span data-testid="icon-eye">eye</span>,
   IconStar: () => <span data-testid="icon-star">star</span>,
@@ -13,6 +14,12 @@ vi.mock('@sloughgpt/strui', () => ({
   IconSparkle: () => <span data-testid="icon-sparkle">sparkle</span>,
   IconCode: () => <span data-testid="icon-code">code</span>,
   IconBolt: () => <span data-testid="icon-bolt">bolt</span>,
+  IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
+  IconSummary: () => <span data-testid="icon-summary">summary</span>,
+  IconChart: () => <span data-testid="icon-chart">chart</span>,
+  IconDownload: () => <span data-testid="icon-download">download</span>,
+  IconCopy: () => <span data-testid="icon-copy">copy</span>,
+  IconCheck: () => <span data-testid="icon-check">check</span>,
   Button: ({ children, onClick, variant, size, className, ...rest }: any) => (
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} {...rest}>{children}</button>
   ),
@@ -128,7 +135,17 @@ describe('ChatToolPanel', () => {
     const { container } = render(<ChatToolPanel open={false} onClose={onClose} sessionId="s1" />)
     const panel = container.querySelector('#chat-tool-panel')
     expect(panel?.className).toContain('w-0')
+    expect(panel?.className).toContain('border-l-0')
+    expect(panel?.className).not.toContain('border-l ')
     expect(screen.queryByText('Tools')).toBeNull()
+  })
+
+  it('paints left border only when open', () => {
+    const { container } = render(<ChatToolPanel open={true} onClose={onClose} sessionId="s1" />)
+    const panel = container.querySelector('#chat-tool-panel')
+    expect(panel?.className).toContain('w-[var(--tool-panel-width)]')
+    expect(panel?.className).not.toContain('border-l-0')
+    expect(panel?.className).toContain('border-l')
   })
 
   it('switches to vision mode when eye icon clicked', () => {

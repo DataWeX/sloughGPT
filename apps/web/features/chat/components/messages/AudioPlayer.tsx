@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, memo } from 'react'
 import { cn, IconPlay, IconStop } from '@sloughgpt/strui'
 import { formatDuration } from '@/lib/format-bytes'
 
@@ -10,7 +10,7 @@ interface AudioPlayerProps {
   className?: string
 }
 
-export function AudioPlayer({ src, durationMs = 0, className }: AudioPlayerProps) {
+export const AudioPlayer = memo(function AudioPlayer({ src, durationMs = 0, className }: AudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -79,4 +79,4 @@ export function AudioPlayer({ src, durationMs = 0, className }: AudioPlayerProps
       </div>
     </div>
   )
-}
+})

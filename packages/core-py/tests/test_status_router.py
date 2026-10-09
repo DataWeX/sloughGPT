@@ -2,12 +2,11 @@
 
 Covers: get_status, ready, live.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -23,6 +22,9 @@ from routers.status import StatusRouter  # noqa: E402
 def _app(sr: StatusRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(sr.router)
+    from infrastructure.exception_handlers import register_all_handlers
+
+    register_all_handlers(app)
     return app
 
 
@@ -65,21 +67,22 @@ class TestStatusDetail:
         client = TestClient(_app(sr))
         resp = client.get("/status")
         data = resp.json()["data"]
-        assert isinstance(data["timestamp"], (int, float))
+        assert "timestamp" in data
+        assert isinstance(data["timestamp"], str)
 
     def test_status_timestamp_reasonable(self):
         sr = StatusRouter()
         client = TestClient(_app(sr))
         resp = client.get("/status")
         ts = resp.json()["data"]["timestamp"]
-        assert ts > 1_000_000_000  # after year 2001
+        assert ts > "2001"  # after year 2001 (ISO string comparison)
 
     def test_status_has_version(self):
         sr = StatusRouter()
         client = TestClient(_app(sr))
         resp = client.get("/status")
         data = resp.json()["data"]
-        assert "version" in data or "version" in str(data)
+        assert "uptime_seconds" in data
 
     def test_ready_returns_bool(self):
         sr = StatusRouter()

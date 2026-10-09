@@ -38,7 +38,6 @@ import argparse
 import errno
 import json
 import logging
-import re
 import threading
 import webbrowser
 from datetime import date
@@ -50,7 +49,7 @@ from urllib.parse import parse_qs, urlparse
 import app_planner.core as core_module
 
 from . import config
-from .kanban import KanbanStore, Board
+from .kanban import Board, KanbanStore
 from .sync import sync_notes_to_board
 
 logger = logging.getLogger("app_planner.gui")
@@ -164,7 +163,7 @@ class GuiHandler(BaseHTTPRequestHandler):
             if path == "/api/notes":
                 return self._handle_list_notes(query)
             if path.startswith("/api/notes/"):
-                note_id = _unquote_path(path[len("/api/notes/"):])
+                note_id = _unquote_path(path[len("/api/notes/") :])
                 if not note_id:
                     return self._error(400, "missing note id")
                 return self._handle_get_note(note_id)
@@ -192,7 +191,8 @@ class GuiHandler(BaseHTTPRequestHandler):
         if q:
             ql = q.lower()
             notes = [
-                n for n in notes
+                n
+                for n in notes
                 if ql in n.title.lower() or ql in " ".join(n.tags).lower() or ql in n.body.lower()
             ]
         self._send(200, {"notes": [_note_to_dict(n) for n in notes[:limit]]})
@@ -229,11 +229,14 @@ class GuiHandler(BaseHTTPRequestHandler):
             by_status[n.status or "open"] = by_status.get(n.status or "open", 0) + 1
             if n.date_str == today_str:
                 today += 1
-        self._send(200, {
-            "total": len(notes),
-            "today": today,
-            "by_status": by_status,
-        })
+        self._send(
+            200,
+            {
+                "total": len(notes),
+                "today": today,
+                "by_status": by_status,
+            },
+        )
 
     # ------------------------------------------------------------------
     # POST / PUT / DELETE
@@ -264,7 +267,7 @@ class GuiHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if not path.startswith("/api/notes/"):
             return self._error(404, f"not found: {path}")
-        note_id = _unquote_path(path[len("/api/notes/"):])
+        note_id = _unquote_path(path[len("/api/notes/") :])
         try:
             body = self._read_json()
             return self._handle_update_note(note_id, body)
@@ -278,7 +281,7 @@ class GuiHandler(BaseHTTPRequestHandler):
         path = urlparse(self.path).path
         if not path.startswith("/api/notes/"):
             return self._error(404, f"not found: {path}")
-        note_id = _unquote_path(path[len("/api/notes/"):])
+        note_id = _unquote_path(path[len("/api/notes/") :])
         try:
             with self.stores.lock:
                 ok = self.stores.note_store.delete(note_id)
@@ -376,11 +379,15 @@ class GuiHandler(BaseHTTPRequestHandler):
 
     def _handle_sync(self) -> None:
         with self.stores.lock:
-            added, updated, total = sync_notes_to_board(self.stores.note_store, self.stores.kanban_store)
+            added, updated, total = sync_notes_to_board(
+                self.stores.note_store, self.stores.kanban_store
+            )
         self._send(200, {"added": added, "updated": updated, "total": total})
 
 
-def _bind_server(host: str, port: int, handler, note_store, kanban_store, attempts: int = 20) -> GuiServer:
+def _bind_server(
+    host: str, port: int, handler, note_store, kanban_store, attempts: int = 20
+) -> GuiServer:
     """Bind a GuiServer, stepping past ports already in use.
 
     Tries *port*, then ``port + 1`` ... ``port + attempts - 1`` when an
@@ -407,6 +414,7 @@ def _bind_server(host: str, port: int, handler, note_store, kanban_store, attemp
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
@@ -820,7 +828,7 @@ function bindBoard() {
         const res = await api("/api/board/move", {method:"POST", body:JSON.stringify({id, column:target})});
         await refresh();
         toast(`Moved \u2192 ${target}`);
-        if (res.card) {} 
+        if (res.card) {}
       } catch (err) { toast(err.message, true); }
     });
   });

@@ -1,5 +1,6 @@
-"""Tests for domains/training/train_pipeline.py (100% coverage target)."""
+"""Tests for domain.training._internal.train_pipeline.py (100% coverage target)."""
 
+import json
 import logging
 import math
 import os
@@ -11,10 +12,10 @@ import warnings
 import numpy as np
 import pytest
 
-from domains.training import train_pipeline as tp
-from domains.training.lr_schedulers import create_scheduler
-from domains.training.slonet import SloAdam, SloAdamW
-from domains.training.train_pipeline import (
+from domain.training._internal import train_pipeline as tp
+from domain.training._internal.lr_schedulers import create_scheduler
+from domain.training._internal.slonet import SloAdam, SloAdamW
+from domain.training._internal.train_pipeline import (
     CheckpointManager,
     SloughGPTTrainer,
     TextDataset,
@@ -114,36 +115,38 @@ class TestPrepareData:
         assert len(data) == len(DATA_TEXT)
         assert n_chars == len(set(DATA_TEXT))
         assert sorted(stoi) == sorted(set(DATA_TEXT))
-        assert itos == {i: c for i, c in enumerate(sorted(set(DATA_TEXT)))}
+        assert itos == dict(enumerate(sorted(set(DATA_TEXT))))
 
     def test_datasets_dir_fallback(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        d = tmp_path / "datasets" / "corpus2"
+        d = tmp_path / "data" / "corpus2"
         d.mkdir(parents=True)
-        (d / "input.txt").write_text("hello world hello", encoding="utf-8")
+        (d / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data("corpus2", block_size=8)
-        assert len(data) == len("hello world hello")
-        assert n_chars == len(set("hello world hello"))
+        assert len(data) == len(DATA_TEXT)
+        assert n_chars == len(set(DATA_TEXT))
 
     def test_list_with_ratios(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
-        b = tmp_path / "datasets" / "b"
+        a = tmp_path / "data" / "a"
+        b = tmp_path / "data" / "b"
         a.mkdir(parents=True)
         b.mkdir(parents=True)
-        (a / "input.txt").write_text("aaaa", encoding="utf-8")
-        (b / "input.txt").write_text("bbbb", encoding="utf-8")
+        a_text = "".join(chr(65 + i) for i in range(12)) * 40
+        b_text = "".join(chr(75 + i) for i in range(12)) * 40
+        (a / "input.txt").write_text(a_text, encoding="utf-8")
+        (b / "input.txt").write_text(b_text, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data([("a", 0.5), ("b", 1.0)], block_size=8)
-        assert len(data) == 2 + 4
-        assert n_chars == 2
+        assert len(data) == int(len(a_text) * 0.5) + len(b_text)
+        assert n_chars == len(set(a_text + b_text))
 
     def test_list_with_ratios_missing_dataset_warns(self, tmp_path, monkeypatch, caplog):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
+        a = tmp_path / "data" / "a"
         a.mkdir(parents=True)
-        (a / "input.txt").write_text("hello there", encoding="utf-8")
+        (a / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data([("a", 1.0), ("missing", 0.5)], block_size=8)
-        assert len(data) == len("hello there")
+        assert len(data) == len(DATA_TEXT)
         assert any("not found" in r.message for r in caplog.records)
 
     def test_list_with_ratios_no_valid_raises(self, tmp_path, monkeypatch):
@@ -153,23 +156,70 @@ class TestPrepareData:
 
     def test_plain_list(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
-        b = tmp_path / "datasets" / "b"
+        a = tmp_path / "data" / "a"
+        b = tmp_path / "data" / "b"
         a.mkdir(parents=True)
         b.mkdir(parents=True)
-        (a / "input.txt").write_text("xyz", encoding="utf-8")
-        (b / "input.txt").write_text("uv", encoding="utf-8")
+        a_text = DATA_TEXT
+        b_text = DATA_TEXT[:256]
+        (a / "input.txt").write_text(a_text, encoding="utf-8")
+        (b / "input.txt").write_text(b_text, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data(["a", "b"], block_size=8)
-        assert len(data) == 5
+        assert len(data) == len(a_text) + len(b_text)
 
     def test_plain_list_missing_skipped(self, tmp_path, monkeypatch, caplog):
         monkeypatch.chdir(tmp_path)
-        a = tmp_path / "datasets" / "a"
+        a = tmp_path / "data" / "a"
         a.mkdir(parents=True)
-        (a / "input.txt").write_text("xyz", encoding="utf-8")
+        (a / "input.txt").write_text(DATA_TEXT, encoding="utf-8")
         data, n_chars, stoi, itos = prepare_data(["a", "nope"], block_size=8)
-        assert len(data) == 3
+        assert len(data) == len(DATA_TEXT)
         assert any("not found" in r.message for r in caplog.records)
+
+    def test_feed_source_loads_live_corpus(self, tmp_path, monkeypatch):
+        from domain.training._internal import training_feed as tf
+
+        seed_pairs = [
+            {
+                "messages": [
+                    {"role": "user", "content": "can the model read from a live feed?"},
+                    {
+                        "role": "assistant",
+                        "content": "yes, the training flow accepts a feed url or feed:source",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "how does the offset cursor behave across pages?"},
+                    {
+                        "role": "assistant",
+                        "content": "each page reports next_offset so consumers resume where they stopped",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "what happens when the corpus grows mid training?"},
+                    {
+                        "role": "assistant",
+                        "content": "the sampler refreshes on a timer and ingests new records",
+                    },
+                ]
+            },
+        ]
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_text("\n".join(json.dumps(r) for r in seed_pairs) + "\n", encoding="utf-8")
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+
+        data, n_chars, stoi, itos = prepare_data("feed:api-conversations", block_size=16)
+        expected_text = tf.load_feed_text("feed:api-conversations")
+        assert isinstance(data, np.ndarray)
+        assert data.dtype == np.int64
+        assert len(data) == len(expected_text)
+        assert n_chars == len(set(expected_text))
+        assert stoi == {c: i for i, c in enumerate(sorted(set(expected_text)))}
 
 
 # =============================================================================
@@ -230,7 +280,7 @@ class TestMakeJsonSafe:
 
 class TestLoadSoulCheckpoint:
     def _make_profile(self, metadata=None):
-        from domains.inference.slo_format import SloProfile
+        from domain.inference._internal.slo_format import SloProfile
 
         p = SloProfile(name="assistant")
         if metadata is not None:
@@ -238,7 +288,7 @@ class TestLoadSoulCheckpoint:
         return p
 
     def test_full_training_state(self, monkeypatch, tmp_path):
-        from domains.inference import slo_format
+        from domain.inference._internal import slo_format
 
         profile = self._make_profile(
             metadata={
@@ -261,7 +311,7 @@ class TestLoadSoulCheckpoint:
         assert result["scheduler_state_dict"] == {"last_lr": 0.0001}
 
     def test_no_metadata(self, monkeypatch, tmp_path):
-        from domains.inference import slo_format
+        from domain.inference._internal import slo_format
 
         profile = self._make_profile()
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))
@@ -272,7 +322,7 @@ class TestLoadSoulCheckpoint:
         assert "scheduler_state_dict" not in result
 
     def test_training_state_not_dict(self, monkeypatch, tmp_path):
-        from domains.inference import slo_format
+        from domain.inference._internal import slo_format
 
         profile = self._make_profile(metadata={"training_state": "nope"})
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))
@@ -328,9 +378,7 @@ class TestBuildTrainingStateMetadata:
             def state_dict(self, params=None):
                 return ["not", "a", "dict"]
 
-        state = _build_training_state_metadata(
-            optimizer=_Strange(), include_optimizer_state=False
-        )
+        state = _build_training_state_metadata(optimizer=_Strange(), include_optimizer_state=False)
         assert state["optimizer"] == ["not", "a", "dict"]
 
     def test_optimizer_state_dict_raises_skipped(self):
@@ -343,7 +391,9 @@ class TestBuildTrainingStateMetadata:
 
     def test_scheduler_state_dict(self):
         opt = SloAdam(lr=0.001, weight_decay=0.0)
-        sched = create_scheduler(opt, scheduler_type="cosine", total_steps=10, warmup_steps=1, min_lr=1e-5)
+        sched = create_scheduler(
+            opt, scheduler_type="cosine", total_steps=10, warmup_steps=1, min_lr=1e-5
+        )
         state = _build_training_state_metadata(scheduler=sched)
         assert "scheduler" in state
 
@@ -360,16 +410,23 @@ class TestBuildTrainingStateMetadata:
         opt = SloAdam(lr=0.0, weight_decay=0.0)  # decayed lr = 0
         params = [np.array([1.0, 2.0])]
         state = _build_training_state_metadata(
-            optimizer=opt, params=params, step=10, epoch=2, initial_lr=0.003,
+            optimizer=opt,
+            params=params,
+            step=10,
+            epoch=2,
+            initial_lr=0.003,
         )
         assert state["optimizer"]["hyperparameters"]["lr"] == 0.003
 
     def test_initial_lr_stored_in_scheduler(self):
         """initial_lr is persisted in scheduler state for resume."""
         opt = SloAdam(lr=0.001, weight_decay=0.0)
-        sched = create_scheduler(opt, scheduler_type="cosine", total_steps=100, warmup_steps=10, min_lr=1e-5)
+        sched = create_scheduler(
+            opt, scheduler_type="cosine", total_steps=100, warmup_steps=10, min_lr=1e-5
+        )
         state = _build_training_state_metadata(
-            scheduler=sched, initial_lr=0.003,
+            scheduler=sched,
+            initial_lr=0.003,
         )
         assert state["scheduler"]["initial_lr"] == 0.003
 
@@ -460,7 +517,7 @@ class TestCheckpointManager:
         assert "model_state_dict" in bundle
 
     def test_load_from_path_npz(self, tmp_path, monkeypatch):
-        from domains.training.slonet import save_checkpoint_npz
+        from domain.training._internal.slonet import save_checkpoint_npz
 
         m = _manager(tmp_path)
         path = str(m.checkpoint_dir / "step_7.npz")
@@ -476,14 +533,14 @@ class TestCheckpointManager:
         assert any("Unsupported checkpoint format" in r.message for r in caplog.records)
 
     def test_is_resumable_true_for_soul_and_npz(self, tmp_path):
-        m = _manager(tmp_path)
+        _manager(tmp_path)
         (tmp_path / "ck" / "model.soul").write_bytes(b"x")
         (tmp_path / "ck" / "model.npz").write_bytes(b"x")
         assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.soul"))
         assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.npz"))
 
     def test_is_resumable_false_for_missing_and_unsupported(self, tmp_path):
-        m = _manager(tmp_path)
+        _manager(tmp_path)
         (tmp_path / "ck" / "notes.txt").write_text("not a checkpoint")
         assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.soul")) is False
         assert CheckpointManager.is_resumable(str(tmp_path / "ck" / "model.pt")) is False
@@ -621,9 +678,9 @@ class TestCheckpointManager:
         assert m.latest_path() == str(real)
 
     def test_save_checkpoint_npz_atomic_no_tmp_left(self, tmp_path):
-        from domains.training.slonet import load_checkpoint_npz, save_checkpoint_npz
+        from domain.training._internal.slonet import load_checkpoint_npz, save_checkpoint_npz
 
-        m = _manager(tmp_path)
+        _manager(tmp_path)
         p = tmp_path / "ck" / "step_7.npz"
         out = save_checkpoint_npz(str(p), {"w": np.array([1.0, 2.0])}, {"step": 7})
         assert out == str(p)
@@ -632,9 +689,9 @@ class TestCheckpointManager:
         assert load_checkpoint_npz(str(p))["step"] == 7
 
     def test_save_checkpoint_npz_failure_leaves_no_artifact(self, tmp_path, monkeypatch):
-        from domains.training.slonet import save_checkpoint_npz
+        from domain.training._internal.slonet import save_checkpoint_npz
 
-        m = _manager(tmp_path)
+        _manager(tmp_path)
 
         def boom(*args, **kwargs):
             raise RuntimeError("disk full")
@@ -668,16 +725,29 @@ class TestTrainerInit:
         assert t.vocab_size == len(set(DATA_TEXT))
 
     def test_legacy_vocab_size(self, data_path, tmp_path):
-        t = SloughGPTTrainer(data_path, n_embed=16, n_layer=1, n_head=2, block_size=8,
-                             vocab_size=48, max_steps=1,
-                             checkpoint_dir=str(tmp_path / "ck"))
+        t = SloughGPTTrainer(
+            data_path,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=8,
+            vocab_size=48,
+            max_steps=1,
+            checkpoint_dir=str(tmp_path / "ck"),
+        )
         assert t.vocab_size == 48
         assert t.config.vocab_size == 48
 
     def test_legacy_no_vocab_uses_data(self, data_path, tmp_path):
-        t = SloughGPTTrainer(data_path, n_embed=16, n_layer=1, n_head=2, block_size=8,
-                             max_steps=1,
-                             checkpoint_dir=str(tmp_path / "ck"))
+        t = SloughGPTTrainer(
+            data_path,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=8,
+            max_steps=1,
+            checkpoint_dir=str(tmp_path / "ck"),
+        )
         assert t.vocab_size == len(set(DATA_TEXT))
 
     def test_config_explicit_vocab_wins(self, data_path, tmp_path):
@@ -800,7 +870,7 @@ class TestTrainStep:
         assert math.isfinite(m["loss"])
 
     def test_scheduler_steps(self, data_path, tmp_path):
-        t = make_trainer(data_path, tiny_config(tmp_path))
+        t = make_trainer(data_path, tiny_config(tmp_path, warmup_steps=0))
         lr_before = t.scheduler.get_last_lr()[0]
         t.train_step()
         lr_after = t.scheduler.get_last_lr()[0]
@@ -952,10 +1022,54 @@ class TestTrain:
         assert t._best_model_path is not None
         assert t._patience_counter == 0
 
+    def test_trains_from_feed_source(self, tmp_path, monkeypatch):
+        from domain.training._internal import training_feed as tf
+
+        seed_pairs = [
+            {
+                "messages": [
+                    {"role": "user", "content": "can the model read from a live feed?"},
+                    {
+                        "role": "assistant",
+                        "content": "yes, the training flow accepts a feed url or feed:source",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "how does the offset cursor behave across pages?"},
+                    {
+                        "role": "assistant",
+                        "content": "each page reports next_offset so consumers resume where they stopped",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "what happens when the corpus grows mid training?"},
+                    {
+                        "role": "assistant",
+                        "content": "the sampler refreshes on a timer and ingests new records",
+                    },
+                ]
+            },
+        ]
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_text("\n".join(json.dumps(r) for r in seed_pairs) + "\n", encoding="utf-8")
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+
+        cfg = tiny_config(tmp_path, max_steps=2)
+        t = make_trainer("feed:api-conversations", cfg)
+        r = t.train()
+        assert r.success is True
+        assert r.global_step == 2
+        assert math.isfinite(r.final_loss)
+        assert os.path.exists(r.model_path)
+        assert t.is_training is False
+
     def test_save_best_only_skips_worse_periodic_saves(self, data_path, tmp_path):
-        cfg = tiny_config(
-            tmp_path, max_steps=3, checkpoint_interval=1, save_best_only=True
-        )
+        cfg = tiny_config(tmp_path, max_steps=3, checkpoint_interval=1, save_best_only=True)
         t = make_trainer(data_path, cfg)
         losses = iter([1.0, 2.0, 3.0])
         real_save = t.save_checkpoint
@@ -980,9 +1094,7 @@ class TestTrain:
         assert t._best_checkpoint_loss == 1.0
 
     def test_save_best_only_off_saves_every_periodic(self, data_path, tmp_path):
-        cfg = tiny_config(
-            tmp_path, max_steps=3, checkpoint_interval=1, save_best_only=False
-        )
+        cfg = tiny_config(tmp_path, max_steps=3, checkpoint_interval=1, save_best_only=False)
         t = make_trainer(data_path, cfg)
         losses = iter([3.0, 2.0, 1.0])
         real_save = t.save_checkpoint
@@ -1044,13 +1156,25 @@ class TestTrain:
         cfg = tiny_config(tmp_path, max_steps=2)
         t = make_trainer(data_path, cfg)
         events = []
-        r = t.train(on_progress=events.append)
+        t.train(on_progress=events.append)
         assert events
         ev = events[0]
-        assert set(ev) >= {"global_step", "epoch", "epochs", "steps_per_epoch",
-                           "progress_percent", "train_loss", "eval_loss",
-                           "learning_rate", "done", "done_reason",
-                           "total_steps", "steps_per_sec", "eta_s", "elapsed_s"}
+        assert set(ev) >= {
+            "global_step",
+            "epoch",
+            "epochs",
+            "steps_per_epoch",
+            "progress_percent",
+            "train_loss",
+            "eval_loss",
+            "learning_rate",
+            "done",
+            "done_reason",
+            "total_steps",
+            "steps_per_sec",
+            "eta_s",
+            "elapsed_s",
+        }
         assert ev["epochs"] == 1
         assert ev["progress_percent"] < 100
         assert ev["total_steps"] >= ev["global_step"]
@@ -1163,7 +1287,9 @@ class TestTrain:
             r = t.train(resume=True, resume_path=None)
         assert r.global_step == 2
         assert r.success is True
-        assert any("Resume requested but no checkpoint found" in rec.message for rec in caplog.records)
+        assert any(
+            "Resume requested but no checkpoint found" in rec.message for rec in caplog.records
+        )
 
     def test_resume_explicit_bad_path_raises(self, data_path, tmp_path):
         cfg = tiny_config(tmp_path, max_steps=2)
@@ -1226,7 +1352,6 @@ class TestTrain:
         with pytest.raises(ValueError, match="resume_checkpoint must be a checkpoint bundle dict"):
             t.train(resume=True, resume_checkpoint="models/some.soul")
 
-
     def test_max_steps_break(self, data_path, tmp_path):
         cfg = tiny_config(tmp_path, max_steps=1)
         t = make_trainer(data_path, cfg)
@@ -1247,7 +1372,8 @@ class TestSaveCheckpoint:
         assert t._last_checkpoint_path is not None
         assert t._last_checkpoint_path.endswith(".soul")
         assert os.path.exists(t._last_checkpoint_path)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(t._last_checkpoint_path)
         assert profile.metadata["vocab_size"] == t.vocab_size
         assert profile.metadata["chars"] is not None
@@ -1263,7 +1389,8 @@ class TestSaveCheckpoint:
     def test_periodic_checkpoint_keeps_optimizer_state(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         t.save_checkpoint({"eval_loss": 1.5})
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(t._last_checkpoint_path)
         ts = profile.metadata["training_state"]
         assert "state" in ts["optimizer"]
@@ -1271,7 +1398,8 @@ class TestSaveCheckpoint:
     def test_final_checkpoint_strips_optimizer_state(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
         t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(t._last_checkpoint_path)
         ts = profile.metadata["training_state"]
         assert "hyperparameters" in ts["optimizer"]
@@ -1284,8 +1412,10 @@ class TestSaveCheckpoint:
         assert (tmp_path / "ck" / "model.soul.meta.json").is_file()
         assert not [p for p in (tmp_path / "ck").iterdir() if p.suffix == ".tmp"]
 
-    def test_save_soul_meta_failure_leaves_no_partial_artifact(self, data_path, tmp_path, monkeypatch):
-        import domains.inference.slo_format as slo_format
+    def test_save_soul_meta_failure_leaves_no_partial_artifact(
+        self, data_path, tmp_path, monkeypatch
+    ):
+        import domain.inference._internal.slo_format as slo_format
 
         def boom(*args, **kwargs):
             raise RuntimeError("meta write failed")
@@ -1304,7 +1434,7 @@ class TestSaveCheckpoint:
         def fake_time():
             return next(ticks)
 
-        monkeypatch.setattr("domains.training.train_pipeline.time.time", fake_time)
+        monkeypatch.setattr("domain.training._internal.train_pipeline.time.time", fake_time)
         # INFO/DEBUG log records (if the CLI configured an active slo.trainer
         # logger) each consume a fake time.time tick via Logger.makeRecord,
         # which would break the timestamp arithmetic below. Disable the logger
@@ -1315,12 +1445,13 @@ class TestSaveCheckpoint:
     def test_rolling_save_keeps_max_checkpoints(self, data_path, tmp_path, monkeypatch):
         t = make_trainer(data_path, tiny_config(tmp_path, max_checkpoints=3))
         self._monotonic_time(monkeypatch, 1_700_000_000)
+        written = []
         for i in range(7):
             t.save_checkpoint({"eval_loss": 1.0 + i})
+            written.append(os.path.basename(t._last_checkpoint_path))
         souls = sorted(p.name for p in (tmp_path / "ckpts").glob("*.soul"))
         assert len(souls) == 3
-        assert souls[0].startswith(f"{tmp_path.name}_1700000004")
-        assert souls[-1].startswith(f"{tmp_path.name}_1700000006")
+        assert souls == sorted(set(written[-3:]))
         metas = list((tmp_path / "ckpts").glob("*.soul.meta.json"))
         assert len(metas) == 3
 
@@ -1333,7 +1464,7 @@ class TestSaveCheckpoint:
         t.save_checkpoint({"eval_loss": 0.1}, is_final=True)
         souls = list((tmp_path / "ckpts").glob("*.soul"))
         assert len(souls) == 1
-        assert souls[0].name.startswith(f"{tmp_path.name}_1700000003")
+        assert souls[0].name == os.path.basename(t._last_checkpoint_path)
         assert os.path.exists(t._last_checkpoint_path)
         assert t._best_model_path == t._last_checkpoint_path
         metas = list((tmp_path / "ckpts").glob("*.soul.meta.json"))
@@ -1371,6 +1502,120 @@ class TestSaveCheckpoint:
         assert not (tmp_path / "nope").exists()
 
 
+class TestFeedLiveRefresh:
+    """Live feed ingestion: FeedBatchSampler streams new records mid-training."""
+
+    def _seed_feed_corpus(self, tmp_path):
+        from domain.training._internal import training_feed as tf
+
+        seed_pairs = [
+            {
+                "messages": [
+                    {"role": "user", "content": "can the model read from a live feed?"},
+                    {
+                        "role": "assistant",
+                        "content": "yes, the training flow accepts a feed url or feed:source",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "how does the offset cursor behave across pages?"},
+                    {
+                        "role": "assistant",
+                        "content": "each page reports next_offset so consumers resume where they stopped",
+                    },
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "what happens when the corpus grows mid training?"},
+                    {
+                        "role": "assistant",
+                        "content": "the sampler refreshes on a timer and ingests new records",
+                    },
+                ]
+            },
+        ]
+        corpus = tmp_path / "data" / "api_conversations" / "corpus.jsonl"
+        corpus.parent.mkdir(parents=True)
+        corpus.write_text("\n".join(json.dumps(r) for r in seed_pairs) + "\n", encoding="utf-8")
+        return str(corpus), tf
+
+    def test_sampler_disabled_by_default(self, tmp_path, monkeypatch):
+        _corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        t = make_trainer("feed:api-conversations", tiny_config(tmp_path, max_steps=2))
+        assert t._feed_sampler is None
+
+    def test_sampler_enabled_with_refresh_interval(self, tmp_path, monkeypatch):
+        _corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        cfg = tiny_config(tmp_path, max_steps=3, feed_refresh_interval=0.01)
+        t = make_trainer("feed:api-conversations", cfg)
+        assert t._feed_sampler is not None
+        assert t._feed_sampler.stats()["pairs"] == 3
+        x, y = t.get_batch("train")
+        assert x.shape == (cfg.batch_size, cfg.block_size)
+        assert y.shape == (cfg.batch_size, cfg.block_size)
+        assert x.dtype == np.int64
+        # val stays on the fixed initial snapshot
+        vx, vy = t.get_batch("val")
+        assert vx.shape == (cfg.batch_size, cfg.block_size)
+
+    def test_new_records_stream_into_training(self, tmp_path, monkeypatch):
+        corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        cfg = tiny_config(tmp_path, max_steps=6, feed_refresh_interval=0.01)
+        t = make_trainer("feed:api-conversations", cfg)
+        assert t._feed_sampler.stats()["pairs"] == 3
+
+        extra = {
+            "messages": [
+                {"role": "user", "content": "does a newly appended record get ingested?"},
+                {
+                    "role": "assistant",
+                    "content": "yes, the sampler refreshes past its cursor and grows the window",
+                },
+            ]
+        }
+        with open(corpus, "a", encoding="utf-8") as f:
+            f.write(json.dumps(extra) + "\n")
+        time.sleep(0.05)  # let the refresh timer elapse before training
+
+        r = t.train()
+        assert r.success is True
+        assert r.global_step == 6
+        assert math.isfinite(r.final_loss)
+        assert t._feed_sampler.stats()["pairs"] == 4
+
+    def test_interval_on_non_feed_data_path_is_ignored(self, data_path, tmp_path, caplog):
+        cfg = tiny_config(tmp_path, max_steps=2, feed_refresh_interval=0.01)
+        t = make_trainer(data_path, cfg)
+        assert t._feed_sampler is None
+        assert "is not a feed spec" in caplog.text
+
+    def test_legacy_param_flows_into_config(self, tmp_path, monkeypatch):
+        _corpus, tf = self._seed_feed_corpus(tmp_path)
+        monkeypatch.setattr(tf, "_REPO_ROOT", tmp_path)
+        t = SloughGPTTrainer(
+            "feed:api-conversations",
+            config=None,
+            n_embed=16,
+            n_layer=1,
+            n_head=2,
+            block_size=8,
+            batch_size=2,
+            epochs=1,
+            max_steps=2,
+            lr=3e-4,
+            feed_refresh_interval=0.01,
+            checkpoint_dir=str(tmp_path / "ckpts"),
+        )
+        assert t.config.feed_refresh_interval == 0.01
+        assert t._feed_sampler is not None
+
+
 class TestSave:
     def test_save_sou(self, data_path, tmp_path):
         t = make_trainer(data_path, tiny_config(tmp_path))
@@ -1401,8 +1646,7 @@ class TestSave:
             warnings.simplefilter("always")
             t.save(out)
         assert not any(
-            issubclass(w.category, DeprecationWarning) and "format" in str(w.message)
-            for w in rec
+            issubclass(w.category, DeprecationWarning) and "format" in str(w.message) for w in rec
         )
         assert os.path.exists(out + ".soul")
 
@@ -1412,7 +1656,8 @@ class TestSave:
         t.current_epoch = 1
         out = str(tmp_path / "model_ts")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
         assert ts["step"] == 3
@@ -1424,7 +1669,8 @@ class TestSave:
         t._last_train_loss = 3.5
         out = str(tmp_path / "model_loss")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(out + ".soul")
         assert profile.final_train_loss == 3.5
 
@@ -1432,7 +1678,8 @@ class TestSave:
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "model_fresh")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(out + ".soul")
         assert profile.final_train_loss is None
         assert profile.final_val_loss is None
@@ -1441,7 +1688,8 @@ class TestSave:
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "model_noopt")
         t.save(out, include_optimizer_state=False)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
         assert "optimizer" in ts
@@ -1453,7 +1701,8 @@ class TestSave:
         t.global_step = 5
         out = str(tmp_path / "model_fullopt")
         t.save(out)
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         profile, _ = load_soul(out + ".soul")
         ts = profile.metadata["training_state"]
         assert ts["step"] == 5
@@ -1485,7 +1734,8 @@ class TestGenerate:
 
 class TestTokenizerTraining:
     def test_prepare_data_with_tokenizer(self, tmp_path):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
+
         p = tmp_path / "c.txt"
         p.write_text(DATA_TEXT, encoding="utf-8")
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
@@ -1497,7 +1747,8 @@ class TestTokenizerTraining:
         assert data.shape[0] < len(DATA_TEXT)  # BPE compresses below char count
 
     def test_trainer_uses_tokenizer_vocab(self, data_path, tmp_path):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
+
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         cfg = tiny_config(tmp_path)
         t = SloughGPTTrainer(data_path, config=cfg, tokenizer=tree)
@@ -1508,7 +1759,8 @@ class TestTokenizerTraining:
         assert len(t.data) < len(DATA_TEXT)
 
     def test_generate_round_trip_through_tokenizer(self, data_path, tmp_path):
-        from domains.training.token_tree import TokenTree
+        from domain.training._internal.token_tree import TokenTree
+
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         np.random.seed(0)
@@ -1518,8 +1770,9 @@ class TestTokenizerTraining:
         assert len(text) > 0
 
     def test_save_embeds_tokenizer(self, data_path, tmp_path):
-        from domains.training.token_tree import TokenTree
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+        from domain.training._internal.token_tree import TokenTree
+
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         out = str(tmp_path / "tok")
@@ -1531,7 +1784,8 @@ class TestTokenizerTraining:
         assert profile.metadata["vocab_size"] == tree.vocab_size
 
     def test_save_without_tokenizer_no_key(self, data_path, tmp_path):
-        from domains.inference.slo_format import load_soul
+        from domain.inference._internal.slo_format import load_soul
+
         t = make_trainer(data_path, tiny_config(tmp_path))
         out = str(tmp_path / "plain")
         t.save(out)
@@ -1539,8 +1793,9 @@ class TestTokenizerTraining:
         assert "tokenizer" not in profile.metadata
 
     def test_from_soul_round_trip_tree_tokenizer(self, data_path, tmp_path):
-        from domains.inference.slonet_provider import SloNetChatProvider
-        from domains.training.token_tree import TokenTree
+        from domain.inference._internal.slonet_provider import SloNetChatProvider
+        from domain.training._internal.token_tree import TokenTree
+
         tree = TokenTree().train(DATA_TEXT, vocab_size=64, embed_dim=0)
         t = SloughGPTTrainer(data_path, config=tiny_config(tmp_path), tokenizer=tree)
         out = str(tmp_path / "tok")
@@ -1572,8 +1827,9 @@ class TestMain:
 
             def train(self, **kw):
                 calls["train"].append(kw)
-                return tp.TrainResult(success=True, global_step=1, total_steps=1,
-                                      final_loss=0.5, epochs_completed=1)
+                return tp.TrainResult(
+                    success=True, global_step=1, total_steps=1, final_loss=0.5, epochs_completed=1
+                )
 
             def generate(self, prompt, max_tokens=200, temperature=0.8):
                 calls["generate"].append((prompt, max_tokens, temperature))
@@ -1585,29 +1841,41 @@ class TestMain:
         return calls
 
     def test_main_default(self, monkeypatch, tmp_path, data_path):
-        calls = self._run_main(monkeypatch, ["--data", data_path, "--max-steps", "1"], tp.SloughGPTTrainer)
+        calls = self._run_main(
+            monkeypatch, ["--data", data_path, "--max-steps", "1"], tp.SloughGPTTrainer
+        )
         assert calls["init"]["max_steps"] == 1
         assert calls["init"]["n_embed"] == 128
         assert calls["train"] == [{}]
         assert calls["generate"] == [("First", 200, 0.8)]
 
     def test_main_resume_path(self, monkeypatch, tmp_path, data_path):
-        calls = self._run_main(monkeypatch, ["--data", data_path, "--resume", "ck.soul"], tp.SloughGPTTrainer)
+        calls = self._run_main(
+            monkeypatch, ["--data", data_path, "--resume", "ck.soul"], tp.SloughGPTTrainer
+        )
         assert calls["train"] == [{"resume": True, "resume_path": "ck.soul"}]
 
     def test_main_resume_latest(self, monkeypatch, tmp_path, data_path):
-        calls = self._run_main(monkeypatch, ["--data", data_path, "--resume-latest"], tp.SloughGPTTrainer)
+        calls = self._run_main(
+            monkeypatch, ["--data", data_path, "--resume-latest"], tp.SloughGPTTrainer
+        )
         assert calls["train"] == [{"resume": True, "resume_path": None}]
 
     def test_main_lora_flags(self, monkeypatch, tmp_path, data_path):
-        calls = self._run_main(monkeypatch, ["--data", data_path, "--lora", "--lora-rank", "4",
-                                             "--lora-alpha", "8.0"], tp.SloughGPTTrainer)
+        calls = self._run_main(
+            monkeypatch,
+            ["--data", data_path, "--lora", "--lora-rank", "4", "--lora-alpha", "8.0"],
+            tp.SloughGPTTrainer,
+        )
         assert calls["init"]["use_lora"] is True
         assert calls["init"]["lora_rank"] == 4
         assert calls["init"]["lora_alpha"] == 8.0
 
     def test_main_resume_conflict_errors(self, monkeypatch, tmp_path, data_path):
-        monkeypatch.setattr(sys, "argv", ["train_pipeline.py", "--data", data_path,
-                                          "--resume", "a.soul", "--resume-latest"])
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["train_pipeline.py", "--data", data_path, "--resume", "a.soul", "--resume-latest"],
+        )
         with pytest.raises(SystemExit):
             tp.main()

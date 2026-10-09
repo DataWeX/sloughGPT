@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from domains.infrastructure.watchdog import HealthWatchdog, get_watchdog
+from domain.infrastructure._internal.watchdog import HealthWatchdog, get_watchdog
 
 
 @pytest.fixture
@@ -36,17 +36,23 @@ def _wait_until(predicate, timeout=5.0):
 
 class TestConfig:
     def test_sets_recovery_fn(self, started_watchdog):
-        fn = lambda: True
+        def fn():
+            return True
+
         started_watchdog.set_recovery_fn(fn)
         assert started_watchdog._recovery_fn is fn
 
     def test_sets_health_check_fn(self, started_watchdog):
-        fn = lambda: True
+        def fn():
+            return True
+
         started_watchdog.set_health_check_fn(fn)
         assert started_watchdog._health_check_fn is fn
 
     def test_sets_on_recovery(self, started_watchdog):
-        fn = lambda: None
+        def fn():
+            return None
+
         started_watchdog.set_on_recovery(fn)
         assert started_watchdog._on_recovery is fn
 
@@ -170,8 +176,8 @@ class TestRecovery:
         assert started_watchdog._consecutive_failures >= 0
 
     def test_default_check_uses_state_module(self, started_watchdog, monkeypatch):
-        import types
         import sys
+        import types
 
         fake = types.ModuleType("state")
         fake.model = None

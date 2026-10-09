@@ -4,14 +4,16 @@ Tests for the workflow router — status, start, stop, triggers.
 Uses a standalone FastAPI app with only the router under test.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.workflow import router
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -56,7 +58,7 @@ class TestWorkflowStatus:
         resp = client.get("/workflow/status")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
+    @patch("domain.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
     def test_get_status_import_error(self, _):
         resp = client.get("/workflow/status")
         assert resp.status_code == 503
@@ -115,7 +117,7 @@ class TestWorkflowStart:
         resp = client.post("/workflow/start", json={})
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
+    @patch("domain.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
     def test_start_import_error(self, _):
         resp = client.post("/workflow/start", json={})
         assert resp.status_code == 503
@@ -186,7 +188,7 @@ class TestWorkflowTrigger:
 
         resp = client.post("/workflow/trigger/invalid")
         assert resp.status_code == 400
-        assert "Unknown action" in resp.json()["detail"]
+        assert "Unknown action" in resp.json()["error"]
 
     @patch(WF_TARGET)
     def test_trigger_foobar(self, mock_get_wf):
@@ -194,7 +196,7 @@ class TestWorkflowTrigger:
 
         resp = client.post("/workflow/trigger/foobar")
         assert resp.status_code == 400
-        assert "foobar" in resp.json()["detail"]
+        assert "foobar" in resp.json()["error"]
 
     @patch(WF_TARGET)
     def test_trigger_aggregate_error(self, mock_get_wf):
@@ -214,7 +216,7 @@ class TestWorkflowTrigger:
         resp = client.post("/workflow/trigger/prune")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
+    @patch("domain.feedback.get_feedback_workflow", side_effect=ImportError("no module"))
     def test_trigger_import_error(self, _):
         resp = client.post("/workflow/trigger/aggregate")
         assert resp.status_code == 503
@@ -240,8 +242,7 @@ class TestWorkflowStartConfigPassthrough:
         mock_get_wf.return_value = wf
 
         resp = client.post("/workflow/start", json={"aggregate_interval_minutes": -5})
-        assert resp.status_code == 200
-        assert resp.json()["data"]["config"]["aggregate_interval_minutes"] == -5
+        assert resp.status_code == 422
 
     @patch(WF_TARGET)
     def test_config_passthrough_zero(self, mock_get_wf):
@@ -249,8 +250,7 @@ class TestWorkflowStartConfigPassthrough:
         mock_get_wf.return_value = wf
 
         resp = client.post("/workflow/start", json={"prune_interval_minutes": 0})
-        assert resp.status_code == 200
-        assert resp.json()["data"]["config"]["prune_interval_minutes"] == 0
+        assert resp.status_code == 422
 
     @patch(WF_TARGET)
     def test_config_assigned_to_workflow(self, mock_get_wf):

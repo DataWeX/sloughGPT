@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Skeleton, Chip } from '@sloughgpt/strui'
+import { cn, ActionCard, Button, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import {
   tokenTreeController,
@@ -30,7 +30,9 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
   const [lineageLoading, setLineageLoading] = useState(false)
 
   useEffect(() => {
-    tokenTreeController.getStats().then(setStats).catch(() => setStats(null))
+    let active = true
+    tokenTreeController.getStats().then(s => { if (active) setStats(s) }).catch(() => { if (active) setStats(null) })
+    return () => { active = false }
   }, [])
 
   const load = useCallback(async (nextOffset: number) => {
@@ -48,8 +50,7 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
 
   useEffect(() => {
     if (stats?.trained) load(offset)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey, stats])
+  }, [refreshKey, stats, offset, load])
 
   const handleGoTo = async (nextOffset: number) => {
     setOffset(nextOffset)
@@ -79,14 +80,15 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
   const trained = stats?.trained ?? false
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Token Tree Vocabulary</CardTitle>
+    <ActionCard
+      title="Token Tree Vocabulary"
+      actions={
         <Button size="sm" variant="ghost" onClick={() => load(offset)} disabled={loading} aria-label="Refresh vocabulary">
           <IconRefresh className="h-4 w-4" />
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      }
+      contentClassName="space-y-3"
+    >
         {stats ? (
           <div className="flex flex-wrap gap-2">
             <Chip label={`Vocab ${stats.vocab_size}`} />
@@ -119,12 +121,13 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
             {page.entries.map(entry => (
               <div key={entry.id}>
                 <button
+                  type="button"
                   onClick={() => handleToggleEntry(entry)}
                   className="w-full flex items-center gap-3 py-1.5 text-sm text-left hover:bg-muted/40 transition-colors px-1 -mx-1 rounded"
                   aria-label={`Toggle lineage for ${display(entry.token)}`}
                 >
                   <span className="w-10 text-right text-xs text-muted-foreground tabular-nums">{entry.id}</span>
-                  <span className={`font-mono flex-1 ${entry.is_special ? 'text-primary' : ''}`}>
+                  <span className={cn('font-mono flex-1', entry.is_special ? 'text-primary' : '')}>
                     {display(entry.token)}
                   </span>
                   <span className="text-xs text-muted-foreground tabular-nums">{entry.freq}</span>
@@ -138,7 +141,7 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
                 {expanded?.id === entry.id && (
                   <div className="rounded-md bg-muted/50 px-3 py-2 my-1">
                     <div className="text-xs text-muted-foreground mb-1">
-                      Merge lineage of <span className="font-mono text-primary">"{display(entry.token)}"</span>
+                      Merge lineage of <span className="font-mono text-primary">{'"' + display(entry.token) + '"'}</span>
                       <span className="text-muted-foreground/70"> — {lineage?.leaves.length ?? '…'} character leaves</span>
                     </div>
                     {lineageLoading ? (
@@ -191,10 +194,9 @@ export function TokenTreeVocabCard({ refreshKey = 0 }: TokenTreeVocabCardProps) 
         )}
 
         <p className="text-xs text-muted-foreground">
-          Browse the tree's vocabulary in id order — special tokens and base characters first, then merge tokens in
+          Browse the tree&apos;s vocabulary in id order — special tokens and base characters first, then merge tokens in
           the order they were learned. Click a token to expand its lineage down to character leaves.
         </p>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

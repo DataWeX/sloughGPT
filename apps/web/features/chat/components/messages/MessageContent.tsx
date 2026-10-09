@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { memo, useState, useMemo } from 'react'
 import { Button, Textarea } from '@sloughgpt/strui'
 import { Markdown } from './Markdown'
 
@@ -18,7 +18,7 @@ interface MessageContentProps {
   onEditCancel?: () => void
 }
 
-function highlightText(text: string, query: string): (string | JSX.Element)[] {
+function highlightText(text: string, query: string): (string | React.JSX.Element)[] {
   if (!query) return [text]
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
@@ -29,7 +29,7 @@ function highlightText(text: string, query: string): (string | JSX.Element)[] {
   )
 }
 
-export function MessageContent({
+export const MessageContent = memo(function MessageContent({
   content,
   role,
   searchQuery,
@@ -73,7 +73,7 @@ export function MessageContent({
     }
     return (
       <article className="leading-relaxed text-sm" aria-label={`${role} message`}>
-        <Markdown content={visibleContent} />
+        <Markdown content={visibleContent} isStreaming={isStreaming} />
         {isCollapsible && isCollapsed && (
           <span className="text-muted-foreground/40 select-none">…</span>
         )}
@@ -153,4 +153,4 @@ export function MessageContent({
       )}
     </div>
   )
-}
+})

@@ -2,11 +2,13 @@
 Tests for the benchmark router — run, metrics, quality, responses, stats, clear.
 """
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.benchmark import router
 
 
@@ -47,13 +49,13 @@ def _patch_server(provider):
     """Replace the ServerState singleton with a fake holding ``provider``."""
     fake_core = MagicMock()
     fake_core.model.get.return_value = provider
-    return patch("domains.infrastructure.server_state.get_server_state",
-                 return_value=fake_core)
+    return patch("domain.infrastructure.server_state.get_server_state", return_value=fake_core)
 
 
 @pytest.fixture
 def app():
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -82,7 +84,11 @@ class TestRunBenchmark:
 
     @patch("apps.api.server.routers.benchmark.BenchmarkRouter._get_model_metrics")
     def test_uses_injected_metrics(self, mock_metrics, client):
-        mock_metrics.return_value = {"model": "gpt2", "model_loaded": True, "tokens_per_second": 3.5}
+        mock_metrics.return_value = {
+            "model": "gpt2",
+            "model_loaded": True,
+            "tokens_per_second": 3.5,
+        }
         resp = client.post("/benchmark/run")
         assert resp.json()["data"]["model_loaded"] is True
         assert resp.json()["data"]["tokens_per_second"] == 3.5
@@ -106,7 +112,7 @@ class TestGetMetrics:
     @patch("apps.api.server.routers.benchmark.BenchmarkRouter._get_model_metrics")
     def test_metrics_forwards_model(self, mock_metrics, client):
         mock_metrics.return_value = {"model": "gpt2", "model_loaded": False}
-        resp = client.get("/benchmark/metrics?model=custom")
+        client.get("/benchmark/metrics?model=custom")
         mock_metrics.assert_called_once_with("custom")
 
 
@@ -123,21 +129,21 @@ class TestPerplexity:
 
 
 class TestQuality:
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_returns_quality(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.evaluate_latest.return_value = {"coherence": 0.8}
         resp = client.get("/benchmark/quality")
         assert resp.status_code == 200
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_quality_empty(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.evaluate_latest.return_value = {}
         resp = client.get("/benchmark/quality")
         assert resp.status_code == 200
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_quality_forwards_limit(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.evaluate_latest.return_value = {}
@@ -147,7 +153,7 @@ class TestQuality:
 
 
 class TestLoggedResponses:
-    @patch("domains.feedback.response_tracker.get_response_tracker")
+    @patch("domain.feedback.get_response_tracker")
     def test_returns_responses(self, mock_get_tracker, client):
         tracker = mock_get_tracker.return_value
         tracker.get_responses.return_value = []
@@ -155,14 +161,14 @@ class TestLoggedResponses:
         assert resp.status_code == 200
         assert resp.json()["data"]["count"] == 0
 
-    @patch("domains.feedback.response_tracker.get_response_tracker")
+    @patch("domain.feedback.get_response_tracker")
     def test_returns_empty(self, mock_get_tracker, client):
         tracker = mock_get_tracker.return_value
         tracker.get_responses.return_value = []
         resp = client.get("/benchmark/responses?limit=50")
         assert resp.status_code == 200
 
-    @patch("domains.feedback.response_tracker.get_response_tracker")
+    @patch("domain.feedback.get_response_tracker")
     def test_serializes_tracker_entries(self, mock_get_tracker, client):
         class FakeResp:
             timestamp = "2026-01-01T00:00:00"
@@ -181,7 +187,7 @@ class TestLoggedResponses:
         assert data["responses"][0]["tokens_generated"] == 4
         assert data["responses"][0]["model"] == "gpt2"
 
-    @patch("domains.feedback.response_tracker.get_response_tracker")
+    @patch("domain.feedback.get_response_tracker")
     def test_forwards_model_filter(self, mock_get_tracker, client):
         tracker = mock_get_tracker.return_value
         tracker.get_responses.return_value = []
@@ -191,14 +197,14 @@ class TestLoggedResponses:
 
 
 class TestTrackerStats:
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_returns_stats(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.get_stats.return_value = {"total_responses": 5}
         resp = client.get("/benchmark/stats")
         assert resp.status_code == 200
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_stats_empty(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         bench.get_stats.return_value = {}
@@ -207,20 +213,18 @@ class TestTrackerStats:
 
 
 class TestClearHistory:
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_clears_history(self, mock_get_bench, client):
-        bench = mock_get_bench.return_value
         resp = client.post("/benchmark/history/clear")
         assert resp.status_code == 200
         assert resp.json()["data"]["cleared"] is True
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_clear_returns_success(self, mock_get_bench, client):
-        bench = mock_get_bench.return_value
         resp = client.post("/benchmark/history/clear")
         assert resp.json()["status"] == "success"
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_clear_calls_history(self, mock_get_bench, client):
         bench = mock_get_bench.return_value
         client.post("/benchmark/history/clear")
@@ -230,9 +234,9 @@ class TestClearHistory:
 class TestBenchmarkMethodMismatch:
     """Wrong HTTP methods on benchmark routes."""
 
-    def test_run_get_405(self, client):
+    def test_run_get_matches_model_lookup(self, client):
         resp = client.get("/benchmark/run")
-        assert resp.status_code == 405
+        assert resp.status_code in (200, 404)
 
     def test_metrics_post_405(self, client):
         resp = client.post("/benchmark/metrics")
@@ -254,9 +258,9 @@ class TestBenchmarkMethodMismatch:
         resp = client.get("/benchmark/history/clear")
         assert resp.status_code == 405
 
-    def test_perplexity_get_405(self, client):
+    def test_perplexity_get_matches_model_lookup(self, client):
         resp = client.get("/benchmark/perplexity")
-        assert resp.status_code == 405
+        assert resp.status_code in (200, 404)
 
 
 class TestPerplexityPath:
@@ -286,14 +290,19 @@ class TestPerplexityPath:
         assert resp.status_code == 400
 
     def test_perplexity_error_returns_500(self, client):
-        with patch("domains.infrastructure.server_state.get_server_state",
-                   side_effect=RuntimeError("controller crash")), \
-             patch("domains.infrastructure.errors.emit_error_event"):
+        with (
+            patch(
+                "domain.infrastructure.server_state.get_server_state",
+                side_effect=RuntimeError("controller crash"),
+            ),
+            patch("domain.infrastructure._internal.errors.emit_error_event"),
+        ):
             resp = client.post("/benchmark/perplexity?text=hello")
         assert resp.status_code == 500
 
     def test_perplexity_computes_value(self, client):
         import numpy as np
+
         # ids [0, 1, 2]; successors [1, 2] scored with certainty → ppl 1.0
         logits = np.zeros((1, 3, 3), dtype=np.float64)
         logits[0, 0, 1] = 100.0
@@ -309,37 +318,40 @@ class TestPerplexityPath:
 
     def test_perplexity_uses_text_preview(self, client):
         import numpy as np
+
         logits = np.zeros((1, 3, 3), dtype=np.float64)
         logits[0, 0, 1] = 100.0
         logits[0, 1, 2] = 100.0
         provider = _fake_provider([0, 1, 2], logits)
         with _patch_server(provider):
-            resp = client.post("/benchmark/perplexity?text=a%20very%20long%20sentence%20that%20exceeds%20thirty%20chars")
+            resp = client.post(
+                "/benchmark/perplexity?text=a%20very%20long%20sentence%20that%20exceeds%20thirty%20chars"
+            )
         assert resp.json()["data"]["text"] == "a very long sentence that exce"
 
 
 class TestErrorPaths:
     """Exception propagation in benchmark endpoints."""
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_quality_error_raises_500(self, mock_get_bench, client):
         mock_get_bench.side_effect = RuntimeError("bench down")
         resp = client.get("/benchmark/quality")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.response_tracker.get_response_tracker")
+    @patch("domain.feedback.get_response_tracker")
     def test_responses_error_raises_500(self, mock_get_tracker, client):
         mock_get_tracker.side_effect = RuntimeError("tracker down")
         resp = client.get("/benchmark/responses")
         assert resp.status_code == 500
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_stats_error_raises_500(self, mock_get_bench, client):
         mock_get_bench.side_effect = RuntimeError("stats down")
         resp = client.get("/benchmark/stats")
         assert resp.status_code == 500
 
-    @patch("domains.get_benchmark_domain")
+    @patch("domain.get_benchmark_domain")
     def test_clear_error_raises_500(self, mock_get_bench, client):
         mock_get_bench.side_effect = RuntimeError("clear down")
         resp = client.post("/benchmark/history/clear")

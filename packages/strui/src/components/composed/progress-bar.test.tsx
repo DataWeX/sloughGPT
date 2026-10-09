@@ -102,8 +102,13 @@ describe('ProgressBar', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuemax', '100')
   })
 
-  it('defaults to value=0', () => {
+  it('defaults to unknown value (no aria-valuenow)', () => {
     render(<ProgressBar />)
+    expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow')
+  })
+
+  it('renders explicit value=0 as 0', () => {
+    render(<ProgressBar value={0} />)
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
   })
 })

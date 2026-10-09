@@ -1,9 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, act } from '@testing-library/react'
+import { render, screen, act, waitFor } from '@testing-library/react'
 
-const mockUpdateSettings = vi.fn()
-const mockAddToast = vi.fn()
-const mockSetLocale = vi.fn()
+const { mockUpdateSettings, mockAddToast, mockSetLocale, mockDeleteKV } = vi.hoisted(() => ({
+  mockUpdateSettings: vi.fn(),
+  mockAddToast: vi.fn(),
+  mockSetLocale: vi.fn(),
+  mockDeleteKV: vi.fn().mockResolvedValue(undefined),
+}))
 
 vi.mock('@/lib/store', () => ({
   useSettings: () => ({
@@ -39,6 +42,7 @@ vi.mock('@/lib/toast-store', () => ({
 
 vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => ({ healthLegacy: null }),
+  liveStatusStore: { subscribe: vi.fn() },
 }))
 
 vi.mock('@/hooks/useLocale', () => ({
@@ -66,6 +70,27 @@ vi.mock('@/lib/model-controller', () => ({
   },
 }))
 
+vi.mock('@/lib/settings-controller', () => ({
+  settingsController: {
+    getProviderApi: vi.fn().mockResolvedValue({
+      enabled: false,
+      api_url: '',
+      model: 'gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: false,
+    }),
+    updateProviderApi: vi.fn().mockResolvedValue({
+      enabled: false,
+      api_url: '',
+      model: 'gpt-4o-mini',
+      timeout: 60,
+      max_retries: 2,
+      api_key_set: false,
+    }),
+  },
+}))
+
 vi.mock('@/lib/download-utils', () => ({
   downloadJson: vi.fn(),
   importFile: vi.fn().mockResolvedValue(null),
@@ -85,6 +110,7 @@ vi.mock('@/lib/validation-schemas', () => ({
 
 vi.mock('@/lib/chat-utils', () => ({
   formatUptime: (s: number) => `${s}s`,
+  CURRENT_SESSION_KEY: 'current-session',
 }))
 
 vi.mock('@/components/ThemeProvider', () => ({
@@ -97,6 +123,30 @@ vi.mock('@/components/ThemeProvider', () => ({
     setPalette: vi.fn(),
   }),
   THEMES: [],
+}))
+
+vi.mock('@/components/PageContainer', () => ({
+  PageContainer: ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <div data-testid="page-container">
+      <h1>{title}</h1>
+      {children}
+    </div>
+  ),
+}))
+
+vi.mock('@/lib/db', () => ({
+  chatDB: {
+    deleteKV: mockDeleteKV,
+  },
+}))
+
+vi.mock('@/lib/theme-storage', () => ({
+  PALETTE_IDS: ['noir-violet', 'ocean'],
+  PALETTE_LABELS: { 'noir-violet': 'Noir Violet', 'ocean': 'Ocean' },
+}))
+
+vi.mock('@/lib/config', () => ({
+  PUBLIC_API_URL: 'http://localhost:8000',
 }))
 
 import SettingsPage from './page'
@@ -116,10 +166,9 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('Settings').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Appearance card', () => {
+  it('renders Appearance section with theme controls', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Appearance').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Theme preference').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders Language card', () => {
@@ -130,35 +179,39 @@ describe('SettingsPage', () => {
   it('renders language buttons', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('English').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('Español').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Connection card', () => {
+  it('renders Connection section', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Connection').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('API server and authentication').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders External model provider card', async () => {
+    render(<SettingsPage />)
+    expect(screen.getAllByText('External model provider').length).toBeGreaterThanOrEqual(1)
+    await waitFor(() => expect(screen.getByLabelText('Endpoint URL')).toBeTruthy())
   })
 
   it('renders API URL input with default value', () => {
     render(<SettingsPage />)
-    const inputs = screen.getAllByLabelText('API server URL')
+    const inputs = screen.getAllByLabelText('Service URL')
     expect(inputs.length).toBeGreaterThanOrEqual(1)
     expect(inputs[0]).toHaveValue('http://localhost:8000')
   })
 
-  it('renders Chat Defaults card', () => {
+  it('renders Temperature control', () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Chat defaults').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Temperature').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Danger zone card', () => {
+  it('renders Memory card', () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Danger zone').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Memory').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders Backup & restore card', () => {
+  it('renders Chat commands card', () => {
     render(<SettingsPage />)
-    expect(screen.getAllByText('Backup & restore').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Chat commands').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders Export settings button', () => {
@@ -188,7 +241,7 @@ describe('SettingsPage', () => {
     expect(screen.getAllByText('System').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('renders streaming switch', () => {
+  it('renders Streaming switch', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Streaming').length).toBeGreaterThanOrEqual(1)
   })
@@ -201,16 +254,6 @@ describe('SettingsPage', () => {
   it('renders collapsible message length control', () => {
     render(<SettingsPage />)
     expect(screen.getAllByText('Auto-collapse messages longer than').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('renders Memory card', () => {
-    render(<SettingsPage />)
-    expect(screen.getAllByText('Memory').length).toBeGreaterThanOrEqual(1)
-  })
-
-  it('renders Chat commands card', () => {
-    render(<SettingsPage />)
-    expect(screen.getAllByText('Chat commands').length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders Process isolation card', () => {

@@ -1,19 +1,25 @@
 """
 Health Controller - Business logic for system health
 """
+
 import json
+import logging
 import time
-from typing import Dict, Any, Tuple, Optional
-import psutil
 from datetime import datetime
+from typing import Any, Optional
+
+import psutil
+
+logger = logging.getLogger(__name__)
 
 _health_start_time = datetime.now()
 
 
-def _get_executor_stats() -> Optional[Dict[str, Any]]:
+def _get_executor_stats() -> dict[str, Any] | None:
     """Get TrainingExecutor pool stats if available."""
     try:
-        from domains.training.executor import get_training_executor, _instance
+        from domain.training._internal.executor import _instance, get_training_executor
+
         if _instance is None:
             return None
         ex = get_training_executor()
@@ -23,40 +29,55 @@ def _get_executor_stats() -> Optional[Dict[str, Any]]:
             "total_tracked": len(ex._jobs),
         }
     except Exception:
+        logger.debug("TrainingExecutor stats unavailable", exc_info=True)
         return None
 
 
-def _get_process_guard_status() -> Optional[Dict[str, Any]]:
+def _get_process_guard_status() -> dict[str, Any] | None:
     """Get ProcessGuard status from the ModelsController if available."""
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         return ctrl.get_process_guard_status()
     except Exception:
+        logger.debug("ProcessGuard status unavailable", exc_info=True)
         return None
 
 
-def _get_mps_monitor_info() -> Optional[Dict[str, Any]]:
+def _get_mps_monitor_info() -> dict[str, Any] | None:
     """Get MPS GPU memory monitor status if available."""
     try:
-        from domains.infrastructure.mps_monitor import get_mps_monitor
+        from domain.infrastructure.mps_monitor import get_mps_monitor
+
         mon = get_mps_monitor()
         return {
             "usage": round(mon.get_usage(), 3),
             "locked_to_cpu": mon.is_locked_to_cpu(),
         }
     except Exception:
+        logger.debug("MPS monitor info unavailable", exc_info=True)
         return None
 
 
 def _is_model_loading() -> bool:
     """Check if the server is currently loading a model in the background.
 
-    Returns True when the model isn't loaded yet but the server has been
-    running for less than 90s (the typical model load window).
+    Returns True when:
+    1. ModelLoader reports a load in progress, OR
+    2. Model isn't loaded yet but the server has been running for less than 90s
+       (the typical model load window).
     """
     try:
+        # Check if ModelLoader has a load in progress
+        from domain.infrastructure.model_loader import ModelLoader
+
+        if ModelLoader.is_loading():
+            return True
+
+        # Fallback: time-based heuristic
         import state as server_state
+
         if server_state.model is not None:
             return False
         if server_state.provider is not None:
@@ -64,7 +85,69 @@ def _is_model_loading() -> bool:
         uptime = (datetime.now() - _health_start_time).total_seconds()
         return uptime < 90
     except Exception:
+        logger.debug("Model loading check failed", exc_info=True)
         return False
+
+
+def _get_mogdb_health() -> dict[str, Any] | None:
+    """Check MogDB storage health: disk usage, journal sizes, write latency."""
+    try:
+        from pathlib import Path
+
+        from domain.shared import find_repo_root
+
+        data_root = find_repo_root(Path(__file__).resolve()) / "data"
+        mogdb_dirs = list(data_root.glob("*_mogdb"))
+
+        if not mogdb_dirs:
+            return {"status": "no_collections", "total_size_bytes": 0}
+
+        total_size = 0
+        journals = []
+        for d in mogdb_dirs:
+            for f in d.glob("*.journal.jsonl"):
+                size = f.stat().st_size
+                total_size += size
+                journals.append({"file": str(f.relative_to(data_root)), "size_bytes": size})
+            for f in d.glob("*.mogdb"):
+                size = f.stat().st_size
+                total_size += size
+
+        # Write latency test: write a tiny doc and measure time
+        import time
+
+        from mogdb import MogDB
+
+        test_path = data_root / "_health_check_mogdb"
+        try:
+            db = MogDB(str(test_path))
+            col = db.collection("_ping")
+            start = time.monotonic()
+            col.insert_one({"ts": time.time()})
+            elapsed_ms = (time.monotonic() - start) * 1000
+            col.drop()
+            db.close()
+        except Exception:
+            logger.debug("MogDB write latency test failed", exc_info=True)
+            elapsed_ms = -1
+        finally:
+            import shutil
+
+            if test_path.exists():
+                shutil.rmtree(test_path, ignore_errors=True)
+
+        # Flag if any journal > 50MB (needs compaction)
+        large_journals = [j for j in journals if j["size_bytes"] > 50 * 1024 * 1024]
+
+        return {
+            "status": "ok" if not large_journals else "needs_compaction",
+            "total_size_bytes": total_size,
+            "collection_count": len(mogdb_dirs),
+            "write_latency_ms": round(elapsed_ms, 2),
+            "large_journals": large_journals,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
 
 
 def _is_app_ready() -> bool:
@@ -73,16 +156,22 @@ def _is_app_ready() -> bool:
     Health must not report the model as loaded until the lifecycle reaches
     RUNNING — otherwise clients see ``model_loaded: true`` during the startup
     window and hit routes that are not registered yet (404 "Not Found").
+
+    Reads from ``STARTUP_PHASE`` (set by the startup orchestrator) instead of
+    creating the lifecycle singleton, which would race with
+    ``StartupOrchestrator._init_lifecycle()`` when health routes are queried
+    pre-lifespan.
     """
     try:
-        from domains.infrastructure.lifecycle import get_lifecycle_manager
-        mgr = get_lifecycle_manager()
-        return mgr.is_running()
+        from startup_progress import STARTUP_PHASE
+
+        return STARTUP_PHASE.get("phase") in ("running", "ready")
     except Exception:
+        logger.debug("Startup phase check failed", exc_info=True)
         return True
 
 
-def _get_model_info() -> Tuple[bool, Optional[str]]:
+def _get_model_info() -> tuple[bool, str | None]:
     """Get model info from registry, controller, or server_state."""
     loaded, model_type, _ = _get_model_info_with_registry()
     if loaded and not _is_app_ready():
@@ -90,44 +179,47 @@ def _get_model_info() -> Tuple[bool, Optional[str]]:
     return loaded, model_type
 
 
-def _get_model_info_with_registry() -> Tuple[bool, Optional[str], Dict[str, Any]]:
+def _get_model_info_with_registry() -> tuple[bool, str | None, dict[str, Any]]:
     """Get model info and registry health in a single query."""
-    registry_health: Dict[str, Any] = {}
+    registry_health: dict[str, Any] = {}
 
     # Check ModelRegistry first (most authoritative)
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
+
         registry = get_model_registry()
         registry_health = registry.health_summary()
         if registry_health.get("healthy") and registry_health.get("default_model"):
             return True, registry_health["default_model"], registry_health
     except ImportError:
-        pass
+        logger.debug("ModelRegistry not available for health check")
 
     # Fallback: check models controller
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         current = ctrl.get_current_model()
         if current:
             return True, current.get("model_id"), registry_health
     except ImportError:
-        pass
+        logger.debug("Models controller not available for health check")
 
     # Fallback: check server_state (used by autoload in lifespan)
     try:
         import state as server_state
+
         if server_state.model is not None:
             return True, server_state.model_type, registry_health
         if server_state.provider is not None:
             return True, server_state.model_type, registry_health
     except ImportError:
-        pass
+        logger.debug("Server state not available for health check")
 
     return False, None, registry_health
 
 
-def _get_model_device() -> Optional[str]:
+def _get_model_device() -> str | None:
     """Resolve the active model's device string for health reporting.
 
     Order: models controller first (authoritative — it holds the resolved
@@ -140,29 +232,32 @@ def _get_model_device() -> Optional[str]:
     """
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         current = ctrl.get_current_model()
         if current and current.get("device"):
             return current["device"]
     except ImportError:
-        pass
+        logger.debug("Models controller not available for device detection")
     try:
-        from domains.infrastructure.model_registry import get_model_registry
+        from domain.infrastructure.model_registry import get_model_registry
+
         registry = get_model_registry()
         health = registry.health_summary()
         if health.get("healthy"):
             for m in health.get("models", []):
                 if m.get("is_default") and m.get("device"):
                     return m["device"]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("GPU device detection failed: %s", e)
     return None
 
 
-def _get_lifecycle_info() -> Dict[str, Any]:
+def _get_lifecycle_info() -> dict[str, Any]:
     """Get lifecycle phase and profile info from the lifecycle manager."""
     try:
-        from domains.infrastructure.lifecycle import get_lifecycle_manager
+        from domain.infrastructure._internal.lifecycle import get_lifecycle_manager
+
         mgr = get_lifecycle_manager()
         return {
             "phase": mgr.phase.value,
@@ -180,42 +275,55 @@ def _get_lifecycle_info() -> Dict[str, Any]:
         }
 
 
-def _get_inference_stats() -> Dict[str, Any]:
+def _get_inference_stats() -> dict[str, Any]:
     """Get inference stats from models controller"""
     try:
         from controllers.models import get_models_controller
+
         ctrl = get_models_controller()
         return ctrl.get_inference_stats()
     except ImportError:
         return {}
     except Exception:
+        logger.debug("Inference stats unavailable", exc_info=True)
         return {}
 
 
-def _get_quantization_info() -> Dict[str, Any]:
+def _get_quantization_info() -> dict[str, Any]:
     """Get quantization status from the active provider."""
     try:
-        from domains.models.provider import get_provider
+        from domain.models._internal.provider import get_provider
+
         provider = get_provider("slonet-native")
         if provider is None:
             provider = get_provider("slonet")
         if provider is None:
             provider = get_provider("hf-default")
-        if provider is not None and hasattr(provider, 'quantization_report'):
-            return provider.quantization_report()
+        if provider is not None and hasattr(provider, "quantization_report"):
+            # Health contract: never ship per_tensor. It serializes to
+            # ~10 MB (per-channel scales, lm_head ~3.4 MB alone) and every
+            # health surface (/health, /health/detailed, /health/stream
+            # SSE every 3s) would repeat it per poll per client. The UI
+            # reads only summary/bits/mode; per-layer detail stays on the
+            # on-demand quantization endpoints.
+            report = provider.quantization_report(include_per_tensor=False)
+            report.pop("per_tensor", None)
+            return report
         return {}
     except Exception:
+        logger.debug("Quantization info unavailable", exc_info=True)
         return {}
 
 
-def _get_kv_session_info() -> Dict[str, Any]:
+def _get_kv_session_info() -> dict[str, Any]:
     """Get cross-turn KV cache session stats from the active provider.
 
     Surfaces ``SloNetChatProvider.session_stats()`` (active sessions, cached
     tokens, TTL). Returns ``{"enabled": False}`` when no provider exposes it.
     """
     try:
-        from domains.models.provider import get_provider
+        from domain.models._internal.provider import get_provider
+
         provider = get_provider("slonet-native")
         if provider is None:
             provider = get_provider("slonet")
@@ -225,17 +333,18 @@ def _get_kv_session_info() -> Dict[str, Any]:
             return stats
         return {"enabled": False}
     except Exception:
+        logger.debug("KV session stats unavailable", exc_info=True)
         return {"enabled": False}
 
 
 def _build_status_message(
     model_loaded: bool,
-    model_type: Optional[str],
+    model_type: str | None,
     model_loading: bool,
-    current_soul: Optional[str],
+    current_soul: str | None,
     request_count: int,
     error_count: int,
-    lifecycle: Dict[str, Any],
+    lifecycle: dict[str, Any],
 ) -> str:
     """Build a human-readable status message incorporating lifecycle phase."""
     phase = lifecycle.get("phase", "unknown")
@@ -261,10 +370,11 @@ def _build_status_message(
     return msg
 
 
-def _get_resource_allocation() -> Dict[str, Any]:
+def _get_resource_allocation() -> dict[str, Any]:
     """Get CPU topology resource allocation."""
     try:
-        from domains.infrastructure.resource_manager import get_resource_manager
+        from domain.infrastructure.resource_manager import get_resource_manager
+
         rm = get_resource_manager()
         return {
             "mode": rm.mode,
@@ -283,10 +393,33 @@ def _get_resource_allocation() -> Dict[str, Any]:
             "process_guard_concurrent": rm.process_guard_concurrent,
         }
     except Exception:
+        logger.debug("Resource allocation unavailable", exc_info=True)
         return {}
 
 
-def _get_process_info() -> Dict[str, Any]:
+def _get_memory_pressure_stats() -> dict[str, Any]:
+    """Get memory pressure monitor stats for health reporting."""
+    try:
+        from domain.infrastructure.memory_pressure import get_memory_pressure_monitor
+
+        return get_memory_pressure_monitor().stats()
+    except Exception:
+        logger.debug("Memory pressure stats unavailable", exc_info=True)
+        return {}
+
+
+_cached_process: Optional["psutil.Process"] = None
+
+
+def _get_process() -> "psutil.Process":
+    """Return a cached psutil.Process instance for the current process."""
+    global _cached_process
+    if _cached_process is None:
+        _cached_process = psutil.Process()
+    return _cached_process
+
+
+def _get_process_info() -> dict[str, Any]:
     """Compute real process metrics for the current server process.
 
     Uses psutil for file descriptors/threads/memory and the stdlib ``gc``
@@ -302,9 +435,9 @@ def _get_process_info() -> Dict[str, Any]:
     """
     try:
         import gc
-        proc = psutil.Process()
-        info: Dict[str, Any] = {
-            "open_files": len(proc.open_files()),
+
+        proc = _get_process()
+        info: dict[str, Any] = {
             "threads": proc.num_threads(),
             "process_cpu_percent": round(proc.cpu_percent(interval=None), 1),
             "process_memory_percent": round(proc.memory_percent(), 1),
@@ -315,10 +448,11 @@ def _get_process_info() -> Dict[str, Any]:
             info["gc_gen0"] = gen0
             info["gc_gen1"] = gen1
             info["gc_gen2"] = gen2
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug("GC gen tracking failed: %s", e)
         return info
     except Exception:
+        logger.debug("Process info unavailable", exc_info=True)
         return {}
 
 
@@ -328,16 +462,22 @@ class HealthController:
     _CACHE_TTL = 2.0  # seconds
 
     def __init__(self):
-        self._cache: Dict[str, Any] = {}
+        self._cache: dict[str, Any] = {}
         self._cache_time: float = 0.0
+        # Warm up psutil cpu_percent — first call always returns 0.0
+        try:
+            psutil.cpu_percent(interval=None)
+            psutil.Process().cpu_percent(interval=None)
+        except Exception as e:
+            logger.debug("CPU percent sampling failed: %s", e)
 
-    def get_basic_health(self) -> Dict[str, Any]:
+    def get_basic_health(self) -> dict[str, Any]:
         """Get basic health status with flow-based summary."""
         model_loaded, model_type = _get_model_info()
         inference_stats = _get_inference_stats()
         lifecycle = _get_lifecycle_info()
         model_loading = not model_loaded and _is_model_loading()
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "status": "healthy",
             "timestamp": datetime.now().isoformat(),
             "model_loaded": model_loaded,
@@ -351,22 +491,31 @@ class HealthController:
 
         # Status message from lifecycle + model state
         result["status_message"] = _build_status_message(
-            model_loaded, model_type, model_loading, None, 0, 0, lifecycle,
+            model_loaded,
+            model_type,
+            model_loading,
+            None,
+            0,
+            0,
+            lifecycle,
         )
 
         if model_loaded:
             try:
                 import state as server_state
+
                 if server_state.model is not None:
                     model = server_state.model
-                    if hasattr(model, "parameters") and callable(getattr(model, "parameters", None)):
+                    if hasattr(model, "parameters") and callable(
+                        getattr(model, "parameters", None)
+                    ):
                         result["num_parameters"] = sum(p.numel() for p in model.parameters())
                 elif server_state.provider is not None:
                     meta = server_state.provider.metadata()
                     if meta and meta.get("total_params"):
                         result["num_parameters"] = meta["total_params"]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Model parameter counting failed: %s", e)
 
         # Quantization status
         quant_info = _get_quantization_info()
@@ -388,19 +537,24 @@ class HealthController:
 
         # Idle manager status
         try:
-            from domains.infrastructure.model_server import get_idle_manager
+            from domain.infrastructure.model_server import get_idle_manager
+
             idle_mgr = get_idle_manager()
             import state as server_state
+
             model_id = server_state.model_type or "unknown"
             idle_info = idle_mgr.get_idle_info(model_id)
             if idle_info:
                 result["idle"] = idle_info
         except Exception:
-            pass
+            logger.debug("Idle manager status unavailable", exc_info=True)
+
+        # Memory pressure stats (so clients know why inference may be blocked)
+        result["memory_pressure"] = _get_memory_pressure_stats()
 
         return result
 
-    def get_detailed_health(self) -> Dict[str, Any]:
+    def get_detailed_health(self) -> dict[str, Any]:
         """Get detailed health with system metrics and GPU info (cached up to CACHE_TTL seconds)."""
         now = time.monotonic()
         if self._cache and (now - self._cache_time) < self._CACHE_TTL:
@@ -413,9 +567,11 @@ class HealthController:
         model_loading = not model_loaded and _is_model_loading()
         uptime = (datetime.now() - _health_start_time).total_seconds()
 
-        gpu_info: Dict[str, Any] = {}
+        gpu_info: dict[str, Any] = {}
+        degraded: list[str] = []
         try:
-            from domains.slolib.gpu import get_accelerator
+            from domain.slolib._internal.gpu import get_accelerator
+
             acc = get_accelerator()
             gpu_info = {
                 "backend": acc.name,
@@ -426,15 +582,18 @@ class HealthController:
             }
         except Exception as e:
             gpu_info = {"backend": "unknown", "error": str(e)}
+            degraded.append("gpu")
 
         # Add ServerState counters if available
         try:
-            from domains.infrastructure.server_state import get_server_state
+            from domain.infrastructure.server_state import get_server_state
+
             ss = get_server_state()
             request_count = ss.request_count
             error_count = ss.error_count
             current_soul = ss.current_soul.get()
             avg_latency = ss.get_avg_latency()
+            p95_latency = ss.get_p95_latency()
             requests_per_min = ss.get_requests_per_minute()
             path_latencies = ss.get_path_latencies(5)
             recent_errors = ss.get_error_history(5)
@@ -442,18 +601,21 @@ class HealthController:
             total_tokens = ss.total_tokens
             tokens_per_sec = ss.get_tokens_per_second()
             avg_tokens_per_req = ss.get_avg_tokens_per_request()
-            health_score = ss.get_health_score()
+            health_score = ss.get_health_score(cpu_percent=cpu, memory_percent=mem.percent)
             model_metrics = ss.get_model_metrics()
             model_events = ss.get_model_events(10)
             ss.record_trend_snapshots()
             health_history = ss.get_health_history(20)
             memory_history = ss.get_memory_history(10)
             rate_violations = ss.get_rate_limit_violations(5)
-        except Exception:
+        except Exception as e:
+            logger.warning("Failed to load server state for detailed health: %s", e)
+            degraded.append("server_state")
             request_count = 0
             error_count = 0
             current_soul = None
             avg_latency = 0.0
+            p95_latency = 0.0
             requests_per_min = 0.0
             path_latencies = []
             recent_errors = []
@@ -470,13 +632,40 @@ class HealthController:
 
         lifecycle = _get_lifecycle_info()
 
+        # Staged loader info
+        try:
+            from infrastructure.staged_loader import get_staged_loader
+
+            staged_loader = get_staged_loader()
+            startup_progress = staged_loader.get_status()
+        except Exception:
+            startup_progress = {
+                "stage": "unknown",
+                "stage_value": 0,
+                "elapsed_seconds": 0,
+                "errors": {},
+                "stages": {},
+            }
+
+        # Version info
+        try:
+            from version import version_info as _version_info
+
+            versions = _version_info()
+        except Exception:
+            logger.debug("Version info unavailable", exc_info=True)
+            versions = {}
+
         result = {
-            "status": "healthy" if lifecycle.get("is_running", False) else lifecycle.get("phase", "unknown"),
+            "status": "healthy"
+            if lifecycle.get("is_running", False)
+            else lifecycle.get("phase", "unknown"),
             "uptime_seconds": uptime,
             "timestamp": datetime.now().isoformat(),
             "request_count": request_count,
             "error_count": error_count,
             "avg_latency_ms": avg_latency,
+            "p95_latency_ms": p95_latency,
             "requests_per_minute": requests_per_min,
             "path_latencies": path_latencies,
             "recent_errors": recent_errors,
@@ -490,6 +679,7 @@ class HealthController:
             "health_history": health_history,
             "memory_history": memory_history,
             "rate_violations": rate_violations,
+            "degraded": degraded,
             "system": {
                 "cpu_percent": round(cpu, 1),
                 "memory_percent": round(mem.percent, 1),
@@ -508,28 +698,66 @@ class HealthController:
             "quantization": _get_quantization_info(),
             "kv_sessions": _get_kv_session_info(),
             "lifecycle": lifecycle,
+            "startup_progress": startup_progress,
             "training_pool": _get_executor_stats(),
             "resource_allocation": _get_resource_allocation(),
             "process_guard": _get_process_guard_status(),
+            "memory_pressure": _get_memory_pressure_stats(),
+            "versions": versions,
             "status_message": _build_status_message(
-                model_loaded, model_type, model_loading, current_soul,
-                request_count, error_count, lifecycle,
+                model_loaded,
+                model_type,
+                model_loading,
+                current_soul,
+                request_count,
+                error_count,
+                lifecycle,
             ),
         }
         self._cache = result
         self._cache_time = now
         return result
 
-    def get_liveness(self) -> Dict[str, Any]:
+    def get_liveness(self) -> dict[str, Any]:
         """Kubernetes liveness probe"""
         return {"status": "alive"}
 
-    def get_readiness(self) -> Dict[str, Any]:
-        """Kubernetes readiness probe"""
-        return {"status": "ready"}
+    def get_readiness(self) -> dict[str, Any]:
+        """Kubernetes readiness probe — verifies subsystems are ready to serve."""
+        checks = {}
+        ready = True
+
+        # 1. App lifecycle must be in running/ready phase
+        app_ready = _is_app_ready()
+        checks["app_lifecycle"] = "ready" if app_ready else "starting"
+        if not app_ready:
+            ready = False
+
+        # 2. Model must be loaded (or server in no-model mode)
+        model_loaded, model_type = _get_model_info()
+        checks["model"] = "loaded" if model_loaded else "not_loaded"
+        if not model_loaded:
+            ready = False
+
+        # 3. Model loading in progress = not ready yet
+        if _is_model_loading():
+            checks["model"] = "loading"
+            ready = False
+
+        # 4. MogDB storage must be writable
+        mogdb_health = _get_mogdb_health()
+        if mogdb_health:
+            checks["mogdb"] = mogdb_health.get("status", "unknown")
+            if mogdb_health.get("status") == "error":
+                ready = False
+
+        return {
+            "status": "ready" if ready else "not_ready",
+            "checks": checks,
+        }
 
 
-_health_controller: Optional[HealthController] = None
+_health_controller: HealthController | None = None
 
 
 def get_health_controller() -> HealthController:

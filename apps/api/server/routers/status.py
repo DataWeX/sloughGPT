@@ -1,10 +1,15 @@
 """
 Status Router - Overall service health and info
 """
-from fastapi import APIRouter
-from datetime import datetime, timezone
 
-from schemas.common import success_response
+from __future__ import annotations
+
+from datetime import datetime
+
+from fastapi import APIRouter
+from schemas.common import endpoint, success_response
+
+from domain.shared import utc_now_iso
 
 
 class StatusRouter:
@@ -18,40 +23,58 @@ class StatusRouter:
         self.router.add_api_route("/ready", self.ready, methods=["GET"])
         self.router.add_api_route("/live", self.live, methods=["GET"])
 
+    @endpoint("status.get")
     async def get_status(self) -> dict:
-        """Return overall service health status with uptime and timestamp.
-
-        Computes the uptime in seconds from the router's start time and
-        includes a UTC ISO timestamp of the check.
-
-        Returns:
-            Success envelope with status "healthy", uptime_seconds, and timestamp.
-        """
+        """Return overall service health status with uptime and timestamp."""
         uptime = (datetime.now() - self._start_time).total_seconds()
+        return success_response(
+            data={
+                "status": "healthy",
+                "uptime_seconds": uptime,
+                "timestamp": utc_now_iso(),
+            }
+        )
 
-        return success_response(data={
-            "status": "healthy",
-            "uptime_seconds": uptime,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-
+    @endpoint("status.ready")
     async def ready(self) -> dict:
         """Kubernetes-style readiness probe.
 
         Returns ready=True when the service can accept traffic.
-
-        Returns:
-            Success envelope with ready: True.
+        Checks that critical subsystems are initialized.
         """
-        return success_response(data={"ready": True})
+        checks = {}
+        import logging
 
+        _log = logging.getLogger("slo.status")
+
+        # Check database connectivity
+        try:
+            from domain.feedback import get_feedback_db
+
+            db = get_feedback_db()
+            checks["database"] = db is not None
+        except Exception as exc:
+            _log.warning("Readiness check: database unavailable: %s", exc)
+            checks["database"] = False
+
+        # Check inference engine
+        try:
+            from domain.inference import get_engine
+
+            engine = get_engine()
+            checks["inference"] = engine is not None
+        except Exception as exc:
+            _log.warning("Readiness check: inference engine unavailable: %s", exc)
+            checks["inference"] = False
+
+        ready = all(checks.values()) if checks else True
+        return success_response(data={"ready": ready, "checks": checks})
+
+    @endpoint("status.live")
     async def live(self) -> dict:
         """Kubernetes-style liveness probe.
 
         Returns alive=True when the process is running and responsive.
-
-        Returns:
-            Success envelope with alive: True.
         """
         return success_response(data={"alive": True})
 

@@ -57,9 +57,9 @@ const stoppedStatus: WorkflowStatus = {
 }
 
 describe('WorkflowPipeline', () => {
-  it('returns null when no status', () => {
-    const { container } = render(<WorkflowPipeline status={null} />)
-    expect(container.querySelector('[data-testid="workflow-pipeline"]')).toBeNull()
+  it('shows not configured message when no status', () => {
+    render(<WorkflowPipeline status={null} />)
+    expect(screen.getByText('Pipeline not configured')).toBeInTheDocument()
   })
 
   it('returns null when no config', () => {

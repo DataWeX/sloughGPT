@@ -19,7 +19,9 @@ export function TokenTreeQueryCard() {
   const addToast = useToastStore(s => s.addToast)
 
   useEffect(() => {
-    tokenTreeController.getStats().then(setStats).catch(() => setStats(null))
+    let active = true
+    tokenTreeController.getStats().then(s => { if (active) setStats(s) }).catch(() => { if (active) setStats(null) })
+    return () => { active = false }
   }, [])
 
   const handleSearch = async () => {
@@ -102,7 +104,7 @@ export function TokenTreeQueryCard() {
           <div className="space-y-2">
             <div className="text-xs text-muted-foreground">
               Nearest neighbors of{' '}
-              <span className="font-mono text-primary">"{displayToken(result.query)}"</span>
+              <span className="font-mono text-primary">{'"' + displayToken(result.query) + '"'}</span>
             </div>
             {result.neighbors.length === 0 ? (
               <div className="text-sm text-muted-foreground">No neighbors found.</div>
@@ -111,6 +113,7 @@ export function TokenTreeQueryCard() {
                 {result.neighbors.map(n => (
                   <button
                     key={n.id}
+                    type="button"
                     onClick={() => handleExpand(n)}
                     className="w-full flex items-center gap-3 text-sm px-2 py-1.5 rounded hover:bg-muted/50 transition-colors text-left"
                     aria-label={`Toggle lineage for ${displayToken(n.token)}`}
@@ -128,7 +131,7 @@ export function TokenTreeQueryCard() {
                 {expanded && (
                   <div className="rounded-md bg-muted/50 px-3 py-2">
                     <div className="text-xs text-muted-foreground mb-1">
-                      Merge lineage of <span className="font-mono text-primary">"{displayToken(expanded.token)}"</span>
+                      Merge lineage of <span className="font-mono text-primary">{'"' + displayToken(expanded.token) + '"'}</span>
                     </div>
                     {loadingLineage ? (
                       <Skeleton className="h-12 w-full rounded" />

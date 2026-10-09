@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
-import { Button } from '@sloughgpt/strui'
+import { Button, Spinner } from '@sloughgpt/strui'
 import { IconDocument } from '@sloughgpt/strui'
 import { multimodalController } from '@/lib/multimodal-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -36,7 +36,7 @@ export function PDFUpload({ onAnalysis, onError, disabled }: PDFUploadProps) {
       })
       onAnalysis(data.analysis || JSON.stringify(data), file.name)
     } catch (err: unknown) {
-      onError(extractErrorMessage(err, 'Failed to analyze PDF'))
+      onError(extractErrorMessage(err, 'Could not analyze PDF'))
     } finally {
       setUploading(false)
       setFilename(null)
@@ -64,7 +64,7 @@ export function PDFUpload({ onAnalysis, onError, disabled }: PDFUploadProps) {
         className="relative"
       >
         {uploading ? (
-          <span className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground border-t-primary" />
+          <Spinner size="xs" />
         ) : (
           <IconDocument className="h-5 w-5" />
         )}

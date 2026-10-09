@@ -1,20 +1,15 @@
 """Tests for KG → RAG pipeline, KnowledgeGraph v2, and RAGService integration."""
 
-import json
 import threading
-import time
-from pathlib import Path
-from typing import List
 
 import pytest
 
-from domains.cognitive.knowledge_graph_v2 import Entity, Fact, KnowledgeGraph
-from domains.cognitive.rag_service import (
-    RAGService,
+from domain.cognition._internal.knowledge_graph_v2 import Entity, KnowledgeGraph
+from domain.cognition._internal.rag_service import (
     KGTrainingPipeline,
+    RAGService,
     get_rag_service,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -38,10 +33,15 @@ def kg():
 @pytest.fixture
 def rag_svc(tmp_path, monkeypatch):
     """Create a fresh RAGService with temp persistence."""
-    from domains.cognitive import rag_service
+    from domain.cognition._internal import rag_service
 
     monkeypatch.setattr(rag_service, "_DATA_DIR", tmp_path)
     monkeypatch.setattr(rag_service, "_DOCUMENTS_FILE", tmp_path / "docs.jsonl")
+    # Separate MogDB constant — without redirecting it the service reads the
+    # real store. Kept in a sibling dir so directory scans don't treat the
+    # DB journal as a document.
+    monkeypatch.setattr(rag_service, "_RAG_DB_PATH", str(tmp_path.parent / (tmp_path.name + "_db")))
+    monkeypatch.setattr(rag_service, "_rag_service", None)
     svc = RAGService()
     return svc
 
@@ -88,7 +88,7 @@ class TestKGEntityResolution:
         g = KnowledgeGraph()
         g.add_entity("paris", "Paris", "city")
         g.add_entity("france", "France", "country")
-        f1 = g.add_fact("Paris", "capital_of", "France", 0.95, "test")
+        g.add_fact("Paris", "capital_of", "France", 0.95, "test")
         f2 = g.add_fact("paris", "capital_of", "france", 0.8, "other")
         assert f2 is None
         assert len(g.facts) == 1
@@ -239,11 +239,13 @@ class TestKGTrainingPipeline:
             pipeline.submit_triples([])
 
     def test_submit_invalid_triple_skipped(self, pipeline):
-        result = pipeline.submit_triples([
-            {"subject": "a", "predicate": "b", "object": "c"},
-            {"bad": "triple"},
-            {"subject": "d", "predicate": "e", "object": "f"},
-        ])
+        result = pipeline.submit_triples(
+            [
+                {"subject": "a", "predicate": "b", "object": "c"},
+                {"bad": "triple"},
+                {"subject": "d", "predicate": "e", "object": "f"},
+            ]
+        )
         assert result == 2
 
     def test_process_batch(self, pipeline, kg):
@@ -422,7 +424,7 @@ class TestRAGServiceConcurrency:
 
 class TestRAGServiceSingleton:
     def test_get_rag_service_returns_same_instance(self, tmp_path, monkeypatch):
-        from domains.cognitive import rag_service
+        from domain.cognition._internal import rag_service
 
         monkeypatch.setattr(rag_service, "_rag_service", None)
         monkeypatch.setattr(rag_service, "_DATA_DIR", tmp_path)

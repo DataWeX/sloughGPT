@@ -1,9 +1,6 @@
 import React, {useState} from 'react';
 import {
   ScrollView,
-  TextInput as RNTextInput,
-  Alert,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
@@ -13,7 +10,7 @@ import {useColors} from '../theme/colors';
 import {useProvidersStore} from '../stores/providers-store';
 import {useHybridStore} from '../stores/hybrid-inference-store';
 import {PROVIDER_REGISTRY, PROVIDER_MODELS} from '../types/providers';
-import type {ProviderId, ProviderConfig} from '../types/providers';
+import type {ProviderId} from '../types/providers';
 import {triggerHaptic} from '../services/haptics';
 import {sounds} from '../services/sounds';
 import {toast} from '../services/toast';
@@ -36,7 +33,6 @@ export function ProvidersScreen() {
   const setApiKey = useProvidersStore(s => s.setApiKey);
   const setBaseUrl = useProvidersStore(s => s.setBaseUrl);
   const setDefaultModel = useProvidersStore(s => s.setDefaultModel);
-  const toggleProvider = useProvidersStore(s => s.toggleProvider);
   const hybrid = useHybridStore();
 
   const [expandedId, setExpandedId] = useState<ProviderId | null>(null);

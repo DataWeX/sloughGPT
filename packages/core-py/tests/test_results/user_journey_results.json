@@ -1,0 +1,362 @@
+[
+  {
+    "test": "dashboard_loads",
+    "passed": true,
+    "detail": "len=1787"
+  },
+  {
+    "test": "dashboard_has_nav",
+    "passed": true,
+    "detail": "links=24"
+  },
+  {
+    "test": "nav_chat",
+    "passed": true,
+    "detail": "len=495"
+  },
+  {
+    "test": "nav_training",
+    "passed": true,
+    "detail": "len=959"
+  },
+  {
+    "test": "nav_datasets",
+    "passed": true,
+    "detail": "len=336"
+  },
+  {
+    "test": "nav_models",
+    "passed": true,
+    "detail": "len=320"
+  },
+  {
+    "test": "nav_agents",
+    "passed": true,
+    "detail": "len=79276"
+  },
+  {
+    "test": "nav_souls",
+    "passed": true,
+    "detail": "len=679"
+  },
+  {
+    "test": "nav_knowledge",
+    "passed": true,
+    "detail": "len=309"
+  },
+  {
+    "test": "nav_monitoring",
+    "passed": true,
+    "detail": "len=461"
+  },
+  {
+    "test": "nav_settings",
+    "passed": true,
+    "detail": "len=4139"
+  },
+  {
+    "test": "nav_planner",
+    "passed": true,
+    "detail": "len=567872"
+  },
+  {
+    "test": "nav_benchmark",
+    "passed": true,
+    "detail": "len=215"
+  },
+  {
+    "test": "nav_tokenizer",
+    "passed": true,
+    "detail": "len=497"
+  },
+  {
+    "test": "nav_errors",
+    "passed": true,
+    "detail": "len=557"
+  },
+  {
+    "test": "nav_security",
+    "passed": true,
+    "detail": "len=557"
+  },
+  {
+    "test": "nav_shell",
+    "passed": true,
+    "detail": "len=320"
+  },
+  {
+    "test": "nav_feedback",
+    "passed": true,
+    "detail": "len=740"
+  },
+  {
+    "test": "nav_files",
+    "passed": true,
+    "detail": "len=320"
+  },
+  {
+    "test": "nav_adapters",
+    "passed": true,
+    "detail": "len=474"
+  },
+  {
+    "test": "nav_brainstorm",
+    "passed": true,
+    "detail": "len=495"
+  },
+  {
+    "test": "nav_decide",
+    "passed": true,
+    "detail": "len=2107"
+  },
+  {
+    "test": "nav_explain",
+    "passed": true,
+    "detail": "len=534"
+  },
+  {
+    "test": "nav_rewrite",
+    "passed": true,
+    "detail": "len=585"
+  },
+  {
+    "test": "nav_translate",
+    "passed": true,
+    "detail": "len=2181"
+  },
+  {
+    "test": "nav_wellness",
+    "passed": true,
+    "detail": "len=556"
+  },
+  {
+    "test": "nav_writing",
+    "passed": true,
+    "detail": "len=2141"
+  },
+  {
+    "test": "nav_consciousness_dashboard",
+    "passed": true,
+    "detail": "len=441"
+  },
+  {
+    "test": "nav_consciousness_health",
+    "passed": true,
+    "detail": "len=694"
+  },
+  {
+    "test": "nav_consciousness_training",
+    "passed": true,
+    "detail": "len=760"
+  },
+  {
+    "test": "nav_consciousness_settings",
+    "passed": true,
+    "detail": "len=1289"
+  },
+  {
+    "test": "nav_consciousness_playground",
+    "passed": true,
+    "detail": "len=3654"
+  },
+  {
+    "test": "nav_training_analytics",
+    "passed": true,
+    "detail": "len=268"
+  },
+  {
+    "test": "nav_training_presets",
+    "passed": true,
+    "detail": "len=268"
+  },
+  {
+    "test": "nav_training_runs",
+    "passed": true,
+    "detail": "len=3396"
+  },
+  {
+    "test": "nav_training_compare",
+    "passed": true,
+    "detail": "len=183"
+  },
+  {
+    "test": "nav_training_trends",
+    "passed": true,
+    "detail": "len=268"
+  },
+  {
+    "test": "nav_shortcuts",
+    "passed": true,
+    "detail": "len=1087"
+  },
+  {
+    "test": "nav_phoneme",
+    "passed": true,
+    "detail": "len=1126"
+  },
+  {
+    "test": "chat_loads",
+    "passed": true,
+    "detail": "len=495"
+  },
+  {
+    "test": "chat_has_input",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "chat_type_message",
+    "passed": true,
+    "detail": "val=Hello test message"
+  },
+  {
+    "test": "training_loads",
+    "passed": true,
+    "detail": "len=1706"
+  },
+  {
+    "test": "training_job_detail_loads",
+    "passed": true,
+    "detail": "len=271"
+  },
+  {
+    "test": "training_job_detail_back_link",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "settings_loads",
+    "passed": true,
+    "detail": "len=3523"
+  },
+  {
+    "test": "planner_loads",
+    "passed": true,
+    "detail": "len=567957"
+  },
+  {
+    "test": "models_loads",
+    "passed": true,
+    "detail": "len=320"
+  },
+  {
+    "test": "monitoring_loads",
+    "passed": true,
+    "detail": "len=557"
+  },
+  {
+    "test": "knowledge_loads",
+    "passed": true,
+    "detail": "len=348"
+  },
+  {
+    "test": "datasets_loads",
+    "passed": true,
+    "detail": "len=336"
+  },
+  {
+    "test": "datasets_import_button",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "datasets_import_dialog_opens",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "test": "datasets_kaggle_radio_exists",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "test": "redirect__companion",
+    "passed": true,
+    "detail": "/companion -> /souls, len=241"
+  },
+  {
+    "test": "redirect__evaluate",
+    "passed": true,
+    "detail": "/evaluate -> /benchmark, len=538"
+  },
+  {
+    "test": "redirect__memory",
+    "passed": true,
+    "detail": "/memory -> /knowledge, len=561"
+  },
+  {
+    "test": "redirect__collections",
+    "passed": true,
+    "detail": "/collections -> /datasets, len=336"
+  },
+  {
+    "test": "redirect__self-train",
+    "passed": true,
+    "detail": "/self-train -> /training, len=2283"
+  },
+  {
+    "test": "redirect__admin",
+    "passed": true,
+    "detail": "/admin -> /settings, len=4137"
+  },
+  {
+    "test": "redirect__images",
+    "passed": true,
+    "detail": "/images -> /files, len=320"
+  },
+  {
+    "test": "redirect__session",
+    "passed": true,
+    "detail": "/session -> /shell, len=2039"
+  },
+  {
+    "test": "brainstorm_input_and_suggestions",
+    "passed": true,
+    "detail": "input=True, suggestions=True"
+  },
+  {
+    "test": "decide_has_options",
+    "passed": true,
+    "detail": "inputs=4"
+  },
+  {
+    "test": "explain_has_difficulty",
+    "passed": false,
+    "detail": "simple=True, normal=False"
+  },
+  {
+    "test": "rewrite_has_actions",
+    "passed": true,
+    "detail": "grammar=True, shorter=True"
+  },
+  {
+    "test": "translate_has_selector",
+    "passed": false,
+    "detail": "select=False, btn=True"
+  },
+  {
+    "test": "wellness_has_options",
+    "passed": true,
+    "detail": "sleep=True, meditate=True"
+  },
+  {
+    "test": "writing_has_tones_types",
+    "passed": true,
+    "detail": "friendly=True, email=True"
+  },
+  {
+    "test": "consciousness_dashboard_loads",
+    "passed": true,
+    "detail": "len=326"
+  },
+  {
+    "test": "consciousness_health_loads",
+    "passed": true,
+    "detail": "len=694"
+  },
+  {
+    "test": "consciousness_playground_loads",
+    "passed": true,
+    "detail": "len=3654"
+  }
+]

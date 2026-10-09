@@ -23,14 +23,14 @@ function makePreview(overrides: Partial<DatasetPreview> = {}): DatasetPreview {
 }
 
 describe('DatasetInsightsCard', () => {
-  it('returns null for empty preview', () => {
+  it('renders empty state for empty preview', () => {
     const { container } = render(<DatasetInsightsCard preview={makePreview({ samples: [] })} />)
-    expect(container.querySelector('[data-testid="dataset-insights"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
-  it('returns null for null preview', () => {
+  it('renders empty state for null preview', () => {
     const { container } = render(<DatasetInsightsCard preview={null} />)
-    expect(container.querySelector('[data-testid="dataset-insights"]')).toBeNull()
+    expect(container.innerHTML).toBe('')
   })
 
   it('shows loading skeleton', () => {

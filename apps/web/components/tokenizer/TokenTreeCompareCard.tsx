@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import {
+  cn,
   Card,
   CardHeader,
   CardTitle,
@@ -31,7 +32,7 @@ function ExampleList({ title, examples, accent }: { title: string; examples: [st
       ) : (
         <div className="flex flex-wrap gap-1">
           {examples.map(([token, freq]) => (
-            <span key={token} className={`text-xs font-mono px-1.5 py-0.5 rounded ${accent}`}>
+            <span key={token} className={cn('text-xs font-mono px-1.5 py-0.5 rounded', accent)}>
               {token} <span className="opacity-70">×{freq}</span>
             </span>
           ))}
@@ -62,8 +63,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
 
   useEffect(() => {
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, load])
 
   const handleCompare = async () => {
     if (!a || !b || a === b) return
@@ -73,7 +73,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       const res = await tokenTreeController.compare(a, b, 10)
       setResult(res)
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Failed to compare token trees', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not compare token trees', 'error')
     } finally {
       setComparing(false)
     }
@@ -90,7 +90,7 @@ export function TokenTreeCompareCard({ refreshKey = 0 }: TokenTreeCompareCardPro
       <CardContent className="space-y-4">
         {loadFailed ? (
           <div className="text-center py-4 text-sm text-muted-foreground">
-            Could not load saved trees. <button onClick={load} className="text-primary underline">Retry</button>
+            Could not load saved trees. <button type="button" onClick={load} className="text-primary underline">Retry</button>
           </div>
         ) : trees.length === 0 ? (
           <div className="text-center py-6 text-sm text-muted-foreground">

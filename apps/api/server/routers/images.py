@@ -1,23 +1,25 @@
 """Image Generation Router - text-to-image generation with style selection."""
 
+import asyncio
 import base64
 import io
 import logging
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
-
-from schemas.common import success_response, classify_and_raise
+from fastapi import APIRouter, BackgroundTasks, Depends
+from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import endpoint, raise_error, safe_audit_log, success_response
 
 logger = logging.getLogger("slo.routers.images")
 
 
 # ── Schema ────────────────────────────────────────────────────────────────
 
+
 class GenerateRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., min_length=1, max_length=2000)
     style: Literal["realistic", "cartoon", "watercolor", "sketch", "fantasy"] = "realistic"
 
 
@@ -67,7 +69,9 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required for image generation")
+            raise_error(
+                "Pillow library required for image generation", "E_INFRA_STARTUP", status_code=500
+            )
 
         prompt_lower = prompt.lower()
         colors = []
@@ -85,11 +89,13 @@ class ImagesRouter:
         else:
             colors = ["#6a11cb", "#2575fc"]
 
-        def _c(c): return int(c.lstrip('#')[:2], 16)
+        def _c(c):
+            return int(c.lstrip("#")[:2], 16)
+
         rgb_colors = [(_c(c), _c(c), _c(c)) for c in colors]
         rgb_colors = []
         for c in colors:
-            h = c.lstrip('#')
+            h = c.lstrip("#")
             rgb_colors.append((int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)))
 
         img = Image.new("RGB", (width, height))
@@ -124,7 +130,7 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw, ImageFont
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGB", (width, height), color="#f0f0f0")
         draw = ImageDraw.Draw(img)
@@ -133,13 +139,20 @@ class ImagesRouter:
         rand_y = (height // 4) + (hash(prompt + "y") % (height // 2))
         size = min(width, height) // 3
 
-        draw.ellipse([rand_x, rand_y, rand_x + size, rand_y + size], fill="#ff6b6b", outline="#333", width=4)
-        draw.ellipse([rand_x + size // 2, rand_y + size // 2, rand_x + size * 1.5, rand_y + size * 1.5],
-                     fill="#4ecdc4", outline="#333", width=4)
+        draw.ellipse(
+            [rand_x, rand_y, rand_x + size, rand_y + size], fill="#ff6b6b", outline="#333", width=4
+        )
+        draw.ellipse(
+            [rand_x + size // 2, rand_y + size // 2, rand_x + size * 1.5, rand_y + size * 1.5],
+            fill="#4ecdc4",
+            outline="#333",
+            width=4,
+        )
 
         try:
             font = ImageFont.load_default()
-        except Exception:
+        except Exception as exc:
+            logger.debug("Font loading failed: %s", exc)
             font = None
         draw.text((width // 2 - 50, height - 50), prompt[:20], fill="#333", font=font)
 
@@ -153,12 +166,13 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGBA", (width, height), color=(255, 255, 255, 0))
         draw = ImageDraw.Draw(img)
 
         import random
+
         random.seed(hash(prompt))
 
         colors = [
@@ -186,23 +200,32 @@ class ImagesRouter:
         try:
             from PIL import Image, ImageDraw
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGB", (width, height), color="#fdfbf7")
         draw = ImageDraw.Draw(img)
 
         import random
+
         random.seed(hash(prompt + "sketch"))
 
         color = (50, 50, 50)
 
         for i in range(0, width, 10):
             y_start = random.randint(0, height // 4)
-            draw.line([i, y_start, i, y_start + random.randint(50, 200)], fill=color, width=random.randint(1, 2))
+            draw.line(
+                [i, y_start, i, y_start + random.randint(50, 200)],
+                fill=color,
+                width=random.randint(1, 2),
+            )
 
         for j in range(0, height, 10):
             x_start = random.randint(0, width // 4)
-            draw.line([x_start, j, x_start + random.randint(50, 200), j], fill=color, width=random.randint(1, 2))
+            draw.line(
+                [x_start, j, x_start + random.randint(50, 200), j],
+                fill=color,
+                width=random.randint(1, 2),
+            )
 
         cx, cy = width // 2, height // 2
         draw.arc([cx - 80, cy - 80, cx + 80, cy + 80], 0, 270, fill=color, width=3)
@@ -215,14 +238,15 @@ class ImagesRouter:
     def _generate_fantasy_image(self, prompt: str, width: int = 512, height: int = 512) -> bytes:
         """Generate a fantasy-style image with magical colors and glow."""
         try:
-            from PIL import Image, ImageDraw, ImageFilter
+            from PIL import Image, ImageDraw
         except ImportError:
-            raise HTTPException(status_code=500, detail="Pillow library required")
+            raise_error("Pillow library required", "E_INFRA_STARTUP", status_code=500)
 
         img = Image.new("RGB", (width, height), color="#1a1a2e")
         draw = ImageDraw.Draw(img)
 
         import random
+
         random.seed(hash(prompt + "fantasy"))
 
         for _ in range(50):
@@ -237,10 +261,10 @@ class ImagesRouter:
             cy = height // 2 + random.randint(-100, 100)
             size = 100 - i * 15
             alpha = 60 - i * 10
-            draw.ellipse([cx - size, cy - size, cx + size, cy + size],
-                         fill=(*self.hex_to_rgb(color), alpha)) if False else None
-            draw.ellipse([cx - size, cy - size, cx + size, cy + size],
-                         fill=self.hex_to_rgb(color))
+            draw.ellipse(
+                [cx - size, cy - size, cx + size, cy + size], fill=(*self.hex_to_rgb(color), alpha)
+            ) if False else None
+            draw.ellipse([cx - size, cy - size, cx + size, cy + size], fill=self.hex_to_rgb(color))
 
         buf = io.BytesIO()
         img.save(buf, format="PNG")
@@ -251,7 +275,7 @@ class ImagesRouter:
     def hex_to_rgb(hex_color: str) -> tuple:
         """Convert hex color to RGB tuple."""
         hex_color = hex_color.lstrip("#")
-        return tuple(int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+        return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
     # ── Generation Functions ───────────────────────────────────────────────
 
@@ -274,6 +298,7 @@ class ImagesRouter:
         gallery_dir.mkdir(parents=True, exist_ok=True)
 
         import uuid
+
         filename = f"generated_{uuid.uuid4().hex[:8]}.png"
         filepath = gallery_dir / filename
 
@@ -283,59 +308,64 @@ class ImagesRouter:
 
     # ── Endpoints ─────────────────────────────────────────────────────────
 
+    @endpoint("images.generate_image")
     async def generate_image(
         self,
         request: GenerateRequest,
         background_tasks: BackgroundTasks = None,
+        auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
-        """Generate an image from text description.
+        """Generate an image from text description."""
+        import time as _time
 
-        Creates an AI-generated image using procedural generation (no external APIs required).
-        Returns a base64-encoded PNG image.
+        _t0 = _time.monotonic()
+        image_bytes = self._generate_image(request.prompt, request.style)
 
-        Args:
-            request: GenerateRequest with prompt and style
+        image_path = self._save_image(image_bytes, request.style)
 
-        Returns:
-            GenerateResponse with image data, style, prompt, and ID
-        """
-        try:
-            image_bytes = self._generate_image(request.prompt, request.style)
+        base64_image = base64.b64encode(image_bytes).decode("utf-8")
+        data_url = f"data:image/png;base64,{base64_image}"
+        _elapsed_ms = (_time.monotonic() - _t0) * 1000
+        safe_audit_log(
+            "images.generate",
+            resource=request.prompt[:80],
+            detail=f"style={request.style} elapsed={_elapsed_ms:.0f}ms",
+        )
 
-            image_path = self._save_image(image_bytes, request.style)
+        return GenerateResponse(
+            image=data_url,
+            style=request.style,
+            prompt=request.prompt,
+            id=image_path.split("/")[-1].replace(".png", ""),
+        )
 
-            base64_image = base64.b64encode(image_bytes).decode("utf-8")
-            data_url = f"data:image/png;base64,{base64_image}"
-
-            return GenerateResponse(
-                image=data_url,
-                style=request.style,
-                prompt=request.prompt,
-                id=image_path.split("/")[-1].replace(".png", ""),
-            )
-
-        except Exception as e:
-            classify_and_raise(e, source="images_generate")
-            logger.error(f"Image generation failed: {e}", extra={"tag": "MODEL"})
-            raise HTTPException(status_code=500, detail=f"Failed to generate image: {e}")
-
+    @endpoint("images.list_gallery")
     async def list_gallery(self) -> dict:
         """List all generated images in the gallery."""
         gallery_dir = Path(__file__).resolve().parents[4] / "data" / "gallery"
 
-        if not gallery_dir.exists():
-            return success_response(data={"images": []})
+        def _scan_gallery():
+            if not gallery_dir.exists():
+                return []
+            images = []
+            for filepath in sorted(
+                gallery_dir.glob("generated_*.png"),
+                key=lambda x: x.stat().st_mtime,
+                reverse=True,
+            ):
+                images.append(
+                    {
+                        "id": filepath.stem,
+                        "path": f"/data/gallery/{filepath.name}",
+                        "created": int(filepath.stat().st_mtime),
+                    }
+                )
+            return images[:50]
 
-        images = []
-        for filepath in sorted(gallery_dir.glob("generated_*.png"), key=lambda x: x.stat().st_mtime, reverse=True):
-            images.append({
-                "id": filepath.stem,
-                "path": f"/data/gallery/{filepath.name}",
-                "created": int(filepath.stat().st_mtime),
-            })
+        images = await asyncio.to_thread(_scan_gallery)
+        return success_response(data={"images": images})
 
-        return success_response(data={"images": images[:50]})
-
+    @endpoint("images.list_styles")
     async def list_styles(self) -> dict:
         """List available image generation styles."""
         return success_response(data={"styles": list(self.STYLES.items())})

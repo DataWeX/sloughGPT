@@ -2,6 +2,9 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, cleanup } from '@testing-library/react'
 import React from 'react'
 
+const mockPush = vi.fn()
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+
 const mockCtx: {
   model: {
     availableModels: string[];
@@ -50,6 +53,7 @@ vi.mock('@sloughgpt/strui', () => {
     DropdownMenuSub: ({ children }: any) => <div>{children}</div>, DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
     DropdownMenuSubTrigger: DMT, DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    Spinner: () => <span data-testid="spinner">...</span>,
     IconChevronDown: () => <span data-testid="icon-chevron-down">▼</span>,
     IconCheck: () => <span data-testid="icon-check">✓</span>,
     IconRefresh: () => <span data-testid="icon-refresh">↻</span>,

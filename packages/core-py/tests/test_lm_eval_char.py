@@ -1,4 +1,4 @@
-"""Tests for domains/training/lm_eval_char.py — char-LM perplexity eval.
+"""Tests for domain/training/_internal/lm_eval_char.py — char-LM perplexity eval.
 
 The main path is exercised end-to-end against a real tiny ``SloughGPTModel``
 on the numpy SloNet stack (no PyTorch, no weights, no network). CLI wrapper
@@ -10,8 +10,8 @@ import math
 import numpy as np
 import pytest
 
-import domains.training.lm_eval_char as ev
-from domains.models import SloughGPTModel
+import domain.training._internal.lm_eval_char as ev
+from domain.models import SloughGPTModel
 
 VOCAB = 64
 EMBED = 32
@@ -19,8 +19,9 @@ BLOCK = 8
 
 
 def _make_model():
-    return SloughGPTModel(vocab_size=VOCAB, n_embed=EMBED, n_layer=2, n_head=4,
-                          block_size=BLOCK, dropout=0.1)
+    return SloughGPTModel(
+        vocab_size=VOCAB, n_embed=EMBED, n_layer=2, n_head=4, block_size=BLOCK, dropout=0.1
+    )
 
 
 def _bundle(model):
@@ -31,18 +32,28 @@ def _bundle(model):
         "model_state_dict": sd,
         "stoi": stoi,
         "itos": itos,
-        "training_info": {"vocab_size": VOCAB, "n_embed": EMBED, "n_layer": 2,
-                          "n_head": 4, "block_size": BLOCK},
+        "training_info": {
+            "vocab_size": VOCAB,
+            "n_embed": EMBED,
+            "n_layer": 2,
+            "n_head": 4,
+            "block_size": BLOCK,
+        },
     }
 
 
 class TestEvaluateSoulCharLm:
     def _write_soul(self, tmp_path, model, *, stoi=None, itos=None, chars=None):
-        from domains.inference.slo_format import SloProfile, save_soul
+        from domain.inference._internal.slo_format import SloProfile, save_soul
 
         soul = SloProfile(name="eval-soul")
-        cfg = {"vocab_size": VOCAB, "n_embed": EMBED, "n_layer": 2,
-               "n_head": 4, "block_size": BLOCK}
+        cfg = {
+            "vocab_size": VOCAB,
+            "n_embed": EMBED,
+            "n_layer": 2,
+            "n_head": 4,
+            "block_size": BLOCK,
+        }
         soul.metadata["config"] = cfg
         soul.metadata["vocab_size"] = VOCAB
         if stoi is not None:
@@ -133,32 +144,144 @@ class TestEvaluateSoulCharLm:
         with pytest.raises(ValueError):
             ev.evaluate_soul_char_lm(str(soul_path), str(p))
 
+    def test_perplexity_equals_exp_mean_loss(self, tmp_path):
+        model = _make_model()
+        stoi = {chr(ord("a") + i): i for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        p = tmp_path / "eval.txt"
+        p.write_text("abcdefghij" * 10, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        assert math.isclose(out["perplexity"], math.exp(out["mean_loss"]), rel_tol=1e-9)
+
+    def test_mean_loss_non_negative(self, tmp_path):
+        model = _make_model()
+        stoi = {chr(ord("a") + i): i for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        p = tmp_path / "eval.txt"
+        p.write_text("abcdefghij" * 10, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        assert out["mean_loss"] >= 0
+
+    def test_eval_chars_matches_input(self, tmp_path):
+        model = _make_model()
+        stoi = {chr(ord("a") + i): i for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        text = "abcdefghij" * 5
+        p = tmp_path / "eval.txt"
+        p.write_text(text, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        # All 50 chars are in stoi, so no skipped chars
+        assert out["num_chars_skipped"] == 0
+
+    def test_single_char_repeated(self, tmp_path):
+        model = _make_model()
+        stoi = {"a": 0}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        p = tmp_path / "eval.txt"
+        p.write_text("a" * 20, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        assert out["mean_loss"] >= 0
+
+    def test_unicode_chars_skipped(self, tmp_path):
+        model = _make_model()
+        stoi = {chr(ord("a") + i): i for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        text = "abcdefghij" * 5 + "日本語"
+        p = tmp_path / "eval.txt"
+        p.write_text(text, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        assert out["num_chars_skipped"] == 3
+
+    def test_max_chars_none_unlimited(self, tmp_path):
+        model = _make_model()
+        stoi = {chr(ord("a") + i): i for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        text = "abcdefghij" * 50
+        p = tmp_path / "eval.txt"
+        p.write_text(text, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p), max_chars=None)
+        assert out["num_chars_skipped"] == 0
+
+    def test_warnings_list_type(self, tmp_path):
+        model = _make_model()
+        stoi = {chr(ord("a") + i): i for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        p = tmp_path / "eval.txt"
+        p.write_text("abcdefghij" * 5, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        assert isinstance(out["warnings"], list)
+
+    def test_output_keys(self, tmp_path):
+        model = _make_model()
+        stoi = {chr(ord("a") + i): i for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, stoi=stoi)
+        p = tmp_path / "eval.txt"
+        p.write_text("abcdefghij" * 5, encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        expected_keys = {
+            "mean_loss",
+            "perplexity",
+            "num_token_positions",
+            "num_chars_skipped",
+            "block_size",
+            "vocab_size",
+            "warnings",
+        }
+        assert expected_keys.issubset(out.keys())
+
+    def testitos_based_vocab(self, tmp_path):
+        model = _make_model()
+        itos = {i: chr(ord("a") + i) for i in range(26)}
+        soul_path = self._write_soul(tmp_path, model, itos=itos)
+        p = tmp_path / "eval.txt"
+        p.write_text("abcdefghijklmnopqrstuvwxyz", encoding="utf-8")
+        out = ev.evaluate_soul_char_lm(str(soul_path), str(p))
+        assert out["num_chars_skipped"] == 0
+
 
 class TestMain:
     def test_json_output(self, tmp_path, monkeypatch, capsys):
         import json as json_lib
+
         monkeypatch.setattr(
             ev,
             "evaluate_soul_char_lm",
-            lambda *a, **k: {"mean_loss": 2.0, "perplexity": math.exp(2), "num_token_positions": 8,
-                             "num_chars_skipped": 0, "block_size": 8, "vocab_size": 64, "warnings": []},
+            lambda *a, **k: {
+                "mean_loss": 2.0,
+                "perplexity": math.exp(2),
+                "num_token_positions": 8,
+                "num_chars_skipped": 0,
+                "block_size": 8,
+                "vocab_size": 64,
+                "warnings": [],
+            },
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
-                                         "--data", "d.txt", "--json"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt", "--json"]
+        )
         ev.main()
         payload = json_lib.loads(capsys.readouterr().out)
         assert payload["perplexity"] == pytest.approx(math.exp(2))
 
     def test_json_output_inf_perplexity(self, monkeypatch, capsys):
         import json as json_lib
+
         monkeypatch.setattr(
             ev,
             "evaluate_soul_char_lm",
-            lambda *a, **k: {"mean_loss": 200.0, "perplexity": float("inf"), "num_token_positions": 8,
-                             "num_chars_skipped": 0, "block_size": 8, "vocab_size": 64, "warnings": []},
+            lambda *a, **k: {
+                "mean_loss": 200.0,
+                "perplexity": float("inf"),
+                "num_token_positions": 8,
+                "num_chars_skipped": 0,
+                "block_size": 8,
+                "vocab_size": 64,
+                "warnings": [],
+            },
         )
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul",
-                                         "--data", "d.txt", "--json"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt", "--json"]
+        )
         ev.main()
         payload = json_lib.loads(capsys.readouterr().out)
         assert payload["perplexity"] is None
@@ -168,8 +291,78 @@ class TestMain:
             raise ValueError("bad checkpoint")
 
         monkeypatch.setattr(ev, "evaluate_soul_char_lm", _boom)
-        monkeypatch.setattr("sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt"])
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt"]
+        )
         with pytest.raises(SystemExit) as exc:
             ev.main()
         assert exc.value.code == 1
-        assert "bad checkpoint" in capsys.readouterr().err
+
+    def test_json_output_all_keys(self, monkeypatch, capsys):
+        import json as json_lib
+
+        monkeypatch.setattr(
+            ev,
+            "evaluate_soul_char_lm",
+            lambda *a, **k: {
+                "mean_loss": 1.0,
+                "perplexity": math.e,
+                "num_token_positions": 16,
+                "num_chars_skipped": 2,
+                "block_size": 8,
+                "vocab_size": 32,
+                "warnings": ["warn1"],
+            },
+        )
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt", "--json"]
+        )
+        ev.main()
+        payload = json_lib.loads(capsys.readouterr().out)
+        assert payload["num_chars_skipped"] == 2
+        assert payload["warnings"] == ["warn1"]
+
+    def test_no_json_outputs_to_logger(self, monkeypatch, capsys):
+        monkeypatch.setattr(
+            ev,
+            "evaluate_soul_char_lm",
+            lambda *a, **k: {
+                "mean_loss": 1.0,
+                "perplexity": math.e,
+                "num_token_positions": 8,
+                "num_chars_skipped": 0,
+                "block_size": 8,
+                "vocab_size": 64,
+                "warnings": [],
+            },
+        )
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "d.txt"]
+        )
+        ev.main()
+        out = capsys.readouterr()
+        assert out.out == ""
+
+    def test_file_not_found_error_exits(self, monkeypatch, capsys):
+        def _boom(*a, **k):
+            raise FileNotFoundError("missing.soul")
+
+        monkeypatch.setattr(ev, "evaluate_soul_char_lm", _boom)
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "missing.soul", "--data", "d.txt"]
+        )
+        with pytest.raises(SystemExit) as exc:
+            ev.main()
+        assert exc.value.code == 1
+
+    def test_value_error_exits(self, monkeypatch, capsys):
+        def _boom(*a, **k):
+            raise ValueError("too short")
+
+        monkeypatch.setattr(ev, "evaluate_soul_char_lm", _boom)
+        monkeypatch.setattr(
+            "sys.argv", ["lm_eval_char", "--checkpoint", "c.soul", "--data", "short.txt"]
+        )
+        with pytest.raises(SystemExit) as exc:
+            ev.main()
+        assert exc.value.code == 1

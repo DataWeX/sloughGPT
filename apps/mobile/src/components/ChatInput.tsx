@@ -3,6 +3,7 @@ import {
   TextInput,
   Pressable,
   Keyboard,
+  Alert,
 } from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -10,6 +11,7 @@ import {triggerHaptic} from '../services/haptics';
 import {QuickPromptPicker} from './QuickPromptPicker';
 import {SlashCommandPicker} from './SlashCommandPicker';
 import {pickDocument, isTextFile, formatFileSize} from '../services/file-upload';
+import {takePhoto, pickImage, imageDataUrl} from '../services/image-upload';
 import {getDraft, saveDraft, clearDraft} from '../services/drafts';
 import {toast} from '../services/toast';
 import {Icon} from './Icon';
@@ -17,6 +19,7 @@ import type {ChatCommand} from '../services/chat-commands';
 
 interface Props {
   onSend: (text: string) => void;
+  onSendWithImages?: (text: string, images: string[]) => void;
   onImage?: () => void;
   onVoice?: () => void;
   onFile?: (content: string, name: string) => void;
@@ -31,7 +34,7 @@ interface Props {
   onExecuteCommand?: (command: ChatCommand, args: string[]) => void;
 }
 
-export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle, onExecuteCommand}: Props) {
+export function ChatInput({onSend, onSendWithImages, onImage, onVoice, onFile, disabled, onStop, isRecording, sessionId, editText, onCancelEdit, voiceMessageMode, onVoiceMessageToggle, onExecuteCommand}: Props) {
   const colors = useColors();
   const [text, setText] = useState('');
   const [showPrompts, setShowPrompts] = useState(false);
@@ -95,27 +98,61 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
 
   const handlePlus = async () => {
     await triggerHaptic('light');
-    try {
-      const file = await pickDocument();
-      if (file) {
-        if (isTextFile(file) && onFile) {
+    Alert.alert('Add Attachment', 'Choose an option', [
+      {
+        text: 'Camera',
+        onPress: async () => {
           try {
-            const RNFS = require('react-native-fs');
-            const content = await RNFS.readFile(decodeURIComponent(file.uri.replace('file://', '')));
-            onFile(content, file.name);
-          } catch {
-            toast.warn('File reading not available — install react-native-fs');
-            return;
+            const photo = await takePhoto();
+            if (photo) {
+              const dataUrl = imageDataUrl(photo);
+              if (onSendWithImages) {
+                onSendWithImages('What do you see in this image?', [dataUrl]);
+              } else if (onImage) {
+                onImage();
+              }
+            }
+          } catch (e: any) {
+            toast.error(e.message || 'Failed to take photo');
           }
-        } else if (file.mimeType.startsWith('image/') && onImage) {
-          onImage();
-        } else {
-          toast.warn(`${file.name} (${formatFileSize(file.size)}) — text files only for now`);
-        }
-      }
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to pick file');
-    }
+        },
+      },
+      {
+        text: 'Gallery',
+        onPress: async () => {
+          if (onImage) {
+            onImage();
+          }
+        },
+      },
+      {
+        text: 'File',
+        onPress: async () => {
+          try {
+            const file = await pickDocument();
+            if (file) {
+              if (isTextFile(file) && onFile) {
+                try {
+                  const RNFS = require('react-native-fs');
+                  const content = await RNFS.readFile(decodeURIComponent(file.uri.replace('file://', '')));
+                  onFile(content, file.name);
+                } catch {
+                  toast.warn('File reading not available — install react-native-fs');
+                  return;
+                }
+              } else if (file.mimeType.startsWith('image/') && onImage) {
+                onImage();
+              } else {
+                toast.warn(`${file.name} (${formatFileSize(file.size)}) — text files only for now`);
+              }
+            }
+          } catch (e: any) {
+            toast.error(e.message || 'Failed to pick file');
+          }
+        },
+      },
+      {text: 'Cancel', style: 'cancel'},
+    ]);
   };
 
   const hasText = text.trim().length > 0;
@@ -133,8 +170,6 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     backgroundColor: colors.primaryAlpha(0.06),
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    borderWidth: 0.5,
-    borderColor: colors.primaryAlpha(0.12),
   };
 
   const inputStyle = {
@@ -142,14 +177,12 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     fontSize: 15,
     fontWeight: '400' as const,
     color: textColor,
-    backgroundColor: colors.primaryAlpha(0.04),
-    borderRadius: 14,
-    paddingHorizontal: 16,
+    backgroundColor: 'transparent',
+    borderRadius: 20,
+    paddingHorizontal: 8,
     paddingVertical: 10,
     maxHeight: 120,
     minHeight: 42,
-    borderWidth: 0.5,
-    borderColor: colors.primaryAlpha(0.1),
   };
 
   const circleBtn = (size: number, color: string) => ({
@@ -161,49 +194,36 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
     justifyContent: 'center' as const,
     shadowColor: primary,
     shadowOffset: {width: 0, height: 2} as const,
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   });
 
   return (
-    <YStack paddingHorizontal={16} paddingVertical={8} backgroundColor={bg} borderTopWidth={1} borderTopColor={border}>
-      <XStack alignItems="flex-end" gap={8}>
+    <YStack paddingHorizontal={16} paddingVertical={12} backgroundColor="transparent">
+      <XStack
+        alignItems="flex-end"
+        gap={10}
+        backgroundColor={colors.background}
+        borderRadius={24}
+        paddingHorizontal={8}
+        paddingVertical={6}
+        borderWidth={1}
+        borderColor={colors.primaryAlpha(0.12)}
+        shadowColor={colors.primary}
+        shadowOffset={{width: 0, height: 4}}
+        shadowOpacity={0.08}
+        shadowRadius={16}
+        elevation={4}>
         <Pressable onPress={handlePlus} disabled={disabled} style={iconBtnStyle} accessibilityLabel="Add attachment">
           <Icon name="plus" size={18} color={textSecondary} />
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            triggerHaptic('light');
-            setText('/');
-            setShowSlash(true);
-            setTimeout(() => inputRef.current?.focus(), 100);
-          }}
-          disabled={disabled}
-          style={iconBtnStyle}
-          accessible accessibilityRole="button" accessibilityLabel="Slash commands">
-          <Text fontSize={16} fontWeight="600" color={textSecondary} fontFamily="JetBrainsMono-Regular">/</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => {
-            triggerHaptic('light');
-            setShowPrompts(true);
-          }}
-          disabled={disabled}
-          style={iconBtnStyle}
-          accessibilityLabel="Open quick prompts"
-          accessibilityRole="button"
-          accessible={true}>
-          <Icon name="zap" size={18} color={textSecondary} />
         </Pressable>
 
         <TextInput
           ref={inputRef}
           value={text}
           onChangeText={handleChangeText}
-          placeholder="Type a message..."
+          placeholder="Message..."
           placeholderTextColor={textMuted}
           multiline
           maxLength={4000}
@@ -221,14 +241,12 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
               onCancelEdit();
             }}
             style={{
-              width: 32,
-              height: 32,
+              width: 36,
+              height: 36,
               borderRadius: 9999,
-              backgroundColor: bg,
+              backgroundColor: colors.primaryAlpha(0.06),
               alignItems: 'center',
               justifyContent: 'center',
-              borderWidth: 0.5,
-              borderColor: border,
             }}
             accessibilityLabel="Cancel edit"
             accessibilityRole="button"
@@ -246,50 +264,26 @@ export function ChatInput({onSend, onImage, onVoice, onFile, disabled, onStop, i
             <Icon name="arrow-up" size={20} color="white" />
           </Pressable>
         ) : (
-          <XStack alignItems="center" gap={4}>
-            {onVoiceMessageToggle && !isRecording && (
-              <Pressable
-                onPress={onVoiceMessageToggle}
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 9999,
-                  backgroundColor: bg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 0.5,
-                  borderColor: border,
-                }}
-                accessibilityLabel="Toggle voice message"
-                accessibilityRole="button"
-                accessible={true}>
-                <Icon name="mic" size={12} color={textSecondary} />
-              </Pressable>
-            )}
-            <Pressable
-              onPress={onVoice}
-              style={[
-                {
-                  width: 40,
-                  height: 40,
-                  borderRadius: 9999,
-                  backgroundColor: bg,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderWidth: 0.5,
-                  borderColor: border,
-                },
-                isRecording && {
-                  backgroundColor: colors.errorLight,
-                  borderColor: colors.error,
-                },
-              ]}
-              accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice input'}
-              accessibilityRole="button"
-              accessible={true}>
-              <Icon name={isRecording ? 'stop-circle' : voiceMessageMode ? 'music' : 'mic'} size={18} color={textSecondary} />
-            </Pressable>
-          </XStack>
+          <Pressable
+            onPress={onVoice}
+            style={[
+              {
+                width: 40,
+                height: 40,
+                borderRadius: 9999,
+                backgroundColor: colors.primaryAlpha(0.06),
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+              isRecording && {
+                backgroundColor: colors.errorLight,
+              },
+            ]}
+            accessibilityLabel={isRecording ? 'Stop recording' : 'Start voice input'}
+            accessibilityRole="button"
+            accessible={true}>
+            <Icon name={isRecording ? 'stop-circle' : 'mic'} size={18} color={textSecondary} />
+          </Pressable>
         )}
       </XStack>
 

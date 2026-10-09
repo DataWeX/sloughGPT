@@ -127,13 +127,14 @@ describe('modelController', () => {
   it('getEngineStatus returns engine info', async () => {
     apiClient.apiGet.mockResolvedValue({ engine: 'slo', version: '1.0.0', models_loaded: 1, uptime_s: 3600, memory_usage_mb: 512 })
     const result = await modelController.getEngineStatus()
-    expect(result.engine).toBe('slo')
+    expect(result).not.toBeNull()
+    expect(result!.engine).toBe('slo')
   })
 
-  it('getEngineStatus returns default on error', async () => {
+  it('getEngineStatus returns null on error', async () => {
     apiClient.apiGet.mockRejectedValue(new Error('fail'))
     const result = await modelController.getEngineStatus()
-    expect(result.engine).toBe('unknown')
+    expect(result).toBeNull()
   })
 
   it('reloadEngine posts reload', async () => {

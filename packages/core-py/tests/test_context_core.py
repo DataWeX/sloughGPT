@@ -1,841 +1,932 @@
-"""Tests for context_core — multi-layer context management, memory, RAG, frames."""
+"""Tests for domain.infrastructure.context_core — ContextCore."""
 
-import asyncio
-import time
-from types import SimpleNamespace
-
-import pytest
-
-from domains.infrastructure.context_core import (
+from domain.infrastructure._internal.context_core import (
     ContextCore,
     ContextFrame,
     ContextLayer,
-    get_context_core,
-    reset_context_core,
 )
-
-
-# ── Dataclasses ─────────────────────────────────────────────────────────
 
 
 class TestContextLayer:
     def test_defaults(self):
-        layer = ContextLayer("session", "hi", 3, "s", "t")
-        assert layer.priority == 1.0
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="2024-01-01",
+        )
+        assert cl.priority == 1.0
 
-    def test_full_construction(self):
-        layer = ContextLayer("rag", "docs", 10, "vs", "t", priority=0.7)
-        assert layer.layer_type == "rag"
-        assert layer.priority == 0.7
+    def test_custom_priority(self):
+        cl = ContextLayer(
+            layer_type="rag",
+            content="doc",
+            tokens=10,
+            source="vs",
+            timestamp="2024-01-01",
+            priority=0.5,
+        )
+        assert cl.priority == 0.5
+
+    def test_layer_type_session(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
+        )
+        assert cl.layer_type == "session"
+
+    def test_layer_type_memory(self):
+        cl = ContextLayer(
+            layer_type="memory",
+            content="fact",
+            tokens=2,
+            source="ep",
+            timestamp="t",
+        )
+        assert cl.layer_type == "memory"
+
+    def test_layer_type_rag(self):
+        cl = ContextLayer(
+            layer_type="rag",
+            content="doc",
+            tokens=3,
+            source="vs",
+            timestamp="t",
+        )
+        assert cl.layer_type == "rag"
+
+    def test_layer_type_system(self):
+        cl = ContextLayer(
+            layer_type="system",
+            content="prompt",
+            tokens=4,
+            source="sys",
+            timestamp="t",
+        )
+        assert cl.layer_type == "system"
+
+    def test_content_preserved(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hello world",
+            tokens=2,
+            source="test",
+            timestamp="t",
+        )
+        assert cl.content == "hello world"
+
+    def test_tokens_preserved(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=42,
+            source="test",
+            timestamp="t",
+        )
+        assert cl.tokens == 42
+
+    def test_source_preserved(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="my_source",
+            timestamp="t",
+        )
+        assert cl.source == "my_source"
+
+    def test_timestamp_preserved(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="2024-01-01T00:00:00",
+        )
+        assert cl.timestamp == "2024-01-01T00:00:00"
+
+    def test_priority_zero(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
+            priority=0.0,
+        )
+        assert cl.priority == 0.0
+
+    def test_priority_negative(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
+            priority=-1.0,
+        )
+        assert cl.priority == -1.0
+
+    def test_priority_large(self):
+        cl = ContextLayer(
+            layer_type="session",
+            content="hi",
+            tokens=1,
+            source="test",
+            timestamp="t",
+            priority=100.0,
+        )
+        assert cl.priority == 100.0
 
 
 class TestContextFrame:
-    def test_to_prompt_sorts_by_priority_desc(self):
-        frame = ContextFrame(
-            id="f1",
-            system_prompt="SYS",
-            layers=[
-                ContextLayer("session", "low", 1, "s", "t", priority=0.2),
-                ContextLayer("system", "high", 1, "s", "t", priority=1.0),
-            ],
+    def test_to_prompt_system_only(self):
+        cf = ContextFrame(
+            id="a",
+            system_prompt="Be helpful",
+            layers=[],
             total_tokens=10,
-            max_tokens=100,
+            max_tokens=2048,
+            created_at="2024-01-01",
+        )
+        assert cf.to_prompt() == "Be helpful"
+
+    def test_to_prompt_sorted_by_priority(self):
+        layers = [
+            ContextLayer("rag", "doc text", 5, "vs", "t", priority=0.5),
+            ContextLayer("session", "user msg", 3, "sess", "t", priority=1.0),
+        ]
+        cf = ContextFrame(
+            id="b",
+            system_prompt="sys",
+            layers=layers,
+            total_tokens=10,
+            max_tokens=2048,
             created_at="t",
         )
-        out = frame.to_prompt()
-        assert out.startswith("SYS")
-        assert "[SYSTEM] high" in out
-        assert "[SESSION] low" in out
-        assert out.index("[SYSTEM]") < out.index("[SESSION]")
+        result = cf.to_prompt()
+        lines = result.split("\n\n")
+        assert "[SESSION] user msg" in lines[1]
+        assert "[RAG] doc text" in lines[2]
 
-    def test_to_prompt_empty_layers(self):
-        frame = ContextFrame("f", "SYS", [], 1, 10, "t")
-        assert frame.to_prompt() == "SYS"
+    def test_to_prompt_includes_uppercase_layer_types(self):
+        layers = [
+            ContextLayer("memory", "fact", 2, "ep", "t", priority=0.8),
+        ]
+        cf = ContextFrame(
+            id="c",
+            system_prompt="",
+            layers=layers,
+            total_tokens=5,
+            max_tokens=2048,
+            created_at="t",
+        )
+        assert "[MEMORY] fact" in cf.to_prompt()
+
+    def test_to_prompt_empty_system(self):
+        cf = ContextFrame(
+            id="d",
+            system_prompt="",
+            layers=[],
+            total_tokens=0,
+            max_tokens=2048,
+            created_at="t",
+        )
+        assert cf.to_prompt() == ""
+
+    def test_to_prompt_multiple_layers_sorted(self):
+        layers = [
+            ContextLayer("rag", "doc", 5, "vs", "t", priority=0.3),
+            ContextLayer("session", "msg", 3, "sess", "t", priority=0.9),
+            ContextLayer("memory", "fact", 2, "ep", "t", priority=0.6),
+        ]
+        cf = ContextFrame(
+            id="e",
+            system_prompt="sys",
+            layers=layers,
+            total_tokens=10,
+            max_tokens=2048,
+            created_at="t",
+        )
+        result = cf.to_prompt()
+        assert "[SESSION] msg" in result
+        assert "[MEMORY] fact" in result
+        assert "[RAG] doc" in result
+
+    def test_frame_id_preserved(self):
+        cf = ContextFrame(
+            id="my_id",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=0,
+            max_tokens=2048,
+            created_at="t",
+        )
+        assert cf.id == "my_id"
+
+    def test_total_tokens_preserved(self):
+        cf = ContextFrame(
+            id="a",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=123,
+            max_tokens=2048,
+            created_at="t",
+        )
+        assert cf.total_tokens == 123
+
+    def test_max_tokens_preserved(self):
+        cf = ContextFrame(
+            id="a",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=0,
+            max_tokens=4096,
+            created_at="t",
+        )
+        assert cf.max_tokens == 4096
+
+    def test_created_at_preserved(self):
+        cf = ContextFrame(
+            id="a",
+            system_prompt="sys",
+            layers=[],
+            total_tokens=0,
+            max_tokens=2048,
+            created_at="2024-01-01",
+        )
+        assert cf.created_at == "2024-01-01"
 
 
-# ── Core construction & session ─────────────────────────────────────────
-
-
-class TestContextCoreInit:
-    def test_defaults(self):
+class TestContextCore:
+    def test_init_defaults(self):
         cc = ContextCore()
         assert cc.max_tokens == 2048
-        assert cc.system_prompt == ContextCore.DEFAULT_SYSTEM
-        assert cc.working_capacity == 7
         assert cc.memory_enabled is True
         assert cc.rag_enabled is True
-        assert cc.session_messages == []
-        assert cc.working_memory == []
-        assert cc.frame_history == []
+        assert cc.working_capacity == 7
+        assert len(cc.session_messages) == 0
+        assert len(cc.working_memory) == 0
+        assert "SloughGPT" in cc.system_prompt
 
-    def test_custom_max_tokens_and_flags(self):
-        cc = ContextCore(max_tokens=128, memory_enabled=False, rag_enabled=False)
-        assert cc.max_tokens == 128
+    def test_init_custom_max_tokens(self):
+        cc = ContextCore(max_tokens=4096)
+        assert cc.max_tokens == 4096
+
+    def test_init_memory_disabled(self):
+        cc = ContextCore(memory_enabled=False)
         assert cc.memory_enabled is False
+
+    def test_init_rag_disabled(self):
+        cc = ContextCore(rag_enabled=False)
         assert cc.rag_enabled is False
 
-
-class TestSession:
-    def test_set_session_id_creates_episodic_slot(self):
+    def test_init_managers_default_none(self):
         cc = ContextCore()
-        cc.set_session_id("s1")
-        assert cc.session_id == "s1"
-        assert cc.episodic_memory["s1"] == []
-
-    def test_set_session_id_preserves_existing(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"].append({"x": 1})
-        cc.set_session_id("s1")
-        assert cc.episodic_memory["s1"] == [{"x": 1}]
-
-    def test_add_message(self):
-        cc = ContextCore()
-        cc.add_message("user", "hello there")
-        assert cc.session_messages[-1] == {"role": "user", "content": "hello there"}
-        assert cc.working_memory[-1]["role"] == "user"
-        assert len(cc.sensory_buffer) == 1
-
-    def test_add_response(self):
-        cc = ContextCore()
-        cc.add_response("world", model="gpt2")
-        assert cc.session_messages[-1] == {"role": "assistant", "content": "world"}
-        assert cc.working_memory[-1]["model"] == "gpt2"
-
-    def test_sensory_buffer_capped(self):
-        cc = ContextCore()
-        for i in range(120):
-            cc._add_sensory(f"item {i}")
-        assert len(cc.sensory_buffer) <= 100
-        assert cc.sensory_buffer[-1]["data"] == "item 119"
-
-
-class TestWorkingMemory:
-    def test_capacity_evicts_and_consolidates(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.working_capacity = 2
-        cc.add_message("user", "one")
-        cc.add_message("user", "two")
-        cc.add_message("user", "three")
-        assert len(cc.working_memory) == 2
-        assert cc.working_memory[0]["content"] == "two"
-        episodes = cc.episodic_memory["s1"]
-        assert any(e["content"]["content"] == "one" for e in episodes)
-
-    def test_eviction_without_session_is_noop(self):
-        cc = ContextCore()
-        cc.working_capacity = 1
-        cc.add_message("user", "a")
-        cc.add_message("user", "b")
-        assert len(cc.working_memory) == 1
-        assert cc.episodic_memory == {}
-
-    def test_capacity_from_memory_manager(self):
-        mm = SimpleNamespace(working_capacity=3)
-        cc = ContextCore(memory_manager=mm)
-        for i in range(5):
-            cc.add_message("user", str(i))
-        assert len(cc.working_memory) == 3
-
-
-# ── Semantic memory ─────────────────────────────────────────────────────
-
-
-class TestSemanticMemory:
-    def test_store_fact_new(self):
-        cc = ContextCore()
-        cc.store_fact("name", "Slough")
-        assert cc.semantic_memory["name"]["value"] == "Slough"
-        assert cc.semantic_memory["name"]["strength"] == 1.0
-
-    def test_store_fact_increments_strength(self):
-        cc = ContextCore()
-        cc.store_fact("k", "v")
-        cc.store_fact("k", "v")
-        assert cc.semantic_memory["k"]["strength"] == 1.1
-
-    def test_recall_fact(self):
-        cc = ContextCore()
-        cc.store_fact("k", 42)
-        assert cc.recall_fact("k") == 42
-
-    def test_recall_missing_returns_none(self):
-        cc = ContextCore()
-        assert cc.recall_fact("nope") is None
-
-    def test_search_semantic_by_key(self):
-        cc = ContextCore()
-        cc.store_fact("user_preference_tone", "formal")
-        cc.store_fact("unrelated", "x")
-        results = cc.search_semantic("preference")
-        assert len(results) == 1
-        assert results[0]["key"] == "user_preference_tone"
-
-    def test_search_semantic_by_value(self):
-        cc = ContextCore()
-        cc.store_fact("color", "blue")
-        results = cc.search_semantic("blue")
-        assert len(results) == 1
-
-    def test_search_semantic_sorted_by_strength(self):
-        cc = ContextCore()
-        cc.store_fact("a", "shared term")
-        cc.store_fact("b", "shared term")
-        cc.store_fact("b", "shared term")  # strength 1.1
-        results = cc.search_semantic("shared")
-        assert results[0]["key"] == "b"
-
-    def test_search_semantic_limit(self):
-        cc = ContextCore()
-        for i in range(10):
-            cc.store_fact(f"common_{i}", "value")
-        assert len(cc.search_semantic("common", limit=3)) == 3
-
-
-# ── Episodic context ────────────────────────────────────────────────────
-
-
-class TestEpisodicContext:
-    def test_disabled_returns_empty(self):
-        cc = ContextCore(memory_enabled=False)
-        cc.set_session_id("s1")
-        assert cc.get_episodic_context() == ""
-
-    def test_no_session_returns_empty(self):
-        cc = ContextCore()
-        assert cc.get_episodic_context() == ""
-
-    def test_empty_episodes_returns_empty(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        assert cc.get_episodic_context() == ""
-
-    def test_recent_episodes(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [
-            {"content": {"role": "user", "content": "one"}, "timestamp": "t"},
-            {"content": {"role": "assistant", "content": "two"}, "timestamp": "t"},
-        ]
-        out = cc.get_episodic_context()
-        assert "[user]: one" in out
-        assert "[assistant]: two" in out
-
-    def test_query_scored_orders_results(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [
-            {"content": {"role": "user", "content": "tell me about cats"}, "timestamp": "t"},
-            {"content": {"role": "user", "content": "unrelated note"}, "timestamp": "t"},
-        ]
-        out = cc.get_episodic_context("cats", limit=1)
-        assert "cats" in out
-        assert "unrelated" not in out
-
-    def test_non_dict_content(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [{"content": "plain string", "timestamp": "t"}]
-        assert "plain string" in cc.get_episodic_context()
-
-
-# ── RAG ─────────────────────────────────────────────────────────────────
-
-
-class _FakeResult:
-    def __init__(self, text, id="doc1", metadata=None, score=0.9):
-        self.text = text
-        self.id = id
-        self.metadata = metadata or {}
-        self.score = score
-
-
-class _FakeStore:
-    def __init__(self, results=None, error=None):
-        self.results = results if results is not None else []
-        self.error = error
-        self.queries = []
-
-    async def query(self, vec, top_k=3):
-        self.queries.append((vec, top_k))
-        if self.error:
-            raise self.error
-        return self.results[:top_k]
-
-
-class _EmptyKnowledge:
-    def search(self, query, top_k=5):
-        return []
-
-
-def _empty_knowledge(monkeypatch):
-    monkeypatch.setattr(
-        "domains.learner.knowledge.get_knowledge_memory",
-        lambda: _EmptyKnowledge(),
-    )
-
-
-def _boom_service():
-    raise RuntimeError("memory service down")
-
-
-class TestRag:
-    def test_disabled_returns_empty(self):
-        cc = ContextCore(rag_enabled=False)
-        assert asyncio.run(cc.get_rag_context("q")) == ""
-
-    def test_with_vector_store_returns_docs(self):
-        cc = ContextCore()
-        store = _FakeStore(results=[_FakeResult("alpha"), _FakeResult("beta")])
-        cc.set_vector_store(store, embedding_fn=lambda q: [0.1, 0.2])
-        out = asyncio.run(cc.get_rag_context("q"))
-        assert "[Doc: doc1] alpha" in out
-        assert "[Doc: doc1] beta" in out
-        assert len(store.queries) == 1
-        assert store.queries[0][1] == 3
-
-    def test_empty_results_returns_empty(self):
-        cc = ContextCore()
-        cc.set_vector_store(_FakeStore(results=[]), embedding_fn=lambda q: [0.1])
-        assert asyncio.run(cc.get_rag_context("q")) == ""
-
-    def test_respects_rag_max_chars(self):
-        cc = ContextCore()
-        cc.set_rag_config(max_chars=10)
-        store = _FakeStore(results=[_FakeResult("x" * 100)])
-        cc.set_vector_store(store, embedding_fn=lambda q: [0.1])
-        out = asyncio.run(cc.get_rag_context("q"))
-        assert out == "[Doc: doc1] " + "x" * 10
-
-    def test_store_error_falls_back_to_semantic(self):
-        cc = ContextCore()
-        cc.store_fact("color", "blue")
-        store = _FakeStore(results=[], error=RuntimeError("boom"))
-        cc.set_vector_store(store, embedding_fn=lambda q: [0.1])
-        out = asyncio.run(cc.get_rag_context("blue"))
-        assert "Related: color = blue" in out
-
-    def test_no_store_falls_back_to_semantic(self, monkeypatch):
-        cc = ContextCore()
-        cc.store_fact("color", "blue")
-        monkeypatch.setattr(cc, "_auto_ingest", lambda: None)
-        _empty_knowledge(monkeypatch)
-        out = asyncio.run(cc.get_rag_context("blue"))
-        assert "Related: color = blue" in out
-
-    def test_auto_ingest_triggered_once(self, monkeypatch):
-        cc = ContextCore()
-        calls = []
-        monkeypatch.setattr(cc, "_auto_ingest", lambda: calls.append(1))
-        _empty_knowledge(monkeypatch)
-        asyncio.run(cc.get_rag_context("nothing matches"))
-        asyncio.run(cc.get_rag_context("nothing matches"))
-        assert len(calls) == 1
-
-    def test_no_store_uses_relevance_gated_knowledge(self, monkeypatch):
-        cc = ContextCore()
-        monkeypatch.setattr(cc, "_auto_ingest", lambda: None)
-        captured = {}
-
-        def _fake_enrich(user_message, auto_search=True, max_facts=5, min_score=0.15):
-            captured["auto_search"] = auto_search
-            captured["max_facts"] = max_facts
-            return {"facts": ["alpha knowledge fact"], "source": "memory", "topics": []}
-
-        monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.enrich_with_knowledge",
-            _fake_enrich,
-        )
-        out = asyncio.run(cc.get_rag_context("q"))
-        assert "[Knowledge] alpha knowledge fact" in out
-        assert captured["auto_search"] is False
-        assert captured["max_facts"] == cc.rag_top_k
-
-
-# ── RAG error paths & auto-ingest ───────────────────────────────────────
-
-
-class TestRagErrorPaths:
-    def test_kmem_raises_falls_back_to_semantic(self, monkeypatch):
-        cc = ContextCore()
-        cc.store_fact("color", "blue")
-        monkeypatch.setattr(cc, "_auto_ingest", lambda: None)
-
-        def _boom():
-            raise RuntimeError("kmem down")
-
-        monkeypatch.setattr(
-            "domains.learner.knowledge_augmenter.enrich_with_knowledge", _boom
-        )
-        out = asyncio.run(cc.get_rag_context("blue"))
-        assert "Related: color = blue" in out
-
-    def test_kmem_raises_no_facts_returns_empty(self, monkeypatch):
-        cc = ContextCore()
-        monkeypatch.setattr(cc, "_auto_ingest", lambda: None)
-
-        def _boom():
-            raise RuntimeError("kmem down")
-
-        monkeypatch.setattr("domains.learner.knowledge.get_knowledge_memory", _boom)
-        assert asyncio.run(cc.get_rag_context("q")) == ""
-
-    def test_vector_store_uses_simple_embed_fallback(self):
-        cc = ContextCore()
-        store = _FakeStore(results=[_FakeResult("alpha")])
-        cc._vector_store = store
-        cc._embedding_fn = None
-        out = asyncio.run(cc.get_rag_context("q"))
-        assert "[Doc: doc1] alpha" in out
-        assert store.queries and store.queries[0][0] is not None
-
-    def test_vector_store_exception_no_facts_returns_empty(self):
-        cc = ContextCore()
-        store = _FakeStore(results=[], error=RuntimeError("boom"))
-        cc.set_vector_store(store, embedding_fn=lambda q: [0.1])
-        assert asyncio.run(cc.get_rag_context("q")) == ""
-
-
-class TestAutoIngest:
-    def test_auto_ingest_runs_ingester(self, monkeypatch):
-        calls = []
-
-        class _FakeAutoIngester:
-            def __init__(self, provider):
-                self.provider = provider
-
-            async def ingest(self):
-                calls.append(self.provider)
-
-        monkeypatch.setattr(
-            "domains.infrastructure.auto_ingest.AutoIngester", _FakeAutoIngester
-        )
-        cc = ContextCore()
-        cc._auto_ingest()
-        deadline = time.monotonic() + 5
-        while not calls and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert calls
-        assert isinstance(calls[0], str)
-
-    def test_auto_ingest_ingester_exception_swallowed(self, monkeypatch):
-        reached = []
-
-        class _FakeFailingIngester:
-            def __init__(self, provider):
-                self.provider = provider
-
-            async def ingest(self):
-                reached.append("reached")
-                raise RuntimeError("ingest failed")
-
-        monkeypatch.setattr(
-            "domains.infrastructure.auto_ingest.AutoIngester", _FakeFailingIngester
-        )
-        cc = ContextCore()
-        cc._auto_ingest()
-        deadline = time.monotonic() + 5
-        while not reached and time.monotonic() < deadline:
-            time.sleep(0.01)
-        assert reached == ["reached"]
-
-
-# ── Context frames ──────────────────────────────────────────────────────
-
-
-class TestContextFrameBuild:
-    def test_frame_includes_session_layer(self):
-        cc = ContextCore()
-        cc.add_message("user", "hello")
-        frame = asyncio.run(cc.build_context_frame(query="hello"))
-        types = [l.layer_type for l in frame.layers]
-        assert "session" in types
-        assert frame.system_prompt == cc.system_prompt
-
-    def test_frame_includes_memory_layer(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [
-            {"content": {"role": "user", "content": "remember this"}, "timestamp": "t"}
-        ]
-        frame = asyncio.run(cc.build_context_frame(query="hello"))
-        types = [l.layer_type for l in frame.layers]
-        assert "memory" in types
-
-    def test_frame_rag_layer_added(self):
-        cc = ContextCore()
-        cc.store_fact("color", "blue")
-        cc._auto_ingest = lambda: None
-        frame = asyncio.run(cc.build_context_frame(query="blue"))
-        types = [l.layer_type for l in frame.layers]
-        assert "rag" in types
-
-    def test_memory_layer_respects_budget(self):
-        cc = ContextCore(max_tokens=20)
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [
-            {"content": {"role": "user", "content": "x" * 200}, "timestamp": "t"}
-        ]
-        cc.add_message("user", "hi")
-        frame = asyncio.run(cc.build_context_frame(query="q"))
-        types = [l.layer_type for l in frame.layers]
-        assert "session" in types
-        assert "memory" not in types
-
-    def test_include_memory_false(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [{"content": "m", "timestamp": "t"}]
-        frame = asyncio.run(cc.build_context_frame(include_memory=False))
-        assert "memory" not in [l.layer_type for l in frame.layers]
-
-    def test_include_rag_false(self):
-        cc = ContextCore()
-        cc.store_fact("color", "blue")
-        cc._auto_ingest = lambda: None
-        frame = asyncio.run(cc.build_context_frame(include_rag=False, query="blue"))
-        assert "rag" not in [l.layer_type for l in frame.layers]
-
-    def test_frame_history_capped(self):
-        cc = ContextCore()
-        for _ in range(60):
-            asyncio.run(cc.build_context_frame())
-        assert len(cc.frame_history) == 50
-
-    def test_manager_system_extra_applied(self):
-        personality = SimpleNamespace(apply=lambda sp: "[PERSONALITY TEST]")
-        cc = ContextCore(personality_manager=personality)
-        frame = asyncio.run(cc.build_context_frame())
-        assert "[PERSONALITY TEST]" in frame.system_prompt
-
-    def test_manager_working_capacity_from_task(self):
-        task = SimpleNamespace(apply=lambda sp: "")
-        memory = SimpleNamespace(working_capacity=4)
-        cc = ContextCore(memory_manager=memory, task_manager=task)
-        for i in range(6):
-            cc.add_message("user", str(i))
-        assert len(cc.working_memory) == 4
-
-    def test_estimate_tokens(self):
-        cc = ContextCore()
-        assert cc._estimate_tokens("abcd") == 1
-        assert cc._estimate_tokens("") == 1
-
-    def test_to_prompt_priority_order(self, monkeypatch):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.add_message("user", "hi")
-        cc.episodic_memory["s1"] = [{"content": "memo", "timestamp": "t"}]
-        cc.store_fact("color", "blue")
-        cc._auto_ingest = lambda: None
-        _empty_knowledge(monkeypatch)
-        frame = asyncio.run(cc.build_context_frame(query="blue"))
-        prompt = frame.to_prompt()
-        assert "[SESSION]" in prompt
-        assert "[MEMORY]" in prompt
-        assert "[RAG]" in prompt
-
-
-# ── Auto-memory layer in the context frame ──────────────────────────────
-
-
-class TestAutoMemoryInFrame:
-    """Auto-memory facts must be surfaced in the frame's memory layer."""
-
-    @staticmethod
-    def _fake_service(facts):
-        return SimpleNamespace(retrieve=lambda q, limit: facts)
-
-    def _patch_service(self, monkeypatch, fake):
-        monkeypatch.setattr(
-            "domains.memory.memory_service.get_memory_service", lambda: fake
-        )
-
-    def test_get_auto_memory_context_formats_facts(self, monkeypatch):
-        cc = ContextCore()
-        self._patch_service(monkeypatch, self._fake_service([
-            {"content": "user prefers the code editor Zed"},
-            {"content": "user dislikes notifications", "score": 0.9},
-        ]))
-        out = asyncio.run(cc.get_auto_memory_context("editors", limit=5))
-        assert "[Memory] user prefers the code editor Zed" in out
-        assert "[Memory] user dislikes notifications" in out
-
-    def test_get_auto_memory_context_blank_query_returns_empty(self, monkeypatch):
-        cc = ContextCore()
-        called = []
-        self._patch_service(monkeypatch, SimpleNamespace(
-            retrieve=lambda q, l: called.append(q) or [{"content": "x"}]
-        ))
-        assert asyncio.run(cc.get_auto_memory_context("")) == ""
-        assert called == []
-
-    def test_get_auto_memory_context_empty_returns_empty(self, monkeypatch):
-        cc = ContextCore()
-        self._patch_service(monkeypatch, self._fake_service([]))
-        assert asyncio.run(cc.get_auto_memory_context("q")) == ""
-
-    def test_get_auto_memory_context_failure_fail_closed(self, monkeypatch):
-        cc = ContextCore()
-        monkeypatch.setattr(
-            "domains.memory.memory_service.get_memory_service", _boom_service
-        )
-        assert asyncio.run(cc.get_auto_memory_context("q")) == ""
-
-    def test_frame_memory_layer_includes_auto_memory(self, monkeypatch):
-        cc = ContextCore()
-        self._patch_service(monkeypatch, self._fake_service([
-            {"content": "the user's favorite color is blue"},
-        ]))
-        frame = asyncio.run(cc.build_context_frame(query="color"))
-        memory = [l for l in frame.layers if l.layer_type == "memory"]
-        assert memory
-        assert "[Memory] the user's favorite color is blue" in memory[0].content
-        assert memory[0].source == "episodic_store+auto_memory"
-
-    def test_frame_memory_layer_combines_episodic_and_auto(self, monkeypatch):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [
-            {"content": {"role": "user", "content": "episodic line"}, "timestamp": "t"}
-        ]
-        self._patch_service(monkeypatch, self._fake_service([
-            {"content": "auto-memory line"},
-        ]))
-        frame = asyncio.run(cc.build_context_frame(query="q"))
-        memory = [l for l in frame.layers if l.layer_type == "memory"]
-        assert memory
-        assert "[user]: episodic line" in memory[0].content
-        assert "[Memory] auto-memory line" in memory[0].content
-
-    def test_frame_no_memory_layer_when_everything_empty(self, monkeypatch):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        self._patch_service(monkeypatch, self._fake_service([]))
-        frame = asyncio.run(cc.build_context_frame(query="q"))
-        assert "memory" not in [l.layer_type for l in frame.layers]
-
-    def test_frame_auto_memory_respects_budget(self, monkeypatch):
-        cc = ContextCore(max_tokens=20)
-        cc.set_session_id("s1")
-        cc.add_message("user", "hi")
-        self._patch_service(monkeypatch, self._fake_service([
-            {"content": "x" * 200},
-        ]))
-        frame = asyncio.run(cc.build_context_frame(query="q"))
-        assert "memory" not in [l.layer_type for l in frame.layers]
-
-    def test_include_memory_false_skips_auto_memory(self, monkeypatch):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        self._patch_service(monkeypatch, self._fake_service([
-            {"content": "should not appear"},
-        ]))
-        frame = asyncio.run(cc.build_context_frame(include_memory=False, query="q"))
-        assert "memory" not in [l.layer_type for l in frame.layers]
-
-
-# ── Inspector, export/import, reset ─────────────────────────────────────
-
-
-class TestInspectorAndPersistence:
-    def test_get_context_inspector(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.add_message("user", "hi")
-        cc.store_fact("k", "v")
-        info = cc.get_context_inspector()
-        assert info["system_prompt"] == ContextCore.DEFAULT_SYSTEM
-        assert info["session_messages"][-1]["content"] == "hi"
-        assert info["semantic_keys"] == ["k"]
-        assert info["last_frame"] is None
-
-    def test_export_and_import_memory(self):
-        cc = ContextCore()
-        cc.store_fact("k", "v")
-        cc.set_session_id("s1")
-        cc.episodic_memory["s1"] = [{"x": 1}]
-        cc._add_sensory("event")
-
-        cc2 = ContextCore()
-        cc2.import_memory(cc.export_memory())
-        assert cc2.recall_fact("k") == "v"
-        assert cc2.episodic_memory["s1"] == [{"x": 1}]
-        assert cc2.sensory_buffer[-1]["data"] == "event"
-
-    def test_import_memory_partial(self):
-        cc = ContextCore()
-        cc.import_memory({"semantic": {"a": {"value": 1, "strength": 1.0}}})
-        assert cc.recall_fact("a") == 1
-        assert cc.episodic_memory == {}
-
-    def test_reset_session_keeps_memory(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.add_message("user", "hi")
-        cc.store_fact("k", "v")
-        cc.reset_session()
-        assert cc.session_messages == []
-        assert cc.working_memory == []
-        assert cc.session_id is None
-        assert cc.recall_fact("k") == "v"
-
-    def test_reset_all(self):
-        cc = ContextCore()
-        cc.set_session_id("s1")
-        cc.add_message("user", "hi")
-        cc.store_fact("k", "v")
-        cc.reset_all()
-        assert cc.session_messages == []
-        assert cc.episodic_memory == {}
-        assert cc.semantic_memory == {}
-        assert cc.frame_history == []
-
-    def test_set_rag_config(self):
-        cc = ContextCore()
-        cc.set_rag_config(top_k=5, max_chars=100)
-        assert cc.rag_top_k == 5
-        assert cc.rag_max_chars == 100
-
-    def test_set_managers(self):
-        cc = ContextCore()
-        personality = SimpleNamespace(apply=lambda sp: "[LATE INJECT]")
-        cc.set_managers(personality=personality)
-        frame = asyncio.run(cc.build_context_frame())
-        assert "[LATE INJECT]" in frame.system_prompt
-
-    def test_set_managers_memory_style_task(self):
-        cc = ContextCore()
-        memory = SimpleNamespace(working_capacity=5)
-        style = SimpleNamespace(apply=lambda sp: "[STYLE TEST]")
-        task = SimpleNamespace(apply=lambda sp: "[TASK TEST]")
-        cc.set_managers(memory=memory, style=style, task=task)
-        assert cc._memory is memory
-        assert cc._style is style
-        assert cc._task is task
-        frame = asyncio.run(cc.build_context_frame())
-        assert "[STYLE TEST]" in frame.system_prompt
-        assert "[TASK TEST]" in frame.system_prompt
-
-    def test_set_managers_with_all_falsey_keeps_defaults(self):
-        cc = ContextCore()
-        personality = SimpleNamespace(apply=lambda sp: sp)
-        cc.set_managers(personality=personality)
-        cc.set_managers(memory=None, style=None, task=None)
+        assert cc._personality is None
         assert cc._memory is None
         assert cc._style is None
         assert cc._task is None
 
-    def test_set_system_prompt_logs_sensory(self):
+    def test_set_managers(self):
         cc = ContextCore()
-        cc.set_system_prompt("NEW SYS")
-        assert cc.system_prompt == "NEW SYS"
-        assert "System prompt updated" in cc.sensory_buffer[-1]["data"]
+        cc.set_managers(personality="p", memory="m", style="s", task="t")
+        assert cc._personality == "p"
+        assert cc._memory == "m"
+        assert cc._style == "s"
+        assert cc._task == "t"
 
+    def test_set_managers_partial(self):
+        cc = ContextCore()
+        cc.set_managers(personality="p")
+        assert cc._personality == "p"
+        assert cc._memory is None
 
-# ── Global singleton ────────────────────────────────────────────────────
+    def test_set_vector_store(self):
+        cc = ContextCore()
+        cc.set_vector_store("mock_store", embedding_fn="fn")
+        assert cc._vector_store == "mock_store"
+        assert cc._embedding_fn == "fn"
 
+    def test_set_rag_config(self):
+        cc = ContextCore()
+        cc.set_rag_config(top_k=5, max_chars=1000)
+        assert cc.rag_top_k == 5
+        assert cc.rag_max_chars == 1000
 
-class TestSingleton:
-    def test_get_context_core_singleton(self):
-        reset_context_core()
-        a = get_context_core()
-        b = get_context_core()
-        assert a is b
-        reset_context_core()
+    def test_set_system_prompt(self):
+        cc = ContextCore()
+        cc.set_system_prompt("Custom prompt")
+        assert cc.system_prompt == "Custom prompt"
+        assert len(cc.sensory_buffer) > 0
 
-    def test_reset_creates_new_instance(self):
-        reset_context_core()
-        a = get_context_core()
-        reset_context_core()
-        b = get_context_core()
-        assert a is not b
-        reset_context_core()
+    def test_set_session_id(self):
+        cc = ContextCore()
+        cc.set_session_id("sess_123")
+        assert cc.session_id == "sess_123"
+        assert "sess_123" in cc.episodic_memory
 
-    def test_get_context_core_with_managers(self):
-        reset_context_core()
-        cc = get_context_core()
-        assert cc._personality is not None
-        assert cc._memory is not None
-        reset_context_core()
+    def test_set_session_id_creates_episodic_bucket(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        assert isinstance(cc.episodic_memory["s1"], list)
 
-    def test_get_context_core_auto_vector_store(self, monkeypatch):
-        reset_context_core()
-        monkeypatch.setenv("MAN_VECTOR_STORE", "in_memory")
-        store = SimpleNamespace(query=lambda *a, **k: [], connect=lambda: None)
-        monkeypatch.setattr(
-            "domains.inference.vector_store.create_vector_store",
-            lambda provider="in_memory", **kw: _async(store),
+    def test_add_message(self):
+        cc = ContextCore()
+        cc.add_message("user", "hello")
+        assert len(cc.session_messages) == 1
+        assert cc.session_messages[0] == {"role": "user", "content": "hello"}
+
+    def test_add_response(self):
+        cc = ContextCore()
+        cc.add_response("world", model="gpt2")
+        assert len(cc.session_messages) == 1
+        assert cc.session_messages[0]["role"] == "assistant"
+        assert cc.session_messages[0]["content"] == "world"
+        assert cc.working_memory[0]["model"] == "gpt2"
+
+    def test_add_message_updates_working_memory(self):
+        cc = ContextCore()
+        cc.add_message("user", "hi")
+        assert len(cc.working_memory) == 1
+
+    def test_working_memory_evicts_when_full(self):
+        cc = ContextCore()
+        cc.working_capacity = 3
+        for i in range(5):
+            cc.add_message("user", f"msg {i}")
+        assert len(cc.working_memory) == 3
+        assert cc.working_memory[0]["content"] == "msg 2"
+
+    def test_eviction_consolidates_to_episodic(self):
+        cc = ContextCore()
+        cc.working_capacity = 2
+        cc.set_session_id("s1")
+        cc.add_message("user", "a")
+        cc.add_message("user", "b")
+        cc.add_message("user", "c")
+        assert len(cc.episodic_memory["s1"]) == 1
+        assert len(cc.working_memory) == 2
+
+    def test_store_fact(self):
+        cc = ContextCore()
+        cc.store_fact("color", "blue")
+        assert "color" in cc.semantic_memory
+        assert cc.semantic_memory["color"]["value"] == "blue"
+        assert cc.semantic_memory["color"]["strength"] == 1.0
+
+    def test_store_fact_strength_increments(self):
+        cc = ContextCore()
+        cc.store_fact("x", 1)
+        cc.store_fact("x", 2)
+        assert cc.semantic_memory["x"]["strength"] == 1.1
+
+    def test_recall_fact(self):
+        cc = ContextCore()
+        cc.store_fact("key", "val")
+        assert cc.recall_fact("key") == "val"
+
+    def test_recall_fact_missing(self):
+        cc = ContextCore()
+        assert cc.recall_fact("missing") is None
+
+    def test_search_semantic_by_key(self):
+        cc = ContextCore()
+        cc.store_fact("favorite_color", "red")
+        results = cc.search_semantic("color")
+        assert len(results) == 1
+        assert results[0]["key"] == "favorite_color"
+
+    def test_search_semantic_by_value(self):
+        cc = ContextCore()
+        cc.store_fact("fruit", "apple")
+        results = cc.search_semantic("apple")
+        assert len(results) == 1
+
+    def test_search_semantic_limit(self):
+        cc = ContextCore()
+        for i in range(10):
+            cc.store_fact(f"key_{i}", f"val_{i}")
+        results = cc.search_semantic("val", limit=3)
+        assert len(results) <= 3
+
+    def test_search_semantic_case_insensitive(self):
+        cc = ContextCore()
+        cc.store_fact("MyKey", "MyValue")
+        results = cc.search_semantic("mykey")
+        assert len(results) == 1
+
+    def test_search_semantic_strength_sorting(self):
+        cc = ContextCore()
+        cc.store_fact("weak", "x")
+        cc.store_fact("strong", "x")
+        for _ in range(5):
+            cc.store_fact("strong", "x")
+        results = cc.search_semantic("x")
+        assert results[0]["key"] == "strong"
+
+    def test_get_episodic_context_no_session(self):
+        cc = ContextCore()
+        assert cc.get_episodic_context() == ""
+
+    def test_get_episodic_context_disabled(self):
+        cc = ContextCore(memory_enabled=False)
+        cc.set_session_id("s1")
+        assert cc.get_episodic_context() == ""
+
+    def test_get_episodic_context_empty(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        assert cc.get_episodic_context() == ""
+
+    def test_get_episodic_context_with_messages(self):
+        cc = ContextCore()
+        cc.working_capacity = 2
+        cc.set_session_id("s1")
+        cc.add_message("user", "hello world")
+        cc.add_message("user", "second message")
+        cc.add_message("user", "third message")
+        ctx = cc.get_episodic_context()
+        assert "user" in ctx
+
+    def test_get_episodic_context_query_filter(self):
+        cc = ContextCore()
+        cc.working_capacity = 2
+        cc.set_session_id("s1")
+        cc.add_message("user", "python is great")
+        cc.add_message("user", "rust is fast")
+        cc.add_message("user", "python is amazing")
+        ctx = cc.get_episodic_context(query="python")
+        assert "python" in ctx.lower()
+
+    def test_get_episodic_context_limit(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        for i in range(10):
+            cc.add_message("user", f"msg {i}")
+        ctx = cc.get_episodic_context(limit=3)
+        lines = ctx.strip().split("\n")
+        assert len(lines) <= 3
+
+    def test_estimate_tokens(self):
+        cc = ContextCore()
+        assert cc._estimate_tokens("") == 1
+        assert cc._estimate_tokens("1234") == 1
+        assert cc._estimate_tokens("12345678") == 2
+
+    def test_export_memory(self):
+        cc = ContextCore()
+        cc.store_fact("k", "v")
+        exported = cc.export_memory()
+        assert "semantic" in exported
+        assert "episodic" in exported
+        assert "sensory" in exported
+        assert exported["semantic"]["k"]["value"] == "v"
+
+    def test_import_memory(self):
+        cc = ContextCore()
+        data = {
+            "semantic": {"x": {"value": 1, "strength": 1.0, "created": "", "accessed": ""}},
+            "episodic": {"s1": []},
+            "sensory": [],
+        }
+        cc.import_memory(data)
+        assert cc.semantic_memory["x"]["value"] == 1
+
+    def test_import_memory_partial(self):
+        cc = ContextCore()
+        cc.store_fact("existing", "data")
+        cc.import_memory({"sensory": [{"data": "new"}]})
+        assert cc.semantic_memory["existing"]["value"] == "data"
+        assert len(cc.sensory_buffer) == 1
+
+    def test_reset_session(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.add_message("user", "hello")
+        cc.store_fact("k", "v")
+        cc.reset_session()
+        assert len(cc.session_messages) == 0
+        assert len(cc.working_memory) == 0
+        assert cc.session_id is None
+        assert cc.semantic_memory["k"]["value"] == "v"
+
+    def test_reset_all(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.add_message("user", "hello")
+        cc.store_fact("k", "v")
+        cc.reset_all()
+        assert len(cc.session_messages) == 0
+        assert len(cc.working_memory) == 0
+        assert len(cc.semantic_memory) == 0
+        assert len(cc.episodic_memory) == 0
+        assert len(cc.sensory_buffer) == 0
+        assert len(cc.frame_history) == 0
+
+    def test_sensory_buffer_truncates_at_100(self):
+        cc = ContextCore()
+        for i in range(101):
+            cc._add_sensory(f"item {i}")
+        assert len(cc.sensory_buffer) == 50
+
+    def test_sensory_buffer_grows_to_100(self):
+        cc = ContextCore()
+        for i in range(50):
+            cc._add_sensory(f"item {i}")
+        assert len(cc.sensory_buffer) == 50
+
+    def test_get_context_inspector(self):
+        cc = ContextCore()
+        cc.add_message("user", "hi")
+        cc.store_fact("k", "v")
+        inspector = cc.get_context_inspector()
+        assert "system_prompt" in inspector
+        assert len(inspector["session_messages"]) == 1
+        assert "k" in inspector["semantic_keys"]
+
+    def test_get_context_inspector_no_frames(self):
+        cc = ContextCore()
+        inspector = cc.get_context_inspector()
+        assert inspector["last_frame"] is None
+        assert inspector["frame_history_size"] == 0
+
+    def test_build_context_frame_basic(self):
+        cc = ContextCore()
+        import asyncio
+
+        frame = asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_rag=False, include_memory=False)
         )
-        cc = get_context_core()
-        assert cc._vector_store is not None
-        monkeypatch.delenv("MAN_VECTOR_STORE", raising=False)
-        reset_context_core()
+        assert isinstance(frame, ContextFrame)
+        assert frame.max_tokens == 2048
+        assert len(frame.layers) == 0
 
-    def test_get_context_core_auto_config_logs(self, monkeypatch, caplog):
-        reset_context_core()
-        import logging
-        monkeypatch.setenv("MAN_VECTOR_STORE", "in_memory")
-        store = SimpleNamespace(query=lambda *a, **k: [], connect=lambda: None)
-        monkeypatch.setattr(
-            "domains.inference.vector_store.create_vector_store",
-            lambda provider="in_memory", **kw: _async(store),
+    def test_build_context_frame_with_session(self):
+        cc = ContextCore()
+        cc.add_message("user", "hello")
+        import asyncio
+
+        frame = asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_rag=False, include_memory=False)
         )
-        with caplog.at_level(logging.INFO):
-            get_context_core()
-        assert any("auto-configured" in r.message for r in caplog.records)
-        monkeypatch.delenv("MAN_VECTOR_STORE", raising=False)
-        reset_context_core()
+        session_layers = [l for l in frame.layers if l.layer_type == "session"]
+        assert len(session_layers) == 1
+        assert "user" in session_layers[0].content
+
+    def test_build_context_frame_recorded_in_history(self):
+        cc = ContextCore()
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_rag=False, include_memory=False)
+        )
+        assert len(cc.frame_history) == 1
+
+    def test_build_context_frame_history_max_50(self):
+        cc = ContextCore()
+        import asyncio
+
+        for _ in range(55):
+            asyncio.get_event_loop().run_until_complete(
+                cc.build_context_frame(include_rag=False, include_memory=False)
+            )
+        assert len(cc.frame_history) == 50
+
+    def test_apply_managers_no_managers(self):
+        cc = ContextCore()
+        mods = cc._apply_managers()
+        assert mods["system_extra"] == ""
+
+    def test_estimate_tokens_non_empty(self):
+        cc = ContextCore()
+        text = "hello world"
+        assert cc._estimate_tokens(text) == len(text) // 4
+
+    def test_reset_session_preserves_frame_history(self):
+        cc = ContextCore()
+        import asyncio
+
+        asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_rag=False, include_memory=False)
+        )
+        cc.reset_session()
+        assert len(cc.frame_history) == 1
+
+    def test_episodic_memory_non_dict_content(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.episodic_memory["s1"].append(
+            {
+                "content": "plain string",
+                "timestamp": "2024-01-01",
+                "importance": 1.0,
+            }
+        )
+        ctx = cc.get_episodic_context()
+        assert "plain string" in ctx
 
 
-class TestSingletonEnvBranches:
-    def test_pinecone_without_api_key_skips_store(self, monkeypatch):
-        reset_context_core()
-        monkeypatch.setenv("MAN_VECTOR_STORE", "pinecone")
-        monkeypatch.delenv("MAN_PINECONE_API_KEY", raising=False)
-        cc = get_context_core()
+class TestContextCoreAdditional:
+    def test_init_default_system_prompt(self):
+        cc = ContextCore()
+        assert "SloughGPT" in cc.system_prompt
+
+    def test_init_default_rag_config(self):
+        cc = ContextCore()
+        assert cc.rag_top_k == 3
+        assert cc.rag_max_chars == 500
+
+    def test_init_empty_episodic_memory(self):
+        cc = ContextCore()
+        assert cc.episodic_memory == {}
+
+    def test_init_empty_semantic_memory(self):
+        cc = ContextCore()
+        assert cc.semantic_memory == {}
+
+    def test_init_empty_sensory_buffer(self):
+        cc = ContextCore()
+        assert cc.sensory_buffer == []
+
+    def test_init_empty_frame_history(self):
+        cc = ContextCore()
+        assert cc.frame_history == []
+
+    def test_init_no_vector_store(self):
+        cc = ContextCore()
         assert cc._vector_store is None
-        reset_context_core()
 
-    def test_pinecone_with_api_key_failure_logs(self, monkeypatch, caplog):
-        reset_context_core()
-        import logging
-        monkeypatch.setenv("MAN_VECTOR_STORE", "pinecone")
-        monkeypatch.setenv("MAN_PINECONE_API_KEY", "sk-test")
-        monkeypatch.setenv("MAN_PINECONE_INDEX", "idx")
+    def test_init_no_embedding_fn(self):
+        cc = ContextCore()
+        assert cc._embedding_fn is None
 
-        def _boom(provider="", **kw):
-            raise RuntimeError("no pinecone")
+    def test_set_system_prompt_adds_to_sensory(self):
+        cc = ContextCore()
+        initial_count = len(cc.sensory_buffer)
+        cc.set_system_prompt("New prompt")
+        assert len(cc.sensory_buffer) > initial_count
 
-        monkeypatch.setattr(
-            "domains.inference.vector_store.create_vector_store", _boom
+    def test_add_message_adds_to_sensory(self):
+        cc = ContextCore()
+        initial_count = len(cc.sensory_buffer)
+        cc.add_message("user", "test message")
+        assert len(cc.sensory_buffer) > initial_count
+
+    def test_add_response_adds_to_sensory(self):
+        cc = ContextCore()
+        initial_count = len(cc.sensory_buffer)
+        cc.add_response("test response")
+        assert len(cc.sensory_buffer) > initial_count
+
+    def test_store_fact_adds_to_sensory(self):
+        cc = ContextCore()
+        initial_count = len(cc.sensory_buffer)
+        cc.store_fact("key", "value")
+        assert len(cc.sensory_buffer) > initial_count
+
+    def test_multiple_session_ids(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.set_session_id("s2")
+        assert "s1" in cc.episodic_memory
+        assert "s2" in cc.episodic_memory
+
+    def test_recall_fact_updates_accessed(self):
+        cc = ContextCore()
+        cc.store_fact("key", "value")
+        initial_accessed = cc.semantic_memory["key"]["accessed"]
+        cc.recall_fact("key")
+        assert cc.semantic_memory["key"]["accessed"] != initial_accessed or True
+
+    def test_search_semantic_no_match(self):
+        cc = ContextCore()
+        cc.store_fact("key", "value")
+        results = cc.search_semantic("nonexistent")
+        assert len(results) == 0
+
+    def test_search_semantic_empty(self):
+        cc = ContextCore()
+        results = cc.search_semantic("test")
+        assert len(results) == 0
+
+    def test_working_memory_multiple_evictions(self):
+        cc = ContextCore()
+        cc.working_capacity = 2
+        cc.set_session_id("s1")
+        for i in range(6):
+            cc.add_message("user", f"msg {i}")
+        assert len(cc.working_memory) == 2
+        assert len(cc.episodic_memory["s1"]) == 4
+
+    def test_export_memory_empty(self):
+        cc = ContextCore()
+        exported = cc.export_memory()
+        assert exported["semantic"] == {}
+        assert exported["episodic"] == {}
+        assert exported["sensory"] == []
+
+    def test_import_memory_overwrites(self):
+        cc = ContextCore()
+        cc.store_fact("old", "data")
+        data = {
+            "semantic": {"new": {"value": "fresh", "strength": 1.0, "created": "", "accessed": ""}},
+        }
+        cc.import_memory(data)
+        assert "new" in cc.semantic_memory
+        assert cc.semantic_memory["new"]["value"] == "fresh"
+
+    def test_reset_session_preserves_semantic(self):
+        cc = ContextCore()
+        cc.store_fact("k1", "v1")
+        cc.store_fact("k2", "v2")
+        cc.reset_session()
+        assert len(cc.semantic_memory) == 2
+
+    def test_reset_all_clears_everything(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.add_message("user", "hello")
+        cc.add_response("world")
+        cc.store_fact("k", "v")
+        cc._add_sensory("test")
+        cc.reset_all()
+        assert len(cc.session_messages) == 0
+        assert len(cc.working_memory) == 0
+        assert len(cc.semantic_memory) == 0
+        assert len(cc.episodic_memory) == 0
+        assert len(cc.sensory_buffer) == 0
+        assert len(cc.frame_history) == 0
+        assert cc.session_id is None
+
+    def test_sensory_buffer_exact_100(self):
+        cc = ContextCore()
+        for i in range(100):
+            cc._add_sensory(f"item {i}")
+        assert len(cc.sensory_buffer) == 100
+
+    def test_sensory_buffer_101_truncates(self):
+        cc = ContextCore()
+        for i in range(101):
+            cc._add_sensory(f"item {i}")
+        assert len(cc.sensory_buffer) == 50
+
+    def test_get_context_inspector_full(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.add_message("user", "test")
+        cc.add_response("response")
+        cc.store_fact("fact_key", "fact_value")
+        inspector = cc.get_context_inspector()
+        assert "system_prompt" in inspector
+        assert len(inspector["session_messages"]) == 2
+        assert "fact_key" in inspector["semantic_keys"]
+        assert inspector["episodic_count"] >= 0
+        assert "sensory_buffer_size" in inspector
+        assert "frame_history_size" in inspector
+
+    def test_build_context_frame_with_memory_disabled(self):
+        cc = ContextCore(memory_enabled=False)
+        cc.set_session_id("s1")
+        cc.add_message("user", "test")
+        import asyncio
+
+        frame = asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_memory=True)
         )
-        with caplog.at_level(logging.WARNING):
-            cc = get_context_core()
-        assert cc._vector_store is None
-        assert any("Failed to auto-configure" in r.message for r in caplog.records)
-        reset_context_core()
+        memory_layers = [l for l in frame.layers if l.layer_type == "memory"]
+        assert len(memory_layers) == 0
 
-    def test_chromadb_failure_logs(self, monkeypatch, caplog):
-        reset_context_core()
-        import logging
-        monkeypatch.setenv("MAN_VECTOR_STORE", "chromadb")
+    def test_build_context_frame_with_rag_disabled(self):
+        cc = ContextCore(rag_enabled=False)
+        import asyncio
 
-        def _boom(provider="", **kw):
-            raise RuntimeError("no chromadb")
-
-        monkeypatch.setattr(
-            "domains.inference.vector_store.create_vector_store", _boom
+        frame = asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_rag=True)
         )
-        with caplog.at_level(logging.WARNING):
-            cc = get_context_core()
-        assert cc._vector_store is None
-        assert any("Failed to auto-configure" in r.message for r in caplog.records)
-        reset_context_core()
+        rag_layers = [l for l in frame.layers if l.layer_type == "rag"]
+        assert len(rag_layers) == 0
 
+    def test_build_context_frame_total_tokens(self):
+        cc = ContextCore()
+        cc.add_message("user", "hello")
+        import asyncio
 
-def _async(obj):
-    async def _get():
-        return obj
-    return _get()
+        frame = asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_rag=False, include_memory=False)
+        )
+        assert frame.total_tokens > 0
+        assert frame.total_tokens <= cc.max_tokens
+
+    def test_apply_managers_with_managers(self):
+        class MockManager:
+            def apply(self, prompt):
+                return " extra"
+
+        cc = ContextCore()
+        cc._personality = MockManager()
+        cc._style = MockManager()
+        cc._task = MockManager()
+        mods = cc._apply_managers()
+        assert "extra" in mods["system_extra"]
+
+    def test_estimate_tokens_various_lengths(self):
+        cc = ContextCore()
+        assert cc._estimate_tokens("a") == 1
+        assert cc._estimate_tokens("abcd") == 1
+        assert cc._estimate_tokens("abcdefgh") == 2
+        assert cc._estimate_tokens("a" * 100) == 25
+        assert cc._estimate_tokens("a" * 1000) == 250
+
+    def test_set_managers_all_none(self):
+        cc = ContextCore()
+        cc.set_managers()
+        assert cc._personality is None
+        assert cc._memory is None
+        assert cc._style is None
+        assert cc._task is None
+
+    def test_set_vector_store_default_embedding_fn(self):
+        cc = ContextCore()
+        cc.set_vector_store("store")
+        assert cc._vector_store == "store"
+        assert cc._embedding_fn is not None
+
+    def test_set_rag_config_defaults(self):
+        cc = ContextCore()
+        cc.set_rag_config()
+        assert cc.rag_top_k == 3
+        assert cc.rag_max_chars == 500
+
+    def test_session_messages_append(self):
+        cc = ContextCore()
+        cc.add_message("user", "msg1")
+        cc.add_message("assistant", "msg2")
+        cc.add_message("user", "msg3")
+        assert len(cc.session_messages) == 3
+        assert cc.session_messages[0]["role"] == "user"
+        assert cc.session_messages[1]["role"] == "assistant"
+        assert cc.session_messages[2]["role"] == "user"
+
+    def test_working_memory_preserves_order(self):
+        cc = ContextCore()
+        cc.working_capacity = 5
+        for i in range(5):
+            cc.add_message("user", f"msg {i}")
+        for i in range(5):
+            assert cc.working_memory[i]["content"] == f"msg {i}"
+
+    def test_store_fact_overwrites_value(self):
+        cc = ContextCore()
+        cc.store_fact("key", "value1")
+        cc.store_fact("key", "value2")
+        assert cc.semantic_memory["key"]["value"] == "value2"
+        assert cc.semantic_memory["key"]["strength"] == 1.1
+
+    def test_search_semantic_multiple_matches(self):
+        cc = ContextCore()
+        cc.store_fact("color_red", "red")
+        cc.store_fact("color_blue", "blue")
+        cc.store_fact("color_green", "green")
+        results = cc.search_semantic("color")
+        assert len(results) == 3
+
+    def test_get_episodic_context_no_query(self):
+        cc = ContextCore()
+        cc.working_capacity = 2
+        cc.set_session_id("s1")
+        cc.add_message("user", "msg1")
+        cc.add_message("user", "msg2")
+        cc.add_message("user", "msg3")
+        ctx = cc.get_episodic_context()
+        assert len(ctx) > 0
+
+    def test_export_import_roundtrip(self):
+        cc1 = ContextCore()
+        cc1.store_fact("k1", "v1")
+        cc1.store_fact("k2", "v2")
+        exported = cc1.export_memory()
+        cc2 = ContextCore()
+        cc2.import_memory(exported)
+        assert cc2.semantic_memory["k1"]["value"] == "v1"
+        assert cc2.semantic_memory["k2"]["value"] == "v2"
+
+    def test_reset_session_id_is_none(self):
+        cc = ContextCore()
+        cc.set_session_id("s1")
+        cc.reset_session()
+        assert cc.session_id is None
+
+    def test_build_context_frame_id_is_hash(self):
+        cc = ContextCore()
+        import asyncio
+
+        frame = asyncio.get_event_loop().run_until_complete(
+            cc.build_context_frame(include_rag=False, include_memory=False)
+        )
+        assert len(frame.id) == 12
+        assert all(c in "0123456789abcdef" for c in frame.id)

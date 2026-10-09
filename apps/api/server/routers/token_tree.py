@@ -1,8 +1,8 @@
 """
-Token Tree API Router — thin wrapper around TokenTreeManager.
+Token Tree API Router — thin wrapper around TokenizerEngine (token-tree surface).
 
-All business logic lives in ``packages/core-py/domains/training/token_tree_manager.py``.
-This router just exposes manager methods as HTTP endpoints:
+Business logic lives in domain.training.tokenizer_engine → TokenTreeManager.
+This router only exposes engine methods as HTTP endpoints:
 
 - ``GET  /token-tree/stats``  — tree summary statistics.
 - ``GET  /token-tree/vocab``  — paged vocabulary entries.
@@ -13,6 +13,7 @@ This router just exposes manager methods as HTTP endpoints:
 - ``DELETE /token-tree/saved/{name}`` — delete a saved tree.
 - ``POST /token-tree/train``  — train on a corpus (or the built-in default).
 - ``POST /token-tree/similar`` — nearest-neighbor tokens via generated embeddings.
+
 - ``POST /token-tree/embedding`` — inspect a token's generated embedding vector.
 - ``POST /token-tree/encode`` — tree-walk encode text to ids.
 - ``POST /token-tree/path`` — trace the encoder's greedy trie walk step by step.
@@ -22,11 +23,19 @@ This router just exposes manager methods as HTTP endpoints:
 - ``POST /token-tree/compare`` — diff two saved trees (overlap + examples).
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from __future__ import annotations
 
-from domains.training.token_tree_manager import get_token_tree_manager
-from schemas.common import success_response
+from fastapi import APIRouter, Depends, Query
+from infrastructure.auth import require_auth_if_enabled
+from pydantic import BaseModel, Field
+from schemas.common import (
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
+
+from domain.training.tokenizer_engine import get_token_tree_manager
 
 
 class TrainTreeRequest(BaseModel):
@@ -94,44 +103,32 @@ class TokenTreeRouter:
         self.router.add_api_route("/matrix", self.matrix, methods=["GET"])
         self.router.add_api_route("/compare", self.compare, methods=["POST"])
 
+    @endpoint("token_tree.stats")
     def get_stats(self) -> dict:
         """Return summary statistics of the current token tree."""
         return success_response(data=get_token_tree_manager().stats())
 
+    @endpoint("token_tree.vocab")
     def get_vocab(
         self,
         limit: int = Query(default=50, ge=1, le=500),
         offset: int = Query(default=0, ge=0),
     ) -> dict:
-        """Return a paged slice of the current tree's vocabulary.
+        """Return a paged slice of the current tree's vocabulary."""
+        return success_response(
+            data=get_token_tree_manager().vocab_entries(
+                offset=offset,
+                limit=limit,
+            )
+        )
 
-        Args:
-            limit: maximum number of entries to return (1..500).
-            offset: number of leading entries to skip.
-
-        Returns:
-            StandardResponse with ``{total, entries}`` where each entry is
-            ``{"id", "token", "freq", "is_special", "is_merged"}``.
-        """
-        return success_response(data=get_token_tree_manager().vocab_entries(
-            offset=offset, limit=limit,
-        ))
-
+    @endpoint("token_tree.merges")
     def get_merges(
         self,
         top_n: int = Query(default=20, ge=1, le=200),
         query: str = Query(default="", max_length=128),
     ) -> dict:
-        """Return the most frequent BPE merge rules of the current tree.
-
-        Args:
-            top_n: maximum number of rules to return (1..200).
-            query: optional case-insensitive substring filter over rule parts;
-                when given, returns matching rules keeping their global rank.
-
-        Returns:
-            StandardResponse with a ranked list of merge rules.
-        """
+        """Return the most frequent BPE merge rules of the current tree."""
         mgr = get_token_tree_manager()
         if query:
             data = mgr.search_merges(query=query, limit=top_n)
@@ -139,83 +136,58 @@ class TokenTreeRouter:
             data = mgr.top_merges(top_n=top_n)
         return success_response(data=data)
 
+    @endpoint("token_tree.saved")
     def get_saved(self) -> dict:
-        """List saved token trees.
-
-        Returns:
-            StandardResponse with ``{"trees": [...]}`` where each entry is
-            ``{"name", "path", "vocab_size", "num_merges", "trained",
-            "saved_at"}``.
-        """
+        """List saved token trees."""
         return success_response(data={"trees": get_token_tree_manager().list_saved()})
 
-    def save_tree(self, req: TreeNameRequest) -> dict:
-        """Save the current tree under a name in the save directory.
-
-        Args:
-            req: tree name.
-
-        Returns:
-            StandardResponse with the saved tree's metadata.
-
-        Raises:
-            HTTPException 422: when the name is invalid.
-        """
+    @endpoint("token_tree.save")
+    def save_tree(
+        self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Save the current tree under a name in the save directory."""
         try:
-            return success_response(data=get_token_tree_manager().save(req.name))
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            saved = get_token_tree_manager().save(req.name)
+        except ValueError as exc:
+            raise_error(
+                f"Invalid token tree name {req.name!r}: {exc}", "E_VALIDATION", status_code=422
+            )
+        return success_response(data=saved)
 
-    def load_tree(self, req: TreeNameRequest) -> dict:
-        """Load a saved tree and make it the current tree.
-
-        Args:
-            req: tree name.
-
-        Returns:
-            StandardResponse with the loaded tree's metadata.
-
-        Raises:
-            HTTPException 404: when no saved tree has that name.
-            HTTPException 422: when the name is invalid.
-        """
+    @endpoint("token_tree.load")
+    def load_tree(
+        self, req: TreeNameRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Load a saved tree and make it the current tree."""
         try:
-            return success_response(data=get_token_tree_manager().load(req.name))
-        except FileNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            loaded = get_token_tree_manager().load(req.name)
+        except FileNotFoundError:
+            raise_error(f"No saved token tree named {req.name!r}", "E_NOT_FOUND", status_code=404)
+        except ValueError as exc:
+            raise_error(
+                f"Invalid token tree name {req.name!r}: {exc}", "E_VALIDATION", status_code=422
+            )
+        return success_response(data=loaded)
 
-    def delete_saved_tree(self, name: str) -> dict:
-        """Delete a saved tree's sidecar files.
-
-        Args:
-            name: tree name.
-
-        Returns:
-            StandardResponse with ``{"name", "deleted": True}``.
-
-        Raises:
-            HTTPException 404: when no saved tree has that name.
-            HTTPException 422: when the name is invalid.
-        """
+    @endpoint("token_tree.delete")
+    def delete_saved_tree(
+        self, name: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Delete a saved tree's sidecar files."""
         try:
             deleted = get_token_tree_manager().delete_saved(name)
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+        except ValueError as exc:
+            raise_error(f"Invalid token tree name {name!r}: {exc}", "E_VALIDATION", status_code=422)
         if not deleted:
-            raise HTTPException(status_code=404, detail=f"No saved token tree named {name!r}")
+            raise_error(f"No saved token tree named {name!r}", "E_NOT_FOUND", status_code=404)
+        safe_audit_log("token_tree.delete", resource=name)
         return success_response(data={"name": name, "deleted": True})
 
-    def train_tree(self, req: TrainTreeRequest) -> dict:
-        """Train a token tree on the provided corpus (built-in default when empty).
-
-        Args:
-            req: corpus texts plus training hyperparameters.
-
-        Returns:
-            StandardResponse with training stats.
-        """
+    @endpoint("token_tree.train")
+    def train_tree(
+        self, req: TrainTreeRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Train a token tree on the provided corpus."""
         mgr = get_token_tree_manager()
         texts = req.texts if req.texts else None
         if texts:
@@ -226,150 +198,84 @@ class TokenTreeRouter:
                 embed_dim=req.embed_dim,
             )
         else:
-            tree = mgr.get_tree(
-                vocab_size=req.vocab_size, embed_dim=req.embed_dim
-            )
+            tree = mgr.get_tree(vocab_size=req.vocab_size, embed_dim=req.embed_dim)
         stats = tree.stats()
-        return success_response(data={
-            "status": "trained",
-            "vocab_size": stats["vocab_size"],
-            "embedding_points": stats["embedding_points"],
-            "embedding_compression_ratio": stats["embedding_compression_ratio"],
-            "embed_dim": stats["embed_dim"],
-        })
+        return success_response(
+            data={
+                "status": "trained",
+                "vocab_size": stats["vocab_size"],
+                "embedding_points": stats["embedding_points"],
+                "embedding_compression_ratio": stats["embedding_compression_ratio"],
+                "embed_dim": stats["embed_dim"],
+            }
+        )
 
-    def similar(self, req: SimilarRequest) -> dict:
-        """Return ranked nearest-neighbor tokens for a query token.
-
-        Args:
-            req: token (id or literal) and top_k.
-
-        Returns:
-            StandardResponse with query and ranked neighbors.
-
-        Raises:
-            HTTPException 404: when the token is not in the vocabulary.
-        """
-        try:
-            data = get_token_tree_manager().similar(req.token, top_k=req.top_k)
-        except KeyError as e:
-            raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
+    @endpoint("token_tree.similar")
+    def similar(
+        self, req: SimilarRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Return ranked nearest-neighbor tokens for a query token."""
+        data = get_token_tree_manager().similar(req.token, top_k=req.top_k)
         return success_response(data=data)
 
-    def embedding(self, req: EmbeddingRequest) -> dict:
-        """Inspect a token's generated embedding vector.
-
-        Args:
-            req: token (id or literal) and top_k largest-magnitude dims.
-
-        Returns:
-            StandardResponse with ``{token, id, dim, norm, top, ...}``.
-
-        Raises:
-            HTTPException 404: when the token is not in the vocabulary.
-            HTTPException 422: when embeddings are disabled.
-        """
+    @endpoint("token_tree.embedding")
+    def embedding(
+        self, req: EmbeddingRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Inspect a token's generated embedding vector."""
         try:
-            data = get_token_tree_manager().embedding_info(
-                req.token, top_k=req.top_k
-            )
-        except KeyError as e:
-            raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
-        except ValueError as e:
-            raise HTTPException(status_code=422, detail=str(e))
+            data = get_token_tree_manager().embedding_info(req.token, top_k=req.top_k)
+        except ValueError as exc:
+            raise_error(f"Token embeddings are not enabled: {exc}", "E_VALIDATION", status_code=422)
         return success_response(data=data)
 
-    def encode(self, req: TokenTextRequest) -> dict:
-        """Encode text into token ids by walking the tree.
-
-        Args:
-            req: input text.
-
-        Returns:
-            StandardResponse with ``{tokens, ids}``.
-        """
+    @endpoint("token_tree.encode")
+    def encode(
+        self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Encode text into token ids by walking the tree."""
         return success_response(data=get_token_tree_manager().encode(req.text))
 
-    def path(self, req: TokenTextRequest) -> dict:
-        """Trace the encoder's greedy trie walk over text.
-
-        Args:
-            req: input text.
-
-        Returns:
-            StandardResponse with ``{steps, ids}``. ``ids`` equals
-            ``encode``'s ids; ``steps`` shows each query step.
-        """
+    @endpoint("token_tree.path")
+    def path(
+        self, req: TokenTextRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Trace the encoder's greedy trie walk over text."""
         return success_response(data=get_token_tree_manager().path(req.text))
 
-    def decode(self, req: TokenIdsRequest) -> dict:
-        """Decode a list of token ids back to text.
-
-        Args:
-            req: token ids.
-
-        Returns:
-            StandardResponse with ``{text}``.
-        """
+    @endpoint("token_tree.decode")
+    def decode(
+        self, req: TokenIdsRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Decode a list of token ids back to text."""
         return success_response(data=get_token_tree_manager().decode(req.ids))
 
-    def lineage(self, req: LineageRequest) -> dict:
-        """Render a token's merge lineage down to character leaves.
-
-        Args:
-            req: token (id or literal).
-
-        Returns:
-            StandardResponse with ``{token, leaves, tree}``.
-
-        Raises:
-            HTTPException 404: when the token is not in the vocabulary.
-        """
-        try:
-            data = get_token_tree_manager().lineage(req.token)
-        except KeyError as e:
-            raise HTTPException(status_code=404, detail=f"Token not in vocabulary: {e}")
+    @endpoint("token_tree.lineage")
+    def lineage(
+        self, req: LineageRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Render a token's merge lineage down to character leaves."""
+        data = get_token_tree_manager().lineage(req.token)
         return success_response(data=data)
 
+    @endpoint("token_tree.matrix")
     def matrix(
         self,
         top_k: int = Query(default=8, ge=1, le=64),
     ) -> dict:
-        """Return an embedding-matrix overview for the current tree.
+        """Return an embedding-matrix overview for the current tree."""
+        return success_response(
+            data=get_token_tree_manager().matrix_summary(
+                top_k=top_k,
+            )
+        )
 
-        Args:
-            top_k: how many most- and least-energetic tokens to include.
-
-        Returns:
-            StandardResponse with ``{matrix, norm_min, norm_mean, norm_max,
-            dead_tokens, live_tokens, most_energetic, least_energetic}``.
-            ``matrix`` is ``[rows, cols]`` or None when embeddings are disabled.
-        """
-        return success_response(data=get_token_tree_manager().matrix_summary(
-            top_k=top_k,
-        ))
-
-    def compare(self, req: CompareTreesRequest) -> dict:
-        """Diff two saved trees without changing the current tree.
-
-        Args:
-            req: ``{a, b, top_k}`` — names of the two saved trees.
-
-        Returns:
-            StandardResponse with ``{a, b, shared_tokens, only_a_tokens,
-            only_b_tokens, shared_merges, only_a_merges, only_b_merges,
-            shared_examples, only_a_examples, only_b_examples}``.
-
-        Raises:
-            HTTPException 404: when either saved tree is missing.
-            HTTPException 400: when comparing a tree with itself.
-        """
-        try:
-            data = get_token_tree_manager().compare(req.a, req.b, top_n=req.top_k)
-        except FileNotFoundError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-        except ValueError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+    @endpoint("token_tree.compare")
+    def compare(
+        self, req: CompareTreesRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Diff two saved trees without changing the current tree."""
+        data = get_token_tree_manager().compare(req.a, req.b, top_n=req.top_k)
         return success_response(data=data)
 
 

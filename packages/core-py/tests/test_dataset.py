@@ -1,9 +1,8 @@
-"""Tests for domains/training/dataset.py TrainingDataset."""
+"""Tests for domain.training._internal.dataset.py TrainingDataset."""
 
 import pytest
 
-from domains.training.dataset import TrainingDataset
-
+from domain.training._internal.dataset import TrainingDataset
 
 SHORT_TEXT = "tiny"
 
@@ -82,10 +81,12 @@ class TestTeacherContext:
         assert context != ""
 
     def test_joins_multiple_relevant(self):
-        text = ("The quick brown fox jumps over the lazy dog and runs fast. "
-                "Another very distinct sentence about completely unrelated things here. "
-                "Yet one more entirely separate statement to make the chunk long enough. "
-                "Four more words to ensure the chunk survives the filter. Five words.")
+        text = (
+            "The quick brown fox jumps over the lazy dog and runs fast. "
+            "Another very distinct sentence about completely unrelated things here. "
+            "Yet one more entirely separate statement to make the chunk long enough. "
+            "Four more words to ensure the chunk survives the filter. Five words."
+        )
         ds = TrainingDataset(text, chunk_size=400)
         context = ds.get_teacher_context("The quick brown fox", min_score=0.05)
         assert context != ""

@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voyager-shim"
+version = "0.1.0"
+description = "Back-compat shim: voyager was renamed to arken. Install arken instead."
+requires-python = ">=3.11"
+dependencies = ["arken"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

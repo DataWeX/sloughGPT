@@ -20,7 +20,8 @@ os.environ.setdefault("SLO_AUTOLOAD_MODEL", "")
 
 # Disable rate limiting for tests to avoid 429s when running the full suite.
 try:
-    from domains.infrastructure.rate_limiter import RateLimitMiddleware as _RLM
+    from infrastructure.rate_limit_middleware import RateLimitMiddleware as _RLM
+
     if _RLM is not None:
         _orig_dispatch = _RLM.dispatch
 
@@ -31,24 +32,41 @@ try:
 except Exception:
     pass
 
+# Disable the readiness gate for tests so schema-validation tests can
+# reach the router and trigger 422s instead of being blocked with 503.
+# The real dispatch is stashed on the class so suites that DO test the gate
+# (tests/server/test_readiness_gate.py) can restore it — this import-time
+# patch is process-wide and leaks into any test module that runs after it.
+try:
+    from infrastructure.middleware import ReadinessGateMiddleware as _RGM
+
+    if not hasattr(_RGM, "_real_dispatch"):
+        _RGM._real_dispatch = _RGM.dispatch
+
+    async def _noop_readiness(self, request, call_next):
+        return await call_next(request)
+
+    _RGM.dispatch = _noop_readiness
+except Exception:
+    pass
+
 
 def _ensure_routers_registered():
     """Register all feature routers on the app if they haven't been yet."""
     from main import app
 
     # Check if benchmark router is already registered (proxy for "all routers")
-    has_routers = any(
-        hasattr(r, "path") and r.path.startswith("/benchmark")
-        for r in app.routes
-    )
+    has_routers = any(hasattr(r, "path") and r.path.startswith("/benchmark") for r in app.routes)
     if has_routers:
         return
 
     from routers import get_all_routers
+
     for r in get_all_routers():
         app.include_router(r)
     try:
         from training.router import router as training_router
+
         app.include_router(training_router)
     except Exception:
         pass
@@ -61,6 +79,7 @@ def get_test_client():
     """Create a TestClient with all routes registered."""
     from fastapi.testclient import TestClient
     from main import app
+
     return TestClient(app)
 
 

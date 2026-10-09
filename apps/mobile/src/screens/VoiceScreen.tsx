@@ -1,7 +1,8 @@
-import React, {useEffect, useState, useCallback} from 'react';
-import {FlatList, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
+import React, {useEffect, useState, useCallback, useRef} from 'react';
+import {ScrollView, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
+import {Audio, Sound} from 'expo-av';
 import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {Icon} from '../components/Icon';
@@ -17,6 +18,13 @@ interface VoiceStatus {
   error: string | null;
 }
 
+interface TTSResponse {
+  audio: string;
+  sample_rate: number;
+  duration_ms: number;
+  backend: string;
+}
+
 export function VoiceScreen() {
   const colors = useColors();
   const [status, setStatus] = useState<VoiceStatus | null>(null);
@@ -24,6 +32,8 @@ export function VoiceScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [inputText, setInputText] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const soundRef = useRef<Sound | null>(null);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -36,6 +46,9 @@ export function VoiceScreen() {
 
   useEffect(() => {
     fetchStatus().finally(() => setLoading(false));
+    return () => {
+      soundRef.current?.unloadAsync().catch(() => {});
+    };
   }, [fetchStatus]);
 
   const onRefresh = async () => {
@@ -49,9 +62,36 @@ export function VoiceScreen() {
     try {
       setGenerating(true);
       triggerHaptic('light');
-      const result = await api.post<{audio_path: string}>('/voice/tts', {text: inputText.trim()});
+
+      if (soundRef.current) {
+        await soundRef.current.unloadAsync().catch(() => {});
+        soundRef.current = null;
+      }
+
+      const result = await api.post<TTSResponse>('/voice/tts', {text: inputText.trim()});
+
+      if (!result.audio) {
+        toast.error('No audio returned');
+        return;
+      }
+
+      const {sound} = await Audio.Sound.createAsync(
+        {uri: `data:audio/wav;base64,${result.audio}`},
+        {shouldPlay: true},
+      );
+      soundRef.current = sound;
+      setPlaying(true);
+
+      sound.setOnPlaybackStatusUpdate((playbackStatus) => {
+        if (playbackStatus.isLoaded && playbackStatus.didJustFinish) {
+          setPlaying(false);
+          sound.unloadAsync().catch(() => {});
+          soundRef.current = null;
+        }
+      });
+
       triggerHaptic('success');
-      toast.success('Audio generated');
+      toast.success(`Played ${((result.duration_ms || 0) / 1000).toFixed(1)}s audio`);
       setInputText('');
       await fetchStatus();
     } catch {
@@ -75,13 +115,12 @@ export function VoiceScreen() {
           <StatusBadge label="Loading..." variant="info" />
         </YStack>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          ListHeaderComponent={
-            <YStack padding={16} gap={12}>
+        <ScrollView
+          contentContainerStyle={{paddingBottom: 32}}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <YStack padding={16} gap={12}>
               {/* TTS Status */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={10}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text fontSize={15} fontWeight="600" color={colors.text}>TTS Status</Text>
                   <StatusBadge label={status?.tts_available ? 'Available' : 'Offline'} variant={status?.tts_available ? 'success' : 'error'} />
@@ -109,7 +148,7 @@ export function VoiceScreen() {
               </YStack>
 
               {/* Test TTS */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Test TTS</Text>
                 <RNTextInput
                   value={inputText}
@@ -130,26 +169,23 @@ export function VoiceScreen() {
                     textAlignVertical: 'top',
                   }}
                 />
-                <Pressable onPress={handleGenerate} disabled={!inputText.trim() || generating}>
-                  <XStack padding={10} borderRadius={8} backgroundColor={inputText.trim() && !generating ? colors.primary : colors.border} alignItems="center" justifyContent="center" gap={6}>
-                    <Icon name={generating ? 'refresh-cw' : 'music'} size={16} color="white" />
-                    <Text fontSize={13} fontWeight="600" color="white">{generating ? 'Generating...' : 'Generate & Play'}</Text>
+                <Pressable onPress={handleGenerate} disabled={!inputText.trim() || generating || playing}>
+                  <XStack padding={10} borderRadius={8} backgroundColor={inputText.trim() && !generating && !playing ? colors.primary : colors.border} alignItems="center" justifyContent="center" gap={6}>
+                    <Icon name={generating ? 'refresh-cw' : playing ? 'music' : 'music'} size={16} color="white" />
+                    <Text fontSize={13} fontWeight="600" color="white">{generating ? 'Generating...' : playing ? 'Playing...' : 'Generate & Play'}</Text>
                   </XStack>
                 </Pressable>
               </YStack>
 
               {/* About */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={6}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={6}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>About</Text>
                 <Text fontSize={13} color={colors.textMuted} lineHeight={18}>
                   Voice synthesis converts text to speech using server-side TTS models. Generated audio can be played back or shared.
                 </Text>
               </YStack>
             </YStack>
-          }
-          contentContainerStyle={{paddingBottom: 32}}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
+          </ScrollView>
       )}
     </SafeAreaView>
   );

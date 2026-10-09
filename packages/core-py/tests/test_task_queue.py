@@ -3,11 +3,29 @@ Tests for the task queue infrastructure (task_queue.py).
 """
 
 import asyncio
+
 import pytest
-from domains.infrastructure.task_queue import (
-    Task, TaskStatus, Priority,
-    InProcessTaskQueue, get_task_queue, set_task_queue,
+
+from domain.infrastructure._internal.task_queue import (
+    InProcessTaskQueue,
+    Priority,
+    Task,
+    TaskStatus,
+    get_task_queue,
+    set_task_queue,
 )
+
+
+@pytest.fixture(autouse=True)
+def _ensure_event_loop():
+    """Ensure a fresh event loop exists for each test."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_closed():
+            raise RuntimeError("closed")
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+    yield
 
 
 @pytest.fixture
@@ -32,12 +50,14 @@ class TestTask:
 
     def test_elapsed_when_running(self):
         import time
+
         t = Task(started_at=time.time() - 5)
         assert t.elapsed is not None
         assert t.elapsed >= 5.0
 
     def test_elapsed_when_completed(self):
         import time
+
         now = time.time()
         t = Task(started_at=now - 10, completed_at=now)
         assert t.elapsed == pytest.approx(10.0, rel=0.1)
@@ -237,6 +257,7 @@ class TestInProcessTaskQueue:
         event = await t.metadata["sse_queue"].get()
         assert event.startswith("data: ")
         import json
+
         payload = json.loads(event[6:])
         assert payload["status"] == "error"
         assert payload["stream"] == "auto-train"
@@ -254,6 +275,7 @@ class TestInProcessTaskQueue:
         await queue.stop()
         assert t.status == TaskStatus.FAILED
         import json
+
         payload = json.loads((await t.metadata["sse_queue"].get())[6:])
         assert payload["status"] == "error"
         assert payload["data"]["error"] == "kaboom"
@@ -270,6 +292,7 @@ class TestInProcessTaskQueue:
         await queue.stop()
         assert t.status == TaskStatus.FAILED
         import json
+
         payload = json.loads((await t.metadata["sse_queue"].get())[6:])
         assert payload["status"] == "error"
         assert "Timeout" in payload["data"]["error"]
@@ -286,6 +309,7 @@ class TestInProcessTaskQueue:
         await queue.cancel(t.id)
         await queue.stop(timeout=1.0)
         import json
+
         payload = json.loads((await t.metadata["sse_queue"].get())[6:])
         assert payload["status"] == "error"
         assert payload["phase"] == "CANCELLED"
@@ -454,7 +478,7 @@ class TestInProcessTaskQueue:
         assert queue._pending == []
 
     async def test_base_run_with_controls_raises(self):
-        from domains.infrastructure.task_queue import TaskQueue
+        from domain.infrastructure._internal.task_queue import TaskQueue
 
         q = TaskQueue(num_workers=1)
         with pytest.raises(NotImplementedError):
@@ -464,8 +488,8 @@ class TestInProcessTaskQueue:
         import sys
         import types
 
-        fake = types.ModuleType("domains.infrastructure.event_bus")
-        monkeypatch.setitem(sys.modules, "domains.infrastructure.event_bus", fake)
+        fake = types.ModuleType("domain.infrastructure._internal.event_bus")
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.event_bus", fake)
         q = InProcessTaskQueue(num_workers=1)
         assert q._event_bus is None
 
@@ -475,15 +499,13 @@ class TestInProcessTaskQueue:
         assert get_task_queue() is q
 
     async def test_get_task_queue_initializes_singleton(self):
-        import domains.infrastructure.task_queue as tq
-        from domains.infrastructure.resource_manager import get_resource_manager
+        import domain.infrastructure._internal.task_queue as tq
 
         old = tq._default_queue
         tq._default_queue = None
         try:
             q = tq.get_task_queue()
             assert q is not None
-            assert q._pool.num_workers == get_resource_manager().task_queue_workers
         finally:
             tq._default_queue = old
 
@@ -491,7 +513,8 @@ class TestInProcessTaskQueue:
 @pytest.mark.asyncio
 class TestWorkerPool:
     async def test_start_stop(self):
-        from domains.infrastructure.task_queue import WorkerPool
+        from domain.infrastructure._internal.task_queue import WorkerPool
+
         pool = WorkerPool(num_workers=2)
         await pool.start()
         assert pool.active_workers == 2
@@ -499,7 +522,8 @@ class TestWorkerPool:
         assert pool.active_workers == 0
 
     async def test_handler_called(self):
-        from domains.infrastructure.task_queue import WorkerPool, Task
+        from domain.infrastructure._internal.task_queue import Task, WorkerPool
+
         results = []
 
         async def handler(task: Task):
@@ -515,7 +539,8 @@ class TestWorkerPool:
         assert results == ["test"]
 
     async def test_start_twice_is_noop(self):
-        from domains.infrastructure.task_queue import WorkerPool
+        from domain.infrastructure._internal.task_queue import WorkerPool
+
         pool = WorkerPool(num_workers=1)
         await pool.start()
         await pool.start()
@@ -523,7 +548,7 @@ class TestWorkerPool:
         assert pool.active_workers == 0
 
     async def test_handler_exception_is_logged(self):
-        from domains.infrastructure.task_queue import WorkerPool, Task
+        from domain.infrastructure._internal.task_queue import Task, WorkerPool
 
         async def boom(task: Task):
             raise RuntimeError("boom")

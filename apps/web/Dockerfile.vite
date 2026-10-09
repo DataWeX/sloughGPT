@@ -1,0 +1,36 @@
+# Vite static SPA image — Phase 5 dual-path (Next image stays apps/web/Dockerfile).
+# Build from repository root:
+#   docker build -f apps/web/Dockerfile.vite -t sloughgpt/web:vite .
+# Optional: --build-arg API_BASE=http://api:8000  (default for compose)
+
+FROM node:20-alpine AS base
+
+FROM base AS deps
+WORKDIR /app
+COPY apps/web/package.json apps/web/package-lock.json* ./apps/web/
+COPY packages/strui/package.json packages/strui/package-lock.json* ./packages/strui/
+WORKDIR /app/apps/web
+RUN npm ci
+WORKDIR /app/packages/strui
+RUN npm ci --omit=peer
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app/packages/strui/node_modules ./packages/strui/node_modules
+COPY apps/web ./apps/web
+COPY packages/strui ./packages/strui
+WORKDIR /app/apps/web
+RUN npm run build:vite \
+  && test -f dist-vite/index.html
+
+FROM nginx:1.27-alpine AS runner
+ARG API_BASE=http://api:8000
+# nginx.conf proxies /api/ to localhost:8000 by default (host static serve);
+# in Docker the API is the compose service `api`.
+COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i "s|http://localhost:8000|${API_BASE}|g" /etc/nginx/conf.d/default.conf
+COPY --from=builder /app/apps/web/dist-vite /usr/share/nginx/html
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -q -O /dev/null http://127.0.0.1:3000/health || exit 1

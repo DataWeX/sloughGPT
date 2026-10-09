@@ -1,0 +1,147 @@
+from __future__ import annotations
+
+"""
+pugqeep — Point-Graph-Queue system.
+
+Core infra engine for spawning processes, branching parallel tasks,
+and managing data across tiers.
+
+Architecture:
+    Queue (core engine — main process)
+      └── Tree (model instance — branches stems into parallel tasks)
+            └── Graph/PointLibrary (context — what the tree knows)
+                  └── Point (star — function-calling capacity)
+
+Quick start:
+    from pugqeep import PGQ
+
+    # Spawn the core engine
+    pgq = PGQ("infra")
+    pgq.spawn(load_config, "config.json")
+    pgq.spawn(start_server, port=8000)
+    pgq.run()
+
+    # Or use data operations
+    pgq.put("weights", numpy_array)
+    data = pgq.get("weights")
+"""
+
+from domain.infrastructure._internal.producer_consumer import (
+    ProducerConsumerQueue,
+    ShutdownMode,
+)
+
+from .cache import MemoryStore as CacheMemoryStore
+from .cache import Tier, TieredCache
+from .compressor import PointCompressor
+from .config import CompressorConfig, LibraryConfig, PointConfig, QueueConfig, TreeConfig
+from .dedup import PointDeduplicator, PointLibrarySync
+from .engine import Engine as Engine
+from .engine import (
+    EngineMetrics,
+    GuardTree,
+    ProcessGroup,
+    ProcessMonitor,
+    ResultCache,
+    SubprocessProcess,
+)
+from .engine import Process as Process
+from .facade import PGQ
+from .generic import (
+    AutoStrategy,
+    ClusterStrategy,
+    CompressionStrategy,
+    DirectoryStorage,
+    FunctionStrategy,
+    FunctionType,
+    JSONStorage,
+    MemoryStorage,
+    PGQGeneric,
+    RawStrategy,
+    StorageBackend,
+    registry,
+)
+from .library import PointLibrary
+from .model_tree import ModelTree
+from .point import Point
+from .point_interface import PointProtocol, PointView
+from .queue import ModelQueue
+from .store import DirectoryStore, JSONStore
+from .store import MemoryStore as FunctionMemoryStore
+from .task_queue import Task, TaskPriority, TaskQueue, TaskStatus
+from .tree import Tree, load_model_to_points
+from .tree import decompress_tree as decompress_tree
+from .tree import load_from_points as load_from_points
+from .tree import load_library as load_library
+from .tree import save_library as save_library
+
+__all__ = [
+    # Core types
+    "Point",
+    "PointProtocol",
+    "PointView",
+    "FunctionType",
+    "PointCompressor",
+    "PointLibrary",
+    "Tree",
+    "ModelTree",
+    "ModelQueue",
+    # Facade
+    "PGQ",
+    # Generic pluggable facade
+    "PGQGeneric",
+    # ABCs
+    "CompressionStrategy",
+    "StorageBackend",
+    "FunctionType",
+    # Registry
+    "registry",
+    # Built-in strategies
+    "ClusterStrategy",
+    "FunctionStrategy",
+    "RawStrategy",
+    "AutoStrategy",
+    # Built-in storage backends
+    "MemoryStorage",
+    "JSONStorage",
+    "DirectoryStorage",
+    # Cache
+    "TieredCache",
+    "Tier",
+    # Task queue
+    "TaskQueue",
+    "Task",
+    "TaskStatus",
+    "TaskPriority",
+    # Stores
+    "FunctionMemoryStore",
+    "CacheMemoryStore",
+    "JSONStore",
+    "DirectoryStore",
+    # Config
+    "PointConfig",
+    "CompressorConfig",
+    "LibraryConfig",
+    "TreeConfig",
+    "QueueConfig",
+    # Sync/dedup
+    "PointDeduplicator",
+    "PointLibrarySync",
+    # Helpers
+    "load_model_to_points",
+    "save_library",
+    "load_library",
+    # Producer-consumer
+    "ProducerConsumerQueue",
+    "ShutdownMode",
+    # Engine classes
+    "Engine",
+    "ProcessGroup",
+    "SubprocessProcess",
+    "ProcessMonitor",
+    "GuardTree",
+    "EngineMetrics",
+    "ResultCache",
+]
+
+__version__ = "0.1.0"

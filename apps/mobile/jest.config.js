@@ -10,5 +10,6 @@ module.exports = {
     '^react-native-fs$': '<rootDir>/src/__mocks__/react-native-fs.ts',
     '^expo-image-picker$': '<rootDir>/src/__mocks__/expo-image-picker.ts',
     '^expo-document-picker$': '<rootDir>/src/__mocks__/expo-document-picker.ts',
+    '^expo-file-system$': '<rootDir>/src/__mocks__/expo-file-system.ts',
   },
 };

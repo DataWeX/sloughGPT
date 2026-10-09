@@ -138,9 +138,10 @@ export const MessageThreading = memo(function MessageThreading({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
+                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0"
                     onClick={() => handleDeleteThread(thread.id)}
                     title="Delete thread"
+                    aria-label="Delete thread"
                   >
                     <IconX className="h-3 w-3" />
                   </Button>
@@ -163,7 +164,7 @@ export const MessageThreading = memo(function MessageThreading({
                           type="text"
                           value={replyDraft}
                           onChange={(e) => setReplyDraft(e.target.value)}
-                          placeholder="Reply to thread..."
+                          placeholder="Reply to thread..." aria-label="Reply to thread"
                           className="w-full text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
                           onKeyDown={(e) => {
                             if (e.key === 'Enter') handleSubmitReply()

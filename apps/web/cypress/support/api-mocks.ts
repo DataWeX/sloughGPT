@@ -3,7 +3,9 @@
  * This file is loaded in cypress/support/e2e.ts
  */
 
-const api = 'http://localhost:8000'
+import { apiBase } from './api-base'
+
+const api = apiBase
 
 Cypress.Commands.add('mockHealth', (overrides = {}) => {
   cy.intercept('GET', `${api}/health`, {
@@ -38,19 +40,76 @@ Cypress.Commands.add('mockSystem', () => {
   }).as('systemMetrics')
   cy.intercept('GET', `${api}/system/info`, {
     statusCode: 200,
-    body: { platform: 'Darwin', platform_release: '24.0.0', architecture: 'arm64', processor: 'Apple M3', cpu_count: 12 },
+    body: {
+      platform: 'Darwin',
+      platform_release: '24.0.0',
+      architecture: 'arm64',
+      processor: 'Apple M3',
+      cpu_count: 12,
+    },
   }).as('systemInfo')
   cy.intercept('GET', `${api}/system/disk`, {
     statusCode: 200,
     body: { total_gb: 256, used_gb: 120, free_gb: 136, percent: 46.9 },
   }).as('systemDisk')
+  cy.intercept('GET', `${api}/system/battery`, {
+    statusCode: 200,
+    body: {
+      status: {
+        level: 72,
+        is_charging: true,
+        is_plugged: true,
+        health: 'Good',
+        capacity: -1,
+        voltage_mv: 7400,
+        current_ma: 1200,
+        time_to_full_min: 30,
+        time_to_empty_min: null,
+        source: 'sysfs',
+        name: 'BAT0',
+        level_band: 'ok',
+        updated_at: 0,
+      },
+      control: {
+        supported: false,
+        writable: false,
+        path: null,
+        current_limit: null,
+        reason: 'no battery device in sysfs',
+      },
+      advice: {
+        limit: 80,
+        action: 'maintain',
+        reason: 'Battery 72% — charging (optimal range 20–80%).',
+      },
+    },
+  }).as('systemBattery')
+  cy.intercept('POST', `${api}/system/battery/limit*`, {
+    statusCode: 200,
+    body: {
+      applied: false,
+      supported: false,
+      limit: null,
+      reason: 'no battery device in sysfs',
+      path: null,
+    },
+  }).as('systemBatteryLimit')
   cy.intercept('GET', `${api}/health/detailed`, {
     statusCode: 200,
     body: {
-      status: 'healthy', uptime_seconds: 3600, timestamp: new Date().toISOString(),
+      status: 'healthy',
+      uptime_seconds: 3600,
+      timestamp: new Date().toISOString(),
       system: { cpu_percent: 45.2, memory_percent: 62.1, memory_available_mb: 6144 },
-      gpu: { backend: 'mps', device_type: 'gpu', vram_gb: 18, tier: 'high', memory_hint: '18 GB unified' },
-      model_loaded: true, model_type: 'gpt2',
+      gpu: {
+        backend: 'mps',
+        device_type: 'gpu',
+        vram_gb: 18,
+        tier: 'high',
+        memory_hint: '18 GB unified',
+      },
+      model_loaded: true,
+      model_type: 'gpt2',
       inference: { inference_count: 42 },
     },
   }).as('detailedHealth')
@@ -72,7 +131,15 @@ Cypress.Commands.add('mockKnowledge', (items: string[] = []) => {
   }).as('mockKnowledgeList')
   cy.intercept('POST', `${api}/knowledge`, {
     statusCode: 200,
-    body: { id: 'k-new', content: '', topic: 'general', source: 'manual', importance: 1, score: 1, created_at: new Date().toISOString() },
+    body: {
+      id: 'k-new',
+      content: '',
+      topic: 'general',
+      source: 'manual',
+      importance: 1,
+      score: 1,
+      created_at: new Date().toISOString(),
+    },
   }).as('mockKnowledgeAdd')
   cy.intercept('POST', `${api}/knowledge/batch-delete`, {
     statusCode: 200,
@@ -80,7 +147,71 @@ Cypress.Commands.add('mockKnowledge', (items: string[] = []) => {
   }).as('mockKnowledgeDelete')
 })
 
+/**
+ * Catch-all for endpoints without a dedicated mock.
+ *
+ * Registered FIRST so every specific mock registered afterwards still wins
+ * (later intercepts take precedence). Without it, an unmocked call reaches
+ * the real origin — an unreachable origin surfaces as an unhandled ApiError
+ * and fails the test.
+ *
+ * Shape heuristic: GETs of collection-looking paths answer with an array,
+ * because `.map()` over `{}` crashes React trees (SoulSelectorDropdown,
+ * model lists, ...), while everything else answers with an object.
+ */
+Cypress.Commands.add('mockApiFallback', () => {
+  // Stateful docstore KV: chatDB KV reads/writes are HTTP calls
+  // (PUT/GET /docstore/kv/{key}), and a purely stateless fallback would drop
+  // every write — persisted state (vm role/steps, training config, sidebar)
+  // would silently revert on reload (vm-page 'persists the selected role and
+  // steps across reloads'). The store closes over spec-frame state, so it
+  // survives cy.reload() within a test. Handled INSIDE the one generic
+  // handler so matching precedence between interceptors never comes into it.
+  const kvStore: Record<string, unknown> = {}
+  cy.intercept({ url: `${api}/**` }, (req) => {
+    const path = req.url.replace(/^https?:\/\/[^/]+/, '').split('?')[0]
+    const kvPrefix = '/docstore/kv/'
+    if (path.startsWith(kvPrefix)) {
+      const key = decodeURIComponent(path.slice(kvPrefix.length))
+      if (req.method === 'GET') {
+        req.reply({
+          statusCode: 200,
+          body: key in kvStore ? { key, value: kvStore[key] } : {},
+        })
+        return
+      }
+      if (req.method === 'DELETE') {
+        delete kvStore[key]
+        req.reply({ statusCode: 200, body: {} })
+        return
+      }
+      let body: unknown = req.body
+      if (typeof body === 'string') {
+        try {
+          body = JSON.parse(body)
+        } catch {
+          body = {}
+        }
+      }
+      kvStore[key] = (body as { value?: unknown } | null)?.value
+      req.reply({ statusCode: 200, body: {} })
+      return
+    }
+    const segments = path.split('/').filter(Boolean)
+    const collectionish =
+      req.method === 'GET' &&
+      segments.length <= 2 &&
+      (segments[segments.length - 1].endsWith('s') || segments[0]?.endsWith('s'))
+    req.reply({ statusCode: 200, body: collectionish ? [] : {} })
+  }).as('apiFallback')
+  // loadSessions() sorts by updatedAt — an object here would throw.
+  cy.intercept('GET', `${api}/docstore/sessions`, { statusCode: 200, body: [] }).as(
+    'docstoreSessions',
+  )
+})
+
 Cypress.Commands.add('mockAll', () => {
+  cy.mockApiFallback()
   cy.mockHealth()
   cy.mockModels()
   cy.mockDatasets()
@@ -93,19 +224,81 @@ Cypress.Commands.add('mockVisual', () => {
     statusCode: 200,
     body: {
       checkpoints: [
-        { name: 'visual-v1', path: '/models/visual-checkpoints/visual-v1', size_mb: 256, created_at: '2026-06-22T10:00:00Z', soul_name: 'vision-v1', lineage: '', llm: 'Qwen2.5-0.5B-Instruct', final_loss: 0.85, total_steps: 120, mean_accuracy: 72.5, description: 'First visual checkpoint' },
-        { name: 'visual-v2', path: '/models/visual-checkpoints/visual-v2', size_mb: 258, created_at: '2026-06-23T10:00:00Z', soul_name: 'vision-v2', lineage: 'visual-v1', llm: 'Qwen2.5-0.5B-Instruct', final_loss: 0.42, total_steps: 200, mean_accuracy: 88.3, description: 'Improved visual checkpoint' },
+        {
+          name: 'visual-v1',
+          path: '/models/visual-checkpoints/visual-v1',
+          size_mb: 256,
+          created_at: '2026-06-22T10:00:00Z',
+          soul_name: 'vision-v1',
+          lineage: '',
+          llm: 'Qwen2.5-0.5B-Instruct',
+          final_loss: 0.85,
+          total_steps: 120,
+          mean_accuracy: 72.5,
+          description: 'First visual checkpoint',
+        },
+        {
+          name: 'visual-v2',
+          path: '/models/visual-checkpoints/visual-v2',
+          size_mb: 258,
+          created_at: '2026-06-23T10:00:00Z',
+          soul_name: 'vision-v2',
+          lineage: 'visual-v1',
+          llm: 'Qwen2.5-0.5B-Instruct',
+          final_loss: 0.42,
+          total_steps: 200,
+          mean_accuracy: 88.3,
+          description: 'Improved visual checkpoint',
+        },
       ],
     },
   }).as('visualCheckpoints')
   cy.intercept('GET', `${api}/multimodal/status`, {
     statusCode: 200,
     body: {
-      engine: { speech_to_text: false, image_caption: false, speech_model: null, vision_model: 'slomet', status: 'ready' },
-      learning: { images_learned: 0, trained: false, vocab_size: 0, replay_buffer_size: 0, learning_method: '', caption_history: [], unique_captions: 0, diversity_ratio: 0, accuracy_history: [], mean_accuracy: 0, last_accuracy: 0 },
-      batch: { running: false, job_id: null, total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '', started_at: null, finished_at: null },
+      engine: {
+        speech_to_text: false,
+        image_caption: false,
+        speech_model: null,
+        vision_model: 'slomet',
+        status: 'ready',
+      },
+      learning: {
+        images_learned: 0,
+        trained: false,
+        vocab_size: 0,
+        replay_buffer_size: 0,
+        learning_method: '',
+        caption_history: [],
+        unique_captions: 0,
+        diversity_ratio: 0,
+        accuracy_history: [],
+        mean_accuracy: 0,
+        last_accuracy: 0,
+      },
+      batch: {
+        running: false,
+        job_id: null,
+        total: 0,
+        completed: 0,
+        errors: 0,
+        progress_pct: 0,
+        current_caption: '',
+        current_image: '',
+        started_at: null,
+        finished_at: null,
+      },
       dpo: { status: 'idle', last_run: null, result: null, accepted_count: 0, rejected_count: 0 },
-      video: { status: 'idle', job_id: null, current_epoch: 0, current_step: 0, total_steps: 0, current_loss: null, result: null, error: null },
+      video: {
+        status: 'idle',
+        job_id: null,
+        current_epoch: 0,
+        current_step: 0,
+        total_steps: 0,
+        current_loss: null,
+        result: null,
+        error: null,
+      },
     },
   }).as('visualStatus')
   cy.intercept('GET', `${api}/multimodal/train/status`, {
@@ -130,17 +323,87 @@ Cypress.Commands.add('mockMultimodal', () => {
   cy.intercept('GET', `${api}/multimodal/status`, {
     statusCode: 200,
     body: {
-      engine: { speech_to_text: true, image_caption: true, speech_model: 'whisper', vision_model: 'soulnet', status: 'ready' },
-      learning: { images_learned: 42, trained: true, vocab_size: 128, replay_buffer_size: 500, learning_method: 'contrastive + self-training', caption_history: ['a cat sitting on a chair', 'a red car', 'a dog in the park'], unique_captions: 3, diversity_ratio: 1.0, accuracy_history: [40, 50, 60, 70, 65, 72, 68, 75, 80, 78], mean_accuracy: 64.2, last_accuracy: 78 },
-      batch: { running: false, job_id: null, total: 0, completed: 0, errors: 0, progress_pct: 0, current_caption: '', current_image: '', started_at: null, finished_at: null },
+      engine: {
+        speech_to_text: true,
+        image_caption: true,
+        speech_model: 'whisper',
+        vision_model: 'soulnet',
+        status: 'ready',
+      },
+      learning: {
+        images_learned: 42,
+        trained: true,
+        vocab_size: 128,
+        replay_buffer_size: 500,
+        learning_method: 'contrastive + self-training',
+        caption_history: ['a cat sitting on a chair', 'a red car', 'a dog in the park'],
+        unique_captions: 3,
+        diversity_ratio: 1.0,
+        accuracy_history: [40, 50, 60, 70, 65, 72, 68, 75, 80, 78],
+        mean_accuracy: 64.2,
+        last_accuracy: 78,
+      },
+      batch: {
+        running: false,
+        job_id: null,
+        total: 0,
+        completed: 0,
+        errors: 0,
+        progress_pct: 0,
+        current_caption: '',
+        current_image: '',
+        started_at: null,
+        finished_at: null,
+      },
       dpo: { status: 'idle', last_run: null, result: null, accepted_count: 0, rejected_count: 0 },
-      video: { status: 'idle', job_id: null, current_epoch: 0, current_step: 0, total_steps: 0, current_loss: null, result: null, error: null },
+      video: {
+        status: 'idle',
+        job_id: null,
+        current_epoch: 0,
+        current_step: 0,
+        total_steps: 0,
+        current_loss: null,
+        result: null,
+        error: null,
+      },
     },
   }).as('multimodalStatus')
   cy.intercept('POST', `${api}/multimodal/reset`, {
     statusCode: 200,
     body: { status: 'success', message: 'Model reset' },
   }).as('multimodalReset')
+})
+
+Cypress.Commands.add('mockAgents', (overrides: any[] = []) => {
+  const defaultAgents = [
+    {
+      id: 'assistant',
+      name: 'Assistant',
+      description: 'General purpose AI assistant',
+      instructions: 'You are a helpful AI assistant.',
+      tools: ['memory', 'file_search'],
+      avatar: 'A',
+    },
+    {
+      id: 'coder',
+      name: 'Coder',
+      description: 'Programming and code execution',
+      instructions: 'You are an expert programmer.',
+      tools: ['code_execution', 'file_read'],
+      avatar: 'C',
+    },
+  ]
+  const agents = overrides.length > 0 ? overrides : defaultAgents
+  cy.intercept('GET', `${api}/agents`, { statusCode: 200, body: agents }).as('agentsList')
+  cy.intercept('POST', `${api}/agents`, { statusCode: 201, body: agents[0] }).as('agentsCreate')
+  cy.intercept('PUT', `${api}/agents/*`, { statusCode: 200, body: agents[0] }).as('agentsUpdate')
+  cy.intercept('DELETE', `${api}/agents/*`, { statusCode: 200, body: { status: 'deleted' } }).as(
+    'agentsDelete',
+  )
+  cy.intercept('POST', `${api}/agents/*/execute`, {
+    statusCode: 200,
+    body: { response: 'This is a simulated agent response.', tools_used: [] },
+  }).as('agentsExecute')
 })
 
 Cypress.Commands.add('mockVm', (runOverrides: Record<string, unknown> = {}) => {
@@ -173,31 +436,43 @@ Cypress.Commands.add('mockVm', (runOverrides: Record<string, unknown> = {}) => {
     statusCode: 200,
     body: {
       programs: [
-        { name: 'hello', description: 'Write "Hello, VM!" to the VGA buffer', code: 'mov eax, 3\nint 0x80' },
-        { name: 'train', description: 'Start a training job (requires admin)', code: 'mov eax, 28\nint 0x80' },
-        { name: 'train-status', description: 'Poll a training job result (requires admin)', code: 'mov eax, 29\nint 0x80' },
+        {
+          name: 'hello',
+          description: 'Write "Hello, VM!" to the VGA buffer',
+          code: 'mov eax, 3\nint 0x80',
+        },
+        {
+          name: 'train',
+          description: 'Start a training job (requires admin)',
+          code: 'mov eax, 28\nint 0x80',
+        },
+        {
+          name: 'train-status',
+          description: 'Poll a training job result (requires admin)',
+          code: 'mov eax, 29\nint 0x80',
+        },
       ],
     },
   }).as('vmBuiltins')
   cy.intercept('GET', `${api}/vm/info`, {
     statusCode: 200,
-    body: { isa: 'x86-32', max_steps: 1000000, default_memory: 1048576, max_memory: 16777216, registers: { eax: { size_bits: 32, name: 'EAX' } }, features: [] },
+    body: {
+      isa: 'x86-32',
+      max_steps: 1000000,
+      default_memory: 1048576,
+      max_memory: 16777216,
+      registers: { eax: { size_bits: 32, name: 'EAX' } },
+      features: [],
+    },
   }).as('vmInfo')
   cy.intercept('GET', `${api}/vm/training/jobs/*`, {
     statusCode: 200,
-    body: { job_id: 1, api_job_id: '1', status: 'completed', progress: 100, result: '{"success": true, "final_loss": 1.5}' },
+    body: {
+      job_id: 1,
+      api_job_id: '1',
+      status: 'completed',
+      progress: 100,
+      result: '{"success": true, "final_loss": 1.5}',
+    },
   }).as('vmTrainingJob')
-})
-
-Cypress.Commands.add('mockAgents', (overrides: any[] = []) => {
-  const defaultAgents = [
-    { id: 'assistant', name: 'Assistant', description: 'General purpose AI assistant', instructions: 'You are a helpful AI assistant.', tools: ['memory', 'file_search'], avatar: 'A' },
-    { id: 'coder', name: 'Coder', description: 'Programming and code execution', instructions: 'You are an expert programmer.', tools: ['code_execution', 'file_read'], avatar: 'C' },
-  ]
-  const agents = overrides.length > 0 ? overrides : defaultAgents
-  cy.intercept('GET', `${api}/agents`, { statusCode: 200, body: agents }).as('agentsList')
-  cy.intercept('POST', `${api}/agents`, { statusCode: 201, body: agents[0] }).as('agentsCreate')
-  cy.intercept('PUT', `${api}/agents/*`, { statusCode: 200, body: agents[0] }).as('agentsUpdate')
-  cy.intercept('DELETE', `${api}/agents/*`, { statusCode: 200, body: { status: 'deleted' } }).as('agentsDelete')
-  cy.intercept('POST', `${api}/agents/*/execute`, { statusCode: 200, body: { response: 'This is a simulated agent response.', tools_used: [] } }).as('agentsExecute')
 })

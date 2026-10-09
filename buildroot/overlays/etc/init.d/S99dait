@@ -1,0 +1,88 @@
+#!/bin/sh
+# Dait Shell init script for SloughGPT
+# This script starts the Dait shell and related services
+
+DAIT_HOME="/opt/sloughgpt"
+DAIT_BIN="$DAIT_HOME/bin"
+DAIT_CONF="$DAIT_HOME/etc"
+DAIT_LOG="/var/log/sloughgpt"
+
+# Create directories
+mkdir -p "$DAIT_LOG"
+mkdir -p /tmp/sloughgpt
+
+# Set environment
+export PATH="$DAIT_BIN:$PATH"
+export PYTHONPATH="$DAIT_HOME/python:$PYTHONPATH"
+export SLOUGHPGT_HOME="$DAIT_HOME"
+export SLOUGHPGT_VERSION="0.1.0"
+
+# Start services based on runlevel
+case "$1" in
+    0|1)
+        # Halt/Single user - minimal services
+        echo "Dait: Single user mode"
+        ;;
+    2)
+        # Multi user without networking
+        echo "Dait: Multi-user mode (no network)"
+        _start_kernel
+        _start_shell
+        ;;
+    3|4|5)
+        # Full multi-user with networking
+        echo "Dait: Full mode"
+        _start_kernel
+        _start_network
+        _start_shell
+        _start_api_server
+        ;;
+    6)
+        # Reboot
+        echo "Dait: Rebooting..."
+        _stop_all
+        ;;
+esac
+
+_start_kernel() {
+    echo "Dait: Starting kernel..."
+    if [ -x "$DAIT_BIN/dait-kernel" ]; then
+        "$DAIT_BIN/dait-kernel" --daemon
+    fi
+}
+
+_start_network() {
+    echo "Dait: Starting network..."
+    if [ -x /etc/init.d/S40network ]; then
+        /etc/init.d/S40network start
+    fi
+}
+
+_start_shell() {
+    echo "Dait: Starting shell..."
+    if [ -x "$DAIT_BIN/dait-shell" ]; then
+        # For now, just show a message
+        echo "Dait shell available at: $DAIT_BIN/dait-shell"
+    fi
+}
+
+_start_api_server() {
+    echo "Dait: Starting API server..."
+    if [ -x "$DAIT_BIN/dait-api" ]; then
+        "$DAIT_BIN/dait-api" --daemon --port 8080
+    fi
+}
+
+_stop_all() {
+    echo "Dait: Stopping all services..."
+    # Kill any running Dait processes
+    pkill -f "dait-" 2>/dev/null || true
+}
+
+# Handle signals
+trap _stop_all SIGTERM SIGINT
+
+# If called with no arguments, start in runlevel 3
+if [ $# -eq 0 ]; then
+    $0 3
+fi

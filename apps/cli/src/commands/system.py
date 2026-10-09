@@ -1,20 +1,20 @@
 """
 System commands - System info, status, optimization, and configuration.
 """
-import sys
-import os
-import json
-import platform
-import time
-import secrets
-from pathlib import Path
-from typing import Optional
 
-from domains.logging import get_global
+import json
+import os
+import platform
+import secrets
+import sys
+import time
+from pathlib import Path
+
+from domain.logging import get_global
 
 log = get_global()
-from core.validator import Doctor
-from utils.formatting import format_size, format_time, format_number
+from core.validator import Validator
+from utils.formatting import format_size
 
 
 def cmd_system(args):
@@ -34,10 +34,11 @@ def cmd_system(args):
     if psutil:
         log.section("CPU")
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             cores = f"{rm.topology.logical_cores} logical / {rm.topology.physical_cores} physical"
-        except Exception:
+        except (ImportError, AttributeError):
             cores = str(psutil.cpu_count())
         log.key_value("Cores", cores)
         log.key_value("Usage", f"{psutil.cpu_percent()}%")
@@ -67,7 +68,11 @@ def cmd_status(args):
 
         try:
             r = requests.get("http://localhost:8000/health", timeout=2)
-            log.status("API", "Online" if r.status_code == 200 else "Offline", "ok" if r.status_code == 200 else "error")
+            log.status(
+                "API",
+                "Online" if r.status_code == 200 else "Offline",
+                "ok" if r.status_code == 200 else "error",
+            )
         except (requests.RequestException, ConnectionError):
             log.status("API", "Not running", "error")
 
@@ -78,7 +83,7 @@ def cmd_status(args):
         else:
             log.status("Models", "Directory not found", "error")
 
-        datasets_dir = Path("datasets")
+        datasets_dir = Path("data")
         if datasets_dir.exists():
             datasets = list(datasets_dir.iterdir())
             log.status("Datasets", f"{len([d for d in datasets if d.is_dir()])} found", "ok")
@@ -104,7 +109,8 @@ def cmd_optimize(args):
 
     log.section("Accelerator (SloNet)")
     try:
-        from domains.training.slonet import _ACCEL_THRESHOLD, _get_accelerator
+        from domain.training._internal.slonet import _ACCEL_THRESHOLD, _get_accelerator
+
         acc = _get_accelerator()
         if acc is not None:
             log.key_value("Backend", acc.name)
@@ -136,12 +142,15 @@ def cmd_optimize(args):
         log.blank()
         log.step("Applying optimizations...")
         try:
-            from domains.infrastructure.resource_manager import get_resource_manager
+            from domain.infrastructure.resource_manager import get_resource_manager
+
             rm = get_resource_manager()
             rm.apply_blas_env()
             rm.apply_compute_limits()
             log.success(f"Thread count optimized: compute={rm.compute_threads} io={rm.io_threads}")
-            log.info(f"OMP={rm.omp_num_threads} MKL={rm.mkl_num_threads} NUMEXPR={rm.numexpr_num_threads}")
+            log.info(
+                f"OMP={rm.omp_num_threads} MKL={rm.mkl_num_threads} NUMEXPR={rm.numexpr_num_threads}"
+            )
         except Exception as e:
             log.warning(f"Thread optimization failed: {e}")
         log.info("Accelerator dispatch is threshold-gated (no runtime change needed)")
@@ -151,8 +160,8 @@ def cmd_config_check(args):
     """Check environment setup."""
     log.header("Environment Check")
 
-    doctor = Doctor()
-    result = doctor.run_all()
+    checker = Validator()
+    result = checker.run_all()
 
     log.blank()
     for check in result.checks:
@@ -165,7 +174,7 @@ def cmd_config_check(args):
         log.error(f"{result.failed_count}/{len(result.checks)} checks failed")
         for check in result.checks:
             if not check.passed and check.suggestion:
-                log.info(f"  → {check.suggestion}")
+                log.info(f"  > {check.suggestion}")
 
 
 def cmd_config_validate(args):
@@ -181,7 +190,7 @@ def cmd_config_validate(args):
         log.warning(f"{env_file} not found")
         return
 
-    with open(env_file, "r") as f:
+    with open(env_file) as f:
         content = f.read()
 
     required_vars = ["SLO_API_KEY", "SLO_JWT_SECRET"]
@@ -252,7 +261,7 @@ def cmd_setup(args):
         return
 
     log.section("Creating Directories")
-    dirs = ["models", "datasets", "data", "checkpoints", "experiments", "logs", "cache"]
+    dirs = ["models", "data", "checkpoints", "experiments", "logs", "cache"]
     for d in dirs:
         os.makedirs(d, exist_ok=True)
         log.success(d)
@@ -265,7 +274,8 @@ def cmd_setup(args):
     log.key_value("Python", platform.python_version())
 
     try:
-        from domains.training.slonet import _get_accelerator
+        from domain.training._internal.slonet import _get_accelerator
+
         acc = _get_accelerator()
         backend = acc.name if acc is not None else "cpu"
         log.key_value("SloNet Accelerator", backend)
@@ -273,18 +283,49 @@ def cmd_setup(args):
     except Exception as e:
         log.warning(f"Accelerator probe failed: {e}")
 
-    if not args.docker_only:
-        log.section("Virtual Environment")
-        venv_dir = args.venv
-        if not os.path.exists(venv_dir):
-            subprocess.run([sys.executable, "-m", "venv", venv_dir])
-            log.success(f"Created {venv_dir}")
+    import shutil
 
-        pip_exe = os.path.join(venv_dir, "bin", "pip")
-        log.info("Installing dependencies...")
-        subprocess.run([pip_exe, "install", "--upgrade", "pip"])
-        subprocess.run([pip_exe, "install", "transformers", "fastapi", "uvicorn", "pydantic"])
-        log.success("Dependencies installed")
+    conda = shutil.which("conda")
+    conda_env = "sloughgpt"
+    # conda is the project default; an explicit --venv DIR opts out.
+    use_conda = conda is not None and args.venv == ".venv"
+
+    if not args.docker_only:
+        if use_conda:
+            log.section(f"Conda environment ({conda_env})")
+            envs = {
+                line.split()[0]
+                for line in subprocess.run(
+                    [conda, "env", "list"], capture_output=True, text=True
+                ).stdout.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            }
+            if conda_env not in envs:
+                subprocess.run([conda, "create", "-n", conda_env, "python=3.12", "-y"], check=False)
+                log.success(f"Created conda env {conda_env}")
+            else:
+                log.info(f"Conda env '{conda_env}' already exists")
+
+            log.info("Installing dependencies...")
+            pip = [conda, "run", "-n", conda_env, "python", "-m", "pip"]
+            subprocess.run([*pip, "install", "--upgrade", "pip"], check=False)
+            subprocess.run(
+                [*pip, "install", "transformers", "fastapi", "uvicorn", "pydantic"],
+                check=False,
+            )
+            log.success("Dependencies installed")
+        else:
+            log.section("Virtual Environment")
+            venv_dir = args.venv
+            if not os.path.exists(venv_dir):
+                subprocess.run([sys.executable, "-m", "venv", venv_dir])
+                log.success(f"Created {venv_dir}")
+
+            pip_exe = os.path.join(venv_dir, "bin", "pip")
+            log.info("Installing dependencies...")
+            subprocess.run([pip_exe, "install", "--upgrade", "pip"])
+            subprocess.run([pip_exe, "install", "transformers", "fastapi", "uvicorn", "pydantic"])
+            log.success("Dependencies installed")
 
     if not args.local_only:
         log.section("Docker")
@@ -297,7 +338,10 @@ def cmd_setup(args):
 
     log.blank()
     log.success("Setup complete!")
-    log.info("Next: source .venv/bin/activate")
+    if use_conda:
+        log.info(f"Next: conda activate {conda_env}")
+    else:
+        log.info(f"Next: source {args.venv}/bin/activate")
     log.info("Then: python3 cli.py dev")
 
 

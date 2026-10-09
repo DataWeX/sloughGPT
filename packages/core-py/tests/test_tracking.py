@@ -1,13 +1,13 @@
-"""Tests for domains/training/tracking.py."""
+"""Tests for domain.training._internal.tracking.py."""
 
 import sys
 
 import pytest
 
-from domains.training.tracking import (
+from domain.training._internal.tracking import (
     ExperimentTracker,
-    TrackingConfig,
     TrackerBackend,
+    TrackingConfig,
     create_tracker,
     log_eval_metrics,
     log_training_metrics,
@@ -31,12 +31,8 @@ def fake_config(monkeypatch):
         (),
         {"tracking": FakeTracking()},
     )
-    monkeypatch.setattr(
-        "domains.infrastructure.config.get_config", lambda: cfg
-    )
-    monkeypatch.setattr(
-        "domains.training.tracking.get_config", lambda: cfg
-    )
+    monkeypatch.setattr("domain.infrastructure._internal.config.get_config", lambda: cfg)
+    monkeypatch.setattr("domain.training._internal.tracking.get_config", lambda: cfg)
 
 
 class TestTrackerBackend:
@@ -138,9 +134,7 @@ class TestMLflowBackend:
 
     def test_metrics_and_params(self, monkeypatch):
         calls = self._fake_mlflow(monkeypatch)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.MLFLOW)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
         tracker.start_run(run_name="r")
         assert ("start", "r") in calls
         tracker.log_metric("loss", 0.5, step=2)
@@ -150,9 +144,7 @@ class TestMLflowBackend:
 
     def test_end_run(self, monkeypatch):
         calls = self._fake_mlflow(monkeypatch)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.MLFLOW)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
         tracker.start_run()
         tracker.end_run()
         assert ("end",) in calls
@@ -184,7 +176,7 @@ class TestWandbBackend:
         monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
         monkeypatch.setitem(
             sys.modules,
-            "domains.training.wandb_helpers",
+            "domain.training.wandb_helpers",
             FakeWandbHelpers,
         )
         tracker = ExperimentTracker(
@@ -219,7 +211,7 @@ class TestWandbBackend:
         monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
         monkeypatch.setitem(
             sys.modules,
-            "domains.training.wandb_helpers",
+            "domain.training.wandb_helpers",
             type("H", (), {"default_wandb_project": staticmethod(lambda: "p")}),
         )
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
@@ -243,7 +235,7 @@ class TestWandbBackend:
         monkeypatch.setitem(sys.modules, "wandb", FakeWandb)
         monkeypatch.setitem(
             sys.modules,
-            "domains.training.wandb_helpers",
+            "domain.training.wandb_helpers",
             type("H", (), {"default_wandb_project": staticmethod(lambda: "p")}),
         )
         tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
@@ -267,9 +259,7 @@ class TestCometBackend:
             def end(self):
                 pass
 
-        monkeypatch.setitem(
-            sys.modules, "comet_ml", type("C", (), {"Experiment": FakeExperiment})
-        )
+        monkeypatch.setitem(sys.modules, "comet_ml", type("C", (), {"Experiment": FakeExperiment}))
         tracker = ExperimentTracker(
             TrackingConfig(
                 backend=TrackerBackend.COMET,
@@ -285,28 +275,34 @@ class TestCometBackend:
 
 class TestMissingBackendDeps:
     def test_mlflow_missing(self, monkeypatch):
+        real_import = __import__
+
         def no_mlflow(name, *a, **k):
-            if name == "mlflow":
+            if name == "mlflow" or name.startswith("mlflow."):
                 raise ImportError("no mlflow")
-            return __import__(name, *a, **k)
+            return real_import(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_mlflow)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.MLFLOW)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.MLFLOW))
+        import html.parser
+
         assert tracker._client is None
+        assert html.parser is not None
 
     def test_wandb_missing(self, monkeypatch):
+        real_import = __import__
+
         def no_wandb(name, *a, **k):
-            if name == "wandb":
+            if name == "wandb" or name.startswith("wandb."):
                 raise ImportError("no wandb")
-            return __import__(name, *a, **k)
+            return real_import(name, *a, **k)
 
         monkeypatch.setattr("builtins.__import__", no_wandb)
-        tracker = ExperimentTracker(
-            TrackingConfig(backend=TrackerBackend.WANDB)
-        )
+        tracker = ExperimentTracker(TrackingConfig(backend=TrackerBackend.WANDB))
+        import html.parser
+
         assert tracker._client is None
+        assert html.parser is not None
 
 
 class TestCreateTracker:

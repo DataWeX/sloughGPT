@@ -1,14 +1,13 @@
-"""Tests for domains.feedback.workflow — automated feedback workflow manager."""
+"""Tests for domain.feedback._internal.workflow — automated feedback workflow manager."""
 
 from __future__ import annotations
 
 import threading
-import time
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.feedback.workflow import (
+from domain.feedback._internal.workflow import (
     FeedbackWorkflowManager,
     WorkflowConfig,
     get_feedback_workflow,
@@ -108,9 +107,7 @@ class TestFeedbackWorkflowManager:
 
     def test_record_feedback_calls_lora_store(self, manager):
         manager.record_feedback("Hello", "Hi", "thumbs_up", user_id="u1")
-        manager.lora_store.update_adapter.assert_called_once_with(
-            user_id="u1", feedback_signal=1.0
-        )
+        manager.lora_store.update_adapter.assert_called_once_with(user_id="u1", feedback_signal=1.0)
 
     def test_record_feedback_thumbs_down_negative_signal(self, manager):
         manager.record_feedback("Hello", "Hi", "thumbs_down", user_id="u1")
@@ -158,8 +155,10 @@ class TestFeedbackWorkflowManagerConcurrency:
         mock_updater = MagicMock()
         mock_updater.get_stats.return_value = {}
         mgr = FeedbackWorkflowManager(
-            feedback_db=mock_db, meta_manager=mock_meta,
-            lora_store=mock_lora, lora_updater=mock_updater,
+            feedback_db=mock_db,
+            meta_manager=mock_meta,
+            lora_store=mock_lora,
+            lora_updater=mock_updater,
         )
         errors = []
 
@@ -218,7 +217,7 @@ class TestBackgroundTraining:
         tokenizer = MagicMock()
         manager.set_model(model, tokenizer)
         with patch(
-            "domains.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             mock_trainer = mock_trainer_cls.return_value
@@ -229,7 +228,7 @@ class TestBackgroundTraining:
     def test_background_training_skips_without_model(self, manager):
         manager.set_model(None, None)
         with patch(
-            "domains.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             manager._run_background_training()
@@ -240,7 +239,7 @@ class TestBackgroundTraining:
         (always None), so background training never ran even when a model was set."""
         manager.set_model(object(), None)
         with patch(
-            "domains.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             manager._run_background_training()
@@ -249,7 +248,7 @@ class TestBackgroundTraining:
     def test_background_training_requires_two_recent_items(self, manager):
         manager.set_model(object(), MagicMock())
         with patch(
-            "domains.feedback.training.FeedbackTrainer",
+            "domain.feedback._internal.training.FeedbackTrainer",
             autospec=True,
         ) as mock_trainer_cls:
             mock_trainer = mock_trainer_cls.return_value

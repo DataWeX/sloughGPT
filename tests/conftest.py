@@ -25,6 +25,30 @@ if _s_root not in sys.path:
     sys.path.append(_s_root)
 
 
+def build_test_app(*routers):
+    """Build a FastAPI app with exception handlers registered.
+
+    Usage::
+
+        app = build_test_app(my_router)
+        client = TestClient(app)
+
+    This ensures raise_error() exceptions are properly caught and
+    converted to JSON responses, matching production behavior.
+    """
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    for r in routers:
+        app.include_router(r)
+
+    from infrastructure.exception_handlers import register_all_handlers
+
+    register_all_handlers(app)
+
+    return app
+
+
 @pytest.fixture
 def api_base_url() -> str:
     """Base URL for API tests."""
@@ -65,7 +89,9 @@ def test_training_config() -> dict:
 class TestHelpers:
     @staticmethod
     def assert_response_success(response, status_code=200):
-        assert response.status_code == status_code, f"Expected {status_code}, got {response.status_code}"
+        assert response.status_code == status_code, (
+            f"Expected {status_code}, got {response.status_code}"
+        )
 
     @staticmethod
     def assert_has_keys(data: dict, keys: list):

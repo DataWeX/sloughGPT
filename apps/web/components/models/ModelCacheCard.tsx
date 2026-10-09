@@ -1,7 +1,7 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { cn, ActionCard, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { Button, Skeleton } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { KpiGrid, StatCard } from '@sloughgpt/strui'
 import { modelDisplayName } from '@/lib/inference-display'
@@ -18,14 +18,14 @@ export default function ModelCacheCard({ cacheUsage, health, onRefresh }: ModelC
   const maxCacheGb = 10
   const usagePercent = cacheUsage ? Math.min((cacheUsage.total_gb / maxCacheGb) * 100, 100) : 0
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Model Cache</CardTitle>
+    <ActionCard
+      title="Model Cache"
+      actions={
         <Button size="sm" variant="ghost" onClick={onRefresh} aria-label="Refresh cache">
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         {cacheUsage ? (
           <>
             <KpiGrid columns={3}>
@@ -40,16 +40,25 @@ export default function ModelCacheCard({ cacheUsage, health, onRefresh }: ModelC
               </div>
               <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-300 rounded-full ${usagePercent > 80 ? 'bg-warning' : 'bg-primary'}`}
+                  className={cn('h-full transition-all duration-300 rounded-full', usagePercent > 80 ? 'bg-warning' : 'bg-primary')}
                   style={{ width: `${usagePercent}%` }}
                 />
               </div>
             </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">Loading cache stats...</p>
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="space-y-1.5">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-5 w-12" />
+                </div>
+              ))}
+            </div>
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </div>
         )}
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

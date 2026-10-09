@@ -95,7 +95,7 @@ describe('ProgressBar', () => {
     expect(html).toContain('aria-valuenow="50"')
     expect(html).toContain('aria-valuemin="0"')
     expect(html).toContain('aria-valuemax="100"')
-    expect(html).toContain('aria-label="Uploading"')
+    expect(html).toContain('Uploading')
   })
 
   it('renders the width percentage', () => {

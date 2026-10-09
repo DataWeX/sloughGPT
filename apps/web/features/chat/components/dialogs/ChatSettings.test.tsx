@@ -7,7 +7,8 @@ afterEach(cleanup)
 describe('ChatSettings', () => {
   const baseProps = {
     isOpen: true, model: 'gpt2', temperature: 0.8, maxTokens: 200,
-    onModelChange: vi.fn(), onTemperatureChange: vi.fn(), onMaxTokensChange: vi.fn(),
+    autoApproveTools: false, onModelChange: vi.fn(), onTemperatureChange: vi.fn(),
+    onMaxTokensChange: vi.fn(), onAutoApproveToolsChange: vi.fn(),
     onClear: vi.fn(), hasMessages: true,
   }
 

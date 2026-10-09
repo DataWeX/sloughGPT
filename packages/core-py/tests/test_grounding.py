@@ -1,16 +1,16 @@
 """Tests for cognitive grounding system."""
 
-import pytest
 import numpy as np
-from domains.cognitive.grounding import (
+
+from domain.cognition._internal.grounding import (
+    CurriculumLearner,
     Document,
-    RAGGrounder,
+    GroundingOrchestrator,
     HierarchicalContext,
-    KnowledgeNode,
     KnowledgeEdge,
     KnowledgeGrounding,
-    CurriculumLearner,
-    GroundingOrchestrator,
+    KnowledgeNode,
+    RAGGrounder,
 )
 
 

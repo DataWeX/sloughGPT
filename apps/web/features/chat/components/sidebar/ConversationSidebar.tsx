@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useDeferredValue, useCallback } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
-import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDownload, IconDocument, IconCopy, IconDot, IconDotOutline } from '@sloughgpt/strui'
+import { IconPlus, IconStar, IconPin, IconChat, IconX, IconSearch, IconFolder, IconSort, IconCheck, IconChevronLeft, IconChevronRight, IconDot, IconDotOutline } from '@sloughgpt/strui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
 import type { Conversation } from '@/lib/session-controller'
-import { formatDate, truncateMessage } from '@/lib/conversations-utils'
+import { ConvRow } from './ConvRow'
 import { downloadJson, downloadMarkdown } from '@/lib/download-utils'
 import { MS_PER_DAY } from '@/lib/format-bytes'
 import { chatDB } from '@/lib/db'
@@ -70,6 +70,7 @@ function SidebarContent({
   const [search, setSearch] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [sortMode, setSortMode] = useState<'updated' | 'name' | 'messages'>('updated')
+  const deferredSearch = useDeferredValue(search)
 
   useEffect(() => {
     let cancelled = false
@@ -102,7 +103,7 @@ function SidebarContent({
     })
   }, [conversations, sortMode])
 
-  const q = search.toLowerCase().trim()
+  const q = deferredSearch.toLowerCase().trim()
   const filtered = useMemo(() => {
     if (!q) return sorted
     return sorted.filter(c =>
@@ -111,11 +112,11 @@ function SidebarContent({
     )
   }, [sorted, q])
 
-  const handleDelete = (e: React.MouseEvent, id: string) => {
+  const handleDelete = useCallback((e: React.MouseEvent, id: string) => {
     e.stopPropagation()
     const conv = sorted.find(c => c.id === id)
     setDeleteTarget({ id, name: conv?.name || 'this conversation' })
-  }
+  }, [sorted])
 
   const confirmDelete = () => {
     if (deleteTarget) {
@@ -124,10 +125,39 @@ function SidebarContent({
     }
   }
 
-  const starred = filtered.filter(c => c.starred).slice(0, 10)
-  const unstarred = filtered.filter(c => !c.starred)
-  const pinned = unstarred.filter(c => c.pinned)
-  const unpinned = unstarred.filter(c => !c.pinned)
+  const handleSelect = useCallback((id: string) => {
+    onLoadConversation(id)
+    onClose?.()
+  }, [onLoadConversation, onClose])
+
+  const handleStar = useCallback((id: string, starred: boolean) => {
+    onStarConversation?.(id, starred)
+  }, [onStarConversation])
+
+  const handlePin = useCallback((id: string, pinned: boolean) => {
+    onPinConversation?.(id, pinned)
+  }, [onPinConversation])
+
+  const handleArchive = useCallback((id: string, archive: boolean) => {
+    onArchiveConversation?.(id, archive)
+  }, [onArchiveConversation])
+
+  const handleRename = useCallback((id: string, name: string) => {
+    onRenameConversation?.(id, name)
+  }, [onRenameConversation])
+
+  const handleDuplicate = useCallback((id: string, name: string) => {
+    onDuplicateConversation?.(id, name)
+  }, [onDuplicateConversation])
+
+  const handleToggleUnread = useCallback((id: string, unread: boolean) => {
+    onToggleUnreadConversation?.(id, unread)
+  }, [onToggleUnreadConversation])
+
+  const starred = useMemo(() => filtered.filter(c => c.starred).slice(0, 10), [filtered])
+  const unstarred = useMemo(() => filtered.filter(c => !c.starred), [filtered])
+  const pinned = useMemo(() => unstarred.filter(c => c.pinned), [unstarred])
+  const unpinned = useMemo(() => unstarred.filter(c => !c.pinned), [unstarred])
 
   function recencyGroup(dateStr: string | undefined): string {
     if (!dateStr) return 'Older'
@@ -155,12 +185,7 @@ function SidebarContent({
     return groups.sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label))
   }, [unpinned])
 
-  const handleSelect = (id: string) => {
-    onLoadConversation(id)
-    onClose?.()
-  }
-
-  const handleExport = (e: React.MouseEvent, c: Conversation, format: 'json' | 'markdown' = 'json') => {
+  const handleExport = useCallback((e: React.MouseEvent, c: Conversation, format: 'json' | 'markdown' = 'json') => {
     e.stopPropagation()
     const safeName = (c.name || 'conversation').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 50)
     if (format === 'markdown') {
@@ -187,10 +212,10 @@ function SidebarContent({
       }
       downloadJson(data, `${safeName}.json`)
     }
-  }
+  }, [])
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/50 shrink-0">
         <div className="flex items-center gap-1">
           {!isDrawer && onToggleCollapse && (
@@ -334,15 +359,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, archive) => handleArchive(id, archive)}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))}
@@ -362,15 +387,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, archive) => handleArchive(id, archive)}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))}
@@ -390,15 +415,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, true) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, archive) => handleArchive(id, archive)}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))}
@@ -458,15 +483,15 @@ function SidebarContent({
                         key={c.id}
                         conversation={c}
                         isActive={c.id === currentConversationId}
-                        onSelect={() => handleSelect(c.id)}
-                        onDelete={(e) => handleDelete(e, c.id)}
-                        onStar={(e) => { e.stopPropagation(); onStarConversation?.(c.id, !c.starred) }}
-                        onPin={(e) => { e.stopPropagation(); onPinConversation?.(c.id, !c.pinned) }}
-                        onArchive={(e) => { e.stopPropagation(); onArchiveConversation?.(c.id, false) }}
-                        onRename={(name) => onRenameConversation?.(c.id, name)}
-                        onExport={(e, fmt) => handleExport(e, c, fmt)}
-                        onDuplicate={(e) => { e.stopPropagation(); onDuplicateConversation?.(c.id, c.name) }}
-                        onToggleUnread={(e) => { e.stopPropagation(); onToggleUnreadConversation?.(c.id, !c.unread) }}
+                        onSelect={handleSelect}
+                        onDelete={handleDelete}
+                        onStar={(_e, id, starred) => handleStar(id, starred)}
+                        onPin={(_e, id, pinned) => handlePin(id, pinned)}
+                        onArchive={(_e, id, _archive) => handleArchive(id, false)}
+                        onRename={handleRename}
+                        onExport={handleExport}
+                        onDuplicate={(_e, id, name) => handleDuplicate(id, name)}
+                        onToggleUnread={(_e, id, unread) => handleToggleUnread(id, unread)}
                         searchQuery={q}
                       />
                     ))
@@ -527,221 +552,3 @@ export function ConversationSidebar({ collapsed, onToggleCollapse, ...props }: C
   )
 }
 
-function ConvRow({
-  conversation: c,
-  isActive,
-  onSelect,
-  onDelete,
-  onStar,
-  onPin,
-  onArchive,
-  onRename,
-  onExport,
-  onDuplicate,
-  onToggleUnread,
-  searchQuery,
-}: {
-  conversation: Conversation
-  isActive: boolean
-  onSelect: () => void
-  onDelete?: (e: React.MouseEvent) => void
-  onStar?: (e: React.MouseEvent) => void
-  onPin?: (e: React.MouseEvent) => void
-  onArchive?: (e: React.MouseEvent) => void
-  onRename?: (name: string) => void
-  onExport?: (e: React.MouseEvent, format?: 'json' | 'markdown') => void
-  onDuplicate?: (e: React.MouseEvent) => void
-  onToggleUnread?: (e: React.MouseEvent) => void
-  searchQuery?: string
-}) {
-  const [editing, setEditing] = useState(false)
-  const [editValue, setEditValue] = useState(c.name)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus()
-      inputRef.current.select()
-    }
-  }, [editing])
-
-  const handleFinishEdit = () => {
-    const trimmed = editValue.trim()
-    if (trimmed && trimmed !== c.name) {
-      onRename?.(trimmed)
-    }
-    setEditing(false)
-  }
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      handleFinishEdit()
-    } else if (e.key === 'Escape') {
-      setEditValue(c.name)
-      setEditing(false)
-    }
-  }
-
-  const msgCount = c.messages?.length ?? c.message_count ?? 0
-  const lastMsg = c.messages?.[c.messages.length - 1]?.content || ''
-
-  const highlightMatch = (text: string, query: string): React.ReactNode => {
-    if (!query) return text
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
-    return parts.map((part, i) =>
-      part.toLowerCase() === query.toLowerCase()
-        ? <mark key={i} className="bg-primary/20 rounded px-0.5 text-inherit">{part}</mark>
-        : part
-    )
-  }
-
-  return (
-    <div
-      className={cn(
-        "group flex items-start gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors",
-        isActive ? "bg-primary/10" : "hover:bg-muted/40",
-        c.unread && !isActive && "bg-primary/5"
-      )}
-      onClick={!editing ? onSelect : undefined}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' && !editing) { e.preventDefault(); onSelect(); return }
-        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-          e.preventDefault()
-          const scrollable = e.currentTarget.closest('.overflow-y-auto') || e.currentTarget.parentElement?.parentElement?.parentElement
-          if (!scrollable) return
-          const items = Array.from(scrollable.querySelectorAll<HTMLElement>('[role="button"]'))
-          const idx = items.indexOf(e.currentTarget)
-          const next = e.key === 'ArrowDown' ? idx + 1 : idx - 1
-          if (next >= 0 && next < items.length) items[next].focus()
-        }
-      }}
-    >
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onPin}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-            aria-label={c.pinned ? 'Unpin' : 'Pin'}
-          >
-            <IconPin className={cn("h-2.5 w-2.5", c.pinned ? "text-primary" : "text-muted-foreground/40")} />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleUnread?.(e) }}
-            className={cn(
-              "h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0",
-              c.unread ? "opacity-100 text-primary" : "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 text-muted-foreground/40"
-            )}
-            aria-label={c.unread ? 'Mark as read' : 'Mark as unread'}
-          >
-            {c.unread ? (
-              <IconDot className="h-2.5 w-2.5" />
-            ) : (
-              <IconDotOutline className="h-2.5 w-2.5" />
-            )}
-          </button>
-          <button
-            onClick={onStar}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 shrink-0 -ml-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity"
-            aria-label={c.starred ? 'Unstar' : 'Star'}
-          >
-            <IconStar className={cn("h-2.5 w-2.5", c.starred ? "text-warning" : "text-muted-foreground/40")} filled={c.starred} />
-          </button>
-          {editing ? (
-            <input
-              ref={inputRef}
-              type="text"
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={handleFinishEdit}
-              onKeyDown={handleKeyDown}
-              onClick={(e) => e.stopPropagation()}
-              className="flex-1 min-w-0 h-5 text-xs font-medium bg-muted/60 rounded-sm px-1 outline-none ring-1 ring-primary/40"
-              aria-label="Rename conversation"
-            />
-          ) : (
-            <p
-              className={cn(
-                "text-xs truncate text-foreground",
-                c.unread ? "font-semibold" : "font-medium"
-              )}
-              onDoubleClick={(e) => { e.stopPropagation(); setEditValue(c.name); setEditing(true) }}
-            >
-              {highlightMatch(c.name, searchQuery || '')}
-            </p>
-          )}
-        </div>
-        {lastMsg && !editing && (
-          <p className="text-[11px] text-muted-foreground/70 mt-0.5 line-clamp-1">
-            {truncateMessage(lastMsg, 36)}
-          </p>
-        )}
-        {!editing && (
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-              {msgCount}
-            </span>
-            <span className="text-xs text-muted-foreground/50">
-              {formatDate(c.updated_at || c.updatedAt)}
-            </span>
-            {c.pinned && <span className="text-xs text-primary">📌</span>}
-            {c.starred && <span className="text-xs">★</span>}
-          </div>
-        )}
-      </div>
-      <div className="hidden sm:flex items-center gap-0.5 shrink-0 mt-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-        {onExport && !editing && (
-          <>
-            <button
-              onClick={(e) => onExport(e, 'json')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-              aria-label="Export as JSON"
-              title="Export as JSON"
-            >
-              <IconDownload className="h-2.5 w-2.5" />
-            </button>
-            <button
-              onClick={(e) => onExport(e, 'markdown')}
-              className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-              aria-label="Export as Markdown"
-              title="Export as Markdown"
-            >
-              <IconDocument className="h-2.5 w-2.5" />
-            </button>
-          </>
-        )}
-        {onDuplicate && !editing && (
-          <button
-            onClick={onDuplicate}
-            className="h-4 w-4 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground"
-            aria-label={`Duplicate ${c.name}`}
-            title="Duplicate conversation"
-          >
-            <IconCopy className="h-2.5 w-2.5" />
-          </button>
-        )}
-        {onArchive && !editing && (
-          <button
-            onClick={onArchive}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-warning"
-            aria-label="Archive"
-          >
-            <IconFolder className="h-2.5 w-2.5" />
-          </button>
-        )}
-        {onDelete && !editing && (
-          <button
-            onClick={onDelete}
-            className="h-7 w-7 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground hover:text-destructive"
-            aria-label={`Delete ${c.name}`}
-          >
-            <IconX className="h-2.5 w-2.5" />
-          </button>
-        )}
-      </div>
-    </div>
-  )
-}

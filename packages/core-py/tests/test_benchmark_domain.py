@@ -1,126 +1,172 @@
-"""Tests for domains.benchmark.domain: response quality tracking and evaluation."""
+"""Tests for benchmark.domain — response quality tracking and evaluation."""
+
+from __future__ import annotations
 
 import json
 
 import pytest
 
-import domains.benchmark.domain as bd
+from domain.benchmark._internal.domain import (
+    BenchmarkDomain,
+    BenchmarkResult,
+    get_benchmark_domain,
+    reset_benchmark_domain,
+)
 
 
 @pytest.fixture
-def benchmark(tmp_path, monkeypatch):
-    monkeypatch.setattr(bd, "_RESPONSES_DIR", tmp_path / "logged_responses")
-    return bd.BenchmarkDomain()
+def bench(tmp_path, monkeypatch):
+    """Create a BenchmarkDomain using a temp directory."""
+    monkeypatch.setattr("domain.benchmark._internal.domain._RESPONSES_DIR", tmp_path)
+    reset_benchmark_domain()
+    yield BenchmarkDomain()
+    reset_benchmark_domain()
 
 
-def write_response(benchmark, name, payload):
-    (benchmark._responses_dir / name).write_text(json.dumps(payload))
-    return name
+def _write_response(bench, filename, data):
+    bench._responses_dir.mkdir(parents=True, exist_ok=True)
+    (bench._responses_dir / filename).write_text(json.dumps(data))
 
 
-class TestLoadResponses:
-    def test_empty_dir(self, benchmark):
-        assert benchmark._load_responses() == []
+# ── Singleton ─────────────────────────────────────────────────────────────
 
-    def test_loads_list_payloads(self, benchmark):
-        write_response(benchmark, "a.json", [{"text": "one"}, {"text": "two"}])
-        assert benchmark._load_responses() == [{"text": "one"}, {"text": "two"}]
 
-    def test_loads_object_payloads(self, benchmark):
-        write_response(benchmark, "b.json", {"text": "solo"})
-        assert benchmark._load_responses() == [{"text": "solo"}]
+class TestBenchmarkDomainSingleton:
+    def setup_method(self):
+        reset_benchmark_domain()
 
-    def test_skips_non_json(self, benchmark):
-        (benchmark._responses_dir / "notes.txt").write_text("not json")
-        assert benchmark._load_responses() == []
+    def teardown_method(self):
+        reset_benchmark_domain()
 
-    def test_skips_corrupt_json(self, benchmark):
-        write_response(benchmark, "bad.json", {"text": "x"})
-        (benchmark._responses_dir / "broken.json").write_text("{not valid json")
-        assert benchmark._load_responses() == [{"text": "x"}]
+    def test_get_returns_same_instance(self):
+        b1 = get_benchmark_domain()
+        b2 = get_benchmark_domain()
+        assert b1 is b2
 
-    def test_sorted_by_filename(self, benchmark):
-        write_response(benchmark, "2.json", {"text": "two"})
-        write_response(benchmark, "1.json", {"text": "one"})
-        assert benchmark._load_responses() == [{"text": "one"}, {"text": "two"}]
+    def test_reset_creates_new_instance(self):
+        b1 = get_benchmark_domain()
+        reset_benchmark_domain()
+        b2 = get_benchmark_domain()
+        assert b1 is not b2
+
+
+# ── BenchmarkResult ───────────────────────────────────────────────────────
+
+
+class TestBenchmarkResult:
+    def test_dataclass_fields(self):
+        r = BenchmarkResult(
+            timestamp="2026-01-01T00:00:00Z",
+            model="gpt2",
+            num_responses=10,
+            avg_length=50.0,
+            length_std=10.0,
+            repetition_rate=0.1,
+            repetition_bigrams=0.05,
+            avg_log_prob=-0.5,
+            unique_bigrams=0.9,
+            unique_trigrams=0.8,
+        )
+        assert r.model == "gpt2"
+        assert r.num_responses == 10
+
+
+# ── get_stats ─────────────────────────────────────────────────────────────
 
 
 class TestGetStats:
-    def test_empty(self, benchmark):
-        assert benchmark.get_stats() == {"total_responses": 0, "models": [], "avg_length": 0}
+    def test_empty_returns_zero(self, bench):
+        stats = bench.get_stats()
+        assert stats["total_responses"] == 0
+        assert stats["models"] == []
+        assert stats["avg_length"] == 0
 
-    def test_aggregates(self, benchmark):
-        write_response(benchmark, "a.json", {"model": "gpt2", "text": "hello world"})
-        write_response(benchmark, "b.json", {"model": "gpt2", "text": "hi"})
-        stats = benchmark.get_stats()
+    def test_single_response(self, bench):
+        _write_response(bench, "r1.json", [{"model": "gpt2", "text": "hello world"}])
+        stats = bench.get_stats()
+        assert stats["total_responses"] == 1
+        assert "gpt2" in stats["models"]
+        assert stats["avg_length"] == 11.0
+
+    def test_multiple_responses(self, bench):
+        _write_response(
+            bench,
+            "r1.json",
+            [
+                {"model": "gpt2", "text": "hello"},
+                {"model": "llama", "text": "hello world"},
+            ],
+        )
+        stats = bench.get_stats()
         assert stats["total_responses"] == 2
-        assert stats["models"] == ["gpt2"]
-        assert stats["avg_length"] == 6.5
+        assert len(stats["models"]) == 2
+        assert stats["avg_length"] == 8.0
 
-    def test_multiple_models(self, benchmark):
-        write_response(benchmark, "a.json", {"model": "a", "text": "x"})
-        write_response(benchmark, "b.json", {"model": "b", "text": "yy"})
-        stats = benchmark.get_stats()
-        assert set(stats["models"]) == {"a", "b"}
-
-    def test_ignores_non_dict_entries(self, benchmark):
-        write_response(benchmark, "a.json", [{"text": "hello"}, "not-a-dict"])
-        stats = benchmark.get_stats()
+    def test_handles_non_dict_entries(self, bench):
+        _write_response(bench, "r1.json", ["not a dict", {"model": "gpt2", "text": "ok"}])
+        stats = bench.get_stats()
         assert stats["total_responses"] == 2
-        assert stats["avg_length"] == 5.0
+
+
+# ── evaluate_latest ───────────────────────────────────────────────────────
 
 
 class TestEvaluateLatest:
-    def test_empty(self, benchmark):
-        assert benchmark.evaluate_latest() == {"responses_analyzed": 0, "metrics": {}}
+    def test_empty_returns_zero(self, bench):
+        result = bench.evaluate_latest()
+        assert result["responses_analyzed"] == 0
+        assert result["metrics"] == {}
 
-    def test_analyzes_limited_recent(self, benchmark):
-        for i in range(5):
-            write_response(benchmark, f"r{i}.json", {"text": "word word word"})
-        result = benchmark.evaluate_latest(limit=3)
-        assert result["responses_analyzed"] == 3
-
-    def test_avg_length_and_std(self, benchmark):
-        write_response(benchmark, "a.json", {"text": "abcd"})
-        write_response(benchmark, "b.json", {"text": "abcdef"})
-        result = benchmark.evaluate_latest()
-        metrics = result["metrics"]
-        assert metrics["avg_length"] == 5.0
-        assert metrics["length_std"] == 1.0
-
-    def test_repetition_rate_zero_for_unique_bigrams(self, benchmark):
-        write_response(benchmark, "a.json", {"text": "alpha beta gamma"})
-        metrics = benchmark.evaluate_latest()["metrics"]
-        assert metrics["repetition_rate"] == 0.0
-        assert metrics["unique_bigram_ratio"] == 1.0
-
-    def test_repetition_rate_detects_duplicates(self, benchmark):
-        write_response(benchmark, "a.json", {"text": "go go go go"})
-        metrics = benchmark.evaluate_latest()["metrics"]
-        assert metrics["repetition_rate"] > 0.0
-        assert metrics["unique_bigram_ratio"] < 1.0
-
-    def test_single_word_text(self, benchmark):
-        write_response(benchmark, "a.json", {"text": "lonely"})
-        result = benchmark.evaluate_latest()
+    def test_analyzes_single_response(self, bench):
+        _write_response(bench, "r1.json", [{"text": "hello world"}])
+        result = bench.evaluate_latest()
+        assert result["responses_analyzed"] == 1
+        assert result["metrics"]["avg_length"] == 11.0
         assert result["metrics"]["repetition_rate"] == 0.0
-        assert result["metrics"]["unique_bigram_ratio"] == 0.0
+
+    def test_detects_repetition(self, bench):
+        text = "the cat sat on the cat sat on the cat"
+        _write_response(bench, "r1.json", [{"text": text}])
+        result = bench.evaluate_latest()
+        assert result["metrics"]["repetition_rate"] > 0
+
+    def test_unique_bigram_ratio(self, bench):
+        text = "a b c d e f g h i j"
+        _write_response(bench, "r1.json", [{"text": text}])
+        result = bench.evaluate_latest()
+        assert result["metrics"]["unique_bigram_ratio"] == 1.0
+
+    def test_respects_limit(self, bench):
+        responses = [{"text": f"response {i}"} for i in range(100)]
+        _write_response(bench, "r1.json", responses)
+        result = bench.evaluate_latest(limit=10)
+        assert result["responses_analyzed"] == 10
+
+    def test_length_std_calculation(self, bench):
+        _write_response(
+            bench,
+            "r1.json",
+            [
+                {"text": "short"},
+                {"text": "a longer response here"},
+            ],
+        )
+        result = bench.evaluate_latest()
+        assert result["metrics"]["length_std"] > 0
+
+
+# ── clear_history ─────────────────────────────────────────────────────────
 
 
 class TestClearHistory:
-    def test_clears_files(self, benchmark):
-        write_response(benchmark, "a.json", {"text": "x"})
-        assert benchmark._responses_dir.exists()
-        benchmark.clear_history()
-        assert benchmark._load_responses() == []
-        assert benchmark._responses_dir.exists()
+    def test_clears_all_files(self, bench):
+        _write_response(bench, "r1.json", [{"text": "data"}])
+        _write_response(bench, "r2.json", [{"text": "data2"}])
+        bench.clear_history()
+        files = list(bench._responses_dir.glob("*.json"))
+        assert len(files) == 0
 
-
-class TestSingleton:
-    def test_get_and_reset(self):
-        bd.reset_benchmark_domain()
-        first = bd.get_benchmark_domain()
-        assert bd.get_benchmark_domain() is first
-        bd.reset_benchmark_domain()
-        assert bd.get_benchmark_domain() is not first
-        bd.reset_benchmark_domain()
+    def test_directory_still_exists(self, bench):
+        _write_response(bench, "r1.json", [{"text": "data"}])
+        bench.clear_history()
+        assert bench._responses_dir.exists()

@@ -1,4 +1,4 @@
-import type {NativeStackScreenProps} from '@react-navigation/native-stack';
+import type {StackScreenProps} from '@react-navigation/stack';
 
 export type SettingsStackParamList = {
   SettingsMain: undefined;
@@ -11,21 +11,22 @@ export type SettingsStackParamList = {
   Search: undefined;
   Providers: undefined;
   Souls: undefined;
-  Tokenizer: undefined;
-  Compare: undefined;
   Datasets: undefined;
   DatasetDetail: {datasetId: string};
-  Export: undefined;
-  Benchmark: undefined;
+  Notifications: undefined;
+  WhatsNew: undefined;
+  Legal: undefined;
   Adapters: undefined;
   Feedback: undefined;
-  Workflow: undefined;
   Voice: undefined;
   Companion: undefined;
   Learn: undefined;
   Agents: undefined;
   Multimodal: undefined;
   ModelDetail: {modelId: string};
+  Images: undefined;
+  Memory: undefined;
+  Auth: undefined;
 };
 
 export type ToolsStackParamList = {
@@ -36,25 +37,26 @@ export type ToolsStackParamList = {
   Search: undefined;
   Health: undefined;
   Souls: undefined;
-  Tokenizer: undefined;
-  Compare: undefined;
   Datasets: undefined;
   DatasetDetail: {datasetId: string};
-  Export: undefined;
-  Benchmark: undefined;
+  Notifications: undefined;
+  WhatsNew: undefined;
+  Legal: undefined;
   Adapters: undefined;
   Feedback: undefined;
-  Workflow: undefined;
   Voice: undefined;
   Companion: undefined;
   Learn: undefined;
   Agents: undefined;
   Multimodal: undefined;
   ModelDetail: {modelId: string};
+  Images: undefined;
+  Memory: undefined;
+  Auth: undefined;
 };
 
 export type SettingsScreenProps<T extends keyof SettingsStackParamList> =
-  NativeStackScreenProps<SettingsStackParamList, T>;
+  StackScreenProps<SettingsStackParamList, T>;
 
 export type ToolsScreenProps<T extends keyof ToolsStackParamList> =
-  NativeStackScreenProps<ToolsStackParamList, T>;
+  StackScreenProps<ToolsStackParamList, T>;

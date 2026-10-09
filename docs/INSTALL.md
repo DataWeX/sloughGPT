@@ -51,7 +51,7 @@ python3 -m pip install aiofiles aiohttp websockets
 python3 -c "
 import sys
 try:
-    import domains
+    import domain
     print('✅ domains package import OK')
 except ImportError as e:
     print(f'❌ Import failed: {e}')
@@ -142,7 +142,7 @@ BCRYPT_ROUNDS=12
 # API Settings
 API_HOST=0.0.0.0
 API_PORT=8000
-# Web UI (local dev): Next.js in apps/web — typically http://localhost:3000
+# Web UI (local dev): Next.js in apps/web — typically http://localhost:5173
 
 # Logging
 LOG_LEVEL=INFO
@@ -237,7 +237,7 @@ except ImportError as e:
 # 3. Test basic functionality (after python3 -m pip install -e . from repo root)
 python3 -c "
 try:
-    import domains
+    import domain
     print('✅ domains package OK')
 except Exception as e:
     print(f'❌ Import error: {e}')
@@ -245,7 +245,7 @@ except Exception as e:
 
 # 4. Check ports (API vs Next.js dev server)
 lsof -i :8000  # Should be free before starting API
-lsof -i :3000  # Should be free before npm run dev (web)
+lsof -i :5173  # Should be free before npm run dev (web)
 ```
 
 ## Platform-Specific Instructions

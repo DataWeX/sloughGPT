@@ -1,0 +1,74 @@
+'use client'
+
+import Link from 'next/link'
+import { memo, useEffect, useState } from 'react'
+import { cn } from '@sloughgpt/strui'
+import { useTrainingSession } from '@/hooks/useTrainingSession'
+
+export const TrainingIndicator = memo(function TrainingIndicator() {
+  // Mount gate: training state is rehydrated from localStorage, so the
+  // first client render would differ from SSR (null) and break hydration.
+  // Render nothing until mounted so both trees match.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+  const { trainingRunning, phase, progress, loss, method } = useTrainingSession()
+
+  if (!mounted || (!trainingRunning && phase !== 'complete' && phase !== 'error')) {
+    return null
+  }
+
+  return (
+    <Link
+      href="/training"
+      prefetch={false}
+      className={cn(
+        'flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] transition-colors',
+        'hover:bg-primary/10',
+        phase === 'error'
+          ? 'text-destructive'
+          : phase === 'complete'
+            ? 'text-success'
+            : 'text-primary',
+      )}
+      title="View training status"
+    >
+      <div className="relative flex h-1.5 w-1.5 shrink-0">
+        {trainingRunning && (
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+        )}
+        <span
+          className={cn(
+            'relative inline-flex h-1.5 w-1.5 rounded-full',
+            phase === 'error'
+              ? 'bg-destructive'
+              : phase === 'complete'
+                ? 'bg-success'
+                : 'bg-primary',
+          )}
+        />
+      </div>
+      <div className="min-w-0 flex-1" role="status" aria-live="polite">
+        <div className="truncate text-[10px] font-medium">
+          {phase === 'error'
+            ? 'Training failed'
+            : phase === 'complete'
+              ? 'Training complete'
+              : `${method === 'turbo' ? 'Turbo' : 'Training'}`}
+        </div>
+        {trainingRunning && (
+          <div className="flex items-center gap-0.5 text-[9px] text-muted-foreground/60 tabular-nums">
+            <span>{Math.round(progress ?? 0)}%</span>
+            {loss != null && (
+              <>
+                <span>·</span>
+                <span>loss {loss.toFixed(3)}</span>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </Link>
+  )
+})

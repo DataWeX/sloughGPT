@@ -20,7 +20,10 @@ beforeEach(() => {
   mockPush.mockReset()
 })
 
-function keydown(key: string, mods: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {}) {
+function keydown(
+  key: string,
+  mods: { ctrl?: boolean; meta?: boolean; shift?: boolean; alt?: boolean } = {},
+) {
   const ev = new KeyboardEvent('keydown', {
     key,
     ctrlKey: mods.ctrl ?? false,
@@ -51,10 +54,10 @@ describe('useGlobalShortcuts', () => {
     expect(mockPush).toHaveBeenCalledWith('/datasets')
   })
 
-  it('Ctrl+4 navigates to /models', () => {
+  it('Ctrl+4 navigates to /personality', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('4', { ctrl: true })
-    expect(mockPush).toHaveBeenCalledWith('/models')
+    expect(mockPush).toHaveBeenCalledWith('/personality')
   })
 
   it('Ctrl+5 navigates to agents', () => {
@@ -132,6 +135,24 @@ describe('useGlobalShortcuts', () => {
     renderHook(() => useGlobalShortcuts())
     keydown('0', { ctrl: true })
     expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it('Ctrl+Shift+M dispatches toggle-dark-mode', () => {
+    const fn = vi.fn()
+    window.addEventListener('toggle-dark-mode', fn)
+    renderHook(() => useGlobalShortcuts())
+    keydown('M', { ctrl: true, shift: true })
+    expect(fn).toHaveBeenCalledTimes(1)
+    window.removeEventListener('toggle-dark-mode', fn)
+  })
+
+  it('Ctrl+M without shift does not toggle dark mode', () => {
+    const fn = vi.fn()
+    window.addEventListener('toggle-dark-mode', fn)
+    renderHook(() => useGlobalShortcuts())
+    keydown('M', { ctrl: true })
+    expect(fn).not.toHaveBeenCalled()
+    window.removeEventListener('toggle-dark-mode', fn)
   })
 
   it('removes event listener on unmount', () => {

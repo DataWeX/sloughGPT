@@ -1,0 +1,57 @@
+[
+  {
+    "test": "e2e_training_page_ui",
+    "passed": true,
+    "detail": "checks={'page_loaded': True, 'has_content': True, 'has_train_keyword': True}"
+  },
+  {
+    "test": "e2e_training_config_elements",
+    "passed": false,
+    "detail": "elements={'has_method': False, 'has_epochs': False, 'has_lr': False, 'has_batch': False}"
+  },
+  {
+    "test": "e2e_training_start_button",
+    "passed": true,
+    "detail": "found=True"
+  },
+  {
+    "test": "e2e_datasets_import_button",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "e2e_datasets_import_dialog",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "e2e_training_devtools",
+    "passed": true,
+    "detail": "checks={'has_steps': True, 'has_console': True, 'has_network': True, 'no_critical_errors': True}"
+  },
+  {
+    "test": "e2e_full_flow_devtools",
+    "passed": true,
+    "detail": "steps=2, ui=True"
+  },
+  {
+    "test": "e2e_cross_page_navigation",
+    "passed": true,
+    "detail": "steps=5, failed=0"
+  },
+  {
+    "test": "e2e_api_health_reachable",
+    "passed": true,
+    "detail": "body=S\nReady\n100%\nModel loaded successfully\nShow timing\nReady\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nC"
+  },
+  {
+    "test": "e2e_training_job_detail",
+    "passed": true,
+    "detail": "len=316"
+  },
+  {
+    "test": "e2e_monitoring_metrics",
+    "passed": true,
+    "detail": "body_snippet=S\nReady\n100%\nModel loaded successfully\nShow timing\nReady\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n"
+  }
+]

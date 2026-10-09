@@ -1,6 +1,11 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, afterEach, vi } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+
+const mockPush = vi.fn()
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+vi.mock('@/vite/next-compat/navigation', () => ({ useRouter: () => ({ push: mockPush }) }))
+
 import { TrainingHistory } from './TrainingHistory'
 
 const jobs = [
@@ -48,7 +53,11 @@ describe('TrainingHistory', () => {
   })
 
   it('shows only first 6 jobs and a +N more line', () => {
-    const many = Array.from({ length: 8 }, (_, i) => ({ id: `job-${i}`, name: `name-${i}`, status: 'queued' })) as any[]
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `job-${i}`,
+      name: `name-${i}`,
+      status: 'queued',
+    })) as any[]
     render(<TrainingHistory jobs={many} />)
     expect(screen.getByText('name-5')).toBeDefined()
     expect(screen.queryByText('name-6')).toBeNull()

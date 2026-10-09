@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, memo } from 'react'
 import { IconX } from '@sloughgpt/strui'
 
 interface ImageLightboxProps {
@@ -9,7 +9,7 @@ interface ImageLightboxProps {
   onClose: () => void
 }
 
-export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
+export const ImageLightbox = memo(function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') onClose()
   }, [onClose])
@@ -37,7 +37,7 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
         className="absolute top-4 right-4 h-8 w-8 flex items-center justify-center rounded-full bg-background/80 hover:bg-background border border-border/50 shadow-lg transition-colors"
         aria-label="Close preview"
       >
-        <IconX className="h-4 w-4" />
+        <IconX className="h-4 w-4" aria-hidden="true" />
       </button>
 
       <img
@@ -48,4 +48,4 @@ export function ImageLightbox({ src, alt, onClose }: ImageLightboxProps) {
       />
     </div>
   )
-}
+})

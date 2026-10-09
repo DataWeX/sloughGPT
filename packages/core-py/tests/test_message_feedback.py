@@ -1,14 +1,10 @@
-"""Tests for domains.feedback.message_feedback — in-memory feedback store."""
+"""Tests for domain.feedback._internal.message_feedback — in-memory feedback store."""
 
 from __future__ import annotations
 
 import threading
-import time
-from datetime import datetime, timezone
 
-import pytest
-
-from domains.feedback.message_feedback import (
+from domain.feedback._internal.message_feedback import (
     MessageData,
     MessageFeedback,
     get_message_feedback,
@@ -82,7 +78,10 @@ class TestGetFeedback:
 class TestSessionContext:
     def test_store_and_get(self):
         mf = MessageFeedback()
-        msgs = [MessageData(role="user", content="Hi"), MessageData(role="assistant", content="Hello")]
+        msgs = [
+            MessageData(role="user", content="Hi"),
+            MessageData(role="assistant", content="Hello"),
+        ]
         mf.store_session_context("sess1", msgs)
         result = mf.get_session_context("sess1")
         assert result is not None
@@ -137,7 +136,13 @@ class TestListConversations:
 
     def test_with_sessions(self):
         mf = MessageFeedback()
-        mf.store_session_context("s1", [MessageData(role="user", content="Hi"), MessageData(role="assistant", content="Hello")])
+        mf.store_session_context(
+            "s1",
+            [
+                MessageData(role="user", content="Hi"),
+                MessageData(role="assistant", content="Hello"),
+            ],
+        )
         mf.store_session_context("s2", [MessageData(role="user", content="Bye")])
         convos = mf.list_conversations()
         assert len(convos) == 2
@@ -199,7 +204,9 @@ class TestConcurrency:
         def writer(n):
             try:
                 for i in range(20):
-                    mf.store_session_context(f"s_{n}_{i}", [MessageData(role="user", content=f"msg {i}")])
+                    mf.store_session_context(
+                        f"s_{n}_{i}", [MessageData(role="user", content=f"msg {i}")]
+                    )
             except Exception as e:
                 errors.append(e)
 

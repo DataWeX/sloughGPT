@@ -23,7 +23,7 @@ python3 apps/api/server/main.py
 
 # Terminal 2 — Web UI
 cd apps/web && npm install && npm run dev
-# → http://localhost:3000
+# → http://localhost:5173
 
 # Or both in one command
 ./scripts/dev-stack.sh
@@ -76,14 +76,9 @@ sloughGPT/
 │   ├── mobile/                # React Native app
 │   ├── gateway/               # API gateway
 │   └── data/                  # Data utilities
+├── domain/                   # Core Python logic (training, inference, feedback, shell, infrastructure)
 ├── packages/
-│   ├── core-py/domains/       # Core Python logic
-│   │   ├── training/          # SloNet, training pipelines, distillation
-│   │   ├── inference/         # Vector store, context, model loading
-│   │   ├── feedback/          # LoRA adapters, DPO, workflow manager
-│   │   ├── multimodal/        # Vision encoder, cross-attention
-│   │   ├── shell/             # Interactive REPL
-│   │   └── infrastructure/    # Config, errors, rate-limiter, lifecycle
+│   ├── core-py/               # Python core (tests, utils)
 │   ├── strui/                 # @sloughgpt/strui component library
 │   ├── mogdb/                 # Document database
 │   ├── sdk-py/                # Python SDK
@@ -94,6 +89,21 @@ sloughGPT/
 ├── tests/                     # Test suite
 └── scripts/                   # Build, deploy, benchmarks
 ```
+
+## Consciousness System
+
+SloughGPT includes a consciousness system with 26 pages for monitoring and managing AI self-awareness:
+
+| Feature | Description |
+|---------|-------------|
+| Dashboard | Main consciousness overview with health metrics |
+| Training | Consciousness training controls and progress |
+| Playground | Interactive experimentation with qualia and beliefs |
+| Analytics | Trend analysis and statistics |
+| Benchmark | Performance benchmarking tools |
+| API Explorer | Interactive API testing interface |
+
+Access the consciousness UI at `http://localhost:5173/consciousness/dashboard` after starting the web UI.
 
 ## API Endpoints
 
@@ -107,13 +117,15 @@ Core endpoints:
 | `POST` | `/chat/stream` | Streaming chat (SSE) |
 | `POST` | `/inference/generate` | Text generation |
 | `POST` | `/inference/generate/stream` | Streaming generation (SSE) |
-| `POST` | `/auto-train/start` | Start training (SSE progress) |
-| `POST` | `/training/start` | HuggingFace fine-tuning |
+| `POST` | `/training/start` | Start training (SSE progress) |
 | `GET` | `/health` | Server and model health |
 | `GET` | `/models` | List available models |
 | `GET` | `/souls` | List available souls |
 | `POST` | `/souls/switch` | Switch active soul |
 | `GET` | `/datasets` | List datasets |
+| `GET` | `/consciousness/status` | Get consciousness status |
+| `POST` | `/consciousness/reflect` | Trigger self-reflection |
+| `GET` | `/consciousness/health` | Consciousness health check |
 
 ## Development
 
@@ -154,6 +166,24 @@ cd apps/web && npm run lint
 | [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Environment configuration |
 | [docs/STRUCTURE.md](docs/STRUCTURE.md) | Project structure and conventions |
 | [docs/SHELL.md](docs/SHELL.md) | Shell REPL documentation |
+| [docs/mogdb-guide.md](docs/mogdb-guide.md) | MogDB usage guide |
+| [docs/engineering-overview.md](docs/engineering-overview.md) | System architecture overview |
+
+## Data Infrastructure
+
+SloughGPT uses **MogDB** as the primary embedded document database with optional JSON sync for human-readable backups.
+
+```python
+# Quick example
+from mogdb import MogDB
+
+db = MogDB("data/my_collection")
+col = db.collection("items")
+col.insert_one({"name": "item", "value": 42})
+doc = col.find_one({"name": "item"})
+```
+
+All data stores (knowledge, RAG, model catalog, response logs, experiments, etc.) use MogDB with automatic JSON sync and TTL expiration. See [docs/mogdb-guide.md](docs/mogdb-guide.md) for details.
 
 ## Docker
 

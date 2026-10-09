@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, cleanup, renderHook, act } from '@testing-library/react'
+import {
+  render,
+  screen,
+  fireEvent,
+  cleanup,
+  renderHook,
+  act,
+  waitFor,
+} from '@testing-library/react'
 import React from 'react'
 
 import { ConvSidebarProvider, useConvSidebar } from './ConvSidebarContext'
@@ -34,7 +42,7 @@ function renderProvider() {
   const view = render(
     <ConvSidebarProvider>
       <TestConsumer />
-    </ConvSidebarProvider>
+    </ConvSidebarProvider>,
   )
   return view
 }
@@ -77,9 +85,12 @@ describe('ConvSidebarContext', () => {
     store.set(CONV_KEY, 'true')
     store.set(NAV_KEY, 'true')
     renderProvider()
-    expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
-    expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
-    expect(screen.getByTestId('open').textContent).toBe('false')
+    await screen.findByTestId('convCollapsed')
+    await waitFor(() => {
+      expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
+      expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
+      expect(screen.getByTestId('open').textContent).toBe('false')
+    })
   })
 
   it('ignores non-true storage values', async () => {
@@ -102,8 +113,10 @@ describe('ConvSidebarContext', () => {
     fireEvent.click(screen.getByText('toggle-nav'))
     expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
     expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
-    expect(store.get(CONV_KEY)).toBe('true')
-    expect(store.get(NAV_KEY)).toBe('true')
+    await waitFor(() => {
+      expect(store.get(CONV_KEY)).toBe('true')
+      expect(store.get(NAV_KEY)).toBe('true')
+    })
   })
 
   it('setOpen/setConvCollapsed/setNavCollapsed apply exact values', async () => {
@@ -114,15 +127,47 @@ describe('ConvSidebarContext', () => {
     expect(screen.getByTestId('open').textContent).toBe('true')
     expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
     expect(screen.getByTestId('navCollapsed').textContent).toBe('true')
-    expect(store.get(CONV_KEY)).toBe('true')
-    expect(store.get(NAV_KEY)).toBe('true')
+    await waitFor(() => {
+      expect(store.get(CONV_KEY)).toBe('true')
+      expect(store.get(NAV_KEY)).toBe('true')
+    })
   })
 
   it('writes false back to storage when toggled off', async () => {
     store.set(CONV_KEY, 'true')
     renderProvider()
+    await waitFor(() => {
+      expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
+    })
     fireEvent.click(screen.getByText('toggle-conv'))
-    expect(store.get(CONV_KEY)).toBe('false')
+    await waitFor(() => {
+      expect(store.get(CONV_KEY)).toBe('false')
+    })
+  })
+
+  it('does not write a key that was just read (mount write storm)', async () => {
+    store.set(CONV_KEY, 'true')
+    store.set(NAV_KEY, 'false')
+    renderProvider()
+    await waitFor(() => {
+      expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
+    })
+    // Let any debounced write window elapse: hydration must not re-PUT.
+    await new Promise((r) => setTimeout(r, 400))
+    expect(chatDBMock.setKV).not.toHaveBeenCalled()
+  })
+
+  it('coalesces a rapid toggle burst into a single write', async () => {
+    renderProvider()
+    for (let i = 0; i < 9; i++) {
+      fireEvent.click(screen.getByText('toggle-conv'))
+    }
+    expect(screen.getByTestId('convCollapsed').textContent).toBe('true')
+    await waitFor(() => {
+      expect(store.get(CONV_KEY)).toBe('true')
+    })
+    await new Promise((r) => setTimeout(r, 400))
+    expect(chatDBMock.setKV.mock.calls.filter(([k]) => k === CONV_KEY)).toHaveLength(1)
   })
 
   it('tolerates chatDB errors', async () => {
@@ -135,7 +180,9 @@ describe('ConvSidebarContext', () => {
   })
 
   it('useConvSidebar throws outside provider', () => {
-    expect(() => renderHook(() => useConvSidebar())).toThrow('useConvSidebar must be used within ConvSidebarProvider')
+    expect(() => renderHook(() => useConvSidebar())).toThrow(
+      'useConvSidebar must be used within ConvSidebarProvider',
+    )
   })
 
   it('useConvSidebar exposes the full value shape', () => {
@@ -149,12 +196,14 @@ describe('ConvSidebarContext', () => {
     expect(result.current.open).toBe(false)
   })
 
-  it('updates through the hook API re-render', () => {
+  it('updates through the hook API re-render', async () => {
     const { result } = renderHook(() => useConvSidebar(), { wrapper: ConvSidebarProvider })
     act(() => result.current.toggle())
     expect(result.current.open).toBe(true)
     act(() => result.current.toggleConv())
     expect(result.current.convCollapsed).toBe(true)
-    expect(store.get(CONV_KEY)).toBe('true')
+    await waitFor(() => {
+      expect(store.get(CONV_KEY)).toBe('true')
+    })
   })
 })

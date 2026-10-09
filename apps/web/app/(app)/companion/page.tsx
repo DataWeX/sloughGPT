@@ -1,33 +1,38 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { useRouter } from 'next/navigation'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid, Skeleton, cn, Slider } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { companionController, type CompanionTraits, type CompanionPreset } from '@/lib/companion-controller'
 import { CompanionInsightsCard } from '@/components/companion/CompanionInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
+import { extractErrorMessage } from '@/lib/error-utils'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 const TRAIT_LABELS: Record<string, { label: string; color: string }> = {
-  warmth: { label: 'Warmth', color: 'bg-orange-500/15 text-orange-600 dark:text-orange-400' },
-  curiosity: { label: 'Curiosity', color: 'bg-blue-500/15 text-blue-600 dark:text-blue-400' },
-  creativity: { label: 'Creativity', color: 'bg-purple-500/15 text-purple-600 dark:text-purple-400' },
-  confidence: { label: 'Confidence', color: 'bg-green-500/15 text-green-600 dark:text-green-400' },
-  humor: { label: 'Humor', color: 'bg-pink-500/15 text-pink-600 dark:text-pink-400' },
+  warmth: { label: 'Warmth', color: 'bg-warning/15 text-warning' },
+  curiosity: { label: 'Curiosity', color: 'bg-primary/15 text-primary' },
+  creativity: { label: 'Creativity', color: 'bg-accent/15 text-accent' },
+  confidence: { label: 'Confidence', color: 'bg-success/15 text-success' },
+  humor: { label: 'Humor', color: 'bg-destructive/15 text-destructive' },
 }
 
 export default function CompanionPage() {
+  const router = useRouter()
   const [traits, setTraits] = useState<CompanionTraits | null>(null)
   const [presets, setPresets] = useState<CompanionPreset[]>([])
   const [systemPrompt, setSystemPrompt] = useState('')
   const [chatInput, setChatInput] = useState('')
-  const [chatResponse, setChatResponse] = useState('')
+  const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'assistant'; content: string }>>([])
   const [chatLoading, setChatLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const addToast = useToastStore(s => s.addToast)
+  useRefreshShortcut(() => router.refresh())
 
   useEffect(() => {
     let ignore = false
@@ -40,8 +45,8 @@ export default function CompanionPage() {
       setTraits(info.traits)
       setPresets(presetRes.presets)
       setSystemPrompt(promptRes.system_prompt)
-    }).catch(() => {
-      if (!ignore) setError('Failed to load companion data')
+    }).catch((err) => {
+      if (!ignore) setError(extractErrorMessage(err, 'Could not load companion data'))
     }).finally(() => { if (!ignore) setLoading(false) })
     return () => { ignore = true }
   }, [])
@@ -59,8 +64,8 @@ export default function CompanionPage() {
       setTraits(res.traits)
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
-    } catch {
-      addToast('Failed to save personality', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Could not save personality'), 'error')
     } finally {
       setSaving(false)
     }
@@ -72,8 +77,8 @@ export default function CompanionPage() {
       setTraits(res.traits)
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
-    } catch {
-      addToast('Failed to apply preset', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Could not apply preset'), 'error')
     }
   }
 
@@ -83,35 +88,41 @@ export default function CompanionPage() {
       setTraits(res.traits)
       const promptRes = await companionController.getPrompt()
       setSystemPrompt(promptRes.system_prompt)
-    } catch {
-      addToast('Failed to reset companion', 'error')
+    } catch (err) {
+      addToast(extractErrorMessage(err, 'Could not reset companion'), 'error')
     }
   }
 
   const handleChat = async () => {
     if (!chatInput.trim() || chatLoading) return
+    const userMsg = chatInput.trim()
+    setChatMessages(prev => [...prev, { role: 'user', content: userMsg }])
     setChatLoading(true)
+    setChatInput('')
     try {
-      const res = await companionController.chat(chatInput)
-      setChatResponse(res.response)
-    } catch {
-      setChatResponse('[Error: could not reach model]')
+      const res = await companionController.chat(userMsg)
+      setChatMessages(prev => [...prev, { role: 'assistant', content: res.response }])
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: `[Error: ${extractErrorMessage(err, 'could not reach model')}]` }])
     } finally {
       setChatLoading(false)
-      setChatInput('')
     }
+  }
+
+  const handleClearChat = () => {
+    setChatMessages([])
   }
 
   if (loading) {
     return (
       <PageContainer title="Companion" subtitle="AI personality management" loadingCards={3}>
         <KpiGrid>
-          <StatCard label="Active Preset" value="..." />
-          <StatCard label="Warmth" value="..." />
-          <StatCard label="Curiosity" value="..." />
-          <StatCard label="Creativity" value="..." />
+          <StatCard label="Active Preset" value={<Skeleton className="h-5 w-16" />} />
+          <StatCard label="Warmth" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Curiosity" value={<Skeleton className="h-5 w-8" />} />
+          <StatCard label="Creativity" value={<Skeleton className="h-5 w-8" />} />
         </KpiGrid>
-        <Card><CardContent><div className="h-48 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card><CardContent className="px-2.5 pb-2.5"><div className="h-48 animate-pulse bg-muted/20 rounded-lg" /></CardContent></Card>
       </PageContainer>
     )
   }
@@ -130,20 +141,21 @@ export default function CompanionPage() {
     <PageContainer title="Companion" subtitle="AI personality management">
       <KpiGrid>
         <StatCard label="Active Preset" value={presets.length > 0 ? presets[0].name : 'Custom'} />
-        <StatCard label="Warmth" value={traits ? String(traits.warmth ?? 0) : '...'} />
-        <StatCard label="Curiosity" value={traits ? String(traits.curiosity ?? 0) : '...'} />
+        <StatCard label="Warmth" value={traits ? String(traits.warmth ?? 0) : <Skeleton className="h-5 w-8" />} />
+        <StatCard label="Curiosity" value={traits ? String(traits.curiosity ?? 0) : <Skeleton className="h-5 w-8" />} />
         <StatCard label="Avg Trait" value={String(avgTrait)} />
       </KpiGrid>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Presets</CardTitle>
+        <Card>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Presets</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2.5 pb-2.5">
           <div className="flex flex-wrap gap-2">
             {presets.map(p => (
               <button
                 key={p.id}
+                type="button"
                 onClick={() => handlePreset(p.id)}
                 className="rounded-md bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors"
                 title={p.description}
@@ -159,15 +171,15 @@ export default function CompanionPage() {
 
       {traits && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Personality Traits</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Personality Traits</CardTitle>
             <div className="flex gap-1.5">
-              <Button size="sm" variant="ghost" onClick={handleReset}>
+              <Button size="sm" variant="ghost" onClick={handleReset} aria-label="Reset">
                 <IconRefresh className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-2.5 pb-2.5">
             {/* Radar chart */}
             {(() => {
               const traitKeys = Object.keys(TRAIT_LABELS)
@@ -182,7 +194,7 @@ export default function CompanionPage() {
               const polygonPoints = points.map(p => `${p.x},${p.y}`).join(' ')
               return (
                 <div className="flex justify-center">
-                  <svg viewBox="0 0 200 200" className="w-48 h-48">
+                  <svg viewBox="0 0 200 200" className="w-48 h-48" role="img" aria-label="Companion trait radar chart">
                     {/* Grid rings */}
                     {[0.25, 0.5, 0.75, 1].map(scale => (
                       <polygon
@@ -245,25 +257,21 @@ export default function CompanionPage() {
                 </div>
               )
             })()}
-            <div className="grid gap-3">
+            <div className="grid gap-1.5">
               {Object.entries(TRAIT_LABELS).map(([key, { label, color }]) => (
-                <div key={key} className="flex items-center gap-3">
-                  <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${color} w-20 text-center`}>
-                    {label}
-                  </span>
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.05}
-                value={(traits[key as keyof CompanionTraits] as number) ?? 0.5}
-                onChange={e => handleTraitChange(key, parseFloat(e.target.value))}
-                className="flex-1 h-1.5 bg-muted rounded-full appearance-none cursor-pointer accent-primary"
-              />
-              <span className="text-xs font-mono text-muted-foreground w-8 text-right">
-                {((traits[key as keyof CompanionTraits] as number) ?? 0.5).toFixed(2)}
-                  </span>
-                </div>
+                <Slider
+                  key={key}
+                  label={label}
+                  value={[(traits[key as keyof CompanionTraits] as number) ?? 0.5]}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  showValue
+                  formatValue={(v) => v.toFixed(2)}
+                  onValueChange={([v]) => handleTraitChange(key, v)}
+                  size="sm"
+                  className={color}
+                />
               ))}
             </div>
             <Button size="sm" onClick={handleSave} disabled={saving}>
@@ -275,10 +283,10 @@ export default function CompanionPage() {
 
       {systemPrompt && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">System Prompt</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">System Prompt</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
             <pre className="text-xs text-muted-foreground bg-muted/30 rounded-md p-3 whitespace-pre-wrap font-mono max-h-40 overflow-y-auto">
               {systemPrompt}
             </pre>
@@ -287,28 +295,55 @@ export default function CompanionPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Test Chat</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Test Chat</CardTitle>
+          {chatMessages.length > 0 && (
+            <Button size="sm" variant="ghost" onClick={handleClearChat} aria-label="Clear chat history">
+              Clear
+            </Button>
+          )}
         </CardHeader>
-        <CardContent className="space-y-3">
-          {chatResponse && (
-            <div className="rounded-md bg-muted/30 p-3 text-sm">
-              {chatResponse}
+        <CardContent className="space-y-3 px-2.5 pb-2.5">
+          {chatMessages.length > 0 && (
+            <div className="space-y-2 max-h-80 overflow-y-auto">
+              {chatMessages.map((msg, i) => (
+                <div
+                  key={i}
+                  className={cn('flex', msg.role === 'user' ? 'justify-end' : 'justify-start')}
+                >
+                  <div
+                    className={cn('max-w-[80%] rounded-lg px-3 py-2 text-sm', msg.role === 'user' ? 'bg-primary/10 text-foreground' : 'bg-muted/50 text-foreground')}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+              {chatLoading && (
+                <div className="flex justify-start">
+                  <div className="bg-muted/50 rounded-lg px-3 py-2 text-sm text-muted-foreground">
+                    Thinking...
+                  </div>
+                </div>
+              )}
             </div>
           )}
+          {chatMessages.length === 0 && !chatLoading && (
+            <p className="text-[10px] text-muted-foreground/60 text-center py-4">Say something to your companion...</p>
+          )}
+          <div ref={chatEndRef} />
           <div className="flex gap-2">
             <Input
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleChat()}
-              placeholder="Say something to your companion..."
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleChat()}
+              placeholder="Type a message..."
               disabled={chatLoading}
+              aria-label="Chat message"
             />
             <Button size="sm" onClick={handleChat} disabled={chatLoading || !chatInput.trim()}>
               {chatLoading ? '...' : 'Send'}
             </Button>
           </div>
-          <div ref={chatEndRef} />
         </CardContent>
       </Card>
     </PageContainer>

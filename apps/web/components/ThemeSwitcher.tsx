@@ -2,12 +2,17 @@
 
 import { IconMoon, IconSun } from '@/components/icons/NavIcons'
 
-import { Button } from '@sloughgpt/strui'
+import { cn, Button } from '@sloughgpt/strui'
 import { useTheme, THEMES } from './ThemeProvider'
 import { PALETTE_IDS, PALETTE_LABELS, PALETTE_COLORS } from '@/lib/theme-storage'
 
 export function ThemeSwitcher() {
-  const { theme, mode, palette, setTheme, setMode, setPalette } = useTheme()
+  const { theme, mode, palette, mounted, setTheme, setMode, setPalette } = useTheme()
+
+  // Gate mode-dependent markup on `mounted`: the server always renders the
+  // !mounted branch, so SSR and the first client render match (no hydration
+  // mismatch from persisted localStorage/mode).
+  const showLight = mounted && mode === 'light'
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -16,9 +21,9 @@ export function ThemeSwitcher() {
           variant="ghost"
           size="icon"
           onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}
-          aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+          aria-label={mounted && mode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
         >
-          {mode === 'dark' ? <IconMoon aria-hidden="true" /> : <IconSun aria-hidden="true" />}
+          {showLight ? <IconSun aria-hidden="true" /> : <IconMoon aria-hidden="true" />}
         </Button>
 
         <span className="text-xs text-muted-foreground/50 font-medium">or</span>
@@ -27,15 +32,14 @@ export function ThemeSwitcher() {
           {THEMES.map((t) => (
             <button
               key={t.id}
+              type="button"
               onClick={() => setTheme(t.id)}
-              className={`h-3.5 w-3.5 rounded-none transition-all duration-200 ease-smooth ${
-                theme === t.id
+              className={cn('h-3.5 w-3.5 rounded-none transition-all duration-200 ease-smooth', mounted && theme === t.id
                   ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110 shadow-sm'
-                  : 'opacity-80 hover:scale-105 hover:opacity-100'
-              }`}
+                  : 'opacity-80 hover:scale-105 hover:opacity-100')}
               style={{ backgroundColor: t.color }}
               role="radio"
-              aria-checked={theme === t.id}
+              aria-checked={mounted && theme === t.id}
               aria-label={t.name}
               title={t.name}
             />
@@ -47,15 +51,14 @@ export function ThemeSwitcher() {
         {PALETTE_IDS.map((id) => (
           <button
             key={id}
+            type="button"
             onClick={() => setPalette(id)}
-            className={`h-3.5 w-3.5 rounded-full transition-all duration-200 ease-smooth ${
-              palette === id
+            className={cn('h-3.5 w-3.5 rounded-full transition-all duration-200 ease-smooth', mounted && palette === id
                 ? 'ring-2 ring-primary ring-offset-2 ring-offset-card scale-110 shadow-sm'
-                : 'opacity-80 hover:scale-105 hover:opacity-100'
-            }`}
+                : 'opacity-80 hover:scale-105 hover:opacity-100')}
             style={{ backgroundColor: PALETTE_COLORS[id] }}
             role="radio"
-            aria-checked={palette === id}
+            aria-checked={mounted && palette === id}
             aria-label={PALETTE_LABELS[id]}
             title={PALETTE_LABELS[id]}
           />

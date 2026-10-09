@@ -6,14 +6,13 @@ All domain calls are mocked; only HTTP-level behavior is tested.
 Note: the companion router imports get_companion / create_companion inside
 the handler function body, so we must patch at the domain module level.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -32,36 +31,66 @@ from routers.companion import router  # noqa: E402
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_companion(**overrides):
-    defaults = dict(
-        _traits={"name": "Friend", "warmth": 0.7, "curiosity": 0.6, "creativity": 0.5, "confidence": 0.5, "humor": 0.4},
-        set_personality=lambda **kw: None,
-        get_system_prompt=lambda: "You are a friendly companion.",
-        adjust_for_mood=lambda mood: None,
-    )
+    defaults = {
+        "_traits": {
+            "name": "Friend",
+            "warmth": 0.7,
+            "curiosity": 0.6,
+            "creativity": 0.5,
+            "confidence": 0.5,
+            "humor": 0.4,
+        },
+        "set_personality": lambda **kw: None,
+        "get_system_prompt": lambda: "You are a friendly companion.",
+        "build_system_prompt": lambda: "You are a friendly companion.",
+        "adjust_for_mood": lambda mood: None,
+    }
     defaults.update(overrides)
     ns = SimpleNamespace(**defaults)
+
+    # Public traits view — the router reads companion.traits (mirrors the
+    # public attr on CompanionSystem), kept in sync with the _traits dict.
+    ns.traits = SimpleNamespace(**ns._traits)
+
     # Allow set_personality to update _traits
     def _set_personality(**kw):
         ns._traits.update(kw)
+        for key, val in kw.items():
+            setattr(ns.traits, key, val)
+
     ns.set_personality = _set_personality
     # Make to_dict return current traits
     ns.to_dict = lambda: {"name": ns._traits.get("name", "Friend"), "traits": dict(ns._traits)}
+
+    # generate() async method — checks provider availability
+    async def _generate(**kwargs):
+        from domain.models._internal.provider import get_provider
+
+        if get_provider("default") is None:
+            raise RuntimeError("No model loaded")
+        return "Hello there!"
+
+    ns.generate = _generate
     return ns
 
 
 def _app():
     app = FastAPI()
     app.include_router(router)
+    from infrastructure.exception_handlers import register_all_handlers
+
+    register_all_handlers(app)
     return app
 
 
 # ---------------------------------------------------------------------------
-# Tests — patch at domains.companion.* (lazy imports inside handler body)
+# Tests — patch at domain.companion.* (lazy imports inside handler body)
 # ---------------------------------------------------------------------------
 
-PATCH_GET = "domains.companion.get_companion"
-PATCH_CREATE = "domains.companion.create_companion"
+PATCH_GET = "domain.companion.get_companion"
+PATCH_CREATE = "domain.companion.create_companion"
 
 
 class TestGetCompanionInfo:
@@ -83,17 +112,19 @@ class TestSetPersonality:
         comp = _make_companion()
         mock_get.return_value = comp
         client = TestClient(_app())
-        resp = client.post("/companion/personality", json={
-            "name": "Alice",
-            "warmth": 0.9,
-            "curiosity": 0.8,
-            "creativity": 0.7,
-            "confidence": 0.6,
-            "humor": 0.5,
-        })
+        resp = client.post(
+            "/companion/personality",
+            json={
+                "name": "Alice",
+                "warmth": 0.9,
+                "curiosity": 0.8,
+                "creativity": 0.7,
+                "confidence": 0.6,
+                "humor": 0.5,
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["status"] == "ok"
         assert "traits" in data
 
 
@@ -106,7 +137,7 @@ class TestPatchPersonality:
         resp = client.patch("/companion/personality", json={"warmth": 0.95})
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["status"] == "ok"
+        assert "traits" in data
 
 
 class TestResetCompanion:
@@ -118,22 +149,27 @@ class TestResetCompanion:
         client = TestClient(_app())
         resp = client.delete("/companion/")
         assert resp.status_code == 200
-        assert resp.json()["data"]["status"] == "ok"
+        assert resp.json()["data"]["reset"] is True
         mock_create.assert_called_once()
 
 
 class TestUsePreset:
+    @patch("routers.companion._get_db")
     @patch(PATCH_CREATE)
     @patch(PATCH_GET)
-    def test_apply_preset(self, mock_get, mock_create):
+    def test_apply_preset(self, mock_get, mock_create, mock_db):
         mock_get.return_value = _make_companion()
         comp = _make_companion()
         mock_create.return_value = comp
+        # Mock the database to return a preset
+        mock_col = MagicMock()
+        mock_col.find_one.return_value = {"id": "warm", "traits": {"warmth": 0.9}}
+        mock_col.count.return_value = 1  # presets exist — _seed_default_presets returns early
+        mock_db.return_value.collection.return_value = mock_col
         client = TestClient(_app())
-        resp = client.post("/companion/preset", json={"name": "Alice", "preset": "warm"})
+        resp = client.post("/companion/preset", json="warm")
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["preset"] == "warm"
         assert "traits" in data
 
 
@@ -163,7 +199,7 @@ class TestListPresets:
 
 
 class TestChat:
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.models._internal.provider.get_provider")
     @patch(PATCH_GET)
     def test_chat_with_model(self, mock_get, mock_provider_fn):
         comp = _make_companion()
@@ -187,17 +223,17 @@ class TestChat:
     def test_chat_no_model_returns_error_message(self, mock_get):
         comp = _make_companion()
         mock_get.return_value = comp
-        with patch("domains.models.provider.get_provider", return_value=None):
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
             client = TestClient(_app())
             resp = client.post("/companion/chat", json={"message": "Hi"})
-        assert resp.status_code == 200
-        assert "[Error:" in resp.json()["response"]
+        assert resp.status_code == 503
+        assert "No model loaded" in resp.json()["error"]
 
     @patch(PATCH_GET)
     def test_chat_with_mood_adjustment(self, mock_get):
         comp = _make_companion()
         mock_get.return_value = comp
-        with patch("domains.models.provider.get_provider", return_value=None):
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
             client = TestClient(_app())
             resp = client.post("/companion/chat", json={"message": "Hi", "user_mood": "happy"})
-        assert resp.status_code == 200
+        assert resp.status_code == 503

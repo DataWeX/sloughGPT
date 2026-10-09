@@ -1,6 +1,6 @@
 import React from 'react';
 import {Text} from 'react-native';
-import {render, waitFor, screen} from '@testing-library/react-native';
+import {render, waitFor, screen, act} from '@testing-library/react-native';
 import * as apiClient from '../../services/api-client';
 
 jest.mock('../../services/api-client');
@@ -83,41 +83,92 @@ describe('useConnectionStatus', () => {
     });
   });
 
-  it('transitions to reconnecting on non-ok response', async () => {
+  it('stays connecting on first failure (never connected)', async () => {
     jest.spyOn(global, 'fetch').mockResolvedValue({ok: false} as Response);
     await render(<Display />);
+    // Should stay 'connecting' — never went offline since never connected
+    await waitFor(() => {
+      expect(parseVal(screen.getByTestId('val')).state).toBe('connecting');
+    });
+  });
+
+  it('transitions to reconnecting after connected then non-ok response', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    // First call succeeds
+    spy.mockResolvedValueOnce({ok: true, json: async () => ({model_loaded: true})} as Response);
+    await render(<Display />);
+    await waitFor(() => {
+      expect(parseVal(screen.getByTestId('val')).state).toBe('connected');
+    });
+    // Second call fails
+    spy.mockResolvedValueOnce({ok: false} as Response);
+    await act(async () => {
+      jest.advanceTimersByTime(8000);
+    });
     await waitFor(() => {
       expect(parseVal(screen.getByTestId('val')).state).toBe('reconnecting');
     });
   });
 
-  it('increments retryCount on non-ok response', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValue({ok: false} as Response);
+  it('increments retryCount after connected then non-ok response', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    spy.mockResolvedValueOnce({ok: true, json: async () => ({model_loaded: true})} as Response);
     await render(<Display />);
+    await waitFor(() => {
+      expect(parseVal(screen.getByTestId('val')).retryCount).toBe(0);
+    });
+    spy.mockResolvedValueOnce({ok: false} as Response);
+    await act(async () => {
+      jest.advanceTimersByTime(8000);
+    });
     await waitFor(() => {
       expect(parseVal(screen.getByTestId('val')).retryCount).toBeGreaterThanOrEqual(1);
     });
   });
 
-  it('transitions to offline on fetch error', async () => {
-    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('fail'));
+  it('transitions to offline after connected then fetch error', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    spy.mockResolvedValueOnce({ok: true, json: async () => ({model_loaded: true})} as Response);
     await render(<Display />);
+    await waitFor(() => {
+      expect(parseVal(screen.getByTestId('val')).state).toBe('connected');
+    });
+    spy.mockRejectedValueOnce(new Error('fail'));
+    await act(async () => {
+      jest.advanceTimersByTime(8000);
+    });
     await waitFor(() => {
       expect(parseVal(screen.getByTestId('val')).state).toBe('offline');
     });
   });
 
-  it('sets latencyMs to null on error', async () => {
-    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('fail'));
+  it('sets latencyMs to null on error after connected', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    spy.mockResolvedValueOnce({ok: true, json: async () => ({model_loaded: true})} as Response);
     await render(<Display />);
+    await waitFor(() => {
+      expect(parseVal(screen.getByTestId('val')).latencyMs).toBeGreaterThanOrEqual(0);
+    });
+    spy.mockRejectedValueOnce(new Error('fail'));
+    await act(async () => {
+      jest.advanceTimersByTime(8000);
+    });
     await waitFor(() => {
       expect(parseVal(screen.getByTestId('val')).latencyMs).toBeNull();
     });
   });
 
-  it('increments retryCount on error', async () => {
-    jest.spyOn(global, 'fetch').mockRejectedValue(new Error('fail'));
+  it('increments retryCount after connected then error', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    spy.mockResolvedValueOnce({ok: true, json: async () => ({model_loaded: true})} as Response);
     await render(<Display />);
+    await waitFor(() => {
+      expect(parseVal(screen.getByTestId('val')).retryCount).toBe(0);
+    });
+    spy.mockRejectedValueOnce(new Error('fail'));
+    await act(async () => {
+      jest.advanceTimersByTime(8000);
+    });
     await waitFor(() => {
       expect(parseVal(screen.getByTestId('val')).retryCount).toBeGreaterThanOrEqual(1);
     });

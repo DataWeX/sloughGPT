@@ -1,10 +1,10 @@
 'use client'
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PageContainer } from '@/components/PageContainer'
-import { Button, StatCard, KpiGrid, Card, CardContent } from '@sloughgpt/strui'
+import { Button, FoldSection, KpiGrid, SectionHeader, StatCard, StatusDot } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { datasetController } from '@/lib/controllers'
 import { trainingJobsController } from '@/lib/training-controller'
@@ -15,53 +15,56 @@ import { useTrainingSession } from '@/hooks/useTrainingSession'
 import { useTrainingDatasets } from '@/hooks/useTrainingDatasets'
 import { useTrainingCheckpoints } from '@/hooks/useTrainingCheckpoints'
 import { useTestDialog } from '@/hooks/useTestDialog'
-import { TrainingSummaryCard } from '@/components/training/TrainingSummaryCard'
-import { TrainingHealthCard } from '@/components/training/TrainingHealthCard'
 import { TrainingPipeline } from '@/components/training/TrainingPipeline'
-import { TurboCard } from '@/components/training/TurboCard'
-import { APILogsCard } from '@/components/training/APILogsCard'
+import { QuickTrainCard } from '@/components/training/QuickTrainCard'
+import { StopTrainingButton } from '@/components/training/StopTrainingButton'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function TrainingPage() {
   const searchParams = useSearchParams()
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const initialLoadDone = useRef(false)
   const session = useTrainingSession()
   const datasets = useTrainingDatasets(addToast)
   const checkpoints = useTrainingCheckpoints()
   const test = useTestDialog()
+  const [pipelineStep, setPipelineStep] = useState<'data' | 'configure' | 'train' | 'results'>(
+    'data',
+  )
+  const [completedSteps, setCompletedSteps] = useState<
+    Set<'data' | 'configure' | 'train' | 'results'>
+  >(new Set())
 
   const form = useTrainingForm(datasets, session, checkpoints, addToast)
+  useRefreshShortcut(() => {
+    void datasets.fetchDatasets()
+    void checkpoints.fetchCheckpoints()
+    void checkpoints.fetchJobs()
+  })
 
-  // ===== Visibility-based polling pause =====
+  // Pause checkpoint polling when page is hidden
   const visibilityRef = useRef<boolean>(true)
-
-  // Warn before leaving during active training
-  useEffect(() => {
-    if (!session.trainingRunning) return
-    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault() }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
-  }, [session.trainingRunning])
-
-  // Keyboard shortcuts for training page
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-        e.preventDefault()
-        if (form.canStart && !session.trainingRunning) {
-          form.startTraining()
-          addToast('Training started', 'success')
-        }
-      }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'T') {
-        e.preventDefault()
-        test.setTestDialogOpen(true)
-      }
+  const ready = useApiReady()
+  const tickRef = useRef<() => void>(() => {})
+  tickRef.current = () => {
+    if (visibilityRef.current) {
+      void checkpoints.fetchCheckpoints()
+      const hasRunning = form.allJobs.some((j) => j.status === 'running')
+      if (hasRunning) void checkpoints.fetchJobs()
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [form.canStart, session.trainingRunning, form.startTraining, addToast, test.setTestDialogOpen])
+  }
+  useEffect(() => {
+    if (!ready) return
+    const onVisibility = () => {
+      visibilityRef.current = !document.hidden
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    const id = setInterval(() => tickRef.current(), 10000)
+    return () => {
+      clearInterval(id)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [ready])
 
   useEffect(() => {
     void datasets.fetchDatasets()
@@ -74,39 +77,26 @@ export default function TrainingPage() {
       initialLoadDone.current = true
       datasets.setSelectedDataset(datasets.datasets[0].id)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Pause checkpoint polling when page is hidden
-  const ready = useApiReady()
-  const tickRef = useRef<() => void>(() => {})
-  tickRef.current = () => {
-    if (visibilityRef.current) {
-      void checkpoints.fetchCheckpoints()
-      const hasRunning = form.allJobs.some(j => j.status === 'running')
-      if (hasRunning) void checkpoints.fetchJobs()
-    }
-  }
-  useEffect(() => {
-    if (!ready) return
-    const onVisibility = () => { visibilityRef.current = !document.hidden }
-    document.addEventListener('visibilitychange', onVisibility)
-    const id = setInterval(() => tickRef.current(), 10000)
-    return () => {
-      clearInterval(id)
-      document.removeEventListener('visibilitychange', onVisibility)
-    }
-  }, [ready])
+  }, [searchParams])
 
   useEffect(() => {
+    let active = true
     if (datasets.selectedDataset && form.inputMode === 'dataset') {
-      datasetController.preview(datasets.selectedDataset, 3).then(datasets.setDatasetPreview).catch(() => datasets.setDatasetPreview(null))
+      datasetController
+        .preview(datasets.selectedDataset, 3)
+        .then((preview) => {
+          if (active) datasets.setDatasetPreview(preview)
+        })
+        .catch(() => {
+          if (active) datasets.setDatasetPreview(null)
+        })
     } else {
       datasets.setDatasetPreview(null)
     }
+    return () => {
+      active = false
+    }
   }, [datasets.selectedDataset, form.inputMode])
-
-  const runningJob = form.allJobs.find(j => j.status === 'running')
-  const completedCount = form.allJobs.filter(j => j.status === 'completed').length
 
   // Browser notification on training completion
   const prevJobStatusesRef = useRef<Map<string, string>>(new Map())
@@ -115,7 +105,7 @@ export default function TrainingPage() {
     for (const job of form.allJobs) {
       const prevStatus = prev.get(job.id)
       if (prevStatus === 'running' && job.status === 'completed') {
-        if (Notification.permission === 'granted') {
+        if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Training Complete', {
             body: `${job.name || 'Training job'} finished successfully`,
             icon: '/favicon.svg',
@@ -130,110 +120,138 @@ export default function TrainingPage() {
     prevJobStatusesRef.current = next
   }, [form.allJobs])
 
-  const requestNotificationPermission = useCallback(() => {
+  const requestNotificationPermission = () => {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission()
     }
-  }, [])
-
+  }
   useEffect(() => {
     requestNotificationPermission()
-  }, [requestNotificationPermission])
+  }, [])
 
-  const handleExportMetrics = useCallback(async () => {
-    try {
-      const blob = await trainingJobsController.exportMetrics()
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'training-metrics.json'
-      a.click()
-      URL.revokeObjectURL(url)
-      addToast('Metrics exported', 'success')
-    } catch {
-      addToast('Failed to export metrics', 'error')
-    }
-  }, [addToast])
+  // Prefer real server jobs over phantom optimistic pending-* entries so
+  // Stop targets an id the backend knows (pending-* 404s).
+  const runningJob =
+    form.allJobs.find((j) => j.status === 'running' && !j.id.startsWith('pending-')) ??
+    form.allJobs.find((j) => j.status === 'running')
+  const completedCount = form.allJobs.filter((j) => j.status === 'completed').length
+  const runningCount = form.allJobs.filter((j) => j.status === 'running').length
+
+  // Hero status: the one thing the eye lands on.
+  const liveTraining = session.turboRunning || runningJob != null
+  const heroTone = liveTraining
+    ? 'primary'
+    : session.turboPhase === 'complete'
+      ? 'success'
+      : session.turboPhase === 'error'
+        ? 'destructive'
+        : 'muted'
+  const heroText = liveTraining
+    ? `Training live — ${Math.round(session.turboProgress)}%${session.turboLoss != null ? ` · loss ${session.turboLoss.toFixed(4)}` : ''}`
+    : session.turboPhase === 'complete'
+      ? 'Training finished — review results below'
+      : session.turboPhase === 'error'
+        ? `Training failed — ${session.turboError ?? 'see details below'}`
+        : 'No active training — configure a run below'
 
   return (
     <PageContainer
       title="Teach me"
       subtitle="Teach your agent from your data"
       className="items-start"
+      loading={checkpoints.loadingJobs && form.allJobs.length === 0}
       headerRight={
         <div className="flex items-center gap-2">
-          <Button size="sm" variant="ghost" onClick={handleExportMetrics}>Export metrics</Button>
-          <Button size="sm" variant="ghost" onClick={() => { void checkpoints.fetchJobs(); void checkpoints.fetchCheckpoints() }}>Refresh</Button>
+          {runningJob && (
+            <StopTrainingButton
+              onStop={async () => {
+                // Phantom optimistic entry: no backend job exists, so broadcast
+                // stop-all (always succeeds) and clear local state instead of 404ing.
+                if (runningJob.id.startsWith('pending-')) {
+                  await trainingJobsController.stopAutoTrain()
+                  form.clearOptimisticJobs()
+                  session.resetTraining()
+                  void checkpoints.fetchJobs()
+                  return
+                }
+                try {
+                  await trainingJobsController.stop(runningJob.id)
+                } catch {
+                  // Job vanished server-side (restart/purge) — still stop-all + reset
+                  // so the UI doesn't stick on "Could not stop training".
+                  await trainingJobsController.stopAutoTrain()
+                  form.clearOptimisticJobs()
+                  session.resetTraining()
+                }
+                void checkpoints.fetchJobs()
+              }}
+              addToast={addToast}
+            />
+          )}
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              void checkpoints.fetchJobs()
+              void checkpoints.fetchCheckpoints()
+            }}
+          >
+            Refresh
+          </Button>
         </div>
       }
     >
-        {/* Stats */}
-        <KpiGrid columns={4}>
-          <StatCard label="Training runs" value={form.allJobs.length} />
-          <StatCard label="Running" value={runningJob ? 1 : 0} />
-          <StatCard label="Completed" value={completedCount} />
-          <StatCard label="Saved versions" value={checkpoints.checkpoints.length} />
-        </KpiGrid>
+      {/* Hero: live training status */}
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-2 rounded-lg border border-border/40 bg-card/50 px-3 py-2"
+      >
+        <StatusDot tone={heroTone} pulse={liveTraining} />
+        <p className="text-sm text-muted-foreground">{heroText}</p>
+      </div>
 
-        {/* First-time user welcome */}
-        {form.allJobs.length === 0 && checkpoints.checkpoints.length === 0 && (
-          <Card className="border-dashed">
-            <CardContent className="py-6 text-center">
-              <p className="text-sm font-medium">Welcome to training</p>
-              <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
-                Pick a dataset or paste training text, configure parameters, and run your first training job.
-                Your trained models and checkpoints will appear here.
-              </p>
-              <div className="flex items-center justify-center gap-4 mt-4 text-[11px] text-muted-foreground">
-                <span>1. Choose data</span>
-                <span className="text-border">→</span>
-                <span>2. Configure</span>
-                <span className="text-border">→</span>
-                <span>3. Train</span>
-                <span className="text-border">→</span>
-                <span>4. Results</span>
-              </div>
-              <Button size="sm" className="mt-4" onClick={() => form.setInputMode('dataset')}>
-                Start training
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+      {/* At-a-glance counts */}
+      <KpiGrid columns={4}>
+        <StatCard label="Datasets" value={datasets.datasets.length} numeric />
+        <StatCard label="Active jobs" value={runningCount} numeric />
+        <StatCard label="Finished jobs" value={completedCount} numeric />
+        <StatCard label="Saved checkpoints" value={checkpoints.checkpoints.length} numeric />
+      </KpiGrid>
 
-        {/* Summary / health / pipeline hidden for first-time users to reduce clutter */}
-        {(form.allJobs.length > 0 || checkpoints.checkpoints.length > 0) && (
-          <>
-            <TrainingSummaryCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
+      {/* 3-step pipeline */}
+      <SectionHeader title="Guided setup" description="Data, configure, train, results." />
+      <TrainingPipeline
+        form={form}
+        datasets={datasets}
+        session={session}
+        checkpoints={checkpoints}
+        onTest={() => test.setTestDialogOpen(true)}
+        addToast={addToast}
+        step={pipelineStep}
+        onStepChange={setPipelineStep}
+        completedSteps={completedSteps}
+        onStepComplete={(id) => setCompletedSteps((prev) => new Set(prev).add(id))}
+      />
 
-            <TrainingHealthCard checkpoints={checkpoints.checkpoints} onTrainMore={() => form.setInputMode('dataset')} />
-
-            {/* Pipeline */}
-            <TrainingPipeline
-              form={form}
-              datasets={datasets}
-              session={session}
-              checkpoints={checkpoints}
-              onTest={() => test.setTestDialogOpen(true)}
-              addToast={addToast}
-            />
-          </>
-        )}
-
-        {/* Fast train (turbo) */}
-        <TurboCard datasets={datasets} session={session} addToast={addToast} />
-
-        {/* Train from API conversation logs */}
-        <APILogsCard addToast={addToast} />
+      {/* Quick train alternative */}
+      <FoldSection heading="Fast train alternative">
+        <QuickTrainCard datasets={datasets} session={session} addToast={addToast} />
+      </FoldSection>
 
       <TestModelDialog
         open={test.testDialogOpen}
         prompt={test.testPrompt}
         result={test.testResult}
         loading={test.testLoading}
+        streaming={test.testStreaming}
+        streamingText={test.testStreamingText}
+        responseFormat={test.responseFormat}
         onClose={() => test.setTestDialogOpen(false)}
         onPromptChange={test.setTestPrompt}
         onGenerate={test.handleTestModel}
         onClear={test.clearTest}
+        onResponseFormatChange={test.setResponseFormat}
       />
     </PageContainer>
   )

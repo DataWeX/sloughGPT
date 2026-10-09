@@ -1,10 +1,15 @@
 """
 Datasets Controller - Business logic for dataset management
 """
-from typing import Optional, List, Dict, Any
-from pathlib import Path
+
 import json
+import logging
 import shutil
+from datetime import UTC
+from pathlib import Path
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetsController:
@@ -12,66 +17,173 @@ class DatasetsController:
 
     def __init__(self, repo_root: Path):
         self.repo_root = repo_root
+        # Legacy paths retained for read-only migration warning; writes go to cache only.
         self.data_dir = repo_root / "data" / "features"
-        self.datasets_dir = repo_root / "datasets"
+        self.datasets_dir = repo_root / "data"
 
-    def list_datasets(self, q: Optional[str] = None, dataset_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List available datasets"""
-        # Use datasets/ directory primarily
+    def _entry_roots(self) -> list[Path]:
+        """Roots to scan: cache-first, legacy data/ read-only."""
+        from domain.training._internal.cache_tags import get_cache_root
+
+        roots = []
+        try:
+            cache_root = get_cache_root()
+            if cache_root.exists():
+                roots.append(cache_root)
+        except Exception as e:
+            logger.debug("Cache root unavailable: %s", e)
+        # Legacy data/ is now read-only (writes go to cache). Keep for
+        # graceful migration until backfill is fully verified.
         datasets_dir = self.datasets_dir
         if not datasets_dir.exists():
             datasets_dir = self.data_dir
-        if not datasets_dir.exists():
-            return []
+        if datasets_dir.exists():
+            roots.append(datasets_dir)
+        return roots
+
+    def _locate(self, dataset_id: str) -> Path | None:
+        """Locate an entry dir: cache-first, legacy fallback (read-only)."""
+        from domain.training._internal.cache_tags import get_cache_root
+
+        try:
+            cached = get_cache_root() / dataset_id
+            if cached.is_dir():
+                return cached
+        except Exception as e:
+            logger.debug("Cache locate failed for %s: %s", dataset_id, e)
+        path = self.datasets_dir / dataset_id
+        if path.exists():
+            return path
+        nested = self.datasets_dir / "datasets" / dataset_id
+        if nested.exists():
+            return nested
+        return None
+
+    def list_datasets(
+        self, q: str | None = None, dataset_type: str | None = None, workspace_id: str = ""
+    ) -> list[dict[str, Any]]:
+        """List available datasets, optionally filtered by workspace."""
+        from domain.training._internal.cache_tags import (
+            classify_kind,
+            entry_tags,
+            find_corpus_file,
+            guess_mime,
+        )
 
         datasets = []
-        for d in datasets_dir.iterdir():
-            if not d.is_dir():
-                continue
+        seen: set[str] = set()
+        # Gather entries first (just-cache wins over legacy data/), then
+        # summarize in a single loop below. The legacy data/datasets/
+        # container is expanded so its corpora list individually.
+        entries: list[tuple[Path, str]] = []
+
+        def _claim(entry: Path, source: str) -> None:
+            if not entry.is_dir():
+                return
+            # Skip MogDB store directories (e.g. training_jobs.db/, webhooks.db/)
+            if entry.name.endswith(".db"):
+                return
+            if entry.name in seen:
+                return  # just-cache entry wins over legacy data/
+            seen.add(entry.name)
+            entries.append((entry, source))
+
+        for datasets_dir in self._entry_roots():
+            for d in sorted(datasets_dir.iterdir(), key=lambda p: p.name):
+                if d.name == "datasets" and d.is_dir():
+                    for child in sorted(d.iterdir(), key=lambda p: p.name):
+                        _claim(child, "data/datasets")
+                    continue
+                _claim(d, "cache" if datasets_dir.name == "external" else "data")
+
+        for d, entry_source in entries:
+            # Check workspace ownership if filtering
+            if workspace_id:
+                meta_path = d / ".metadata.json"
+                if meta_path.exists():
+                    try:
+                        meta = json.loads(meta_path.read_text())
+                        if meta.get("workspace_id") and meta["workspace_id"] != workspace_id:
+                            continue
+                    except Exception as e:
+                        logger.debug("Failed to parse metadata from %s: %s", meta_path, e)
+                else:
+                    # No metadata = global dataset, include in all workspaces
+                    pass
 
             input_file = d / "input.txt"
             corpus_file = d / "corpus.jsonl"
 
             has_corpus = corpus_file.exists()
-            size = corpus_file.stat().st_size if has_corpus else (input_file.stat().st_size if input_file.exists() else 0)
+            if has_corpus:
+                size = corpus_file.stat().st_size
+            elif input_file.exists():
+                size = input_file.stat().st_size
+            else:
+                # Fall back to any discovered corpus file (e.g. input.jsonl).
+                from domain.training._internal.cache_tags import find_corpus_file as _find
+
+                _primary = _find(d)
+                size = _primary.stat().st_size if _primary is not None else 0
             num_samples = 0
             if has_corpus and size < 1_000_000:
                 try:
                     with open(corpus_file) as f:
                         num_samples = sum(1 for _ in f)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to count samples in %s: %s", corpus_file, e)
 
             # Detect Visual dataset from metadata marker
+            # NOTE: local name must not shadow the dataset_type filter param.
             visual_meta_path = d / ".visual_metadata.json"
             if visual_meta_path.exists():
                 try:
-                    visual_meta = json.loads(visual_meta_path.read_text())
-                    dataset_type = "visual"
-                except Exception:
-                    dataset_type = "corpus" if has_corpus else "text"
+                    json.loads(visual_meta_path.read_text())
+                    detected_type = "visual"
+                except Exception as e:
+                    logger.debug("Failed to parse visual metadata from %s: %s", visual_meta_path, e)
+                    detected_type = "corpus" if has_corpus else "text"
             else:
-                dataset_type = "corpus" if has_corpus else "text"
+                detected_type = "corpus" if has_corpus else "text"
 
+            kind = classify_kind(d.name, d)
+            tags = entry_tags(d, kind)
+            primary = find_corpus_file(d)
             dataset = {
                 "id": d.name,
                 "name": d.name.replace("_", " ").title(),
                 "path": str(d),
-                "type": dataset_type,
+                "type": detected_type,
+                "kind": kind,
+                "tags": tags,
+                "mime": guess_mime(primary) if primary is not None else "application/octet-stream",
+                "source": entry_source,
                 "size_bytes": size,
                 "size_formatted": f"{size / 1024:.1f} KB" if size > 0 else "Empty",
                 "size": size,
                 "num_samples": num_samples,
                 "samples": num_samples,
-                "description": self._describe_dataset(d, [], size) if (corpus_file.exists() or input_file.exists()) else "",
+                "description": self._describe_dataset(d, [], size)
+                if (corpus_file.exists() or input_file.exists())
+                else "",
             }
 
             # Attach Visual metadata if present
-            if visual_meta_path.exists() and dataset_type == "visual":
+            if visual_meta_path.exists() and detected_type == "visual":
                 try:
                     dataset["visual_metadata"] = json.loads(visual_meta_path.read_text())
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("Failed to parse visual metadata from %s: %s", visual_meta_path, e)
+
+            # Attach workspace_id from metadata if present
+            meta_path = d / ".metadata.json"
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_text())
+                    if "workspace_id" in meta:
+                        dataset["workspace_id"] = meta["workspace_id"]
+                except Exception as e:
+                    logger.debug("Failed to parse workspace metadata from %s: %s", meta_path, e)
 
             # Filters
             if q and q.lower() not in d.name.lower() and q.lower() not in dataset["name"].lower():
@@ -83,23 +195,28 @@ class DatasetsController:
 
         return datasets
 
-    def get_dataset(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+    def get_dataset(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset details"""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        from domain.training._internal.cache_tags import classify_kind, entry_tags
+
+        path = self._locate(dataset_id)
+        if path is None:
             return None
 
+        kind = classify_kind(path.name, path)
         return {
             "id": dataset_id,
             "name": path.name,
             "path": str(path),
             "exists": True,
+            "kind": kind,
+            "tags": entry_tags(path, kind),
         }
 
-    def get_dataset_stats(self, dataset_id: str) -> Optional[Dict[str, Any]]:
+    def get_dataset_stats(self, dataset_id: str) -> dict[str, Any] | None:
         """Get dataset statistics matching the frontend DatasetStats interface."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
 
         files = list(path.glob("*.jsonl"))
@@ -124,9 +241,9 @@ class DatasetsController:
 
         if sample_file.exists():
             try:
-                with open(sample_file, "r", encoding="utf-8", errors="replace") as f:
+                with open(sample_file, encoding="utf-8", errors="replace") as f:
                     raw = f.read()
-                lines_list = [l.strip() for l in raw.split("\n") if l.strip()]
+                lines_list = [line.strip() for line in raw.split("\n") if line.strip()]
                 total_chars = len(raw)
                 sample_preview = lines_list[:5]
 
@@ -135,16 +252,17 @@ class DatasetsController:
                         is_jsonl = True
                         try:
                             import json
+
                             obj = json.loads(line)
                             if "messages" in obj or "conversations" in obj:
                                 is_messages = True
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.debug("Failed to parse JSON line for message detection: %s", e)
                     lower = line.lower()
                     if any(lower.startswith(m) or f" {m}" in lower for m in dialogue_markers):
                         has_dialogue = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.debug("Failed to read sample file %s for stats: %s", sample_file, e)
 
         num_lines = len(lines_list)
         avg_length = (total_chars / num_lines) if num_lines > 0 else 0
@@ -195,30 +313,30 @@ class DatasetsController:
             return f"Dataset with {size_str} of data."
 
         try:
-            with open(sample_file, "r", encoding="utf-8", errors="replace") as f:
+            with open(sample_file, encoding="utf-8", errors="replace") as f:
                 sample = f.read(2000)
-        except Exception:
+        except Exception as e:
+            logger.debug("Failed to read sample file %s: %s", sample_file, e)
             return f"Dataset with {size_str} of data."
 
-        lines = [l.strip() for l in sample.split("\n") if l.strip()]
+        lines = [line.strip() for line in sample.split("\n") if line.strip()]
         word_count = len(sample.split())
 
         # Detect format
-        is_jsonl = False
         is_messages = False
         has_dialogue = False
         dialogue_markers = ["user:", "assistant:", "human:", "<|user|>", "<|assistant|>"]
 
         for line in lines[:10]:
             if line.startswith("{"):
-                is_jsonl = True
                 try:
                     import json
+
                     obj = json.loads(line)
                     if "messages" in obj or "conversations" in obj:
                         is_messages = True
                 except Exception:
-                    pass
+                    logger.debug("JSON parse skipped in dataset preview")
             lower = line.lower()
             if any(lower.startswith(m) or f" {m}" in lower for m in dialogue_markers):
                 has_dialogue = True
@@ -240,7 +358,7 @@ class DatasetsController:
 
         return " ".join(parts) + "."
 
-    def search_datasets(self, q: str) -> List[Dict[str, Any]]:
+    def search_datasets(self, q: str) -> list[dict[str, Any]]:
         """Search datasets by name — returns full dataset summaries.
 
         Args:
@@ -256,10 +374,28 @@ class DatasetsController:
         """
         return self.list_datasets(q=q)
 
-    def create_dataset(self, name: str, description: Optional[str] = None) -> Dict[str, Any]:
-        """Create a new dataset"""
-        path = self.datasets_dir / name
+    def create_dataset(
+        self, name: str, description: str | None = None, workspace_id: str = ""
+    ) -> dict[str, Any]:
+        """Create a new dataset in the just-cache, optionally workspace-scoped."""
+        from domain.training._internal.cache_tags import get_cache_root, write_entry_meta
+
+        path = get_cache_root() / name
         path.mkdir(parents=True, exist_ok=True)
+        write_entry_meta(path, kind="dataset", tags=["dataset"], source="api")
+
+        # Persist workspace_id in metadata
+        if workspace_id:
+            meta_path = path / ".metadata.json"
+            meta = {}
+            if meta_path.exists():
+                try:
+                    meta = json.loads(meta_path.read_text())
+                except Exception as e:
+                    logger.debug("Failed to parse existing metadata from %s: %s", meta_path, e)
+            meta["workspace_id"] = workspace_id
+            with open(meta_path, "w") as f:
+                json.dump(meta, f, indent=2)
 
         return {
             "id": name,
@@ -267,12 +403,13 @@ class DatasetsController:
             "description": description,
             "created": True,
             "path": str(path),
+            "workspace_id": workspace_id,
         }
 
-    def update_dataset(self, dataset_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def update_dataset(self, dataset_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
         """Update dataset metadata. Renames directory if name changes, persists description."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
 
         new_name = updates.get("name")
@@ -280,7 +417,7 @@ class DatasetsController:
 
         # Rename directory if name changed
         if new_name and new_name != dataset_id:
-            new_path = self.datasets_dir / new_name
+            new_path = path.parent / new_name
             if new_path.exists():
                 return None  # target name already taken
             path.rename(new_path)
@@ -294,12 +431,14 @@ class DatasetsController:
             if meta_path.exists():
                 try:
                     import json as _json
-                    with open(meta_path, "r") as f:
+
+                    with open(meta_path) as f:
                         meta = _json.load(f)
                 except Exception:
-                    pass
+                    logger.debug("Failed to read dataset metadata from %s", meta_path)
             meta["description"] = new_desc
             import json as _json
+
             with open(meta_path, "w") as f:
                 _json.dump(meta, f, indent=2)
 
@@ -312,17 +451,17 @@ class DatasetsController:
 
     def delete_dataset(self, dataset_id: str) -> bool:
         """Delete a dataset directory"""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return False
         shutil.rmtree(path)
         return True
 
-    def add_data(self, dataset_id: str, data: List[str]) -> Optional[int]:
+    def add_data(self, dataset_id: str, data: list[str]) -> int | None:
         """Append data rows to a dataset's corpus file"""
         # Existing implementation unchanged (kept for context)
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         corpus_file = path / "corpus.jsonl"
         count = 0
@@ -330,26 +469,40 @@ class DatasetsController:
             for line in data:
                 f.write(json.dumps({"text": line}) + "\n")
                 count += 1
+        if count:
+            try:
+                from domain.infrastructure._internal.artifact_registry import try_register
+
+                try_register("dataset", corpus_file, name=dataset_id)
+            except Exception:
+                logger.debug("Dataset registry update skipped", exc_info=True)
         return count
 
     # --- Versioning helpers -------------------------------------------------
     def _ensure_versions_dir(self, dataset_id: str) -> Path:
         """Return the versions directory for a dataset, creating it if needed."""
-        versions_dir = self.datasets_dir / dataset_id / "versions"
+        base = self._locate(dataset_id)
+        if base is None:
+            # Should not happen in cache-only mode — caller already 404'd
+            from domain.training._internal.cache_tags import get_cache_root
+
+            base = get_cache_root() / dataset_id
+        versions_dir = base / "versions"
         versions_dir.mkdir(parents=True, exist_ok=True)
         return versions_dir
 
-    def create_version_snapshot(self, dataset_id: str) -> Optional[str]:
+    def create_version_snapshot(self, dataset_id: str) -> str | None:
         """Create a timestamped snapshot of the current dataset files.
 
         Returns the version name (timestamp) or None if the dataset does not exist.
         """
-        from datetime import datetime, timezone
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        from datetime import datetime
+
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         versions_dir = self._ensure_versions_dir(dataset_id)
-        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        timestamp = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         version_path = versions_dir / timestamp
         version_path.mkdir(parents=True, exist_ok=True)
         # Copy relevant files (corpus.jsonl or input.txt) into the version folder
@@ -359,7 +512,7 @@ class DatasetsController:
                 shutil.copy2(src, version_path / fname)
         return timestamp
 
-    def list_versions(self, dataset_id: str) -> List[str]:
+    def list_versions(self, dataset_id: str) -> list[str]:
         """List all version timestamps for a dataset, newest first."""
         versions_dir = self._ensure_versions_dir(dataset_id)
         if not versions_dir.exists():
@@ -372,9 +525,9 @@ class DatasetsController:
 
         Returns True on success, False if the version or dataset does not exist.
         """
-        path = self.datasets_dir / dataset_id
+        path = self._locate(dataset_id)
         version_path = self._ensure_versions_dir(dataset_id) / version
-        if not path.exists() or not version_path.exists():
+        if path is None or not path.exists() or not version_path.exists():
             return False
         # Overwrite main corpus/input files with the snapshot copies
         for fname in ["corpus.jsonl", "input.txt"]:
@@ -383,10 +536,10 @@ class DatasetsController:
                 shutil.copy2(src, path / fname)
         return True
 
-    def preview_dataset(self, dataset_id: str, limit: int = 10) -> Optional[dict]:
+    def preview_dataset(self, dataset_id: str, limit: int = 10) -> dict | None:
         """Return a preview of dataset contents (first N rows)."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         corpus_file = path / "corpus.jsonl"
         data_file = corpus_file if corpus_file.exists() else path / "input.txt"
@@ -400,7 +553,7 @@ class DatasetsController:
         samples = []
         total_count = 0
         with open(data_file) as f:
-            for i, line in enumerate(f):
+            for line in f:
                 line = line.strip()
                 if not line:
                     continue
@@ -418,20 +571,25 @@ class DatasetsController:
                     convs = obj.get("conversations", [])
                     human = next((c["value"] for c in convs if c.get("from") == "human"), "")
                     gpt = next((c["value"] for c in convs if c.get("from") == "gpt"), "")
-                    samples.append({
-                        "path": img_path,
-                        "language": "visual",
-                        "content": f"[IMG: {img_path}] Q: {human} A: {gpt[:120]}" + ("..." if len(gpt) > 120 else ""),
-                        "size": len(gpt),
-                    })
+                    samples.append(
+                        {
+                            "path": img_path,
+                            "language": "visual",
+                            "content": f"[IMG: {img_path}] Q: {human} A: {gpt[:120]}"
+                            + ("..." if len(gpt) > 120 else ""),
+                            "size": len(gpt),
+                        }
+                    )
                 else:
                     text = obj.get("text", obj.get("content", ""))
-                    samples.append({
-                        "path": "",
-                        "language": "text",
-                        "content": text[:200] + ("..." if len(text) > 200 else ""),
-                        "size": len(text),
-                    })
+                    samples.append(
+                        {
+                            "path": "",
+                            "language": "text",
+                            "content": text[:200] + ("..." if len(text) > 200 else ""),
+                            "size": len(text),
+                        }
+                    )
 
         return {
             "dataset_id": dataset_id,
@@ -441,10 +599,10 @@ class DatasetsController:
             "languages": {"visual": total_count} if is_visual else {"text": total_count},
         }
 
-    def export_dataset(self, dataset_id: str, format: str = "jsonl") -> Optional[Path]:
+    def export_dataset(self, dataset_id: str, format: str = "jsonl") -> Path | None:
         """Export a dataset as a file. Returns path to export file or None."""
-        path = self.datasets_dir / dataset_id
-        if not path.exists():
+        path = self._locate(dataset_id)
+        if path is None:
             return None
         corpus_file = path / "corpus.jsonl"
         if not corpus_file.exists():
@@ -461,7 +619,7 @@ class DatasetsController:
         return export_path
 
 
-_datasets_controller: Optional[DatasetsController] = None
+_datasets_controller: DatasetsController | None = None
 
 
 def get_datasets_controller() -> DatasetsController:

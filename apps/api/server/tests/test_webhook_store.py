@@ -92,7 +92,7 @@ def test_get_secret_and_sign_payload(tmp_path):
 def test_get_stats_counts(tmp_path):
     store = _mk_store(tmp_path)
     a = _register(store)
-    b = _register(store)
+    _register(store)
     store.unregister(a)
 
     stats = store.get_stats()

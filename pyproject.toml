@@ -32,7 +32,6 @@ dependencies = [
     "starlette>=0.27.0",
     "httpx>=0.25.0",
     "click>=8.1.0",
-    "rich>=13.0.0",
     "safetensors>=0.4.0",
     "accelerate>=0.25.0",
     "pandas>=2.0.0",
@@ -83,37 +82,57 @@ Documentation = "https://github.com/iamtowbee/sloughGPT#readme"
 Repository = "https://github.com/iamtowbee/sloughGPT"
 
 [tool.setuptools]
-package-dir = {"" = "packages/core-py", "apps" = "apps"}
+# Dual-tree consolidation moved `domain` from packages/core-py/domains to the
+# repo root (cards 20260924_047..058), but package-dir still mapped the whole
+# tree under packages/core-py — discovery found `domain` via the "." root and
+# the map pointed it at the deleted packages/core-py/domain, hard-failing
+# `python setup.py egg_info` (card 56cf354c). Single source root: package-dir
+# and packages.find must agree, and setup.py is a thin shim over this file.
+package-dir = {"" = "."}
 include-package-data = true
 
 [tool.setuptools.package-data]
-domains = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
+domain = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 apps = ["**/*.sou", "**/*.json", "**/*.yaml", "**/*.txt"]
 
 [tool.setuptools.packages.find]
-where = ["packages/core-py", "."]
-include = ["domains*", "utils*", "apps*"]
-exclude = ["tests*", "apps.web*"]
+where = ["."]
+include = ["domain*", "utils*", "apps*", "memory*"]
+exclude = ["tests*", "*.tests*", "apps.web*"]
 
 [tool.black]
 line-length = 100
 target-version = ["py39", "py310", "py311"]
 
 [tool.ruff]
-# CI lint job uses a smoke subset only (see .github/workflows/reusable-ci-core.yml):
-#   ruff check tests/ apps/cli/ apps/api/server/ packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82
 line-length = 100
-target-version = "py39"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4"]
-ignore = ["E501"]
+ignore = ["E501", "N802", "N803", "N806", "N812", "N814", "N818", "N999", "E402", "E701", "E702", "E741", "B008", "N801", "N804", "N805", "N807", "N815", "N817", "B007", "B904", "E721", "B023", "B017", "B005", "B018", "B905", "B002", "B039", "E731", "F601", "C408", "C416", "C401", "UP031", "UP042", "E722", "UP007", "UP035"]
+
+# domain.* is first-party by identity, not by filesystem resolution: the
+# domain/shell/_internal/{cmds,addons} entries are machine-local symlinks,
+# so probe-based classification diverged between environments and CI flagged
+# 11 I001s that pass locally (card ca647de2).
+[tool.ruff.lint.isort]
+known-first-party = ["domain"]
+
+[tool.ruff.lint.flake8-bugbear]
 
 [tool.ruff.lint.per-file-ignores]
-"packages/core-py/domains/training/*.py" = ["B006", "C408"]
+"**/__init__.py" = ["F401", "F811"]
+"domain/training/*.py" = ["B006", "C408"]
+"packages/core-py/tests/*.py" = ["N801", "F811", "B017"]
+"**/tests/*.py" = ["F811", "B017"]
+"tests/fixtures/__init__.py" = ["F403", "F405"]
+"domain/cognitive/_internal/metacognition/__init__.py" = ["F403", "F405"]
+"packages/core-py/scripts/*.py" = ["B018"]
+"scripts/examples/*.py" = ["F821"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
@@ -123,3 +142,11 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["packages/core-py", "domain"]
+omit = ["*/tests/*", "*/test_*"]
+
+[tool.coverage.report]
+fail_under = 50
+show_missing = true

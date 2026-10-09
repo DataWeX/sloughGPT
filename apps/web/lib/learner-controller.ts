@@ -10,12 +10,23 @@
 import { apiGet, apiPost } from './http-client'
 
 export interface LearnerStatus {
-  learner_active: boolean
-  knowledge_count: number
-  feeds_count: number
-  total_tokens: number
-  last_train?: string
-  last_search?: string
+  soul_name: string
+  total_tokens_ingested: number
+  train_steps_completed: number
+  current_loss: number
+  loss_history: number[]
+  buffer_size: number
+  buffer_capacity: number
+  pending_tokens: number
+  arch: string
+  n_embed: number
+  n_layer: number
+  n_head: number
+  vocab_size: number
+  knowledge: Record<string, unknown>
+  feeds_subscribed: number
+  filter_stats: Record<string, unknown>
+  filter_config: Record<string, unknown>
 }
 
 export interface SearchResult {
@@ -36,11 +47,13 @@ export const learnerController = {
   },
 
   async search(query: string, maxResults = 5): Promise<SearchResult> {
-    return apiPost('/learn/search', { query, max_results: maxResults })
+    const params = new URLSearchParams({ query, max_results: String(maxResults) })
+    return apiPost(`/learn/search?${params}`)
   },
 
   async ingestUrl(url: string): Promise<{ status: string; facts_added: number }> {
-    return apiPost('/learn/ingest-url', { url })
+    const params = new URLSearchParams({ url })
+    return apiPost(`/learn/ingest-url?${params}`)
   },
 
   async ingestText(text: string): Promise<{ status: string; facts_added: number }> {
@@ -50,31 +63,34 @@ export const learnerController = {
   async queryKnowledge(query?: string, limit = 20): Promise<KnowledgeResult> {
     const params = new URLSearchParams()
     if (query) params.set('query', query)
-    params.set('limit', String(limit))
+    params.set('top_k', String(limit))
     return apiGet(`/learn/knowledge?${params}`)
   },
 
   async subscribeFeed(url: string, interval = 3600): Promise<{ status: string }> {
-    return apiPost('/learn/feed', { action: 'subscribe', url, poll_interval: interval })
+    const params = new URLSearchParams({ action: 'subscribe', url, poll_interval: String(interval) })
+    return apiPost(`/learn/feed?${params}`)
   },
 
   async unsubscribeFeed(url: string): Promise<{ status: string }> {
-    return apiPost('/learn/feed', { action: 'unsubscribe', url })
+    const params = new URLSearchParams({ action: 'unsubscribe', url })
+    return apiPost(`/learn/feed?${params}`)
   },
 
   async listFeeds(): Promise<{ feeds: Array<{ url: string; interval: number; last_poll?: string }> }> {
-    return apiGet('/learn/feed?action=list')
+    const params = new URLSearchParams({ action: 'list' })
+    return apiPost(`/learn/feed?${params}`)
   },
 
   async train(): Promise<{ status: string; loss?: number }> {
-    return apiPost('/learn/train', {})
+    return apiPost('/learn/train')
   },
 
   async evaluate(): Promise<{ metrics: Record<string, unknown> }> {
-    return apiPost('/learn/evaluate', {})
+    return apiPost('/learn/evaluate')
   },
 
   async deploy(): Promise<{ status: string }> {
-    return apiPost('/learn/deploy', {})
+    return apiPost('/learn/deploy')
   },
 }

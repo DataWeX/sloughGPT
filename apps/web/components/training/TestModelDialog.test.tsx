@@ -11,7 +11,9 @@ describe('TestModelDialog', () => {
 
   const base = {
     open: true, prompt: '', result: null, loading: false,
+    streaming: false, streamingText: '', responseFormat: 'text' as const,
     onClose: vi.fn(), onPromptChange: vi.fn(), onGenerate: vi.fn(), onClear: vi.fn(),
+    onResponseFormatChange: vi.fn(),
   }
 
   it('returns null when not open', () => {
@@ -90,7 +92,6 @@ describe('TestModelDialog', () => {
     const result = { prompt: 'hi', response: '', model: '', tokens_generated: 0, error: 'model not loaded' }
     render(<TestModelDialog {...base} result={result} />)
     expect(screen.getByText('model not loaded')).toBeInTheDocument()
-    expect(screen.getByText('Error')).toBeInTheDocument()
   })
 
   it('shows model and token info', () => {

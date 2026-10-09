@@ -8,6 +8,7 @@ import {
   Keyboard,
 } from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
+import {TamaguiProvider} from '../theme/TamaguiProvider';
 import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
 import {triggerHaptic} from '../services/haptics';
@@ -91,6 +92,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <TamaguiProvider>
       <YStack flex={1} backgroundColor={colors.overlay(0.4)} justifyContent="flex-end">
         <YStack
           backgroundColor={colors.background}
@@ -173,6 +175,7 @@ export function SearchSessionsModal({visible, onClose, onSelectSession}: Props) 
           />
         </YStack>
       </YStack>
+      </TamaguiProvider>
     </Modal>
   );
 }

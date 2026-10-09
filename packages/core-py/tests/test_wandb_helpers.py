@@ -1,4 +1,4 @@
-"""Tests for domains.training.wandb_helpers: env flags, config flattening, API job tracker."""
+"""Tests for domain.training._internal.wandb_helpers: env flags, config flattening, API job tracker."""
 
 import sys
 import types
@@ -7,8 +7,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from domains.infrastructure.config import get_config
-from domains.training.wandb_helpers import (
+from domain.infrastructure._internal.config import get_config
+from domain.training._internal.wandb_helpers import (
     create_training_tracker_for_api_job,
     default_wandb_project,
     flatten_for_wandb_config,
@@ -138,7 +138,7 @@ class TestFlattenForWandbConfig:
 
 
 class FakeTrackingModule:
-    """In-memory stand-in for domains.training.tracking to avoid wandb/network."""
+    """In-memory stand-in for domain.training.tracking to avoid wandb/network."""
 
     def __init__(self):
         self.runs = []
@@ -155,23 +155,29 @@ class FakeTrackingModule:
 @pytest.fixture
 def fake_tracking(monkeypatch):
     fake = FakeTrackingModule()
-    monkeypatch.setitem(sys.modules, "domains.training.tracking", fake)
+    monkeypatch.setitem(sys.modules, "domain.training.tracking", fake)
     return fake
 
 
 class TestCreateTrainingTrackerForApiJob:
     def test_disabled_returns_none(self, tracking_config, monkeypatch):
         tracking_config.tracking.wandb_training_enabled = False
-        assert create_training_tracker_for_api_job(
-            job_id="j1", job_name="n", data_path="p", hyperparams={}
-        ) is None
+        assert (
+            create_training_tracker_for_api_job(
+                job_id="j1", job_name="n", data_path="p", hyperparams={}
+            )
+            is None
+        )
 
     def test_missing_tracking_module_returns_none(self, tracking_config, monkeypatch):
         tracking_config.tracking.wandb_training_enabled = True
-        monkeypatch.setitem(sys.modules, "domains.training.tracking", None)
-        assert create_training_tracker_for_api_job(
-            job_id="j1", job_name="n", data_path="p", hyperparams={}
-        ) is None
+        monkeypatch.setitem(sys.modules, "domain.training.tracking", None)
+        assert (
+            create_training_tracker_for_api_job(
+                job_id="j1", job_name="n", data_path="p", hyperparams={}
+            )
+            is None
+        )
 
     def test_starts_run_and_logs_params(self, tracking_config, fake_tracking):
         tracking_config.tracking.wandb_training_enabled = True
@@ -200,9 +206,12 @@ class TestCreateTrainingTrackerForApiJob:
     def test_init_failure_returns_none(self, tracking_config, fake_tracking):
         tracking_config.tracking.wandb_training_enabled = True
         fake_tracking.ExperimentTracker.side_effect = RuntimeError("no wandb")
-        assert create_training_tracker_for_api_job(
-            job_id="j1", job_name="n", data_path="p", hyperparams={}
-        ) is None
+        assert (
+            create_training_tracker_for_api_job(
+                job_id="j1", job_name="n", data_path="p", hyperparams={}
+            )
+            is None
+        )
 
     def test_run_name_truncated(self, tracking_config, fake_tracking):
         tracking_config.tracking.wandb_training_enabled = True

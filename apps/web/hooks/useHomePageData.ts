@@ -1,26 +1,41 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
-import { soulsController, type Soul } from '@/lib/souls-controller'
+import { type Soul } from '@/lib/souls-controller'
 import { sessionController } from '@/lib/session-controller'
 import { trainingController } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { feedbackController, type FeedbackStats } from '@/lib/feedback-controller'
+import { datasetController } from '@/lib/dataset-controller'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
 import { useApiReady } from '@/hooks/useLiveStatus'
+import { useModels, useSouls } from '@/lib/cache/api-hooks'
+import { logger } from '@/lib/dev-log'
 
 export interface HomePageData {
   modelCount: number | null
   checkpointCount: number
   modelStatus: { loaded: boolean; model: string | null }
   currentSoul: { name: string; description: string; traits: string[] } | null
-  recentSessions: Array<{ id: string; name: string; updated_at: string; message_count?: number; pinned?: boolean; starred?: boolean }>
+  recentSessions: Array<{
+    id: string
+    name: string
+    updated_at: string
+    message_count?: number
+    pinned?: boolean
+    starred?: boolean
+  }>
   runningTraining: { name: string; status_message: string } | null
   knowledgeCount: number
   recentJobs: Array<{ id: string; name: string; status: string; created_at?: string }>
-  recentDatasets: Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>
+  recentDatasets: Array<{
+    id: string
+    name: string
+    updated_at?: string
+    size?: number
+    samples?: number
+  }>
   testRunning: boolean
   testResponse: string | null
   setTestRunning: (v: boolean) => void
@@ -29,6 +44,7 @@ export interface HomePageData {
   inferenceCount: number | null
   healthSummary: string | null
   feedbackStats: FeedbackStats | null
+  loading: boolean
   /** Per-section error flags — true if that section's fetch failed */
   errors: {
     models: boolean
@@ -44,13 +60,36 @@ export interface HomePageData {
 export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
   const [modelCount, setModelCount] = useState<number | null>(null)
   const [checkpointCount, setCheckpointCount] = useState<number>(0)
-  const [modelStatus, setModelStatus] = useState<{ loaded: boolean; model: string | null }>({ loaded: false, model: null })
-  const [currentSoul, setCurrentSoul] = useState<{ name: string; description: string; traits: string[] } | null>(null)
-  const [recentSessions, setRecentSessions] = useState<Array<{ id: string; name: string; updated_at: string; message_count?: number; pinned?: boolean; starred?: boolean }>>([])
-  const [runningTraining, setRunningTraining] = useState<{ name: string; status_message: string } | null>(null)
+  const [modelStatus, setModelStatus] = useState<{ loaded: boolean; model: string | null }>({
+    loaded: false,
+    model: null,
+  })
+  const [currentSoul, setCurrentSoul] = useState<{
+    name: string
+    description: string
+    traits: string[]
+  } | null>(null)
+  const [recentSessions, setRecentSessions] = useState<
+    Array<{
+      id: string
+      name: string
+      updated_at: string
+      message_count?: number
+      pinned?: boolean
+      starred?: boolean
+    }>
+  >([])
+  const [runningTraining, setRunningTraining] = useState<{
+    name: string
+    status_message: string
+  } | null>(null)
   const [knowledgeCount, setKnowledgeCount] = useState<number>(0)
-  const [recentJobs, setRecentJobs] = useState<Array<{ id: string; name: string; status: string; created_at?: string }>>([])
-  const [recentDatasets, setRecentDatasets] = useState<Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>>([])
+  const [recentJobs, setRecentJobs] = useState<
+    Array<{ id: string; name: string; status: string; created_at?: string }>
+  >([])
+  const [recentDatasets, setRecentDatasets] = useState<
+    Array<{ id: string; name: string; updated_at?: string; size?: number; samples?: number }>
+  >([])
   const [testRunning, setTestRunning] = useState(false)
   const [testResponse, setTestResponse] = useState<string | null>(null)
   const [feedbackStats, setFeedbackStats] = useState<FeedbackStats | null>(null)
@@ -66,87 +105,161 @@ export function useHomePageData(health: ApiHealthSnapshot): HomePageData {
 
   const ready = useApiReady()
 
-  const inferenceCount = health && health !== 'offline' ? health.inference_count ?? 0 : null
-  const healthSummary = health && health !== 'offline' ? health.model_type ?? null : null
-  const apiStatus = health === null ? 'loading' : health === 'offline' ? 'offline' : 'online'
+  // Use shared query cache for models and souls — eliminates 2 redundant API calls.
+  const { data: modelsData, isLoading: modelsLoading } = useModels()
+  const { data: soulsData, isLoading: soulsLoading } = useSouls()
+
+  // Derive model count from the query cache instead of a separate API call.
+  useEffect(() => {
+    if (modelsData) {
+      const list = modelsData ?? []
+      setModelCount(list.length)
+    }
+  }, [modelsData])
+
+  // Derive current soul from the query cache instead of a separate API call.
+  useEffect(() => {
+    if (soulsData) {
+      const active = soulsData.current_soul
+        ? (soulsData.souls || [])?.find((s: Soul) => s.name === soulsData.current_soul)
+        : null
+      setCurrentSoul(active || null)
+    }
+  }, [soulsData])
+
+  // Use health snapshot for model status instead of a separate API call.
+  useEffect(() => {
+    if (health && health !== 'offline') {
+      setModelStatus({ loaded: health.model_loaded, model: health.model_type })
+    }
+  }, [health])
+
+  const inferenceCount = health && health !== 'offline' ? (health.inference_count ?? 0) : null
+  const healthSummary = health && health !== 'offline' ? (health.model_type ?? null) : null
 
   useEffect(() => {
     if (!ready) return
     const cancelled = { current: false }
-    modelController.status().then(status => {
-      if (!cancelled.current) setModelStatus({ loaded: status.loaded, model: status.model_type })
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
-    soulsController.list().then(data => {
-      if (!cancelled.current) {
-        const active = data.current_soul
-          ? data.souls?.find((s: Soul) => s.name === data.current_soul)
-          : null
-        setCurrentSoul(active || null)
-      }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, soul: true })) })
-    modelController.list().then(models => {
-      if (!cancelled.current) setModelCount(models.length)
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, models: true })) })
-    sessionController.list().then(sessions => {
-      if (!cancelled.current) {
-        const sorted = [...sessions]
-          .filter(s => s.name || s.id)
-          .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-          .slice(0, 5)
-          .map(s => ({
-            id: s.id,
-            name: s.name,
-            updated_at: s.updated_at,
-            message_count: s.messages?.length,
-            pinned: s.pinned,
-            starred: s.starred,
-          }))
-        setRecentSessions(sorted)
-      }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, sessions: true })) })
-    trainingController.list().then(jobs => {
-      if (!cancelled.current) {
-        const running = jobs.find(j => j.status === 'running')
-        setRunningTraining(running ? { name: running.name || running.id, status_message: running.status_message || 'Training...' } : null)
-        const recent = [...jobs]
-          .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
-          .slice(0, 3)
-        setRecentJobs(recent)
-      }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, training: true })) })
-    knowledgeController.stats().then(s => {
-      if (!cancelled.current) setKnowledgeCount(s.total_items)
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, knowledge: true })) })
-    feedbackController.getFeedbackStats().then(s => {
-      if (!cancelled.current) setFeedbackStats(s)
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, feedback: true })) })
-    datasetController.list().then(list => {
-      if (!cancelled.current) {
-        const sorted = [...list]
-          .sort((a, b) => new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime())
-          .slice(0, 5)
-          .map(ds => ({
-            id: ds.id,
-            name: ds.name,
-            updated_at: ds.updated_at || ds.created_at,
-            size: ds.size,
-            samples: ds.samples,
-          }))
-        setRecentDatasets(sorted)
-      }
-    }).catch(() => { if (!cancelled.current) setErrors(p => ({ ...p, datasets: true })) })
-    return () => { cancelled.current = true }
+    // Sessions, training, knowledge, feedback, and datasets are NOT available
+    // via SSE/live status — these still need dedicated API calls.
+    sessionController
+      .list()
+      .then((sessions) => {
+        if (!cancelled.current) {
+          const sorted = [...sessions]
+            .filter((s) => s.name || s.id)
+            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+            .slice(0, 5)
+            .map((s) => ({
+              id: s.id,
+              name: s.name,
+              updated_at: s.updated_at,
+              message_count: s.messages?.length,
+              pinned: s.pinned,
+              starred: s.starred,
+            }))
+          setRecentSessions(sorted)
+        }
+      })
+      .catch((e) => {
+        logger.warning('Could not home sessions list', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, sessions: true }))
+      })
+    trainingController
+      .list()
+      .then((jobs) => {
+        if (!cancelled.current) {
+          const running = jobs.find((j) => j.status === 'running')
+          setRunningTraining(
+            running
+              ? {
+                  name: running.name || running.id,
+                  status_message: running.status_message || 'Training...',
+                }
+              : null,
+          )
+          const recent = [...jobs]
+            .sort(
+              (a, b) =>
+                new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime(),
+            )
+            .slice(0, 3)
+          setRecentJobs(recent)
+        }
+      })
+      .catch((e) => {
+        logger.warning('Could not home training list', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, training: true }))
+      })
+    knowledgeController
+      .stats()
+      .then((s) => {
+        if (!cancelled.current) setKnowledgeCount(s.total_items)
+      })
+      .catch((e) => {
+        logger.warning('Could not home knowledge stats', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, knowledge: true }))
+      })
+    feedbackController
+      .getFeedbackStats()
+      .then((s) => {
+        if (!cancelled.current) setFeedbackStats(s)
+      })
+      .catch((e) => {
+        logger.warning('Could not home feedback stats', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, feedback: true }))
+      })
+    datasetController
+      .list()
+      .then((list) => {
+        if (!cancelled.current) {
+          const sorted = [...list]
+            .sort(
+              (a, b) =>
+                new Date(b.updated_at || b.created_at || 0).getTime() -
+                new Date(a.updated_at || a.created_at || 0).getTime(),
+            )
+            .slice(0, 5)
+            .map((ds) => ({
+              id: ds.id,
+              name: ds.name,
+              updated_at: ds.updated_at || ds.created_at,
+              size: ds.size,
+              samples: ds.samples,
+            }))
+          setRecentDatasets(sorted)
+        }
+      })
+      .catch((e) => {
+        logger.warning('Could not home datasets list', { exception: String(e?.message || e) })
+        if (!cancelled.current) setErrors((p) => ({ ...p, datasets: true }))
+      })
+    return () => {
+      cancelled.current = true
+    }
   }, [ready])
 
+  const loading = modelsLoading || soulsLoading || health === null
+
   return {
-    modelCount, checkpointCount,
-    modelStatus, currentSoul,
-    recentSessions, runningTraining,
-    knowledgeCount, recentJobs, recentDatasets,
-    testRunning, testResponse,
-    setTestRunning, setTestResponse,
-    setKnowledgeCount, inferenceCount,
-    healthSummary, feedbackStats,
+    modelCount,
+    checkpointCount,
+    modelStatus,
+    currentSoul,
+    recentSessions,
+    runningTraining,
+    knowledgeCount,
+    recentJobs,
+    recentDatasets,
+    testRunning,
+    testResponse,
+    setTestRunning,
+    setTestResponse,
+    setKnowledgeCount,
+    inferenceCount,
+    healthSummary,
+    feedbackStats,
+    loading,
     errors,
   }
 }

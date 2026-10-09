@@ -258,7 +258,7 @@ describe('MemoryCard', () => {
     render(<MemoryCard />)
     await screen.findByText('Recent fact')
 
-    const order = () => screen.getAllByTitle('Click to copy').map(el => el.textContent)
+    const order = () => screen.getAllByTitle('Copy to clipboard').map(el => el.textContent)
     expect(order()).toEqual(['Recent fact', 'Mid fact', 'Old fact'])
 
     fireEvent.click(screen.getByLabelText('Toggle memory sort order'))
@@ -281,7 +281,7 @@ describe('MemoryCard', () => {
     fireEvent.click(importance)
     await waitFor(() => expect(screen.getAllByText('Importance').length).toBeGreaterThanOrEqual(1))
 
-    const order = () => screen.getAllByTitle('Click to copy').map(el => el.textContent)
+    const order = () => screen.getAllByTitle('Copy to clipboard').map(el => el.textContent)
     expect(order()).toEqual(['High importance fact', 'Mid importance fact', 'Low importance fact'])
   })
 
@@ -311,7 +311,7 @@ describe('MemoryCard', () => {
 
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('m1', 'User prefers a cappuccino after noon', 'drinks', 0.8))
     expect(mockAddToast).toHaveBeenCalledWith('Memory item updated', 'success')
-    expect(screen.queryByLabelText('Edit memory fact text')).toBeNull()
+    await waitFor(() => expect(screen.queryByLabelText('Edit memory fact text')).toBeNull())
   })
 
   it('edits a memory fact importance via the slider and saves via the API', async () => {
@@ -842,7 +842,7 @@ describe('MemoryCard', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Toggle automatic memory' }))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Failed to update memory setting', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not update memory setting', 'error')
     })
   })
 })

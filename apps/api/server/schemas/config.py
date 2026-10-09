@@ -1,8 +1,8 @@
 """
 Config Schemas - Data models for configuration
 """
+
 from pydantic import BaseModel, Field
-from typing import Optional
 
 
 class GenerationConfig(BaseModel):
@@ -15,9 +15,9 @@ class GenerationConfig(BaseModel):
 
 
 class ConfigUpdate(BaseModel):
-    temperature: Optional[float] = None
-    top_p: Optional[float] = None
-    top_k: Optional[int] = None
-    repetition_penalty: Optional[float] = None
-    max_new_tokens: Optional[int] = None
-    max_context_length: Optional[int] = None
+    temperature: float | None = None
+    top_p: float | None = None
+    top_k: int | None = None
+    repetition_penalty: float | None = None
+    max_new_tokens: int | None = None
+    max_context_length: int | None = None

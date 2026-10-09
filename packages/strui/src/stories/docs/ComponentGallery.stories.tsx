@@ -7,6 +7,7 @@ import { ChatThread } from '@/components/ai/chat-thread'
 import { Citation } from '@/components/ai/citation'
 import { CodeSnippet } from '@/components/ai/code-snippet'
 import { EmptyState } from '@/components/ai/empty-state'
+import { IconCpu } from '@/components/ui/icons'
 import { JobStatus } from '@/components/ai/job-status'
 import { MessageBubble } from '@/components/ai/message-bubble'
 import { PromptComposer } from '@/components/ai/prompt-composer'
@@ -39,12 +40,45 @@ import { StatusDot } from '@/components/composed/status-dot'
 import { StepIndicator } from '@/components/composed/step-indicator'
 import { Timeline } from '@/components/composed/timeline'
 import { Toolbar } from '@/components/composed/toolbar'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
+import { ActionCard } from '@/components/composed/action-card'
+import { ChipGroup } from '@/components/composed/chip-group'
+import { DetailRow } from '@/components/composed/detail-row'
+import { InfoCard } from '@/components/composed/info-card'
+import { InsightsCard } from '@/components/composed/insights-card'
+import { MetricsCard } from '@/components/composed/metrics-card'
+import { SortDropdown } from '@/components/composed/sort-dropdown'
+import { TabGroup } from '@/components/composed/tab-group'
+import { StatusBadge } from '@/components/composed/status-badge'
+import { DetailList } from '@/components/composed/detail-list'
+import { LoadingCard } from '@/components/composed/loading-card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
@@ -107,8 +141,9 @@ function GalleryCanvas() {
             <div className="min-w-0 space-y-2">
               <h1 className="sl-h1">Component gallery</h1>
               <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                Pastel lattice · Outfit + JetBrains Mono · sharp corners · Radix under the hood. Toggle{' '}
-                <strong className="font-medium text-foreground">Surface</strong> in the toolbar for light/dark.
+                Pastel lattice · Outfit + JetBrains Mono · sharp corners · Radix under the hood.
+                Toggle <strong className="font-medium text-foreground">Surface</strong> in the
+                toolbar for light/dark.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -164,10 +199,14 @@ function GalleryCanvas() {
                 <CardTitle>Card</CardTitle>
                 <CardDescription>Lattice border and soft fill.</CardDescription>
               </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">Card content area.</CardContent>
+              <CardContent className="text-sm text-muted-foreground">
+                Card content area.
+              </CardContent>
             </Card>
             <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Tabs</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Tabs
+              </p>
               <Tabs defaultValue="a">
                 <TabsList>
                   <TabsTrigger value="a">Alpha</TabsTrigger>
@@ -195,7 +234,9 @@ function GalleryCanvas() {
                   <DialogTitle>Dialog</DialogTitle>
                   <DialogDescription>Modal surface for confirmations and forms.</DialogDescription>
                 </DialogHeader>
-                <p className="text-sm text-muted-foreground">Body copy uses the same tokens as the page.</p>
+                <p className="text-sm text-muted-foreground">
+                  Body copy uses the same tokens as the page.
+                </p>
               </DialogContent>
             </Dialog>
             <AlertDialog>
@@ -207,7 +248,9 @@ function GalleryCanvas() {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Destructive action?</AlertDialogTitle>
-                  <AlertDialogDescription>This uses the alert palette for emphasis.</AlertDialogDescription>
+                  <AlertDialogDescription>
+                    This uses the alert palette for emphasis.
+                  </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -247,7 +290,11 @@ function GalleryCanvas() {
             }
           />
           <div className="mt-8 space-y-6">
-            <SectionHeader title="Section header" description="Smaller than page title." action={<Chip variant="primary">v2</Chip>} />
+            <SectionHeader
+              title="Section header"
+              description="Smaller than page title."
+              action={<Chip variant="primary">v2</Chip>}
+            />
             <Toolbar className="flex flex-wrap gap-2">
               <SearchInput className="max-w-xs" placeholder="Search…" />
               <Button size="sm" variant="ghost">
@@ -255,8 +302,8 @@ function GalleryCanvas() {
               </Button>
             </Toolbar>
             <KpiGrid>
-            <StatCard label="Requests" value="12.4k" trend={{ value: 3, positive: true }} />
-            <StatCard label="Latency" value="420ms" />
+              <StatCard label="Requests" value="12.4k" trend={{ value: 3, positive: true }} />
+              <StatCard label="Latency" value="420ms" />
             </KpiGrid>
             <InlineBanner
               variant="warning"
@@ -265,7 +312,14 @@ function GalleryCanvas() {
               action={<Button size="sm">Upgrade</Button>}
             />
             <div className="grid gap-6 lg:grid-cols-2">
-              <EmptyCard message="No experiments" action={<Button size="sm" className="w-full sm:w-auto">Create</Button>} />
+              <EmptyCard
+                message="No experiments"
+                action={
+                  <Button size="sm" className="w-full sm:w-auto">
+                    Create
+                  </Button>
+                }
+              />
               <div className="space-y-3">
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-2/3" />
@@ -304,7 +358,99 @@ function GalleryCanvas() {
             <FormField id="gf" label="Form field" hint="Helper under the control.">
               <Input id="gf" />
             </FormField>
-            <SettingsRow title="Setting row" description="Two-column settings row pattern." control={<Switch defaultChecked />} />
+            <SettingsRow
+              title="Setting row"
+              description="Two-column settings row pattern."
+              control={<Switch defaultChecked />}
+            />
+          </div>
+
+          <Separator className="my-8" />
+
+          <div className="space-y-6">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">
+              New Composites
+            </p>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <ActionCard
+                title="System Health"
+                subtitle="Real-time metrics"
+                actions={
+                  <Button size="sm" variant="ghost">
+                    Refresh
+                  </Button>
+                }
+              >
+                <div className="space-y-2 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">CPU</span>
+                    <span>45%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Memory</span>
+                    <span>8.2 GB</span>
+                  </div>
+                </div>
+              </ActionCard>
+              <InsightsCard
+                title="Training Insights"
+                kpis={[
+                  { label: 'Loss', value: '0.23' },
+                  { label: 'Accuracy', value: '94%' },
+                ]}
+                details={[
+                  { label: 'Epochs', value: 12 },
+                  { label: 'Learning rate', value: '2e-4' },
+                ]}
+              />
+            </div>
+            <MetricsCard title="Overview" columns={4}>
+              <StatCard label="Total Jobs" value={42} />
+              <StatCard label="Active" value={3} trend={{ value: 12, positive: true }} />
+              <StatCard label="Failed" value={1} trend={{ value: 5, positive: false }} />
+              <StatCard label="Avg Time" value="2.4h" />
+            </MetricsCard>
+            <div className="flex flex-wrap gap-3">
+              <StatusBadge tone="success">Running</StatusBadge>
+              <StatusBadge tone="warning">Queued</StatusBadge>
+              <StatusBadge tone="destructive">Failed</StatusBadge>
+            </div>
+            <ChipGroup
+              chips={[
+                { label: 'Python', tone: 'primary' },
+                { label: 'PyTorch', tone: 'success' },
+                { label: 'GPU', tone: 'warning' },
+              ]}
+            />
+            <InfoCard
+              icon={<IconCpu className="h-4 w-4" />}
+              title="GPU"
+              description="NVIDIA RTX 4090"
+              tone="success"
+              size="sm"
+            />
+            <DetailList
+              items={[
+                { label: 'Model', value: 'GPT-2' },
+                { label: 'Path', value: '/models/gpt2', mono: true },
+              ]}
+            />
+            <LoadingCard title="Loading..." rows={2} />
+            <SortDropdown
+              value="newest"
+              options={[
+                { value: 'newest', label: 'Newest' },
+                { value: 'oldest', label: 'Oldest' },
+              ]}
+              onChange={() => {}}
+            />
+            <TabGroup
+              defaultValue="a"
+              tabs={[
+                { value: 'a', label: 'Tab A', content: <p className="text-sm">Content A</p> },
+                { value: 'b', label: 'Tab B', content: <p className="text-sm">Content B</p> },
+              ]}
+            />
           </div>
         </Section>
 
@@ -321,7 +467,9 @@ function GalleryCanvas() {
             </div>
             <div className="flex flex-col gap-2">
               <MessageBubble role="user">User message bubble</MessageBubble>
-              <MessageBubble role="assistant">Assistant transcript — readable prose, no card.</MessageBubble>
+              <MessageBubble role="assistant">
+                Assistant transcript — readable prose, no card.
+              </MessageBubble>
             </div>
             <TypingIndicator />
             <StreamingAssistantPlaceholder lines={2} />
@@ -359,7 +507,8 @@ function GalleryCanvas() {
         </Section>
 
         <footer className="border-t border-border pt-8 text-center text-xs text-muted-foreground">
-          strui · SloughGPT design system — see per-component stories for full controls and props tables.
+          strui · SloughGPT design system — see per-component stories for full controls and props
+          tables.
         </footer>
       </div>
     </div>

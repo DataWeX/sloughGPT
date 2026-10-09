@@ -1,8 +1,8 @@
 """Shared fixtures for bawl tests — resets shared state between tests."""
 
 import pytest
-from bawl.fetch import _hits
 from bawl.crawl import _robots
+from bawl.fetch import _hits
 
 
 @pytest.fixture(autouse=True)

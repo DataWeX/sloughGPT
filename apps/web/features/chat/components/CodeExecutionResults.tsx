@@ -3,6 +3,8 @@
 import { useState, useCallback, memo } from 'react'
 import { Button, IconX, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
+import { formatDurationCompact } from '@/lib/formatDuration'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface CodeExecution {
   id: string
@@ -19,11 +21,6 @@ interface CodeExecutionResultsProps {
   executions: CodeExecution[]
   onRerun?: (id: string) => void
   className?: string
-}
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(2)}s`
 }
 
 function getStatusColor(exitCode: number): string {
@@ -47,7 +44,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
   const handleCopy = useCallback(async (code: string, id: string) => {
     await navigator.clipboard.writeText(code)
     setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 2000)
+    setTimeout(() => setCopiedId(null), COPY_FEEDBACK_DURATION_MS)
   }, [])
 
   const handleToggle = useCallback((id: string) => {
@@ -82,7 +79,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
               </span>
               <span className="text-xs font-medium">{exec.language}</span>
               <span className="text-[10px] text-muted-foreground">
-                {formatDuration(exec.duration)}
+                {formatDurationCompact(exec.duration)}
               </span>
             </div>
             <div className="flex items-center gap-1">
@@ -104,6 +101,7 @@ export const CodeExecutionResults = memo(function CodeExecutionResults({
                   size="icon-sm"
                   className="absolute top-1 right-1 h-5 w-5"
                   onClick={() => handleCopy(exec.code, exec.id)}
+                  aria-label={copiedId === exec.id ? 'Copied' : 'Copy code'}
                 >
                   {copiedId === exec.id ? (
                     <IconCheck className="h-3 w-3" />

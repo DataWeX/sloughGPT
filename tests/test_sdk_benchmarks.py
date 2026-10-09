@@ -1,4 +1,5 @@
 """Coverage for sloughgpt_sdk.benchmarks."""
+
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -11,8 +12,8 @@ sys.path.insert(0, str(_REPO_ROOT / "packages" / "sdk-py"))
 from sloughgpt_sdk.benchmarks import (  # noqa: E402
     Benchmark,
     BenchmarkResult,
-    LoadTestResult,
     LoadTester,
+    LoadTestResult,
     Profiler,
     benchmark_cache_operations,
     percentile,
@@ -35,9 +36,17 @@ class TestPercentile:
 class TestBenchmarkResult:
     def test_str_format(self):
         r = BenchmarkResult(
-            name="op", iterations=10, total_time_ms=100.0, avg_time_ms=10.0,
-            min_time_ms=5.0, max_time_ms=20.0, median_time_ms=9.0,
-            std_dev_ms=2.0, ops_per_second=100.0, p95_ms=15.0, p99_ms=18.0,
+            name="op",
+            iterations=10,
+            total_time_ms=100.0,
+            avg_time_ms=10.0,
+            min_time_ms=5.0,
+            max_time_ms=20.0,
+            median_time_ms=9.0,
+            std_dev_ms=2.0,
+            ops_per_second=100.0,
+            p95_ms=15.0,
+            p99_ms=18.0,
         )
         s = str(r)
         assert "op" in s
@@ -46,9 +55,17 @@ class TestBenchmarkResult:
 
     def test_to_dict(self):
         r = BenchmarkResult(
-            name="op", iterations=10, total_time_ms=100.0, avg_time_ms=10.0,
-            min_time_ms=5.0, max_time_ms=20.0, median_time_ms=9.0,
-            std_dev_ms=2.0, ops_per_second=100.0, p95_ms=15.0, p99_ms=18.0,
+            name="op",
+            iterations=10,
+            total_time_ms=100.0,
+            avg_time_ms=10.0,
+            min_time_ms=5.0,
+            max_time_ms=20.0,
+            median_time_ms=9.0,
+            std_dev_ms=2.0,
+            ops_per_second=100.0,
+            p95_ms=15.0,
+            p99_ms=18.0,
         )
         d = r.to_dict()
         assert d["name"] == "op"
@@ -58,11 +75,20 @@ class TestBenchmarkResult:
 class TestLoadTestResult:
     def test_to_dict_truncates_errors(self):
         r = LoadTestResult(
-            name="load", concurrent_workers=2, total_requests=5,
-            successful_requests=3, failed_requests=2, total_time_ms=100.0,
-            requests_per_second=50.0, avg_latency_ms=10.0, min_latency_ms=1.0,
-            max_latency_ms=20.0, median_latency_ms=9.0, p95_latency_ms=15.0,
-            p99_latency_ms=18.0, success_rate=0.6,
+            name="load",
+            concurrent_workers=2,
+            total_requests=5,
+            successful_requests=3,
+            failed_requests=2,
+            total_time_ms=100.0,
+            requests_per_second=50.0,
+            avg_latency_ms=10.0,
+            min_latency_ms=1.0,
+            max_latency_ms=20.0,
+            median_latency_ms=9.0,
+            p95_latency_ms=15.0,
+            p99_latency_ms=18.0,
+            success_rate=0.6,
             errors=[f"e{i}" for i in range(20)],
         )
         d = r.to_dict()
@@ -93,27 +119,39 @@ class TestBenchmarkRun:
         def grab(*a, **k):
             seen.append((a, k))
 
-        with patch("sloughgpt_sdk.benchmarks.time.perf_counter", side_effect=[0.0, 0.01, 0.02, 0.02, 0.04]):
+        with patch(
+            "sloughgpt_sdk.benchmarks.time.perf_counter", side_effect=[0.0, 0.01, 0.02, 0.02, 0.04]
+        ):
             Benchmark().run(
-                "op", func=grab, iterations=2, warmup=1,
-                args=(1, 2), kwargs={"x": 3},
+                "op",
+                func=grab,
+                iterations=2,
+                warmup=1,
+                args=(1, 2),
+                kwargs={"x": 3},
             )
         assert seen == [((1, 2), {"x": 3})] * 3
 
     def test_run_single_iteration_zero_stdev(self):
         with patch("sloughgpt_sdk.benchmarks.time.perf_counter", side_effect=[0.0, 0.01, 0.03]):
             result = Benchmark().run(
-                "op", func=lambda: None, iterations=1, warmup=0, kwargs={},
+                "op",
+                func=lambda: None,
+                iterations=1,
+                warmup=0,
+                kwargs={},
             )
         assert result.std_dev_ms == 0
 
     def test_compare_sorts_by_avg(self):
         def slow():
             import time
+
             time.sleep(0.002)
 
         def fast():
             import time
+
             time.sleep(0.0005)
 
         results = Benchmark().compare("cmp", {"slow": slow, "fast": fast}, iterations=1)
@@ -137,8 +175,10 @@ class TestLoadTester:
             calls.append(1)
 
         result = LoadTester().load_test(
-            name="bench", request_func=ok,
-            concurrent_workers=3, requests_per_worker=4,
+            name="bench",
+            request_func=ok,
+            concurrent_workers=3,
+            requests_per_worker=4,
         )
         assert len(calls) == 12
         assert result.concurrent_workers == 3
@@ -155,8 +195,10 @@ class TestLoadTester:
             raise RuntimeError("boom")
 
         result = LoadTester().load_test(
-            name="bench", request_func=flaky,
-            concurrent_workers=2, requests_per_worker=2,
+            name="bench",
+            request_func=flaky,
+            concurrent_workers=2,
+            requests_per_worker=2,
         )
         assert result.total_requests == 4
         assert result.failed_requests == 4
@@ -165,8 +207,10 @@ class TestLoadTester:
 
     def test_stress_test(self):
         result = LoadTester().stress_test(
-            name="stress", request_func=lambda: None,
-            duration_seconds=0.01, target_rps=1000000,
+            name="stress",
+            request_func=lambda: None,
+            duration_seconds=0.01,
+            target_rps=1000000,
         )
         assert result["name"] == "stress"
         assert result["total_requests"] >= 1
@@ -179,16 +223,20 @@ class TestLoadTester:
             raise ValueError("nope")
 
         result = LoadTester().stress_test(
-            name="stress", request_func=bad,
-            duration_seconds=0.01, target_rps=1000000,
+            name="stress",
+            request_func=bad,
+            duration_seconds=0.01,
+            target_rps=1000000,
         )
         assert result["failed"] == result["total_requests"]
         assert result["errors"] == ["nope"] or len(result["errors"]) >= 1
 
     def test_stress_test_pacing_sleeps(self):
         result = LoadTester().stress_test(
-            name="pacing", request_func=lambda: None,
-            duration_seconds=0.4, target_rps=10,
+            name="pacing",
+            request_func=lambda: None,
+            duration_seconds=0.4,
+            target_rps=10,
         )
         assert result["total_requests"] >= 2
         assert result["requests_per_second"] > 0
@@ -208,13 +256,13 @@ class TestProfiler:
         report = prof.get_report()
         assert "add" in report
         assert report["add"]["calls"] == 2
-        assert report["add"]["total_ms"] == pytest.approx(
-            report["add"]["avg_ms"] * 2)
+        assert report["add"]["total_ms"] == pytest.approx(report["add"]["avg_ms"] * 2)
         assert report["add"]["min_ms"] <= report["add"]["avg_ms"] <= report["add"]["max_ms"]
 
     def test_profiler_context_manager(self):
         prof = Profiler()
         with prof:
+
             @prof.profile("ctx")
             def work():
                 return "x"

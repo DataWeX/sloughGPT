@@ -47,6 +47,7 @@ module.exports = {
         },
         success: 'var(--success)',
         warning: 'var(--warning)',
+        info: 'var(--info)',
         chart: {
           1: 'var(--chart-1)',
           2: 'var(--chart-2)',

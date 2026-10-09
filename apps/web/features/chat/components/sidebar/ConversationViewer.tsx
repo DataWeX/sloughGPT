@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, memo } from 'react'
 import { cn, IconX, IconTrash, IconThumbUp, IconThumbDown, IconChat, IconCopy, IconCheck, IconDownload } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
+import { formatDateTimeUS } from '@/lib/time-format'
 
 interface ViewerMessage {
   id: string
@@ -21,17 +22,7 @@ interface ConversationViewerProps {
   onDelete?: () => void
 }
 
-function formatTimestamp(timestamp: number): string {
-  const date = new Date(timestamp)
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  })
-}
-
-export function ConversationViewer({
+export const ConversationViewer = memo(function ConversationViewer({
   isOpen,
   onClose,
   messages: initialMessages,
@@ -123,7 +114,7 @@ export function ConversationViewer({
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative z-10 flex h-[90dvh] w-[90vw] max-w-3xl flex-col rounded-lg border border-border bg-background shadow-2xl">
+      <div className="relative z-10 flex h-[90dvh] w-[90vw] max-w-3xl flex-col min-h-0 rounded-lg border border-border bg-background shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 id="viewer-title" className="truncate text-base font-semibold text-foreground">{title}</h2>
@@ -202,7 +193,7 @@ export function ConversationViewer({
                         </span>
                       )}
                       <span className="text-xs text-muted-foreground/60">
-                        {formatTimestamp(message.timestamp)}
+                        {formatDateTimeUS(message.timestamp)}
                       </span>
                     </div>
                   </div>
@@ -211,6 +202,7 @@ export function ConversationViewer({
                   </div>
                   <div className="flex items-center gap-2 mt-2 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button
+                      type="button"
                       onClick={async () => {
                         await navigator.clipboard.writeText(message.content)
                         setCopiedId(message.id)
@@ -244,6 +236,6 @@ export function ConversationViewer({
       </div>
     </div>
   )
-}
+})
 
 export type { ViewerMessage, ConversationViewerProps }

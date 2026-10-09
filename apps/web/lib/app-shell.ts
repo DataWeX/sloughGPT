@@ -9,10 +9,11 @@
 
 import { createStore } from 'zustand/vanilla'
 import { persist } from 'zustand/middleware'
+import { trackEvent } from '@/lib/dev-log'
 
 export interface TrainingShellState {
   phase: 'idle' | 'TRAINING' | 'complete' | 'error'
-  method: 'slnet' | 'hf' | 'turbo' | null
+  method: 'slonet' | 'hf' | 'turbo' | null
   loss: number | null
   progress: number
   epoch: number
@@ -33,6 +34,13 @@ export interface TrainingShellState {
   jobId: string | null
   visualOutputDir: string | null
   visualSouPath: string | null
+  avgQuality: number | null
+  dataQuality: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number } | null
+  finetunedModelPath: string | null
+  finetunedModelLoss: number | null
+  distillCheckpoint: string | null
+  distillFinalLoss: number | null
+  distillEpochs: number | null
 }
 
 export interface AppShellState {
@@ -68,7 +76,14 @@ const DEFAULT_TRAINING: TrainingShellState = {
   error: null,
   jobId: null,
   visualOutputDir: null,
+  avgQuality: null,
+  dataQuality: null,
   visualSouPath: null,
+  finetunedModelPath: null,
+  finetunedModelLoss: null,
+  distillCheckpoint: null,
+  distillFinalLoss: null,
+  distillEpochs: null,
 }
 
 export const appShellStore = createStore<AppShellState>()(
@@ -79,19 +94,30 @@ export const appShellStore = createStore<AppShellState>()(
       lastActivity: Date.now(),
 
       setTraining: (partial) =>
-        set((state) => ({
-          training: { ...state.training, ...partial },
-          lastActivity: Date.now(),
-        })),
+        set((state) => {
+          if (partial.phase !== undefined && partial.phase !== state.training.phase) {
+            trackEvent('training_phase_changed', { from: state.training.phase, to: partial.phase, method: partial.method ?? state.training.method })
+          }
+          return {
+            training: { ...state.training, ...partial },
+            lastActivity: Date.now(),
+          }
+        }),
 
       resetTraining: () =>
-        set((state) => ({
-          training: { ...DEFAULT_TRAINING },
-          lastActivity: Date.now(),
-        })),
+        set((state) => {
+          trackEvent('training_reset', { phase: state.training.phase })
+          return {
+            training: { ...DEFAULT_TRAINING },
+            lastActivity: Date.now(),
+          }
+        }),
 
       setLastActiveRoute: (route) =>
-        set({ lastActiveRoute: route, lastActivity: Date.now() }),
+        set((state) => {
+          trackEvent('route_changed', { from: state.lastActiveRoute, to: route })
+          return { lastActiveRoute: route, lastActivity: Date.now() }
+        }),
     }),
     {
       name: 'app-shell',

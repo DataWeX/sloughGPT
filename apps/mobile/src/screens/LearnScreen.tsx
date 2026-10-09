@@ -337,15 +337,15 @@ export function LearnScreen() {
         <YStack flex={1} paddingHorizontal={16} gap={12}>
           {/* Stats */}
           <XStack gap={8}>
-            <YStack flex={1} padding={10} borderRadius={8} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={2} alignItems="center">
+            <YStack flex={1} padding={10} borderRadius={8} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={2} alignItems="center">
               <Text fontSize={18} fontWeight="700" color={colors.text}>{status?.knowledge_count ?? facts.length}</Text>
               <Text fontSize={10} color={colors.textMuted}>Facts</Text>
             </YStack>
-            <YStack flex={1} padding={10} borderRadius={8} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={2} alignItems="center">
+            <YStack flex={1} padding={10} borderRadius={8} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={2} alignItems="center">
               <Text fontSize={18} fontWeight="700" color={colors.text}>{status?.tokens ?? 0}</Text>
               <Text fontSize={10} color={colors.textMuted}>Tokens</Text>
             </YStack>
-            <YStack flex={1} padding={10} borderRadius={8} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={2} alignItems="center">
+            <YStack flex={1} padding={10} borderRadius={8} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={2} alignItems="center">
               <Text fontSize={18} fontWeight="700" color={colors.text}>{status?.feeds ?? feeds.length}</Text>
               <Text fontSize={10} color={colors.textMuted}>Feeds</Text>
             </YStack>

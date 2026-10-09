@@ -4,18 +4,20 @@ Tests for the user adapters router — CRUD, merge, aggregate, quality, prune.
 Uses a standalone FastAPI app with only the router under test.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.user_adapters import router
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
-STORE_TARGET = "domains.feedback.get_per_user_lora"
+STORE_TARGET = "domain.feedback.get_per_user_lora"
 
 
 def _make_store():
@@ -68,6 +70,9 @@ class TestListAdapters:
 
     @patch(STORE_TARGET)
     def test_list_adapters_import_error(self, mock_get):
+        import apps.api.server.routers.user_adapters as mod
+
+        mod._list_cache = None
         mock_get.side_effect = ImportError("no module")
         resp = client.get("/user-adapters")
         assert resp.status_code == 503
@@ -115,17 +120,17 @@ class TestUpdateAdapter:
         store = _make_store()
         mock_get.return_value = store
 
-        resp = client.post("/user-adapters/user1/update", json={"rating": "good"})
+        resp = client.post("/user-adapters/user1/update", json={"rating": "thumbs_up"})
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "updated"
         assert data["user_id"] == "user1"
-        store.update_adapter.assert_called_once_with("user1", rating="good")
+        store.update_adapter.assert_called_once_with("user1", feedback_signal=1.0)
 
     @patch(STORE_TARGET)
     def test_update_adapter_import_error(self, mock_get):
         mock_get.side_effect = ImportError("no module")
-        resp = client.post("/user-adapters/user1/update", json={"rating": "good"})
+        resp = client.post("/user-adapters/user1/update", json={"rating": "thumbs_up"})
         assert resp.status_code == 503
 
 
@@ -287,7 +292,9 @@ class TestPruneAdapters:
         store = _make_store()
         mock_get.return_value = store
 
-        resp = client.post("/user-adapters/prune", json={"min_feedback_count": 3, "max_age_days": 15})
+        resp = client.post(
+            "/user-adapters/prune", json={"min_feedback_count": 3, "max_age_days": 15}
+        )
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["status"] == "pruned"

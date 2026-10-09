@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-import pytest
-from domains.cognitive.core import CognitiveCore, ThinkingMode, ReasoningType
-from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph, RelationType
-from domains.cognitive.reasoning.deep import (
-    WorkingMemory,
+from domain.cognition._internal.core import CognitiveCore, ReasoningType, ThinkingMode
+from domain.cognition._internal.knowledge_graph_v2 import KnowledgeGraph, RelationType
+from domain.cognition._internal.reasoning.deep import (
     FormalLogicEngine,
     Predicate,
     Term,
     WellFormedFormula,
+    WorkingMemory,
 )
 
 # ── CognitiveCore ─────────────────────────────────────────────────────────

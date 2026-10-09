@@ -1,13 +1,12 @@
 """
 Chat commands - Interactive chat and one-shot generation.
 """
-import sys
+
 import os
 import tempfile
 from pathlib import Path
-from typing import Optional
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from utils.formatting import truncate
@@ -16,10 +15,15 @@ from utils.formatting import truncate
 def cmd_chat(args):
     """Interactive chat against the API."""
     import subprocess
+
     import requests
     from requests.exceptions import ConnectionError as RequestsConnectionError
-
-    from utils.helpers import chat_repository_root, chat_uvicorn_bind_host, chat_find_available_port, chat_wait_for_health
+    from utils.helpers import (
+        chat_find_available_port,
+        chat_repository_root,
+        chat_uvicorn_bind_host,
+        chat_wait_for_health,
+    )
 
     base_url = f"http://{args.host}:{args.port}".rstrip("/")
     server_proc = None
@@ -31,9 +35,7 @@ def cmd_chat(args):
         try:
             r = requests.get(f"{base_url}/health", timeout=3)
             return r.status_code == 200
-        except RequestsConnectionError:
-            return False
-        except Exception:
+        except requests.RequestException:
             return False
 
     def try_load_model(model_id: str) -> bool:
@@ -86,7 +88,8 @@ def cmd_chat(args):
         log_f.close()
 
         server_dir = repo / "apps" / "api" / "server"
-        from domains.shared import find_server_python
+        from domain.shared import find_server_python
+
         cmd = [
             find_server_python(repo),
             "-m",
@@ -158,8 +161,11 @@ def cmd_chat(args):
     log.blank()
 
     try:
+        from domain.shell._internal.io import ConsoleIO
+
+        io = ConsoleIO()
         while True:
-            user_input = input("You: ")
+            user_input = io.read("You: ")
             if user_input.lower() in ["quit", "exit", "q"]:
                 break
 
@@ -178,7 +184,11 @@ def cmd_chat(args):
                     data = response.json()
                     text = data.get("text", data)
                     print(f"\nSloughGPT: {text}\n")
-                    if isinstance(text, str) and "No model loaded" in text and not printed_no_model_hint:
+                    if (
+                        isinstance(text, str)
+                        and "No model loaded" in text
+                        and not printed_no_model_hint
+                    ):
                         log.info("Load a model first: --auto-model gpt2")
                         printed_no_model_hint = True
                 else:
@@ -206,9 +216,10 @@ def cmd_chat(args):
 
 def cmd_generate(args):
     """One-shot text generation."""
-    from pathlib import Path
-    from domains.core import SloEngine
+
     from utils.helpers import local_soul_candidate_paths
+
+    from domain.core._internal.soul import SloEngine
 
     models_dir = Path("models")
 
@@ -228,12 +239,23 @@ def cmd_generate(args):
             log.success(f"Loaded soul: {soul.name} from {path.name}")
             loaded = True
             return True
-        except Exception as e:
+        except Exception:
             return False
 
-    for sou_path in local_soul_candidate_paths(models_dir):
-        if _try_load_sou(sou_path):
-            break
+    explicit = getattr(args, "model", None)
+    if isinstance(explicit, str) and explicit.strip():
+        cand = Path(explicit)
+        if not cand.is_file():
+            cand = models_dir / cand
+        if _try_load_sou(cand):
+            log.key_value("Model", str(cand))
+        else:
+            log.warning(f"Could not load explicit model: {explicit}")
+
+    if not loaded:
+        for sou_path in local_soul_candidate_paths(models_dir):
+            if _try_load_sou(sou_path):
+                break
 
     if not loaded:
         log.warning("No model found, using demo mode")

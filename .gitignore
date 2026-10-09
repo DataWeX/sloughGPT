@@ -3,6 +3,9 @@ apps/mobile/ios/Pods/
 apps/mobile/ios/build/
 apps/mobile/ios/
 
+# Releases
+releases/
+
 # Design docs (not committed)
 LLM.md
 
@@ -94,6 +97,10 @@ venv.bak/
 !.vscode/settings.json
 !.vscode/tasks.json
 .idea/
+
+# Training history (user data, not source)
+~/.config/sloughgpt/training_history.jsonl
+~/.config/sloughgpt/settings.json
 *.swp
 *.swo
 *~
@@ -134,8 +141,8 @@ data/sample.jsonl
 
 # Data directories (repo root only — do not ignore web/app/(app)/datasets)
 /datasets/
-runs/
-out/
+/runs/
+/out/
 
 # Cache directories
 .cache/
@@ -215,11 +222,17 @@ data/
 *.soul
 *.gguf
 *.bin
+*.img
 *.db
 *.sqlite
+boot.img
+serveo_ecdsa
+serveo_ecdsa.pub
+t.png
 
 # Compiled C extensions (build artifacts)
 *.so
+*.so.buildflags
 
 # Build output
 **/target/
@@ -239,3 +252,17 @@ apps/mobile/android/app/build/
 apps/mobile/android/app/debug.keystore
 apps/mobile/android/gradle/wrapper/gradle-wrapper.jar
 apps/mobile/android/gradlew
+
+# Build artifacts
+releases/
+x
+y
+
+# Dev notes — derived from journal, not source of truth
+.dev-notes/*.md
+# Hoplite platform metadata (per-thread sandbox artifacts)
+.hoplite/
+
+# avion journey-engine test artifacts
+arken_output/
+.resilient-state/

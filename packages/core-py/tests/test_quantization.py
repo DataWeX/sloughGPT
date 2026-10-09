@@ -16,30 +16,34 @@ Tests cover:
   - walk_slo_linears / walk_hf_linears with mock models
 """
 
-import tempfile
 from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
-from domains.infrastructure.quantization import (
+from domain.infrastructure._internal.quantization import (
     Quantine,
-    QuantMeta,
     QuantizedLinear,
+    QuantMeta,
     TensorInfo,
     _cosine_similarity,
     _dequantize,
+    _ensure_2d_packed,
+    _int4_numpy_fallback,
+    _numpy_fallback,
     _pack_int4,
     _unpack_int4,
+    apply_adaptive_quantization,
     dequantize_kv_tensor,
-    int8_matmul,
     int4_matmul,
+    int4_quantized_linear,
+    int8_matmul,
     quantize_activation,
     quantize_kv_tensor,
     quantize_state_dict,
     quantized_linear,
-    int4_quantized_linear,
+    should_quantize_row,
     walk_hf_linears,
     walk_slo_linears,
 )
@@ -61,8 +65,13 @@ class TestTensorInfo:
     def test_quantized_dequantizes_correctly(self):
         arr = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         meta = QuantMeta(
-            scale=1.0, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(3,), original_dtype="float32",
+            scale=1.0,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(3,),
+            original_dtype="float32",
         )
         quantized = np.array([1, 2, 3], dtype=np.int8)
         info = TensorInfo(name="test", array=quantized, meta=meta)
@@ -78,16 +87,26 @@ class TestTensorInfo:
 
     def test_shape_from_meta(self):
         meta = QuantMeta(
-            scale=1.0, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(10, 20), original_dtype="float32",
+            scale=1.0,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10, 20),
+            original_dtype="float32",
         )
         info = TensorInfo(name="test", array=np.zeros((10,), dtype=np.int8), meta=meta)
         assert info.shape == (10, 20)
 
     def test_dtype_from_meta(self):
         meta = QuantMeta(
-            scale=1.0, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(3,), original_dtype="float64",
+            scale=1.0,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(3,),
+            original_dtype="float64",
         )
         info = TensorInfo(name="test", array=np.zeros(3, dtype=np.int8), meta=meta)
         assert info.dtype == np.dtype("float64")
@@ -99,8 +118,13 @@ class TestTensorInfo:
 
     def test_compression_ratio_int8(self):
         meta = QuantMeta(
-            scale=1.0, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(100,), original_dtype="float32",
+            scale=1.0,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(100,),
+            original_dtype="float32",
         )
         quantized = np.zeros((100,), dtype=np.int8)
         info = TensorInfo(name="test", array=quantized, meta=meta)
@@ -108,8 +132,13 @@ class TestTensorInfo:
 
     def test_compression_ratio_int4(self):
         meta = QuantMeta(
-            scale=1.0, zero_point=0, bits=4, mode="symmetric",
-            dtype_code=5, original_shape=(100,), original_dtype="float32",
+            scale=1.0,
+            zero_point=0,
+            bits=4,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(100,),
+            original_dtype="float32",
         )
         quantized = np.zeros((50,), dtype=np.int8)
         info = TensorInfo(name="test", array=quantized, meta=meta)
@@ -621,7 +650,9 @@ class TestQuantizeWithScale:
         engine = Quantine(bits=8, mode="symmetric")
         arr = np.random.randn(16, 32).astype(np.float32) * 0.5
         per_channel_scale = np.abs(arr).max(axis=1) / 127.0
-        info = engine.quantize_with_scale("blocks.0.w.weight", arr, scale=per_channel_scale, zero_point=0)
+        info = engine.quantize_with_scale(
+            "blocks.0.w.weight", arr, scale=per_channel_scale, zero_point=0
+        )
         assert info.is_quantized
         assert isinstance(info.meta.scale, np.ndarray)
         deq = info.as_float()
@@ -637,9 +668,16 @@ class TestQuantMeta:
 
     def test_to_dict_from_dict_roundtrip(self):
         meta = QuantMeta(
-            scale=0.05, zero_point=10, bits=8, mode="asymmetric",
-            dtype_code=5, original_shape=(16, 32), original_dtype="float32",
-            mse=0.001, max_abs_error=0.02, cosine_sim=0.99,
+            scale=0.05,
+            zero_point=10,
+            bits=8,
+            mode="asymmetric",
+            dtype_code=5,
+            original_shape=(16, 32),
+            original_dtype="float32",
+            mse=0.001,
+            max_abs_error=0.02,
+            cosine_sim=0.99,
         )
         d = meta.to_dict()
         restored = QuantMeta.from_dict(d)
@@ -654,8 +692,13 @@ class TestQuantMeta:
     def test_to_dict_from_dict_per_channel(self):
         scale_arr = np.array([0.1, 0.2, 0.3], dtype=np.float32)
         meta = QuantMeta(
-            scale=scale_arr, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(3, 10), original_dtype="float32",
+            scale=scale_arr,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(3, 10),
+            original_dtype="float32",
         )
         d = meta.to_dict()
         assert isinstance(d["scale"], list)
@@ -665,15 +708,25 @@ class TestQuantMeta:
 
     def test_is_per_channel_true(self):
         meta = QuantMeta(
-            scale=np.array([0.1, 0.2]), zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(2, 10), original_dtype="float32",
+            scale=np.array([0.1, 0.2]),
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(2, 10),
+            original_dtype="float32",
         )
         assert meta.is_per_channel
 
     def test_is_per_channel_false(self):
         meta = QuantMeta(
-            scale=0.1, zero_point=0, bits=8, mode="symmetric",
-            dtype_code=5, original_shape=(10,), original_dtype="float32",
+            scale=0.1,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10,),
+            original_dtype="float32",
         )
         assert not meta.is_per_channel
 
@@ -794,7 +847,9 @@ class TestQuantizeStateDict:
 
         for name, info in result.items():
             if info.is_quantized:
-                assert info.meta.cosine_sim > 0.95, f"{name} cosine_sim too low: {info.meta.cosine_sim}"
+                assert info.meta.cosine_sim > 0.95, (
+                    f"{name} cosine_sim too low: {info.meta.cosine_sim}"
+                )
 
     def test_quantize_state_dict_int4(self):
         state_dict = {
@@ -924,9 +979,12 @@ class TestInt8Matmul:
         b_int8 = np.clip(np.round(b_fp / b_scale) + b_zp, -128, 127).astype(np.int8)
 
         result = int8_matmul(
-            a_int8, b_int8,
-            a_scale=a_scale, b_scale=b_scale,
-            a_zero_point=a_zp, b_zero_point=b_zp,
+            a_int8,
+            b_int8,
+            a_scale=a_scale,
+            b_scale=b_scale,
+            a_zero_point=a_zp,
+            b_zero_point=b_zp,
         )
         expected = a_fp @ b_fp.T
         np.testing.assert_allclose(result, expected, rtol=0.2, atol=1.0)
@@ -990,7 +1048,7 @@ class TestWalkLinears:
     """Test model layer walking functions."""
 
     def test_walk_slo_linears(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         FakeSloLinear = type("SloLinear", (), {})
 
@@ -1013,7 +1071,7 @@ class TestWalkLinears:
 
         mock_mod = MagicMock()
         mock_mod.SloLinear = FakeSloLinear
-        with patch.dict("sys.modules", {"domains.training.slonet": mock_mod}):
+        with patch.dict("sys.modules", {"domain.training._internal.slonet": mock_mod}):
             result = walk_slo_linears(model)
         assert "lm_head" in result
         assert "blocks.0.attn.W_q" in result
@@ -1021,11 +1079,11 @@ class TestWalkLinears:
         assert len(result) == 8
 
     def test_walk_slo_linears_empty(self):
-        from unittest.mock import patch, MagicMock
+        from unittest.mock import MagicMock, patch
 
         mock_mod = MagicMock()
         mock_mod.SloLinear = type("SloLinear", (), {})
-        with patch.dict("sys.modules", {"domains.training.slonet": mock_mod}):
+        with patch.dict("sys.modules", {"domain.training._internal.slonet": mock_mod}):
             model = SimpleNamespace(layers=[], blocks=[])
             result = walk_slo_linears(model)
         assert result == {}
@@ -1058,6 +1116,134 @@ class TestWalkLinears:
         model = FakeModule()
         result = walk_hf_linears(model)
         assert result == {}
+
+
+# ---------------------------------------------------------------------------
+# Adaptive quantization
+# ---------------------------------------------------------------------------
+class TestAdaptiveQuantization:
+    """Test adaptive int8 dispatch that only quantizes where int8 beats fp32."""
+
+    _MOCK_MOD = None
+
+    def _slo_linear(self, n, k, quantized=False):
+        """Build a fake SloLinear-compatible module with the fields used."""
+        from unittest.mock import MagicMock
+
+        w = MagicMock()
+        w.data = np.zeros((n, k), dtype=np.float32)
+        m = MagicMock()
+        m.weight = w
+        m._quant_info = MagicMock() if quantized else None
+        return m
+
+    @pytest.fixture(autouse=True)
+    def _patch_slonet(self):
+        """Expose the fake SloLinear class to walk_slo_linears."""
+        from unittest.mock import MagicMock, patch
+
+        FakeSloLinear = MagicMock()
+        mock_mod = MagicMock()
+        mock_mod.SloLinear = FakeSloLinear
+        with patch.dict("sys.modules", {"domain.training._internal.slonet": mock_mod}):
+            yield FakeSloLinear
+
+    def test_should_quantize_small_false(self):
+        # Small embed dims must stay fp32 (int8 loses on AVX512 numpy).
+        assert should_quantize_row(96) is False
+        assert should_quantize_row(256) is False
+        assert should_quantize_row(511) is False
+
+    def test_should_quantize_large_true(self):
+        # Large inner dims cross the memory-bound threshold and should quantize.
+        assert should_quantize_row(1024) is True
+        assert should_quantize_row(4096) is True
+
+    def test_should_quantize_respects_crossover(self):
+        assert should_quantize_row(300, crossover_k=256) is True
+        assert should_quantize_row(200, crossover_k=256) is False
+
+    def test_no_kernel_means_never_quantize(self, _patch_slonet):
+        # When the AVX2 kernel is not available, never vote to quantize.
+        from unittest.mock import patch
+
+        from domain.infrastructure._internal import quantization as q
+
+        self._slo_linear(4, 2048)
+        with patch.object(q, "_has_int8_kernel", return_value=False):
+            assert should_quantize_row(2048) is False
+
+    def test_apply_small_model_stays_fp32(self, _patch_slonet):
+        # A small-embed model: every layer below crossover, none quantized.
+        linears = {}
+        for name, n, k in [
+            ("lm_head", 65, 96),
+            ("blocks.0.attn.W_q", 96, 96),
+            ("blocks.0.ff.w1", 96, 96),
+            ("blocks.1.attn.W_k", 96, 96),
+        ]:
+            linears[name] = self._slo_linear(n, k)
+
+        from unittest.mock import patch
+
+        from domain.infrastructure._internal import quantization as q
+
+        class FakeModel:
+            pass
+
+        fm = FakeModel()
+        with patch.object(q, "walk_slo_linears", return_value=linears):
+            res = apply_adaptive_quantization(fm, bits=8, mode="symmetric")
+
+        assert res["quantized"] == 0
+        assert res["total"] == 4
+        assert res["left_fp32"] == 4
+        # No layer got a quantized weight set.
+        for m in linears.values():
+            assert m.set_quantized_weight.call_count == 0
+
+    def test_apply_large_model_quantizes_big_layers(self, _patch_slonet):
+        # Mixed model: big layers quantized, small layer left fp32.
+        linears = {}
+        for name, n, k, qz in [
+            ("lm_head", 65, 1024, False),
+            ("blocks.0.attn.W_q", 1024, 1024, False),
+            ("blocks.0.ff.w1", 1024, 4096, False),
+            ("blocks.0.attn.W_k", 64, 64, False),  # small -> stays fp32
+        ]:
+            linears[name] = self._slo_linear(n, k, qz)
+
+        from unittest.mock import patch
+
+        from domain.infrastructure._internal import quantization as q
+
+        fm = SimpleNamespace()
+        with patch.object(q, "walk_slo_linears", return_value=linears):
+            res = apply_adaptive_quantization(fm, bits=8, mode="symmetric")
+
+        assert res["total"] == 4
+        assert res["left_fp32"] == 1
+        assert res["quantized"] == 3
+        # big layers had set_quantized_weight called; small one did not.
+        assert linears["blocks.0.attn.W_q"].set_quantized_weight.call_count == 1
+        assert linears["blocks.0.attn.W_k"].set_quantized_weight.call_count == 0
+
+    def test_apply_skips_already_quantized(self, _patch_slonet):
+        linears = {
+            "lm_head": self._slo_linear(65, 2048, quantized=True),
+            "blocks.0.attn.W_q": self._slo_linear(2048, 2048, quantized=False),
+        }
+        from unittest.mock import patch
+
+        from domain.infrastructure._internal import quantization as q
+
+        fm = SimpleNamespace()
+        with patch.object(q, "walk_slo_linears", return_value=linears):
+            res = apply_adaptive_quantization(fm, bits=8, mode="symmetric")
+
+        assert res["quantized"] == 2  # already-quantized lm_head counts, no re-quantize
+        assert linears["lm_head"].set_quantized_weight.call_count == 0
+        assert linears["blocks.0.attn.W_q"].set_quantized_weight.call_count == 1
 
 
 # ---------------------------------------------------------------------------
@@ -1215,7 +1401,7 @@ class TestQuantizedLinear:
 
     def test_from_linear_extraction(self):
         try:
-            import torch
+            import torch  # noqa: F401
             import torch.nn as nn
         except ImportError:
             pytest.skip("torch not installed")
@@ -1232,7 +1418,7 @@ class TestQuantizedLinear:
 
     def test_from_linear_no_bias(self):
         try:
-            import torch
+            import torch  # noqa: F401
             import torch.nn as nn
         except ImportError:
             pytest.skip("torch not installed")
@@ -1288,9 +1474,12 @@ class TestQuantizedLinear:
         engine = Quantine(bits=8, mode="symmetric")
         info = engine.quantize("test.weight", w)
         ql = QuantizedLinear(
-            weight_int8=info.array, scale=info.meta.scale,
-            zero_point=info.meta.zero_point, bias=None,
-            bits=info.meta.bits, original_shape=info.meta.original_shape,
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=None,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
             mode=info.meta.mode,
         )
         x = np.random.randn(2, 16).astype(np.float32)
@@ -1379,3 +1568,427 @@ class TestSuggestFormat:
     def test_low_quality_threshold_prefers_int8(self):
         result = Quantine.suggest_format(quality_threshold=0.5, min_speed_ratio=0.1)
         assert "benchmark" in result
+
+    def test_1d_weight_reshaped(self):
+        w = np.random.randn(64).astype(np.float32)
+        result = Quantine.suggest_format(sample_weight=w)
+        assert result["format"] in ("fp32", "int8", "int4")
+
+
+# ---------------------------------------------------------------------------
+# _numpy_fallback / _int4_numpy_fallback
+# ---------------------------------------------------------------------------
+class TestFallbackGEMM:
+    """Test pure-numpy GEMM fallback functions."""
+
+    def test_numpy_fallback_correctness(self):
+        a = np.array([[1, 2], [3, 4]], dtype=np.int8)
+        b = np.array([[5, 6], [7, 8]], dtype=np.int8)
+        result = _numpy_fallback(a, b)
+        expected = a.astype(np.int32) @ b.astype(np.int32).T
+        np.testing.assert_array_equal(result, expected)
+
+    def test_numpy_fallback_larger(self):
+        np.random.seed(99)
+        a = np.random.randint(-10, 10, (4, 8)).astype(np.int8)
+        b = np.random.randint(-10, 10, (3, 8)).astype(np.int8)
+        result = _numpy_fallback(a, b)
+        expected = a.astype(np.int32) @ b.astype(np.int32).T
+        np.testing.assert_array_equal(result, expected)
+
+    def test_int4_numpy_fallback_correctness(self):
+        arr = np.array([1, -3, 7, -8], dtype=np.int8)
+        packed = _pack_int4(arr)
+        B_packed = packed.reshape(1, -1)
+        K = 4
+        A = np.array([[1, 0, 1, 0]], dtype=np.int8)
+        result = _int4_numpy_fallback(A, B_packed, K)
+        assert result.shape == (1, 1)
+        expected_val = 1 * 1 + 0 * (-3) + 1 * 7 + 0 * (-8)
+        assert result[0, 0] == expected_val
+
+    def test_int4_numpy_fallback_roundtrip(self):
+        np.random.seed(77)
+        arr = np.random.randint(-8, 7, (3, 8)).astype(np.int8)
+        packed = _pack_int4(arr.ravel()).reshape(3, 4)
+        A = np.random.randint(-5, 5, (2, 8)).astype(np.int8)
+        result = _int4_numpy_fallback(A, packed, 8)
+        unpacked = np.zeros((3, 8), dtype=np.int8)
+        for j in range(3):
+            for k in range(8):
+                if k % 2 == 0:
+                    nib = int(packed[j, k // 2]) & 0x0F
+                else:
+                    nib = (int(packed[j, k // 2]) >> 4) & 0x0F
+                unpacked[j, k] = np.int8((nib ^ 8) - 8)
+        expected = A.astype(np.int32) @ unpacked.astype(np.int32).T
+        np.testing.assert_array_equal(result, expected)
+
+
+# ---------------------------------------------------------------------------
+# _ensure_2d_packed
+# ---------------------------------------------------------------------------
+class TestEnsure2dPacked:
+    """Test _ensure_2d_packed reshaping."""
+
+    def test_1d_to_2d(self):
+        packed = np.zeros(16, dtype=np.int8)
+        result = _ensure_2d_packed(packed, orig_k=8)
+        assert result.shape == (4, 4)
+
+    def test_already_2d(self):
+        packed = np.zeros((4, 4), dtype=np.int8)
+        result = _ensure_2d_packed(packed, orig_k=8)
+        assert result.shape == (4, 4)
+
+    def test_1d_odd_k(self):
+        packed = np.zeros(6, dtype=np.int8)
+        result = _ensure_2d_packed(packed, orig_k=4)
+        assert result.shape == (3, 2)
+
+
+# ---------------------------------------------------------------------------
+# int4_matmul direct tests
+# ---------------------------------------------------------------------------
+class TestInt4Matmul:
+    """Test int4 matrix multiplication directly."""
+
+    def test_int4_matmul_symmetric(self):
+        np.random.seed(42)
+        M, K, N = 2, 8, 4
+        a_fp = np.random.randn(M, K).astype(np.float32)
+        b_fp = np.random.randn(N, K).astype(np.float32)
+
+        a_scale = np.max(np.abs(a_fp)) / 127.0
+        b_scale = np.max(np.abs(b_fp)) / 7.0
+
+        a_int8 = np.clip(np.round(a_fp / a_scale), -128, 127).astype(np.int8)
+        b_int4 = np.clip(np.round(b_fp / b_scale), -8, 7).astype(np.int8)
+        b_packed = _pack_int4(b_int4.ravel()).reshape(N, K // 2).astype(np.int8)
+
+        result = int4_matmul(
+            a_int8,
+            b_packed,
+            a_scale=a_scale,
+            b_scale=b_scale,
+            orig_k=K,
+        )
+        expected = a_fp @ b_fp.T
+        np.testing.assert_allclose(result, expected, rtol=0.2, atol=1.0)
+
+    def test_int4_matmul_asymmetric(self):
+        np.random.seed(42)
+        M, K, N = 2, 8, 4
+        a_fp = np.random.randn(M, K).astype(np.float32) + 5.0
+        b_fp = np.random.rand(N, K).astype(np.float32) * 10.0
+
+        a_range = a_fp.max() - a_fp.min()
+        b_range = b_fp.max() - b_fp.min()
+        a_scale = a_range / 255.0
+        b_scale = b_range / 15.0
+        a_zp = int(np.round(-128 - a_fp.min() / a_scale))
+        b_zp = int(np.round(-b_fp.min() / b_scale))
+
+        a_int8 = np.clip(np.round(a_fp / a_scale) + a_zp, -128, 127).astype(np.int8)
+        b_int4 = np.clip(np.round(b_fp / b_scale) + b_zp, 0, 15).astype(np.int8)
+        b_packed = _pack_int4(b_int4.ravel()).reshape(N, K // 2).astype(np.int8)
+
+        result = int4_matmul(
+            a_int8,
+            b_packed,
+            a_scale=a_scale,
+            b_scale=b_scale,
+            orig_k=K,
+            a_zero_point=a_zp,
+            b_zero_point=b_zp,
+        )
+        assert result.shape == (M, N)
+        assert result.dtype == np.float32
+        assert not np.any(np.isnan(result))
+
+    def test_int4_matmul_1d_packed(self):
+        np.random.seed(42)
+        K, N = 8, 4
+        a = np.random.randint(-10, 10, (2, K)).astype(np.int8)
+        b_int4 = np.random.randint(-8, 7, (N, K)).astype(np.int8)
+        b_packed = _pack_int4(b_int4.ravel()).astype(np.int8)
+
+        result = int4_matmul(a, b_packed, a_scale=1.0, b_scale=1.0, orig_k=K)
+        expected = a.astype(np.int32) @ b_int4.astype(np.int32).T
+        np.testing.assert_array_equal(result, expected.astype(np.float32))
+
+
+# ---------------------------------------------------------------------------
+# int4_quantized_linear
+# ---------------------------------------------------------------------------
+class TestInt4QuantizedLinear:
+    """Test int4_quantized_linear function."""
+
+    def test_int4_quantized_linear_basic(self):
+        np.random.seed(42)
+        M, K, N = 4, 16, 8
+        x = np.random.randn(M, K).astype(np.float32)
+        w = np.random.randn(N, K).astype(np.float32) * 0.02
+
+        w_scale = np.max(np.abs(w)) / 7.0
+        w_int4 = np.clip(np.round(w / w_scale), -8, 7).astype(np.int8)
+        w_packed = _pack_int4(w_int4.ravel()).reshape(N, K // 2).astype(np.int8)
+
+        result = int4_quantized_linear(
+            x, w_packed, weight_scale=w_scale, weight_zero_point=0, orig_k=K
+        )
+        assert result.shape == (M, N)
+
+    def test_int4_quantized_linear_with_bias(self):
+        np.random.seed(42)
+        M, K, N = 2, 8, 4
+        x = np.random.randn(M, K).astype(np.float32)
+        w = np.random.randn(N, K).astype(np.float32) * 0.02
+        b = np.random.randn(N).astype(np.float32) * 0.01
+
+        w_scale = np.max(np.abs(w)) / 7.0
+        w_int4 = np.clip(np.round(w / w_scale), -8, 7).astype(np.int8)
+        w_packed = _pack_int4(w_int4.ravel()).reshape(N, K // 2).astype(np.int8)
+
+        result = int4_quantized_linear(
+            x, w_packed, weight_scale=w_scale, weight_zero_point=0, orig_k=K, bias=b
+        )
+        assert result.shape == (M, N)
+
+    def test_int4_quantized_linear_asymmetric(self):
+        np.random.seed(42)
+        M, K, N = 2, 8, 4
+        x = np.random.randn(M, K).astype(np.float32)
+        w = np.random.rand(N, K).astype(np.float32) * 10.0
+
+        w_range = w.max() - w.min()
+        w_scale = w_range / 15.0
+        w_zp = int(np.round(-w.min() / w_scale))
+        w_int4 = np.clip(np.round(w / w_scale) + w_zp, 0, 15).astype(np.int8)
+        w_packed = _pack_int4(w_int4.ravel()).reshape(N, K // 2).astype(np.int8)
+
+        result = int4_quantized_linear(
+            x, w_packed, weight_scale=w_scale, weight_zero_point=w_zp, orig_k=K
+        )
+        assert result.shape == (M, N)
+
+    def test_int4_quantized_linear_1d_packed(self):
+        np.random.seed(42)
+        M, K, N = 2, 8, 4
+        x = np.random.randn(M, K).astype(np.float32)
+        w = np.random.randn(N, K).astype(np.float32) * 0.02
+
+        w_scale = np.max(np.abs(w)) / 7.0
+        w_int4 = np.clip(np.round(w / w_scale), -8, 7).astype(np.int8)
+        w_packed = _pack_int4(w_int4.ravel()).astype(np.int8)
+
+        result = int4_quantized_linear(
+            x, w_packed, weight_scale=w_scale, weight_zero_point=0, orig_k=K
+        )
+        assert result.shape == (M, N)
+
+
+# ---------------------------------------------------------------------------
+# QuantizedLinear.dequantize caching
+# ---------------------------------------------------------------------------
+class TestQuantizedLinearCaching:
+    """Test QuantizedLinear dequantize caching behavior."""
+
+    def test_dequantize_caches_result(self):
+        w = np.random.randn(16, 16).astype(np.float32) * 0.02
+        engine = Quantine(bits=8, mode="symmetric")
+        info = engine.quantize("test.weight", w)
+        ql = QuantizedLinear(
+            weight_int8=info.array,
+            scale=info.meta.scale,
+            zero_point=info.meta.zero_point,
+            bias=None,
+            bits=info.meta.bits,
+            original_shape=info.meta.original_shape,
+            mode=info.meta.mode,
+        )
+        d1 = ql.dequantize()
+        d2 = ql.dequantize()
+        np.testing.assert_array_equal(d1, d2)
+        assert d1 is d2
+
+
+# ---------------------------------------------------------------------------
+# Error threshold skip behavior
+# ---------------------------------------------------------------------------
+class TestErrorThreshold:
+    """Test that high-error tensors are skipped."""
+
+    def test_skip_when_error_too_high(self):
+        arr = np.ones(100, dtype=np.float32)
+        arr[0] = 1000.0
+        engine = Quantine(bits=4, mode="asymmetric", skip_quantize_if_error_above=0.0001)
+        info = engine.quantize("test", arr)
+        assert not info.is_quantized
+
+    def test_quantize_when_error_below_threshold(self):
+        arr = np.random.randn(100).astype(np.float32) * 0.01
+        engine = Quantine(bits=8, mode="symmetric", skip_quantize_if_error_above=10.0)
+        info = engine.quantize("test", arr)
+        assert info.is_quantized
+
+
+# ---------------------------------------------------------------------------
+# dequantize_to_float
+# ---------------------------------------------------------------------------
+class TestDequantizeToFloat:
+    """Test Quantine.dequantize_to_float convenience method."""
+
+    def test_dequantize_to_float(self):
+        engine = Quantine(bits=8, mode="symmetric")
+        arr = np.random.randn(100).astype(np.float32)
+        info = engine.quantize("test", arr)
+        result = engine.dequantize_to_float(info)
+        np.testing.assert_allclose(result, arr, atol=0.1)
+
+    def test_dequantize_to_float_non_quantized(self):
+        engine = Quantine(bits=8, mode="symmetric")
+        arr = np.random.randn(50).astype(np.float32)
+        info = TensorInfo(name="test", array=arr)
+        result = engine.dequantize_to_float(info)
+        np.testing.assert_array_equal(result, arr)
+
+
+# ---------------------------------------------------------------------------
+# int8_matmul edge cases
+# ---------------------------------------------------------------------------
+class TestInt8MatmulEdgeCases:
+    """Test int8_matmul with per-channel b_scale."""
+
+    def test_per_channel_b_scale_as_ndarray(self):
+        np.random.seed(42)
+        M, K, N = 2, 8, 4
+        a = np.random.randint(-10, 10, (M, K)).astype(np.int8)
+        b = np.random.randint(-10, 10, (N, K)).astype(np.int8)
+        b_scale = np.max(np.abs(b), axis=1).astype(np.float32) / 127.0
+        result = int8_matmul(a, b, a_scale=1.0, b_scale=b_scale)
+        raw = a.astype(np.int32) @ b.astype(np.int32).T
+        expected = raw.astype(np.float32) * b_scale[np.newaxis, :]
+        np.testing.assert_allclose(result, expected, atol=1.0)
+
+    def test_single_element_matmul(self):
+        a = np.array([[5]], dtype=np.int8)
+        b = np.array([[3]], dtype=np.int8)
+        result = int8_matmul(a, b, a_scale=1.0, b_scale=1.0)
+        assert result.shape == (1, 1)
+        assert result[0, 0] == pytest.approx(15.0)
+
+
+# ---------------------------------------------------------------------------
+# QuantMeta defaults
+# ---------------------------------------------------------------------------
+class TestQuantMetaDefaults:
+    """Test QuantMeta default field values."""
+
+    def test_default_error_metrics(self):
+        meta = QuantMeta(
+            scale=0.1,
+            zero_point=0,
+            bits=8,
+            mode="symmetric",
+            dtype_code=5,
+            original_shape=(10,),
+            original_dtype="float32",
+        )
+        assert meta.mse == 0.0
+        assert meta.max_abs_error == 0.0
+        assert meta.cosine_sim == 1.0
+
+    def test_from_dict_with_defaults(self):
+        d = {
+            "scale": 0.1,
+            "zero_point": 0,
+            "bits": 8,
+            "mode": "symmetric",
+            "dtype_code": 5,
+            "original_shape": [10],
+            "original_dtype": "float32",
+        }
+        meta = QuantMeta.from_dict(d)
+        assert meta.mse == 0.0
+        assert meta.cosine_sim == 1.0
+
+
+# ---------------------------------------------------------------------------
+# Quantine constructor edge cases
+# ---------------------------------------------------------------------------
+class TestQuantineConstructor:
+    """Test Quantine initialization edge cases."""
+
+    def test_bits_4(self):
+        engine = Quantine(bits=4, mode="symmetric")
+        assert engine._bits == 4
+
+    def test_bits_8(self):
+        engine = Quantine(bits=8, mode="symmetric")
+        assert engine._bits == 8
+
+    def test_mode_asymmetric(self):
+        engine = Quantine(bits=8, mode="asymmetric")
+        assert engine._mode.value == "asymmetric"
+
+    def test_clip_percentile_stored(self):
+        engine = Quantine(bits=8, mode="symmetric", clip_percentile=0.99)
+        assert engine._clip_pct == 0.99
+
+    def test_error_threshold_stored(self):
+        engine = Quantine(bits=8, mode="symmetric", skip_quantize_if_error_above=5.0)
+        assert engine._error_threshold == 5.0
+
+
+# ---------------------------------------------------------------------------
+# _dequantize edge cases
+# ---------------------------------------------------------------------------
+class TestDequantizeEdgeCases:
+    """Test _dequantize with various inputs."""
+
+    def test_dequantize_asymmetric_int8(self):
+        q = np.array([0, 64, 127], dtype=np.int8)
+        result = _dequantize(q, scale=1.0, zero_point=0, bits=8, original_shape=(3,))
+        np.testing.assert_allclose(result, [0.0, 64.0, 127.0])
+
+    def test_dequantize_per_channel_scale(self):
+        q = np.array([[1, 2], [3, 4]], dtype=np.int8)
+        scale = np.array([0.1, 0.2], dtype=np.float32)
+        result = _dequantize(q, scale=scale, zero_point=0, bits=8, original_shape=(2, 2))
+        expected = q.astype(np.float32) * scale.reshape(-1, 1)
+        np.testing.assert_allclose(result, expected)
+
+    def test_dequantize_int4_packed(self):
+        arr = np.array([1, -3, 5, -7], dtype=np.int8)
+        packed = _pack_int4(arr)
+        result = _dequantize(
+            packed, scale=1.0, zero_point=0, bits=4, original_shape=(4,), signed=True
+        )
+        np.testing.assert_allclose(result, arr.astype(np.float32), atol=0.5)
+
+
+# ---------------------------------------------------------------------------
+# Summary edge cases
+# ---------------------------------------------------------------------------
+class TestSummaryEdgeCases:
+    """Test summary with various quantization results."""
+
+    def test_summary_worst_tensor(self):
+        engine = Quantine(bits=8, mode="symmetric")
+        arr1 = np.random.randn(100).astype(np.float32) * 0.01
+        arr2 = np.random.randn(100).astype(np.float32) * 10.0
+        engine.quantize("small", arr1)
+        engine.quantize("large", arr2)
+        summary = engine.summary()
+        assert summary["worst_tensor"] in ("small", "large")
+
+    def test_summary_multiple_tensors(self):
+        engine = Quantine(bits=8, mode="symmetric")
+        for i in range(10):
+            engine.quantize(f"t{i}", np.random.randn(50).astype(np.float32) * 0.02)
+        summary = engine.summary()
+        assert summary["tensors"] == 10
+        assert summary["avg_mse"] >= 0
+        assert 0 <= summary["avg_cosine_sim"] <= 1
+        assert summary["avg_max_abs_error"] >= 0

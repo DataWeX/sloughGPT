@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sloughgpt.fullname" . }}-api
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "sloughgpt.labels" . | nindent 4 }}
+    {{- include "sloughgpt.api.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicas }}
+  selector:
+    matchLabels:
+      {{- include "sloughgpt.api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "sloughgpt.api.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+      - name: api
+        image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: {{ include "sloughgpt.fullname" . }}-config
+        env:
+        - name: SLO_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "sloughgpt.fullname" . }}-secrets
+              key: API_KEY
+        - name: SLO_JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "sloughgpt.fullname" . }}-secrets
+              key: JWT_SECRET
+        resources:
+          {{- toYaml .Values.api.resources | nindent 10 }}
+        {{- if .Values.api.gpu.enabled }}
+          limits:
+            nvidia.com/gpu: {{ .Values.api.gpu.count }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: {{ .Values.api.healthcheck.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.api.healthcheck.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.api.healthcheck.liveness.timeoutSeconds }}
+          failureThreshold: {{ .Values.api.healthcheck.liveness.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: {{ .Values.api.healthcheck.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.api.healthcheck.readiness.periodSeconds }}
+          timeoutSeconds: {{ .Values.api.healthcheck.readiness.timeoutSeconds }}
+          failureThreshold: {{ .Values.api.healthcheck.readiness.failureThreshold }}
+        volumeMounts:
+        {{- if .Values.persistence.models.enabled }}
+        - name: model-storage
+          mountPath: /app/models
+        {{- end }}
+        {{- if .Values.persistence.data.enabled }}
+        - name: data-storage
+          mountPath: /app/data
+        {{- end }}
+      volumes:
+      {{- if .Values.persistence.models.enabled }}
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: {{ include "sloughgpt.fullname" . }}-models
+      {{- end }}
+      {{- if .Values.persistence.data.enabled }}
+      - name: data-storage
+        persistentVolumeClaim:
+          claimName: {{ include "sloughgpt.fullname" . }}-data
+      {{- end }}

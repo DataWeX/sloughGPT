@@ -2,13 +2,15 @@
 
 import { useRouter } from 'next/navigation'
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '@sloughgpt/strui'
-import { IconDownload } from '@/components/icons/NavIcons'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Badge, IconDownload, cn, Spinner } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { modelController } from '@/lib/model-controller'
 import { trainingJobsController } from '@/lib/training-controller'
 import { ExportHistoryCard, recordExport } from '@/components/export/ExportHistoryCard'
+import { ExportTemplateCard } from '@/components/export/ExportTemplateCard'
+import { ExportProgressCard } from '@/components/export/ExportProgressCard'
+import { ExportScheduleCard } from '@/components/export/ExportScheduleCard'
 import { downloadJson, downloadBlob } from '@/lib/download-utils'
 import { apiGet } from '@/lib/http-client'
 
@@ -33,8 +35,8 @@ export default function ExportPage() {
   const [exporting, setExporting] = useState(false)
   const [exportResult, setExportResult] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [formatLoadError, setFormatLoadError] = useState<string | null>(null)
 
-  const [trainingPairs, setTrainingPairs] = useState<Record<string, unknown>[] | null>(null)
   const [exportingPairs, setExportingPairs] = useState(false)
 
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([])
@@ -50,21 +52,16 @@ export default function ExportPage() {
         }))
         setFormats(list)
       })
-      .catch(() => {
-        setFormats([
-          { key: 'sou', label: 'SOU', description: 'SloughGPT self-contained + personality' },
-          { key: 'safetensors', label: 'SafeTensors', description: 'Safe, fast (recommended)' },
-          { key: 'onnx', label: 'ONNX', description: 'Cross-platform (server, web, TF.js)' },
-          { key: 'gguf_q4_k_m', label: 'GGUF Q4_K_M', description: 'Mobile (llama.rn)' },
-          { key: 'torch', label: 'PyTorch', description: 'Training checkpoint' },
-        ])
+      .catch((err: unknown) => {
+        const msg = err instanceof Error ? err.message : String(err)
+        setFormatLoadError(`Could not load export formats: ${msg}`)
       })
   }, [])
 
   const fetchCheckpoints = async () => {
     setLoadingCheckpoints(true)
     try {
-      const data = await apiGet<{ checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+      const data = await apiGet<{ checkpoints: Checkpoint[] }>('/training/checkpoints')
       setCheckpoints(data?.checkpoints ?? [])
     } catch {
       setCheckpoints([])
@@ -89,7 +86,7 @@ export default function ExportPage() {
       setExportResult(`Exported ${fileCount} file(s) in ${res.format} format`)
       recordExport(res.format, fileCount).catch(() => {})
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed')
+      setExportError(err instanceof Error ? err.message : 'Could not export')
     } finally {
       setExporting(false)
     }
@@ -101,7 +98,7 @@ export default function ExportPage() {
       const blob = await trainingJobsController.exportTrainingPairs()
       downloadBlob(blob, `training-pairs-${Date.now()}.jsonl`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Training data export failed')
+      setExportError(err instanceof Error ? err.message : 'Could not export training data')
     } finally {
       setExportingPairs(false)
     }
@@ -112,16 +109,7 @@ export default function ExportPage() {
       const blob = await trainingJobsController.downloadCheckpoint(name)
       downloadBlob(blob, `${name}.soul`)
     } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Checkpoint download failed')
-    }
-  }
-
-  const handleDownloadFeedbackExport = async () => {
-    try {
-      const blob = await trainingJobsController.downloadTrainingJob('latest')
-      downloadBlob(blob, `feedback-export-${Date.now()}.json`)
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Feedback export not available')
+      setExportError(err instanceof Error ? err.message : 'Could not checkpoint download')
     }
   }
 
@@ -135,37 +123,40 @@ export default function ExportPage() {
   return (
     <PageContainer title="Export" subtitle="Export models, training data, and checkpoints">
       {exportResult && (
-        <div className="rounded-md bg-success/10 border border-success/20 px-4 py-3 text-sm text-success">
-          {exportResult}
-        </div>
+        <StatusBanner variant="success" message={exportResult} dismissible={false} />
       )}
       {exportError && (
-        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-          {exportError}
-          <button className="ml-2 underline" onClick={() => setExportError(null)}>Dismiss</button>
-        </div>
+        <StatusBanner variant="error" message={exportError} />
+      )}
+      {formatLoadError && (
+        <StatusBanner variant="error" message={formatLoadError} dismissible={false} />
       )}
 
       <ExportHistoryCard />
 
+      <ExportProgressCard />
+
+      <ExportTemplateCard onSelect={(t) => {
+        setSelectedFormat(t.format)
+      }} />
+
+      <ExportScheduleCard />
+
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Model Export</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Model Export</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+        <CardContent className="space-y-2 px-2.5 pb-2.5">
+          <p className="text-[10px] text-muted-foreground/60">
             Export the currently loaded model to a file format.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1">
             {formats.map(f => (
               <button
                 key={f.key}
+                type="button"
                 onClick={() => setSelectedFormat(f.key)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                  selectedFormat === f.key
-                    ? 'bg-primary/15 text-primary'
-                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                }`}
+                className={cn('rounded-full px-2.5 py-1 text-[10px] font-medium transition-colors', selectedFormat === f.key ? 'bg-primary/15 text-primary' : 'bg-muted/50 text-muted-foreground hover:bg-muted/80')}
                 title={f.description}
               >
                 {f.label}
@@ -173,23 +164,24 @@ export default function ExportPage() {
             ))}
           </div>
           {selectedFormat && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-[10px] text-muted-foreground/60">
               {formats.find(f => f.key === selectedFormat)?.description}
             </p>
           )}
           <Button
             size="sm"
+            className="h-7 text-[11px]"
             onClick={handleExportModel}
             disabled={exporting}
           >
             {exporting ? (
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <Spinner size="xs" />
                 Exporting...
               </span>
             ) : (
               <span className="inline-flex items-center gap-1.5">
-                <IconDownload className="h-3.5 w-3.5" />
+                <IconDownload className="h-3 w-3" />
                 Export Model
               </span>
             )}
@@ -198,71 +190,62 @@ export default function ExportPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Training Data Export</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Training Data Export</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
+        <CardContent className="space-y-2 px-2.5 pb-2.5">
+          <p className="text-[10px] text-muted-foreground/60">
             Download your training pairs as JSON for use in other tools.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1">
             <Button
               size="sm"
               variant="outline"
+              className="h-7 text-[11px]"
               onClick={handleExportTrainingData}
               disabled={exportingPairs}
             >
               {exportingPairs ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  <Spinner size="xs" />
                   Exporting...
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1.5">
-                  <IconDownload className="h-3.5 w-3.5" />
+                  <IconDownload className="h-3 w-3" />
                   Download Training Pairs (JSONL)
                 </span>
               )}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleDownloadFeedbackExport}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                <IconDownload className="h-3.5 w-3.5" />
-                Download Feedback Export
-              </span>
             </Button>
           </div>
         </CardContent>
       </Card>
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Checkpoints</CardTitle>
-          <Button size="sm" variant="ghost" onClick={fetchCheckpoints} disabled={loadingCheckpoints}>
-            <IconRefresh className={`h-3.5 w-3.5 ${loadingCheckpoints ? 'animate-spin' : ''}`} />
+        <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Checkpoints</CardTitle>
+          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchCheckpoints} disabled={loadingCheckpoints} aria-label="Refresh checkpoints">
+            <Spinner className="h-3 w-3" />
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-2.5 pb-2.5">
           {checkpoints.length === 0 ? (
-            <div className="text-center py-6 space-y-2">
-              <p className="text-sm text-muted-foreground">No checkpoints found. Train a model to create checkpoints.</p>
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => router.push('/training')}>
+            <div className="text-center py-4 space-y-1.5">
+              <p className="text-[10px] text-muted-foreground/60">No checkpoints found. Train a model to create checkpoints.</p>
+              <Button size="sm" variant="outline" className="h-6 text-[10px]" onClick={() => router.push('/training')}>
                 Go to Training
               </Button>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {checkpoints.map(cp => (
                 <div
                   key={cp.name}
-                  className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2 text-sm hover:bg-muted/50 transition-colors"
+                  className="flex items-center justify-between rounded-lg border border-border/40 px-2.5 py-2 text-[11px] hover:bg-muted/20 transition-colors"
                 >
                   <div className="min-w-0">
                     <div className="font-medium truncate">{cp.name}</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="text-[10px] text-muted-foreground/60">
                       {fmtBytes(cp.size_bytes)}
                       {cp.loss != null && <> · Loss: {cp.loss.toFixed(3)}</>}
                       {cp.created_at && <> · {new Date(cp.created_at).toLocaleDateString()}</>}
@@ -271,9 +254,10 @@ export default function ExportPage() {
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="h-6 text-[10px]"
                     onClick={() => handleDownloadCheckpoint(cp.name)}
                   >
-                    <IconDownload className="h-3.5 w-3.5" />
+                    <IconDownload className="h-3 w-3" />
                   </Button>
                 </div>
               ))}

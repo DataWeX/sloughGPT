@@ -4,7 +4,7 @@
  * These are the single source of truth for all frontend types.
  * Controllers import from here instead of defining their own copies.
  *
- * Backend source: packages/core-py/domains/feedback/workflow.py:get_status()
+ * Backend source: domain/feedback/_internal/workflow.py:get_status()
  * Backend source: apps/api/server/routers/*.py response models
  */
 

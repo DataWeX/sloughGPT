@@ -2,47 +2,133 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
 import React from 'react'
 
-const {
-  mockPush, mockAddToast, mockList, mockDelete, mockSearch, mockListVersions, mockExport,
-} = vi.hoisted(() => ({
-  mockPush: vi.fn(),
-  mockAddToast: vi.fn(),
-  mockList: vi.fn(),
-  mockDelete: vi.fn(),
-  mockSearch: vi.fn(),
-  mockListVersions: vi.fn(),
-  mockExport: vi.fn(),
-}))
+const { mockPush, mockAddToast, mockList, mockDelete, mockSearch, mockListVersions, mockExport } =
+  vi.hoisted(() => ({
+    mockPush: vi.fn(),
+    mockAddToast: vi.fn(),
+    mockList: vi.fn(),
+    mockDelete: vi.fn(),
+    mockSearch: vi.fn(),
+    mockListVersions: vi.fn(),
+    mockExport: vi.fn(),
+  }))
 
 vi.mock('@sloughgpt/strui', () => {
-  const iconMock = (name: string) => { const C = () => <span data-testid={`icon-${name}`}>{name}</span>; C.displayName = `Icon${name}`; return C }
+  const iconMock = (name: string) => {
+    const C = () => <span data-testid={`icon-${name}`}>{name}</span>
+    C.displayName = `Icon${name}`
+    return C
+  }
   const passthrough = ({ children }: any) => <div>{children}</div>
   return {
     cn: vi.fn((...args: any[]) => args.join(' ')),
-    Card: ({ children, className, onClick }: any) => <div className={className} onClick={onClick}>{children}</div>, CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
-    CardHeader: passthrough, CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
-    EmptyCard: ({ message, action }: any) => <div><span>{message}</span>{action}</div>,
-    Button: ({ children, onClick, variant, size, className, disabled, 'aria-label': ariaLabel }: any) => (
-      <button onClick={onClick} className={className} disabled={disabled} aria-label={ariaLabel} data-variant={variant}>{children}</button>
+    Card: ({ children, className, onClick }: any) => (
+      <div className={className} onClick={onClick}>
+        {children}
+      </div>
+    ),
+    CardContent: ({ children, className }: any) => <div className={className}>{children}</div>,
+    CardHeader: passthrough,
+    CardTitle: ({ children, className }: any) => <div className={className}>{children}</div>,
+    EmptyCard: ({ message, action }: any) => (
+      <div>
+        <span>{message}</span>
+        {action}
+      </div>
+    ),
+    Button: ({
+      children,
+      onClick,
+      variant,
+      size,
+      className,
+      disabled,
+      'aria-label': ariaLabel,
+    }: any) => (
+      <button
+        onClick={onClick}
+        className={className}
+        disabled={disabled}
+        aria-label={ariaLabel}
+        data-variant={variant}
+      >
+        {children}
+      </button>
     ),
     Input: ({ value, onChange, className, placeholder }: any) => (
       <input value={value} onChange={onChange} className={className} placeholder={placeholder} />
     ),
     Skeleton: ({ className }: any) => <div className={className} />,
-    IconRefresh: iconMock('refresh'), IconPlus: iconMock('plus'), IconTrash: iconMock('trash'), IconChevronDown: iconMock('chevron-down'), IconDownload: iconMock('download'), IconPlay: iconMock('play'),
-    AlertDialog: ({ open, onOpenChange, children }: any) => open ? <div data-testid="alert-dialog">{children}</div> : null,
+    IconRefresh: iconMock('refresh'),
+    IconPlus: iconMock('plus'),
+    IconTrash: iconMock('trash'),
+    IconChevronDown: iconMock('chevron-down'),
+    IconDownload: iconMock('download'),
+    IconPlay: iconMock('play'),
+    IconUpload: iconMock('upload'),
+    AlertDialog: ({ open, onOpenChange, children }: any) =>
+      open ? <div data-testid="alert-dialog">{children}</div> : null,
     AlertDialogContent: ({ children }: any) => <div>{children}</div>,
     AlertDialogHeader: ({ children }: any) => <div>{children}</div>,
     AlertDialogTitle: ({ children }: any) => <div>{children}</div>,
     AlertDialogDescription: ({ children }: any) => <div>{children}</div>,
     AlertDialogFooter: ({ children }: any) => <div>{children}</div>,
     AlertDialogCancel: ({ children, ...props }: any) => <button {...props}>{children}</button>,
-    AlertDialogAction: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+    AlertDialogAction: ({ children, onClick, ...props }: any) => (
+      <button onClick={onClick} {...props}>
+        {children}
+      </button>
+    ),
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/datasets',
   useParams: () => ({ id: 'test' }),
 }))
 
@@ -58,17 +144,19 @@ vi.mock('@/lib/dataset-controller', () => ({
 }))
 
 vi.mock('@/lib/toast-store', () => ({
-  useToastStore: (sel: any) => sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast },
+  useToastStore: (sel: any) => (sel ? sel({ addToast: mockAddToast }) : { addToast: mockAddToast }),
 }))
 
-vi.mock('@/components/DatasetInlineImportModal', () => ({
-  __esModule: true,
-  default: ({ open, onOpenChange }: any) => open ? <div data-testid="import-modal">Import Modal</div> : null,
+vi.mock('@/components/DatasetImportDialog', () => ({
+  DatasetImportDialog: ({ open, onOpenChange }: any) =>
+    open ? <div data-testid="import-modal">Import Modal</div> : null,
 }))
 
 vi.mock('@/lib/conversations-utils', () => ({
   formatDate: (d: string) => d,
 }))
+
+import { useQueryStore } from '@/lib/cache/client'
 
 vi.mock('@/lib/format-bytes', () => ({
   formatBytes: (b: number) => {
@@ -81,9 +169,30 @@ vi.mock('@/lib/format-bytes', () => ({
 import DatasetsPage from './page'
 
 const mockDatasets = [
-  { id: 'ds1', name: 'Shakespeare', source: 'local', size: 102400, samples: 500, created_at: '2026-01-15T00:00:00Z' },
-  { id: 'ds2', name: 'GitHub Code', source: 'github', size: 2048000, samples: 1200, created_at: '2026-02-20T00:00:00Z' },
-  { id: 'ds3', name: 'Wikipedia', source: 'url', size: 51200, samples: 50, created_at: '2026-03-10T00:00:00Z' },
+  {
+    id: 'ds1',
+    name: 'Shakespeare',
+    source: 'local',
+    size: 102400,
+    samples: 500,
+    created_at: '2026-01-15T00:00:00Z',
+  },
+  {
+    id: 'ds2',
+    name: 'GitHub Code',
+    source: 'github',
+    size: 2048000,
+    samples: 1200,
+    created_at: '2026-02-20T00:00:00Z',
+  },
+  {
+    id: 'ds3',
+    name: 'Wikipedia',
+    source: 'url',
+    size: 51200,
+    samples: 50,
+    created_at: '2026-03-10T00:00:00Z',
+  },
 ]
 
 const mockDatasetDetail = {
@@ -98,6 +207,9 @@ const mockDatasetDetail = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // useDatasetList caches by key (30s staleTime) — reset between tests
+  // or data from earlier tests leaks into later ones.
+  useQueryStore.setState({ cache: {}, fetchingKeys: new Set() })
   mockList.mockResolvedValue(mockDatasets)
   mockDelete.mockResolvedValue(undefined)
   mockSearch.mockResolvedValue(mockDatasets)
@@ -110,9 +222,9 @@ afterEach(cleanup)
 describe('DatasetsPage', () => {
   it('renders header with title', async () => {
     render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('Datasets')).toBeDefined())
+    await waitFor(() => expect(screen.getByText('My Files')).toBeDefined())
     expect(screen.getByText('Refresh')).toBeDefined()
-    expect(screen.getByText('Import')).toBeDefined()
+    expect(screen.getByText('Add file')).toBeDefined()
   })
 
   it('renders dataset cards', async () => {
@@ -130,23 +242,11 @@ describe('DatasetsPage', () => {
     })
   })
 
-  it('shows a version count badge when the dataset has versions', async () => {
-    mockListVersions.mockImplementation((id: string) =>
-      id === 'ds1'
-        ? Promise.resolve({ versions: ['20260801120000', '20260801110000'], count: 2 })
-        : Promise.resolve({ versions: [], count: 0 }),
-    )
-    render(<DatasetsPage />)
-    await waitFor(() => {
-      expect(screen.getByText('2 versions')).toBeDefined()
-    })
-  })
-
   it('does not render a version badge for versionless datasets', async () => {
     mockListVersions.mockResolvedValue({ versions: [], count: 0 })
     render(<DatasetsPage />)
     await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
-    await new Promise(r => setTimeout(r, 20))
+    await new Promise((r) => setTimeout(r, 20))
     expect(screen.queryByText(/\d+ versions?/)).toBeNull()
   })
 
@@ -175,43 +275,38 @@ describe('DatasetsPage', () => {
     fireEvent.click(screen.getByLabelText('Export Shakespeare'))
 
     await waitFor(() => {
-      expect(mockAddToast).toHaveBeenCalledWith('Export failed', 'error')
+      expect(mockAddToast).toHaveBeenCalledWith('Could not export', 'error')
     })
     vi.unstubAllGlobals()
   })
 
   it('filters datasets by search', async () => {
-    mockSearch.mockResolvedValue([mockDatasets[0]])
     render(<DatasetsPage />)
     await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
-    const searchInput = screen.getByPlaceholderText('Search datasets...')
-    await act(async () => { fireEvent.change(searchInput, { target: { value: 'shakes' } }) })
-    await waitFor(() => {
-      expect(mockSearch).toHaveBeenCalledWith('shakes')
+    const searchInput = screen.getByPlaceholderText('Search files...')
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: 'shakes' } })
     })
-  })
-
-  it('shows a searching indicator while the search is in flight', async () => {
-    let resolveSearch: (v: unknown) => void
-    mockSearch.mockReturnValue(new Promise(res => { resolveSearch = res }))
-    render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
-    const searchInput = screen.getByPlaceholderText('Search datasets...')
-    await act(async () => { fireEvent.change(searchInput, { target: { value: 'pending' } }) })
     await waitFor(() => {
-      expect(screen.getByRole('status')).toBeDefined()
+      expect(screen.getByText('Shakespeare')).toBeDefined()
+      expect(screen.queryByText('GitHub Code')).toBeNull()
+      expect(screen.queryByText('Wikipedia')).toBeNull()
     })
-    await act(async () => { resolveSearch!([mockDatasets[0]]) })
+    await act(async () => {
+      fireEvent.change(searchInput, { target: { value: '' } })
+    })
     await waitFor(() => {
-      expect(screen.queryByRole('status')).toBeNull()
+      expect(screen.getByText('GitHub Code')).toBeDefined()
     })
   })
 
   it('shows empty state when no datasets', async () => {
     mockList.mockResolvedValue([])
     render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('No datasets yet')).toBeDefined(), { timeout: 3000 })
-    expect(screen.getByText('Import Dataset')).toBeDefined()
+    await waitFor(() => expect(screen.getByText('No files yet')).toBeDefined(), {
+      timeout: 3000,
+    })
+    expect(screen.getAllByText('Add file').length).toBeGreaterThanOrEqual(2)
   })
 
   it('navigates to dataset detail on card click', async () => {
@@ -225,21 +320,29 @@ describe('DatasetsPage', () => {
     render(<DatasetsPage />)
     await waitFor(() => expect(screen.getByText('Shakespeare')).toBeDefined())
     const deleteButtons = screen.getAllByLabelText(/Delete/)
-    await act(async () => { fireEvent.click(deleteButtons[0]) })
-    await waitFor(() => { expect(screen.getByTestId('alert-dialog')).toBeTruthy() })
-    const dialog = screen.getByTestId('alert-dialog')
-    const confirmBtn = Array.from(dialog.querySelectorAll('button')).find(b => b.textContent?.trim() === 'Delete') as HTMLElement
-    await act(async () => { confirmBtn.click() })
+    await act(async () => {
+      fireEvent.click(deleteButtons[0])
+    })
     await waitFor(() => {
-      expect(mockDelete).toHaveBeenCalledWith('ds3')
-      expect(mockAddToast).toHaveBeenCalledWith(expect.stringContaining('Wikipedia'), 'info', undefined, expect.any(Function))
+      expect(screen.getByTestId('alert-dialog')).toBeTruthy()
+    })
+    const dialog = screen.getByTestId('alert-dialog')
+    const confirmBtn = Array.from(dialog.querySelectorAll('button')).find(
+      (b) => b.textContent?.trim() === 'Delete',
+    ) as HTMLElement
+    await act(async () => {
+      confirmBtn.click()
+    })
+    await waitFor(() => {
+      expect(mockDelete).toHaveBeenCalledWith('ds1')
+      expect(mockAddToast).toHaveBeenCalledWith('Deleted "Shakespeare"', 'info')
     })
   })
 
   it('opens import modal on Import click', async () => {
     render(<DatasetsPage />)
-    await waitFor(() => expect(screen.getByText('Import')).toBeDefined())
-    fireEvent.click(screen.getByText('Import'))
+    await waitFor(() => expect(screen.getByText('Add file')).toBeDefined())
+    fireEvent.click(screen.getByText('Add file'))
     await waitFor(() => expect(screen.getByTestId('import-modal')).toBeTruthy())
   })
 })

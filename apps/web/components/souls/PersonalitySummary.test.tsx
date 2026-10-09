@@ -1,6 +1,50 @@
-import { describe, it, expect, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
 import React from 'react'
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  IconHeart: (props: any) => <svg data-testid="icon" />,
+  IconBrain: (props: any) => <svg data-testid="icon" />,
+
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}))
+
 import PersonalitySummary, { deriveArchetype } from './PersonalitySummary'
 
 const baseWeights = {
@@ -27,11 +71,10 @@ describe('PersonalitySummary', () => {
     expect(container.querySelector('.border-b')).toBeNull()
   })
 
-  it('renders 3 group stat cards', () => {
-    render(<PersonalitySummary traitWeights={baseWeights} currentSoulName={null} />)
-    expect(screen.getByText('❤️')).toBeDefined()
-    expect(screen.getByText('🧠')).toBeDefined()
-    expect(screen.getByText('💖')).toBeDefined()
+  it('renders 3 group stat cards with icons', () => {
+    const { container } = render(<PersonalitySummary traitWeights={baseWeights} currentSoulName={null} />)
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs.length).toBeGreaterThanOrEqual(3)
   })
 
   it('renders group labels in stat cards', () => {
@@ -60,7 +103,7 @@ describe('PersonalitySummary', () => {
 
   it('renders overall score when soul name is provided', () => {
     const { container } = render(<PersonalitySummary traitWeights={baseWeights} currentSoulName="alice" />)
-    const overall = container.querySelector('.text-2xl.font-bold.text-destructive')
+    const overall = container.querySelector('.text-base.font-bold')
     expect(overall?.textContent).toBe('50')
   })
 
@@ -92,7 +135,7 @@ describe('PersonalitySummary', () => {
 
   it('renders overall score 0 when no traits', () => {
     const { container } = render(<PersonalitySummary traitWeights={{ personality: {}, cognition: {}, emotion: {} }} currentSoulName="test" />)
-    const overalls = container.querySelectorAll('.text-2xl')
+    const overalls = container.querySelectorAll('.text-base.font-bold')
     const overall = Array.from(overalls).find(el => el.textContent === '0')
     expect(overall).toBeDefined()
   })

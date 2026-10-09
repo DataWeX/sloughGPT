@@ -2,6 +2,8 @@
 
 import { useState, useCallback } from 'react'
 import { datasetController } from '@/lib/controllers'
+import { trackEvent } from '@/lib/dev-log'
+import { formatToastError } from '@/lib/error-utils'
 import type { Dataset, DatasetPreview } from '@/lib/dataset-controller'
 
 export interface UseTrainingDatasetsReturn {
@@ -16,24 +18,41 @@ export interface UseTrainingDatasetsReturn {
   fetchDatasets: () => Promise<void>
 }
 
-export function useTrainingDatasets(addToast: (msg: string, type?: 'success' | 'error' | 'info') => void): UseTrainingDatasetsReturn {
+export function useTrainingDatasets(
+  addToast: (msg: string, type?: 'success' | 'error' | 'info') => void,
+): UseTrainingDatasetsReturn {
   const [datasets, setDatasets] = useState<Dataset[]>([])
-  const [selectedDataset, setSelectedDataset] = useState('')
+  const [selectedDataset, _setSelectedDataset] = useState('')
   const [loadingDatasets, setLoadingDatasets] = useState(false)
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [datasetPreview, setDatasetPreview] = useState<DatasetPreview | null>(null)
+
+  const setSelectedDataset = (id: string) => {
+    trackEvent('dataset_selected', { dataset_id: id })
+    _setSelectedDataset(id)
+  }
 
   const fetchDatasets = useCallback(async () => {
     setLoadingDatasets(true)
     try {
       const list = await datasetController.list()
       setDatasets(list)
-    } catch { addToast('Failed to fetch datasets', 'error') }
-    finally { setLoadingDatasets(false) }
+    } catch (e) {
+      addToast(formatToastError(e, 'Could not fetch datasets'), 'error')
+    } finally {
+      setLoadingDatasets(false)
+    }
   }, [addToast])
 
   return {
-    datasets, selectedDataset, loadingDatasets, importModalOpen, datasetPreview,
-    setSelectedDataset, setImportModalOpen, setDatasetPreview, fetchDatasets,
+    datasets,
+    selectedDataset,
+    loadingDatasets,
+    importModalOpen,
+    datasetPreview,
+    setSelectedDataset,
+    setImportModalOpen,
+    setDatasetPreview,
+    fetchDatasets,
   }
 }

@@ -18,6 +18,9 @@ declare namespace Cypress {
     /** Mock /knowledge CRUD endpoints */
     mockKnowledge(items?: string[]): Chainable<null>
 
+    /** Catch-all 200 for unmocked endpoints (registered before specific mocks) */
+    mockApiFallback(): Chainable<null>
+
     /** Mock all endpoints via individual mocks */
     mockAll(): Chainable<null>
 

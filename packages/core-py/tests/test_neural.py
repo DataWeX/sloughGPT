@@ -1,19 +1,23 @@
 """Tests for Neural Interface Layer — kernel primitives for neural computation."""
 
-import pytest
 import numpy as np
-from domains.shell.kernel import Kernel, reset_kernel
-from domains.shell.kernel_process import Process, ProcessState, Priority
-from domains.shell.kernel_neural import (
-    NeuralKernel, NeuralProcess, NeuralProcessType,
-    NeuralKVCache, NeuralEmbeddingStore, NeuralMemoryType,
-    NeuralEngineDevice, TokenizerDevice, EmbeddingStoreDevice,
-    NeuralInterrupt, NeuralSyscall,
-)
-from domains.shell.kernel_syscall import SyscallNumber
+import pytest
 
+from domain.shell._internal.kernel import reset_kernel
+from domain.shell._internal.kernel_neural import (
+    EmbeddingStoreDevice,
+    NeuralEmbeddingStore,
+    NeuralEngineDevice,
+    NeuralKernel,
+    NeuralKVCache,
+    NeuralProcessType,
+    NeuralSyscall,
+    TokenizerDevice,
+)
+from domain.shell._internal.kernel_process import ProcessState
 
 # ── Neural Process tests ─────────────────────────────────────────────────────
+
 
 class TestNeuralProcess:
     def setup_method(self):
@@ -82,6 +86,7 @@ class TestNeuralProcess:
 
 # ── KV Cache tests ───────────────────────────────────────────────────────────
 
+
 class TestNeuralKVCache:
     def test_create_and_initialize(self):
         cache = NeuralKVCache(num_layers=12, head_dim=64, max_positions=512)
@@ -132,6 +137,7 @@ class TestNeuralKVCache:
 
 # ── Embedding Store tests ────────────────────────────────────────────────────
 
+
 class TestNeuralEmbeddingStore:
     def test_create(self):
         store = NeuralEmbeddingStore(vocab_size=1000, embed_dim=64)
@@ -181,6 +187,7 @@ class TestNeuralEmbeddingStore:
 
 # ── Neural Engine Device tests ───────────────────────────────────────────────
 
+
 class TestNeuralEngineDevice:
     def test_register_and_info(self):
         dev = NeuralEngineDevice()
@@ -189,7 +196,6 @@ class TestNeuralEngineDevice:
 
     def test_load_unload_model(self):
         dev = NeuralEngineDevice()
-        dev.open()
         dev.load_model("test", lambda x: x)
         info = dev.info()
         assert "test" in info["model_names"]
@@ -198,8 +204,10 @@ class TestNeuralEngineDevice:
 
     def test_forward_pass(self):
         dev = NeuralEngineDevice()
-        dev.open()
-        model = lambda x: x * 2
+
+        def model(x):
+            return x * 2
+
         dev.load_model("double", model)
         result = dev.ioctl("forward", "double", np.array([1, 2, 3]))
         assert result.success
@@ -207,17 +215,17 @@ class TestNeuralEngineDevice:
 
     def test_forward_no_model(self):
         dev = NeuralEngineDevice()
-        dev.open()
         result = dev.ioctl("forward", "nonexistent", np.array([1]))
         assert not result.success
 
     def test_generate(self):
         dev = NeuralEngineDevice()
-        dev.open()
+
         # Simple model that returns token IDs
         class MockGen:
             def generate_numpy(self, prompt, max_tokens=10, temperature=1.0):
                 return [1, 2, 3]
+
         dev.load_model("gen", MockGen())
         result = dev.ioctl("generate", "gen", "hello", max_tokens=3)
         assert result.success
@@ -225,7 +233,6 @@ class TestNeuralEngineDevice:
 
     def test_attention(self):
         dev = NeuralEngineDevice()
-        dev.open()
         q = np.random.randn(1, 4, 8)
         k = np.random.randn(1, 4, 8)
         v = np.random.randn(1, 4, 8)
@@ -236,7 +243,6 @@ class TestNeuralEngineDevice:
 
     def test_loss_cross_entropy(self):
         dev = NeuralEngineDevice()
-        dev.open()
         pred = np.array([[0.7, 0.3], [0.2, 0.8]])
         tgt = np.array([[1, 0], [0, 1]])
         result = dev.ioctl("loss", pred, tgt, loss_fn="cross_entropy")
@@ -245,7 +251,6 @@ class TestNeuralEngineDevice:
 
     def test_loss_mse(self):
         dev = NeuralEngineDevice()
-        dev.open()
         pred = np.array([1.0, 2.0, 3.0])
         tgt = np.array([1.1, 2.1, 3.1])
         result = dev.ioctl("loss", pred, tgt, loss_fn="mse")
@@ -255,10 +260,10 @@ class TestNeuralEngineDevice:
 
 # ── Tokenizer Device tests ───────────────────────────────────────────────────
 
+
 class TestTokenizerDevice:
     def test_byte_level_fallback(self):
         dev = TokenizerDevice()
-        dev.open()
         result = dev.ioctl("encode", "hello world")
         assert result.success
         assert result.value["tokens"] == list(b"hello world")
@@ -266,7 +271,6 @@ class TestTokenizerDevice:
 
     def test_byte_level_decode(self):
         dev = TokenizerDevice()
-        dev.open()
         result = dev.ioctl("decode", [104, 101, 108, 108, 111])
         assert result.success
         assert result.value["text"] == "hello"
@@ -275,10 +279,11 @@ class TestTokenizerDevice:
         class MockTokenizer:
             def encode(self, text):
                 return [ord(c) for c in text]
+
             def decode(self, tokens):
                 return "".join(chr(t) for t in tokens)
+
         dev = TokenizerDevice(MockTokenizer())
-        dev.open()
         enc = dev.ioctl("encode", "abc")
         assert enc.success
         assert enc.value["tokens"] == [97, 98, 99]
@@ -289,16 +294,15 @@ class TestTokenizerDevice:
 
 # ── Embedding Store Device tests ─────────────────────────────────────────────
 
+
 class TestEmbeddingStoreDevice:
     def test_create_store(self):
         dev = EmbeddingStoreDevice()
-        dev.open()
         result = dev.ioctl("create", store_name="test", vocab_size=100, embed_dim=32)
         assert result.success
 
     def test_lookup(self):
         dev = EmbeddingStoreDevice()
-        dev.open()
         dev.create_store("test", 100, 32)
         result = dev.ioctl("lookup", [1, 2, 3], store_name="test")
         assert result.success
@@ -306,7 +310,6 @@ class TestEmbeddingStoreDevice:
 
     def test_update(self):
         dev = EmbeddingStoreDevice()
-        dev.open()
         dev.create_store("test", 100, 32)
         new_vecs = np.ones((3, 32))
         result = dev.ioctl("update", [0, 1, 2], new_vecs, store_name="test")
@@ -315,7 +318,6 @@ class TestEmbeddingStoreDevice:
 
     def test_nearest(self):
         dev = EmbeddingStoreDevice()
-        dev.open()
         dev.create_store("test", 100, 32)
         store = dev.get_store("test")
         store._embeddings = np.zeros((100, 32))
@@ -326,6 +328,7 @@ class TestEmbeddingStoreDevice:
 
 
 # ── Neural Kernel integration tests ──────────────────────────────────────────
+
 
 class TestNeuralKernel:
     def setup_method(self):
@@ -393,10 +396,12 @@ class TestNeuralKernel:
     def test_neural_syscall_generate(self):
         nk = NeuralKernel()
         nk.boot()
+
         # Register a mock model
         class MockModel:
             def generate_numpy(self, prompt, max_tokens=10, temperature=1.0):
                 return [10, 20, 30]
+
         nk.engine.load_model("mock", MockModel())
         result = nk.syscall(NeuralSyscall.GENERATE, "hello", "mock", max_tokens=3)
         assert result.success

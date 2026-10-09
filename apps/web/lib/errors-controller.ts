@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiDelete } from './http-client'
+import { apiGet, apiDelete } from './http-client'
 
 export interface GroupedError {
   fingerprint: string

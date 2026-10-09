@@ -8,9 +8,10 @@ import {
 import { chatDB, type ChatSession as DBChatSession } from '@/lib/db'
 import { sessionController } from '@/lib/session-controller'
 import { addGlobalError } from '@/lib/error-store'
+import { trackEvent } from '@/lib/dev-log'
 import type { Conversation } from '@/lib/session-controller'
 
-const MAX_STORAGE_MESSAGES = 40
+const MAX_STORAGE_MESSAGES = 200
 
 /** Upper bound on the backend remote-merge phase of loadSession. If the server
  *  is slow or offline, fetchMessages can otherwise hold sessionLoading true for
@@ -105,6 +106,7 @@ export function useChatSessions(opts: {
     deletedSessionsRef.current.delete(sessionId)
     if (!_createdSessions.has(sessionId)) {
       _createdSessions.add(sessionId)
+      trackEvent('session_created')
       sessionController.create(sessionName, sessionId).catch(err => {
         _createdSessions.delete(sessionId)
         addGlobalError(err, 'Chat:SessionCreate')
@@ -117,6 +119,7 @@ export function useChatSessions(opts: {
   }, [])
 
   const loadSession = useCallback(async (sessionId: string) => {
+    trackEvent('session_loaded', { session_id: sessionId })
     sessionIdRef.current = sessionId
     setSessionLoading(true)
     inFlightLoadsRef.current++
@@ -168,9 +171,10 @@ export function useChatSessions(opts: {
   }, [showToast, setMessages, setInput, setSessionSaved, setSessionLoading, sessionIdRef])
 
   const deleteSession = useCallback(async (sessionId: string) => {
+    trackEvent('session_deleted', { session_id: sessionId })
     deletedSessionsRef.current.add(sessionId)
     await chatDB.deleteSession(sessionId)
-    sessionController.delete(sessionId).catch((e) => addGlobalError({ message: 'Session delete sync failed', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
+    sessionController.delete(sessionId).catch((e) => addGlobalError({ message: 'Could not session delete sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     const newSessions = await chatDB.loadSessions()
     setSessions(newSessions)
     if ((await chatDB.getKV<string>(CURRENT_SESSION_KEY)) === sessionId) {
@@ -182,34 +186,39 @@ export function useChatSessions(opts: {
   }, [showToast, setMessages, setSessionSaved])
 
   const starSession = useCallback(async (sessionId: string, starred: boolean) => {
+    trackEvent('session_starred', { session_id: sessionId })
     await chatDB.updateSession(sessionId, { starred })
-    sessionController.update(sessionId, { starred }).catch((e) => addGlobalError({ message: 'Session star sync failed', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
+    sessionController.update(sessionId, { starred }).catch((e) => addGlobalError({ message: 'Could not session star sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, starred } : s))
     showToast(starred ? 'Conversation starred' : 'Conversation unstarred')
   }, [showToast])
 
   const pinSession = useCallback(async (sessionId: string, pinned: boolean) => {
+    trackEvent('session_pinned', { session_id: sessionId })
     await chatDB.updateSession(sessionId, { pinned })
-    sessionController.update(sessionId, { pinned }).catch((e) => addGlobalError({ message: 'Session pin sync failed', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
+    sessionController.update(sessionId, { pinned }).catch((e) => addGlobalError({ message: 'Could not session pin sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, pinned } : s))
     showToast(pinned ? 'Conversation pinned' : 'Conversation unpinned')
   }, [showToast])
 
   const archiveSession = useCallback(async (sessionId: string, archived: boolean) => {
+    trackEvent('session_archived', { session_id: sessionId })
     await chatDB.updateSession(sessionId, { archived })
-    sessionController.update(sessionId, { archived }).catch((e) => addGlobalError({ message: 'Session archive sync failed', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
+    sessionController.update(sessionId, { archived }).catch((e) => addGlobalError({ message: 'Could not session archive sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, archived } : s))
     showToast(archived ? 'Conversation archived' : 'Conversation restored')
   }, [showToast])
 
   const renameSession = useCallback(async (sessionId: string, newName: string) => {
+    trackEvent('session_renamed', { session_id: sessionId, name: newName })
     await chatDB.updateSession(sessionId, { name: newName })
-    sessionController.update(sessionId, { name: newName }).catch((e) => addGlobalError({ message: 'Session rename sync failed', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
+    sessionController.update(sessionId, { name: newName }).catch((e) => addGlobalError({ message: 'Could not session rename sync', source: 'useChatSessions', metadata: { sessionId, error: String(e) } }))
     setSessions(prev => prev.map(s => s.id === sessionId ? { ...s, name: newName } : s))
     showToast('Conversation renamed')
   }, [showToast])
 
   const duplicateSession = useCallback(async (sessionId: string) => {
+    trackEvent('session_duplicated', { session_id: sessionId })
     const session = await chatDB.loadSession(sessionId)
     if (session) {
       const newId = `chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`

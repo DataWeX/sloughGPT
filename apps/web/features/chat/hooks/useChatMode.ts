@@ -1,16 +1,18 @@
 'use client'
 
-import { useState, useCallback, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { ChatMessage } from '@/lib/chat-utils'
 import { useToastStore } from '@/lib/toast-store'
 import { imagesController } from '@/lib/images-controller'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { trackEvent } from '@/lib/dev-log'
 import type { ImageStyle } from '@/lib/images-controller'
 import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
 
 const MODE_CONFIGS: Record<ChatMode, { placeholder: string }> = {
   chat: { placeholder: 'Type a message...' },
   write: { placeholder: 'What do you want to write about?' },
+  rewrite: { placeholder: 'Paste text to rewrite...' },
   decide: { placeholder: 'What do you need help deciding?' },
   explain: { placeholder: 'What do you want explained?' },
   translate: { placeholder: 'Text to translate...' },
@@ -32,9 +34,22 @@ interface UseChatModeOptions {
 }
 
 export function useChatMode({ chat }: UseChatModeOptions) {
-  const [chatMode, setChatMode] = useState<ChatMode>('chat')
+  const [chatMode, _setChatMode] = useState<ChatMode>('chat')
+  const setChatMode = useCallback((mode: ChatMode | ((prev: ChatMode) => ChatMode)) => {
+    _setChatMode(mode)
+  }, [])
+  // Log after commit, not inside the setState updater — updaters must stay
+  // pure (React may invoke them twice under StrictMode, double-firing events).
+  const prevChatModeRef = useRef<ChatMode>('chat')
+  useEffect(() => {
+    if (prevChatModeRef.current !== chatMode) {
+      trackEvent('chat_mode_changed', { from: prevChatModeRef.current, to: chatMode })
+      prevChatModeRef.current = chatMode
+    }
+  }, [chatMode])
   const [writeTone, setWriteTone] = useState('Friendly')
   const [writeType, setWriteType] = useState('Email')
+  const [rewriteStyle, setRewriteStyle] = useState('Fix Grammar')
   const [decideStructure, setDecideStructure] = useState('Pros & Cons')
   const [explainDifficulty, setExplainDifficulty] = useState('Simple')
   const [translateLangPair, setTranslateLangPair] = useState('EN→ES')
@@ -47,12 +62,12 @@ export function useChatMode({ chat }: UseChatModeOptions) {
 
   const handleCreateImage = useCallback(async (prompt: string) => {
     const userMsg: ChatMessage = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: 'user',
       content: prompt,
       timestamp: new Date(),
     }
-    const pendingId = (Date.now() + 1).toString()
+    const pendingId = crypto.randomUUID()
     const pendingMsg: ChatMessage = {
       id: pendingId,
       role: 'assistant',
@@ -85,6 +100,16 @@ export function useChatMode({ chat }: UseChatModeOptions) {
         return null // no transform
       case 'write':
         return `Write a ${writeTone.toLowerCase()} ${writeType.toLowerCase()} about: ${input}`
+      case 'rewrite': {
+        const rewritePrompts: Record<string, string> = {
+          'Fix Grammar': 'Fix all grammar and spelling errors in this text while keeping the meaning',
+          'Make Shorter': 'Make this text shorter and more concise while keeping the key points',
+          'Make Friendlier': 'Rewrite this text in a warmer, more friendly tone',
+          'Make Professional': 'Rewrite this text in a professional, formal tone',
+          'Sound Like Me': 'Rewrite this text to sound more natural and conversational, like a real person wrote it',
+        }
+        return `${rewritePrompts[rewriteStyle] || 'Rewrite this text'}:\n\n${input}`
+      }
       case 'decide':
         return `Help me decide using ${decideStructure.toLowerCase()}: ${input}`
       case 'explain':
@@ -109,7 +134,7 @@ export function useChatMode({ chat }: UseChatModeOptions) {
       default:
         return null
     }
-  }, [chatMode, writeTone, writeType, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType])
+  }, [chatMode, writeTone, writeType, rewriteStyle, decideStructure, explainDifficulty, translateLangPair, brainstormTopic, wellnessType])
 
   const handleSend = useCallback(async (readFileData?: { text: string; filename: string } | null) => {
     const input = chat.input.trim()
@@ -154,6 +179,8 @@ export function useChatMode({ chat }: UseChatModeOptions) {
     setWriteTone,
     writeType,
     setWriteType,
+    rewriteStyle,
+    setRewriteStyle,
     decideStructure,
     setDecideStructure,
     explainDifficulty,

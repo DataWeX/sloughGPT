@@ -17,29 +17,30 @@ processed independently.  Brace nesting is tracked for block scoping.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Any
 
-from aml.schema import AmlBlock, AmlDocument, AmlValue
+from aml.schema import AmlBlock, AmlDocument
 
 # ── token patterns ────────────────────────────────────────────────────
 
-RE_COMMENT    = re.compile(r"^\s*#")
-RE_HEADER     = re.compile(r"^@aml\s+(\d+\.\d+)")
-RE_BLANK      = re.compile(r"^\s*$")
+RE_COMMENT = re.compile(r"^\s*#")
+RE_HEADER = re.compile(r"^@aml\s+(\d+\.\d+)")
+RE_BLANK = re.compile(r"^\s*$")
 
 # @tag name { ... }  or  @tag {  — handles both single-line and multi-line
 RE_TAG_WITH_BRACE = re.compile(r"^\s*(@\w+)(?:\s+([^{]+))?\s*\{(.*)\}\s*$")
 # @tag name {  (multi-line, opening brace at end)
 RE_TAG_OPEN = re.compile(r"^\s*(@\w+)(?:\s+([^{]+))?\s*\{\s*$")
 # @tag name = value
-RE_INLINE_EQ  = re.compile(r"^\s*(@\w+)\s+(\S+)\s*=\s*(.+)$")
+RE_INLINE_EQ = re.compile(r"^\s*(@\w+)\s+(\S+)\s*=\s*(.+)$")
 #     key = value
-RE_ASSIGN     = re.compile(r"^\s+(\w+)\s*=\s*(.+)$")
+RE_ASSIGN = re.compile(r"^\s+(\w+)\s*=\s*(.+)$")
 # - item
-RE_LIST_ITEM  = re.compile(r"^\s*-\s+(.+)$")
+RE_LIST_ITEM = re.compile(r"^\s*-\s+(.+)$")
 
 
 # ── value parser ──────────────────────────────────────────────────────
+
 
 def _parse_value(raw: str) -> Any:
     """Parse a value token into a Python object.
@@ -56,8 +57,9 @@ def _parse_value(raw: str) -> Any:
         return [_parse_value(item.strip()) for item in _split_csv(inner)]
 
     # quoted string
-    if (stripped.startswith('"') and stripped.endswith('"')) or \
-       (stripped.startswith("'") and stripped.endswith("'")):
+    if (stripped.startswith('"') and stripped.endswith('"')) or (
+        stripped.startswith("'") and stripped.endswith("'")
+    ):
         return stripped[1:-1]
 
     # null
@@ -89,7 +91,7 @@ def _parse_value(raw: str) -> Any:
 def _split_csv(s: str) -> list[str]:
     """Split a comma-separated value string respecting quotes."""
     parts: list[str] = []
-    in_quote: Optional[str] = None
+    in_quote: str | None = None
     current: list[str] = []
     for ch in s:
         if ch in ('"', "'") and (in_quote is None or in_quote == ch):
@@ -109,6 +111,7 @@ def _split_csv(s: str) -> list[str]:
 
 
 # ── main parser ───────────────────────────────────────────────────────
+
 
 def parse(source: str) -> AmlDocument:
     """Parse an AML string into an ``AmlDocument``."""
@@ -175,9 +178,9 @@ def parse(source: str) -> AmlDocument:
     return doc
 
 
-def _parse_block_body(lines: list[str], start: int, tag: str,
-                      name: Optional[str], doc: AmlDocument
-                      ) -> tuple[AmlBlock, int]:
+def _parse_block_body(
+    lines: list[str], start: int, tag: str, name: str | None, doc: AmlDocument
+) -> tuple[AmlBlock, int]:
     """Parse the body of a block delimited by ``{`` ... ``}``.
 
     Returns (block, next_line_index).
@@ -244,8 +247,9 @@ def _parse_block_body(lines: list[str], start: int, tag: str,
                     am = RE_ASSIGN.match("    " + part)
                     if am:
                         nested_meta[am.group(1)] = _parse_value(am.group(2))
-            doc.blocks.append(AmlBlock(tag=nested_tag, name=nested_name,
-                                        metadata=nested_meta, line=i + 1))
+            doc.blocks.append(
+                AmlBlock(tag=nested_tag, name=nested_name, metadata=nested_meta, line=i + 1)
+            )
             i += 1
             continue
 
@@ -262,11 +266,10 @@ def _parse_block_body(lines: list[str], start: int, tag: str,
     if list_items:
         body = list_items
 
-    return AmlBlock(tag=tag, name=name, body=body, metadata=metadata,
-                     line=start), i
+    return AmlBlock(tag=tag, name=name, body=body, metadata=metadata, line=start), i
 
 
 def parse_file(path: str) -> AmlDocument:
     """Parse an AML file from disk."""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return parse(f.read())

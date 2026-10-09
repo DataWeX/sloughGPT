@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from domains.logging.base import LogLevel, LogRecord
-from domains.logging.console_logger import ConsoleLogger
+from domain.logging._internal.base import LogLevel, LogRecord
+from domain.logging._internal.console_logger import ConsoleLogger
 
 
 def _record(
@@ -49,16 +49,16 @@ _ANSI_CODES = {
 
 @pytest.fixture
 def ansi_on(monkeypatch):
-    import domains.logging.console_logger as cl
+    from domain.logging._internal import config as log_config
 
     for name, code in _ANSI_CODES.items():
-        monkeypatch.setattr(cl._Ansi, name, code)
+        monkeypatch.setattr(log_config._A, name, code)
 
 
 # ── Construction ───────────────────────────────────────────────────────────
 
-class TestConstruction:
 
+class TestConstruction:
     def test_default_stream_is_stderr_capture(self):
         log = ConsoleLogger("slo.api")
         assert log.name == "slo.api"
@@ -77,11 +77,11 @@ class TestConstruction:
 
 # ── Human format ───────────────────────────────────────────────────────────
 
-class TestHumanFormat:
 
+class TestHumanFormat:
     def test_info_line(self):
         log = ConsoleLogger("slo.api", colors=False)
-        line = log._format_record(_record(message="server started", context={"port": 8000}))
+        line = log._formatter.format_oop(_record(message="server started", context={"port": 8000}))
         assert "server started" in line
         assert "INF" in line
         assert "port=8000" in line
@@ -109,7 +109,7 @@ class TestHumanFormat:
     def test_critical_badge(self):
         log = ConsoleLogger("slo.api", colors=False)
         line = log._format_record(_record(message="boom", level=LogLevel.CRITICAL))
-        assert "CRI" in line
+        assert "CRT" in line
 
     def test_colors_emit_ansi_when_enabled(self, ansi_on):
         log = ConsoleLogger("slo.api", colors=True)
@@ -137,16 +137,16 @@ class TestHumanFormat:
 
 # ── JSON format ────────────────────────────────────────────────────────────
 
-class TestJsonFormat:
 
+class TestJsonFormat:
     def test_json_line_is_valid(self):
         log = ConsoleLogger("slo.api", format="json")
         line = log._format_record(_record(message="hello", context={"a": 1}, tag="REQ"))
         data = json.loads(line)
-        assert data["level"] == "INFO"
+        assert data["lvl"] == "INFO"
         assert data["logger"] == "slo.api.inference"
         assert data["msg"] == "hello"
-        assert data["tag"] == "REQ"
+        assert data["op"] == "REQ"
         assert data["ctx"] == {"a": 1}
 
     def test_json_includes_code_and_exception(self):
@@ -161,15 +161,14 @@ class TestJsonFormat:
                 )
             )
         )
-        assert data["code"] == "E_MODEL_CRASH"
-        assert data["err"] == "OSError: nope"
-        assert data["level"] == "ERROR"
+        assert data["exception"] == "OSError: nope"
+        assert data["lvl"] == "ERROR"
 
     def test_json_level_mapping(self):
         log = ConsoleLogger("slo.api", format="json")
-        assert json.loads(log._format_record(_record(level=LogLevel.WARNING)))["level"] == "WARN"
-        assert json.loads(log._format_record(_record(level=LogLevel.DEBUG)))["level"] == "DEBUG"
-        assert json.loads(log._format_record(_record(level=LogLevel.CRITICAL)))["level"] == "CRIT"
+        assert json.loads(log._format_record(_record(level=LogLevel.WARNING)))["lvl"] == "WARNING"
+        assert json.loads(log._format_record(_record(level=LogLevel.DEBUG)))["lvl"] == "DEBUG"
+        assert json.loads(log._format_record(_record(level=LogLevel.CRITICAL)))["lvl"] == "CRITICAL"
 
     def test_json_timestamp_iso(self):
         log = ConsoleLogger("slo.api", format="json")
@@ -179,8 +178,8 @@ class TestJsonFormat:
 
 # ── Exception parsing ──────────────────────────────────────────────────────
 
-class TestExceptionParsing:
 
+class TestExceptionParsing:
     def test_parse_simple_type_and_message(self):
         log = ConsoleLogger("slo.api")
         exc_type, exc_msg, file_info = log._parse_exception("ValueError: bad input")
@@ -198,14 +197,14 @@ class TestExceptionParsing:
         log = ConsoleLogger("slo.api")
         tb = (
             "Traceback (most recent call last):\n"
-            "  File 'domains/foo.py', line 42, in run\n"
+            "  File 'domain/foo.py', line 42, in run\n"
             "    do_thing()\n"
             "RuntimeError: exploded"
         )
         exc_type, exc_msg, file_info = log._parse_exception(tb)
         assert exc_type == "RuntimeError"
         assert exc_msg == "exploded"
-        assert file_info == "domains/foo.py:42 in run()"
+        assert file_info == "domain/foo.py:42 in run()"
 
     def test_get_exception_color_programming(self, ansi_on):
         log = ConsoleLogger("slo.api")
@@ -234,10 +233,177 @@ class TestExceptionParsing:
         assert "nope" in parts[1]
 
 
+# ── Cursor methods ────────────────────────────────────────────────────────
+
+
+class TestCursorMethods:
+    def test_cursor_up_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.cursor_up(3)
+        assert "\033[3A" in stream.data
+
+    def test_cursor_up_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.cursor_up(3)
+        assert buf.getvalue() == ""
+
+    def test_cursor_up_noop_on_zero(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.cursor_up(0)
+        assert not hasattr(stream, "data") or stream.data == ""
+
+    def test_cursor_down_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.cursor_down(2)
+        assert "\033[2B" in stream.data
+
+    def test_cursor_down_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.cursor_down(2)
+        assert buf.getvalue() == ""
+
+    def test_clear_line_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.clear_line()
+        assert "\033[2K" in stream.data
+
+    def test_clear_line_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.clear_line()
+        assert buf.getvalue() == ""
+
+    def test_clear_lines_combines_up_and_clear(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.clear_lines(2)
+        assert "\033[1A" in stream.data
+        assert "\033[2K" in stream.data
+
+    def test_hide_cursor_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.hide_cursor()
+        assert "\033[?25l" in stream.data
+
+    def test_hide_cursor_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.hide_cursor()
+        assert buf.getvalue() == ""
+
+    def test_show_cursor_writes_ansi_on_tty(self):
+        class FakeTTY:
+            def isatty(self):
+                return True
+
+            def write(self, s):
+                self.data = getattr(self, "data", "") + s
+
+            def flush(self):
+                pass
+
+        stream = FakeTTY()
+        log = ConsoleLogger("slo.api", stream=stream)
+        log.show_cursor()
+        assert "\033[?25h" in stream.data
+
+    def test_show_cursor_noop_on_non_tty(self):
+        buf = io.StringIO()
+        log = ConsoleLogger("slo.api", stream=buf)
+        log.show_cursor()
+        assert buf.getvalue() == ""
+
+    def test_cursor_methods_swallows_stream_error(self):
+        class BrokenTTY:
+            def isatty(self):
+                return True
+
+            def write(self, _):
+                raise OSError("closed")
+
+            def flush(self):
+                raise OSError("closed")
+
+        log = ConsoleLogger("slo.api", stream=BrokenTTY())
+        log.cursor_up(1)
+        log.cursor_down(1)
+        log.clear_line()
+        log.clear_lines(1)
+        log.hide_cursor()
+        log.show_cursor()
+
+
 # ── emit ───────────────────────────────────────────────────────────────────
 
-class TestEmit:
 
+class TestEmit:
     def test_emit_writes_line(self):
         buf = io.StringIO()
         log = ConsoleLogger("slo.api", stream=buf, colors=False)

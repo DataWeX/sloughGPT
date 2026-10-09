@@ -11,11 +11,9 @@ import os
 import random
 import sys
 import time
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Optional
-
 
 SAVE_DIR = Path.home() / ".bunker_game"
 SAVE_DIR.mkdir(parents=True, exist_ok=True)
@@ -114,20 +112,24 @@ def morning_report(state: GameState):
     clear()
     header(f"Day {state.day} — {state.season.value}")
     season_colors = {
-        Season.SPRING: "\033[32m", Season.SUMMER: "\033[33m",
-        Season.AUTUMN: "\033[31m", Season.WINTER: "\033[34m",
+        Season.SPRING: "\033[32m",
+        Season.SUMMER: "\033[33m",
+        Season.AUTUMN: "\033[31m",
+        Season.WINTER: "\033[34m",
     }
     print(f"  {season_colors[state.season]}Population\033[0m: {state.population}")
-    print(f"  Resources:")
+    print("  Resources:")
     print(f"  {state.resources}")
-    print(f"  Upgrades: ", end="")
+    print("  Upgrades: ", end="")
     upgrades_list = []
     for name, val in asdict(state.upgrades).items():
         if val:
             label = name.replace("_", " ").title()
             upgrades_list.append(f"\033[36m{label}\033[0m")
     print(", ".join(upgrades_list) if upgrades_list else "\033[90mNone\033[0m")
-    print(f"  \033[90mDays until surface habitable: {max(0, 365 - state.days_surface_habitable)}\033[0m")
+    print(
+        f"  \033[90mDays until surface habitable: {max(0, 365 - state.days_surface_habitable)}\033[0m"
+    )
     divider()
 
 
@@ -177,7 +179,7 @@ def check_shortages(state: GameState) -> list[str]:
     if state.resources.power <= 0:
         state.resources.power = 0
         state.resources.morale -= 10
-        msgs.append(f"\033[31mPower failure — morale drops\033[0m")
+        msgs.append("\033[31mPower failure — morale drops\033[0m")
     if state.resources.morale <= 0:
         state.resources.morale = 0
         deaths = random.randint(1, 2)
@@ -185,7 +187,7 @@ def check_shortages(state: GameState) -> list[str]:
         msgs.append(f"\033[31m{deaths} lost hope and left the bunker!\033[0m")
     if state.resources.meds <= 0:
         state.resources.meds = 0
-        msgs.append(f"\033[31mNo medicine left!\033[0m")
+        msgs.append("\033[31mNo medicine left!\033[0m")
     return msgs
 
 
@@ -335,7 +337,9 @@ def resolve_event(state: GameState, event_id: str) -> str:
             return "\033[32mThe reinforced door holds. Raiders move on.\033[0m"
         else:
             state.resources.scrap = max(0, state.resources.scrap - 10)
-            return "\033[31mYou hurriedly reinforce the door. They move on but took some scrap.\033[0m"
+            return (
+                "\033[31mYou hurriedly reinforce the door. They move on but took some scrap.\033[0m"
+            )
     elif event_id == "raiders_fight":
         casualties = random.randint(0, 2)
         state.population = max(1, state.population - casualties)
@@ -343,6 +347,7 @@ def resolve_event(state: GameState, event_id: str) -> str:
         state.resources.scrap = min(100, state.resources.scrap + random.randint(3, 10))
         return "\033[33mYou fought them off. Casualties but gained some scrap.\033[0m"
     return "\033[90mNothing happens.\033[0m"
+
 
 UPGRADE_EVENTS = [
     {
@@ -422,7 +427,9 @@ def workshop_action(state: GameState):
             time.sleep(1)
             continue
         if state.resources.scrap < u["cost"]:
-            slow_type(f"\n  \033[31mNeed {u['cost']} scrap — you have {state.resources.scrap}\033[0m")
+            slow_type(
+                f"\n  \033[31mNeed {u['cost']} scrap — you have {state.resources.scrap}\033[0m"
+            )
             time.sleep(1.5)
             continue
 
@@ -460,7 +467,9 @@ def scavenge(state: GameState):
     state.resources.scrap = min(100, state.resources.scrap + found_scrap)
     state.resources.meds = min(100, state.resources.meds + found_meds)
 
-    print(f"  Found: \033[33m+{found_food} food\033[0m, \033[37m+{found_scrap} scrap\033[0m", end="")
+    print(
+        f"  Found: \033[33m+{found_food} food\033[0m, \033[37m+{found_scrap} scrap\033[0m", end=""
+    )
     if found_meds:
         print(f", \033[31m+{found_meds} meds\033[0m", end="")
     print()
@@ -469,19 +478,19 @@ def scavenge(state: GameState):
         casualty = random.randint(0, 1)
         if casualty:
             state.population = max(1, state.population - 1)
-            slow_type(f"\n  \033[31mOne of the scavengers didn't make it back.\033[0m")
+            slow_type("\n  \033[31mOne of the scavengers didn't make it back.\033[0m")
         else:
-            slow_type(f"\n  \033[33mThe team encountered danger but escaped unharmed.\033[0m")
+            slow_type("\n  \033[33mThe team encountered danger but escaped unharmed.\033[0m")
         state.resources.morale = max(0, state.resources.morale - 5)
     elif risk < 0.05:
         state.resources.power = max(0, state.resources.power + random.randint(5, 15))
-        slow_type(f"\n  \033[36mThey found spare batteries! +power\033[0m")
+        slow_type("\n  \033[36mThey found spare batteries! +power\033[0m")
 
     state.scavenge_cooldown = 3
     time.sleep(2)
 
 
-def trigger_random_event(state: GameState) -> Optional[str]:
+def trigger_random_event(state: GameState) -> str | None:
     """Trigger a random event with player choices."""
     event = random.choice(EVENTS)
     clear()
@@ -513,7 +522,9 @@ def season_advance(state: GameState):
         clear()
         header(f"Season Change — {state.season.value}")
         if state.season == Season.WINTER:
-            slow_type("  Winter sets in. Surface temperatures plummet.\n  Power consumption increases.\n")
+            slow_type(
+                "  Winter sets in. Surface temperatures plummet.\n  Power consumption increases.\n"
+            )
             state.resources.power -= 10
         elif state.season == Season.SUMMER:
             slow_type("  Summer heat. Water evaporates faster.\n")
@@ -536,10 +547,10 @@ def check_win(state: GameState) -> bool:
 def save_game(state: GameState):
     data = asdict(state)
     SAVE_PATH.write_text(json.dumps(data, indent=2))
-    print(f"\n  \033[90mGame saved.\033[0m")
+    print("\n  \033[90mGame saved.\033[0m")
 
 
-def load_game() -> Optional[GameState]:
+def load_game() -> GameState | None:
     if SAVE_PATH.exists():
         try:
             data = json.loads(SAVE_PATH.read_text())
@@ -589,9 +600,13 @@ def main_loop():
     else:
         print(title_art)
         print()
-        slow_type("  The sirens faded hours ago.\n  The last news broadcast mentioned\n  something about nuclear winter\n  lasting for years.\n")
+        slow_type(
+            "  The sirens faded hours ago.\n  The last news broadcast mentioned\n  something about nuclear winter\n  lasting for years.\n"
+        )
         time.sleep(1)
-        slow_type("  \033[36mYou are the bunker commander now.\n  12 people. Limited supplies.\n  Keep everyone alive.\033[0m\n")
+        slow_type(
+            "  \033[36mYou are the bunker commander now.\n  12 people. Limited supplies.\n  Keep everyone alive.\033[0m\n"
+        )
         time.sleep(1.5)
         state = GameState()
 
@@ -656,13 +671,17 @@ def main_loop():
         time.sleep(0.5)
         slow_type(f"  \033[32m{state.population} survivors emerge into the sunlight.\033[0m\n")
         time.sleep(0.5)
-        slow_type("  \033[36mYou led them through the darkest days.\n  The world can begin again.\033[0m\n")
+        slow_type(
+            "  \033[36mYou led them through the darkest days.\n  The world can begin again.\033[0m\n"
+        )
     else:
         header("💀 GAME OVER")
         if state.population <= 0:
             slow_type("  Everyone is gone.\n  The bunker is silent.\n")
         else:
-            slow_type(f"  After {state.day} days, the bunker fell.\n  {state.population} survivors remain.\n")
+            slow_type(
+                f"  After {state.day} days, the bunker fell.\n  {state.population} survivors remain.\n"
+            )
 
     print(f"  \033[90mDays survived: {state.day}\033[0m")
     print(f"  \033[90mFinal population: {state.population}\033[0m")

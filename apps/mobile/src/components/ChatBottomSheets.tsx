@@ -1,10 +1,12 @@
 import React from 'react';
 import {Modal, FlatList, TextInput as RNTextInput, Platform} from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
+import {TamaguiProvider} from '../theme/TamaguiProvider';
 import {useColors} from '../theme/colors';
 import {useChatStore} from '../stores/chat-store';
 import {useSettingsStore} from '../stores/settings-store';
 import {useModelStore} from '../stores/model-store';
+import {api} from '../services/api-client';
 import {toast} from '../services/toast';
 import * as labelsService from '../services/labels';
 import {Icon} from './Icon';
@@ -103,6 +105,7 @@ export function ChatBottomSheets({
   const colors = useColors();
 
   return (
+    <TamaguiProvider>
     <>
       {/* Conversation Info — bottom sheet */}
       <Modal visible={showInfo} animationType="slide" transparent onRequestClose={() => setShowInfo(false)}>
@@ -699,6 +702,7 @@ export function ChatBottomSheets({
         </YStack>
       </Modal>
     </>
+    </TamaguiProvider>
   );
 }
 
@@ -758,7 +762,7 @@ function ChatSettingsContent() {
         borderRadius={10}
         alignItems="center"
         backgroundColor={colors.primaryAlpha(0.08)}
-        onPress={() => update({temperature: 0.8, maxTokens: 256, topP: 0.9, topK: 50})}
+        onPress={() => update({temperature: 0.7, maxTokens: 256, topP: 0.85, topK: 40})}
         pressStyle={{opacity: 0.7, scale: 0.98}}>
         <Text fontSize={13} fontWeight="600" color={colors.primary}>Reset to Defaults</Text>
       </YStack>
@@ -775,11 +779,8 @@ function SystemPromptContent() {
   React.useEffect(() => {
     const fetchPrompt = async () => {
       try {
-        const res = await fetch('http://localhost:8000/souls/current');
-        if (res.ok) {
-          const data = await res.json();
-          setPrompt(data.system_prompt || data.description || 'No system prompt available for this soul.');
-        }
+        const data = await api.get<{system_prompt?: string; description?: string}>('/souls/current');
+        setPrompt(data.system_prompt || data.description || 'No system prompt available for this soul.');
       } catch {
         setPrompt('Unable to load system prompt.');
       } finally {

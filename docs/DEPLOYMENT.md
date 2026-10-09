@@ -63,6 +63,18 @@ docker compose -f infra/docker/docker-compose.yml --profile vector up -d weaviat
 docker compose -f infra/docker/docker-compose.yml up -d api redis prometheus grafana
 ```
 
+### 7. Static frontend through the gateway (recommended)
+
+```bash
+cd apps/web && npm run build:vite     # → apps/web/dist-vite (same-origin build)
+# restart the gateway so it picks the build up as its document root
+```
+
+One origin (gateway `:8080`) serves the shell, relays the API and streams SSE —
+no Node server in the path and no CORS. Deep links get `index.html`; data
+requests relay to the sidecar; the shell still loads when the API is down.
+`main.py --web` is retired (it no longer spawns Next).
+
 ## Environment Configuration
 
 Copy `.env.example` to `.env` and configure:

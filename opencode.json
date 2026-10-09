@@ -35,6 +35,16 @@
       "template": "Load relevant docs for the given task area (frontend, backend, core, sdk, infra, cli). Read the doc map in .opencode/agents/doc-aware-engineer.md, then load the docs.",
       "description": "Load relevant project docs before making changes",
       "agent": "doc-aware-engineer"
+    },
+    "systems": {
+      "template": "Run systems engineering on the specified target: kernel, init, vm, buildroot, driver <name>, syscall <name>, addon <name>, pane, surface, tui, v86. Design and implement OS-level components for the Dait operating system.",
+      "description": "Design and implement OS components, kernel modules, drivers, Buildroot configs, or VM extensions",
+      "agent": "systems-engineer"
+    },
+    "test": {
+      "template": "Write tests for the specified target. Detect the type automatically: if the target is a React component or page (.tsx), write vitest component tests. If it's a Python module (.py), write pytest unit tests. If it's a page flow or the user says 'journey', add Playwright tests to test_user_journeys.py. If the user says 'coverage', measure and improve coverage. Always check what tests exist first, then fill gaps.",
+      "description": "Write tests for any target (auto-detects unit, component, journey, coverage)",
+      "agent": "test-writer"
     }
   },
   "agent": {
@@ -59,7 +69,17 @@
       "hidden": false
     },
     "qa-developer": {
-      "description": "QA developer agent for core backend infrastructure. Finds regressions, fixes backend logic bugs, and improves test coverage in packages/core-py/domains/.",
+      "description": "QA developer agent for core backend infrastructure. Finds regressions, fixes backend logic bugs, and improves test coverage in domain/.",
+      "mode": "subagent",
+      "hidden": false
+    },
+    "systems-engineer": {
+      "description": "Systems engineering agent for OS design and code. Writes kernel modules, device drivers, init system services, Buildroot configurations, and VM infrastructure.",
+      "mode": "subagent",
+      "hidden": false
+    },
+    "test-writer": {
+      "description": "Writes unit tests, component tests, Playwright journey tests, and improves coverage. Use for 'add tests', 'write tests', 'coverage', 'journey tests'.",
       "mode": "subagent",
       "hidden": false
     }

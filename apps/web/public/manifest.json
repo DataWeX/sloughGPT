@@ -1,0 +1,17 @@
+{
+  "name": "Man - AI Platform",
+  "short_name": "Man",
+  "description": "Man — your personal AI. Train it on your own data, then chat, write and learn together.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#110f18",
+  "theme_color": "#7c52c4",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

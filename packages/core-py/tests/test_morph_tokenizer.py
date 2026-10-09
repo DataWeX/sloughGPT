@@ -1,8 +1,9 @@
 """Tests for MorphTokenizer — own BPE + morphological analysis."""
 
 import pytest
-from domains.infrastructure.morph_tokenizer import MorphTokenizer
-from domains.infrastructure.safetensors_loader import _find_safetensors, _get_model_dir
+
+from domain.infrastructure._internal.model_resolver import get_model_dir
+from domain.infrastructure._internal.morph_tokenizer import MorphTokenizer
 
 QWEN2_ID = "Qwen/Qwen2.5-0.5B-Instruct"
 
@@ -13,7 +14,7 @@ def _is_cached(model_id: str) -> bool:
     Uses the same resolution the loader uses (searching both the standard HF
     cache and the flat project-local models/hf-cache/hub layout).
     """
-    return (_get_model_dir(model_id) / "tokenizer.json").exists()
+    return (get_model_dir(model_id) / "tokenizer.json").exists()
 
 
 class TestMorphTokenizerGPT2:
@@ -226,3 +227,37 @@ class TestMorphTokenizerLocalDir:
         tok = MorphTokenizer.from_pretrained(str(tmp_path))
         assert tok.vocab_size == 4
         assert tok.encode("abc") == [0, 1, 2]
+
+
+class TestByteFallbackDecodeStreaming:
+    """Single-token streaming decode must preserve ▁→space (card 053).
+
+    Full-sequence decode suppresses the first token's ▁ (SentencePiece
+    convention) — that must stay. Single-token decode (slonet_provider chat
+    stream decodes one id per call) must NOT drop the ▁, or streamed words
+    glue together.
+    """
+
+    @pytest.fixture
+    def tok(self):
+        return MorphTokenizer(
+            vocab={"▁Hello": 10, "▁world": 11, "<0x41>": 12},
+            merges=[],
+            byte_fallback=True,
+            byte_level=False,
+            eos_token_id=0,
+        )
+
+    def test_single_token_decode_preserves_space(self, tok):
+        assert tok.decode([10]) == " Hello"
+
+    def test_single_byte_token_decodes(self, tok):
+        assert tok.decode([12]) == "A"
+
+    def test_full_sequence_first_space_suppressed(self, tok):
+        assert tok.decode([10, 11]) == "Hello world"
+
+    def test_stream_concat_matches_full_decode_after_start_strip(self, tok):
+        ids = [10, 11]
+        streamed = "".join(tok.decode([i]) for i in ids)
+        assert streamed.lstrip(" ") == tok.decode(ids)

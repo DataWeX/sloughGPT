@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useMemo, memo } from 'react'
-import { Button, IconX, IconCheck, IconFile, IconExternalLink, IconInfo, IconChat } from '@sloughgpt/strui'
+import { Button, IconX, IconFile, IconExternalLink, IconInfo, IconChat } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
 
@@ -180,6 +180,7 @@ export const SmartContextSuggestions = memo(function SmartContextSuggestions({
         className="h-4 w-4"
         onClick={handleDismiss}
         title="Dismiss"
+        aria-label="Dismiss"
       >
         <IconX className="h-2.5 w-2.5" />
       </Button>

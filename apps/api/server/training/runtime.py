@@ -28,7 +28,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.training.runtime")
 
@@ -55,12 +55,12 @@ class TrainingRuntime:
         self._grace_timeout_s = grace_timeout_s
         self._lock = threading.Lock()
         # job_id -> {"job": dict, "cancel_event": threading.Event | None}
-        self._jobs: Dict[str, Dict[str, Any]] = {}
+        self._jobs: dict[str, dict[str, Any]] = {}
 
     def _get_store(self):
         """Resolve the JobStore lazily (injectable for tests)."""
         if self._store is None:
-            from training.job_store import get_job_store
+            from .job_store import get_job_store
 
             self._store = get_job_store()
         return self._store
@@ -71,8 +71,8 @@ class TrainingRuntime:
         self,
         job_id: str,
         job: dict[str, Any],
-        cancel_event: Optional[threading.Event] = None,
-        config: Optional[Dict[str, Any]] = None,
+        cancel_event: threading.Event | None = None,
+        config: dict[str, Any] | None = None,
     ) -> None:
         """Register a live job and persist its initial row.
 
@@ -90,9 +90,7 @@ class TrainingRuntime:
             self._jobs[job_id] = {"job": job, "cancel_event": cancel_event}
         self._ensure_row(job_id, job, config)
 
-    def _ensure_row(
-        self, job_id: str, job: dict[str, Any], config: Optional[Dict[str, Any]]
-    ) -> None:
+    def _ensure_row(self, job_id: str, job: dict[str, Any], config: dict[str, Any] | None) -> None:
         """Create a store row for the job if it does not already exist."""
         store = self._get_store()
         if store.get(job_id) is not None:
@@ -112,13 +110,13 @@ class TrainingRuntime:
         except Exception as e:
             logger.warning("JobStore create failed for %s: %s", job_id, e, extra={"tag": "TRAIN"})
 
-    def _get_job(self, job_id: str) -> Optional[dict[str, Any]]:
+    def _get_job(self, job_id: str) -> dict[str, Any] | None:
         """Return the tracked in-memory job dict, if any."""
         with self._lock:
             entry = self._jobs.get(job_id)
         return entry.get("job") if entry else None
 
-    def get(self, job_id: str) -> Optional[dict[str, Any]]:
+    def get(self, job_id: str) -> dict[str, Any] | None:
         """Return the tracked job dict (mutable reference) or None.
 
         Callers may mutate the returned dict in place; ``sync`` reads it back.
@@ -143,7 +141,7 @@ class TrainingRuntime:
         if store.get(job_id) is None:
             self._ensure_row(job_id, rec, rec.get("config"))
         status = str(rec.get("status") or "running")
-        fields: Dict[str, Any] = {
+        fields: dict[str, Any] = {
             "name": rec.get("name"),
             "status": status,
             "progress": rec.get("progress", 0),
@@ -171,26 +169,28 @@ class TrainingRuntime:
     # ── Shutdown ──────────────────────────────────────────────────────────
 
     def _signal_auto_train_cancel(self) -> None:
-        """Set the auto-train router's module-level cancel events."""
+        """Set the service-layer cancel events for auto-train and turbo."""
         try:
-            import routers.auto_train as at
+            from domain.training._internal.service import get_cancel_event, get_turbo_cancel_event
 
-            ev = getattr(at, "_auto_train_cancel_event", None)
+            ev = get_cancel_event()
             if ev is not None:
                 try:
                     ev.set()
-                except Exception:
-                    pass
-            tev = getattr(at, "_turbo_cancel_event", None)
+                except Exception as exc:
+                    logger.debug("Failed to set cancel event: %s", exc, extra={"tag": "TRAIN"})
+            tev = get_turbo_cancel_event()
             if tev is not None:
                 try:
                     tev.set()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Failed to set turbo cancel event: %s", exc, extra={"tag": "TRAIN"}
+                    )
         except Exception as e:
             logger.debug("Auto-train cancel signal failed: %s", e, extra={"tag": "TRAIN"})
 
-    def shutdown(self, timeout_s: Optional[float] = None) -> None:
+    def shutdown(self, timeout_s: float | None = None) -> None:
         """Gracefully stop every tracked job and persist the final state.
 
         Sequence:
@@ -218,8 +218,13 @@ class TrainingRuntime:
             if ev is not None:
                 try:
                     ev.set()
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(
+                        "Failed to set cancel event for job %s: %s",
+                        jid,
+                        exc,
+                        extra={"tag": "TRAIN"},
+                    )
                 cooperative.append(jid)
 
         # Jobs without a cooperative cancel event (e.g. SSE auto-train) cannot
@@ -262,7 +267,9 @@ class TrainingRuntime:
                         extra={"tag": "TRAIN"},
                     )
                 except Exception as e:
-                    logger.warning("Interrupt mark failed for %s: %s", jid, e, extra={"tag": "TRAIN"})
+                    logger.warning(
+                        "Interrupt mark failed for %s: %s", jid, e, extra={"tag": "TRAIN"}
+                    )
 
     # ── Startup restore ───────────────────────────────────────────────────
 
@@ -295,7 +302,9 @@ class TrainingRuntime:
                         extra={"tag": "START"},
                     )
                 except Exception as e:
-                    logger.warning("Stale mark failed for %s: %s", row["id"], e, extra={"tag": "START"})
+                    logger.warning(
+                        "Stale mark failed for %s: %s", row["id"], e, extra={"tag": "START"}
+                    )
 
         try:
             from training.jobs import training_jobs
@@ -331,7 +340,7 @@ class TrainingRuntime:
             }
 
 
-_runtime: Optional[TrainingRuntime] = None
+_runtime: TrainingRuntime | None = None
 _runtime_lock = threading.Lock()
 
 
@@ -343,3 +352,13 @@ def get_training_runtime() -> TrainingRuntime:
             if _runtime is None:
                 _runtime = TrainingRuntime()
     return _runtime
+
+
+def _register_runtime_with_core() -> None:
+    """Register this runtime as the implementation for the core protocol."""
+    try:
+        from domain.training._internal.runtime_protocol import set_training_runtime
+
+        set_training_runtime(_runtime or get_training_runtime())
+    except ImportError:
+        logger.debug("Training runtime protocol not available")

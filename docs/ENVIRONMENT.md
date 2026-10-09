@@ -4,14 +4,15 @@ Complete reference for all environment variables used in SloughGPT.
 
 ## Quick Reference
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SLO_API_KEY` | Yes | - | API key for authentication |
-| `SLO_JWT_SECRET` | Yes | - | Secret for JWT token signing |
-| `SLO_ENV` | No | `development` | Environment mode |
-| `SLO_HOST` | No | `0.0.0.0` | Server host |
-| `SLO_PORT` | No | `8000` | Server port |
-| `SLO_RELOAD` | No | `false` | Enable auto-reload on file changes |
+| Variable                   | Required | Default                          | Description                                          |
+| -------------------------- | -------- | -------------------------------- | ---------------------------------------------------- |
+| `SLO_API_KEY`              | Yes      | -                                | API key for authentication                           |
+| `SLO_JWT_SECRET`           | Yes      | -                                | Secret for JWT token signing                         |
+| `SLO_ENV`                  | No       | `development`                    | Environment mode                                     |
+| `SLO_HOST`                 | No       | `0.0.0.0`                        | Server host                                          |
+| `SLO_PORT`                 | No       | `8000`                           | Server port                                          |
+| `SLO_RELOAD`               | No       | `false`                          | Enable auto-reload on file changes                   |
+| `SLO_STARTUP_HISTORY_PATH` | No       | `~/.slogpt/startup_history.json` | Retired startup-history JSON (migration source only) |
 
 **Legacy names:** older docs and images used a typo (`SLAUGHGPT_*`). The server still accepts `SLAUGHGPT_API_KEY`, `SLAUGHGPT_JWT_SECRET`, and `SLAUGHGPT_API_KEYS` if the `SLO_*` counterparts are unset. Prefer `SLO_*` for new deployments.
 
@@ -20,6 +21,7 @@ Complete reference for all environment variables used in SloughGPT.
 ## Authentication
 
 ### SLO_API_KEY
+
 **Required in production**
 
 API key for authenticating requests.
@@ -33,6 +35,7 @@ SLO_API_KEY=your-generated-key-here
 ```
 
 ### SLO_API_KEYS
+
 **Optional**
 
 Comma-separated list of multiple valid API keys.
@@ -42,6 +45,7 @@ SLO_API_KEYS=key1,key2,key3
 ```
 
 ### SLO_JWT_SECRET
+
 **Required in production**
 
 Secret key for signing JWT tokens.
@@ -58,7 +62,58 @@ SLO_JWT_SECRET=your-64-character-secret
 
 ## Server Configuration
 
+### MAN_GATEWAY_PORT
+
+**Optional** · Rust edge (`apps/gateway`)
+
+Listen port for `slough-gateway` (default `8080`).
+
+```bash
+MAN_GATEWAY_PORT=8080
+```
+
+### MAN_CORE_URL
+
+**Optional** · Rust edge
+
+Upstream Python API base URL the edge relays to (default `http://127.0.0.1:8000`).
+
+```bash
+MAN_CORE_URL=http://127.0.0.1:8000
+```
+
+### MAN_STATIC_DIR
+
+**Optional** · Rust edge
+
+Directory of static files to mount at `/static` when present (default `apps/web/.next/static`). Missing dir is skipped.
+
+```bash
+MAN_STATIC_DIR=apps/web/.next/static
+```
+
+### MAN_GATEWAY_DENY
+
+**Optional** · Rust edge
+
+Comma-separated path prefixes rejected at the edge with **403** before Python is contacted (boundary match: `/shell` blocks `/shell/run`, not `/shelladmin`). Traversal (`..`), `..` substrings, and NUL are always rejected.
+
+```bash
+MAN_GATEWAY_DENY=/shell,/datasets
+```
+
+### MAN_GATEWAY_CHAT_ONLY
+
+**Optional** · Rust edge
+
+When `1`/`true`/`yes`/`on`, only the conversation surface is allowed (`/chat`, `/inference`, `/models`, `/session`, `/memory`, `/companion`, `/souls`, `/feedback`, `/conversations`, `/docs`, `/redoc`, `/openapi.json`, `/metrics`, `/system`, `/health*`). Everything else → **403**. Exposure shape only — auth and rate limits stay in Python.
+
+```bash
+MAN_GATEWAY_CHAT_ONLY=1
+```
+
 ### SLO_ENV
+
 **Optional**
 
 Environment mode.
@@ -68,6 +123,7 @@ SLO_ENV=development  # or production
 ```
 
 ### SLO_HOST
+
 **Optional**
 
 Server bind address.
@@ -77,6 +133,7 @@ SLO_HOST=0.0.0.0  # Default
 ```
 
 ### SLO_PORT
+
 **Optional**
 
 Server port.
@@ -86,6 +143,7 @@ SLO_PORT=8000  # Default
 ```
 
 ### SLO_RELOAD
+
 **Optional**
 
 Enable uvicorn auto-reload on Python file changes.
@@ -95,6 +153,7 @@ SLO_RELOAD=true  # Default: false
 ```
 
 ### SLO_ENABLE_PROCESS_GUARD
+
 **Optional**
 
 Run model inference in a guarded subprocess for crash isolation. When enabled,
@@ -111,11 +170,81 @@ SLO_ENABLE_PROCESS_GUARD=true  # Default: true
 Related knobs: `SLO_GUARD_MAX_RESTARTS` (default `3`), `SLO_GUARD_RESTART_DELAY`
 (seconds), `SLO_GUARD_MEMORY_LIMIT_MB`, `SLO_PROCESS_GUARD_CONCURRENT`.
 
+### SLO_STARTUP_HISTORY_PATH
+
+Path of the **retired** JSON-file startup-history store (default
+`~/.slogpt/startup_history.json`). Startup history now persists to the MogDB
+store at `data/startup_history_mogdb`; this variable is read once at boot — if
+the legacy file exists, its records are imported and the original is kept as
+`.bak` (never deleted). Leave unset to use the default location.
+
+---
+
+## Memory Pressure (System)
+
+The `MemoryPressureMonitor` proactively detects high system memory usage and
+triggers graduated cleanup actions: cache clearing, garbage collection, idle
+model weight release, and inference/load blocking.
+
+### SLO_MEMORY_PRESSURE_WARNING
+
+**Optional** — Default: `80`
+
+System memory percent at which the monitor logs a warning and clears caches
+(KV cache, process state).
+
+```bash
+SLO_MEMORY_PRESSURE_WARNING=80
+```
+
+### SLO_MEMORY_PRESSURE_CRITICAL
+
+**Optional** — Default: `90`
+
+System memory percent at which the monitor forces garbage collection, drops
+KV caches, releases idle model weights, runs `malloc_trim`, and stops guard
+subprocesses.
+
+```bash
+SLO_MEMORY_PRESSURE_CRITICAL=90
+```
+
+### SLO_MEMORY_PRESSURE_EMERGENCY
+
+**Optional** — Default: `95`
+
+System memory percent at which the monitor blocks new model loads and returns
+an error from inference requests. Use when you want to prevent OOM kills
+entirely.
+
+```bash
+SLO_MEMORY_PRESSURE_EMERGENCY=95
+```
+
+### SLO_IDLE_TIMEOUT
+
+**Optional** — Default: `300`
+
+Seconds of inactivity before a loaded model is automatically unloaded to free
+memory. Set to `0` to disable idle unloading. Models are transparently
+reloaded on the next inference request.
+
+```bash
+SLO_IDLE_TIMEOUT=300  # 5 minutes
+```
+
+### API Endpoints
+
+- `GET /models/memory-pressure` — current pressure stats (level, percent, thresholds, counters)
+- `POST /models/memory-cleanup` — force an immediate cleanup cycle
+- `GET /health/detailed` — includes `memory_pressure` block
+
 ---
 
 ## Memory (Auto-Memory)
 
 ### Behavior
+
 Every completed chat turn (user + assistant, combined ≥ `SLO_MEMORY_MIN_CHARS`
 chars) is distilled into knowledge facts automatically. When facts exist, the
 chat loop builds a context frame: the RAG layer pulls relevance-gated facts
@@ -125,6 +254,7 @@ prompt alongside the context-manager system prompt. Disable entirely with
 `SLO_MEMORY_ENABLED=false`.
 
 ### SLO_MEMORY_ENABLED
+
 **Optional** — Default: `true`
 
 Master switch for the auto-memory layer. When `false`, every memory method
@@ -136,6 +266,7 @@ SLO_MEMORY_ENABLED=false   # disable long-term learning
 ```
 
 ### SLO_MEMORY_MIN_CHARS
+
 **Optional** — Default: `80`
 
 Minimum combined length (user message + assistant response) before a completed
@@ -146,6 +277,7 @@ SLO_MEMORY_MIN_CHARS=120   # only remember substantive exchanges
 ```
 
 ### SLO_MEMORY_MAX_FACTS
+
 **Optional** — Default: `5`
 
 Maximum number of memory facts returned by a single retrieval.
@@ -155,6 +287,7 @@ SLO_MEMORY_MAX_FACTS=10
 ```
 
 ### SLO_MEMORY_STORE_PATH
+
 **Optional** — Default: `data/memory`
 
 Directory used by the task-backed memory store (`memory.remember` /
@@ -164,6 +297,7 @@ learner's `KnowledgeMemoryProvider` remains the retrieval index; this archive
 is the durable, inspectable record of task-mined facts.
 
 ### SLO_MEMORY_SYNC
+
 **Optional** — Default: `false`
 
 When `true`, `remember()` stores inline instead of being offloaded to a worker
@@ -171,6 +305,7 @@ thread. Useful for tests and CLI/task producers; the chat loop always uses
 `asyncio.to_thread`.
 
 ### SLO_MEMORY_CONSOLIDATION_THRESHOLD
+
 **Optional** — Default: `0.80`
 
 Minimum n-gram cosine similarity for two same-topic facts to be treated as
@@ -185,6 +320,7 @@ SLO_MEMORY_CONSOLIDATION_THRESHOLD=0.90   # conservative: only near-verbatim
 ```
 
 ### SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES
+
 **Optional** — Default: `60`
 
 How often the server runs an automatic maintenance pass. Each pass prunes
@@ -199,6 +335,7 @@ SLO_MEMORY_MAINTENANCE_INTERVAL_MINUTES=1440   # once a day
 ```
 
 ### SLO_MEMORY_ARCHIVE_RETENTION_DAYS
+
 **Optional** — Default: `30`
 
 Every `memory.store`, `memory.remember`, and `memory.consolidate` task append
@@ -220,6 +357,7 @@ SLO_MEMORY_ARCHIVE_RETENTION_DAYS=90   # keep three months of provenance
 ## Logging
 
 ### SLO_LOG_LEVEL
+
 **Optional**
 
 Minimum log level for server output.
@@ -229,20 +367,39 @@ SLO_LOG_LEVEL=INFO   # DEBUG, INFO, WARNING, ERROR, CRITICAL
 ```
 
 ### SLO_LOG_FORMAT
+
 **Optional**
 
-Output format for logs. Use `json` for structured logging (log aggregation, ELK stack, Datadog).
+Console output format. File logs (`logs/sloughgpt.log`) are always
+systemd-style syslog lines (no hostname), e.g.
+`Sep 18 09:31:02 slo.startup[385542]: INFO [START] model loaded`.
 
 ```bash
-SLO_LOG_FORMAT=human  # "human" (colored terminal) or "json" (structured JSON lines)
+SLO_LOG_FORMAT=human  # console: "human" (colored terminal), "json", "slo" or "syslog"
 ```
 
-JSON output example:
-```json
-{"ts":"2026-07-15T03:33:03.454Z","level":"INFO","logger":"man.api","msg":"Server started","tag":"START","ctx":{"port":8000}}
+### SLO_LOG_DIR
+
+**Optional**
+
+Directory for log file output. Defaults to `logs/` in the repo root. A `sloughgpt.log` file is created with rotation (10 MB per file, 5 backups).
+
+```bash
+SLO_LOG_DIR=/var/log/sloughgpt
+```
+
+### SLO_LOG_NO_FILE
+
+**Optional**
+
+Disable file-based log output entirely (logs go to stderr only).
+
+```bash
+SLO_LOG_NO_FILE=1   # no sloughgpt.log file created
 ```
 
 ### SLO_LOG_COLOR
+
 **Optional**
 
 Force or disable ANSI color output in `human` format. Defaults to auto-detection (colors are emitted only when stderr is a TTY and `NO_COLOR` is unset). `NO_COLOR=1` always disables colors.
@@ -256,46 +413,46 @@ SLO_LOG_COLOR=0   # force plain text even in a terminal
 
 Every log line includes a category tag for quick visual scanning:
 
-| Tag | Category | Example |
-|-----|----------|---------|
-| `[START]` | Server startup, config | `Phase 4: loading model` |
-| `[MODEL]` | Model loading, providers | `Registered hf-default: Qwen2.5-0.5B` |
-| `[SOUL]` | Soul management, personality | `Found 7 souls` |
-| `[REQ]` | HTTP requests, timing | `GET /chat 200 (0.34s)` |
-| `[INF]` | Inference, streaming, knowledge | `Client disconnected` |
-| `[INFO]` | Per-request generation telemetry (debug) | `generate_sync (mode=guard)` |
-| `[TRAIN]` | Training pipeline | `Auto-train configured` |
-| `[INFRA]` | Infrastructure, deployment | `RateLimitMiddleware registered` |
-| `[AUTH]` | Authentication | `Token expiring` |
+| Tag       | Category                                 | Example                               |
+| --------- | ---------------------------------------- | ------------------------------------- |
+| `[START]` | Server startup, config                   | `Phase 4: loading model`              |
+| `[MODEL]` | Model loading, providers                 | `Registered hf-default: Qwen2.5-0.5B` |
+| `[SOUL]`  | Soul management, personality             | `Found 7 souls`                       |
+| `[REQ]`   | HTTP requests, timing                    | `GET /chat 200 (0.34s)`               |
+| `[INF]`   | Inference, streaming, knowledge          | `Client disconnected`                 |
+| `[INFO]`  | Per-request generation telemetry (debug) | `generate_sync (mode=guard)`          |
+| `[TRAIN]` | Training pipeline                        | `Auto-train configured`               |
+| `[INFRA]` | Infrastructure, deployment               | `RateLimitMiddleware registered`      |
+| `[AUTH]`  | Authentication                           | `Token expiring`                      |
 
 ### Error Codes
 
 Structured error codes for programmatic handling:
 
-| Code | Category | Description |
-|------|----------|-------------|
-| `E_AUTH_MISSING` | Auth | No API key provided |
-| `E_AUTH_EXPIRED` | Auth | Token expired |
-| `E_AUTH_INVALID` | Auth | Invalid token |
-| `E_AUTH_FORBIDDEN` | Auth | Insufficient permissions |
-| `E_MODEL_LOAD` | Model | Failed to load model |
-| `E_MODEL_OOM` | Model | Out of memory |
-| `E_MODEL_TIMEOUT` | Model | Inference timeout |
-| `E_MODEL_CRASH` | Model | Model crashed |
-| `E_MODEL_WARMUP` | Model | Warmup failed |
-| `E_INF_TOKENIZER` | Inference | Tokenizer error |
-| `E_INF_GENERATION` | Inference | Generation failed |
-| `E_INF_CACHE` | Inference | Cache error |
-| `E_INFRA_STARTUP` | Infra | Startup failed |
-| `E_INFRA_TIMEOUT` | Infra | Request timeout |
-| `E_INFRA_REGISTRY` | Infra | Registry error |
-| `E_INFRA_PROVIDER` | Infra | Provider error |
-| `E_VAL_REQUEST` | Validation | Invalid request |
-| `E_VAL_FIELD` | Validation | Invalid field |
-| `E_TRAIN_DATA` | Training | Data error |
-| `E_TRAIN_CRASH` | Training | Training crashed |
-| `E_TRAIN_CHECKPOINT` | Training | Checkpoint error |
-| `E_DOMAIN` | Domain | Business logic error |
+| Code                 | Category   | Description              |
+| -------------------- | ---------- | ------------------------ |
+| `E_AUTH_MISSING`     | Auth       | No API key provided      |
+| `E_AUTH_EXPIRED`     | Auth       | Token expired            |
+| `E_AUTH_INVALID`     | Auth       | Invalid token            |
+| `E_AUTH_FORBIDDEN`   | Auth       | Insufficient permissions |
+| `E_MODEL_LOAD`       | Model      | Failed to load model     |
+| `E_MODEL_OOM`        | Model      | Out of memory            |
+| `E_MODEL_TIMEOUT`    | Model      | Inference timeout        |
+| `E_MODEL_CRASH`      | Model      | Model crashed            |
+| `E_MODEL_WARMUP`     | Model      | Warmup failed            |
+| `E_INF_TOKENIZER`    | Inference  | Tokenizer error          |
+| `E_INF_GENERATION`   | Inference  | Generation failed        |
+| `E_INF_CACHE`        | Inference  | Cache error              |
+| `E_INFRA_STARTUP`    | Infra      | Startup failed           |
+| `E_INFRA_TIMEOUT`    | Infra      | Request timeout          |
+| `E_INFRA_REGISTRY`   | Infra      | Registry error           |
+| `E_INFRA_PROVIDER`   | Infra      | Provider error           |
+| `E_VAL_REQUEST`      | Validation | Invalid request          |
+| `E_VAL_FIELD`        | Validation | Invalid field            |
+| `E_TRAIN_DATA`       | Training   | Data error               |
+| `E_TRAIN_CRASH`      | Training   | Training crashed         |
+| `E_TRAIN_CHECKPOINT` | Training   | Checkpoint error         |
+| `E_DOMAIN`           | Domain     | Business logic error     |
 
 ---
 
@@ -303,10 +460,10 @@ Structured error codes for programmatic handling:
 
 The following environment variable names are accepted as fallbacks:
 
-| Legacy Name | Modern Name |
-|-------------|-------------|
-| `SLAUGHGPT_API_KEY` | `SLO_API_KEY` |
+| Legacy Name            | Modern Name      |
+| ---------------------- | ---------------- |
+| `SLAUGHGPT_API_KEY`    | `SLO_API_KEY`    |
 | `SLAUGHGPT_JWT_SECRET` | `SLO_JWT_SECRET` |
-| `SLAUGHGPT_API_KEYS` | `SLO_API_KEYS` |
+| `SLAUGHGPT_API_KEYS`   | `SLO_API_KEYS`   |
 
 These are read from `settings.py` if the `SLO_*` variant is unset. New deployments should use only `SLO_*` names.

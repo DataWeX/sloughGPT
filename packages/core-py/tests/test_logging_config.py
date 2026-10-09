@@ -1,0 +1,727 @@
+"""
+Tests for domain.logging._internal.config — centralized logging configuration.
+
+Covers:
+    - setup_logging() with all parameter combinations
+    - LogFormatter (console human-readable + file JSON)
+    - Correlation ID injection via contextvars
+    - Log context merging
+    - File handler with rotation
+    - ClientExtensionFilter
+    - Third-party logger suppression
+    - Record factory enrichment
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import logging.handlers
+import os
+import re
+import socket
+import sys
+import tempfile
+import threading
+from io import StringIO
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+# Ensure packages/core-py is on the path
+_CORE_PY = Path(__file__).resolve().parents[1]
+if str(_CORE_PY) not in sys.path:
+    sys.path.insert(0, str(_CORE_PY))
+
+from domain.logging._internal.config import (
+    ClientExtensionFilter,
+    LogFormatter,
+    RepeatSuppressionFilter,
+    SyslogFormatter,
+    _collect_extras,
+    _enriched_record_factory,
+    _log_context,
+    _request_id,
+    clear_log_context,
+    get_log_context,
+    get_request_id,
+    set_log_context,
+    set_request_id,
+    setup_logging,
+)
+
+# ── Helpers ───────────────────────────────────────────────────────────
+
+
+def _make_record(
+    name: str = "slo.test",
+    level: int = logging.INFO,
+    msg: str = "test message",
+    **extra,
+) -> logging.LogRecord:
+    """Create a LogRecord for testing."""
+    record = logging.LogRecord(
+        name=name,
+        level=level,
+        pathname="",
+        lineno=0,
+        msg=msg,
+        args=(),
+        exc_info=None,
+    )
+    for k, v in extra.items():
+        setattr(record, k, v)
+    return record
+
+
+def _reset_contextvars():
+    """Reset contextvars to clean state."""
+    _request_id.set(None)
+    _log_context.set({})
+
+
+@pytest.fixture(autouse=True)
+def _clean_context():
+    """Reset contextvars before each test."""
+    _reset_contextvars()
+    yield
+    _reset_contextvars()
+
+
+# ── Correlation ID tests ──────────────────────────────────────────────
+
+
+class TestCorrelationID:
+    def test_default_is_none(self):
+        assert get_request_id() is None
+
+    def test_set_and_get(self):
+        set_request_id("abc-123")
+        assert get_request_id() == "abc-123"
+
+    def test_overwrite(self):
+        set_request_id("first")
+        set_request_id("second")
+        assert get_request_id() == "second"
+
+    def test_thread_isolation(self):
+        set_request_id("main")
+        results = []
+
+        def child():
+            results.append(get_request_id())
+            set_request_id("child")
+            results.append(get_request_id())
+
+        t = threading.Thread(target=child)
+        t.start()
+        t.join()
+        # Main thread should still have "main"
+        assert get_request_id() == "main"
+        # Child thread starts with None (fresh contextvar), then sets "child"
+        assert results[0] is None
+        assert results[1] == "child"
+
+
+# ── Log context tests ─────────────────────────────────────────────────
+
+
+class TestLogContext:
+    def test_default_is_empty(self):
+        assert get_log_context() == {}
+
+    def test_set_and_get(self):
+        set_log_context(model="gpt2")
+        ctx = get_log_context()
+        assert ctx["model"] == "gpt2"
+
+    def test_merge(self):
+        set_log_context(model="gpt2")
+        set_log_context(device="cpu")
+        ctx = get_log_context()
+        assert ctx["model"] == "gpt2"
+        assert ctx["device"] == "cpu"
+
+    def test_overwrite(self):
+        set_log_context(model="gpt2")
+        set_log_context(model="llama")
+        assert get_log_context()["model"] == "llama"
+
+    def test_clear(self):
+        set_log_context(model="gpt2")
+        clear_log_context()
+        assert get_log_context() == {}
+
+    def test_returns_copy(self):
+        set_log_context(model="gpt2")
+        ctx1 = get_log_context()
+        ctx2 = get_log_context()
+        assert ctx1 == ctx2
+        assert ctx1 is not ctx2  # different dict objects
+
+
+# ── LogFormatter tests ────────────────────────────────────────────────
+
+
+class TestLogFormatterHuman:
+    def test_basic_output(self):
+        fmt = LogFormatter(colors=False)
+        record = _make_record(msg="hello world")
+        output = fmt.format(record)
+        assert "INF" in output
+        assert "hello world" in output
+        assert "test" in output  # logger name
+
+    def test_level_badges(self):
+        fmt = LogFormatter(colors=False)
+        for level, badge in [
+            (logging.DEBUG, "DBG"),
+            (logging.INFO, "INF"),
+            (logging.WARNING, "WRN"),
+            (logging.ERROR, "ERR"),
+            (logging.CRITICAL, "CRI"),
+        ]:
+            record = _make_record(level=level)
+            output = fmt.format(record)
+            assert badge in output
+
+    def test_tag_in_output(self):
+        fmt = LogFormatter(colors=False)
+        record = _make_record(tag="MODEL")
+        output = fmt.format(record)
+        assert "[MODEL]" in output
+
+    def test_request_id_in_output(self):
+        fmt = LogFormatter(colors=False)
+        record = _make_record(request_id="abc-123")
+        output = fmt.format(record)
+        assert "req=abc-123" in output
+
+    def test_context_in_output(self):
+        fmt = LogFormatter(colors=False)
+        record = _make_record(model="gpt2", tokens=50)
+        output = fmt.format(record)
+        assert "model=gpt2" in output
+        assert "tokens=50" in output
+
+    def test_exception_in_output(self):
+        fmt = LogFormatter(colors=False)
+        try:
+            raise ValueError("bad value")
+        except ValueError:
+            import sys
+
+            exc_info = sys.exc_info()
+        record = _make_record(exc_info=exc_info)
+        output = fmt.format(record)
+        assert "ValueError" in output
+        assert "bad value" in output
+
+    def test_colors_enabled(self):
+        fmt = LogFormatter(colors=True)
+        record = _make_record(msg="colored")
+        output = fmt.format(record)
+        assert "\033[" in output  # ANSI escape codes present
+
+
+# ── LogFormatter JSON tests ──────────────────────────────────────────
+
+
+class TestLogFormatterJSON:
+    """Tests for LogFormatter in JSON mode."""
+
+    def test_basic_output(self):
+        fmt = LogFormatter(fmt="json", colors=False)
+        record = _make_record(msg="hello")
+        output = fmt.format(record)
+        data = json.loads(output)
+        assert data["msg"] == "hello"
+        assert data["lvl"] == "INFO"
+        assert data["logger"] == "slo.test"
+        assert "ts" in data
+
+    def test_tag_in_output(self):
+        fmt = LogFormatter(fmt="json", colors=False)
+        record = _make_record(tag="REQ")
+        data = json.loads(fmt.format(record))
+        assert data["tag"] == "REQ"
+
+    def test_request_id_in_output(self):
+        fmt = LogFormatter(fmt="json", colors=False)
+        record = _make_record(request_id="xyz-789")
+        data = json.loads(fmt.format(record))
+        assert data["corr"] == "xyz-789"
+
+    def test_context_in_output(self):
+        fmt = LogFormatter(fmt="json", colors=False)
+        record = _make_record(model="gpt2", tokens=100)
+        data = json.loads(fmt.format(record))
+        assert data["ctx"]["model"] == "gpt2"
+        assert data["ctx"]["tokens"] == 100
+
+    def test_exception_in_output(self):
+        fmt = LogFormatter(fmt="json", colors=False)
+        try:
+            raise RuntimeError("boom")
+        except RuntimeError:
+            import sys
+
+            exc_info = sys.exc_info()
+        record = _make_record(exc_info=exc_info)
+        data = json.loads(fmt.format(record))
+        assert "exception" in data
+        assert "RuntimeError" in data["exception"]
+
+    def test_no_extra_fields_in_output(self):
+        fmt = LogFormatter(fmt="json", colors=False)
+        record = _make_record()
+        data = json.loads(fmt.format(record))
+        # Standard fields should not appear in ctx
+        assert "ctx" not in data or data["ctx"] == {}
+
+
+# ── ClientExtensionFilter tests ───────────────────────────────────────
+
+
+class TestClientExtensionFilter:
+    def test_allows_normal_messages(self):
+        f = ClientExtensionFilter()
+        record = _make_record(msg="normal log message")
+        assert f.filter(record) is True
+
+    def test_blocks_chrome_extension(self):
+        f = ClientExtensionFilter()
+        record = _make_record(msg="chrome-extension://abc/error")
+        assert f.filter(record) is False
+
+    def test_blocks_client_error(self):
+        f = ClientExtensionFilter()
+        record = _make_record(msg="CLIENT ERROR 12345")
+        assert f.filter(record) is False
+
+    def test_blocks_zero_zero(self):
+        f = ClientExtensionFilter()
+        record = _make_record(msg="0 0 connection lost")
+        assert f.filter(record) is False
+
+
+# ── RepeatSuppressionFilter tests ─────────────────────────────────────
+
+
+class TestRepeatSuppressionFilter:
+    @staticmethod
+    def _warn(msg="HTTP 400 on PUT /docstore/kv/x"):
+        return _make_record(name="slo.exception_handlers", level=logging.WARNING, msg=msg)
+
+    def test_first_record_passes_repeat_suppressed(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        assert f.filter(self._warn()) is True
+        assert f.filter(self._warn()) is False
+        assert f.filter(self._warn()) is False
+
+    def test_debug_and_info_always_pass(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        info = _make_record(level=logging.INFO, msg="hello")
+        debug = _make_record(level=logging.DEBUG, msg="hello")
+        assert f.filter(info) is True
+        assert f.filter(debug) is True
+
+    def test_distinct_messages_not_suppressed(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        assert f.filter(self._warn("HTTP 400 on PUT /a")) is True
+        assert f.filter(self._warn("HTTP 404 on GET /b")) is True
+        assert f.filter(self._warn("HTTP 400 on PUT /a")) is False
+
+    def test_digits_and_corr_ids_normalized(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        assert f.filter(self._warn("GET /models 200 (1.234s) corr=abc123de")) is True
+        # Different corr/duration, same template -> suppressed
+        assert f.filter(self._warn("GET /models 200 (9.876s) corr=deadbeef")) is False
+
+    def test_shared_instance_same_decision_per_record(self):
+        """One instance on 3 handlers: handlers 2/3 must replay handler 1's
+        decision, not count the record they just accepted as a repeat."""
+        f = RepeatSuppressionFilter(window_s=60)
+        record = self._warn()
+        assert [f.filter(record) for _ in range(3)] == [True, True, True]
+        dup = self._warn()
+        assert [f.filter(dup) for _ in range(3)] == [False, False, False]
+
+    def test_summary_emitted_after_window(self, caplog):
+        f = RepeatSuppressionFilter(window_s=0.05)
+        with caplog.at_level(logging.WARNING, logger="slo.exception_handlers"):
+            assert f.filter(self._warn()) is True
+            for _ in range(4):
+                assert f.filter(self._warn()) is False
+            # Force the sweep by waiting out the window and passing a new record
+            import time as _time
+
+            _time.sleep(0.06)
+            assert f.filter(self._warn()) is True
+        summaries = [r.getMessage() for r in caplog.records if "suppressed" in r.getMessage()]
+        assert any("suppressed 4 similar lines" in s for s in summaries), summaries
+
+    def test_zero_window_disables(self):
+        f = RepeatSuppressionFilter(window_s=0)
+        for _ in range(5):
+            assert f.filter(self._warn()) is True
+
+    def test_state_is_bounded(self):
+        f = RepeatSuppressionFilter(window_s=60)
+        for i in range(600):
+            f.filter(self._warn(f"HTTP 400 on PUT /docstore/kv/key{i}"))
+        assert len(f._state) <= f._MAX_KEYS
+
+
+class TestRepeatSuppressionIntegration:
+    """setup_logging wiring + an end-to-end docstore 400 storm."""
+
+    @staticmethod
+    def _dedup_filters(handler) -> list[RepeatSuppressionFilter]:
+        return [f for f in handler.filters if isinstance(f, RepeatSuppressionFilter)]
+
+    def test_setup_logging_attaches_one_shared_filter_to_every_handler(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = setup_logging(log_dir=tmpdir, enable_output_buffer=False)
+            root = logging.getLogger()
+            handlers_with_filter = []
+            for h in root.handlers:
+                filters = self._dedup_filters(h)
+                if filters:
+                    handlers_with_filter.append((h, filters[0]))
+            assert len(handlers_with_filter) >= 2, "console + file must both dedup"
+            assert len({id(f) for _, f in handlers_with_filter}) == 1, "must be one shared instance"
+            assert result["file_handler"] is not None
+
+    def test_env_window_is_honored(self):
+        with patch.dict(os.environ, {"SLO_LOG_DEDUP_WINDOW": "0"}):
+            f = RepeatSuppressionFilter()
+        assert f.window_s == 0.0
+
+    def test_docstore_400_storm_collapses_to_one_line_plus_summary(self):
+        """24 identical failures must not print 24 (or 48) WARN lines."""
+        f = RepeatSuppressionFilter(window_s=60)
+
+        class Capture(logging.Handler):
+            def __init__(self):
+                super().__init__(logging.WARNING)
+                self.records = []
+
+            def emit(self, record):
+                self.records.append(record)
+
+        capture = Capture()
+        capture.addFilter(f)
+        logger = logging.getLogger("slo.exception_handlers")
+        logger.addHandler(capture)
+        logger.setLevel(logging.WARNING)
+        old_propagate = logger.propagate
+        logger.propagate = False
+        try:
+            for i in range(24):
+                logger.warning(
+                    "HTTP 400 on PUT /docstore/kv/conv_%08x",
+                    0xABCD1234 + i,
+                    extra={"context": {"corr": f"{i:08x}"}},
+                )
+        finally:
+            logger.removeHandler(capture)
+            logger.propagate = old_propagate
+        assert len(capture.records) == 1, [r.getMessage() for r in capture.records]
+        assert "400" in capture.records[0].getMessage()
+
+
+# ── _collect_extras tests ─────────────────────────────────────────────
+
+
+class TestCollectExtras:
+    def test_extracts_non_standard_fields(self):
+        record = _make_record(model="gpt2", tokens=50)
+        ctx = _collect_extras(record)
+        assert ctx["model"] == "gpt2"
+        assert ctx["tokens"] == 50
+
+    def test_excludes_standard_fields(self):
+        record = _make_record()
+        ctx = _collect_extras(record)
+        # Standard fields should not appear
+        assert "name" not in ctx
+        assert "levelname" not in ctx
+        assert "message" not in ctx
+
+    def test_excludes_tag_and_request_id(self):
+        record = _make_record(tag="REQ", request_id="abc")
+        ctx = _collect_extras(record)
+        assert "tag" not in ctx
+        assert "request_id" not in ctx
+
+    def test_empty_when_no_extras(self):
+        record = _make_record()
+        ctx = _collect_extras(record)
+        assert ctx == {}
+
+
+# ── Record factory tests ──────────────────────────────────────────────
+
+
+class TestRecordFactory:
+    def test_injects_request_id(self):
+        set_request_id("factory-test")
+        record = _enriched_record_factory(
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
+        )
+        assert record.request_id == "factory-test"
+
+    def test_no_request_id_when_none(self):
+        record = _enriched_record_factory(
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
+        )
+        assert not hasattr(record, "request_id") or getattr(record, "request_id", None) is None
+
+    def test_injects_log_context(self):
+        set_log_context(model="gpt2", device="cpu")
+        record = _enriched_record_factory(
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
+        )
+        assert record.model == "gpt2"
+        assert record.device == "cpu"
+
+    def test_does_not_overwrite_existing(self):
+        record = _enriched_record_factory(
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
+        )
+        record.request_id = "existing"
+        # Factory should not overwrite
+        _enriched_record_factory(
+            "slo.test",
+            logging.INFO,
+            "",
+            0,
+            "msg",
+            (),
+            None,
+        )
+        # record2 is a new record, not the same as record
+
+
+# ── setup_logging tests ───────────────────────────────────────────────
+
+
+class TestSetupLogging:
+    def test_default_setup(self):
+        result = setup_logging(enable_output_buffer=False)
+        assert result["level"] == "INFO"
+        assert "log_dir" in result
+
+    def test_custom_level(self):
+        result = setup_logging(level="DEBUG", enable_output_buffer=False)
+        assert result["level"] == "DEBUG"
+        root = logging.getLogger()
+        assert root.level == logging.DEBUG
+
+    def test_unified_formatter(self):
+        result = setup_logging(enable_output_buffer=False)
+        assert "level" in result
+
+    def test_file_handler_created(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = setup_logging(log_dir=tmpdir, enable_output_buffer=False)
+            assert result["file_handler"] is not None
+            assert isinstance(result["file_handler"], logging.handlers.RotatingFileHandler)
+            log_file = Path(tmpdir) / "sloughgpt.log"
+            assert log_file.exists()
+
+    def test_file_handler_disabled(self):
+        result = setup_logging(enable_file=False, enable_output_buffer=False)
+        assert result["file_handler"] is None
+
+    def test_console_handler_installed(self):
+        setup_logging(enable_output_buffer=False)
+        root = logging.getLogger()
+        # Should have at least one StreamHandler
+        stream_handlers = [h for h in root.handlers if isinstance(h, logging.StreamHandler)]
+        assert len(stream_handlers) >= 1
+
+    def test_console_handler_disabled(self):
+        setup_logging(enable_console=False, enable_output_buffer=False)
+        # When console disabled, only file handler should be present
+        # (no StreamHandler on root)
+        root = logging.getLogger()
+        stream_handlers = [
+            h
+            for h in root.handlers
+            if isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
+        ]
+        assert len(stream_handlers) == 0
+
+    def test_third_party_suppressed(self):
+        setup_logging(enable_output_buffer=False)
+        for name in ("httpx", "httpcore", "urllib3", "uvicorn.access"):
+            logger = logging.getLogger(name)
+            assert logger.level >= logging.WARNING
+
+    def test_returns_complete_info(self):
+        result = setup_logging(enable_output_buffer=False)
+        assert "level" in result
+        assert "log_dir" in result
+        assert "file_handler" in result
+        assert "bridge" in result
+
+    def test_env_var_overrides(self):
+        with patch.dict(os.environ, {"SLO_LOG_LEVEL": "DEBUG"}):
+            result = setup_logging(enable_output_buffer=False)
+            assert result["level"] == "DEBUG"
+
+    def test_idempotent(self):
+        """Calling setup_logging twice should not create duplicate handlers."""
+        setup_logging(enable_output_buffer=False)
+        handler_count_1 = len(logging.getLogger().handlers)
+        setup_logging(enable_output_buffer=False)
+        handler_count_2 = len(logging.getLogger().handlers)
+        # Should not double handlers (setup_logging removes existing handlers first)
+        assert handler_count_2 <= handler_count_1 + 1  # +1 for file handler
+
+
+# ── Integration test: logging through stdlib works ────────────────────
+
+
+class TestStdlibIntegration:
+    def test_logger_info_appears_in_handler(self):
+        """Verify that logging.getLogger('slo.*').info() works through the new setup."""
+        output = StringIO()
+        setup_logging(enable_output_buffer=False, enable_file=False)
+
+        # Add a test handler that captures output
+        test_handler = logging.StreamHandler(output)
+        test_handler.setFormatter(LogFormatter(colors=False))
+        logging.getLogger().addHandler(test_handler)
+
+        logger = logging.getLogger("slo.integration.test")
+        logger.info("integration test message", extra={"tag": "INFRA"})
+
+        test_output = output.getvalue()
+        assert "integration test message" in test_output
+        assert "[INFRA]" in test_output
+
+        # Cleanup
+        logging.getLogger().removeHandler(test_handler)
+
+    def test_correlation_id_in_stdlib_log(self):
+        """Verify correlation ID flows through stdlib logging."""
+        output = StringIO()
+        setup_logging(enable_output_buffer=False, enable_file=False)
+
+        test_handler = logging.StreamHandler(output)
+        test_handler.setFormatter(LogFormatter(fmt="json", colors=False))
+        logging.getLogger().addHandler(test_handler)
+
+        set_request_id("req-42")
+        logger = logging.getLogger("slo.correlation")
+        logger.info("correlated message")
+
+        test_output = output.getvalue()
+        data = json.loads(test_output)
+        assert data["corr"] == "req-42"
+
+        logging.getLogger().removeHandler(test_handler)
+
+
+# ── SyslogFormatter tests ─────────────────────────────────────────────
+
+
+class TestSyslogFormatter:
+    """Tests for SyslogFormatter (systemd-style, no hostname)."""
+
+    def test_shape_matches_systemd_format(self):
+        from datetime import datetime
+
+        fmt = SyslogFormatter()
+        record = _make_record(name="slo.startup", msg="model loaded")
+        record.created = 1789824662
+        record.process = 385542
+        dt = datetime.fromtimestamp(1789824662)
+        expected_ts = f"{dt.strftime('%b')} {dt.day:2d} {dt.strftime('%H:%M:%S')}"
+        out = fmt.format(record)
+        assert out == f"{expected_ts} slo.startup[385542]: INFO model loaded", out
+        assert re.match(
+            r"^[A-Z][a-z]{2}\s+\d{1,2} \d{2}:\d{2}:\d{2} \S+\[\d+\]: \w+ ",
+            out,
+        )
+
+    def test_no_hostname_leaks(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(msg="hello"))
+        assert socket.gethostname() not in out
+
+    def test_pid_present(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record())
+        assert f"[{os.getpid()}]" in out
+
+    def test_tag_badge(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(tag="START"))
+        assert "[START]" in out
+
+    def test_op_domain_badge(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(op="model.load"))
+        assert "[MODEL]" in out
+
+    def test_rid_and_ctx(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(request_id="abc", key="val", n=3))
+        assert "rid=abc" in out
+        assert "key=val" in out
+        assert "n=3" in out
+
+    def test_ctx_values_with_spaces_are_quoted(self):
+        fmt = SyslogFormatter()
+        out = fmt.format(_make_record(path="/a b/c"))
+        assert 'path="/a b/c"' in out
+
+    def test_exception_appends_summary_and_traceback(self):
+        fmt = SyslogFormatter()
+        try:
+            raise ValueError("boom")
+        except ValueError:
+            record = _make_record(msg="failed")
+            record.exc_info = sys.exc_info()
+        out = fmt.format(record)
+        assert "[ValueError] boom" in out
+        assert "Traceback (most recent call last)" in out
+
+    def test_level_names_preserved(self):
+        fmt = SyslogFormatter()
+        for level, name in (
+            (logging.DEBUG, "DEBUG"),
+            (logging.WARNING, "WARNING"),
+            (logging.ERROR, "ERROR"),
+        ):
+            out = fmt.format(_make_record(level=level))
+            assert f": {name} " in out or out.endswith(f": {name}"), out

@@ -31,7 +31,7 @@ natural language interpretation — all in a single Python module.
 
 ## Installation
 
-The shell is part of `packages/core-py/domains/shell/`. There are no extra dependencies
+The shell is part of `domain/shell`. There are no extra dependencies
 beyond Python 3.9+ and `requests` (for API calls to the backend).
 
 ### Launching
@@ -49,8 +49,8 @@ sloughgpt shell -c "gen hello world > output.txt"
 ### Programmatic Use
 
 ```python
-from domains.shell.repl import ShellREPL
-from domains.shell.kernel import DaitRuntime
+from domain.shell._internal.repl import ShellREPL
+from domain.shell import DaitRuntime
 
 rt = DaitRuntime()
 repl = ShellREPL(rt)
@@ -412,7 +412,7 @@ terminal width; the caret always stays visible.
 | `load`, `unload`, `gen` | Model names from `/models` API |
 | `switch` | Soul names from `/souls` API |
 | `datasets` | Dataset names from `/datasets` API |
-| `checkpoints` | Checkpoint names from `/auto-train/checkpoints` API |
+| `checkpoints` | Checkpoint names from `/training/checkpoints` API |
 | `finetuned` | Subcommands (`load`, `rm`, `del`, `delete`); model names after `load`/`rm`/`del`/`delete` from `/training/finetuned-models` API |
 | `source`, `less`, `tee`, `pushd`, `sort`, `uniq` | File/directory path completion (fallback) |
 
@@ -658,7 +658,7 @@ set in the environment before launching the shell.
 ### Module Layout
 
 ```
-domains/shell/
+domain/shell/
 ├── __init__.py     # Package exports
 ├── kernel.py       # DaitRuntime + Kernel (process/resource management)
 ├── repl.py         # ShellREPL (40+ commands, pipelines, readline)
@@ -759,9 +759,9 @@ documented in `docs/routers.md`.
 | `whoami` | `/souls/current` | GET |
 | `datasets` | `/datasets` | GET |
 | `knowledge` | `/knowledge/list` + `/knowledge/stats` | GET |
-| `checkpoints` | `/auto-train/checkpoints` | GET |
-| `load_checkpoint` | `/auto-train/checkpoints/{name}/load` | POST |
-| `delete_checkpoint` | `/auto-train/checkpoints/{name}` | DELETE |
+| `checkpoints` | `/training/checkpoints` | GET |
+| `load_checkpoint` | `/training/checkpoints/{name}/load` | POST |
+| `delete_checkpoint` | `/training/checkpoints/{name}` | DELETE |
 | `finetuned` | `/training/finetuned-models` | GET |
 | `load_finetuned` | `/training/finetuned-models/{name}/load` | POST |
 | `delete_finetuned` | `/training/finetuned-models/{name}` | DELETE |
@@ -854,7 +854,7 @@ Grants persist to `~/.config/shell_permissions.json`:
 ### Configuration
 
 ```python
-from domains.shell import ShellPermissions, Risk
+from domain.shell._internal.permissions import ShellPermissions, Risk
 
 perms = ShellPermissions()
 perms.set_policy(Risk.DANGEROUS, "allow")   # allow all dangerous

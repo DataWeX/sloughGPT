@@ -1,5 +1,10 @@
-import { PageSkeleton } from '@/components/ui/PageSkeleton'
+import { PageContainer } from '@/components/PageContainer'
+import { ComparePageSkeleton } from '@/components/ui/PageSkeletons'
 
 export default function CompareLoading() {
-  return <PageSkeleton cards={2} />
+  return (
+    <PageContainer title="Compare" loading loadingContent={<ComparePageSkeleton />}>
+      <></>
+    </PageContainer>
+  )
 }

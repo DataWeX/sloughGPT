@@ -1,11 +1,25 @@
 /** Format byte count to human-readable string (e.g. "1.5 MB"). */
 export function formatBytes(bytes: number): string {
-  if (!bytes) return '—'
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—'
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
+
+/**
+ * Estimate token count for text.
+ * Uses a heuristic: ~1.3 tokens per word for English text.
+ * More accurate than simple character/4 for mixed content.
+ */
+export function estimateTokens(text: string): number {
+  if (!text) return 0
+  const words = text.split(/\s+/).filter((w) => w.length > 0).length
+  return Math.ceil(words * 1.3)
+}
+
+/** Re-export formatDurationMs for backward compatibility. */
+export { formatDurationMs as formatDuration } from './formatDuration'
 
 /** Time constants in milliseconds. */
 export const MS_PER_SECOND = 1000

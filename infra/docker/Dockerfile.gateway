@@ -1,0 +1,21 @@
+# slough-gateway — stateless edge (byte-relay + streaming compression)
+FROM rust:1.83-bookworm AS builder
+
+WORKDIR /build
+COPY apps/gateway/Cargo.toml apps/gateway/Cargo.lock ./
+COPY apps/gateway/src ./src
+RUN cargo build --release --locked
+
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl bash \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /build/target/release/slough-gateway /usr/local/bin/slough-gateway
+
+ENV MAN_GATEWAY_PORT=8080 \
+    MAN_CORE_URL=http://api:8000 \
+    RUST_LOG=slough_gateway=info,tower_http=info
+
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -sf "http://127.0.0.1:${MAN_GATEWAY_PORT}/health" || exit 1
+CMD ["slough-gateway"]

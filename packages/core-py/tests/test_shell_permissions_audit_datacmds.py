@@ -1,20 +1,26 @@
-"""Tests for domains/shell/permissions.py, audit.py, cmds/data_cmds.py."""
+"""Tests for domain.shell.permissions.py, audit.py, cmds/data_cmds.py."""
 
-import json
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-
-# ── permissions.py ──────────────────────────────────────────────────────────
-
-from domains.shell.permissions import (
-    Risk, ShellPermissions, _RISK_MAP, _FORCE_PATTERNS,
-    _SAFE, _ELEVATED, _DANGEROUS, _CRITICAL,
+from domain.shell._internal.permissions import (
+    _FORCE_PATTERNS,
+    _RISK_MAP,
+    Risk,
+    ShellPermissions,
+    reset_permissions_db,
+    set_permissions_db,
 )
+
+
+@pytest.fixture(autouse=True)
+def _temp_mogdb(tmp_path):
+    """Point the permissions module at a temporary MogDB for every test."""
+    db_path = str(tmp_path / "test_perms")
+    set_permissions_db(db_path)
+    yield
+    reset_permissions_db()
 
 
 class TestRiskConstants:
@@ -180,8 +186,8 @@ class TestShellPermissions:
 
 class TestShellPermissionsPersistence:
     def test_save_and_load(self, tmp_path):
-        config_file = tmp_path / "perms.json"
-        with patch.object(ShellPermissions, '_config_path', config_file):
+        set_permissions_db(str(tmp_path / "test_perms"))
+        try:
             p = ShellPermissions()
             p.grant("rm")
             p.set_policy(Risk.DANGEROUS, "allow")
@@ -189,30 +195,36 @@ class TestShellPermissionsPersistence:
 
             p2 = ShellPermissions()
             assert "rm" in p2._granted
+        finally:
+            reset_permissions_db()
 
     def test_load_missing_file(self, tmp_path):
-        config_file = tmp_path / "nonexistent.json"
-        with patch.object(ShellPermissions, '_config_path', config_file):
+        set_permissions_db(str(tmp_path / "empty_perms"))
+        try:
             p = ShellPermissions()
             assert p._granted == set()
+        finally:
+            reset_permissions_db()
 
     def test_load_corrupt_file(self, tmp_path):
-        config_file = tmp_path / "corrupt.json"
-        config_file.write_text("not valid json {{{")
-        with patch.object(ShellPermissions, '_config_path', config_file):
+        # With MogDB, there's no "corrupt file" scenario — just empty collection
+        set_permissions_db(str(tmp_path / "clean_perms"))
+        try:
             p = ShellPermissions()
             assert p._granted == set()
+        finally:
+            reset_permissions_db()
 
 
 # ── audit.py ────────────────────────────────────────────────────────────────
 
-from domains.shell.audit import ShellAuditLogger, get_shell_audit_logger
+from domain.shell._internal.audit import ShellAuditLogger, get_shell_audit_logger
 
 
 class TestShellAuditLogger:
     def test_init_creates_log_dir(self, tmp_path):
         log_dir = tmp_path / "audit_test"
-        logger = ShellAuditLogger(log_dir=log_dir)
+        ShellAuditLogger(log_dir=log_dir)
         assert log_dir.exists()
 
     def test_log_path(self, tmp_path):
@@ -320,7 +332,8 @@ class TestShellAuditLogger:
 
 class TestAuditSingleton:
     def test_singleton(self, tmp_path):
-        import domains.shell.audit as audit_mod
+        import domain.shell._internal.audit as audit_mod
+
         audit_mod._audit = None
         logger1 = get_shell_audit_logger(log_dir=tmp_path)
         logger2 = get_shell_audit_logger(log_dir=tmp_path)
@@ -330,9 +343,9 @@ class TestAuditSingleton:
 
 # ── cmds/data_cmds.py ──────────────────────────────────────────────────────
 
-from domains.shell.cmds import data_cmds
-from domains.shell.console import Console
-from domains.shell.io import MemoryIO
+from domain.shell._internal.cmds import data_cmds
+from domain.shell._internal.console import Console
+from domain.shell._internal.io import MemoryIO
 
 
 def _make_console():
@@ -556,7 +569,7 @@ class TestDataCmdsTokenizer:
 
 # ── cmds/models_cmd.py ─────────────────────────────────────────────────────
 
-from domains.shell.cmds import models_cmd
+from domain.shell._internal.cmds import models_cmd
 
 
 class TestModelsCmd:
@@ -639,7 +652,7 @@ class TestModelsCmd:
 
 # ── cmds/souls_cmd.py ──────────────────────────────────────────────────────
 
-from domains.shell.cmds import souls_cmd
+from domain.shell._internal.cmds import souls_cmd
 
 
 class TestSoulsCmd:
@@ -669,6 +682,7 @@ class TestSoulsCmd:
     def test_switch_no_name(self):
         console = _make_console()
         api = MagicMock()
+        api.souls.return_value = []
         rc = souls_cmd.run(["switch"], console, api, {})
         assert rc == 1
 

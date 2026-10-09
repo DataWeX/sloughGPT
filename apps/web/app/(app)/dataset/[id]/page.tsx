@@ -10,12 +10,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@sloughgpt/strui'
-import { Button } from '@sloughgpt/strui'
+import { Button, Spinner } from '@sloughgpt/strui'
 import { Input } from '@sloughgpt/strui'
 import { Badge } from '@sloughgpt/strui'
 import { StatCard, KpiGrid, Skeleton } from '@sloughgpt/strui'
 import { Breadcrumbs } from '@sloughgpt/strui'
-import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconRefresh, IconClock, IconChevronDown } from '@sloughgpt/strui'
+import { IconTrash, IconDownload, IconEdit, IconCheck, IconX, IconClock, IconChevronDown } from '@sloughgpt/strui'
 import { datasetController, type Dataset, type DatasetStats, type DatasetPreview as DatasetPreviewData } from '@/lib/dataset-controller'
 import { DatasetPreview } from '@/components/DatasetPreview'
 import { DatasetQualityCard } from '@/components/dataset/DatasetQualityCard'
@@ -24,7 +24,7 @@ import { formatBytes } from '@/lib/format-bytes'
 import { downloadBlob, downloadJson } from '@/lib/download-utils'
 import { useToastStore } from '@/lib/toast-store'
 
-const DatasetImportModal = dynamicNext(() => import('@/components/DatasetImportModal').then(m => m.DatasetImportModal), { ssr: false })
+const DatasetImportDialog = dynamicNext(() => import('@/components/DatasetImportDialog').then(m => m.DatasetImportDialog), { ssr: false })
 
 export default function DatasetDetailPage() {
   const params = useParams()
@@ -55,7 +55,7 @@ export default function DatasetDetailPage() {
       const d = await datasetController.get(datasetId)
       setDataset(d)
     } catch {
-      addToast('Failed to load dataset', 'error')
+      addToast('Could not load dataset', 'error')
     } finally {
       setLoading(false)
     }
@@ -102,7 +102,7 @@ export default function DatasetDetailPage() {
       addToast('Snapshot created', 'success')
       fetchVersions()
     } catch {
-      addToast('Snapshot failed', 'error')
+      addToast('Could not snapshot', 'error')
     } finally {
       setSnapshotting(false)
     }
@@ -115,7 +115,7 @@ export default function DatasetDetailPage() {
       addToast(res.message || 'Version restored', 'success')
       fetchVersions()
     } catch {
-      addToast('Restore failed', 'error')
+      addToast('Could not restore', 'error')
     } finally {
       setRestoreTarget(null)
     }
@@ -154,7 +154,7 @@ export default function DatasetDetailPage() {
       addToast('Renamed', 'success')
       setRenaming(false)
     } catch {
-      addToast('Rename failed', 'error')
+      addToast('Could not rename', 'error')
     }
   }
 
@@ -165,7 +165,7 @@ export default function DatasetDetailPage() {
       addToast(`Deleted "${dataset.name}"`, 'info')
       router.push('/datasets')
     } catch {
-      addToast('Delete failed', 'error')
+      addToast('Could not delete', 'error')
     } finally {
       setShowDelete(false)
     }
@@ -178,7 +178,7 @@ export default function DatasetDetailPage() {
       downloadBlob(blob, `${dataset.name || dataset.id}.jsonl`)
       addToast('Exported', 'success')
     } catch {
-      addToast('Export failed', 'error')
+      addToast('Could not export', 'error')
     }
   }
 
@@ -204,7 +204,7 @@ export default function DatasetDetailPage() {
       downloadBlob(new Blob([csv], { type: 'text/csv' }), `${dataset.name || dataset.id}.csv`)
       addToast('Exported as CSV', 'success')
     } catch {
-      addToast('CSV export failed', 'error')
+      addToast('Could not csv export', 'error')
     }
   }
 
@@ -220,7 +220,7 @@ export default function DatasetDetailPage() {
       setConvertResult(res)
       addToast('Converted to chat format', 'success')
     } catch {
-      addToast('Conversion failed', 'error')
+      addToast('Could not conversion', 'error')
     } finally {
       setConverting(false)
     }
@@ -233,8 +233,8 @@ export default function DatasetDetailPage() {
       <Button variant="outline" size="sm" className="h-11 text-xs" onClick={() => setImportOpen(true)}>
         Import Data
       </Button>
-      <Button variant="secondary" size="sm" onClick={fetchDataset} disabled={loading}>
-        <IconRefresh className={loading ? 'animate-spin h-4 w-4 mr-1' : 'h-4 w-4 mr-1'} />
+       <Button variant="outline" size="sm" onClick={fetchDataset} disabled={loading}>
+        <Spinner className="h-4 w-4 mr-1" />
         Refresh
       </Button>
     </div>
@@ -274,7 +274,7 @@ export default function DatasetDetailPage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <CardTitle className="text-base">Details</CardTitle>
-                  {dataset.type && <Badge variant={"secondary" as const} className="text-xs">{dataset.type}</Badge>}
+                   {dataset.type && <Badge variant="outline" className="text-xs">{dataset.type}</Badge>}
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="relative">
@@ -285,6 +285,7 @@ export default function DatasetDetailPage() {
                       onClick={() => setExportOpen(!exportOpen)}
                       onKeyDown={(e) => { if (e.key === 'Escape') setExportOpen(false) }}
                       aria-expanded={exportOpen}
+                      aria-pressed={exportOpen}
                       aria-haspopup="true"
                     >
                       <IconDownload className="h-4 w-4 mr-1" /> Export <IconChevronDown className="h-3 w-3 ml-1" />
@@ -292,10 +293,10 @@ export default function DatasetDetailPage() {
                     {exportOpen && (
                       <div className="absolute right-0 top-full mt-1 z-50">
                         <div className="bg-card border border-border rounded-md shadow-md p-1 min-w-[120px]">
-                          <button onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button type="button" onClick={() => { handleExport(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
                             Export as JSONL
                           </button>
-                          <button onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
+                          <button type="button" onClick={() => { handleExportCSV(); setExportOpen(false) }} className="w-full text-left text-xs px-2 py-1 rounded hover:bg-muted transition-colors">
                             Export as CSV
                           </button>
                         </div>
@@ -427,7 +428,7 @@ export default function DatasetDetailPage() {
               ) : (
                 <ul className="space-y-2">
                   {versions.map(v => (
-                    <li key={v} className="flex items-center justify-between rounded-md border border-border/60 px-3 py-2">
+                    <li key={v} className="flex items-center justify-between rounded-md border border-border/40 px-3 py-2">
                       <div className="flex items-center gap-2 text-sm">
                         <IconClock className="h-4 w-4 text-muted-foreground" />
                         <span className="font-mono text-xs">{v}</span>
@@ -514,8 +515,8 @@ export default function DatasetDetailPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {importOpen && DatasetImportModal && (
-        <DatasetImportModal
+      {importOpen && DatasetImportDialog && (
+        <DatasetImportDialog
           open={importOpen}
           onOpenChange={setImportOpen}
           onImportComplete={() => { setImportOpen(false); fetchDataset() }}

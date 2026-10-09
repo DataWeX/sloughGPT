@@ -8,9 +8,17 @@ import types
 from unittest.mock import patch
 
 import pytest
-from domains.shell.devices import (
-    AIDevice, NullDevice, RandomDevice, LLMDevice, EmbeddingDevice,
-    KnowledgeDevice, VisionDevice, ProcDevice, DeviceManager,
+
+from domain.shell._internal.devices import (
+    AIDevice,
+    DeviceManager,
+    EmbeddingDevice,
+    KnowledgeDevice,
+    LLMDevice,
+    NullDevice,
+    ProcDevice,
+    RandomDevice,
+    VisionDevice,
     create_default_devices,
 )
 
@@ -130,6 +138,7 @@ class TestKnowledgeDevice:
 class TestVisionDevice:
     def test_read(self):
         assert "image path" in VisionDevice().read()
+
     def test_write_bad_path(self):
         assert "not found" in VisionDevice().write("/x/y.jpg")
 
@@ -141,18 +150,24 @@ class TestProcDevice:
 
     def test_uptime(self, dev):
         assert "123.45" in dev.read("uptime")
+
     def test_loadavg(self, dev):
         assert dev.read("loadavg").count("/") == 1
+
     def test_stat(self, dev):
         r = dev.read("stat")
         assert "kernel" in r and "agent" in r
+
     def test_pid_status(self, dev):
         r = dev.read("42/status")
         assert "agent" in r and "42" in r
+
     def test_nonexistent_pid(self, dev):
         assert "No such process" in dev.read("999/status")
+
     def test_nonexistent_path(self, dev):
         assert "No such file" in dev.read("xyz")
+
     def test_write_ro(self, dev):
         assert "read-only" in dev.write("data")
 
@@ -261,8 +276,8 @@ class TestLLMDeviceFallback:
 class TestEmbeddingDeviceFallback:
     def test_compute_embedding_without_fn(self):
         dev = EmbeddingDevice()
-        assert dev.write("hello world") == "  embedding: 64 dims"
-        assert "64 dims" in dev.read()
+        assert dev.write("hello world") == "  embedding: 384 dims"
+        assert "384 dims" in dev.read()
 
 
 class TestKnowledgeDeviceBranches:
@@ -312,7 +327,7 @@ class TestKnowledgeDeviceBranches:
 
 class TestVisionDeviceSuccess:
     def test_write_real_file_delegates_to_cnn(self):
-        fake_vision = types.ModuleType("domains.multimodal.vision")
+        fake_vision = types.ModuleType("domain.multimodal._internal.vision")
 
         class _CNN:
             def caption(self, img):
@@ -333,7 +348,7 @@ class TestVisionDeviceSuccess:
         try:
             with patch.dict(
                 "sys.modules",
-                {"domains.multimodal.vision": fake_vision, "PIL": _PIL},
+                {"domain.multimodal._internal.vision": fake_vision, "PIL": _PIL},
             ):
                 out = VisionDevice().write(path)
         finally:
@@ -346,7 +361,7 @@ class TestVisionDeviceSuccess:
             path = f.name
         size = os.path.getsize(path)
         try:
-            with patch.dict("sys.modules", {"domains.multimodal.vision": None}):
+            with patch.dict("sys.modules", {"domain.multimodal._internal.vision": None}):
                 out = VisionDevice().write(path)
         finally:
             os.unlink(path)

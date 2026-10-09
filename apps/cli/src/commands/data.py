@@ -1,29 +1,27 @@
 """
 Data commands - Dataset management, import, and validation.
 """
-import sys
-import os
+
 import json
 from pathlib import Path
-from typing import Optional
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
-from utils.formatting import format_size, format_number
+from utils.formatting import format_number, format_size
 
 
 def cmd_datasets(args):
     """List available datasets."""
-    datasets_dir = Path("datasets")
+    datasets_dir = Path("data")
     registry_file = datasets_dir / "registry.json"
     registry = {}
     if registry_file.exists():
         try:
             with open(registry_file) as f:
                 registry = json.load(f)
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("Could not load registry: %s", e)
 
     log.header("Datasets")
 
@@ -44,7 +42,7 @@ def cmd_datasets(args):
 
 def cmd_dataset_import(args, source: str):
     """Import datasets from various sources."""
-    datasets_dir = Path("datasets")
+    datasets_dir = Path("data")
     datasets_dir.mkdir(exist_ok=True)
 
     log.header(f"Import Dataset ({source})")
@@ -57,7 +55,7 @@ def cmd_dataset_import(args, source: str):
         log.blank()
 
         try:
-            from domains.training.data_import import RepoImporter
+            from domain.training._internal.data_import import RepoImporter
 
             repo = RepoImporter()
             result = repo.import_from_github(
@@ -67,7 +65,9 @@ def cmd_dataset_import(args, source: str):
             )
 
             if result.success:
-                log.success(f"Imported {result.files_imported} files ({format_number(result.total_chars)} chars)")
+                log.success(
+                    f"Imported {result.files_imported} files ({format_number(result.total_chars)} chars)"
+                )
                 log.key_value("Location", result.output_path)
             else:
                 log.error(f"Failed: {result.error}")
@@ -82,13 +82,13 @@ def cmd_dataset_import(args, source: str):
         log.blank()
 
         try:
-            from domains.training.data_import import HuggingFaceImporter
+            from domain.training._internal.data_import import HuggingFaceImporter
 
             hf = HuggingFaceImporter()
             result = hf.download_dataset(
                 dataset_id=dataset_id,
                 name=name,
-                output_dir="datasets",
+                output_dir="data",
             )
 
             if result.success:
@@ -139,7 +139,8 @@ def cmd_dataset_search(args):
 
     if source == "hf":
         try:
-            from domains.training.data_import import HuggingFaceImporter
+            from domain.training._internal.data_import import HuggingFaceImporter
+
             results = HuggingFaceImporter().search_datasets(query=query, limit=args.limit)
             if results:
                 log.success(f"Found {len(results)} datasets")
@@ -156,7 +157,8 @@ def cmd_dataset_search(args):
             log.error(str(e))
     else:
         try:
-            from domains.training.data_import import GitHubSearch
+            from domain.training._internal.data_import import GitHubSearch
+
             results = GitHubSearch().search_repos(query=query, limit=args.limit)
             if results:
                 log.success(f"Found {len(results)} repositories")
@@ -184,7 +186,7 @@ def cmd_data_tool(args, subcmd: str):
         total_chars = 0
 
         if path.is_file():
-            with open(path, "r") as f:
+            with open(path) as f:
                 for line in f:
                     line = line.strip()
                     if line:
@@ -208,7 +210,7 @@ def cmd_data_tool(args, subcmd: str):
     elif subcmd == "validate":
         issues = []
         if path.is_file():
-            with open(path, "r") as f:
+            with open(path) as f:
                 for i, line in enumerate(f, 1):
                     if not line.strip():
                         issues.append(f"Line {i}: Empty")
@@ -226,7 +228,7 @@ def cmd_data_tool(args, subcmd: str):
 def cmd_dataset_stats(args):
     """Show detailed dataset statistics."""
     name = args.name
-    dataset_path = Path("datasets") / name
+    dataset_path = Path("data") / name
 
     if not dataset_path.exists():
         log.error(f"Dataset not found: {name}")
@@ -273,7 +275,7 @@ def cmd_dataset_export(args):
     name = args.name
     output = args.output or f"{name}.zip"
 
-    dataset_path = Path("datasets") / name
+    dataset_path = Path("data") / name
     if not dataset_path.exists():
         log.error(f"Dataset not found: {name}")
         return

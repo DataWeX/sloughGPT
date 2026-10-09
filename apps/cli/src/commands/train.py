@@ -1,21 +1,21 @@
 """
 Train commands - Training, evaluation, and quick smoke tests.
 """
+
+import math
 import os
+import re
 import sys
 import time
-import math
-import re
 from pathlib import Path
-from typing import Optional, List
 
 import numpy as np
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
+from utils.formatting import format_number, format_size, format_time, truncate
 from utils.progress import ProgressBar
-from utils.formatting import format_size, format_time, format_number
 
 
 def _softmax_np(x: np.ndarray) -> np.ndarray:
@@ -42,10 +42,10 @@ def _resolve_corpus_file(path_or_name: str) -> Path:
     if p.is_file():
         return p
     name = path_or_name.strip("/")
-    for candidate in (Path("datasets") / name / "input.txt", Path(name)):
+    for candidate in (Path("data") / name / "input.txt", Path(name)):
         if candidate.is_file():
             return candidate
-    available = sorted(d.name for d in Path("datasets").glob("*") if d.is_dir())
+    available = sorted(d.name for d in Path("data").glob("*") if d.is_dir())
     hint = f" Available datasets: {', '.join(available)}." if available else ""
     log.error(f"Dataset not found: {path_or_name}.{hint}")
     sys.exit(2)
@@ -61,6 +61,7 @@ def _print_train_result(result, model_path: str) -> None:
     Returns:
         None.
     """
+
     def _loss(v):
         """Return a 4-decimal string for a finite number-like loss, else None."""
         try:
@@ -98,7 +99,9 @@ def _print_native_next_steps(checkpoint_dir: str, saved: str) -> None:
     log.info("Load this model in chat by pointing the server at it and restarting:")
     log.info(f"  SLO_NATIVE_SOUL_PATH={saved} python3 apps/api/server/main.py")
     if Path(checkpoint_dir).resolve() == Path("models/slonet-native").resolve():
-        log.info("(Default dir — the server also auto-discovers .soul models under models/slonet-native/.)")
+        log.info(
+            "(Default dir — the server also auto-discovers .soul models under models/slonet-native/.)"
+        )
 
 
 def _gpt2_teacher_cached() -> bool:
@@ -119,7 +122,7 @@ def _gpt2_teacher_cached() -> bool:
     return bool(snap.glob("*.safetensors")) and (snap / "tokenizer.json").exists()
 
 
-def _split_corpus_text(text: str, min_len: int = 40) -> List[str]:
+def _split_corpus_text(text: str, min_len: int = 40) -> list[str]:
     """Split a corpus string into samples suitable for contrastive training.
 
     Contrastive learning needs multiple texts, but a corpus file is one blob.
@@ -139,13 +142,13 @@ def _split_corpus_text(text: str, min_len: int = 40) -> List[str]:
     if len(paras) == 1 and len(paras[0]) >= 2 * min_len:
         win = 2 * min_len
         step = max(1, len(paras[0]) // 8)
-        return [paras[0][i:i + win] for i in range(0, len(paras[0]) - win + 1, step)][:50]
+        return [paras[0][i : i + win] for i in range(0, len(paras[0]) - win + 1, step)][:50]
     words = text.split()
     chunk = 200
     return [
-        " ".join(words[i:i + chunk])
+        " ".join(words[i : i + chunk])
         for i in range(0, len(words), chunk)
-        if len(" ".join(words[i:i + chunk])) >= min_len
+        if len(" ".join(words[i : i + chunk])) >= min_len
     ]
 
 
@@ -196,7 +199,9 @@ def _embedder_retrieval_check(embedder, texts, query=None, top_k=3) -> None:
         if self_rank == 0 and margin > 0.0:
             log.success(f"Self-retrieval OK (rank #1, margin {margin:.3f})")
         else:
-            log.warning(f"Self-retrieval rank #{self_rank + 1} (margin {margin:.3f}) — embeddings may be weak")
+            log.warning(
+                f"Self-retrieval rank #{self_rank + 1} (margin {margin:.3f}) — embeddings may be weak"
+            )
 
 
 def cmd_train(args):
@@ -221,8 +226,10 @@ def cmd_train(args):
         return cmd_train_embed(args)
 
     # Original train logic
-    from utils.helpers import chat_repository_root
-    from utils.helpers import train_export_stem_slug, train_export_default_stem
+    from utils.helpers import (
+        train_export_default_stem,
+        train_export_stem_slug,
+    )
 
     if not args.api:
         sys.path.insert(0, ".")
@@ -252,8 +259,13 @@ def cmd_train(args):
         tracker = None
         if config.tracking.enabled:
             from dataclasses import asdict
-            from domains.training.tracking import ExperimentTracker, TrackerBackend, TrackingConfig
-            from domains.training.wandb_helpers import flatten_for_wandb_config
+
+            from domain.training._internal.tracking import (
+                ExperimentTracker,
+                TrackerBackend,
+                TrackingConfig,
+            )
+            from domain.training._internal.wandb_helpers import flatten_for_wandb_config
 
             backend = (
                 TrackerBackend.WANDB
@@ -275,7 +287,7 @@ def cmd_train(args):
             tracker.log_params(flatten_for_wandb_config(asdict(config)))
             log.success(f"Tracking enabled: {config.tracking.backend}")
 
-        from domains.training.train_pipeline import SloughGPTTrainer
+        from domain.training._internal.train_pipeline import SloughGPTTrainer
 
         if getattr(args, "save_stem", None):
             save_stem = train_export_stem_slug(args.save_stem, "export")
@@ -369,6 +381,7 @@ def cmd_train(args):
 
     # API training
     import requests
+
     sys.path.insert(0, ".")
     try:
         from config_loader import load_config, merge_args_with_config
@@ -439,8 +452,8 @@ def cmd_quick(args):
     """Quick smoke test: train a toy model and generate."""
     sys.path.insert(0, ".")
 
-    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
-    from domains.training.performance import get_optimal_device
+    from domain.training import SloughGPTTrainer, TrainerConfig
+    from domain.training._internal.performance import get_optimal_device
 
     log.header("SloughGPT Quick Start")
 
@@ -555,8 +568,8 @@ def cmd_train_native(args):
     """
     sys.path.insert(0, ".")
 
-    from domains.training.train_pipeline import SloughGPTTrainer, TrainerConfig
-    from domains.training.performance import get_optimal_device
+    from domain.training import SloughGPTTrainer, TrainerConfig
+    from domain.training._internal.performance import get_optimal_device
 
     checkpoint_dir = getattr(args, "checkpoint_dir", None) or "models/slonet-native"
 
@@ -601,7 +614,9 @@ def cmd_train_native(args):
     log.key_value("Dataset", str(dataset))
     log.key_value("Device", str(device))
     log.key_value("Steps", str(config.max_steps or "epoch-budget"))
-    log.key_value("Arch", f"e{config.n_embed} l{config.n_layer} h{config.n_head} b{config.block_size}")
+    log.key_value(
+        "Arch", f"e{config.n_embed} l{config.n_layer} h{config.n_head} b{config.block_size}"
+    )
     log.key_value("Batch", str(config.batch_size))
     log.key_value("Learning Rate", str(config.learning_rate))
     log.key_value("Checkpoint Dir", str(checkpoint_dir))
@@ -610,7 +625,7 @@ def cmd_train_native(args):
     tokenizer = None
     tokenizer_kind = getattr(args, "tokenizer", "char") or "char"
     if tokenizer_kind == "token-tree":
-        from domains.training.token_tree import TokenTree
+        from domain.training import TokenTree
 
         corpus_text = Path(dataset).read_text(encoding="utf-8")
         token_vocab_size = getattr(args, "token_vocab_size", 512) or 512
@@ -621,7 +636,10 @@ def cmd_train_native(args):
             embed_dim=0,
             verbose=False,
         )
-        log.key_value("Tokenizer", f"token-tree ({tokenizer.vocab_size} tokens, {len(tokenizer.merges)} merges)")
+        log.key_value(
+            "Tokenizer",
+            f"token-tree ({tokenizer.vocab_size} tokens, {len(tokenizer.merges)} merges)",
+        )
         log.blank()
     else:
         log.key_value("Tokenizer", "char-level")
@@ -711,7 +729,7 @@ def cmd_eval(args):
     data_path = getattr(args, "data", None) or "datasets/shakespeare/input.txt"
 
     try:
-        from domains.training.lm_eval_char import evaluate_soul_char_lm
+        from domain.training._internal.lm_eval_char import evaluate_soul_char_lm
 
         if not Path(data_path).is_file():
             log.warning(f"Data file not found: {data_path}")
@@ -747,6 +765,7 @@ def _print_char_lm_metrics(metrics: dict) -> None:
 
 
 # ── Sub-commands merged into `train` ──────────────────────────────
+
 
 def _cmd_self_train(args):
     """Run self-training loop (model talks to itself)."""
@@ -794,7 +813,7 @@ def _cmd_autotrain(args):
 
     if action == "start":
         resp = requests.post(
-            f"{api_url}/auto-train/start",
+            f"{api_url}/training/start",
             json={
                 "teacher": getattr(args, "auto_teacher", None) or getattr(args, "teacher", "gpt2"),
                 "temperature": getattr(args, "temperature", 0.8),
@@ -806,13 +825,13 @@ def _cmd_autotrain(args):
         else:
             log.error(f"Failed: {resp.json()}")
     elif action == "stop":
-        resp = requests.post(f"{api_url}/auto-train/stop")
+        resp = requests.post(f"{api_url}/training/stop")
         if resp.ok:
             log.success(f"Stopped: {resp.json()}")
         else:
             log.error(f"Failed: {resp.json()}")
     elif action == "status":
-        resp = requests.get(f"{api_url}/auto-train/status")
+        resp = requests.get(f"{api_url}/training/status")
         if resp.ok:
             data = resp.json()
             for k, v in data.items():
@@ -823,8 +842,9 @@ def _cmd_autotrain(args):
 
 def _cmd_monitor(args):
     """Monitor training jobs."""
-    import requests
     import time
+
+    import requests
 
     base_url = f"http://{args.host}:{args.port}"
 
@@ -832,7 +852,7 @@ def _cmd_monitor(args):
 
     while True:
         try:
-            response = requests.get(f"{base_url}/training", timeout=5)
+            response = requests.get(f"{base_url}/training/jobs", timeout=5)
             if response.status_code == 200:
                 jobs = response.json()
                 if isinstance(jobs, dict) and "jobs" in jobs:
@@ -858,6 +878,7 @@ def _cmd_monitor(args):
 def _cmd_user_adapters(args):
     """Manage per-user LoRA adapters."""
     import sys as _sys
+
     _sys.path.insert(0, ".")
 
     log.header("User Adapters")
@@ -866,7 +887,7 @@ def _cmd_user_adapters(args):
     user_id = getattr(args, "adapters_user", None) or getattr(args, "user", None)
     users_str = getattr(args, "adapters_users", None) or getattr(args, "users", None)
     try:
-        from domains.feedback import get_per_user_lora
+        from domain.feedback import get_per_user_lora
 
         store = get_per_user_lora()
 
@@ -874,8 +895,8 @@ def _cmd_user_adapters(args):
             adapters = store.get_all_adapters()
             stats = store.get_stats()
             log.key_value("Total Users", str(stats["total_users"]))
-            log.key_value("Total Size", f'{stats["total_size_mb"]:.2f} MB')
-            log.key_value("Avg per User", f'{stats["avg_size_per_user_kb"]:.1f} KB')
+            log.key_value("Total Size", f"{stats['total_size_mb']:.2f} MB")
+            log.key_value("Avg per User", f"{stats['avg_size_per_user_kb']:.1f} KB")
 
             if adapters:
                 log.blank()
@@ -916,6 +937,7 @@ def _cmd_user_adapters(args):
 def _cmd_feedback_train(args):
     """Prepare training data from feedback."""
     import sys as _sys
+
     _sys.path.insert(0, ".")
 
     log.header("Feedback Training Pipeline")
@@ -925,7 +947,7 @@ def _cmd_feedback_train(args):
     output_dir = getattr(args, "feedback_output", None) or getattr(args, "output", None)
 
     try:
-        from domains.feedback import create_training_pipeline
+        from domain.feedback import create_training_pipeline
 
         trainer = create_training_pipeline()
         stats = trainer.get_training_stats()
@@ -960,15 +982,18 @@ def _cmd_feedback_train(args):
 def _cmd_feedback_export(args):
     """Export feedback data for training."""
     import sys as _sys
+
     _sys.path.insert(0, ".")
 
     log.header("Feedback Export")
 
-    output_path = getattr(args, "export_feedback_output", None) or getattr(args, "output", "data/training_feedback.jsonl")
+    output_path = getattr(args, "export_feedback_output", None) or getattr(
+        args, "output", "data/training_feedback.jsonl"
+    )
     fmt = getattr(args, "export_feedback_format", None) or getattr(args, "format", "jsonl")
 
     try:
-        from domains.feedback import get_meta_weight_manager
+        from domain.feedback import get_meta_weight_manager
 
         manager = get_meta_weight_manager()
         if manager is None:
@@ -986,6 +1011,7 @@ def _cmd_feedback_export(args):
         manager.export_training_data(filepath=output_path, format=fmt)
 
         import os
+
         if os.path.exists(output_path):
             with open(output_path) as f:
                 lines = sum(1 for _ in f)
@@ -996,10 +1022,12 @@ def _cmd_feedback_export(args):
     except ImportError as e:
         log.error(f"Feedback module: {e}")
 
+
 def _cmd_checkpoint_info(args):
     """Inspect a .soul checkpoint — show metadata, weight summary, training info."""
     from pathlib import Path
-    from domains.training.slonet import import_from_sou
+
+    from domain.training._internal.slonet import import_from_sou
 
     log.header("Checkpoint Info")
 
@@ -1061,13 +1089,14 @@ def _cmd_checkpoint_info(args):
 def cmd_demo(args):
     """Run system demos (RAG, KG, EWC, inference)."""
     import sys
+
     sys.path.insert(0, ".")
 
     log.header("SloughGPT Demo")
 
-    from domains.cognitive.rag import ProductionRAG
-    from domains.cognitive.knowledge_graph_v2 import KnowledgeGraph
-    from domains.training.ewc import EwcContinualLearner
+    from domain.cognition._internal.knowledge_graph_v2 import KnowledgeGraph
+    from domain.cognition._internal.rag import ProductionRAG
+    from domain.training._internal.ewc import EwcContinualLearner
 
     if args.component in ("all", "rag"):
         log.section("RAG - Document Retrieval")
@@ -1086,7 +1115,8 @@ def cmd_demo(args):
 
     if args.component in ("all", "ewc"):
         log.section("EWC - Catastrophic Forgetting Prevention")
-        from domains.models import SloughGPTModel
+        from domain.models import SloughGPTModel
+
         model = SloughGPTModel(vocab_size=50, n_embed=32, n_layer=2, n_head=2, block_size=16)
         ewc = EwcContinualLearner(model)
         log.key_value("Fisher Params", str(len(ewc.fisher_estimator.fisher_accum)))
@@ -1106,13 +1136,15 @@ def cmd_rlhf(args):
     sys.path.insert(0, ".")
 
     log.header("RLHF Demo")
-    from domains.training.rlhf import RLHFConfig
-    from domains.models import SloughGPTModel
+    from domain.models import SloughGPTModel
+    from domain.training._internal.rlhf import RLHFConfig
 
     device = "cpu"
     log.key_value("Device", device)
 
-    model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=4, block_size=32, dropout=0.0)
+    model = SloughGPTModel(
+        vocab_size=100, n_embed=64, n_layer=2, n_head=4, block_size=32, dropout=0.0
+    )
     log.key_value("Parameters", f"{model.num_parameters():,}")
 
     config = RLHFConfig(ppo_epochs=2, clip_epsilon=0.2, entropy_coef=0.01, gamma=1.0, lam=0.95)
@@ -1139,14 +1171,15 @@ def cmd_rlhf(args):
 
 def cmd_cloud_setup(args):
     """Setup Pinecone vector store."""
-    import sys
     import asyncio
     import os
+    import sys
+
     sys.path.insert(0, ".")
 
     log.header("Cloud Setup")
-    from domains.inference.vector_stores.pinecone_store import PineconeVectorStore
-    from domains.inference.vector_store import VectorEntry, simple_embed
+    from domain.inference._internal.vector_store import VectorEntry, simple_embed
+    from domain.inference._internal.vector_stores.pinecone_store import PineconeVectorStore
 
     api_key = args.api_key or os.getenv("PINECONE_API_KEY")
     if not api_key:
@@ -1156,9 +1189,21 @@ def cmd_cloud_setup(args):
     async def setup():
         log.key_value("Index", args.index)
         log.key_value("Dimension", str(args.dimension))
-        store = PineconeVectorStore(api_key=api_key, index_name=args.index, dimension=args.dimension, environment=args.environment)
+        store = PineconeVectorStore(
+            api_key=api_key,
+            index_name=args.index,
+            dimension=args.dimension,
+            environment=args.environment,
+        )
         await store.connect()
-        entries = [VectorEntry(id="test", vector=simple_embed("test document", dimension=args.dimension), text="test document", metadata={"created_by": "cli"})]
+        entries = [
+            VectorEntry(
+                id="test",
+                vector=simple_embed("test document", dimension=args.dimension),
+                text="test document",
+                metadata={"created_by": "cli"},
+            )
+        ]
         await store.upsert(entries)
         count = await store.count()
         log.success(f"Pinecone: {count} documents indexed")
@@ -1184,15 +1229,27 @@ def register(subparsers):
     train_parser.add_argument("--save-stem", type=str, default=None, help="Output filename stem")
 
     # Self-train mode
-    train_parser.add_argument("--self", dest="self_train", action="store_true", help="Self-training loop (model talks to itself)")
+    train_parser.add_argument(
+        "--self",
+        dest="self_train",
+        action="store_true",
+        help="Self-training loop (model talks to itself)",
+    )
     train_parser.add_argument("--self-steps", type=int, default=1000, help="Self-train steps")
     train_parser.add_argument("--self-model", default="gpt2", help="Model for self-train")
-    train_parser.add_argument("--self-max-tokens", type=int, default=50, help="Self-train max tokens per gen")
+    train_parser.add_argument(
+        "--self-max-tokens", type=int, default=50, help="Self-train max tokens per gen"
+    )
     train_parser.add_argument("--self-seed", default="Hello", help="Self-train starting text")
     train_parser.add_argument("--self-forever", action="store_true", help="Self-train until Ctrl+C")
 
     # Auto-train mode
-    train_parser.add_argument("--auto", dest="auto_train_action", choices=["start", "stop", "status"], help="Auto-training via API")
+    train_parser.add_argument(
+        "--auto",
+        dest="auto_train_action",
+        choices=["start", "stop", "status"],
+        help="Auto-training via API",
+    )
     train_parser.add_argument("--auto-teacher", default="gpt2", help="Auto-train teacher model")
     train_parser.add_argument("--auto-steps", type=int, default=1000, help="Auto-train max steps")
 
@@ -1201,30 +1258,64 @@ def register(subparsers):
     train_parser.add_argument("--interval", type=int, default=5, help="Watch refresh interval (s)")
 
     # Adapter management
-    train_parser.add_argument("--adapters", dest="adapters_action", choices=["list", "info", "delete", "merge"], help="Manage LoRA adapters")
+    train_parser.add_argument(
+        "--adapters",
+        dest="adapters_action",
+        choices=["list", "info", "delete", "merge"],
+        help="Manage LoRA adapters",
+    )
     train_parser.add_argument("--adapters-user", help="User ID for adapter info/delete")
     train_parser.add_argument("--adapters-users", help="Comma-separated user IDs for adapter merge")
 
     # Feedback training
-    train_parser.add_argument("--from-feedback", dest="feedback_train", action="store_true", help="Prepare training data from feedback")
-    train_parser.add_argument("--feedback-format", choices=["all", "dpo", "sft", "reward"], default="all", help="Feedback training format")
-    train_parser.add_argument("--feedback-output", help="Output directory for feedback training data")
-    train_parser.add_argument("--feedback-stats-only", action="store_true", help="Show feedback stats only")
+    train_parser.add_argument(
+        "--from-feedback",
+        dest="feedback_train",
+        action="store_true",
+        help="Prepare training data from feedback",
+    )
+    train_parser.add_argument(
+        "--feedback-format",
+        choices=["all", "dpo", "sft", "reward"],
+        default="all",
+        help="Feedback training format",
+    )
+    train_parser.add_argument(
+        "--feedback-output", help="Output directory for feedback training data"
+    )
+    train_parser.add_argument(
+        "--feedback-stats-only", action="store_true", help="Show feedback stats only"
+    )
 
     # Feedback export
     train_parser.add_argument("--export-feedback", action="store_true", help="Export feedback data")
-    train_parser.add_argument("--export-feedback-output", default="data/training_feedback.jsonl", help="Export path")
-    train_parser.add_argument("--export-feedback-format", choices=["jsonl", "dpo"], default="jsonl", help="Export format")
+    train_parser.add_argument(
+        "--export-feedback-output", default="data/training_feedback.jsonl", help="Export path"
+    )
+    train_parser.add_argument(
+        "--export-feedback-format", choices=["jsonl", "dpo"], default="jsonl", help="Export format"
+    )
 
     # Checkpoint info
-    train_parser.add_argument("--checkpoint-info", dest="checkpoint_info_path", help="Inspect a checkpoint file (.soul)")
+    train_parser.add_argument(
+        "--checkpoint-info", dest="checkpoint_info_path", help="Inspect a checkpoint file (.soul)"
+    )
 
     # Embedder training
-    train_parser.add_argument("--embed", dest="embed_train", action="store_true", help="Train text embedder on corpus")
-    train_parser.add_argument("--corpus", help="Corpus path for embedder training (auto-discovers knowledge/datasets if omitted)")
+    train_parser.add_argument(
+        "--embed", dest="embed_train", action="store_true", help="Train text embedder on corpus"
+    )
+    train_parser.add_argument(
+        "--corpus",
+        help="Corpus path for embedder training (auto-discovers knowledge/datasets if omitted)",
+    )
     train_parser.add_argument("--embed-dim", type=int, default=384, help="Embedding dimension")
-    train_parser.add_argument("--vocab-size", type=int, default=4096, help="Vocab size for embedder")
-    train_parser.add_argument("--output", dest="embed_output", default=None, help="Embedder save path")
+    train_parser.add_argument(
+        "--vocab-size", type=int, default=4096, help="Vocab size for embedder"
+    )
+    train_parser.add_argument(
+        "--output", dest="embed_output", default=None, help="Embedder save path"
+    )
 
     train_parser.set_defaults(func=cmd_train)
 
@@ -1233,7 +1324,9 @@ def register(subparsers):
         "quick",
         help="Smoke test: train briefly and generate",
     )
-    quick_parser.add_argument("--dataset", "-d", default="datasets/shakespeare/input.txt", help="Corpus file")
+    quick_parser.add_argument(
+        "--dataset", "-d", default="datasets/shakespeare/input.txt", help="Corpus file"
+    )
     quick_parser.add_argument("--prompt", default="The king", help="Generation prompt")
     quick_parser.add_argument("--epochs", type=int, default=1, help="Training epochs")
     quick_parser.add_argument("--steps", type=int, default=100, help="Max steps")
@@ -1255,7 +1348,9 @@ def register(subparsers):
         "eval",
         help="Evaluate model perplexity",
     )
-    eval_parser.add_argument("--checkpoint", default="models/sloughgpt.soul", help="Checkpoint path")
+    eval_parser.add_argument(
+        "--checkpoint", default="models/sloughgpt.soul", help="Checkpoint path"
+    )
     eval_parser.add_argument("--data", default="datasets/shakespeare/input.txt", help="Eval text")
     eval_parser.add_argument("--device", default="cpu", help="Device for scoring")
     eval_parser.add_argument("--no-strict", action="store_true", help="Allow partial load")
@@ -1264,7 +1359,12 @@ def register(subparsers):
 
     # Demo
     demo_parser = subparsers.add_parser("demo", help="Run system demos (RAG, KG, EWC)")
-    demo_parser.add_argument("--component", choices=["all", "rag", "kg", "ewc", "inference"], default="all", help="Subsystem to demo")
+    demo_parser.add_argument(
+        "--component",
+        choices=["all", "rag", "kg", "ewc", "inference"],
+        default="all",
+        help="Subsystem to demo",
+    )
     demo_parser.set_defaults(func=cmd_demo)
 
     # RLHF
@@ -1295,9 +1395,7 @@ def cmd_train_embed(args):
     model is saved to data/models/text-embedder.soul and automatically
     used by simple_embed() instead of downloading sentence-transformers.
     """
-    import os
     import json
-    import glob as glob_mod
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parent.parent.parent.parent
@@ -1315,8 +1413,8 @@ def cmd_train_embed(args):
                 for fp in p.rglob(ext):
                     try:
                         texts.append(fp.read_text(errors="ignore"))
-                    except Exception:
-                        pass
+                    except OSError as e:
+                        log.warning("Skipping %s: %s", fp, e)
         else:
             log.error(f"Corpus not found: {corpus}")
             return
@@ -1327,8 +1425,8 @@ def cmd_train_embed(args):
             for fp in knowledge_dir.rglob("*.txt"):
                 try:
                     texts.append(fp.read_text(errors="ignore"))
-                except Exception:
-                    pass
+                except OSError as e:
+                    log.warning("Skipping %s: %s", fp, e)
             for fp in knowledge_dir.rglob("*.json"):
                 try:
                     data = json.loads(fp.read_text(errors="ignore"))
@@ -1336,8 +1434,8 @@ def cmd_train_embed(args):
                         texts.extend(str(x) for x in data if isinstance(x, str))
                     elif isinstance(data, dict):
                         texts.extend(str(v) for v in data.values() if isinstance(v, str))
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, OSError) as e:
+                    log.warning("Skipping %s: %s", fp, e)
 
         sessions_dir = repo_root / "data" / "sessions"
         if sessions_dir.exists():
@@ -1352,23 +1450,23 @@ def cmd_train_embed(args):
                         for msg in data["messages"]:
                             if isinstance(msg, dict) and "content" in msg:
                                 texts.append(msg["content"])
-                except Exception:
-                    pass
+                except (json.JSONDecodeError, OSError) as e:
+                    log.warning("Skipping %s: %s", fp, e)
 
         # Datasets directory
-        datasets_dir = repo_root / "datasets"
+        datasets_dir = repo_root / "data"
         if datasets_dir.exists():
             for fp in datasets_dir.rglob("*.txt"):
                 try:
                     texts.append(fp.read_text(errors="ignore"))
-                except Exception:
-                    pass
+                except OSError as e:
+                    log.warning("Skipping %s: %s", fp, e)
             for fp in datasets_dir.rglob("*.jsonl"):
                 try:
                     for line in fp.read_text(errors="ignore").splitlines():
                         texts.append(line)
-                except Exception:
-                    pass
+                except OSError as e:
+                    log.warning("Skipping %s: %s", fp, e)
 
     # Filter empty / tiny texts
     texts = [t.strip() for t in texts if len(t.strip()) > 20]
@@ -1386,31 +1484,37 @@ def cmd_train_embed(args):
     # ── Test mode: retrieve against the collected corpus ─────────────
     test_query = getattr(args, "test", None)
     if test_query:
-        from domains.inference.slo_embedder import SloTextEmbedder
+        from domain.inference._internal.slo_embedder import SloTextEmbedder
+
         embedder = SloTextEmbedder.load()
         if embedder is None:
             log.error("No trained embedder found. Run training first: sloughgpt train embed")
             return
         vec = embedder.embed(test_query)
-        log.success(f"Embedding for '{test_query}': dim={len(vec)}, norm={sum(x*x for x in vec)**0.5:.4f}")
+        log.success(
+            f"Embedding for '{test_query}': dim={len(vec)}, norm={sum(x * x for x in vec) ** 0.5:.4f}"
+        )
         _embedder_retrieval_check(embedder, texts, query=test_query)
         return
 
     # ── Train ─────────────────────────────────────────────────────────
-    from domains.inference.slo_embedder import train_embedder
+    from domain.inference._internal.slo_embedder import train_embedder
 
     total_epochs = getattr(args, "epochs", 20)
     from utils.training_progress import TrainingProgressBar
+
     pbar = TrainingProgressBar(desc="Training embedder", total_steps=total_epochs)
 
     def progress(epoch, loss, total):
-        pbar.update({
-            "global_step": epoch,
-            "progress_percent": int(epoch * 100 / total) if total else 100,
-            "epoch": epoch,
-            "epochs": total,
-            "train_loss": loss,
-        })
+        pbar.update(
+            {
+                "global_step": epoch,
+                "progress_percent": int(epoch * 100 / total) if total else 100,
+                "epoch": epoch,
+                "epochs": total,
+                "train_loss": loss,
+            }
+        )
 
     result = train_embedder(
         texts=texts,
@@ -1435,7 +1539,8 @@ def cmd_train_embed(args):
     log.info("No sentence-transformers download needed.")
 
     # ── Retrieval sanity check: prove the saved artifact works ───────
-    from domains.inference.slo_embedder import SloTextEmbedder
+    from domain.inference._internal.slo_embedder import SloTextEmbedder
+
     embedder = SloTextEmbedder.load(result["save_path"])
     if embedder is None:
         log.warning("Trained embedder could not be reloaded — verify --output path.")
@@ -1473,7 +1578,6 @@ def cmd_train_embed(args):
 def cmd_distill(args):
     """Distill GPT-2 teacher into a smaller SloTransformer student."""
     import threading
-    import json
 
     api_mode = getattr(args, "api", False)
     text_source = getattr(args, "text_source", None)
@@ -1483,6 +1587,7 @@ def cmd_distill(args):
     text = None
     if file_path:
         from pathlib import Path
+
         p = Path(file_path)
         if not p.exists():
             log.error(f"File not found: {file_path}")
@@ -1491,6 +1596,7 @@ def cmd_distill(args):
         log.info(f"Loaded {len(text):,} chars from {file_path}")
     elif text_source:
         from pathlib import Path
+
         p = Path(text_source)
         if p.is_dir():
             # Try standard dataset files
@@ -1528,7 +1634,7 @@ def cmd_distill(args):
     elif preset == "medium":
         n_embed, n_layer, n_head, block_size = 256, 6, 8, 256
 
-    log.header("Knowledge Distillation (GPT-2 → Student)")
+    log.header("Knowledge Distillation (GPT-2 to Student)")
     log.key_value("Teacher", "gpt2")
     log.key_value("Student", f"{n_embed}d {n_layer}L {n_head}H")
     log.key_value("Context", str(block_size))
@@ -1539,20 +1645,22 @@ def cmd_distill(args):
     # ── API mode ──────────────────────────────────────────────────────
     if api_mode:
         import requests
+
         base_url = f"http://{args.host}:{args.port}"
 
         # For API mode, resolve the dataset name the server can find
         dataset_name = text_source or file_path
         if dataset_name:
             from pathlib import Path
+
             p = Path(dataset_name)
             if p.is_dir():
                 dataset_name = p.name
             elif p.is_file():
                 # Check if it's inside a known dataset dir
                 parts = p.parts
-                if "datasets" in parts:
-                    idx = parts.index("datasets")
+                if "data" in parts:
+                    idx = parts.index("data")
                     if idx + 1 < len(parts):
                         dataset_name = parts[idx + 1]
                 else:
@@ -1585,10 +1693,12 @@ def cmd_distill(args):
         log.warning("GPT-2 teacher weights are not in the local HuggingFace cache.")
         log.warning("The first run downloads ~500MB from HuggingFace Hub.")
         log.error("Aborting — download the teacher first, then retry:")
-        log.info("  huggingface-cli download gpt2 --include '*.safetensors' --include tokenizer.json")
+        log.info(
+            "  huggingface-cli download gpt2 --include '*.safetensors' --include tokenizer.json"
+        )
         return
 
-    from domains.training.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
+    from domain.training._internal.distill_gpt2 import DistillConfig, distill_gpt2_to_slo
 
     resume_path = getattr(args, "resume", None)
     if resume_path:
@@ -1613,16 +1723,19 @@ def cmd_distill(args):
     samples_per_epoch = len(text) // config.block_size
     total_steps = config.epochs * (samples_per_epoch // config.batch_size)
     from utils.training_progress import TrainingProgressBar
+
     pbar = TrainingProgressBar(desc="Distilling", total_steps=total_steps)
 
     def on_step(step, loss, epoch):
-        pbar.update({
-            "global_step": step,
-            "progress_percent": int(step * 100 / total_steps) if total_steps else 100,
-            "epoch": epoch + 1,
-            "epochs": config.epochs,
-            "train_loss": loss,
-        })
+        pbar.update(
+            {
+                "global_step": step,
+                "progress_percent": int(step * 100 / total_steps) if total_steps else 100,
+                "epoch": epoch + 1,
+                "epochs": config.epochs,
+                "train_loss": loss,
+            }
+        )
 
     cancel_event = threading.Event()
 
@@ -1632,12 +1745,14 @@ def cmd_distill(args):
         cancel_event.set()
 
     import signal
+
     old_handler = signal.signal(signal.SIGINT, on_sigint)
 
     try:
         start_time = time.time()
         student, metadata = distill_gpt2_to_slo(
-            text, config,
+            text,
+            config,
             on_step=on_step,
             cancel_event=cancel_event,
         )
@@ -1684,6 +1799,7 @@ def _stream_api_progress(base_url, job_id):
 
     try:
         import requests
+
         while True:
             try:
                 resp = requests.get(f"{base_url}/training/jobs/{job_id}", timeout=5)
@@ -1734,10 +1850,11 @@ def _stream_api_progress(base_url, job_id):
 def cmd_train_from_sessions(args):
     """Train a SloNet model on API chat logs via the server.
 
-    Posts to /auto-train/from-sessions/start, then streams SSE from
-    /auto-train/from-sessions/stream for live progress.
+    Posts to /training/from-sessions-start, then streams SSE from
+    /training/from-sessions-stream for live progress.
     """
     import json as _json
+
     import requests
 
     host = getattr(args, "host", "127.0.0.1")
@@ -1752,14 +1869,14 @@ def cmd_train_from_sessions(args):
         if not health.get("model_loaded"):
             log.warning("No model loaded on server. Training will still work,")
             log.warning("but you need a model to test the checkpoint afterwards.")
-    except Exception:
+    except (requests.RequestException, ValueError):
         log.error("Cannot reach server. Is it running? (make api)")
         return
 
     # Count available pairs
     try:
         sessions_dir = Path("data/chat_sessions")
-        corpus_file = Path("datasets/api_conversations/corpus.jsonl")
+        corpus_file = Path("data/api_conversations/corpus.jsonl")
         n_sessions = len(list(sessions_dir.glob("*.json"))) if sessions_dir.exists() else 0
         n_corpus = 0
         if corpus_file.exists():
@@ -1769,8 +1886,8 @@ def cmd_train_from_sessions(args):
         if n_sessions == 0 and n_corpus == 0:
             log.error("No chat data found. Use the chat first to generate training data.")
             return
-    except Exception:
-        pass
+    except OSError as e:
+        log.warning("Could not count training data: %s", e)
 
     # Start training
     session_ids = None
@@ -1793,7 +1910,7 @@ def cmd_train_from_sessions(args):
     }
 
     try:
-        resp = requests.post(f"{base_url}/auto-train/from-sessions/start", json=payload, timeout=10)
+        resp = requests.post(f"{base_url}/training/from-sessions-start", json=payload, timeout=10)
         if not resp.ok:
             log.error(f"Failed to start: {resp.status_code} {resp.text}")
             return
@@ -1811,8 +1928,9 @@ def cmd_train_from_sessions(args):
 
     try:
         import requests as _req
+
         with _req.get(
-            f"{base_url}/auto-train/from-sessions/stream",
+            f"{base_url}/training/from-sessions-stream",
             stream=True,
             timeout=300,
         ) as stream:
@@ -1836,7 +1954,7 @@ def cmd_train_from_sessions(args):
                     bar.set_progress(5)
 
                 elif phase == "TRAIN" and status == "working":
-                    step = data.get("step", 0)
+                    data.get("step", 0)
                     loss = data.get("loss", 0)
                     epoch = event.get("meta", {}).get("epoch", 0)
                     total_epochs = event.get("meta", {}).get("total_epochs", 0)
@@ -1867,7 +1985,7 @@ def cmd_train_from_sessions(args):
                     if samples:
                         log.info("Sample outputs:")
                         for s in samples[:3]:
-                            log.info(f"  {s.get('prompt', '')} → {s.get('response', '')[:80]}")
+                            log.info(f"  {s.get('prompt', '')} -> {s.get('response', '')[:80]}")
                     break
 
                 elif status == "error":
@@ -1889,7 +2007,7 @@ def cmd_train_from_sessions(args):
         log.info(f"Loading checkpoint into chat: {checkpoint_name}")
         try:
             load_resp = requests.post(
-                f"{base_url}/auto-train/checkpoints/{checkpoint_name}/load",
+                f"{base_url}/training/checkpoints/{checkpoint_name}/load",
                 timeout=30,
             )
             if load_resp.ok:
@@ -1906,6 +2024,7 @@ def cmd_train_from_sessions(args):
     # JSON output
     if getattr(args, "json_output", False):
         import json as _json2
+
         result = {
             "checkpoint": checkpoint_name,
             "final_loss": final_loss,

@@ -1,7 +1,18 @@
 """Tests for bidirectional DAG: forward-mode AD alongside backward-mode AD."""
 
 import numpy as np
-from domains.training.slonet import Tensor, cross_entropy, _layernorm, _rmsnorm, sigmoid, relu, tanh, gelu, silu, _softmax, _maxpool2d, flatten, no_grad, _transpose
+
+from domain.training._internal.slonet import (
+    Tensor,
+    _layernorm,
+    _rmsnorm,
+    _softmax,
+    _transpose,
+    cross_entropy,
+    relu,
+    sigmoid,
+    tanh,
+)
 
 
 class TestForwardGradBasic:
@@ -39,7 +50,7 @@ class TestForwardGradBasic:
 
     def test_pow(self):
         a = Tensor([2.0, 3.0], requires_grad=True)
-        y = a ** 2
+        y = a**2
         t = y.forward_grad({a.id: np.array([1.0, 1.0])})
         # dy/da = 2*a, JVP = 2*a*t_a
         assert np.allclose(t[y.id], [4.0, 6.0])
@@ -176,10 +187,8 @@ class TestDotProductConsistency:
         # Backward-mode (all inputs share same seed w=1)
         y.grad = None
         y.backward()
-        vjp = sum((inp.grad.data * tangents[inp.id]).sum()
-                  for inp in inputs if inp.id in tangents)
-        assert np.allclose(jvp.sum(), vjp, atol=1e-5), \
-            f"JVP={jvp.sum():.6f} VJP={vjp:.6f}"
+        vjp = sum((inp.grad.data * tangents[inp.id]).sum() for inp in inputs if inp.id in tangents)
+        assert np.allclose(jvp.sum(), vjp, atol=1e-5), f"JVP={jvp.sum():.6f} VJP={vjp:.6f}"
 
     def test_add_dot(self):
         a = Tensor([1.0, 2.0], requires_grad=True)
@@ -217,8 +226,9 @@ class TestDotProductConsistency:
         targets = Tensor(np.array([2]))
         probs = _softmax(logits)
         loss = cross_entropy(probs, targets)
-        self._check(y=loss, inputs=[logits],
-                    tangents={logits.id: np.random.randn(1, 3).astype(np.float32)})
+        self._check(
+            y=loss, inputs=[logits], tangents={logits.id: np.random.randn(1, 3).astype(np.float32)}
+        )
 
     def test_chain_dot(self):
         A = Tensor(np.random.randn(4, 4).astype(np.float32), requires_grad=True)
@@ -227,49 +237,11 @@ class TestDotProductConsistency:
         self._check(y, [A, x], {x.id: np.random.randn(4).astype(np.float32)})
 
 
-class TestConsumersGraph:
-    """Test that _consumers edges are correctly tracked."""
-
-    def test_add_consumers(self):
-        a = Tensor([1.0], requires_grad=True)
-        b = Tensor([2.0], requires_grad=True)
-        y = a + b
-        assert y in a._consumers
-        assert y in b._consumers
-
-    def test_chain_consumers(self):
-        a = Tensor([1.0], requires_grad=True)
-        b = Tensor([2.0], requires_grad=True)
-        c = Tensor([3.0], requires_grad=True)
-        s = a + b
-        y = s * c
-        assert any(t.id == s.id for t in a._consumers)
-        assert any(t.id == s.id for t in b._consumers)
-        assert any(t.id == y.id for t in s._consumers)
-        assert any(t.id == y.id for t in c._consumers)
-
-    def test_no_grad_no_consumers(self):
-        with no_grad():
-            a = Tensor([1.0], requires_grad=True)
-            b = Tensor([2.0], requires_grad=True)
-            y = a + b
-        assert y._consumers == []
-
-    def test_backward_clears_consumers(self):
-        """backward() must release forward-DAG references from persistent leaves."""
-        a = Tensor([1.0, 2.0], requires_grad=True)
-        b = Tensor([3.0, 4.0], requires_grad=True)
-        s = a * b
-        y = (s + a).sum()
-        assert a._consumers and b._consumers
-        y.backward()
-        assert a._consumers == []
-        assert b._consumers == []
-        assert s._consumers == []
+class TestBackwardThenForwardGrad:
+    """backward() must not break a later forward-mode pass: forward_grad
+    reads _children/_forward_fn only, never forward-edge bookkeeping."""
 
     def test_backward_then_forward_grad_still_works(self):
-        """forward_grad reads _children/_forward_fn, not _consumers, so clearing
-        consumers in backward() must not break a later forward-mode pass."""
         a = Tensor([1.0, 2.0], requires_grad=True)
         b = Tensor([3.0, 4.0], requires_grad=True)
         s = a * b
@@ -278,9 +250,6 @@ class TestConsumersGraph:
         t = y.forward_grad({a.id: np.array([1.0, 1.0])})
         assert np.allclose(t[s.id], np.array([3.0, 4.0]))
         assert np.allclose(t[y.id], np.array(7.0))
-
-
-
 
 
 class TestBackwardRegression:
@@ -303,3 +272,75 @@ class TestBackwardRegression:
         assert np.allclose(a.grad.data, [3.0])
         assert np.allclose(b.grad.data, [3.0])
         assert np.allclose(c.grad.data, [3.0])
+
+
+class TestAcyclicGraph:
+    """The Tensor graph must be a pure DAG (out -> parents): reachable nodes
+    are freed by refcounting alone the moment the loss tensor drops, without
+    any cyclic-GC pass. With ``_gc_parked`` disabling the collector during
+    training, a cyclic graph leaks one whole step's float64 intermediates
+    (~0.77GB/step in the medium benchmark config) until an explicit collect.
+
+    Two independent cycle sources are locked down here:
+    - bidirectional ``_consumers`` back-edges (input -> output) — caught by the
+      eval/no-backward test, where no ``backward()`` runs to clear them;
+    - ``fwd`` forward-mode closures capturing the ``out`` Tensor itself
+      (relu/gelu/silu/slice/flatten do ``np.zeros_like(out.data)``) — caught by
+      the post-backward test, since ``backward()`` clears consumers but a
+      self-cyclic node still pins its whole ancestral chain.
+    """
+
+    def test_dropped_graph_frees_without_gc_after_backward(self):
+        import gc
+        import weakref
+
+        gc.collect()  # purge unrelated garbage first
+        gc.disable()
+        try:
+            a = Tensor([1.0, 2.0], requires_grad=True)
+            b = Tensor([3.0, 4.0], requires_grad=True)
+            prod = a * b
+            mid = relu(prod)  # fwd closure self-captures `out` pre-fix
+            loss = mid.sum()
+            loss.backward()  # clears _consumers pre-fix; self-cycle must still die
+            wr_mid = weakref.ref(mid)
+            wr_prod = weakref.ref(prod)
+            del loss, mid, prod, a, b
+            assert wr_mid() is None, (
+                "relu node survived without gc.collect(): its fwd closure "
+                "still holds a reference to the node itself"
+            )
+            assert wr_prod() is None, (
+                "upstream node pinned by a self-cyclic consumer: the graph "
+                "must be refcount-freed after backward()"
+            )
+        finally:
+            gc.enable()
+
+    def test_dropped_eval_graph_frees_without_gc(self):
+        import gc
+        import weakref
+
+        gc.collect()
+        gc.disable()
+        try:
+            a = Tensor([1.0, 2.0], requires_grad=True)
+            b = Tensor([3.0, 4.0], requires_grad=True)
+            prod = a * b
+            loss = prod.sum()
+            wr_prod = weakref.ref(prod)
+            # eval-style: forward only, no backward() to clear any back-edges
+            del loss, prod, a, b
+            assert wr_prod() is None, (
+                "forward-only graph survived without gc: _consumers made "
+                "input/output edges bidirectional (cycle a <-> prod)"
+            )
+        finally:
+            gc.enable()
+
+    def test_no_consumers_attribute(self):
+        a = Tensor([1.0], requires_grad=True)
+        b = Tensor([2.0], requires_grad=True)
+        y = a + b
+        assert not hasattr(a, "_consumers")
+        assert not hasattr(y, "_consumers")

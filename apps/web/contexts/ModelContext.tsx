@@ -5,7 +5,7 @@ import { modelController } from '@/lib/model-controller'
 import type { HealthStatus } from '@/lib/model-controller'
 import type { ModelInfo } from '@/lib/types'
 import { useLiveStatus, useApiReady } from '@/hooks/useLiveStatus'
-import { logger } from '@/lib/dev-log'
+import { logger, trackEvent } from '@/lib/dev-log'
 import { extractErrorMessage } from '@/lib/error-utils'
 
 const _log = logger.child('model-context')
@@ -78,7 +78,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
         tags: m.tags,
       })))
     } catch (err) {
-      _log.error('Failed to fetch models', { exception: String(err) })
+      _log.error('Could not fetch models', { exception: String(err) })
     }
   }, [])
 
@@ -111,6 +111,7 @@ export function ModelProvider({ children }: { children: ReactNode }) {
       }
       await refreshModels()
       await refreshHealth()
+      trackEvent('model_loaded', { model_id: modelId })
       return { success: true }
     } catch (err) {
       const error = extractErrorMessage(err)
@@ -154,10 +155,11 @@ export function ModelProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     try {
-      await modelController.unloadModel(modelId)
+      await modelController.unloadModel()
 
       await refreshModels()
       await refreshHealth()
+      trackEvent('model_unloaded', { model_id: modelId })
       return { success: true }
     } catch (err) {
       const error = extractErrorMessage(err)

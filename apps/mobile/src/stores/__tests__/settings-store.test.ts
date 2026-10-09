@@ -11,11 +11,11 @@ const DEFAULTS = {
   fontFamily: 'outfit',
   fontSizeScale: 1.0,
   accentColor: 'violet',
-  temperature: 0.8,
+  temperature: 0.7,
   maxTokens: 256,
-  topP: 0.9,
-  topK: 50,
-  repetitionPenalty: 1.2,
+  topP: 0.85,
+  topK: 40,
+  repetitionPenalty: 1.15,
   memoryContext: '',
   apiUrl: 'http://localhost:8000',
   chatBackground: '',
@@ -42,11 +42,11 @@ describe('initial state', () => {
     expect(s.theme).toBe('system');
     expect(s.fontFamily).toBe('outfit');
     expect(s.fontSizeScale).toBe(1.0);
-    expect(s.temperature).toBe(0.8);
+    expect(s.temperature).toBe(0.7);
     expect(s.maxTokens).toBe(256);
-    expect(s.topP).toBe(0.9);
-    expect(s.topK).toBe(50);
-    expect(s.repetitionPenalty).toBe(1.2);
+    expect(s.topP).toBe(0.85);
+    expect(s.topK).toBe(40);
+    expect(s.repetitionPenalty).toBe(1.15);
     expect(s.apiUrl).toBe('http://localhost:8000');
   });
 });
@@ -117,8 +117,8 @@ describe('reset', () => {
     useSettingsStore.getState().update({temperature: 0.1, theme: 'dark'});
     useSettingsStore.getState().reset();
     const s = useSettingsStore.getState();
-    expect(s.temperature).toBe(0.8);
-    expect(s.theme).toBe('system');
+    expect(s.temperature).toBe(0.7);
+    expect(s.theme).toBe('dark');
     expect(s.fontFamily).toBe('outfit');
   });
 

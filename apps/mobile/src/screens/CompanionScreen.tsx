@@ -1,5 +1,5 @@
 import React, {useEffect, useState, useCallback} from 'react';
-import {FlatList, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
+import {ScrollView, Pressable, RefreshControl, TextInput as RNTextInput} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
@@ -142,18 +142,17 @@ export function CompanionScreen() {
           <StatusBadge label="Loading..." variant="info" />
         </YStack>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          ListHeaderComponent={
-            <YStack padding={16} gap={12}>
+        <ScrollView
+          contentContainerStyle={{paddingBottom: 32}}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <YStack padding={16} gap={12}>
               {/* KPI */}
               <XStack gap={8}>
-                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
+                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
                   <Text fontSize={11} color={colors.textMuted}>Preset</Text>
                   <Text fontSize={14} fontWeight="600" color={colors.text}>{data?.active_preset || 'Custom'}</Text>
                 </YStack>
-                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
+                <YStack flex={1} padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4} alignItems="center">
                   <Text fontSize={11} color={colors.textMuted}>Avg Trait</Text>
                   <Text fontSize={14} fontWeight="600" color={colors.primary}>{avgTrait}</Text>
                 </YStack>
@@ -161,7 +160,7 @@ export function CompanionScreen() {
 
               {/* Presets */}
               {data?.presets && data.presets.length > 0 && (
-                <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+                <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Presets</Text>
                   <XStack gap={6} flexWrap="wrap">
                     {data.presets.map(p => (
@@ -176,7 +175,7 @@ export function CompanionScreen() {
               )}
 
               {/* Personality Traits */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={10}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Personality Traits</Text>
                 {(Object.keys(traits) as Array<keyof typeof traits>).map(key => (
                   <TraitSlider
@@ -196,7 +195,7 @@ export function CompanionScreen() {
 
               {/* System Prompt */}
               {data?.system_prompt && (
-                <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={6}>
+                <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={6}>
                   <Text fontSize={15} fontWeight="600" color={colors.text}>System Prompt</Text>
                   <YStack padding={10} borderRadius={6} backgroundColor={colors.background}>
                     <Text fontSize={12} fontFamily="monospace" color={colors.textMuted} lineHeight={18}>{data.system_prompt}</Text>
@@ -205,7 +204,7 @@ export function CompanionScreen() {
               )}
 
               {/* Test Chat */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Test Chat</Text>
                 <RNTextInput
                   value={chatInput}
@@ -235,10 +234,7 @@ export function CompanionScreen() {
                 ) : null}
               </YStack>
             </YStack>
-          }
-          contentContainerStyle={{paddingBottom: 32}}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
+          </ScrollView>
       )}
     </SafeAreaView>
   );

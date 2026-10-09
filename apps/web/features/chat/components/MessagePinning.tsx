@@ -117,6 +117,7 @@ export const MessagePinning = memo(function MessagePinning({
             className="h-5 w-5"
             onClick={handleClearAll}
             title="Clear all pins"
+            aria-label="Clear all pins"
           >
             <IconX className="h-3 w-3" />
           </Button>
@@ -151,13 +152,14 @@ export const MessagePinning = memo(function MessagePinning({
                       <p className="text-[10px] text-muted-foreground mt-1 italic">{pin.note}</p>
                     )}
                   </button>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 shrink-0">
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0">
                     <Button
                       variant="ghost"
                       size="icon-sm"
                       className="h-5 w-5"
                       onClick={() => handleAddNote(pin.id)}
                       title="Add note"
+                      aria-label="Add note to pin"
                     >
                       <IconCheck className="h-3 w-3" />
                     </Button>
@@ -167,6 +169,7 @@ export const MessagePinning = memo(function MessagePinning({
                       className="h-5 w-5"
                       onClick={() => handleUnpin(pin.id)}
                       title="Unpin"
+                      aria-label="Unpin message"
                     >
                       <IconX className="h-3 w-3" />
                     </Button>

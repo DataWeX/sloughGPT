@@ -1,8 +1,8 @@
-"""Coverage tests for domains/shell/kernel_devices.py."""
+"""Coverage tests for domain.shell.kernel_devices.py."""
 
 import pytest
 
-from domains.shell.kernel_devices import (
+from domain.shell._internal.kernel_devices import (
     DeviceDriver,
     DeviceHandle,
     DeviceManager,
@@ -244,7 +244,7 @@ def test_table_ioctl_fd_disconnected():
 def test_table_list_and_stats():
     t = DeviceTable()
     t.register(FakeDevice("d1"))
-    h = t.open("d1")
+    t.open("d1")
     listing = t.list_devices()
     assert len(listing) == 1
     assert listing[0]["name"] == "d1"

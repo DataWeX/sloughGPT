@@ -13,12 +13,13 @@ with tag starting with ``@``.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional, Union
+from typing import Any
 
 
 @dataclass
 class AmlValue:
     """A scalar value extracted from AML source."""
+
     raw: str
     type: str = "string"  # string | int | float | bool | null
 
@@ -57,9 +58,10 @@ class AmlBlock:
                        "tags": ["cell", "energy"]},
         )
     """
+
     tag: str
-    name: Optional[str] = None
-    body: Optional[Union[str, list, dict]] = None
+    name: str | None = None
+    body: str | list | dict | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     line: int = 0
 
@@ -73,6 +75,7 @@ class AmlDocument:
         blocks:  ordered list of all blocks
         errors:  parse errors (non-fatal, document still usable)
     """
+
     version: str = "1.0"
     blocks: list[AmlBlock] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -81,7 +84,7 @@ class AmlDocument:
         """Return all blocks matching *tag* (without ``@`` prefix)."""
         return [b for b in self.blocks if b.tag == tag]
 
-    def by_name(self, name: str) -> Optional[AmlBlock]:
+    def by_name(self, name: str) -> AmlBlock | None:
         """Return the first block with matching *name*, or None."""
         for b in self.blocks:
             if b.name == name:

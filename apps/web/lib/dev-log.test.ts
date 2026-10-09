@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.hoisted(() => { (process.env as Record<string, string>).NODE_ENV = 'development' })
+vi.hoisted(() => {
+  ;(process.env as Record<string, string>).NODE_ENV = 'development'
+})
 
-import { LogTransport, WebLogger, devDebug, logger } from './dev-log'
+import { LogTransport, WebLogger, trackEvent, devDebug, logger } from './dev-log'
 
 beforeEach(() => {
   vi.spyOn(console, 'debug').mockImplementation(() => {})
@@ -19,7 +21,11 @@ describe('WebLogger', () => {
   it('emits debug to console.debug', () => {
     const log = new WebLogger('test', 'debug')
     log.debug('hello')
-    expect(console.debug).toHaveBeenCalledWith('[test]', 'hello', expect.objectContaining({ level: 'debug', logger: 'test', message: 'hello' }))
+    expect(console.debug).toHaveBeenCalledWith(
+      '[test]',
+      'hello',
+      expect.objectContaining({ level: 'debug', logger: 'test', message: 'hello' }),
+    )
   })
 
   it('does not emit debug when level is warning', () => {
@@ -49,7 +55,11 @@ describe('WebLogger', () => {
   it('critical calls console.error', () => {
     const log = new WebLogger('test', 'debug')
     log.critical('fatal')
-    expect(console.error).toHaveBeenCalledWith('[test]', 'fatal', expect.objectContaining({ level: 'critical' }))
+    expect(console.error).toHaveBeenCalledWith(
+      '[test]',
+      'fatal',
+      expect.objectContaining({ level: 'critical' }),
+    )
   })
 
   it('error accepts exception in opts', () => {
@@ -183,5 +193,175 @@ describe('WebLogger — flush rate limiting', () => {
     const body = JSON.parse((fetch as any).mock.calls[1][1].body)
     expect(body.logs).toHaveLength(1)
     expect(body.logs[0].message).toBe('second')
+  })
+})
+
+describe('WebLogger — trackEvent', () => {
+  const originalFetch = globalThis.fetch
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.stubGlobal('fetch', originalFetch)
+  })
+
+  it('trackEvent enqueues a record with auto-inferred tag', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('session_created', { session_id: 'abc' })
+    log.flush()
+    expect(fetch).toHaveBeenCalledTimes(1)
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    // Message is a clean one-liner; structured fields live in context only
+    expect(body.logs[0].message).toBe('session_created')
+    expect(body.logs[0].context.session_id).toBe('abc')
+    expect(body.logs[0].context.tag).toBe('CHAT')
+  })
+
+  it('trackEvent sends a bare event — backend composes the transition', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('api_connection_changed', { kind: 'api', from: 'connecting', to: 'connected' })
+    log.flush()
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs[0].message).toBe('api_connection_changed')
+    expect(body.logs[0].context).toMatchObject({
+      kind: 'api',
+      from: 'connecting',
+      to: 'connected',
+    })
+  })
+
+  it('trackEvent uses explicit tag over inference', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('custom_event', { tag: 'TRAIN' })
+    log.flush()
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs[0].context.tag).toBe('TRAIN')
+  })
+
+  it('trackEvent defaults to UI tag for unknown events', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('locale_changed')
+    log.flush()
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs[0].context.tag).toBe('UI')
+  })
+
+  it('trackEvent infers MODEL tag from model_ prefix', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('model_loaded', { model: 'gpt2' })
+    log.flush()
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs[0].context.tag).toBe('MODEL')
+    expect(body.logs[0].message).toBe('model_loaded')
+    expect(body.logs[0].context.model).toBe('gpt2')
+  })
+
+  it('trackEvent infers INFRA tag from vm_ prefix', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('vm_booted')
+    log.flush()
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs[0].context.tag).toBe('INFRA')
+  })
+
+  it('trackEvent in dev mode calls console.debug', () => {
+    const log = new WebLogger('slo.web.ui')
+    log.trackEvent('test_event', { x: 1 })
+    expect(console.debug).toHaveBeenCalledWith('[slo.web.ui]', 'test_event', { x: 1 })
+  })
+
+  it('trackEvent without data produces clean message', () => {
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('route_changed')
+    log.flush()
+    const body = JSON.parse((fetch as any).mock.calls[0][1].body)
+    expect(body.logs[0].message).toBe('route_changed')
+  })
+
+  it('inferTag is a static method on WebLogger', () => {
+    expect(WebLogger.inferTag('model_loaded')).toBe('MODEL')
+    expect(WebLogger.inferTag('locale_changed')).toBe('UI')
+  })
+
+  it('trackEvent mirrors into the error-store state-event buffer', async () => {
+    const { useErrorStore } = await import('./error-store')
+    useErrorStore.getState().clearStateEvents()
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('training_started', { method: 'turbo' })
+    // mirror is lazy/async — wait for it to land (real timers for waitFor)
+    vi.useRealTimers()
+    await vi.waitFor(() => {
+      expect(useErrorStore.getState().getStateEvents().length).toBeGreaterThan(0)
+    })
+    const [e] = useErrorStore.getState().getStateEvents()
+    expect(e.event).toBe('training_started')
+    expect(e.kind).toBe('training')
+    useErrorStore.getState().clearStateEvents()
+    vi.useFakeTimers()
+  })
+
+  it('trackEvent mirror records transitions with from/to', async () => {
+    const { useErrorStore } = await import('./error-store')
+    useErrorStore.getState().clearStateEvents()
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('connection_status_changed', { from: 'connecting', to: 'connected' })
+    vi.useRealTimers()
+    await vi.waitFor(() => {
+      expect(useErrorStore.getState().getStateEvents().length).toBeGreaterThan(0)
+    })
+    const [e] = useErrorStore.getState().getStateEvents()
+    expect(e.kind).toBe('connection')
+    expect(e.from).toBe('connecting')
+    expect(e.to).toBe('connected')
+    useErrorStore.getState().clearStateEvents()
+    vi.useFakeTimers()
+  })
+
+  it('trackEvent mirror respects explicit kind', async () => {
+    const { useErrorStore } = await import('./error-store')
+    useErrorStore.getState().clearStateEvents()
+    const transport = new LogTransport()
+    const log = new WebLogger('slo.web.ui', 'info', {}, transport)
+    log.trackEvent('custom_event', { kind: 'model' })
+    vi.useRealTimers()
+    await vi.waitFor(() => {
+      expect(useErrorStore.getState().getStateEvents().length).toBeGreaterThan(0)
+    })
+    expect(useErrorStore.getState().getStateEvents()[0].kind).toBe('model')
+    useErrorStore.getState().clearStateEvents()
+    vi.useFakeTimers()
+  })
+})
+
+describe('trackEvent (singleton)', () => {
+  const originalFetch = globalThis.fetch
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.stubGlobal('fetch', originalFetch)
+  })
+
+  it('exports a trackEvent function that delegates to WebEventLogger', () => {
+    trackEvent('auth_login', { user_id: 'u1' })
+    logger.flush()
+    expect(fetch).toHaveBeenCalled()
   })
 })

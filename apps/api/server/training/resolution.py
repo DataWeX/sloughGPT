@@ -6,32 +6,60 @@ documented under *Checkpoint vocabulary* in ``docs/policies/CONTRIBUTING.md``.
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple, Dict
+from pathlib import Path
+from typing import Any
 
 from .schemas import TrainDatasetRef
 
 
-def _repo_root() -> "Path":
+def _repo_root() -> Path:
     from pathlib import Path
-    from domains.shared.utils import find_repo_root
+
+    from domain.shared import find_repo_root
+
     return find_repo_root(Path(__file__).resolve())
 
 
+def resolve_legacy_corpus_path(stem: str) -> Path | None:
+    """Find a training corpus file for a dataset id across legacy locations.
+
+    Search order (first hit wins, preserving the historic priority):
+    ``datasets/{stem}/input.txt`` (exact legacy contract), then
+    ``data/{stem}`` and ``data/datasets/{stem}`` via the shared
+    ``find_corpus_file`` priority (corpus.jsonl, input.txt, train.txt,
+    text.txt, *.txt, *.jsonl).
+
+    Returns the corpus file Path, or None when nothing resolves.
+    """
+    from domain.training._internal.cache_tags import find_corpus_file
+
+    root = _repo_root()
+    legacy = root / "datasets" / stem / "input.txt"
+    if legacy.is_file():
+        return legacy
+    for base in ("data", "data/datasets"):
+        candidate_dir = root / base / stem
+        if candidate_dir.is_dir():
+            hit = find_corpus_file(candidate_dir)
+            if hit is not None:
+                return hit
+    return None
+
+
 def resolve_training_inputs(
-    dataset: Optional[str],
-    manifest_uri: Optional[str],
-    dataset_ref: Optional[TrainDatasetRef],
-) -> Tuple[str, str, Optional[Dict[str, Any]], str]:
+    dataset: str | None,
+    manifest_uri: str | None,
+    dataset_ref: TrainDatasetRef | None,
+) -> tuple[str, str, dict[str, Any] | None, str]:
     """
     Returns (data_path_str, out_stem, manifest_meta | None, source_kind).
 
     source_kind is ``legacy`` | ``manifest`` | ``ref``.
     """
-    from pathlib import Path
 
-    from domains.training.dataset_manifest import ManifestError, resolve_training_data_path
+    from domain.training._internal.dataset_manifest import ManifestError, resolve_training_data_path
 
-    manifest_meta: Optional[Dict[str, Any]] = None
+    manifest_meta: dict[str, Any] | None = None
 
     if dataset_ref is not None:
         ref = dataset_ref
@@ -56,7 +84,18 @@ def resolve_training_inputs(
         return str(data_path), out_stem, manifest_meta, "manifest"
 
     stem = str(dataset).strip()
-    p = _repo_root() / "datasets" / stem / "input.txt"
-    if not p.is_file():
-        raise ManifestError(f"Missing training file: {p}")
-    return str(p.resolve()), stem, None, "legacy"
+    # Just-cache first; legacy datasets/ dir is a read-only fallback.
+    try:
+        from domain.training._internal.cache_tags import resolve_in_cache
+
+        hit = resolve_in_cache(stem)
+        if hit:
+            return hit, stem, None, "cache"
+    except ValueError:
+        pass
+    hit = resolve_legacy_corpus_path(stem)
+    if hit is None:
+        searched = ["datasets/{s}/input.txt", "data/{s}/", "data/datasets/{s}/"]
+        locations = ", ".join(loc.format(s=stem) for loc in searched)
+        raise ManifestError(f"Missing training file for {stem!r} (searched: {locations})")
+    return str(hit.resolve()), stem, None, "legacy"

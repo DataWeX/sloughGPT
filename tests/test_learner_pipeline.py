@@ -10,26 +10,26 @@ Tests the chain:
   → ContinualLearner.deploy()
 """
 
-import pytest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from domains.inference.vector_store import InMemoryVectorStore
-from domains.learner.entity_extractor import (
-    extract_entities,
-    extract_relationships,
-    extract_facts_from_conversation,
-)
-from domains.learner.knowledge import (
-    KnowledgeMemory,
-    KnowledgeFact,
-    KnowledgeIngestor,
-    _extract_topics,
-)
-from domains.learner.knowledge_augmenter import enrich_with_knowledge
-from domains.learner.continual import ContinualLearner, _tokenize
-from domains.learner.data_filter import DataFilter
+from unittest.mock import patch
 
+import pytest
+
+from domain.inference._internal.vector_store import InMemoryVectorStore
+from domain.knowledge._internal.knowledge import _extract_topics
+from domain.learner._internal.continual import ContinualLearner
+from domain.learner._internal.data_filter import DataFilter
+from domain.learner._internal.entity_extractor import (
+    extract_entities,
+    extract_facts_from_conversation,
+    extract_relationships,
+)
+from domain.learner._internal.knowledge import (
+    KnowledgeFact,
+    KnowledgeMemory,
+)
+from domain.learner._internal.knowledge_augmenter import enrich_with_knowledge
 
 # ===== Entity Extraction → Storage =====
 
@@ -148,22 +148,35 @@ class TestKnowledgeAugmenter:
     """enrich_with_knowledge retrieves stored facts to augment chat messages."""
 
     def test_enrich_with_stored_facts(self):
-        memory = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384), load_persisted=False)
+        memory = KnowledgeMemory(
+            vector_store=InMemoryVectorStore(dimension=384), load_persisted=False
+        )
         memory._visited.clear()
-        memory.add_fact(KnowledgeFact(
-            content="Python is a high-level programming language created by Guido van Rossum",
-            topic="programming",
-            source="test",
-        ))
-        memory.add_fact(KnowledgeFact(
-            content="TypeScript adds static typing to JavaScript",
-            topic="programming",
-            source="test",
-        ))
+        memory.add_fact(
+            KnowledgeFact(
+                content="Python is a high-level programming language created by Guido van Rossum",
+                topic="programming",
+                source="test",
+            )
+        )
+        memory.add_fact(
+            KnowledgeFact(
+                content="TypeScript adds static typing to JavaScript",
+                topic="programming",
+                source="test",
+            )
+        )
 
-        with patch("domains.learner.knowledge_augmenter.get_knowledge_memory", return_value=memory):
-            with patch("domains.learner.knowledge_augmenter.get_knowledge_ingestor") as mock_ingestor:
-                mock_ingestor.return_value.search_and_ingest.return_value = {"new_facts": 0, "rejected": 0}
+        with patch(
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
+        ):
+            with patch(
+                "domain.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
+            ) as mock_ingestor:
+                mock_ingestor.return_value.search_and_ingest.return_value = {
+                    "new_facts": 0,
+                    "rejected": 0,
+                }
                 result = enrich_with_knowledge("Tell me about Python")
         assert result["source"] in ("memory", "none")
         if result["source"] == "memory":
@@ -171,12 +184,21 @@ class TestKnowledgeAugmenter:
             assert any("Python" in f for f in result["facts"])
 
     def test_enrich_empty_with_no_data(self):
-        memory = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384), load_persisted=False)
+        memory = KnowledgeMemory(
+            vector_store=InMemoryVectorStore(dimension=384), load_persisted=False
+        )
         memory._visited.clear()
 
-        with patch("domains.learner.knowledge_augmenter.get_knowledge_memory", return_value=memory):
-            with patch("domains.learner.knowledge_augmenter.get_knowledge_ingestor") as mock_ingestor:
-                mock_ingestor.return_value.search_and_ingest.return_value = {"new_facts": 0, "rejected": 0}
+        with patch(
+            "domain.learner._internal.knowledge_augmenter.get_knowledge_memory", return_value=memory
+        ):
+            with patch(
+                "domain.learner._internal.knowledge_augmenter.get_knowledge_ingestor"
+            ) as mock_ingestor:
+                mock_ingestor.return_value.search_and_ingest.return_value = {
+                    "new_facts": 0,
+                    "rejected": 0,
+                }
                 result = enrich_with_knowledge("Tell me about something unknown", auto_search=False)
         assert result["source"] == "none"
         assert result["facts"] == []
@@ -193,7 +215,7 @@ class TestLearnerPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domains.learner.continual.STATE_PATH", tmp_path / "continual.soul"),
+            patch("domain.learner._internal.continual.STATE_PATH", tmp_path / "continual.soul"),
         ):
             l = ContinualLearner()
             l._running = False
@@ -223,10 +245,12 @@ class TestLearnerPipeline:
 
     @pytest.mark.slow
     def test_ingest_conversation_and_train(self, learner):
-        learner.ingest_conversation([
-            ("hi", "hello there"),
-            ("what is python", "python is a programming language"),
-        ])
+        learner.ingest_conversation(
+            [
+                ("hi", "hello there"),
+                ("what is python", "python is a programming language"),
+            ]
+        )
         assert learner.total_tokens_ingested > 0
 
         status = learner.train_now()
@@ -262,16 +286,20 @@ class TestFullPipeline:
 
     def _make_memory_with_facts(self):
         memory = KnowledgeMemory(vector_store=InMemoryVectorStore(dimension=384))
-        memory.add_fact(KnowledgeFact(
-            content="The Python programming language was created by Guido van Rossum in 1991",
-            topic="programming",
-            source="test",
-        ))
-        memory.add_fact(KnowledgeFact(
-            content="Transformers are a neural network architecture for sequence processing",
-            topic="ai",
-            source="test",
-        ))
+        memory.add_fact(
+            KnowledgeFact(
+                content="The Python programming language was created by Guido van Rossum in 1991",
+                topic="programming",
+                source="test",
+            )
+        )
+        memory.add_fact(
+            KnowledgeFact(
+                content="Transformers are a neural network architecture for sequence processing",
+                topic="ai",
+                source="test",
+            )
+        )
         return memory
 
     @pytest.mark.slow
@@ -285,11 +313,13 @@ class TestFullPipeline:
         memory = self._make_memory_with_facts()
         memory._visited.clear()
         for fact_text in conversation_facts:
-            memory.add_fact(KnowledgeFact(
-                content=fact_text,
-                topic="chat",
-                source="chat",
-            ))
+            memory.add_fact(
+                KnowledgeFact(
+                    content=fact_text,
+                    topic="chat",
+                    source="chat",
+                )
+            )
 
         results = memory.search("machine learning engineer", top_k=5)
         assert len(results) >= 1
@@ -312,7 +342,10 @@ class TestFullPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.soul"),
+            patch(
+                "domain.learner._internal.continual.STATE_PATH",
+                Path(tempfile.mkdtemp()) / "continual.soul",
+            ),
         ):
             learner = ContinualLearner()
             try:
@@ -331,7 +364,10 @@ class TestFullPipeline:
         with (
             patch.object(ContinualLearner, "_background_loop", lambda self: None),
             patch.object(ContinualLearner, "_save_checkpoint", lambda self: None),
-            patch("domains.learner.continual.STATE_PATH", Path(tempfile.mkdtemp()) / "continual.soul"),
+            patch(
+                "domain.learner._internal.continual.STATE_PATH",
+                Path(tempfile.mkdtemp()) / "continual.soul",
+            ),
         ):
             learner = ContinualLearner()
             try:
@@ -349,7 +385,9 @@ class TestFullPipeline:
                 learner.shutdown()
 
     def test_extract_topics_from_text(self):
-        topics = _extract_topics("Machine learning and artificial intelligence are transforming technology")
+        topics = _extract_topics(
+            "Machine learning and artificial intelligence are transforming technology"
+        )
         assert len(topics) > 0
         assert all(isinstance(t, str) for t in topics)
 

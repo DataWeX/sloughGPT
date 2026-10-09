@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, memo } from 'react'
-import { Button, IconRefresh } from '@sloughgpt/strui'
+import { Button, Spinner } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { chatDB } from '@/lib/db'
 import type { ChatSession } from '@/lib/db'
@@ -159,7 +159,7 @@ export const ChatAnalytics = memo(function ChatAnalytics({ className }: ChatAnal
           disabled={loading}
           aria-label="Refresh analytics"
         >
-          <IconRefresh className={cn('h-3 w-3', loading && 'animate-spin')} />
+          <Spinner className="h-3 w-3" />
         </Button>
       </div>
 

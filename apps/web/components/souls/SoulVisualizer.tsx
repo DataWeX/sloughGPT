@@ -1,30 +1,23 @@
 'use client'
 
 import { useState } from 'react'
+import { cn } from '@sloughgpt/strui'
 import TraitRadarChart from './TraitRadarChart'
 import PersonalitySummary from './PersonalitySummary'
+import { SOUL_GROUP_COLORS, SOUL_GROUP_LABELS, SOUL_GROUP_KEYS } from './soul-constants'
 
 interface SoulVisualizerProps {
   traitWeights: Record<string, Record<string, number>>
   currentSoulName: string | null
 }
 
-const GROUP_COLORS: Record<string, string> = {
-  personality: 'rgb(var(--primary))',
-  cognition: 'rgb(var(--chart-4))',
-  emotion: 'rgb(var(--destructive))',
-}
-
-const GROUP_LABELS: Record<string, string> = {
-  personality: 'Personality',
-  cognition: 'Cognition',
-  emotion: 'Emotion',
-}
+const GROUP_COLORS = SOUL_GROUP_COLORS
+const GROUP_LABELS = SOUL_GROUP_LABELS
 
 export default function SoulVisualizer({ traitWeights, currentSoulName }: SoulVisualizerProps) {
   const [view, setView] = useState<'summary' | 'chart'>('summary')
 
-  const groups = ['personality', 'cognition', 'emotion'] as const
+  const groups = SOUL_GROUP_KEYS
 
   if (!traitWeights || Object.keys(traitWeights).length === 0) return null
 
@@ -35,33 +28,19 @@ export default function SoulVisualizer({ traitWeights, currentSoulName }: SoulVi
 
   return (
     <>
-      <style>{`
-        @keyframes viewFadeIn {
-          from { opacity: 0; transform: translateY(4px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .view-pane {
-          animation: viewFadeIn 0.3s ease-out both;
-        }
-      `}</style>
-
       {/* ── View toggle ── */}
       {hasRadarData && (
         <div className="flex flex-wrap items-center gap-1 mb-3">
           <button
             type="button"
-            className={`text-[10px] px-2 py-1 rounded-md transition-colors ${
-              view === 'summary' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('text-[10px] px-2 py-1 rounded-md transition-colors', view === 'summary' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground')}
             onClick={() => setView('summary')}
           >
             List
           </button>
           <button
             type="button"
-            className={`text-[10px] px-2 py-1 rounded-md transition-colors ${
-              view === 'chart' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground'
-            }`}
+            className={cn('text-[10px] px-2 py-1 rounded-md transition-colors', view === 'chart' ? 'bg-primary/10 text-primary font-medium' : 'text-muted-foreground hover:text-foreground')}
             onClick={() => setView('chart')}
           >
             Radar

@@ -1,4 +1,5 @@
 """Coverage for sloughgpt_sdk.cli."""
+
 import builtins
 import sys
 from pathlib import Path
@@ -37,8 +38,12 @@ class TestMainHealth:
     def test_plain_output(self, capsys):
         client = Mock()
         client.health.return_value = SimpleNamespace(
-            raw={"s": "ok"}, status="ok", version="1.0",
-            model_loaded=True, model_name="gpt2", device="cpu",
+            raw={"s": "ok"},
+            status="ok",
+            version="1.0",
+            model_loaded=True,
+            model_name="gpt2",
+            device="cpu",
         )
         assert _run(_argv(None, "health"), client) == 0
         out = capsys.readouterr().out
@@ -50,7 +55,14 @@ class TestMainHealth:
 
     def test_json_output(self, capsys):
         client = Mock()
-        client.health.return_value = SimpleNamespace(raw={"a": "b"}, status="ok", version="1.0", model_loaded=False, model_name=None, device="cpu")
+        client.health.return_value = SimpleNamespace(
+            raw={"a": "b"},
+            status="ok",
+            version="1.0",
+            model_loaded=False,
+            model_name=None,
+            device="cpu",
+        )
         _run(_argv(None, "--json", "health"), client)
         out = capsys.readouterr().out
         assert '"a": "b"' in out
@@ -60,8 +72,12 @@ class TestMainInfo:
     def test_plain_output(self, capsys):
         client = Mock()
         client.info.return_value = SimpleNamespace(
-            raw={}, version="1.0", pytorch_version="2.0",
-            cuda_available=True, cuda={"device": "gpu0"}, cpu_count=8,
+            raw={},
+            version="1.0",
+            pytorch_version="2.0",
+            cuda_available=True,
+            cuda={"device": "gpu0"},
+            cpu_count=8,
         )
         _run(_argv(None, "info"), client)
         out = capsys.readouterr().out
@@ -71,7 +87,14 @@ class TestMainInfo:
 
     def test_json_and_no_cuda(self, capsys):
         client = Mock()
-        client.info.return_value = SimpleNamespace(version="1.0", pytorch_version="2.0", cuda_available=False, cuda=None, cpu_count=4, raw={"version": "1.0"})
+        client.info.return_value = SimpleNamespace(
+            version="1.0",
+            pytorch_version="2.0",
+            cuda_available=False,
+            cuda=None,
+            cpu_count=4,
+            raw={"version": "1.0"},
+        )
         assert _run(_argv(None, "--json", "info"), client) == 0
         out = capsys.readouterr().out
         assert '"version"' in out
@@ -81,8 +104,10 @@ class TestMainGenerate:
     def test_plain(self, capsys):
         client = Mock()
         client.generate.return_value = SimpleNamespace(
-            generated_text="hi", raw_response={"t": "hi"},
-            tokens_generated=2, inference_time_ms=10.5,
+            generated_text="hi",
+            raw_response={"t": "hi"},
+            tokens_generated=2,
+            inference_time_ms=10.5,
         )
         _run(_argv(None, "generate", "hello"), client)
         out = capsys.readouterr().out
@@ -91,8 +116,10 @@ class TestMainGenerate:
     def test_json_and_verbose(self, capsys):
         client = Mock()
         client.generate.return_value = SimpleNamespace(
-            generated_text="hi", raw_response={"t": "hi"},
-            tokens_generated=2, inference_time_ms=10.5,
+            generated_text="hi",
+            raw_response={"t": "hi"},
+            tokens_generated=2,
+            inference_time_ms=10.5,
         )
         assert _run(_argv(None, "--json", "--verbose", "generate", "hello"), client) == 0
         out = capsys.readouterr().out
@@ -111,14 +138,18 @@ class TestMainGenerate:
 class TestMainChat:
     def test_without_system(self, capsys):
         client = Mock()
-        client.chat.return_value = SimpleNamespace(message=SimpleNamespace(content="reply"), raw_response={"r": 1})
+        client.chat.return_value = SimpleNamespace(
+            message=SimpleNamespace(content="reply"), raw_response={"r": 1}
+        )
         _run(_argv(None, "chat", "hi"), client)
         out = capsys.readouterr().out
         assert out.strip() == "reply"
 
     def test_with_system_and_json(self, capsys):
         client = Mock()
-        client.chat.return_value = SimpleNamespace(message=SimpleNamespace(content="reply"), raw_response={"r": 1})
+        client.chat.return_value = SimpleNamespace(
+            message=SimpleNamespace(content="reply"), raw_response={"r": 1}
+        )
         assert _run(_argv(None, "--json", "chat", "hi", "--system", "you are a bot"), client) == 0
         out = capsys.readouterr().out
         assert '"r": 1' in out
@@ -141,7 +172,9 @@ class TestMainModels:
 
     def test_json(self, capsys):
         client = Mock()
-        client.list_models.return_value = [SimpleNamespace(raw={"id": "m1"}, id="m1", source=None, description=None)]
+        client.list_models.return_value = [
+            SimpleNamespace(raw={"id": "m1"}, id="m1", source=None, description=None)
+        ]
         _run(_argv(None, "--json", "models"), client)
         out = capsys.readouterr().out
         assert '"id": "m1"' in out
@@ -160,7 +193,9 @@ class TestMainDatasets:
 
     def test_json(self, capsys):
         client = Mock()
-        client.list_datasets.return_value = [SimpleNamespace(raw={"id": "ds1"}, id="ds1", description=None)]
+        client.list_datasets.return_value = [
+            SimpleNamespace(raw={"id": "ds1"}, id="ds1", description=None)
+        ]
         assert _run(_argv(None, "--json", "datasets"), client) == 0
         assert '"id": "ds1"' in capsys.readouterr().out
 
@@ -169,8 +204,13 @@ class TestMainMetrics:
     def test_plain(self, capsys):
         client = Mock()
         client.metrics.return_value = SimpleNamespace(
-            raw={}, requests_total=10, requests_success=8,
-            requests_failed=2, cache_hits=3, cache_misses=7, avg_response_time_ms=1.5,
+            raw={},
+            requests_total=10,
+            requests_success=8,
+            requests_failed=2,
+            cache_hits=3,
+            cache_misses=7,
+            avg_response_time_ms=1.5,
         )
         _run(_argv(None, "metrics"), client)
         out = capsys.readouterr().out
@@ -187,8 +227,13 @@ class TestMainMetrics:
     def test_json(self, capsys):
         client = Mock()
         client.metrics.return_value = SimpleNamespace(
-            raw={"r": "x"}, requests_total=1, requests_success=1, requests_failed=0,
-            cache_hits=0, cache_misses=0, avg_response_time_ms=1.0,
+            raw={"r": "x"},
+            requests_total=1,
+            requests_success=1,
+            requests_failed=0,
+            cache_hits=0,
+            cache_misses=0,
+            avg_response_time_ms=1.0,
         )
         _run(_argv(None, "--json", "metrics"), client)
         assert '"r": "x"' in capsys.readouterr().out
@@ -208,7 +253,9 @@ class TestMainRegistry:
 
     def test_list_json(self, capsys):
         client = Mock()
-        client.list_registry_models.return_value = [{"model_id": "m1", "status": "s", "model_type": "t"}]
+        client.list_registry_models.return_value = [
+            {"model_id": "m1", "status": "s", "model_type": "t"}
+        ]
         _run(_argv(None, "--json", "registry", "list"), client)
         assert '"model_id": "m1"' in capsys.readouterr().out
 

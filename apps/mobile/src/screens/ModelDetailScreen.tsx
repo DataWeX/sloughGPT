@@ -1,9 +1,9 @@
 import React, {useEffect, useState, useCallback} from 'react';
-import {FlatList, Pressable, RefreshControl} from 'react-native';
+import {ScrollView, Pressable, RefreshControl} from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useRoute, useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import type {StackNavigationProp} from '@react-navigation/stack';
 import type {ToolsStackParamList} from '../navigation/types';
 import {useColors} from '../theme/colors';
 import {api} from '../services/api-client';
@@ -16,7 +16,7 @@ import type {ModelInfo, BenchmarkResult} from '../types';
 
 export function ModelDetailScreen() {
   const route = useRoute();
-  const navigation = useNavigation<NativeStackNavigationProp<ToolsStackParamList>>();
+  const navigation = useNavigation<StackNavigationProp<ToolsStackParamList>>();
   const colors = useColors();
   const {modelId} = route.params as {modelId: string};
   const {models, currentModel, health, loadModel, unloadModel, loadingModelId} = useModelStore();
@@ -107,13 +107,12 @@ export function ModelDetailScreen() {
           <StatusBadge label="Loading..." variant="info" />
         </YStack>
       ) : (
-        <FlatList
-          data={[]}
-          renderItem={() => null}
-          ListHeaderComponent={
-            <YStack padding={16} gap={12}>
+        <ScrollView
+          contentContainerStyle={{paddingBottom: 32}}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
+          <YStack padding={16} gap={12}>
               {/* Status */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={10}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={10}>
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Model Info</Text>
                   <StatusBadge label={isLoaded ? 'Loaded' : 'Not Loaded'} variant={isLoaded ? 'success' : 'default'} />
@@ -143,7 +142,7 @@ export function ModelDetailScreen() {
               </YStack>
 
               {/* Actions */}
-              <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+              <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                 <Text fontSize={15} fontWeight="600" color={colors.text}>Actions</Text>
                 <XStack gap={8}>
                   {!isLoaded ? (
@@ -172,7 +171,7 @@ export function ModelDetailScreen() {
 
               {/* Tags */}
               {model?.tags && model.tags.length > 0 && (
-                <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={6}>
+                <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={6}>
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Tags</Text>
                   <XStack gap={4} flexWrap="wrap">
                     {model.tags.map(tag => (
@@ -184,7 +183,7 @@ export function ModelDetailScreen() {
 
               {/* Benchmark Results */}
               {benchmark && (
-                <YStack padding={14} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={8}>
+                <YStack padding={14} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={8}>
                   <Text fontSize={15} fontWeight="600" color={colors.text}>Benchmark Results</Text>
                   <XStack gap={12}>
                     {[
@@ -204,7 +203,7 @@ export function ModelDetailScreen() {
 
               {/* Server Health */}
               {health && (
-                <YStack padding={12} borderRadius={10} backgroundColor={colors.white} borderWidth={0.5} borderColor={colors.border} gap={4}>
+                <YStack padding={12} borderRadius={10} backgroundColor={colors.card} borderWidth={0.5} borderColor={colors.border} gap={4}>
                   <XStack justifyContent="space-between" alignItems="center">
                     <Text fontSize={13} color={colors.textMuted}>Server</Text>
                     <StatusBadge label={health.status} variant={health.status === 'healthy' ? 'success' : 'error'} />
@@ -216,10 +215,7 @@ export function ModelDetailScreen() {
                 </YStack>
               )}
             </YStack>
-          }
-          contentContainerStyle={{paddingBottom: 32}}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
+          </ScrollView>
       )}
     </SafeAreaView>
   );

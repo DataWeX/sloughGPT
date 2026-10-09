@@ -20,8 +20,7 @@ export interface TTSResult {
 
 class VoiceController {
   async getStatus(): Promise<VoiceStatus> {
-    const data = await apiGet<{ data?: VoiceStatus } | VoiceStatus>('/voice/status')
-    return (data && 'data' in data && data.data) ? data.data : (data as VoiceStatus)
+    return apiGet<VoiceStatus>('/voice/status')
   }
 
   async tts(text: string): Promise<TTSResult> {

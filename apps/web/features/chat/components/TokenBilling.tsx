@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback, useEffect, useMemo, memo } from 'react'
-import { Button, IconX, IconRefresh, IconCheck, IconDownload } from '@sloughgpt/strui'
+import { Button, IconRefresh } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import { logger } from '@/lib/dev-log'
 import { apiGet } from '@/lib/http-client'
@@ -134,7 +134,7 @@ export const TokenBilling = memo(function TokenBilling({
             </span>
           )}
         </div>
-        <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={fetchData}>
+        <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={fetchData} aria-label="Refresh token balance">
           <IconRefresh className="h-3 w-3" />
         </Button>
       </div>

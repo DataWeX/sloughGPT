@@ -1,17 +1,19 @@
-"""Smoke test for domains.training.train_pipeline.SloughGPTTrainer (CLI / API driver)."""
+"""Smoke test for domain.training._internal.train_pipeline.SloughGPTTrainer (CLI / API driver)."""
 
 from pathlib import Path
 
 import pytest
 
 
-def test_sloughgpt_trainer_runs_short_cpu_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_sloughgpt_trainer_runs_short_cpu_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Mirrors ``cli.py train`` local path: tiny data, CPU, few steps."""
     monkeypatch.chdir(tmp_path)
     corpus = tmp_path / "corpus.txt"
-    corpus.write_text("abcdefgh" * 80, encoding="utf-8")
+    corpus.write_text("abcdefghij" * 64, encoding="utf-8")
 
-    from domains.training.train_pipeline import SloughGPTTrainer
+    from domain.training._internal.train_pipeline import SloughGPTTrainer
 
     trainer = SloughGPTTrainer(
         data_path=str(corpus),
@@ -26,7 +28,7 @@ def test_sloughgpt_trainer_runs_short_cpu_session(tmp_path: Path, monkeypatch: p
         checkpoint_dir=str(tmp_path / "ckpt"),
         checkpoint_interval=100_000,
     )
-    assert trainer.vocab_size == 8
+    assert trainer.vocab_size == 10
     result = trainer.train()
     assert "global_step" in result
     assert result["global_step"] > 0

@@ -60,7 +60,7 @@ export const MessageNotes = memo(function MessageNotes({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Add a note..."
+          placeholder="Add a note..." aria-label="Add a note"
           className="w-full text-xs bg-transparent border-0 p-0 resize-none focus:outline-none focus:ring-0 placeholder:text-muted-foreground/50 min-h-[60px]"
           autoFocus
         />
@@ -71,6 +71,7 @@ export const MessageNotes = memo(function MessageNotes({
             className="h-5 w-5"
             onClick={handleSave}
             title="Save (Ctrl+Enter)"
+            aria-label="Save note"
           >
             <IconCheck className="h-3 w-3" />
           </Button>
@@ -80,6 +81,7 @@ export const MessageNotes = memo(function MessageNotes({
             className="h-5 w-5"
             onClick={handleCancel}
             title="Cancel (Esc)"
+            aria-label="Cancel"
           >
             <IconX className="h-3 w-3" />
           </Button>
@@ -99,9 +101,10 @@ export const MessageNotes = memo(function MessageNotes({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="h-5 w-5 opacity-0 group-hover:opacity-100 shrink-0"
+            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 shrink-0"
             onClick={handleStartEdit}
             title="Edit note"
+            aria-label="Edit note"
           >
             <IconEdit className="h-3 w-3" />
           </Button>

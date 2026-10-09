@@ -4,21 +4,24 @@ Tests for process-level isolation: ModelWorkerProcess, ProcessGuard, and ModelSe
 These tests use a fake model class loaded in a subprocess to verify crash
 isolation, auto-restart, and Queue-based RPC.
 """
+
 import multiprocessing as mp
-import time
 import os
-import signal
 import queue
+import signal
 import sys
 import threading
+import time
 import types
+
 import pytest
+
 pytestmark = pytest.mark.slow
-from typing import Any, Optional
+from typing import Any
 from unittest.mock import MagicMock
 
 # Path so spawned subprocess can import tests.helpers.fake_model
-import sys as _sys
+
 _test_helpers_dir = os.path.join(os.path.dirname(__file__), "helpers")
 _extra_paths = [_test_helpers_dir]
 
@@ -26,6 +29,7 @@ _extra_paths = [_test_helpers_dir]
 # ── Fake SloNet worker (no heavy imports) ───────────────────────────────
 # This module-level function is pickleable and can be spawned in a subprocess.
 # It follows the same Queue protocol as _worker_loop but with a trivial model.
+
 
 def _fake_slo_worker_main(
     req_q: mp.Queue,
@@ -38,9 +42,8 @@ def _fake_slo_worker_main(
     **kwargs: Any,
 ) -> None:
     """Fake SloNet worker for testing — no real model loaded."""
-    import queue as _queue
     import gc as _gc
-    import traceback as _tb
+    import queue as _queue
 
     hb_q.put_nowait(("ready", os.getpid()))
     requests_served = 0
@@ -58,11 +61,17 @@ def _fake_slo_worker_main(
         if cmd == "generate":
             try:
                 session_id, prompt, gen_kwargs = payload
-                resp_q.put_nowait(("result", session_id, {
-                    "text": f"slo({model_id}): {prompt}",
-                    "tokens_generated": len(prompt.split()),
-                    "elapsed_ms": 1.0,
-                }))
+                resp_q.put_nowait(
+                    (
+                        "result",
+                        session_id,
+                        {
+                            "text": f"slo({model_id}): {prompt}",
+                            "tokens_generated": len(prompt.split()),
+                            "elapsed_ms": 1.0,
+                        },
+                    )
+                )
                 requests_served += 1
             except Exception as e:
                 try:
@@ -76,11 +85,17 @@ def _fake_slo_worker_main(
                 text = f"slo({model_id}): {prompt}"
                 for word in text.split():
                     resp_q.put_nowait(("token", session_id, word + " "))
-                resp_q.put_nowait(("result", session_id, {
-                    "text": "",
-                    "tokens_generated": len(text.split()),
-                    "elapsed_ms": 1.0,
-                }))
+                resp_q.put_nowait(
+                    (
+                        "result",
+                        session_id,
+                        {
+                            "text": "",
+                            "tokens_generated": len(text.split()),
+                            "elapsed_ms": 1.0,
+                        },
+                    )
+                )
                 requests_served += 1
             except Exception as e:
                 try:
@@ -95,6 +110,7 @@ def _fake_slo_worker_main(
 # ── Spawned worker mains for start() failure paths ───────────────────────
 # Pickled by reference into the child process (same mechanism as the fake
 # SloNet worker above), so they never need a real model or torch.
+
 
 def _dead_worker_main(
     req_q: mp.Queue,
@@ -130,6 +146,7 @@ def _silent_alive_worker_main(
 
 
 # ── Fake process / queue objects for parent-side error paths ─────────────
+
 
 class _FakeProc:
     """Fake multiprocessing.Process: ``is_alive()`` returns a scripted sequence."""
@@ -239,7 +256,7 @@ class TestModelWorkerProcess:
 
     @pytest.fixture
     def worker(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -247,7 +264,7 @@ class TestModelWorkerProcess:
         w.stop()
 
     def test_start_and_stop(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker.start()
@@ -270,7 +287,7 @@ class TestModelWorkerProcess:
         assert health.pid is not None
 
     def test_generate_timeout(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         kwargs = dict(self.WORKER_KWARGS)
         kwargs["model_kwargs"] = {"reply": "slow", "delay": 3.0}
@@ -283,7 +300,7 @@ class TestModelWorkerProcess:
         worker.stop()
 
     def test_worker_crash_detected(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker.start()
@@ -296,7 +313,7 @@ class TestModelWorkerProcess:
         worker.stop()
 
     def test_generate_on_dead_worker_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker.start()
@@ -305,7 +322,7 @@ class TestModelWorkerProcess:
             worker.generate("hello")
 
     def test_double_start_safe(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker.start()
@@ -316,13 +333,13 @@ class TestModelWorkerProcess:
     # ── Parent-side error/edge paths ──────────────────────────────────
 
     def test_stop_when_never_started(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker.stop()  # no-op: _process is None
 
     def test_stop_send_failure_swallowed(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._req_q = _RaisingQueue()
@@ -332,7 +349,7 @@ class TestModelWorkerProcess:
         worker.stop()
 
     def test_stop_kills_unresponsive_process(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._req_q = _OkQueue()
@@ -344,7 +361,7 @@ class TestModelWorkerProcess:
         assert proc.killed
 
     def test_cleanup_queues_swallows_errors(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._req_q = _PoisonQueue()
@@ -353,8 +370,8 @@ class TestModelWorkerProcess:
         worker._cleanup_queues()  # close()/join_thread() failures are swallowed
 
     def test_start_fails_when_worker_reports_dead(self, monkeypatch):
-        import domains.infrastructure.model_worker as mw_mod
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        import domain.infrastructure._internal.model_worker as mw_mod
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         monkeypatch.setattr(mw_mod, "_hf_worker_main", _dead_worker_main)
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
@@ -365,8 +382,8 @@ class TestModelWorkerProcess:
             worker.stop()
 
     def test_start_fails_when_worker_dies_silently(self, monkeypatch):
-        import domains.infrastructure.model_worker as mw_mod
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        import domain.infrastructure._internal.model_worker as mw_mod
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         monkeypatch.setattr(mw_mod, "_hf_worker_main", _silent_worker_main)
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
@@ -377,8 +394,8 @@ class TestModelWorkerProcess:
             worker.stop()
 
     def test_start_retries_while_worker_alive_but_silent(self, monkeypatch):
-        import domains.infrastructure.model_worker as mw_mod
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        import domain.infrastructure._internal.model_worker as mw_mod
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         monkeypatch.setattr(mw_mod, "_hf_worker_main", _silent_alive_worker_main)
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
@@ -389,7 +406,7 @@ class TestModelWorkerProcess:
             worker.stop()
 
     def test_health_check_drains_heartbeats(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._hb_q = _ScriptedQueue([("alive", 1), ("dead", 2), ("ready", 3)])
@@ -399,7 +416,7 @@ class TestModelWorkerProcess:
         assert health.crashed is True
 
     def test_health_check_handles_queue_error(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._hb_q = _ScriptedQueue([], end=OSError)
@@ -408,7 +425,7 @@ class TestModelWorkerProcess:
         assert health.alive is False
 
     def test_generate_put_failure_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True])
@@ -418,7 +435,7 @@ class TestModelWorkerProcess:
             worker.generate("hello")
 
     def test_generate_raises_when_worker_dies_during_generation(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, False])
@@ -428,7 +445,7 @@ class TestModelWorkerProcess:
             worker.generate("hello")
 
     def test_generate_worker_error_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True])
@@ -438,34 +455,44 @@ class TestModelWorkerProcess:
             worker.generate("hello")
 
     def test_generate_unknown_response_skipped(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("weird", "x"),
-            ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                ("weird", "x"),
+                ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
+            ]
+        )
         result = worker.generate("hello")
         assert result["text"] == "ok"
 
     def test_generate_ignores_stale_session_message(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("result", "req-stale-0", {"text": "old", "tokens_generated": 1, "elapsed_ms": 1.0}),
-            ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                (
+                    "result",
+                    "req-stale-0",
+                    {"text": "old", "tokens_generated": 1, "elapsed_ms": 1.0},
+                ),
+                ("result", {"text": "ok", "tokens_generated": 1, "elapsed_ms": 1.0}),
+            ]
+        )
         result = worker.generate("hello")
         assert result["text"] == "ok"
 
     def test_generate_stall_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
-        from domains.infrastructure.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.model_worker import (
+            ModelWorkerProcess,
+            WorkerStreamStalledError,
+        )
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _AlwaysAliveProc()
@@ -476,24 +503,28 @@ class TestModelWorkerProcess:
             worker.generate("hello")
 
     def test_generate_stream_ignores_stale_session_tokens(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("token", "req-stale-0", "junk "),
-            ("token", "req-stale-0", "junk "),
-            ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                ("token", "req-stale-0", "junk "),
+                ("token", "req-stale-0", "junk "),
+                ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
+            ]
+        )
         gen = worker.generate_stream("hello")
         with pytest.raises(StopIteration) as excinfo:
             next(gen)
         assert excinfo.value.value["tokens_generated"] == 0
 
     def test_generate_stream_stall_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
-        from domains.infrastructure.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.model_worker import (
+            ModelWorkerProcess,
+            WorkerStreamStalledError,
+        )
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _AlwaysAliveProc()
@@ -504,7 +535,7 @@ class TestModelWorkerProcess:
             next(worker.generate_stream("hello"))
 
     def test_generate_stream_not_alive_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([False])
@@ -512,7 +543,7 @@ class TestModelWorkerProcess:
             next(worker.generate_stream("hello"))
 
     def test_generate_stream_put_failure_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True])
@@ -522,7 +553,7 @@ class TestModelWorkerProcess:
             next(worker.generate_stream("hello"))
 
     def test_generate_stream_raises_when_worker_dies(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, False])
@@ -532,7 +563,7 @@ class TestModelWorkerProcess:
             next(worker.generate_stream("hello"))
 
     def test_generate_stream_worker_error_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True])
@@ -542,22 +573,24 @@ class TestModelWorkerProcess:
             next(worker.generate_stream("hello"))
 
     def test_generate_stream_unknown_response_skipped(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._process = _FakeProc([True, True, True])
         worker._req_q = _OkQueue()
-        worker._resp_q = _ScriptedQueue([
-            ("weird", "x"),
-            ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
-        ])
+        worker._resp_q = _ScriptedQueue(
+            [
+                ("weird", "x"),
+                ("result", {"text": "ok", "tokens_generated": 0, "elapsed_ms": 1.0}),
+            ]
+        )
         gen = worker.generate_stream("hello")
         with pytest.raises(StopIteration) as excinfo:
             next(gen)
         assert excinfo.value.value["tokens_generated"] == 0
 
     def test_generate_stream_timeout_returns_empty_result(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         worker = ModelWorkerProcess(**self.WORKER_KWARGS)
         worker._generate_timeout = 0.01
@@ -570,7 +603,7 @@ class TestModelWorkerProcess:
         assert excinfo.value.value == {}
 
     def test_context_manager_starts_and_stops(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         with ModelWorkerProcess(**self.WORKER_KWARGS) as worker:
             assert worker.alive
@@ -595,28 +628,32 @@ class TestProcessGuard:
     }
 
     def test_resolve_memory_limit_uses_explicit(self, tmp_path):
-        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         assert resolve_memory_limit_mb(str(tmp_path / "model.slnc"), 12345.0) == 12345.0
 
     def test_resolve_memory_limit_auto_sizes_from_file(self, tmp_path):
-        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         slnc = tmp_path / "model.slnc"
         slnc.write_bytes(b"\x00" * (1024 * 1024 * 100))  # 100 MB
         assert resolve_memory_limit_mb(str(slnc), 0) == 8192.0  # floor
 
     def test_resolve_memory_limit_auto_large_file(self, tmp_path):
-        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         slnc = tmp_path / "model.slnc"
         slnc.write_bytes(b"\x00" * (1024 * 1024 * 4096))  # 4 GB
         assert resolve_memory_limit_mb(str(slnc), None) == 4096 * 8
 
     def test_resolve_memory_limit_missing_file(self, tmp_path):
-        from domains.infrastructure.process_guard import resolve_memory_limit_mb
+        from domain.infrastructure._internal.process_guard import resolve_memory_limit_mb
+
         assert resolve_memory_limit_mb(str(tmp_path / "nope.slnc"), None) is None
         assert resolve_memory_limit_mb(None, 0) is None
 
     def test_start_and_stop(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.start()
@@ -625,7 +662,7 @@ class TestProcessGuard:
         assert not guard.alive
 
     def test_generate(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.start()
@@ -634,7 +671,7 @@ class TestProcessGuard:
         guard.stop()
 
     def test_health_report(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.start()
@@ -647,14 +684,14 @@ class TestProcessGuard:
         guard.stop()
 
     def test_health_report_not_started(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         h = guard.health()
         assert not h["alive"]
 
     def test_crash_and_restart(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         cb_calls = []
         guard = ProcessGuard(**self.GUARD_KWARGS)
@@ -682,7 +719,7 @@ class TestProcessGuard:
         guard.stop()
 
     def test_max_restarts_exhausted(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.start()
@@ -705,28 +742,28 @@ class TestProcessGuard:
     # ── Parent-side error/edge paths ──────────────────────────────────
 
     def test_generate_not_started_raises(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         with pytest.raises(RuntimeError, match="not alive"):
             guard.generate("hello")
 
     def test_generate_stream_not_started_raises(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         with pytest.raises(RuntimeError, match="not alive"):
             next(guard.generate_stream("hello"))
 
     def test_stall_recovers_and_restarts(self):
-        from domains.infrastructure.process_guard import ProcessGuard
-        from domains.infrastructure.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.model_worker import WorkerStreamStalledError
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.start()
         try:
-            guard._worker.generate = lambda *a, **k: (
-                (_ for _ in ()).throw(WorkerStreamStalledError("simulated wedge"))
+            guard._worker.generate = lambda *a, **k: (_ for _ in ()).throw(
+                WorkerStreamStalledError("simulated wedge")
             )
             with pytest.raises(WorkerStreamStalledError, match="simulated wedge"):
                 guard.generate("hello")
@@ -738,7 +775,7 @@ class TestProcessGuard:
             guard.stop()
 
     def test_monitor_loop_continues_without_worker(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.health_check_interval = 0.01
@@ -752,7 +789,7 @@ class TestProcessGuard:
         assert not t.is_alive()
 
     def test_monitor_loop_handles_callback_errors(self, monkeypatch):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(**self.GUARD_KWARGS)
         guard.health_check_interval = 0.01
@@ -781,24 +818,12 @@ class TestProcessGuard:
 
 
 class TestModelServerWithGuard:
+    """ModelServer delegates to an alive ProcessGuard without loading HF/torch."""
+
     @pytest.fixture
     def model_server_with_guard(self):
-        pytest.importorskip("torch")
-        from domains.infrastructure.model_server import ModelServer
-        from domains.infrastructure.process_guard import ProcessGuard
-
-        import torch
-        mock_model = MagicMock()
-        mock_model.generate.return_value = torch.zeros(1, 10, dtype=torch.long)
-        mock_model.device = "cpu"
-
-        mock_tokenizer = MagicMock()
-        mock_tokenizer.pad_token_id = 0
-        mock_tokenizer.eos_token_id = 0
-        inputs_mock = MagicMock()
-        inputs_mock.__getitem__.return_value = torch.zeros(1, 5, dtype=torch.long)
-        inputs_mock.get.return_value = None
-        mock_tokenizer.return_value = inputs_mock
+        from domain.infrastructure._internal.model_server import ModelServer
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         guard = ProcessGuard(
             model_cls_path="fake_model.FakeTestModel",
@@ -810,17 +835,28 @@ class TestModelServerWithGuard:
             health_check_interval=0.5,
             extra_sys_paths=_extra_paths,
         )
-        guard.start()
+        # Skip real HF load — stub a live worker that answers generate/stream.
+        fake_worker = MagicMock()
+        fake_worker.alive = True
+        fake_worker.generate.return_value = {
+            "text": "process isolated",
+            "tokens_generated": 0,
+            "elapsed_ms": 1.0,
+        }
+        fake_worker.generate_stream.return_value = iter(["proc", " isolated"])
+        guard._worker = fake_worker
+        guard._stop_monitor.set()  # no monitor thread
 
         server = ModelServer(
-            model=mock_model,
-            tokenizer=mock_tokenizer,
+            model=MagicMock(),
+            tokenizer=MagicMock(),
             model_id="test-with-guard",
             process_guard=guard,
             enable_warmup=False,
+            enable_circuit_breaker=False,
         )
         yield server, guard
-        guard.stop()
+        guard._worker = None
 
     @pytest.mark.asyncio
     async def test_generate_delegates_to_guard(self, model_server_with_guard):
@@ -867,17 +903,18 @@ class TestSloNetWorkerProcess:
     @pytest.fixture(autouse=True)
     def _patch_worker(self, monkeypatch):
         """Replace the real _slo_worker_main with our fake in the module namespace."""
-        import domains.infrastructure.model_worker as mw_mod
+        import domain.infrastructure._internal.model_worker as mw_mod
+
         monkeypatch.setattr(mw_mod, "_slo_worker_main", _fake_slo_worker_main)
 
     def test_backend_property(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         assert w.backend == "slo"
 
     def test_backend_hf_mode(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(
             model_cls_path="fake_model.FakeTestModel",
@@ -887,13 +924,13 @@ class TestSloNetWorkerProcess:
         assert w.backend == "hf"
 
     def test_requires_either_slnc_or_hf(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         with pytest.raises(ValueError, match="requires either"):
             ModelWorkerProcess(worker_id="bad-worker")
 
     def test_start_and_stop(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -902,7 +939,7 @@ class TestSloNetWorkerProcess:
         assert not w.alive
 
     def test_generate(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -916,7 +953,7 @@ class TestSloNetWorkerProcess:
             w.stop()
 
     def test_generate_stream(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -937,7 +974,7 @@ class TestSloNetWorkerProcess:
             w.stop()
 
     def test_health_after_generate(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -949,7 +986,7 @@ class TestSloNetWorkerProcess:
         w.stop()
 
     def test_double_start_safe(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -958,7 +995,7 @@ class TestSloNetWorkerProcess:
         w.stop()
 
     def test_generate_on_dead_worker_raises(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -967,7 +1004,7 @@ class TestSloNetWorkerProcess:
             w.generate("hello")
 
     def test_worker_crash_detected(self):
-        from domains.infrastructure.model_worker import ModelWorkerProcess
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
 
         w = ModelWorkerProcess(**self.WORKER_KWARGS)
         w.start()
@@ -999,11 +1036,12 @@ class TestProcessGuardSlo:
 
     @pytest.fixture(autouse=True)
     def _patch_worker(self, monkeypatch):
-        import domains.infrastructure.model_worker as mw_mod
+        import domain.infrastructure._internal.model_worker as mw_mod
+
         monkeypatch.setattr(mw_mod, "_slo_worker_main", _fake_slo_worker_main)
 
     def test_start_and_stop(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(**self.GUARD_KWARGS)
         g.start()
@@ -1012,7 +1050,7 @@ class TestProcessGuardSlo:
         assert not g.alive
 
     def test_generate(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(**self.GUARD_KWARGS)
         g.start()
@@ -1023,7 +1061,7 @@ class TestProcessGuardSlo:
             g.stop()
 
     def test_health_report(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(**self.GUARD_KWARGS)
         g.start()
@@ -1038,14 +1076,14 @@ class TestProcessGuardSlo:
             g.stop()
 
     def test_health_report_not_started(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(**self.GUARD_KWARGS)
         h = g.health()
         assert not h["alive"]
 
     def test_crash_and_restart(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         cb_calls = []
         g = ProcessGuard(**self.GUARD_KWARGS)
@@ -1071,7 +1109,7 @@ class TestProcessGuardSlo:
         g.stop()
 
     def test_max_restarts_exhausted(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(**self.GUARD_KWARGS)
         g.start()
@@ -1090,7 +1128,7 @@ class TestProcessGuardSlo:
         g.stop()
 
     def test_generate_stream(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(**self.GUARD_KWARGS)
         g.start()
@@ -1110,7 +1148,7 @@ class TestProcessGuardSlo:
             g.stop()
 
     def test_memory_mb_uses_psutil(self, monkeypatch):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         fake_psutil = types.ModuleType("psutil")
 
@@ -1144,7 +1182,7 @@ class TestProcessGuardSlo:
             g.stop()
 
     def test_memory_mb_swallows_psutil_error(self, monkeypatch):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         fake_psutil = types.ModuleType("psutil")
 
@@ -1175,7 +1213,7 @@ class TestProcessGuardSlo:
 
 class TestCreateSloGuard:
     def test_creates_guard_with_correct_params(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(
             slnc_path="/tmp/test.slnc",
@@ -1191,7 +1229,7 @@ class TestCreateSloGuard:
         assert g.worker_id == "slo-guard-gpt2"
 
     def test_default_worker_id_convention(self):
-        from domains.infrastructure.process_guard import ProcessGuard
+        from domain.infrastructure._internal.process_guard import ProcessGuard
 
         g = ProcessGuard(
             slnc_path="/tmp/mymodel.slnc",
@@ -1201,8 +1239,9 @@ class TestCreateSloGuard:
         assert g.worker_id == "slo-guard-mymodel"
 
     def test_create_slo_guard_factory_signature(self):
-        from domains.infrastructure.process_guard import create_slo_guard
         import inspect
+
+        from domain.infrastructure._internal.process_guard import create_slo_guard
 
         sig = inspect.signature(create_slo_guard)
         params = list(sig.parameters.keys())
@@ -1212,7 +1251,7 @@ class TestCreateSloGuard:
         assert "quant_bits" in params
 
     def test_create_slo_guard_started(self, monkeypatch):
-        import domains.infrastructure.process_guard as pg_mod
+        import domain.infrastructure._internal.process_guard as pg_mod
 
         monkeypatch.setattr(pg_mod.ProcessGuard, "start", lambda self: None)
         guard = pg_mod.create_slo_guard(
@@ -1232,7 +1271,7 @@ class TestCreateSloGuard:
 
 class TestCreateModelGuard:
     def test_create_model_guard_configured(self, monkeypatch):
-        import domains.infrastructure.process_guard as pg_mod
+        import domain.infrastructure._internal.process_guard as pg_mod
 
         monkeypatch.setattr(pg_mod.ProcessGuard, "start", lambda self: None)
         guard = pg_mod.create_model_guard(
@@ -1243,7 +1282,10 @@ class TestCreateModelGuard:
             generate_timeout=3.0,
             max_concurrent=2,
         )
-        assert guard.model_cls_path == "domains.infrastructure.hf_model_worker.hf_model_loader"
+        assert (
+            guard.model_cls_path
+            == "domain.infrastructure._internal.hf_model_worker.hf_model_loader"
+        )
         assert guard.model_kwargs == {"model_id": "my-org/model", "device": "cpu"}
         assert guard.worker_id == "guard-model"
         assert guard.max_restarts == 2

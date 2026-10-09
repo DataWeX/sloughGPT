@@ -21,7 +21,6 @@ echo "Checking required files..."
 files=(
     "package.json"
     "apps/api/server/main.py"
-    "packages/core-py/domains/ui/api_server.py"
     "apps/web/package.json"
     "apps/web/app/(app)/page.tsx"
     "apps/web/app/(app)/chat/page.tsx"
@@ -46,7 +45,7 @@ if [ "$all_found" = true ]; then
     echo ""
     if python3 -m ruff --version &>/dev/null; then
         echo "Ruff smoke (same rules as CI)..."
-        python3 -m ruff check tests/ apps/cli/ apps/api/server/ packages/core-py/domains/training/checkpoint_utils.py --select E9,F63,F7,F82 || {
+        python3 -m ruff check tests/ apps/cli/ apps/api/server/ domain/training/_internal/checkpoint_utils.py --select E9,F63,F7,F82 || {
             echo "❌ Ruff smoke failed"
             exit 1
         }
@@ -60,7 +59,7 @@ if [ "$all_found" = true ]; then
     if command -v node &>/dev/null && [ -d "apps/web/node_modules" ]; then
         echo "Web npm run ci (apps/web)..."
         (cd apps/web && npm run ci) || {
-            echo "❌ Web npm run ci failed (clean .next, lint, typecheck, test, next build)"
+            echo "❌ Web npm run ci failed (lint, typecheck, test, vite build)"
             exit 1
         }
         echo "✓ Web npm run ci passed"
@@ -94,7 +93,7 @@ if [ "$all_found" = true ]; then
     echo ""
     echo "Docker: docker compose -f infra/docker/docker-compose.yml up -d api"
     echo ""
-    echo "Then open the web dev URL (often http://localhost:3000)"
+    echo "Then open the web dev URL (often http://localhost:5173)"
     echo ""
     echo "With a repo .venv, you can prefix commands:"
     echo "  ./run.sh python3 -m pytest tests/ -q"

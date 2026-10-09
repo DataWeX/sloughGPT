@@ -33,6 +33,37 @@ services:
     networks:
       - sloughgpt-net
 
+  # ─── Edge Gateway (compression / byte-relay) ─────────────────────
+  gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.gateway
+    container_name: sloughgpt-gateway
+    image: sloughgpt/gateway:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - MAN_GATEWAY_PORT=8080
+      - MAN_CORE_URL=http://api:8000
+      - RUST_LOG=slough_gateway=info,tower_http=info
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8080/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: "0.5"
+    networks:
+      - sloughgpt-net
+    depends_on:
+      api:
+        condition: service_healthy
+
   # ─── Web UI (Next.js) ─────────────────────────────────────────────
   web:
     build:

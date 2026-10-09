@@ -1,19 +1,20 @@
 """Tests for online LoRA updater — config, initialization, feedback, gradients."""
 
 import time
-import pytest
-import numpy as np
-from unittest.mock import patch
-from domains.feedback.online_train import (
-    LoRAConfig, OnlineLoRAUpdater, get_online_lora_updater,
-    _online_lora,
-)
 
+import numpy as np
+import pytest
+
+from domain.feedback._internal.online_train import (
+    LoRAConfig,
+    OnlineLoRAUpdater,
+    get_online_lora_updater,
+)
 
 # ── LoRAConfig ─────────────────────────────────────────────────────────────
 
-class TestLoRAConfig:
 
+class TestLoRAConfig:
     def test_defaults(self):
         cfg = LoRAConfig()
         assert cfg.rank == 8
@@ -37,13 +38,13 @@ class TestLoRAConfig:
 
 # ── OnlineLoRAUpdater ─────────────────────────────────────────────────────
 
+
 @pytest.fixture
 def updater():
     return OnlineLoRAUpdater(update_interval=3)
 
 
 class TestOnlineLoRAUpdater:
-
     def test_init_default_config(self):
         u = OnlineLoRAUpdater()
         assert u.config.rank == 8
@@ -83,9 +84,15 @@ class TestOnlineLoRAUpdater:
         for i in range(3):
             updater.add_feedback(f"p{i}", f"r{i}", "thumbs_up")
         time.sleep(0.1)
+        # Trigger fired and drained the buffer — but with no engine nothing
+        # was applied, so it counts as a skipped update, not a phantom one
+        # (card b83a5788).
         assert updater._feedback_buffer == []
-        assert updater._stats["total_updates"] >= 1
-        assert updater._stats["total_samples"] == 3
+        assert updater._stats["total_updates"] == 0
+        assert updater._stats["total_samples"] == 0
+        assert updater._stats["last_update_time"] is None
+        assert updater._stats["total_skipped_updates"] == 1
+        assert updater._stats["total_skipped_samples"] == 3
 
     def test_add_feedback_below_threshold_no_update(self, updater):
         for i in range(2):
@@ -102,48 +109,107 @@ class TestOnlineLoRAUpdater:
         assert updater._feedback_buffer[0]["quality_score"] == 0.0
 
     def test_compute_gradients_positive_feedback(self, updater):
+        # Retired contract (card b83a5788): without an engine attached no
+        # gradients exist — updates skip honestly instead of phantom-counting.
         updater.initialize(model_dim=64)
         batch = [{"rating": "thumbs_up", "quality_score": 1.0}] * 3
-        grads = updater._compute_gradients(batch)
-        assert "W_a" in grads
-        assert "W_b" in grads
-        # Positive feedback → positive reinforcement → scale > 0
-        scale = updater.learning_rate * 1.0
-        assert scale > 0
+        assert updater._compute_gradients(batch) == {}
 
     def test_compute_gradients_negative_feedback(self, updater):
         updater.initialize(model_dim=64)
         batch = [{"rating": "thumbs_down", "quality_score": 0.0}] * 3
-        grads = updater._compute_gradients(batch)
+        updater._compute_gradients(batch)
         scale = updater.learning_rate * (-1.0)
         assert scale < 0
 
     def test_compute_gradients_mixed_feedback(self, updater):
+        # Same retired contract as test_compute_gradients_positive_feedback:
+        # no engine -> no gradients (card b83a5788).
         updater.initialize(model_dim=64)
         batch = [
             {"rating": "thumbs_up", "quality_score": 1.0},
             {"rating": "thumbs_down", "quality_score": 0.0},
         ]
-        grads = updater._compute_gradients(batch)
-        # 1 positive, 1 negative → reinforcement = 0
-        assert grads["W_a"].shape == (8, 64)
+        assert updater._compute_gradients(batch) == {}
 
     def test_apply_gradients(self, updater):
         updater.initialize(model_dim=64)
         w_before = updater._lora_weights["W_a"].copy()
-        grads = {"W_a": np.ones((8, 64), dtype=np.float32) * 0.01,
-                 "W_b": np.ones((64, 8), dtype=np.float32) * 0.01}
+        grads = {
+            "W_a": np.ones((8, 64), dtype=np.float32) * 0.01,
+            "W_b": np.ones((64, 8), dtype=np.float32) * 0.01,
+        }
         updater._apply_gradients(grads)
         assert not np.array_equal(updater._lora_weights["W_a"], w_before)
 
     def test_apply_gradients_clips_to_minus_1_1(self, updater):
         updater.initialize(model_dim=64)
         updater._lora_weights["W_a"] = np.full((8, 64), 0.9, dtype=np.float32)
-        grads = {"W_a": np.full((8, 64), -0.5, dtype=np.float32),
-                 "W_b": np.zeros((64, 8), dtype=np.float32)}
+        grads = {
+            "W_a": np.full((8, 64), -0.5, dtype=np.float32),
+            "W_b": np.zeros((64, 8), dtype=np.float32),
+        }
         updater._apply_gradients(grads)
         assert updater._lora_weights["W_a"].max() <= 1.0
         assert updater._lora_weights["W_a"].min() >= -1.0
+
+    def test_apply_gradients_returns_applied_count(self, updater):
+        updater.initialize(model_dim=64)
+        grads = {
+            "W_a": np.zeros((8, 64), dtype=np.float32),
+            "W_b": np.zeros((64, 8), dtype=np.float32),
+        }
+        assert updater._apply_gradients(grads) == 2
+
+    def test_apply_gradients_skips_shape_mismatch(self, updater):
+        # Card b83a5788 defect 2: logit-shaped "gradients" (seq, vocab) must
+        # be skipped honestly — not raise into _perform_update's swallow and
+        # not partially corrupt the weights.
+        updater.initialize(model_dim=64)
+        w_before = updater._lora_weights["W_a"].copy()
+        grads = {"W_a": np.zeros((3, 16), dtype=np.float32)}
+        assert updater._apply_gradients(grads) == 0
+        np.testing.assert_array_equal(updater._lora_weights["W_a"], w_before)
+
+    def test_no_engine_update_counts_as_skipped_not_applied(self, updater):
+        # Card b83a5788 defects 1+3: an engine-less run must not increment
+        # total_updates/total_samples or stamp last_update_time — it counts
+        # as skipped, and the weights are untouched.
+        updater.initialize(model_dim=64)
+        w_before = updater._lora_weights["W_a"].copy()
+        updater._feedback_buffer = [
+            {"prompt": "p", "response": "r", "rating": "thumbs_up", "quality_score": 1.0},
+            {"prompt": "p2", "response": "r2", "rating": "thumbs_down", "quality_score": 0.0},
+            {"prompt": "p3", "response": "r3", "rating": "thumbs_up", "quality_score": 1.0},
+        ]
+        updater._perform_update()
+        assert updater._stats["total_updates"] == 0
+        assert updater._stats["total_samples"] == 0
+        assert updater._stats["last_update_time"] is None
+        assert updater._stats["total_skipped_updates"] == 1
+        assert updater._stats["total_skipped_samples"] == 3
+        np.testing.assert_array_equal(updater._lora_weights["W_a"], w_before)
+
+    def test_engine_failure_yields_no_gradients(self):
+        # Card b83a5788 defect 5: the pseudo-gradient fallback (random noise
+        # on live weights) is retired — a failing forward pass yields {}.
+        class _ExplodingEngine:
+            class _Text:
+                @staticmethod
+                def encode(text):
+                    return [1, 2]
+
+            text = _Text()
+
+            def forward(self, input_ids):
+                raise RuntimeError("boom")
+
+        updater = OnlineLoRAUpdater(engine=_ExplodingEngine())
+        updater.initialize(model_dim=64)
+        grads = updater._compute_gradients(
+            [{"prompt": "hi", "response": "hello", "rating": "thumbs_up"}]
+        )
+        assert grads == {}
 
     def test_apply_to_logits_shape_preserved(self, updater):
         updater.initialize(model_dim=256)
@@ -178,6 +244,10 @@ class TestOnlineLoRAUpdater:
         stats = updater.get_stats()
         assert "total_updates" in stats
         assert "total_samples" in stats
+        assert "total_skipped_updates" in stats
+        assert "total_skipped_samples" in stats
+        assert "engine_attached" in stats
+        assert stats["engine_attached"] is False
         assert "buffer_size" in stats
         assert "is_updating" in stats
         assert "is_initialized" in stats
@@ -192,10 +262,13 @@ class TestOnlineLoRAUpdater:
         assert updater._feedback_buffer == []
         assert updater._stats["total_updates"] == 0
         assert updater._stats["total_samples"] == 0
+        assert updater._stats["total_skipped_updates"] == 0
+        assert updater._stats["total_skipped_samples"] == 0
         assert updater._stats["last_update_time"] is None
 
     def test_thread_safety_concurrent_add(self, updater):
         import threading
+
         def add_many():
             for i in range(20):
                 updater.add_feedback(f"p{i}", f"r{i}", "thumbs_up")
@@ -205,16 +278,24 @@ class TestOnlineLoRAUpdater:
             t.start()
         for t in threads:
             t.join(timeout=5)
-        total = updater._stats["total_samples"] + len(updater._feedback_buffer)
+        # Every sample is either still buffered or was drained into an
+        # applied-or-skipped update (engine-less runs drain as skipped,
+        # never as phantom applied counts — card b83a5788).
+        total = (
+            updater._stats["total_samples"]
+            + updater._stats["total_skipped_samples"]
+            + len(updater._feedback_buffer)
+        )
         assert total == 80
 
 
 # ── Global singleton ──────────────────────────────────────────────────────
 
-class TestGetOnlineLoRAUpdater:
 
+class TestGetOnlineLoRAUpdater:
     def test_returns_singleton(self):
-        import domains.feedback.online_train as mod
+        import domain.feedback._internal.online_train as mod
+
         original = mod._online_lora
         mod._online_lora = None
         try:

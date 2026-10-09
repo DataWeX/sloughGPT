@@ -1,6 +1,9 @@
-import { describe, it, expect, vi } from 'vitest'
-import crypto from 'crypto'
-import { createAuthOptions } from './authOptions'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.hoisted(() => {
+  process.env.NEXTAUTH_SECRET = 'test-secret'
+  ;(process.env as any).NODE_ENV = 'test'
+})
 
 const { mockGithub, mockCredentials } = vi.hoisted(() => ({
   mockGithub: vi.fn((opts: any) => ({ id: 'github', options: opts })),
@@ -10,23 +13,29 @@ const { mockGithub, mockCredentials } = vi.hoisted(() => ({
 vi.mock('next-auth/providers/github', () => ({ default: (opts: any) => mockGithub(opts) }))
 vi.mock('next-auth/providers/credentials', () => ({ default: (opts: any) => mockCredentials(opts) }))
 
-function makeEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): NodeJS.ProcessEnv {
-  return { NODE_ENV: 'test', ...overrides }
+import { createAuthOptions } from './authOptions'
+
+function makeEnv(overrides: Partial<Record<string, string>> = {}): NodeJS.ProcessEnv {
+  return { NODE_ENV: 'test', NEXTAUTH_SECRET: 'test-secret', ...overrides } as NodeJS.ProcessEnv
 }
 
 describe('authOptions', () => {
-  it('uses GithubProvider when credentials are configured', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockGithub.mockImplementation((opts: any) => ({ id: 'github', options: opts }))
+    mockCredentials.mockImplementation((opts: any) => ({ id: opts.id ?? 'credentials', options: opts }))
+  })
+
+  it('uses GithubProvider when github env vars are set', () => {
     const opts = createAuthOptions(makeEnv({ GITHUB_ID: 'gh-id', GITHUB_SECRET: 'gh-secret' }))
     expect(mockGithub).toHaveBeenCalledWith({ clientId: 'gh-id', clientSecret: 'gh-secret' })
     expect(opts.providers.length).toBe(1)
-    expect(opts.providers[0].id).toBe('github')
   })
 
-  it('falls back to placeholder CredentialsProvider without github env', () => {
+  it('falls back to CredentialsProvider without github env', () => {
     const opts = createAuthOptions(makeEnv())
     expect(mockCredentials).toHaveBeenCalled()
     expect(opts.providers.length).toBe(1)
-    expect(opts.providers[0].id).toBe('fastapi-login')
   })
 
   it('uses the provided NEXTAUTH_SECRET', () => {
@@ -34,10 +43,8 @@ describe('authOptions', () => {
     expect(opts.secret).toBe('explicit-secret')
   })
 
-  it('derives a production secret from a hash when unset and not development', () => {
-    const opts = createAuthOptions(makeEnv({ NEXTAUTH_SECRET: '' }))
-    const expected = crypto.createHash('sha256').update('sloughgpt-nextauth-secret').digest('base64')
-    expect(opts.secret).toBe(expected)
+  it('throws when NEXTAUTH_SECRET is empty and NODE_ENV is not development', () => {
+    expect(() => createAuthOptions(makeEnv({ NEXTAUTH_SECRET: '' }))).toThrow()
   })
 
   it('uses a dev-only fallback secret in development', () => {

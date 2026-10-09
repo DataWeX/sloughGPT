@@ -34,7 +34,7 @@ export function TokenTreeCodecCard() {
       setIdsInput(result.ids.join(', '))
       setDecodeText('')
     } catch {
-      addToast('Failed to encode text', 'error')
+      addToast('Could not encode text', 'error')
     } finally {
       setEncoding(false)
     }
@@ -51,7 +51,7 @@ export function TokenTreeCodecCard() {
       const result = await tokenTreeController.decode(ids)
       setDecodeText(result.text)
     } catch {
-      addToast('Failed to decode ids', 'error')
+      addToast('Could not decode ids', 'error')
     } finally {
       setDecoding(false)
     }
@@ -129,7 +129,7 @@ export function TokenTreeCodecCard() {
         {decodeText && (
           <div className="rounded-md bg-success/10 border border-success/20 px-3 py-2 text-sm">
             <span className="text-muted-foreground">Decoded: </span>
-            <span className="font-mono">"{decodeText}"</span>
+            <span className="font-mono">{'"' + decodeText + '"'}</span>
           </div>
         )}
 

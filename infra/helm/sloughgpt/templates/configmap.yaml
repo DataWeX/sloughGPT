@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sloughgpt.fullname" . }}-config
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "sloughgpt.labels" . | nindent 4 }}
+data:
+  SLO_ENV: {{ .Values.config.env | quote }}
+  SLO_LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  SLO_MODEL__NAME: {{ .Values.config.model.name | quote }}
+  SLO_MODEL__DEVICE: {{ .Values.config.model.device | quote }}
+  SLO_MODEL__MAX_LENGTH: {{ .Values.config.model.maxLength | quote }}
+  SLO_MODEL__TEMPERATURE: {{ .Values.config.model.temperature | quote }}
+  SLO_MODEL__MAX_NEW_TOKENS: {{ .Values.config.model.maxNewTokens | quote }}
+  SLO_AUTH_REQUIRED: {{ .Values.config.auth.required | quote }}
+  SLO_RATE_LIMIT__WINDOW_SECONDS: {{ .Values.config.rateLimit.windowSeconds | quote }}
+  SLO_RATE_LIMIT__MAX_REQUESTS: {{ .Values.config.rateLimit.maxRequests | quote }}

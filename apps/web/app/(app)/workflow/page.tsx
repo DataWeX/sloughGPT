@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid } from '@sloughgpt/strui'
+import { useState, useEffect, useCallback } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, StatCard, KpiGrid, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { workflowController } from '@/lib/workflow-controller'
@@ -17,18 +17,18 @@ export default function WorkflowPage() {
   const [triggering, setTriggering] = useState(false)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchStatus = async () => {
+  const fetchStatus = useCallback(async () => {
     setLoading(true)
     try {
       setStatus(await workflowController.status())
     } catch {
-      addToast('Failed to load workflow status', 'error')
+      addToast('Could not load workflow status', 'error')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchStatus() }, [])
+  useEffect(() => { fetchStatus() }, [fetchStatus])
 
   const handleToggle = async () => {
     setToggling(true)
@@ -40,7 +40,7 @@ export default function WorkflowPage() {
       }
       await fetchStatus()
     } catch {
-      addToast('Failed to toggle workflow', 'error')
+      addToast('Could not toggle workflow', 'error')
     } finally {
       setToggling(false)
     }
@@ -59,6 +59,15 @@ export default function WorkflowPage() {
       setTriggering(false)
     }
   }
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey) { e.preventDefault(); void fetchStatus() }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [fetchStatus])
 
   return (
     <PageContainer
@@ -88,30 +97,26 @@ export default function WorkflowPage() {
       {triggerMsg && (
         <div className="rounded-md bg-primary/10 border border-primary/20 px-4 py-3 text-sm text-primary">
           {triggerMsg}
-          <button className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
+          <button type="button" className="ml-2 underline" onClick={() => setTriggerMsg(null)}>Dismiss</button>
         </div>
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Status</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5 flex flex-row items-center justify-between">
+          <CardTitle className="text-[11px] font-medium">Status</CardTitle>
           <div className="flex gap-1.5">
-            <Button size="sm" variant="ghost" onClick={fetchStatus}>
+            <Button size="sm" variant="ghost" onClick={fetchStatus} aria-label="Refresh">
               <IconRefresh className="h-4 w-4" />
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="px-2.5 pb-2.5 space-y-3">
           <div className="flex items-center gap-3">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${
-              status?.running
-                ? 'bg-success/15 text-success'
-                : 'bg-muted text-muted-foreground'
-            }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${status?.running ? 'bg-success' : 'bg-muted-foreground/40'}`} />
+            <span className={cn('inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-medium', status?.running ? 'bg-success/15 text-success' : 'bg-muted text-muted-foreground')}>
+              <span className={cn('h-1.5 w-1.5 rounded-full', status?.running ? 'bg-success' : 'bg-muted-foreground/40')} />
               {status?.running ? 'Running' : 'Stopped'}
             </span>
-            <Button size="sm" onClick={handleToggle} disabled={toggling}>
+            <Button size="sm" className="h-7 text-[11px]" onClick={handleToggle} disabled={toggling}>
               {toggling ? '...' : status?.running ? 'Stop' : 'Start'}
             </Button>
           </div>
@@ -122,22 +127,22 @@ export default function WorkflowPage() {
 
       <WorkflowPipeline status={status} />
 
-      {status?.config && (
+      {status?.stats && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Configuration</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Configuration</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {[
                 { label: 'Aggregate', value: `${status.config.aggregate_interval_minutes} min` },
                 { label: 'Prune', value: `${status.config.prune_interval_minutes} min` },
                 { label: 'Export', value: `${status.config.export_interval_hours} hr` },
                 { label: 'Health Check', value: `${status.config.health_check_interval_seconds}s` },
               ].map(c => (
-                <div key={c.label} className="rounded-md bg-muted/30 p-3 text-center">
+                <div key={c.label} className="rounded-lg bg-muted/20 p-2.5 text-center">
                   <div className="text-xs text-muted-foreground">{c.label}</div>
-                  <div className="text-sm font-mono font-medium">{c.value}</div>
+                  <div className="text-[11px] font-mono font-medium tabular-nums">{c.value}</div>
                 </div>
               ))}
             </div>
@@ -147,26 +152,26 @@ export default function WorkflowPage() {
 
       {status?.stats && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Stats</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Stats</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-md bg-muted/30 p-3 text-center">
+          <CardContent className="px-2.5 pb-2.5">
+            <div className="grid grid-cols-2 gap-1.5">
+              <div className="rounded-lg bg-muted/20 p-2.5 text-center">
                 <div className="text-xs text-muted-foreground">Feedback Recorded</div>
-                <div className="text-lg font-mono font-medium">{status.stats.feedback_recorded ?? 0}</div>
+                <div className="text-[11px] font-mono font-medium tabular-nums">{status.stats.feedback_recorded ?? 0}</div>
               </div>
-              <div className="rounded-md bg-muted/30 p-3 text-center">
+              <div className="rounded-lg bg-muted/20 p-2.5 text-center">
                 <div className="text-xs text-muted-foreground">Auto-train Steps</div>
-                <div className="text-lg font-mono font-medium">{status.stats.auto_train_steps ?? 0}</div>
+                <div className="text-[11px] font-mono font-medium tabular-nums">{status.stats.auto_train_steps ?? 0}</div>
               </div>
-              <div className="rounded-md bg-muted/30 p-3 text-center">
+              <div className="rounded-lg bg-muted/20 p-2.5 text-center">
                 <div className="text-xs text-muted-foreground">Workflow Runs</div>
-                <div className="text-lg font-mono font-medium">{status.stats.workflow_runs ?? 0}</div>
+                <div className="text-[11px] font-mono font-medium tabular-nums">{status.stats.workflow_runs ?? 0}</div>
               </div>
-              <div className="rounded-md bg-muted/30 p-3 text-center">
+              <div className="rounded-lg bg-muted/20 p-2.5 text-center">
                 <div className="text-xs text-muted-foreground">DPO Train Steps</div>
-                <div className="text-lg font-mono font-medium">{status.stats.dpo_train_steps ?? 0}</div>
+                <div className="text-[11px] font-mono font-medium tabular-nums">{status.stats.dpo_train_steps ?? 0}</div>
               </div>
             </div>
           </CardContent>
@@ -174,16 +179,17 @@ export default function WorkflowPage() {
       )}
 
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Manual Triggers</CardTitle>
+        <CardHeader className="pb-2 pt-2.5 px-2.5">
+          <CardTitle className="text-[11px] font-medium">Manual Triggers</CardTitle>
         </CardHeader>
-        <CardContent>
+          <CardContent className="px-2.5 pb-2.5">
           <div className="flex gap-2">
             {['aggregate', 'prune', 'export'].map(action => (
               <Button
                 key={action}
                 size="sm"
                 variant="outline"
+                className="h-7 text-[11px]"
                 onClick={() => handleTrigger(action)}
                 disabled={triggering}
               >

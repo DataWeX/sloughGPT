@@ -8,7 +8,7 @@ Syscall numbers (X86SyscallHandler):
     SYS_TRAIN_START=28, SYS_TRAIN_STATUS=29, SYS_TRAIN_GET_RESULT=30
 
 Queries are resolved programmatically from syscall-5 constants in
-``domains.shell.vm`` at import time, so the registry never hardcodes a
+``domain.shell._internal.vm`` at import time, so the registry never hardcodes a
 number the VM does not itself define.
 """
 
@@ -17,13 +17,13 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from domains.shared import find_repo_root
+from domain.shared import find_repo_root
 
 _CORE_DIR = str(find_repo_root(Path(__file__).resolve()) / "packages" / "core-py")
 if _CORE_DIR not in sys.path:
     sys.path.insert(0, _CORE_DIR)
 
-from domains.shell.vm import (  # noqa: E402
+from domain.shell._internal.vm import (  # noqa: E402
     X86SyscallHandler,
 )
 
@@ -487,8 +487,14 @@ BUILTIN_PROGRAMS: dict[str, dict[str, str]] = {
     "factorial": {"description": "Compute 6! = 720, display the result", "program": _factorial},
     "guess": {"description": "Number guessing game (keyboard input)", "program": _guess},
     "rainbow": {"description": "Rainbow colored 'HELLO VM!' text (VGA)", "program": _rainbow},
-    "train": {"description": "Launch a training job via SYS_TRAIN_START (requires ADMIN role)", "program": _train},
-    "train-status": {"description": "Poll a training job via SYS_TRAIN_STATUS (requires ADMIN role)", "program": _train_status},
+    "train": {
+        "description": "Launch a training job via SYS_TRAIN_START (requires ADMIN role)",
+        "program": _train,
+    },
+    "train-status": {
+        "description": "Poll a training job via SYS_TRAIN_STATUS (requires ADMIN role)",
+        "program": _train_status,
+    },
 }
 
 

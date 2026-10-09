@@ -62,6 +62,8 @@ interface TrainingState {
   epoch: number;
   totalEpochs: number;
   steps: number;
+  stepsPerSec: number | null;
+  eta: number | null;
   checkpoint: string | null;
   error: string | null;
   checkpoints: Checkpoint[];
@@ -93,10 +95,23 @@ interface TrainingState {
   unloadAdapterModel: () => Promise<void>;
   importDataset: (source: string, name: string, type: 'url' | 'github' | 'huggingface' | 'csv') => Promise<void>;
   clearError: () => void;
+  rehydrate: () => Promise<void>;
 }
 
 let abortController: AbortController | null = null;
 let hfPollTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Cleanup SSE + poll timers — call on screen unmount. */
+export function cleanupTraining() {
+  if (abortController) {
+    abortController.abort();
+    abortController = null;
+  }
+  if (hfPollTimer) {
+    clearInterval(hfPollTimer);
+    hfPollTimer = null;
+  }
+}
 
 const defaultConfig: TrainConfig = {
   epochs: 10,
@@ -124,6 +139,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   epoch: 0,
   totalEpochs: 10,
   steps: 0,
+  stepsPerSec: null,
+  eta: null,
   checkpoint: null,
   error: null,
   checkpoints: [],
@@ -163,6 +180,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       epoch: 0,
       totalEpochs: cfg.epochs,
       steps: 0,
+      stepsPerSec: null,
+      eta: null,
       checkpoint: null,
       error: null,
     });
@@ -193,10 +212,12 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
             loss: Number(rawData.loss),
             steps: Number(step),
             epoch: Number(ep),
+            stepsPerSec: rawData.steps_per_sec != null ? Number(rawData.steps_per_sec) : s.stepsPerSec,
+            eta: rawData.eta_s != null ? Number(rawData.eta_s) : s.eta,
             lossHistory: [
               ...s.lossHistory,
               {step: Number(step), value: Number(rawData.loss)},
-            ],
+            ].slice(-200),
           }));
         }
 
@@ -262,6 +283,8 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
       epoch: 0,
       totalEpochs: hfOpts.epochs,
       steps: 0,
+      stepsPerSec: null,
+      eta: null,
       error: null,
       hfFinetunedPath: null,
     });
@@ -473,4 +496,50 @@ export const useTrainingStore = create<TrainingState>((set, get) => ({
   },
 
   clearError: () => set({error: null}),
+
+  rehydrate: async () => {
+    const state = get();
+    if (state.phase !== 'idle' && state.running) return;
+
+    try {
+      const jobs = await listTrainingJobs();
+      const running = Array.isArray(jobs) ? jobs.find((j: any) => j.status === 'running') : null;
+      if (running) {
+        set({
+          phase: 'TRAINING',
+          running: true,
+          loss: running.loss ?? null,
+          epoch: running.current_epoch ?? 0,
+          totalEpochs: running.epochs ?? 0,
+          steps: running.global_step ?? 0,
+        });
+
+        abortController = new AbortController();
+        try {
+          for await (const event of streamTraining(abortController.signal)) {
+            const rawPhase = event.phase;
+            const rawStatus = event.status;
+            const rawData = (event.data || {}) as Record<string, any>;
+            if (rawPhase) set({phase: rawPhase as TrainPhase});
+            if (rawData.loss !== undefined) {
+              set(s => ({
+                loss: Number(rawData.loss),
+                steps: Number(rawData.step ?? rawData.global_step ?? s.steps),
+                epoch: Number(rawData.epoch ?? rawData.current_epoch ?? s.epoch),
+                lossHistory: [...s.lossHistory, {step: Number(rawData.step ?? 0), value: Number(rawData.loss)}].slice(-200),
+              }));
+            }
+            if (rawStatus === 'complete') {
+              set({phase: 'COMPLETE', running: false});
+              break;
+            }
+            if (rawStatus === 'error') {
+              set({phase: 'FAILED', error: String(event.message || 'Training failed'), running: false});
+              break;
+            }
+          }
+        } catch {}
+      }
+    } catch {}
+  },
 }));

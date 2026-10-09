@@ -6,14 +6,16 @@ The router imports get_token_tree_manager at module level, so we patch the
 name in the router's namespace.
 """
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.token_tree import router
 
 app = FastAPI()
+register_all_handlers(app)
 app.include_router(router)
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -161,7 +163,6 @@ class TestTrain:
     @patch(MGR_TARGET)
     def test_train_with_texts(self, mock_get_mgr):
         mgr = _mock_manager()
-        tree = mgr.train.return_value
         mock_get_mgr.return_value = mgr
 
         resp = client.post(

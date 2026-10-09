@@ -4,6 +4,7 @@ import { useState, useCallback, memo } from 'react'
 import { Button, IconDownload, IconCopy, IconCheck } from '@sloughgpt/strui'
 import { cn } from '@sloughgpt/strui'
 import type { ChatMessage } from '@/lib/chat-utils'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface ConversationExportProps {
   messages: ChatMessage[]
@@ -129,7 +130,7 @@ export const ConversationExport = memo(function ConversationExport({
     const content = getContent()
     await navigator.clipboard.writeText(content)
     setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
   }, [getContent])
 
   const handleDownload = useCallback(() => {

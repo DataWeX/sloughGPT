@@ -1,14 +1,15 @@
 """Tests for pugqeep/compressor.py, library.py, dedup.py — compression, library CRUD, deduplication."""
 
+import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
-import tempfile
 
-from domains.infrastructure.pugqeep.compressor import PointCompressor
-from domains.infrastructure.pugqeep.point import Point
-from domains.infrastructure.pugqeep.library import PointLibrary
-from domains.infrastructure.pugqeep.dedup import PointDeduplicator, PointLibrarySync
+from domain.infrastructure._internal.pugqeep.compressor import PointCompressor
+from domain.infrastructure._internal.pugqeep.dedup import PointDeduplicator, PointLibrarySync
+from domain.infrastructure._internal.pugqeep.library import PointLibrary
+from domain.infrastructure._internal.pugqeep.point import Point
 
 
 class TestPointCompressorCluster:
@@ -60,14 +61,16 @@ class TestPointCompressorFunction:
 
 class TestPointCompressorCompress:
     def test_compress_cluster_method(self):
-        from domains.infrastructure.pugqeep.config import CompressorConfig
+        from domain.infrastructure._internal.pugqeep.config import CompressorConfig
+
         config = CompressorConfig(method="cluster")
         comp = PointCompressor(config=config)
         p = comp.compress(np.random.randn(50).astype(np.float32), identity="c")
         assert p.function_type == "cluster"
 
     def test_compress_function_method(self):
-        from domains.infrastructure.pugqeep.config import CompressorConfig
+        from domain.infrastructure._internal.pugqeep.config import CompressorConfig
+
         config = CompressorConfig(method="function")
         comp = PointCompressor(config=config)
         weights = np.arange(50, dtype=np.float32) * 3.0

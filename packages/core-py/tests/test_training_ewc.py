@@ -1,23 +1,22 @@
-"""Tests for domains/training/ewc.py — EWC continual learning."""
+"""Tests for domain.training._internal.ewc.py — EWC continual learning."""
 
 import numpy as np
 import pytest
 
-from domains.training.ewc import (
-    _as_array,
-    _scalar,
-    _batch_size,
-    _unpack_batch,
-    EWCParameters,
-    TaskSnapshot,
+from domain.training._internal.ewc import (
     DiagonalFisherEstimator,
     EwcContinualLearner,
+    EWCParameters,
+    TaskSnapshot,
+    _as_array,
+    _batch_size,
+    _scalar,
+    _unpack_batch,
 )
-from domains.training.slonet import (
-    Tensor,
-    tensor,
+from domain.training._internal.slonet import (
     SloLinear,
     cross_entropy,
+    tensor,
 )
 
 
@@ -136,9 +135,12 @@ def test_ewc_parameters_defaults():
 
 def test_task_snapshot_fields():
     s = TaskSnapshot(
-        task_id="t1", task_name="first",
-        parameters={"w": np.ones(2)}, fisher_diagonal={"w": np.zeros(2)},
-        optimal_loss=0.5, num_samples=10,
+        task_id="t1",
+        task_name="first",
+        parameters={"w": np.ones(2)},
+        fisher_diagonal={"w": np.zeros(2)},
+        optimal_loss=0.5,
+        num_samples=10,
     )
     assert s.task_id == "t1"
     assert s.task_name == "first"

@@ -18,9 +18,9 @@ __author__ = "SloughGPT"
 __email__ = "dev@sloughgpt.ai"
 __url__ = "https://github.com/iamtowbee/sloughGPT"
 
-import sys
 import importlib.util
 import os
+import sys
 
 _package_dir = os.path.dirname(__file__)
 _models_path = os.path.join(_package_dir, "models.py")
@@ -57,7 +57,7 @@ sys.modules["sloughgpt_sdk"].HealthStatus = HealthStatus
 sys.modules["sloughgpt_sdk"].SystemInfo = SystemInfo
 sys.modules["sloughgpt_sdk"].MetricsData = MetricsData
 
-from sloughgpt_sdk.client import SloughGPTClient, AsyncSloughGPTClient
+from sloughgpt_sdk.client import AsyncSloughGPTClient, SloughGPTClient
 
 _http_path = os.path.join(_package_dir, "http_client.py")
 _http_spec = importlib.util.spec_from_file_location("sloughgpt_sdk.http", _http_path)

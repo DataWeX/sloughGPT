@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Fake npx for journey tests: `npx next build` "builds" a working standalone
+# server.js (node http server honouring PORT/HOSTNAME) instead of the real
+# multi-minute Next build + network fetch. `npx react-native start` (metro)
+# serves on PORT so _check_port sees a live bundler. Anything else is a
+# no-op success.
+set -u
+LOG="${FAKE_NPM_LOG:-/tmp/fake_npm.log}"
+echo "argv: $*" >> "$LOG"
+
+if [ "${1:-}" = "next" ] && [ "${2:-}" = "build" ]; then
+  if [ "${FAKE_NPX_FAIL:-0}" = "1" ]; then
+    # Real next build fails after tens of seconds — by then the API has
+    # already bound its port, so a missing cleanup leaves a live orphan.
+    sleep "${FAKE_NPX_DELAY:-0}"
+    echo "fake npx: forced build failure" >&2
+    exit 1
+  fi
+  mkdir -p .next/standalone
+  cat > .next/standalone/server.js <<'JS'
+const http = require("http");
+const port = process.env.PORT || 3000;
+const host = process.env.HOSTNAME || "0.0.0.0";
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { "content-type": "text/html" });
+    res.end("<html><body>standalone-ok</body></html>");
+  })
+  .listen(port, host, () => console.log("standalone listening on " + port));
+JS
+fi
+
+if [ "${1:-}" = "react-native" ] && [ "${2:-}" = "start" ]; then
+  # Metro: _cmd_api_and_mobile sets PORT=8081 and waits on _check_port(8081).
+  # Run the server in ITS OWN session: the CLI's pty teardown (script SIGHUP
+  # on session exit) must not kill an orphaned metro before the journey's
+  # orphan check runs — that check exists to catch exactly that leak. Green
+  # path: the handler's terminate hits this shell (trap → kills the child)
+  # and _kill_port(8081) is the backstop.
+  setsid python3 -m http.server "${PORT:-8081}" --bind 0.0.0.0 &
+  KP=$!
+  trap 'kill -TERM "$KP" 2>/dev/null' TERM
+  wait "$KP"
+  exit $?
+fi
+exit 0

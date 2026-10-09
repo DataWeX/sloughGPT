@@ -12,93 +12,141 @@ Endpoints:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends, Query
-from pydantic import BaseModel
+import logging
 
+from fastapi import APIRouter, Depends, Query
 from infrastructure.auth import require_auth_if_enabled
-from domains.billing.token_service import (
-    get_token_billing_service,
+from pydantic import BaseModel, Field
+from schemas.common import endpoint, raise_error, success_response
+
+from domain.billing import (
     Tier,
+    get_token_billing_service,
 )
+
+logger = logging.getLogger("slo.routers.tokens")
 
 router = APIRouter(prefix="/tokens", tags=["tokens"])
 
 
+def _resolve_user_id(auth_user: dict | None) -> str:
+    """Best-effort caller identity for billing scoping.
+
+    ``require_auth_if_enabled`` returns None when auth is disabled (the
+    local-dev default), and JWT payloads carry ``sub`` rather than ``id`` —
+    so indexing ``auth_user["id"]`` crashed every auth mode (NoneType deref
+    when disabled, KeyError when enabled). Mirrors the claim fallback used by
+    errors.ingest / api_keys / users, ending at a shared anonymous account.
+    """
+    if not auth_user:
+        return "anonymous"
+    user_id = auth_user.get("sub") or auth_user.get("id") or auth_user.get("username")
+    return str(user_id or "anonymous")
+
+
 class TopUpRequest(BaseModel):
-    amount: int
+    amount: int = Field(..., ge=1, le=1_000_000, description="Number of tokens to add")
 
 
 class UpgradeRequest(BaseModel):
-    tier: str
+    tier: str = Field(..., pattern=r"^(free|basic|pro|enterprise)$", description="Target tier")
 
 
 class CheckRequest(BaseModel):
-    model: str
-    input_tokens: int
-    output_tokens: int
+    model: str = Field(..., min_length=1, max_length=200, description="Model identifier")
+    input_tokens: int = Field(..., ge=0, le=10_000_000, description="Expected input tokens")
+    output_tokens: int = Field(..., ge=0, le=10_000_000, description="Expected output tokens")
 
 
 @router.get("/balance")
+@endpoint("tokens.balance")
 async def get_balance(auth_user: dict = Depends(require_auth_if_enabled)):
-    service = get_token_billing_service()
-    account = service.get_balance(auth_user["id"])
-    return account.to_dict()
+    try:
+        service = get_token_billing_service()
+        account = service.get_balance(_resolve_user_id(auth_user))
+        return success_response(data=account.to_dict())
+    except Exception as e:
+        logger.error("Failed to get balance: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_BALANCE", status_code=500)
 
 
 @router.get("/usage/summary")
+@endpoint("tokens.usage_summary")
 async def get_usage_summary(auth_user: dict = Depends(require_auth_if_enabled)):
-    service = get_token_billing_service()
-    return service.get_usage_summary(auth_user["id"])
+    try:
+        service = get_token_billing_service()
+        return success_response(data=service.get_usage_summary(_resolve_user_id(auth_user)))
+    except Exception as e:
+        logger.error("Failed to get usage summary: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_USAGE", status_code=500)
 
 
 @router.get("/usage/history")
+@endpoint("tokens.usage_history")
 async def get_usage_history(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     auth_user: dict = Depends(require_auth_if_enabled),
 ):
-    service = get_token_billing_service()
-    records = service.get_usage_history(auth_user["id"], limit=limit, offset=offset)
-    return {"records": [r.to_dict() for r in records]}
+    try:
+        service = get_token_billing_service()
+        records = service.get_usage_history(_resolve_user_id(auth_user), limit=limit, offset=offset)
+        return success_response(data={"records": [r.to_dict() for r in records]})
+    except Exception as e:
+        logger.error("Failed to get usage history: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_HISTORY", status_code=500)
 
 
 @router.post("/topup")
+@endpoint("tokens.topup")
 async def topup_credits(request: TopUpRequest, auth_user: dict = Depends(require_auth_if_enabled)):
-    if request.amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    if request.amount > 1_000_000:
-        raise HTTPException(status_code=400, detail="Maximum top-up is 1,000,000 tokens")
-
-    service = get_token_billing_service()
-    account = service.add_credits(auth_user["id"], request.amount)
-    return account.to_dict()
+    try:
+        service = get_token_billing_service()
+        account = service.add_credits(_resolve_user_id(auth_user), request.amount)
+        return success_response(data=account.to_dict(), message=f"Added {request.amount} credits")
+    except Exception as e:
+        logger.error("Failed to topup credits: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_TOPUP", status_code=500)
 
 
 @router.post("/upgrade")
+@endpoint("tokens.upgrade")
 async def upgrade_tier(request: UpgradeRequest, auth_user: dict = Depends(require_auth_if_enabled)):
     try:
         tier = Tier(request.tier)
     except ValueError:
-        raise HTTPException(
+        raise_error(
+            f"Invalid tier. Must be one of: {', '.join(t.value for t in Tier)}",
+            "E_VAL_REQUEST",
             status_code=400,
-            detail=f"Invalid tier. Must be one of: {', '.join(t.value for t in Tier)}",
         )
 
-    service = get_token_billing_service()
-    account = service.upgrade_tier(auth_user["id"], tier)
-    return account.to_dict()
+    try:
+        service = get_token_billing_service()
+        account = service.upgrade_tier(_resolve_user_id(auth_user), tier)
+        return success_response(data=account.to_dict(), message=f"Upgraded to {tier.value}")
+    except Exception as e:
+        logger.error("Failed to upgrade tier: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_UPGRADE", status_code=500)
 
 
 @router.post("/check")
+@endpoint("tokens.check")
 async def check_tokens(request: CheckRequest, auth_user: dict = Depends(require_auth_if_enabled)):
-    service = get_token_billing_service()
-    account = service.get_balance(auth_user["id"])
-    total_tokens = request.input_tokens + request.output_tokens
-    can_afford = account.can_afford(total_tokens)
-    return {
-        "canAfford": can_afford,
-        "totalTokens": total_tokens,
-        "balance": account.balance,
-        "dailyRemaining": max(0, account.daily_limit - account.daily_used),
-        "monthlyRemaining": max(0, account.monthly_limit - account.monthly_used),
-    }
+    try:
+        service = get_token_billing_service()
+        account = service.get_balance(_resolve_user_id(auth_user))
+        total_tokens = request.input_tokens + request.output_tokens
+        can_afford = account.can_afford(total_tokens)
+        return success_response(
+            data={
+                "canAfford": can_afford,
+                "totalTokens": total_tokens,
+                "balance": account.balance,
+                "dailyRemaining": max(0, account.daily_limit - account.daily_used),
+                "monthlyRemaining": max(0, account.monthly_limit - account.monthly_used),
+            }
+        )
+    except Exception as e:
+        logger.error("Failed to check tokens: %s", e, extra={"tag": "TOKENS"})
+        raise_error(str(e), "E_TOKENS_CHECK", status_code=500)

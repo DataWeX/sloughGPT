@@ -1,7 +1,8 @@
 'use client'
 import { create } from 'zustand'
+import { logStateEvent } from '@/lib/state-events'
 
-export type ApiStatus = 'connected' | 'connecting' | 'offline' | 'reloading'
+export type ApiStatus = 'connected' | 'connecting' | 'offline' | 'reloading' | 'error'
 
 export interface ConnectionDiagnostic {
   /** The endpoint that failed */
@@ -62,17 +63,36 @@ export const useApiMonitor = create<ApiMonitorState>((set) => ({
   failureCount: 0,
   lastSuccessEndpoint: null,
   setStatus: (status) =>
-    set((s) => ({
-      status,
-      lastOnline: status === 'connected' ? Date.now() : s.lastOnline,
-      lastOffline: status !== 'connected' ? Date.now() : s.lastOffline,
-    })),
+    set((s) => {
+      if (s.status !== status) {
+        // Single call: logStateEvent already forwards to the backend ingest,
+        // so a direct trackEvent here would log the transition twice.
+        logStateEvent('api_connection_changed', {
+          kind: 'api',
+          from: s.status,
+          to: status,
+        })
+      }
+      return {
+        status,
+        lastOnline: status === 'connected' ? Date.now() : s.lastOnline,
+        lastOffline: status !== 'connected' ? Date.now() : s.lastOffline,
+      }
+    }),
   setHealthSummary: (data) => set({ healthSummary: data }),
-  addFailure: (diag) =>
+  addFailure: (diag) => {
+    // Single call: logStateEvent forwards the structured data to the backend
+    // ingest — a direct trackEvent here would log the failure twice.
+    logStateEvent('api_connection_failure', {
+      kind: 'api',
+      message: `api_connection_failure ${diag.endpoint} ${diag.kind}`,
+      data: { endpoint: diag.endpoint, status_code: diag.status, error_type: diag.kind },
+    })
     set((s) => ({
       recentFailures: [diag, ...s.recentFailures].slice(0, MAX_RECENT_FAILURES),
       failureCount: s.failureCount + 1,
-    })),
+    }))
+  },
   clearFailures: () => set({ recentFailures: [], failureCount: 0 }),
 }))
 

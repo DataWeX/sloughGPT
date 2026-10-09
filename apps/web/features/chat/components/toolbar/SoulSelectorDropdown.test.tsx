@@ -9,28 +9,92 @@ vi.mock('@/lib/souls-controller', () => ({
   soulsController: { getTraitWeights: vi.fn().mockResolvedValue(null) },
 }))
 
-vi.mock('@/components/souls/PersonalitySummary', () => ({ deriveArchetype: vi.fn().mockReturnValue(null) }))
+vi.mock('@/components/souls/PersonalitySummary', () => ({
+  deriveArchetype: vi.fn().mockReturnValue(null),
+}))
 
 vi.mock('@sloughgpt/strui', () => {
-  function DM({ children }: any) { return <div>{children}</div> }
-  function DMT({ children, asChild }: any) { return asChild ? <>{children}</> : <button>{children}</button> }
+  function DM({ children }: any) {
+    return <div>{children}</div>
+  }
+  function DMT({ children, asChild }: any) {
+    return asChild ? <>{children}</> : <button>{children}</button>
+  }
   function DMI({ children, onSelect }: any) {
-    return <button role="menuitem" onClick={onSelect}>{children}</button>
+    return (
+      <button role="menuitem" onClick={onSelect}>
+        {children}
+      </button>
+    )
   }
   return {
-    DropdownMenu: DM, DropdownMenuTrigger: DMT, DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuItem: DMI, DropdownMenuSeparator: () => <hr />, DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuCheckboxItem: DMI, DropdownMenuPortal: ({ children }: any) => <div>{children}</div>,
+    cn: (...args: any[]) => args.filter(Boolean).join(' '),
+    DropdownMenu: DM,
+    DropdownMenuTrigger: DMT,
+    DropdownMenuContent: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuItem: DMI,
+    DropdownMenuSeparator: () => <hr />,
+    DropdownMenuLabel: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuCheckboxItem: DMI,
+    DropdownMenuPortal: ({ children }: any) => <div>{children}</div>,
     DropdownMenuGroup: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuSub: ({ children }: any) => <div>{children}</div>, DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
-    DropdownMenuSubTrigger: DMT, DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuSub: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuRadioGroup: ({ children }: any) => <div>{children}</div>,
+    DropdownMenuSubTrigger: DMT,
+    DropdownMenuSubContent: ({ children }: any) => <div>{children}</div>,
     Button: ({ children, onClick, variant, size, ...rest }: any) => (
-      <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>{children}</button>
+      <button onClick={onClick} data-variant={variant} data-size={size} {...rest}>
+        {children}
+      </button>
     ),
     IconChevronDown: () => <span data-testid="icon-chevron-down">▼</span>,
     IconCheck: () => <span data-testid="icon-check">✓</span>,
     IconHeart: () => <span data-testid="icon-heart">♥</span>,
     IconChevronRight: () => <span data-testid="icon-chevron-right">▸</span>,
+
+    Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => (
+      <div data-testid="action-card">
+        <h3>{title}</h3>
+        {children}
+      </div>
+    ),
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => (
+      <textarea value={value} onChange={onChange} {...props} />
+    ),
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
   }
 })
 
@@ -40,28 +104,85 @@ import type { ChatToolbarContextValue } from '@/features/chat/contexts/ChatToolb
 import type { Soul } from '@/lib/souls-controller'
 
 const souls: Soul[] = [
-  { name: 'friendly', description: 'Warm and approachable', traits: ['warmth', 'empathy'], personality: { warmth: 0.8 } },
-  { name: 'witty', description: 'Sharp and clever', traits: ['humor', 'intelligence'], personality: { humor: 0.9 } },
+  {
+    name: 'friendly',
+    description: 'Warm and approachable',
+    traits: ['warmth', 'empathy'],
+    personality: { warmth: 0.8 },
+  },
+  {
+    name: 'witty',
+    description: 'Sharp and clever',
+    traits: ['humor', 'intelligence'],
+    personality: { humor: 0.9 },
+  },
 ]
 
-function makeCtx(overrides: { souls?: Soul[]; current?: Soul | null; onSelect?: ReturnType<typeof vi.fn> } = {}): ChatToolbarContextValue {
+function makeCtx(
+  overrides: { souls?: Soul[]; current?: Soul | null; onSelect?: ReturnType<typeof vi.fn> } = {},
+): ChatToolbarContextValue {
   const onSelect = overrides.onSelect ?? vi.fn()
   return {
-    conversations: { conversations: [], sessionIdRef: { current: '' } as React.MutableRefObject<string>, onLoad: vi.fn(), onStar: vi.fn(), onPin: vi.fn(), onNewChat: vi.fn() },
-    search: { query: '', onChange: vi.fn(), onClear: vi.fn(), matchIndex: 0, matchCount: 0, matchIds: [], onPrevMatch: vi.fn(), onNextMatch: vi.fn(), showMobile: false, setShowMobile: vi.fn() },
-    model: { availableModels: [], current: '', loading: null, generating: false, infoMap: {}, downloadProgress: {}, onSelect: vi.fn() },
+    conversations: {
+      conversations: [],
+      sessionIdRef: { current: '' } as React.MutableRefObject<string>,
+      onLoad: vi.fn(),
+      onStar: vi.fn(),
+      onPin: vi.fn(),
+      onNewChat: vi.fn(),
+    },
+    search: {
+      query: '',
+      onChange: vi.fn(),
+      onClear: vi.fn(),
+      matchIndex: 0,
+      matchCount: 0,
+      matchIds: [],
+      onPrevMatch: vi.fn(),
+      onNextMatch: vi.fn(),
+      showMobile: false,
+      setShowMobile: vi.fn(),
+    },
+    model: {
+      availableModels: [],
+      current: '',
+      loading: null,
+      generating: false,
+      infoMap: {},
+      downloadProgress: {},
+      onSelect: vi.fn(),
+    },
     soul: { souls: overrides.souls ?? souls, current: overrides.current ?? null, onSelect },
     knowledge: { showing: false, count: 0, context: '', onToggle: vi.fn() },
     agent: { agents: [], current: null, onSelect: vi.fn() },
-    localEngine: { modelUrl: '', useLocal: false, loading: false, archInfo: null, onToggle: vi.fn() },
-    actions: { onVoiceMode: vi.fn(), onToggleTools: vi.fn(), onExportMarkdown: vi.fn(), onSystemPrompt: vi.fn(), onSearchConversations: vi.fn(), hasMessages: false, messageCount: 0, bookmarkCount: 0 },
+    localEngine: {
+      modelUrl: '',
+      useLocal: false,
+      loading: false,
+      archInfo: null,
+      onToggle: vi.fn(),
+    },
+    actions: {
+      onVoiceMode: vi.fn(),
+      onToggleTools: vi.fn(),
+      onExportMarkdown: vi.fn(),
+      onSystemPrompt: vi.fn(),
+      onSearchConversations: vi.fn(),
+      hasMessages: false,
+      messageCount: 0,
+      bookmarkCount: 0,
+    },
     health: { status: 'ok', summary: '', modelLoaded: false, modelType: '' },
     sidebar: { open: false, onToggle: vi.fn(), onClose: vi.fn() },
   }
 }
 
 function renderWithCtx(overrides: Parameters<typeof makeCtx>[0] = {}) {
-  return render(<ChatToolbarProvider value={makeCtx(overrides)}><SoulSelectorDropdown /></ChatToolbarProvider>)
+  return render(
+    <ChatToolbarProvider value={makeCtx(overrides)}>
+      <SoulSelectorDropdown />
+    </ChatToolbarProvider>,
+  )
 }
 
 describe('SoulSelectorDropdown', () => {
@@ -90,17 +211,17 @@ describe('SoulSelectorDropdown', () => {
     expect(items.length).toBeGreaterThanOrEqual(2)
   })
 
-  it('has View full profile link that navigates to /models', () => {
+  it('has View full profile link that navigates to /souls', () => {
     renderWithCtx()
     fireEvent.click(screen.getByText('View full profile'))
-    expect(mockPush).toHaveBeenCalledWith('/models')
+    expect(mockPush).toHaveBeenCalledWith('/souls')
   })
 
   it('calls onSelect when a soul is clicked', () => {
     const onSelect = vi.fn()
     renderWithCtx({ onSelect })
     const items = screen.getAllByRole('menuitem')
-    const friendlyItem = items.find(item => item.textContent?.includes('friendly'))
+    const friendlyItem = items.find((item) => item.textContent?.includes('friendly'))
     if (friendlyItem) fireEvent.click(friendlyItem)
     expect(onSelect).toHaveBeenCalledWith(souls[0])
   })
@@ -153,7 +274,12 @@ describe('SoulSelectorDropdown', () => {
   })
 
   it('hides traits section when soul has no traits', () => {
-    const soulNoTraits: Soul = { name: 'bare', description: 'No traits', traits: [], personality: {} }
+    const soulNoTraits: Soul = {
+      name: 'bare',
+      description: 'No traits',
+      traits: [],
+      personality: {},
+    }
     renderWithCtx({ souls: [soulNoTraits] })
     expect(screen.getByText('bare')).toBeDefined()
     expect(screen.queryByText('warmth')).toBeNull()

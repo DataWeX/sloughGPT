@@ -46,6 +46,42 @@ const MAX_RETRIES = 1;
 const BASE_DELAY = 500;
 const DEFAULT_TIMEOUT_MS = 30_000;
 
+/** Simple in-memory cache for GET requests. */
+class RequestCache {
+  private store = new Map<string, {data: unknown; expiresAt: number}>();
+
+  constructor(private defaultTtlMs = 5000) {}
+
+  get<T>(key: string): T | undefined {
+    const entry = this.store.get(key);
+    if (!entry) return undefined;
+    if (Date.now() > entry.expiresAt) {
+      this.store.delete(key);
+      return undefined;
+    }
+    return entry.data as T;
+  }
+
+  set(key: string, data: unknown, ttlMs?: number) {
+    this.store.set(key, {data, expiresAt: Date.now() + (ttlMs ?? this.defaultTtlMs)});
+  }
+
+  invalidate(prefix: string) {
+    for (const key of this.store.keys()) {
+      if (key.startsWith(prefix)) this.store.delete(key);
+    }
+  }
+}
+
+const cache = new RequestCache(5000);
+
+/** Paths that benefit from longer cache TTL. */
+const LONG_TTL_PATHS: [RegExp, number][] = [
+  [/^\/models(?!\/)/, 10_000],
+  [/^\/datasets(?!\/)/, 10_000],
+  [/^\/health/, 5_000],
+];
+
 function parseErrorDetail(text: string, resStatus: number): string {
   try {
     const j = JSON.parse(text);
@@ -66,6 +102,11 @@ async function request<T>(
   path: string,
   body?: unknown,
 ): Promise<T> {
+  if (method === 'GET' && !body) {
+    const cached = cache.get<T>(path);
+    if (cached !== undefined) return cached;
+  }
+
   const baseUrl = await getApiUrl();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -108,7 +149,16 @@ async function request<T>(
       const text = await res.text();
       if (!text) return undefined as T;
       const raw = JSON.parse(text);
-      return unwrap<T>(raw);
+      const result = unwrap<T>(raw);
+
+      if (method === 'GET') {
+        const ttl = LONG_TTL_PATHS.find(([re]) => re.test(path))?.[1];
+        cache.set(path, result, ttl);
+      } else if (method !== 'GET') {
+        cache.invalidate(path.split('/').slice(0, 3).join('/'));
+      }
+
+      return result;
     } catch (err) {
       clearTimeout(timer);
 
@@ -153,18 +203,40 @@ export const api = {
   /** Upload a file (image/audio) via multipart form data. */
   upload: async <T>(path: string, formData: FormData): Promise<T> => {
     const baseUrl = await getApiUrl();
-    const res = await fetch(`${baseUrl}${path}`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => null);
-      throw new ApiError(res.status, (data as any)?.detail || res.statusText, data);
+    const MAX_RETRIES = 2;
+    const TIMEOUT_MS = 60_000;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+      try {
+        const res = await fetch(`${baseUrl}${path}`, {
+          method: 'POST',
+          body: formData,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (!res.ok) {
+          const data = await res.json().catch(() => null);
+          throw new ApiError(res.status, (data as any)?.detail || res.statusText, data);
+        }
+        const text = await res.text();
+        if (!text) return undefined as T;
+        const raw = JSON.parse(text);
+        return unwrap<T>(raw);
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        const isRetryable = err?.name === 'AbortError' || (err?.status && [408, 429, 502, 503, 504].includes(err.status));
+        if (isRetryable && attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        throw err;
+      }
     }
-    const text = await res.text();
-    if (!text) return undefined as T;
-    const raw = JSON.parse(text);
-    return unwrap<T>(raw);
+    throw new Error('Upload failed after retries');
   },
 
   /** Sync offline messages with the server. */
@@ -216,9 +288,9 @@ export const api = {
 
   /** Pull latest weights from a trained checkpoint. */
   pullWeights: async (checkpoint: string) => {
-    const baseUrl = await getApiUrl();
-    return fetch(
-      `${baseUrl}/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
-    ).then(r => r.json());
+    return request<any>(
+      'GET',
+      `/training/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
+    );
   },
 };

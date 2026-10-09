@@ -5,6 +5,7 @@ import React from 'react'
 
 vi.mock('@sloughgpt/strui', () => ({
   cn: vi.fn((...args: any[]) => args.join(' ')),
+  Spinner: () => <span data-testid="spinner">loading</span>,
   Button: ({ children, onClick, variant, size, className, disabled, ...rest }: any) => (
     <button onClick={onClick} className={className} data-variant={variant} data-size={size} disabled={disabled} {...rest}>{children}</button>
   ),
@@ -18,6 +19,19 @@ vi.mock('@sloughgpt/strui', () => ({
       {...rest}
     />
   ),
+  Slider: ({ value, onValueChange, min, max, showValue, formatValue, ...rest }: any) => (
+    <div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value?.[0] ?? 0}
+        onChange={(e) => onValueChange?.([Number(e.target.value)])}
+        {...rest}
+      />
+      {showValue && <span>{formatValue ? formatValue(value?.[0] ?? 0) : value?.[0]}</span>}
+    </div>
+  ),
   IconRefresh: () => <span data-testid="icon-refresh">refresh</span>,
   IconTrash: () => <span data-testid="icon-trash">trash</span>,
   IconSearch: () => <span data-testid="icon-search">search</span>,
@@ -30,6 +44,7 @@ const hoisted = vi.hoisted(() => ({
   memoryController: {
     list: vi.fn(),
     stats: vi.fn(),
+    archiveStats: vi.fn().mockResolvedValue({ records: 0, bytes: 0 }),
     delete: vi.fn(),
     clear: vi.fn(),
     setEnabled: vi.fn(),
@@ -47,6 +62,27 @@ vi.mock('@/lib/memory-controller', () => ({
 
 vi.mock('@/lib/dev-log', () => ({
   logger: hoisted.logger,
+}))
+
+vi.mock('@/lib/memory-events', () => {
+  const listeners = new Set<(info: any) => void>()
+  return {
+    subscribeMemoryEvents: vi.fn((cb: any) => {
+      listeners.add(cb)
+      return () => { listeners.delete(cb) }
+    }),
+    publishMemoryEvent: vi.fn((info: any) => {
+      for (const l of listeners) l(info)
+    }),
+  }
+})
+
+vi.mock('@/vite/next-compat/link', () => ({
+  default: ({ href, children, ...rest }: any) => (
+    <a href={typeof href === 'string' ? href : String(href)} {...rest}>
+      {children}
+    </a>
+  ),
 }))
 
 import { MemoryTab } from './MemoryTab'
@@ -233,7 +269,7 @@ describe('MemoryTab', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    fireEvent.click(screen.getByTitle('Click to copy'))
+    fireEvent.click(screen.getByTitle('Copy to clipboard'))
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'))
     expect(screen.getAllByText('Copied').length).toBeGreaterThanOrEqual(1)
   })
@@ -243,7 +279,7 @@ describe('MemoryTab', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    fireEvent.keyDown(screen.getByTitle('Click to copy'), { key: 'Enter' })
+    fireEvent.keyDown(screen.getByTitle('Copy to clipboard'), { key: 'Enter' })
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('The user prefers espresso over drip coffee.'))
   })
 
@@ -255,7 +291,7 @@ describe('MemoryTab', () => {
       render(<MemoryTab />)
       await act(async () => {})
       await act(async () => {})
-      fireEvent.click(screen.getByTitle('Click to copy'))
+      fireEvent.click(screen.getByTitle('Copy to clipboard'))
       await act(async () => {})
       expect(screen.getAllByText('Copied').length).toBeGreaterThanOrEqual(1)
       act(() => { vi.advanceTimersByTime(1500) })
@@ -269,7 +305,7 @@ describe('MemoryTab', () => {
     Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
-    fireEvent.click(screen.getByTitle('Click to copy'))
+    fireEvent.click(screen.getByTitle('Copy to clipboard'))
     await waitFor(() => expect(hoisted.logger.debug).toHaveBeenCalled())
     expect(screen.queryByText('Copied')).toBeNull()
   })
@@ -622,7 +658,7 @@ describe('MemoryTab', () => {
     fireEvent.click(screen.getByLabelText('Edit memory item'))
     fireEvent.change(screen.getByLabelText('Edit memory fact text'), { target: { value: 'Updated text.' } })
     fireEvent.click(screen.getByText('Save'))
-    expect(await screen.findByText('Failed to update memory item')).toBeDefined()
+    expect(await screen.findByText('Could not update memory item')).toBeDefined()
   })
 
   it('shows search score when results are from search', async () => {
@@ -667,7 +703,7 @@ describe('MemoryTab', () => {
     render(<MemoryTab />)
     await screen.findByText(/prefers espresso over drip coffee/)
     fireEvent.click(screen.getByText('Consolidate'))
-    expect(await screen.findByText('Failed to consolidate memory')).toBeDefined()
+    expect(await screen.findByText('Could not consolidate memory')).toBeDefined()
   })
 
   it('disables the consolidate button while running', async () => {

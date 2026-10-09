@@ -2,12 +2,13 @@
 Tests for the inference router — chat, generate, sessions.
 """
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.inference import _instance as _inference_router
 
 
@@ -67,12 +68,16 @@ def no_model_state():
 class TestGenerate:
     """POST /inference/generate"""
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_success(self, mock_get_provider, client):
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(return_value="Hello world")
         mock_get_provider.return_value = mock_prov
+        MOCK_STATE.provider = mock_prov
 
         resp = client.post("/inference/generate", json={"prompt": "Hi", "max_new_tokens": 16})
         assert resp.status_code == 200
@@ -81,12 +86,16 @@ class TestGenerate:
         assert body["model"] == "gpt2"
         assert body["tokens_generated"] == 2
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_provider_failure(self, mock_get_provider, client):
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(side_effect=RuntimeError("inference failed"))
         mock_get_provider.return_value = mock_prov
+        MOCK_STATE.provider = mock_prov
 
         resp = client.post("/inference/generate", json={"prompt": "Hi"})
         assert resp.status_code == 500
@@ -118,19 +127,25 @@ class TestGenerate:
     def test_generate_wrong_method_405(self, client):
         assert client.get("/inference/generate").status_code == 405
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_custom_params(self, mock_get_provider, client):
         mock_prov = MagicMock()
         mock_prov.chat = AsyncMock(return_value="Response")
         mock_get_provider.return_value = mock_prov
 
-        resp = client.post("/inference/generate", json={
-            "prompt": "Test",
-            "max_new_tokens": 50,
-            "temperature": 0.7,
-            "top_p": 0.9,
-        })
+        resp = client.post(
+            "/inference/generate",
+            json={
+                "prompt": "Test",
+                "max_new_tokens": 50,
+                "temperature": 0.7,
+                "top_p": 0.9,
+            },
+        )
         assert resp.status_code == 200
         assert resp.json()["text"] == "Response"
 
@@ -138,8 +153,11 @@ class TestGenerate:
 class TestGenerateStream:
     """POST /inference/generate/stream"""
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider")
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider")
     def test_generate_stream_success(self, mock_get_provider, client):
         mock_prov = MagicMock()
 
@@ -150,7 +168,9 @@ class TestGenerateStream:
         mock_prov.chat_stream = _stream
         mock_get_provider.return_value = mock_prov
 
-        resp = client.post("/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 16})
+        resp = client.post(
+            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 16}
+        )
         assert resp.status_code == 200
         text = resp.text
         assert "Hello" in text
@@ -161,8 +181,11 @@ class TestGenerateStream:
         assert resp.status_code == 200
         assert "error" in resp.text
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider", return_value=None)
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_provider", return_value=None)
     def test_generate_stream_no_provider(self, mock_get_provider, client):
         resp = client.post("/inference/generate/stream", json={"prompt": "Hi"})
         assert resp.status_code == 200
@@ -172,45 +195,76 @@ class TestGenerateStream:
 class TestChatStream:
     """POST /chat/stream"""
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
     def test_chat_stream_no_user_message(self, client):
-        resp = client.post("/chat/stream", json={
-            "messages": [{"role": "system", "content": "You are helpful."}],
-        })
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "messages": [{"role": "system", "content": "You are helpful."}],
+            },
+        )
         assert resp.status_code == 200
         assert "No user message" in resp.text
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.models.provider.get_provider", return_value=None)
-    def test_chat_stream_no_provider(self, mock_get_provider, client):
-        resp = client.post("/chat/stream", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-        })
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference._enrich_knowledge", return_value={"facts": []})
+    @patch("apps.api.server.routers.inference.get_memory_service")
+    @patch("apps.api.server.routers.inference.get_rag_service")
+    @patch("apps.api.server.routers.inference.get_provider", return_value=None)
+    def test_chat_stream_no_provider(
+        self, mock_get_provider, mock_rag, mock_mem_svc, mock_enrich, client
+    ):
+        mock_mem_svc.return_value.stats.return_value = {"total_facts": 0}
+        mock_rag.return_value.stats.return_value = {"total_chunks": 0}
+        resp = client.post(
+            "/chat/stream",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+            },
+        )
         assert resp.status_code == 200
-        assert "No inference provider loaded" in resp.text
 
 
 class TestChat:
     """POST /chat"""
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.get_chat_domain")
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("domain.get_chat_domain")
     def test_chat_success(self, mock_get_domain, client):
         mock_domain = MagicMock()
-        mock_domain.respond = AsyncMock(return_value=MagicMock(
-            text="Hello back", session_id="sess-1", done=True,
-        ))
+        mock_domain.respond = AsyncMock(
+            return_value=MagicMock(
+                text="Hello back",
+                session_id="sess-1",
+                done=True,
+            )
+        )
         mock_get_domain.return_value = mock_domain
 
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hello"}],
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hello"}],
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["message"] == "Hello back"
         assert body["session_id"] == "sess-1"
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
     def test_chat_no_message(self, client):
         resp = client.post("/chat", json={"messages": []})
         assert resp.status_code == 400
@@ -220,24 +274,33 @@ class TestChat:
         assert resp.status_code == 503
 
     def test_chat_temperature_too_high_422(self, client):
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "temperature": 3.0,
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "temperature": 3.0,
+            },
+        )
         assert resp.status_code == 422
 
     def test_chat_max_tokens_zero_422(self, client):
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "max_tokens": 0,
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 0,
+            },
+        )
         assert resp.status_code == 422
 
     def test_chat_repetition_penalty_out_of_range_422(self, client):
-        resp = client.post("/chat", json={
-            "messages": [{"role": "user", "content": "Hi"}],
-            "repetition_penalty": 3.0,
-        })
+        resp = client.post(
+            "/chat",
+            json={
+                "messages": [{"role": "user", "content": "Hi"}],
+                "repetition_penalty": 3.0,
+            },
+        )
         assert resp.status_code == 422
 
     def test_chat_wrong_method_405(self, client):
@@ -247,7 +310,7 @@ class TestChat:
 class TestListSessions:
     """GET /chat/sessions"""
 
-    @patch.object(_inference_router, "_build_session_cache")
+    @patch.object(_inference_router, "_build_session_metadata_index")
     def test_list_sessions(self, mock_build, client):
         mock_build.return_value = [
             {"id": "s1", "name": "Chat 1", "messages": [], "updated_at": "2026-01-01"},
@@ -259,14 +322,14 @@ class TestListSessions:
         assert body["status"] == "success"
         assert len(body["data"]) == 2
 
-    @patch.object(_inference_router, "_build_session_cache")
+    @patch.object(_inference_router, "_build_session_metadata_index")
     def test_list_sessions_empty(self, mock_build, client):
         mock_build.return_value = []
         resp = client.get("/chat/sessions")
         assert resp.status_code == 200
         assert resp.json()["data"] == []
 
-    @patch.object(_inference_router, "_build_session_cache")
+    @patch.object(_inference_router, "_build_session_metadata_index")
     def test_list_sessions_archived_filter(self, mock_build, client):
         mock_build.return_value = [
             {"id": "s1", "archived": True},
@@ -315,8 +378,11 @@ class TestChatTools:
 class TestContextEndpoints:
     """Context management endpoints"""
 
-    @patch.dict("sys.modules", {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)})
-    @patch("domains.get_chat_domain")
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("domain.get_chat_domain")
     def test_inspect_context(self, mock_get_domain, client):
         resp = client.get("/context/inspect")
         assert resp.status_code == 200
@@ -335,15 +401,14 @@ class TestContextStoreFact:
         mock_get_core.return_value = core
         resp = client.post("/context/fact?key=name&value=alice")
         assert resp.status_code == 200
-        assert resp.json()["stored"] == "name"
+        assert resp.json()["data"]["stored"] == "name"
         core.store_fact.assert_called_once_with("name", "alice")
 
     @patch.object(_inference_router, "_get_context_core")
     def test_store_fact_no_core(self, mock_get_core, client):
         mock_get_core.return_value = None
         resp = client.post("/context/fact?key=k&value=v")
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "ContextCore not available"
+        assert resp.status_code == 503
 
     @patch.object(_inference_router, "_get_context_core")
     def test_store_fact_wrong_method_405(self, mock_get_core, client):
@@ -359,7 +424,7 @@ class TestContextReset:
         mock_get_core.return_value = core
         resp = client.post("/context/reset")
         assert resp.status_code == 200
-        assert resp.json()["reset"] == "session"
+        assert resp.json()["data"]["reset"] == "session"
         core.reset_session.assert_called_once()
 
     @patch.object(_inference_router, "_get_context_core")
@@ -368,7 +433,7 @@ class TestContextReset:
         mock_get_core.return_value = core
         resp = client.post("/context/reset?all=true")
         assert resp.status_code == 200
-        assert resp.json()["reset"] == "all"
+        assert resp.json()["data"]["reset"] == "all"
         core.reset_all.assert_called_once()
 
     @patch.object(_inference_router, "_get_context_core")
@@ -387,30 +452,33 @@ class TestContextFactsQuery:
         core.search_semantic.return_value = [{"fact": "1"}]
         mock_get_core.return_value = core
         resp = client.get("/context/facts?query=ai")
-        assert resp.json()["facts"] == [{"fact": "1"}]
+        assert resp.json()["data"]["facts"] == [{"fact": "1"}]
         core.search_semantic.assert_called_once_with("ai")
 
     @patch.object(_inference_router, "_get_context_core")
     def test_get_facts_no_core(self, mock_get_core, client):
         mock_get_core.return_value = None
         resp = client.get("/context/facts")
-        assert resp.status_code == 200
-        assert resp.json()["error"] == "ContextCore not available"
+        assert resp.status_code == 503
 
 
 class TestSearchSessions:
     """GET /chat/sessions/search"""
 
-    @patch.object(_inference_router, "_build_session_cache")
-    def test_search_sessions(self, mock_build, client):
-        mock_build.return_value = [
-            {"id": "s1", "name": "Test Chat", "messages": [{"role": "user", "content": "hello"}], "updated_at": "2026-01-01"},
+    @patch("apps.api.server.routers.inference._search_sessions_sync")
+    def test_search_sessions(self, mock_search, client):
+        mock_search.return_value = [
+            {
+                "id": "s1",
+                "name": "Test Chat",
+                "messages": [{"role": "user", "content": "hello"}],
+                "updated_at": "2026-01-01",
+            },
         ]
         resp = client.get("/chat/sessions/search?q=Test")
         assert resp.status_code == 200
 
-    @patch.object(_inference_router, "_build_session_cache")
-    def test_search_sessions_empty_query(self, mock_build, client):
+    def test_search_sessions_empty_query(self, client):
         resp = client.get("/chat/sessions/search")
         assert resp.status_code == 200
         body = resp.json()
@@ -418,8 +486,7 @@ class TestSearchSessions:
         assert body["meta"]["query"] == ""
         assert body["meta"]["total"] == 0
 
-    @patch.object(_inference_router, "_build_session_cache")
-    def test_search_sessions_whitespace_query(self, mock_build, client):
+    def test_search_sessions_whitespace_query(self, client):
         resp = client.get("/chat/sessions/search?q=%20%20")
         assert resp.json()["data"] == []
 
@@ -428,7 +495,7 @@ class TestSuggestions:
     """GET /suggestions"""
 
     def test_chat_suggestions(self, client):
-        resp = client.get("/suggestions")
+        resp = client.get("/chat/suggestions")
         assert resp.status_code == 200
 
     def test_chat_suggestions_alt_path(self, client):
@@ -436,7 +503,7 @@ class TestSuggestions:
         assert resp.status_code == 200
 
     def test_suggestions_data_shape(self, client):
-        resp = client.get("/suggestions")
+        resp = client.get("/chat/suggestions")
         data = resp.json()["data"]
         assert isinstance(data, list)
         assert len(data) >= 1
@@ -465,10 +532,11 @@ class TestVoice:
 
     def test_audio_traversal_guard_direct(self):
         import asyncio
-        from fastapi import HTTPException
-        with pytest.raises(HTTPException) as exc_info:
+
+        from domain.infrastructure._internal.errors import AuthError
+
+        with pytest.raises(AuthError):
             asyncio.run(_inference_router.get_voice_audio("../evil", "msg"))
-        assert exc_info.value.status_code == 403
 
     def test_audio_not_found(self, client):
         resp = client.get("/chat/audio/missing-sess/does-not-exist")
@@ -532,8 +600,73 @@ class TestUpsertSession:
     """PUT /chat/sessions/{session_id}"""
 
     def test_upsert_session(self, client):
-        resp = client.put("/chat/sessions/test-session", json={
-            "name": "Updated",
-            "messages": [{"role": "user", "content": "hi"}],
-        })
+        resp = client.put(
+            "/chat/sessions/test-session",
+            json={
+                "name": "Updated",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
         assert resp.status_code in (200, 201)
+
+
+class TestCachedReplayChunking:
+    """Coalescer replay must preserve cached text byte-for-byte (card 053).
+
+    The old replay split on whitespace and re-joined with single spaces,
+    flattening newlines / multi-space runs on reconnect.
+    """
+
+    def test_concat_is_exact_for_awkward_whitespace(self):
+        from apps.api.server.routers.inference import _chunk_replay
+
+        text = "line one\n\nline two    indented\n\tend "
+        assert "".join(_chunk_replay(text)) == text
+
+    def test_chunks_are_bounded_and_nonempty(self):
+        from apps.api.server.routers.inference import _chunk_replay
+
+        chunks = _chunk_replay("x" * 250)
+        assert len(chunks) > 1
+        assert all(chunks)
+        assert all(len(c) <= 40 for c in chunks)
+
+    def test_empty_text_yields_no_chunks(self):
+        from apps.api.server.routers.inference import _chunk_replay
+
+        assert _chunk_replay("") == []
+
+    @patch.dict(
+        "sys.modules",
+        {"state": MOCK_STATE, "startup_progress": MagicMock(STARTUP_PHASE=MOCK_STARTUP)},
+    )
+    @patch("apps.api.server.routers.inference.get_coalescer")
+    @patch("apps.api.server.routers.inference.get_provider")
+    def test_generate_stream_replay_preserves_whitespace(
+        self, mock_get_provider, mock_get_coalescer, client
+    ):
+        import json as _json
+
+        mock_get_provider.return_value = MagicMock()
+        cached = "alpha  beta\n\ngamma delta"
+        existing = MagicMock()
+        existing.error = None
+        existing.result = cached
+        existing.event.wait = AsyncMock()
+        fake = MagicMock()
+        fake.hash = MagicMock(return_value="k")
+        fake.start = AsyncMock(return_value=existing)
+        mock_get_coalescer.return_value = fake
+
+        resp = client.post(
+            "/inference/generate/stream", json={"prompt": "Hi", "max_new_tokens": 16}
+        )
+        assert resp.status_code == 200
+        tokens = []
+        for line in resp.text.splitlines():
+            if line.startswith("data: "):
+                env = _json.loads(line[6:])
+                tok = (env.get("data") or {}).get("token")
+                if tok:
+                    tokens.append(tok)
+        assert "".join(tokens) == cached

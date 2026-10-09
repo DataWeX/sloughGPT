@@ -37,7 +37,9 @@ describe('TrainingAnalyticsCard', () => {
   it('shows loading state', () => {
     mockList.mockImplementation(() => new Promise(() => {}))
     render(<TrainingAnalyticsCard addToast={mockToast} />)
-    expect(screen.getByText('Loading...')).toBeTruthy()
+    expect(screen.getByText('Training Analytics')).toBeTruthy()
+    expect(screen.queryByText('No training data yet. Complete training to see analytics.')).toBeNull()
+    expect(screen.queryByText('Total runs')).toBeNull()
   })
 
   it('shows empty state when no jobs', async () => {

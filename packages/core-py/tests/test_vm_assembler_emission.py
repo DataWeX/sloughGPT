@@ -1,5 +1,5 @@
 """
-Byte-exact emission tests for the X86Assembler in domains/shell/vm.py.
+Byte-exact emission tests for the X86Assembler in domain.shell.vm.py.
 
 Covers every previously-uncovered branch of the opcode/encoding layer:
 string ops, push/pop variants, in/out, condition-code jumps, jmp/call/far,
@@ -20,16 +20,14 @@ documented quirks:
 
 import pytest
 
-import numpy as np  # imported first to avoid a coverage+numpy extension reload quirk
-
-from domains.shell.vm import (
-    X86Assembler,
-    X86CPU,
+from domain.shell._internal.vm import (
     FLAG_ZF,
-    _parity,
+    X86CPU,
+    X86Assembler,
     _char_to_scancode,
-    _scancode_to_char,
     _default_kbd_handler,
+    _parity,
+    _scancode_to_char,
 )
 
 
@@ -42,6 +40,7 @@ def _hex(source, bits=None):
 # ══════════════════════════════════════════════════════════════════════════════
 # Prefix handling
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_operand_size_prefix_16bit_regs_in_32bit_mode():
     assert _hex("lodsw", 32) == "66ad"
@@ -64,6 +63,7 @@ def test_no_prefix_for_16bit_regs_in_16bit_mode():
 # ══════════════════════════════════════════════════════════════════════════════
 # String operations
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_misc_one_byte_ops():
     assert _hex("cld") == "fc"
@@ -110,6 +110,7 @@ def test_rep_unknown_target_emits_only_prefix():
 # ══════════════════════════════════════════════════════════════════════════════
 # Push / Pop
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_push_registers():
     assert _hex("push eax") == "6650"
@@ -160,6 +161,7 @@ def test_pop_no_operands_emits_nothing():
 # int / in / out
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_int_immediate():
     assert _hex("int 0x10") == "cd10"
     assert _hex("int 33") == "cd21"
@@ -186,6 +188,7 @@ def test_out_forms():
 # ══════════════════════════════════════════════════════════════════════════════
 # Jumps / calls
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_cc_jumps_short():
     assert _hex("jz 0") == "74fe"
@@ -259,6 +262,7 @@ def test_forward_label_resolution():
 # ══════════════════════════════════════════════════════════════════════════════
 # MOV
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_mov_reg_imm():
     assert _hex("mov al, 0x7F") == "b07f"
@@ -364,6 +368,7 @@ def test_mov_scaled_index_sib():
 # ALU
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_alu_reg_reg():
     assert _hex("add al, bl") == "00d8"
     assert _hex("or ax, bx") == "09d8"
@@ -464,6 +469,7 @@ def test_adc_sbb_emitted():
 # inc / dec / unary / shift
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_inc_dec_registers():
     assert _hex("inc eax") == "6640"
     assert _hex("dec eax") == "6648"
@@ -534,6 +540,7 @@ def test_shift_memory_forms():
 # lea / xchg / lgdt / lidt / ltr
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_lea():
     assert _hex("lea eax, [ebx+4]") == "8d4304"
     assert _hex("lea eax, [ebx+0x100]") == "8d8300010000"
@@ -574,6 +581,7 @@ def test_ltr_memory_emitted():
 # Data directives
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_db_forms():
     assert _hex("db 1, 2, 0x3F") == "01023f"
     assert _hex('db "Hello", 0') == "48656c6c6f00"
@@ -608,6 +616,7 @@ def test_times():
 # ══════════════════════════════════════════════════════════════════════════════
 # Directives and immediate parsing
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_bits_org_equ_directives():
     asm = X86Assembler()
@@ -664,27 +673,29 @@ def test_asm_run_acc_imm_short_forms():
     # decode and execute correctly in the runtime.
     asm = X86Assembler()
     cpu = X86CPU()
-    cpu.load(asm.assemble(
-        "[BITS 32]\n"
-        "add al, 5\n"          # 04 05
-        "sub al, 3\n"          # 2C 03 -> AL = 2
-        "mov eax, 0x100\n"
-        "add eax, 0x1000\n"    # 05 00 10 00 00 (imm exceeds imm8 range)
-        "sub eax, 0x1\n"       # 2D 01 00 00 00
-        "add ax, 0x1234\n"     # 66 05 34 12 (16-bit AX form)
-        "and eax, 0xFF\n"      # 25 FF 00 00 00
-        "test eax, 0x1\n"      # A9 01 00 00 00
-        "test al, 0xCC\n"      # A8 CC
-        "hlt\n",
-        org=0x1000,
-    ))
+    cpu.load(
+        asm.assemble(
+            "[BITS 32]\n"
+            "add al, 5\n"  # 04 05
+            "sub al, 3\n"  # 2C 03 -> AL = 2
+            "mov eax, 0x100\n"
+            "add eax, 0x1000\n"  # 05 00 10 00 00 (imm exceeds imm8 range)
+            "sub eax, 0x1\n"  # 2D 01 00 00 00
+            "add ax, 0x1234\n"  # 66 05 34 12 (16-bit AX form)
+            "and eax, 0xFF\n"  # 25 FF 00 00 00
+            "test eax, 0x1\n"  # A9 01 00 00 00
+            "test al, 0xCC\n"  # A8 CC
+            "hlt\n",
+            org=0x1000,
+        )
+    )
     for _ in range(8):
         cpu.step()  # up to and including `test eax, 0x1`
     assert cpu.eax == 0x33
     assert cpu._flag(FLAG_ZF) is False  # 0x33 & 1 == 1
     cpu.step()  # test al, 0xCC
     assert cpu.eax == 0x33
-    assert cpu._flag(FLAG_ZF) is True   # 0x33 & 0xCC == 0
+    assert cpu._flag(FLAG_ZF) is True  # 0x33 & 0xCC == 0
 
 
 def test_execute_acc_imm_roundtrip_32bit():
@@ -692,14 +703,16 @@ def test_execute_acc_imm_roundtrip_32bit():
     # 15/1D id), run them in the CPU, verify EAX.
     asm = X86Assembler()
     cpu = X86CPU()
-    cpu.load(asm.assemble(
-        "[BITS 32]\n"
-        "mov eax, 10\n"
-        "adc eax, 0x100\n"   # 15 00 01 00 00 (CF=0) -> 0x10A
-        "sbb eax, 0x100\n"   # 1D 00 01 00 00 (CF=0) -> 0xA
-        "hlt\n",
-        org=0x1000,
-    ))
+    cpu.load(
+        asm.assemble(
+            "[BITS 32]\n"
+            "mov eax, 10\n"
+            "adc eax, 0x100\n"  # 15 00 01 00 00 (CF=0) -> 0x10A
+            "sbb eax, 0x100\n"  # 1D 00 01 00 00 (CF=0) -> 0xA
+            "hlt\n",
+            org=0x1000,
+        )
+    )
     cpu.step()  # mov eax, 10
     cpu.step()  # adc eax, 0x100
     assert cpu.eax == 0x10A
@@ -711,16 +724,13 @@ def test_execute_acc_imm_roundtrip_32bit():
 # Execution smoke tests (real assembly -> real execution)
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 def test_execute_bits32_program():
     asm = X86Assembler()
     cpu = X86CPU()
-    cpu.load(asm.assemble("[BITS 32]\n"
-                          "mov eax, 0x1234\n"
-                          "push eax\n"
-                          "pop ebx\n"
-                          "inc eax\n"
-                          "dec eax\n"
-                          "hlt"), org=0)
+    cpu.load(
+        asm.assemble("[BITS 32]\nmov eax, 0x1234\npush eax\npop ebx\ninc eax\ndec eax\nhlt"), org=0
+    )
     cpu.run(max_steps=1000)
     assert cpu.eax == 0x1234
     assert cpu.ebx == 0x1234
@@ -730,13 +740,10 @@ def test_execute_bits32_program():
 def test_execute_jump_and_condition():
     asm = X86Assembler()
     cpu = X86CPU()
-    cpu.load(asm.assemble("[BITS 32]\n"
-                          "xor eax, eax\n"
-                          "jz done\n"
-                          "mov eax, 0xDEAD\n"
-                          "done:\n"
-                          "mov ebx, 1\n"
-                          "hlt"), org=0)
+    cpu.load(
+        asm.assemble("[BITS 32]\nxor eax, eax\njz done\nmov eax, 0xDEAD\ndone:\nmov ebx, 1\nhlt"),
+        org=0,
+    )
     cpu.run(max_steps=1000)
     assert cpu.eax == 0
     assert cpu.ebx == 1
@@ -745,6 +752,7 @@ def test_execute_jump_and_condition():
 # ══════════════════════════════════════════════════════════════════════════════
 # Keyboard / scancode helpers and parity
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_parity():
     assert _parity(0x03) is True
@@ -766,7 +774,7 @@ def test_scancode_to_char():
     assert _scancode_to_char(0x39) == " "
     assert _scancode_to_char(0x0E) == "\x08"  # backspace as control int
     assert _scancode_to_char(0x2A) == "\x00"  # unknown
-    assert _scancode_to_char(999) == "\x00"   # out of range
+    assert _scancode_to_char(999) == "\x00"  # out of range
 
 
 def test_default_kbd_handler():
@@ -787,6 +795,7 @@ def test_default_kbd_handler():
 # These methods are never called by assemble() at runtime (grep-proven),
 # so they can only be covered via direct private-method invocation.
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 def test_pfx_8bit_reg_returns_false():
     asm = X86Assembler()
@@ -1012,3 +1021,220 @@ def test_alu_mem_imm_displacement_encodes_mod_bits():
 def test_alu_byte_mem_imm_uses_byte_opcode():
     assert _hex("add byte [ebx], 5", 32) == "800305"
     assert _hex("cmp byte [eax], 1", 32) == "803801"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 16-bit ALU reg <- [mem] (L4545-4558)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_alu_reg16_mem():
+    # ADD r16, r/m16 — 66 03 /r  (assembler hardcodes 0x66 for 16-bit reg←mem)
+    assert _hex("add ax, [ebx]") == "660303"
+    assert _hex("add cx, [ebx+4]") == "66034b04"
+    # SUB r16, r/m16 — 66 2B /r
+    assert _hex("sub dx, [eax]") == "662b10"
+    # OR r16, r/m16 — 66 0B /r
+    assert _hex("or si, [ebx]") == "660b33"
+    # AND r16, r/m16 — 66 23 /r
+    assert _hex("and di, [eax+8]") == "66237808"
+    # XOR r16, r/m16 — 66 33 /r
+    assert _hex("xor ax, [ebx]") == "663303"
+    # CMP r16, r/m16 — 66 3B /r
+    assert _hex("cmp bx, [eax]") == "663b18"
+    # TEST r16, r/m16 — 66 85 /r
+    assert _hex("test cx, [ebx]") == "66850b"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 8-bit ALU reg <- [mem] non-test paths (L4559-4570)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_alu_reg8_mem():
+    # ADD r8, r/m8 — 02 /r
+    assert _hex("add al, [ebx]") == "0203"
+    assert _hex("add cl, [eax+4]") == "024804"
+    # SUB r8, r/m8 — 2A /r
+    assert _hex("sub dl, [ebx]") == "2a13"
+    # OR r8, r/m8 — 0A /r
+    assert _hex("or bl, [eax]") == "0a18"
+    # AND r8, r/m8 — 22 /r
+    assert _hex("and ah, [ebx]") == "2223"
+    # XOR r8, r/m8 — 32 /r
+    assert _hex("xor al, [eax+8]") == "324008"
+    # CMP r8, r/m8 — 3A /r
+    assert _hex("cmp al, [ebx]") == "3a03"
+    # TEST r8, r/m8 — 84 /r (already covered but adding for completeness)
+    assert _hex("test al, [ebx]") == "8403"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 16-bit ALU reg, imm (L4625-4658)
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_alu_reg16_imm():
+    # ADD r16, imm16 — 81 C0+digit iw (general form, non-accumulator, 16-bit mode)
+    assert _hex("add bx, 0x1234") == "81c33412"
+    # ADD AX, imm16 — 05 iw (accumulator short form, imm > 127)
+    assert _hex("add ax, 0x1234") == "053412"
+    # SUB r16, imm8 — 83 E8 ib (sign-extended)
+    assert _hex("sub cx, 5") == "83e905"
+    # OR r16, imm16 — 81 C9 iw
+    assert _hex("or dx, 0x1234") == "81ca3412"
+    # AND r16, imm16 — 81 E4 iw
+    assert _hex("and sp, 0x1234") == "81e43412"
+    # XOR r16, imm16 — 81 F1 iw
+    assert _hex("xor si, 0x1234") == "81f63412"
+    # CMP r16, imm16 — 81 F9 iw
+    assert _hex("cmp di, 0x1234") == "81ff3412"
+    # TEST AX, imm16 — A9 iw (accumulator short form)
+    assert _hex("test ax, 0x1234") == "a93412"
+    # TEST r16, imm16 — F7 C0+digit iw (general form)
+    assert _hex("test bx, 0x1234") == "f7c33412"
+    # Immediate within imm8 range uses 83 sign-extended form
+    assert _hex("add bx, 5") == "83c305"
+    assert _hex("sub ax, 0x7F") == "83e87f"
+    # TEST AX with small immediate still uses A9 iw (TEST doesn't have imm8 form)
+    assert _hex("test ax, 5") == "a90500"
+
+
+# ── MOV memory operand emission coverage ─────────────────────────────────────
+
+
+class TestAssemblerMovMemoryEmission:
+    """Tests for uncovered MOV emission paths: [mem], r32/r16, word/byte size prefix, etc."""
+
+    def _hex(self, src):
+        return X86Assembler().assemble(f"[BITS 32]\n{src}", org=0).hex()
+
+    def test_mov_eax_direct_addr(self):
+        assert self._hex("mov [0x1000], eax") == "a300100000"
+
+    def test_mov_ecx_direct_addr(self):
+        assert self._hex("mov [0x1000], ecx") == "890d00100000"
+
+    def test_mov_ebx_direct_addr(self):
+        assert self._hex("mov [0x1000], ebx") == "891d00100000"
+
+    def test_mov_ax_direct_addr_16bit(self):
+        assert self._hex("mov [0x1000], ax") == "66a300100000"
+
+    def test_mov_bx_direct_addr_16bit(self):
+        assert self._hex("mov [0x1000], bx") == "66891d00100000"
+
+    def test_mov_ecx_from_abs_addr(self):
+        assert self._hex("mov ecx, [0x1000]") == "8b0d00100000"
+
+    def test_mov_ebx_from_abs_addr(self):
+        assert self._hex("mov ebx, [0x1000]") == "8b1d00100000"
+
+    def test_mov_word_imm(self):
+        assert self._hex("mov [0x1000], word 0x1234") == "66c705001000003412"
+
+    def test_mov_byte_imm(self):
+        assert self._hex("mov [0x1000], byte 0x42") == "c6050010000042"
+
+    def test_mov_dword_imm(self):
+        assert self._hex("mov [0x1000], dword 0xDEADBEEF") == "c70500100000efbeadde"
+
+    def test_mov_bx_from_abs_addr_16bit(self):
+        assert self._hex("mov bx, [0x1000]") == "668b1d00100000"
+
+    def test_mov_dx_from_abs_addr_16bit(self):
+        assert self._hex("mov dx, [0x1000]") == "668b1500100000"
+
+    def test_mov_ecx_from_reg_indirect(self):
+        assert self._hex("mov ecx, [eax]") == "8b08"
+
+    def test_mov_eax_from_ecx_indirect(self):
+        assert self._hex("mov eax, [ecx]") == "8b01"
+
+    def test_mov_eax_byte(self):
+        assert self._hex("mov al, [0x1000]") == "8a0500100000"
+
+    def test_mov_ecx_from_esi_indirect(self):
+        assert self._hex("mov ecx, [esi]") == "8b0e"
+
+    def test_mov_edi_from_eax_indirect(self):
+        assert self._hex("mov edi, [eax]") == "8b38"
+
+
+# ── XCHG memory operand emission coverage ────────────────────────────────────
+
+
+class TestAssemblerXchgMemory:
+    """XCHG with memory operands — covers lines 5031-5058."""
+
+    def _hex(self, src):
+        return X86Assembler().assemble(f"[BITS 32]\n{src}", org=0).hex()
+
+    def test_xchg_eax_ecx_mem(self):
+        assert self._hex("xchg ecx, [eax]") == "8708"
+
+    def test_xchg_ecx_eax_mem(self):
+        assert self._hex("xchg [eax], ecx") == "8708"
+
+    def test_xchg_ebx_mem(self):
+        assert self._hex("xchg ebx, [eax]") == "8718"
+
+    def test_xchg_ecx_mem_direct(self):
+        assert self._hex("xchg ecx, [0x1000]") == "870d00100000"
+
+    def test_xchg_bx_mem(self):
+        assert self._hex("xchg bx, [eax]") == "668718"
+
+    def test_xchg_al_mem(self):
+        assert self._hex("xchg al, [eax]") == "8600"
+
+    def test_xchg_mem_al(self):
+        assert self._hex("xchg [eax], al") == "8600"
+
+
+# ── LGDT/LIDT/LTR emission coverage ─────────────────────────────────────────
+
+
+class TestAssemblerSystemInstructions:
+    """LGDT, LIDT, LTR emission."""
+
+    def _hex(self, src):
+        return X86Assembler().assemble(f"[BITS 32]\n{src}", org=0).hex()
+
+    def test_lgdt(self):
+        assert self._hex("lgdt [0x1000]") == "0f011500100000"
+
+    def test_lidt(self):
+        assert self._hex("lidt [0x1000]") == "0f011d00100000"
+
+    def test_ltr_ax(self):
+        assert self._hex("ltr ax") == "0f00d8"
+
+    def test_ltr_bx(self):
+        assert self._hex("ltr bx") == "0f00db"
+
+    def test_lgdt_16bit(self):
+        result = X86Assembler().assemble("[BITS 16]\nlgdt [0x1000]", org=0).hex()
+        assert result.startswith("670f0115")
+
+
+# ── MOV with CR/DR emission coverage ────────────────────────────────────────
+
+
+class TestAssemblerMovCRDR:
+    """MOV CR/DR emission paths."""
+
+    def _hex(self, src):
+        return X86Assembler().assemble(f"[BITS 32]\n{src}", org=0).hex()
+
+    def test_mov_cr0_eax(self):
+        assert self._hex("mov cr0, eax") == "0f22c0"
+
+    def test_mov_eax_cr0(self):
+        assert self._hex("mov eax, cr0") == "0f20c0"
+
+    def test_mov_dr0_eax(self):
+        assert self._hex("mov dr0, eax") == "0f23c0"
+
+    def test_mov_eax_dr0(self):
+        assert self._hex("mov eax, dr0") == "0f21c0"

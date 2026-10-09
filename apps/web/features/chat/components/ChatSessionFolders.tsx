@@ -135,6 +135,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
           size="icon-sm"
           className="h-5 w-5"
           onClick={() => setCreating(!creating)}
+          aria-label="Create folder"
         >
           <IconPlus className="h-3 w-3" />
         </Button>
@@ -146,7 +147,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
             type="text"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Folder name..."
+            placeholder="Folder name..." aria-label="Folder name"
             className="flex-1 text-xs bg-transparent border rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary/50"
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           />
@@ -156,6 +157,7 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
             className="h-6 w-6"
             onClick={handleCreate}
             disabled={!newName.trim()}
+            aria-label="Confirm create folder"
           >
             <IconCheck className="h-3 w-3" />
           </Button>
@@ -193,9 +195,10 @@ export const ChatSessionFolders = memo(function ChatSessionFolders({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                       onClick={() => handleDelete(folder.id)}
                       title="Delete folder"
+                      aria-label="Delete folder"
                     >
                       <IconX className="h-3 w-3" />
                     </Button>

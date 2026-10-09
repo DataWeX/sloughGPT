@@ -14,34 +14,19 @@ passed explicitly — callers never need to thread it manually.
 
 from __future__ import annotations
 
-import contextvars
 import logging
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, Field
+
+from domain.infrastructure.correlation import get_correlation_id
 
 _audit_logger = logging.getLogger("audit")
 
 T = TypeVar("T")
 
-# Per-request correlation ID, set by CorrelationIdMiddleware.
-# error_response() reads this automatically when correlation_id is not passed.
-_correlation_id: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-    "_correlation_id", default=None,
-)
 
-
-def set_correlation_id(cid: str | None) -> None:
-    """Store the current request's correlation ID in context."""
-    _correlation_id.set(cid)
-
-
-def get_correlation_id() -> str | None:
-    """Return the current request's correlation ID, or ``None``."""
-    return _correlation_id.get()
-
-
-class StandardResponse(BaseModel, Generic[T]):
+class StandardResponse[T](BaseModel):
     """Unified response envelope for all API endpoints.
 
     Attributes:
@@ -53,8 +38,8 @@ class StandardResponse(BaseModel, Generic[T]):
 
     status: str = "success"
     data: T = Field(default_factory=dict)
-    message: Optional[str] = None
-    meta: Optional[dict[str, Any]] = None
+    message: str | None = None
+    meta: dict[str, Any] | None = None
 
 
 def success_response(
@@ -152,9 +137,8 @@ def raise_error(
 ) -> None:
     """Raise an AppError that the global exception handler converts to JSON.
 
-    Maps router error codes to the AppError subclass hierarchy so the
-    existing exception_handlers.py catches and formats the response
-    with the correct HTTP status.
+    Uses the unified ERROR_REGISTRY from domain.infrastructure._internal.errors to
+    resolve the correct AppError subclass and HTTP status for each code.
 
     Args:
         message: Human-readable error description.
@@ -165,33 +149,26 @@ def raise_error(
     Raises:
         AppError (or subclass) — never returns.
     """
-    # Lazy import to avoid circular dependency at module load time
-    from domains.infrastructure.errors import (
+    from domain.infrastructure._internal.errors import (
+        ERROR_REGISTRY,
         AppError,
-        NotFoundError,
-        ValidationError as AppValidationError,
-        AuthError,
-        ResourceExhaustedError,
-        ConfigError,
+        ErrorCode,
     )
 
-    # Map router error codes → AppError subclasses + HTTP status
-    _code_map: dict[str, tuple[type[AppError], int]] = {
-        "E_NOT_FOUND":        (NotFoundError, 404),
-        "E_VAL_REQUEST":      (AppValidationError, 422),
-        "E_VAL_FIELD":        (AppValidationError, 422),
-        "E_BAD_REQUEST":      (AppValidationError, 400),
-        "E_AUTH_MISSING":     (AuthError, 401),
-        "E_AUTH_FORBIDDEN":   (AuthError, 403),
-        "E_INFRA_BUSY":       (ResourceExhaustedError, 409),
-        "E_INFRA_RATE_LIMIT": (ResourceExhaustedError, 429),
-        "E_INFRA_TIMEOUT":    (ResourceExhaustedError, 408),
-        "E_INFRA_STARTUP":    (ConfigError, 503),
-        "E_INFRA_REGISTRY":   (ConfigError, 503),
-        "E_DOMAIN":           (AppError, status_code or 400),
-    }
+    # Look up in the unified registry
+    try:
+        ec = ErrorCode(code)
+        class_name, default_status, _recoverable, _user_msg = ERROR_REGISTRY[ec]
+    except (ValueError, KeyError):
+        # Unknown code — fall back to generic AppError
+        class_name = "AppError"
+        default_status = status_code or 400
 
-    exc_cls, default_status = _code_map.get(code, (AppError, status_code or 400))
+    # Import the correct class dynamically
+    import domain.infrastructure._internal.errors as _err_mod
+
+    exc_cls = getattr(_err_mod, class_name, AppError)
+
     http_status = status_code or default_status
 
     raise exc_cls(
@@ -208,7 +185,8 @@ def safe_audit_log(
     resource: str = "",
     detail: str = "",
     user: str = "anonymous",
-    extra: Optional[dict] = None,
+    extra: dict | None = None,
+    workspace_id: str = "",
     **kwargs: Any,
 ) -> None:
     """Log an audit event without crashing on failure.
@@ -222,44 +200,92 @@ def safe_audit_log(
         detail: Human-readable detail string.
         user: User identifier (default: "anonymous").
         extra: Optional extra dict to forward to the audit logger.
+        workspace_id: Workspace scope for the event.
         **kwargs: Additional fields merged into ``extra``.
     """
     try:
         from infrastructure.auth import get_audit_logger
+
         merged = {**(extra or {}), **kwargs} if kwargs else extra
-        get_audit_logger().log(action, user=user, resource=resource, detail=detail, extra=merged)
+        get_audit_logger().log(
+            action,
+            user=user,
+            resource=resource,
+            detail=detail,
+            extra=merged,
+            workspace_id=workspace_id,
+        )
     except Exception:
         _audit_logger.info(
-            "audit:%s resource=%s detail=%s %s",
-            action, resource, detail,
+            "audit:%s resource=%s detail=%s ws=%s %s",
+            action,
+            resource,
+            detail,
+            workspace_id or "global",
             " ".join(f"{k}={v}" for k, v in (extra or kwargs).items()) if (extra or kwargs) else "",
         )
 
 
 def classify_and_raise(e: Exception, source: str = "router") -> None:
-    """Classify an exception, emit an error event, and raise HTTPException.
+    """Classify an exception and raise the corresponding AppError.
 
-    Replaces the repeated ``classify_exception + emit_error_event + raise_error``
-    blocks across router files.
+    This is the canonical error handling pattern for router endpoints:
+
+        try:
+            ...
+        except Exception as e:
+            classify_and_raise(e, source="router.chat")
+
+    The exception handler (NOT this function) emits the EventBus event.
+    This avoids double emission.
 
     Args:
         e: The caught exception.
         source: Identifier for the error source.
 
     Raises:
-        HTTPException: Always, with classified error details.
+        AppError (or subclass) — never returns.
     """
-    from fastapi import HTTPException as _HTTPException
+    from domain.infrastructure._internal.errors import AppError as _AppError
+    from domain.infrastructure._internal.errors import classify_exception
+
     try:
-        from domains.infrastructure.errors import classify_exception, emit_error_event
         err = classify_exception(e)
-        emit_error_event(err, source=source)
-        raise _HTTPException(status_code=err.http_status, detail=err.user_message)
-    except _HTTPException:
+        # Set source for EventBus emission in the exception handler
+        err.source = source
+        if isinstance(err, _AppError):
+            raise err
+        raise_error(err.user_message, err.code, status_code=err.http_status, details=err.details)
+    except _AppError:
         raise
     except Exception:
         _audit_logger.warning(
             "classify_and_raise fallback: source=%s error=%s",
-            source, e, exc_info=True,
+            source,
+            e,
+            exc_info=True,
         )
-        raise _HTTPException(status_code=500, detail=str(e))
+        raise_error(str(e), "E_DOMAIN", status_code=500)
+
+
+def endpoint(source: str):
+    """Decorator that wraps a router method with try/except + classify_and_raise.
+
+    Usage:
+        @endpoint("learner.search")
+        def learn_search(self, req: ...):
+            ...
+    """
+    import functools
+
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as e:
+                classify_and_raise(e, source=source)
+
+        return wrapper
+
+    return decorator

@@ -1,0 +1,11026 @@
+{
+ "note": "Route + OpenAPI baseline for scripts/check_contract.py \u2014 report-only drift signal, regenerated with --write-baseline.",
+ "routers": 53,
+ "count": 555,
+ "routes": [
+  [
+   "/",
+   "GET"
+  ],
+  [
+   "/agents",
+   "GET"
+  ],
+  [
+   "/agents",
+   "POST"
+  ],
+  [
+   "/agents/orchestrate",
+   "POST"
+  ],
+  [
+   "/agents/runs",
+   "GET"
+  ],
+  [
+   "/agents/runs/{run_id}",
+   "GET"
+  ],
+  [
+   "/agents/{agent_id}",
+   "DELETE"
+  ],
+  [
+   "/agents/{agent_id}",
+   "GET"
+  ],
+  [
+   "/agents/{agent_id}",
+   "PUT"
+  ],
+  [
+   "/agents/{agent_id}/execute",
+   "POST"
+  ],
+  [
+   "/auth/login",
+   "POST"
+  ],
+  [
+   "/auth/me",
+   "GET"
+  ],
+  [
+   "/auth/refresh",
+   "POST"
+  ],
+  [
+   "/auth/register",
+   "POST"
+  ],
+  [
+   "/auth/token",
+   "POST"
+  ],
+  [
+   "/auth/verify",
+   "POST"
+  ],
+  [
+   "/benchmark/history/clear",
+   "POST"
+  ],
+  [
+   "/benchmark/metrics",
+   "GET"
+  ],
+  [
+   "/benchmark/perplexity",
+   "POST"
+  ],
+  [
+   "/benchmark/program",
+   "GET"
+  ],
+  [
+   "/benchmark/quality",
+   "GET"
+  ],
+  [
+   "/benchmark/responses",
+   "GET"
+  ],
+  [
+   "/benchmark/run",
+   "POST"
+  ],
+  [
+   "/benchmark/score",
+   "POST"
+  ],
+  [
+   "/benchmark/stats",
+   "GET"
+  ],
+  [
+   "/benchmark/{model_id}",
+   "GET"
+  ],
+  [
+   "/cancel-all",
+   "POST"
+  ],
+  [
+   "/cancel/{op_id}",
+   "POST"
+  ],
+  [
+   "/chat",
+   "POST"
+  ],
+  [
+   "/chat",
+   "POST"
+  ],
+  [
+   "/chat/active",
+   "GET"
+  ],
+  [
+   "/chat/addons",
+   "GET"
+  ],
+  [
+   "/chat/audio/{session_id}/{message_id}",
+   "GET"
+  ],
+  [
+   "/chat/control",
+   "POST"
+  ],
+  [
+   "/chat/health",
+   "GET"
+  ],
+  [
+   "/chat/sessions",
+   "GET"
+  ],
+  [
+   "/chat/sessions",
+   "POST"
+  ],
+  [
+   "/chat/sessions/current",
+   "GET"
+  ],
+  [
+   "/chat/sessions/search",
+   "GET"
+  ],
+  [
+   "/chat/sessions/{session_id}",
+   "DELETE"
+  ],
+  [
+   "/chat/sessions/{session_id}",
+   "GET"
+  ],
+  [
+   "/chat/sessions/{session_id}",
+   "PUT"
+  ],
+  [
+   "/chat/stream",
+   "POST"
+  ],
+  [
+   "/chat/stream",
+   "POST"
+  ],
+  [
+   "/chat/suggestions",
+   "GET"
+  ],
+  [
+   "/chat/tools",
+   "GET"
+  ],
+  [
+   "/chat/voice/{session_id}",
+   "POST"
+  ],
+  [
+   "/chat/{session_id}/cancel",
+   "POST"
+  ],
+  [
+   "/chat/{session_id}/regenerate",
+   "POST"
+  ],
+  [
+   "/cloud-training/jobs",
+   "GET"
+  ],
+  [
+   "/cloud-training/submit",
+   "POST"
+  ],
+  [
+   "/cloud-training/{job_id}/cancel",
+   "POST"
+  ],
+  [
+   "/cloud-training/{job_id}/status",
+   "GET"
+  ],
+  [
+   "/companion/",
+   "DELETE"
+  ],
+  [
+   "/companion/",
+   "GET"
+  ],
+  [
+   "/companion/chat",
+   "POST"
+  ],
+  [
+   "/companion/personality",
+   "PATCH"
+  ],
+  [
+   "/companion/personality",
+   "POST"
+  ],
+  [
+   "/companion/preset",
+   "POST"
+  ],
+  [
+   "/companion/presets",
+   "GET"
+  ],
+  [
+   "/companion/presets",
+   "POST"
+  ],
+  [
+   "/companion/presets/{preset_id}",
+   "DELETE"
+  ],
+  [
+   "/companion/prompt",
+   "GET"
+  ],
+  [
+   "/config/generation",
+   "GET"
+  ],
+  [
+   "/config/generation",
+   "PATCH"
+  ],
+  [
+   "/config/generation",
+   "PUT"
+  ],
+  [
+   "/context/fact",
+   "POST"
+  ],
+  [
+   "/context/facts",
+   "GET"
+  ],
+  [
+   "/context/inspect",
+   "GET"
+  ],
+  [
+   "/context/reset",
+   "POST"
+  ],
+  [
+   "/contracts",
+   "GET"
+  ],
+  [
+   "/datasets",
+   "GET"
+  ],
+  [
+   "/datasets",
+   "POST"
+  ],
+  [
+   "/datasets/convert-to-messages",
+   "POST"
+  ],
+  [
+   "/datasets/from-chat",
+   "POST"
+  ],
+  [
+   "/datasets/import/batch",
+   "POST"
+  ],
+  [
+   "/datasets/import/csv",
+   "POST"
+  ],
+  [
+   "/datasets/import/github",
+   "POST"
+  ],
+  [
+   "/datasets/import/huggingface",
+   "POST"
+  ],
+  [
+   "/datasets/import/isbn",
+   "POST"
+  ],
+  [
+   "/datasets/import/kaggle",
+   "POST"
+  ],
+  [
+   "/datasets/import/local",
+   "POST"
+  ],
+  [
+   "/datasets/import/url",
+   "POST"
+  ],
+  [
+   "/datasets/search",
+   "GET"
+  ],
+  [
+   "/datasets/search/books",
+   "GET"
+  ],
+  [
+   "/datasets/search/github",
+   "GET"
+  ],
+  [
+   "/datasets/{dataset_id}",
+   "DELETE"
+  ],
+  [
+   "/datasets/{dataset_id}",
+   "GET"
+  ],
+  [
+   "/datasets/{dataset_id}",
+   "PATCH"
+  ],
+  [
+   "/datasets/{dataset_id}/data",
+   "POST"
+  ],
+  [
+   "/datasets/{dataset_id}/export",
+   "POST"
+  ],
+  [
+   "/datasets/{dataset_id}/preview",
+   "GET"
+  ],
+  [
+   "/datasets/{dataset_id}/quality",
+   "GET"
+  ],
+  [
+   "/datasets/{dataset_id}/stats",
+   "GET"
+  ],
+  [
+   "/datasets/{dataset_id}/versions",
+   "GET"
+  ],
+  [
+   "/datasets/{dataset_id}/versions",
+   "POST"
+  ],
+  [
+   "/datasets/{dataset_id}/versions/{timestamp}",
+   "POST"
+  ],
+  [
+   "/docstore/message-notes",
+   "GET"
+  ],
+  [
+   "/docstore/message-notes",
+   "POST"
+  ],
+  [
+   "/docstore/message-notes/search",
+   "GET"
+  ],
+  [
+   "/docstore/message-notes/{session_id}/{message_id}",
+   "DELETE"
+  ],
+  [
+   "/docstore/{collection}",
+   "DELETE"
+  ],
+  [
+   "/docstore/{collection}",
+   "GET"
+  ],
+  [
+   "/docstore/{collection}/bulk",
+   "POST"
+  ],
+  [
+   "/docstore/{collection}/{doc_id}",
+   "DELETE"
+  ],
+  [
+   "/docstore/{collection}/{doc_id}",
+   "GET"
+  ],
+  [
+   "/docstore/{collection}/{doc_id}",
+   "PATCH"
+  ],
+  [
+   "/docstore/{collection}/{doc_id}",
+   "PUT"
+  ],
+  [
+   "/errors/clear",
+   "DELETE"
+  ],
+  [
+   "/errors/export",
+   "GET"
+  ],
+  [
+   "/errors/grouped",
+   "GET"
+  ],
+  [
+   "/errors/log",
+   "GET"
+  ],
+  [
+   "/errors/log",
+   "POST"
+  ],
+  [
+   "/errors/logs/ingest",
+   "POST"
+  ],
+  [
+   "/errors/recent",
+   "GET"
+  ],
+  [
+   "/errors/stream",
+   "GET"
+  ],
+  [
+   "/errors/trends",
+   "GET"
+  ],
+  [
+   "/errors/unread",
+   "GET"
+  ],
+  [
+   "/experiments",
+   "GET"
+  ],
+  [
+   "/experiments",
+   "POST"
+  ],
+  [
+   "/experiments/compare",
+   "GET"
+  ],
+  [
+   "/experiments/{experiment_id}",
+   "DELETE"
+  ],
+  [
+   "/experiments/{experiment_id}",
+   "GET"
+  ],
+  [
+   "/experiments/{experiment_id}/complete",
+   "POST"
+  ],
+  [
+   "/experiments/{experiment_id}/data",
+   "GET"
+  ],
+  [
+   "/experiments/{experiment_id}/log_metric",
+   "POST"
+  ],
+  [
+   "/experiments/{experiment_id}/log_param",
+   "POST"
+  ],
+  [
+   "/experiments/{experiment_id}/runs",
+   "GET"
+  ],
+  [
+   "/feedback",
+   "POST"
+  ],
+  [
+   "/feedback/conversations",
+   "GET"
+  ],
+  [
+   "/feedback/conversations",
+   "POST"
+  ],
+  [
+   "/feedback/conversations/{conv_id}",
+   "DELETE"
+  ],
+  [
+   "/feedback/conversations/{conv_id}",
+   "GET"
+  ],
+  [
+   "/feedback/conversations/{conv_id}",
+   "PATCH"
+  ],
+  [
+   "/feedback/stats/summary",
+   "GET"
+  ],
+  [
+   "/feedback/workflow-record",
+   "POST"
+  ],
+  [
+   "/feedback/{message_id}",
+   "GET"
+  ],
+  [
+   "/files",
+   "GET"
+  ],
+  [
+   "/files/search",
+   "GET"
+  ],
+  [
+   "/files/upload",
+   "POST"
+  ],
+  [
+   "/files/{file_id}",
+   "DELETE"
+  ],
+  [
+   "/files/{file_id}",
+   "GET"
+  ],
+  [
+   "/files/{file_id}/ingest",
+   "POST"
+  ],
+  [
+   "/images/gallery",
+   "GET"
+  ],
+  [
+   "/images/generate",
+   "POST"
+  ],
+  [
+   "/images/styles",
+   "GET"
+  ],
+  [
+   "/infer",
+   "POST"
+  ],
+  [
+   "/infer/detokenize",
+   "POST"
+  ],
+  [
+   "/infer/embed",
+   "POST"
+  ],
+  [
+   "/infer/health",
+   "GET"
+  ],
+  [
+   "/infer/info",
+   "GET"
+  ],
+  [
+   "/infer/stream",
+   "POST"
+  ],
+  [
+   "/infer/tokenize",
+   "POST"
+  ],
+  [
+   "/inference/generate",
+   "POST"
+  ],
+  [
+   "/inference/generate/stream",
+   "POST"
+  ],
+  [
+   "/info",
+   "GET"
+  ],
+  [
+   "/info/soul",
+   "GET"
+  ],
+  [
+   "/knowledge",
+   "GET"
+  ],
+  [
+   "/knowledge",
+   "POST"
+  ],
+  [
+   "/knowledge/adapter-status",
+   "GET"
+  ],
+  [
+   "/knowledge/batch",
+   "POST"
+  ],
+  [
+   "/knowledge/batch-delete",
+   "POST"
+  ],
+  [
+   "/knowledge/bulk-ingest",
+   "POST"
+  ],
+  [
+   "/knowledge/categorize",
+   "POST"
+  ],
+  [
+   "/knowledge/check-duplicate",
+   "POST"
+  ],
+  [
+   "/knowledge/context",
+   "GET"
+  ],
+  [
+   "/knowledge/embedder-status",
+   "GET"
+  ],
+  [
+   "/knowledge/gaps",
+   "GET"
+  ],
+  [
+   "/knowledge/ingest-file",
+   "POST"
+  ],
+  [
+   "/knowledge/ingest-url",
+   "POST"
+  ],
+  [
+   "/knowledge/kg/pipeline-stats",
+   "GET"
+  ],
+  [
+   "/knowledge/kg/sync",
+   "POST"
+  ],
+  [
+   "/knowledge/label",
+   "GET"
+  ],
+  [
+   "/knowledge/rag/clear",
+   "POST"
+  ],
+  [
+   "/knowledge/rag/documents",
+   "GET"
+  ],
+  [
+   "/knowledge/rag/ingest",
+   "POST"
+  ],
+  [
+   "/knowledge/rag/query",
+   "POST"
+  ],
+  [
+   "/knowledge/rag/stats",
+   "GET"
+  ],
+  [
+   "/knowledge/rag/verify",
+   "POST"
+  ],
+  [
+   "/knowledge/reviews/due",
+   "GET"
+  ],
+  [
+   "/knowledge/reviews/{item_id}/schedule",
+   "POST"
+  ],
+  [
+   "/knowledge/search",
+   "GET"
+  ],
+  [
+   "/knowledge/search-files",
+   "POST"
+  ],
+  [
+   "/knowledge/stats",
+   "GET"
+  ],
+  [
+   "/knowledge/suggest-topic",
+   "POST"
+  ],
+  [
+   "/knowledge/topics",
+   "GET"
+  ],
+  [
+   "/knowledge/train-adapter",
+   "POST"
+  ],
+  [
+   "/knowledge/train-embedder",
+   "POST"
+  ],
+  [
+   "/knowledge/{item_id}",
+   "DELETE"
+  ],
+  [
+   "/knowledge/{item_id}",
+   "PATCH"
+  ],
+  [
+   "/knowledge/{item_id}/related",
+   "GET"
+  ],
+  [
+   "/learn/deploy",
+   "POST"
+  ],
+  [
+   "/learn/evaluate",
+   "POST"
+  ],
+  [
+   "/learn/feed",
+   "GET"
+  ],
+  [
+   "/learn/feed",
+   "POST"
+  ],
+  [
+   "/learn/ingest",
+   "POST"
+  ],
+  [
+   "/learn/ingest-url",
+   "POST"
+  ],
+  [
+   "/learn/knowledge",
+   "GET"
+  ],
+  [
+   "/learn/search",
+   "POST"
+  ],
+  [
+   "/learn/status",
+   "GET"
+  ],
+  [
+   "/learn/train",
+   "POST"
+  ],
+  [
+   "/lora-eval/aggregate",
+   "POST"
+  ],
+  [
+   "/lora-eval/history",
+   "GET"
+  ],
+  [
+   "/lora-eval/run",
+   "POST"
+  ],
+  [
+   "/memory/archive",
+   "GET"
+  ],
+  [
+   "/memory/archive/prune",
+   "POST"
+  ],
+  [
+   "/memory/archive/stats",
+   "GET"
+  ],
+  [
+   "/memory/clear",
+   "POST"
+  ],
+  [
+   "/memory/config",
+   "GET"
+  ],
+  [
+   "/memory/config",
+   "POST"
+  ],
+  [
+   "/memory/consolidate",
+   "POST"
+  ],
+  [
+   "/memory/list",
+   "GET"
+  ],
+  [
+   "/memory/remember",
+   "POST"
+  ],
+  [
+   "/memory/search",
+   "GET"
+  ],
+  [
+   "/memory/stats",
+   "GET"
+  ],
+  [
+   "/memory/store",
+   "POST"
+  ],
+  [
+   "/memory/{item_id}",
+   "DELETE"
+  ],
+  [
+   "/memory/{item_id}",
+   "PATCH"
+  ],
+  [
+   "/meta-weights/get",
+   "POST"
+  ],
+  [
+   "/meta-weights/ping",
+   "GET"
+  ],
+  [
+   "/meta-weights/stats",
+   "GET"
+  ],
+  [
+   "/mobile/conversations",
+   "GET"
+  ],
+  [
+   "/mobile/conversations/{session_id}",
+   "GET"
+  ],
+  [
+   "/mobile/dashboard",
+   "GET"
+  ],
+  [
+   "/mobile/health",
+   "GET"
+  ],
+  [
+   "/mobile/knowledge",
+   "GET"
+  ],
+  [
+   "/mobile/knowledge",
+   "POST"
+  ],
+  [
+   "/mobile/knowledge/{item_id}",
+   "DELETE"
+  ],
+  [
+   "/mobile/knowledge/{item_id}",
+   "PATCH"
+  ],
+  [
+   "/mobile/models",
+   "GET"
+  ],
+  [
+   "/mobile/models/switch",
+   "POST"
+  ],
+  [
+   "/mobile/notifications/cleanup",
+   "POST"
+  ],
+  [
+   "/mobile/notifications/devices",
+   "GET"
+  ],
+  [
+   "/mobile/notifications/history",
+   "GET"
+  ],
+  [
+   "/mobile/notifications/register",
+   "POST"
+  ],
+  [
+   "/mobile/notifications/send",
+   "POST"
+  ],
+  [
+   "/mobile/notifications/unregister",
+   "POST"
+  ],
+  [
+   "/mobile/notify/training-complete",
+   "POST"
+  ],
+  [
+   "/mobile/sync",
+   "POST"
+  ],
+  [
+   "/mobile/sync/status",
+   "GET"
+  ],
+  [
+   "/mobile/train",
+   "POST"
+  ],
+  [
+   "/mobile/train/auto-config",
+   "PATCH"
+  ],
+  [
+   "/mobile/train/auto-status",
+   "GET"
+  ],
+  [
+   "/mobile/train/compact",
+   "POST"
+  ],
+  [
+   "/mobile/train/export",
+   "GET"
+  ],
+  [
+   "/mobile/train/from-sessions",
+   "POST"
+  ],
+  [
+   "/mobile/train/pair/{pair_id}",
+   "DELETE"
+  ],
+  [
+   "/mobile/train/pair/{pair_id}",
+   "PATCH"
+  ],
+  [
+   "/mobile/train/pairs",
+   "GET"
+  ],
+  [
+   "/mobile/train/pairs/bulk",
+   "DELETE"
+  ],
+  [
+   "/mobile/train/pending",
+   "GET"
+  ],
+  [
+   "/mobile/train/session/{session_id}",
+   "GET"
+  ],
+  [
+   "/mobile/train/stats",
+   "GET"
+  ],
+  [
+   "/mobile/train/synced",
+   "DELETE"
+  ],
+  [
+   "/model-stack",
+   "GET"
+  ],
+  [
+   "/model-stack/base",
+   "POST"
+  ],
+  [
+   "/model-stack/clear",
+   "POST"
+  ],
+  [
+   "/model-stack/push",
+   "POST"
+  ],
+  [
+   "/model-stack/{name}",
+   "DELETE"
+  ],
+  [
+   "/models",
+   "GET"
+  ],
+  [
+   "/models/backends",
+   "GET"
+  ],
+  [
+   "/models/backends/active",
+   "GET"
+  ],
+  [
+   "/models/backends/active",
+   "POST"
+  ],
+  [
+   "/models/cache-usage",
+   "GET"
+  ],
+  [
+   "/models/catalog",
+   "GET"
+  ],
+  [
+   "/models/catalog/stats",
+   "GET"
+  ],
+  [
+   "/models/conversion-status",
+   "GET"
+  ],
+  [
+   "/models/current",
+   "GET"
+  ],
+  [
+   "/models/debug/providers",
+   "GET"
+  ],
+  [
+   "/models/dequantize",
+   "POST"
+  ],
+  [
+   "/models/download",
+   "POST"
+  ],
+  [
+   "/models/download/qwen-gguf",
+   "GET"
+  ],
+  [
+   "/models/download/{model_id:path}",
+   "GET"
+  ],
+  [
+   "/models/download/{model_id:path}/cancel",
+   "POST"
+  ],
+  [
+   "/models/download/{model_id:path}/pause",
+   "POST"
+  ],
+  [
+   "/models/download/{model_id:path}/resume",
+   "POST"
+  ],
+  [
+   "/models/download/{model_id:path}/retry",
+   "POST"
+  ],
+  [
+   "/models/download/{model_id:path}/verify",
+   "POST"
+  ],
+  [
+   "/models/downloads",
+   "GET"
+  ],
+  [
+   "/models/engine/reload",
+   "POST"
+  ],
+  [
+   "/models/engine/status",
+   "GET"
+  ],
+  [
+   "/models/export",
+   "POST"
+  ],
+  [
+   "/models/export/formats",
+   "GET"
+  ],
+  [
+   "/models/external/download",
+   "POST"
+  ],
+  [
+   "/models/external/models",
+   "GET"
+  ],
+  [
+   "/models/external/servers",
+   "GET"
+  ],
+  [
+   "/models/external/servers",
+   "POST"
+  ],
+  [
+   "/models/external/servers/{name}",
+   "DELETE"
+  ],
+  [
+   "/models/file/{model_id:path}/{file_path:path}",
+   "GET"
+  ],
+  [
+   "/models/hf",
+   "GET"
+  ],
+  [
+   "/models/history",
+   "GET"
+  ],
+  [
+   "/models/load",
+   "POST"
+  ],
+  [
+   "/models/logs",
+   "GET"
+  ],
+  [
+   "/models/memory-cleanup",
+   "POST"
+  ],
+  [
+   "/models/memory-pressure",
+   "GET"
+  ],
+  [
+   "/models/precision",
+   "POST"
+  ],
+  [
+   "/models/process-guard",
+   "GET"
+  ],
+  [
+   "/models/process-guard",
+   "POST"
+  ],
+  [
+   "/models/quantize",
+   "POST"
+  ],
+  [
+   "/models/unload",
+   "POST"
+  ],
+  [
+   "/models/visual-load",
+   "POST"
+  ],
+  [
+   "/mole/report",
+   "GET"
+  ],
+  [
+   "/mole/run",
+   "POST"
+  ],
+  [
+   "/multimodal/analyze",
+   "POST"
+  ],
+  [
+   "/multimodal/ask",
+   "POST"
+  ],
+  [
+   "/multimodal/batch-encode-phonemes",
+   "POST"
+  ],
+  [
+   "/multimodal/batch-score-pronunciation",
+   "POST"
+  ],
+  [
+   "/multimodal/checkpoints",
+   "GET"
+  ],
+  [
+   "/multimodal/checkpoints/{name}",
+   "DELETE"
+  ],
+  [
+   "/multimodal/checkpoints/{name}/load",
+   "POST"
+  ],
+  [
+   "/multimodal/decode-phonemes",
+   "POST"
+  ],
+  [
+   "/multimodal/detect",
+   "POST"
+  ],
+  [
+   "/multimodal/detect-language",
+   "POST"
+  ],
+  [
+   "/multimodal/dpo",
+   "POST"
+  ],
+  [
+   "/multimodal/encode-phonemes",
+   "POST"
+  ],
+  [
+   "/multimodal/generate-image",
+   "POST"
+  ],
+  [
+   "/multimodal/pdf/upload",
+   "POST"
+  ],
+  [
+   "/multimodal/process-video",
+   "POST"
+  ],
+  [
+   "/multimodal/reset",
+   "POST"
+  ],
+  [
+   "/multimodal/score-pronunciation",
+   "POST"
+  ],
+  [
+   "/multimodal/status",
+   "GET"
+  ],
+  [
+   "/multimodal/synthesize-speech",
+   "POST"
+  ],
+  [
+   "/multimodal/train",
+   "POST"
+  ],
+  [
+   "/multimodal/train-batch",
+   "POST"
+  ],
+  [
+   "/multimodal/train-video",
+   "POST"
+  ],
+  [
+   "/multimodal/transcribe",
+   "POST"
+  ],
+  [
+   "/multimodal/video-infer",
+   "POST"
+  ],
+  [
+   "/multimodal/visual-dataset",
+   "POST"
+  ],
+  [
+   "/openwebui/checkpoint/reload",
+   "POST"
+  ],
+  [
+   "/openwebui/checkpoints",
+   "GET"
+  ],
+  [
+   "/openwebui/datasets",
+   "GET"
+  ],
+  [
+   "/openwebui/training/start",
+   "POST"
+  ],
+  [
+   "/openwebui/training/status",
+   "GET"
+  ],
+  [
+   "/openwebui/training/stop",
+   "POST"
+  ],
+  [
+   "/operations",
+   "GET"
+  ],
+  [
+   "/operations/purge",
+   "POST"
+  ],
+  [
+   "/phoneme/batch-encode",
+   "POST"
+  ],
+  [
+   "/phoneme/decode",
+   "POST"
+  ],
+  [
+   "/phoneme/detect-language",
+   "POST"
+  ],
+  [
+   "/phoneme/encode",
+   "POST"
+  ],
+  [
+   "/phoneme/languages",
+   "GET"
+  ],
+  [
+   "/phoneme/score",
+   "POST"
+  ],
+  [
+   "/phoneme/status",
+   "GET"
+  ],
+  [
+   "/phoneme/synthesize",
+   "POST"
+  ],
+  [
+   "/phoneme/visualize",
+   "POST"
+  ],
+  [
+   "/plugins",
+   "GET"
+  ],
+  [
+   "/plugins/reload",
+   "POST"
+  ],
+  [
+   "/plugins/{plugin_name}/disable",
+   "POST"
+  ],
+  [
+   "/plugins/{plugin_name}/enable",
+   "POST"
+  ],
+  [
+   "/profiles",
+   "GET"
+  ],
+  [
+   "/profiles/active",
+   "GET"
+  ],
+  [
+   "/profiles/apply",
+   "POST"
+  ],
+  [
+   "/profiles/recommend",
+   "GET"
+  ],
+  [
+   "/profiles/{profile_id}",
+   "GET"
+  ],
+  [
+   "/providers",
+   "GET"
+  ],
+  [
+   "/rate-limit/check",
+   "GET"
+  ],
+  [
+   "/rate-limit/status",
+   "GET"
+  ],
+  [
+   "/registry/artifacts",
+   "GET"
+  ],
+  [
+   "/registry/best",
+   "GET"
+  ],
+  [
+   "/registry/models",
+   "GET"
+  ],
+  [
+   "/registry/models/{model_id}",
+   "GET"
+  ],
+  [
+   "/registry/stats",
+   "GET"
+  ],
+  [
+   "/registry/verify",
+   "GET"
+  ],
+  [
+   "/security/audit",
+   "GET"
+  ],
+  [
+   "/security/keys",
+   "GET"
+  ],
+  [
+   "/security/keys",
+   "POST"
+  ],
+  [
+   "/security/keys/validate",
+   "POST"
+  ],
+  [
+   "/security/keys/{key_id}",
+   "DELETE"
+  ],
+  [
+   "/security/keys/{key_id}",
+   "GET"
+  ],
+  [
+   "/security/keys/{key_id}/rotate",
+   "POST"
+  ],
+  [
+   "/self-train/start",
+   "POST"
+  ],
+  [
+   "/self-train/status",
+   "GET"
+  ],
+  [
+   "/self-train/stop",
+   "POST"
+  ],
+  [
+   "/session/{session_id}/context",
+   "POST"
+  ],
+  [
+   "/session/{session_id}/inspector",
+   "GET"
+  ],
+  [
+   "/session/{session_id}/messages",
+   "GET"
+  ],
+  [
+   "/settings",
+   "GET"
+  ],
+  [
+   "/settings/adaptive",
+   "GET"
+  ],
+  [
+   "/settings/adaptive",
+   "PATCH"
+  ],
+  [
+   "/settings/adaptive/insights",
+   "GET"
+  ],
+  [
+   "/settings/generation",
+   "GET"
+  ],
+  [
+   "/settings/generation",
+   "PATCH"
+  ],
+  [
+   "/settings/model-card",
+   "POST"
+  ],
+  [
+   "/settings/providers/api",
+   "GET"
+  ],
+  [
+   "/settings/providers/api",
+   "PATCH"
+  ],
+  [
+   "/settings/reset",
+   "POST"
+  ],
+  [
+   "/settings/training",
+   "GET"
+  ],
+  [
+   "/settings/training",
+   "PATCH"
+  ],
+  [
+   "/settings/training/analytics",
+   "GET"
+  ],
+  [
+   "/settings/training/auto-train/config",
+   "PATCH"
+  ],
+  [
+   "/settings/training/auto-train/status",
+   "GET"
+  ],
+  [
+   "/settings/training/batch-status",
+   "GET"
+  ],
+  [
+   "/settings/training/bookmarks",
+   "GET"
+  ],
+  [
+   "/settings/training/compare",
+   "GET"
+  ],
+  [
+   "/settings/training/history/clear",
+   "POST"
+  ],
+  [
+   "/settings/training/history/export",
+   "GET"
+  ],
+  [
+   "/settings/training/presets",
+   "GET"
+  ],
+  [
+   "/settings/training/presets/{preset_name}",
+   "GET"
+  ],
+  [
+   "/settings/training/presets/{preset_name}/apply",
+   "POST"
+  ],
+  [
+   "/settings/training/runs",
+   "GET"
+  ],
+  [
+   "/settings/training/runs/bulk/bookmark",
+   "POST"
+  ],
+  [
+   "/settings/training/runs/bulk/delete",
+   "POST"
+  ],
+  [
+   "/settings/training/runs/bulk/tag",
+   "POST"
+  ],
+  [
+   "/settings/training/runs/{run_id}",
+   "DELETE"
+  ],
+  [
+   "/settings/training/runs/{run_id}",
+   "GET"
+  ],
+  [
+   "/settings/training/runs/{run_id}/bookmark",
+   "POST"
+  ],
+  [
+   "/settings/training/runs/{run_id}/duplicate",
+   "POST"
+  ],
+  [
+   "/settings/training/runs/{run_id}/export",
+   "GET"
+  ],
+  [
+   "/settings/training/runs/{run_id}/notes",
+   "PUT"
+  ],
+  [
+   "/settings/training/runs/{run_id}/tags",
+   "POST"
+  ],
+  [
+   "/settings/training/runs/{run_id}/tags/{tag}",
+   "DELETE"
+  ],
+  [
+   "/settings/training/tags",
+   "GET"
+  ],
+  [
+   "/settings/training/tags/{tag}",
+   "GET"
+  ],
+  [
+   "/settings/ui",
+   "GET"
+  ],
+  [
+   "/settings/ui",
+   "PATCH"
+  ],
+  [
+   "/settings/voice",
+   "GET"
+  ],
+  [
+   "/settings/voice",
+   "PATCH"
+  ],
+  [
+   "/shell/exec",
+   "POST"
+  ],
+  [
+   "/shell/exec/stream",
+   "POST"
+  ],
+  [
+   "/souls",
+   "GET"
+  ],
+  [
+   "/souls/chat",
+   "POST"
+  ],
+  [
+   "/souls/current",
+   "GET"
+  ],
+  [
+   "/souls/stats",
+   "GET"
+  ],
+  [
+   "/souls/switch",
+   "POST"
+  ],
+  [
+   "/souls/weights",
+   "GET"
+  ],
+  [
+   "/souls/weights",
+   "POST"
+  ],
+  [
+   "/souls/weights/modes",
+   "GET"
+  ],
+  [
+   "/souls/weights/snapshot/{name}",
+   "DELETE"
+  ],
+  [
+   "/souls/weights/snapshot/{name}",
+   "POST"
+  ],
+  [
+   "/souls/weights/snapshot/{name}/load",
+   "POST"
+  ],
+  [
+   "/souls/weights/snapshots",
+   "GET"
+  ],
+  [
+   "/souls/{soul_name}",
+   "GET"
+  ],
+  [
+   "/system/battery",
+   "GET"
+  ],
+  [
+   "/system/battery/limit",
+   "POST"
+  ],
+  [
+   "/system/battery/policy",
+   "PUT"
+  ],
+  [
+   "/system/disk",
+   "GET"
+  ],
+  [
+   "/system/executor",
+   "GET"
+  ],
+  [
+   "/system/executor/purge",
+   "POST"
+  ],
+  [
+   "/system/executor/{job_id}",
+   "GET"
+  ],
+  [
+   "/system/executor/{job_id}/cancel",
+   "POST"
+  ],
+  [
+   "/system/executor/{job_id}/result",
+   "GET"
+  ],
+  [
+   "/system/inference-pool",
+   "GET"
+  ],
+  [
+   "/system/info",
+   "GET"
+  ],
+  [
+   "/system/lifecycle",
+   "GET"
+  ],
+  [
+   "/system/metrics",
+   "GET"
+  ],
+  [
+   "/system/output",
+   "GET"
+  ],
+  [
+   "/system/stream",
+   "GET"
+  ],
+  [
+   "/tenants",
+   "GET"
+  ],
+  [
+   "/tenants",
+   "POST"
+  ],
+  [
+   "/tenants/{tenant_id}",
+   "DELETE"
+  ],
+  [
+   "/tenants/{tenant_id}",
+   "GET"
+  ],
+  [
+   "/tenants/{tenant_id}",
+   "PUT"
+  ],
+  [
+   "/tenants/{tenant_id}/stats",
+   "GET"
+  ],
+  [
+   "/token-tree/compare",
+   "POST"
+  ],
+  [
+   "/token-tree/decode",
+   "POST"
+  ],
+  [
+   "/token-tree/embedding",
+   "POST"
+  ],
+  [
+   "/token-tree/encode",
+   "POST"
+  ],
+  [
+   "/token-tree/lineage",
+   "POST"
+  ],
+  [
+   "/token-tree/load",
+   "POST"
+  ],
+  [
+   "/token-tree/matrix",
+   "GET"
+  ],
+  [
+   "/token-tree/merges",
+   "GET"
+  ],
+  [
+   "/token-tree/path",
+   "POST"
+  ],
+  [
+   "/token-tree/save",
+   "POST"
+  ],
+  [
+   "/token-tree/saved",
+   "GET"
+  ],
+  [
+   "/token-tree/saved/{name}",
+   "DELETE"
+  ],
+  [
+   "/token-tree/similar",
+   "POST"
+  ],
+  [
+   "/token-tree/stats",
+   "GET"
+  ],
+  [
+   "/token-tree/train",
+   "POST"
+  ],
+  [
+   "/token-tree/vocab",
+   "GET"
+  ],
+  [
+   "/tokenizer/analyze",
+   "POST"
+  ],
+  [
+   "/tokenizer/decompose",
+   "POST"
+  ],
+  [
+   "/tokenizer/detokenize",
+   "POST"
+  ],
+  [
+   "/tokenizer/merges",
+   "GET"
+  ],
+  [
+   "/tokenizer/pretokenize",
+   "POST"
+  ],
+  [
+   "/tokenizer/sample",
+   "GET"
+  ],
+  [
+   "/tokenizer/samples",
+   "GET"
+  ],
+  [
+   "/tokenizer/stats",
+   "GET"
+  ],
+  [
+   "/tokenizer/tokenize",
+   "POST"
+  ],
+  [
+   "/tokenizer/train",
+   "POST"
+  ],
+  [
+   "/tokenizer/vocab",
+   "GET"
+  ],
+  [
+   "/tokens/balance",
+   "GET"
+  ],
+  [
+   "/tokens/check",
+   "POST"
+  ],
+  [
+   "/tokens/topup",
+   "POST"
+  ],
+  [
+   "/tokens/upgrade",
+   "POST"
+  ],
+  [
+   "/tokens/usage/history",
+   "GET"
+  ],
+  [
+   "/tokens/usage/summary",
+   "GET"
+  ],
+  [
+   "/tools",
+   "GET"
+  ],
+  [
+   "/tools/{tool_id}/generate",
+   "POST"
+  ],
+  [
+   "/user-adapters",
+   "GET"
+  ],
+  [
+   "/user-adapters/aggregate-best",
+   "POST"
+  ],
+  [
+   "/user-adapters/merge",
+   "POST"
+  ],
+  [
+   "/user-adapters/prune",
+   "POST"
+  ],
+  [
+   "/user-adapters/quality",
+   "GET"
+  ],
+  [
+   "/user-adapters/{user_id}",
+   "DELETE"
+  ],
+  [
+   "/user-adapters/{user_id}",
+   "GET"
+  ],
+  [
+   "/user-adapters/{user_id}/reset",
+   "POST"
+  ],
+  [
+   "/user-adapters/{user_id}/update",
+   "POST"
+  ],
+  [
+   "/users",
+   "GET"
+  ],
+  [
+   "/users",
+   "POST"
+  ],
+  [
+   "/users/me/password",
+   "POST"
+  ],
+  [
+   "/users/me/profile",
+   "GET"
+  ],
+  [
+   "/users/me/profile",
+   "PUT"
+  ],
+  [
+   "/users/{user_id}",
+   "DELETE"
+  ],
+  [
+   "/users/{user_id}",
+   "GET"
+  ],
+  [
+   "/users/{user_id}",
+   "PUT"
+  ],
+  [
+   "/vector/ingest/status",
+   "GET"
+  ],
+  [
+   "/vector/init",
+   "POST"
+  ],
+  [
+   "/vector/search",
+   "POST"
+  ],
+  [
+   "/vector/stats",
+   "GET"
+  ],
+  [
+   "/vector/upsert",
+   "POST"
+  ],
+  [
+   "/vm/builtins",
+   "GET"
+  ],
+  [
+   "/vm/info",
+   "GET"
+  ],
+  [
+   "/vm/run",
+   "POST"
+  ],
+  [
+   "/vm/training/jobs/{job_id}",
+   "GET"
+  ],
+  [
+   "/vm/training/jobs/{job_id}/stop",
+   "POST"
+  ],
+  [
+   "/voice/status",
+   "GET"
+  ],
+  [
+   "/voice/tts",
+   "POST"
+  ],
+  [
+   "/workflow/start",
+   "POST"
+  ],
+  [
+   "/workflow/status",
+   "GET"
+  ],
+  [
+   "/workflow/stop",
+   "POST"
+  ],
+  [
+   "/workflow/trigger/{action}",
+   "POST"
+  ],
+  [
+   "/workspaces",
+   "GET"
+  ],
+  [
+   "/workspaces",
+   "POST"
+  ],
+  [
+   "/workspaces/import",
+   "POST"
+  ],
+  [
+   "/workspaces/{workspace_id}",
+   "DELETE"
+  ],
+  [
+   "/workspaces/{workspace_id}",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}",
+   "PUT"
+  ],
+  [
+   "/workspaces/{workspace_id}/activity",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/cleanup",
+   "POST"
+  ],
+  [
+   "/workspaces/{workspace_id}/clone",
+   "POST"
+  ],
+  [
+   "/workspaces/{workspace_id}/export",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/health",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/invite",
+   "POST"
+  ],
+  [
+   "/workspaces/{workspace_id}/members",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/members",
+   "POST"
+  ],
+  [
+   "/workspaces/{workspace_id}/members/bulk",
+   "POST"
+  ],
+  [
+   "/workspaces/{workspace_id}/members/{user_id}",
+   "DELETE"
+  ],
+  [
+   "/workspaces/{workspace_id}/notifications",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/permissions",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/search",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/settings",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/settings",
+   "PUT"
+  ],
+  [
+   "/workspaces/{workspace_id}/share",
+   "POST"
+  ],
+  [
+   "/workspaces/{workspace_id}/share/{share_id}",
+   "DELETE"
+  ],
+  [
+   "/workspaces/{workspace_id}/shared",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/shared/api-keys",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/shared/datasets",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/shared/knowledge",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/stats",
+   "GET"
+  ],
+  [
+   "/workspaces/{workspace_id}/usage",
+   "GET"
+  ],
+  [
+   "/world/neural",
+   "POST"
+  ],
+  [
+   "/world/render",
+   "POST"
+  ],
+  [
+   "/world/render/image",
+   "POST"
+  ],
+  [
+   "/world/stats",
+   "GET"
+  ],
+  [
+   "/world/tick",
+   "POST"
+  ]
+ ],
+ "operations": {
+  "/auth/login": {
+   "POST": {
+    "operationId": "login_auth_login_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "LoginRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/auth/register": {
+   "POST": {
+    "operationId": "register_auth_register_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "RegisterRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/auth/me": {
+   "GET": {
+    "operationId": "get_me_auth_me_get",
+    "params": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/auth/token": {
+   "POST": {
+    "operationId": "create_token_auth_token_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TokenRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/auth/verify": {
+   "POST": {
+    "operationId": "verify_token_auth_verify_post",
+    "params": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/auth/refresh": {
+   "POST": {
+    "operationId": "refresh_token_auth_refresh_post",
+    "params": [
+     {
+      "name": "authorization",
+      "in": "header",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models": {
+   "GET": {
+    "operationId": "list_models_models_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/load": {
+   "POST": {
+    "operationId": "load_model_models_load_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "LoadModelRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/unload": {
+   "POST": {
+    "operationId": "unload_model_models_unload_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/current": {
+   "GET": {
+    "operationId": "current_model_models_current_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/hf": {
+   "GET": {
+    "operationId": "list_hf_models_models_hf_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/logs": {
+   "GET": {
+    "operationId": "get_model_logs_models_logs_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "model_filter",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/export": {
+   "POST": {
+    "operationId": "export_model_models_export_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ExportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/export/formats": {
+   "GET": {
+    "operationId": "get_export_formats_models_export_formats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/download": {
+   "POST": {
+    "operationId": "start_download_models_download_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DownloadRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/download/{model_id}": {
+   "GET": {
+    "operationId": "get_download_status_models_download__model_id__get",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/downloads": {
+   "GET": {
+    "operationId": "list_downloads_models_downloads_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/download/{model_id}/cancel": {
+   "POST": {
+    "operationId": "cancel_download_models_download__model_id__cancel_post",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/download/{model_id}/pause": {
+   "POST": {
+    "operationId": "pause_download_models_download__model_id__pause_post",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/download/{model_id}/resume": {
+   "POST": {
+    "operationId": "resume_download_models_download__model_id__resume_post",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/download/{model_id}/verify": {
+   "POST": {
+    "operationId": "verify_download_models_download__model_id__verify_post",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/download/{model_id}/retry": {
+   "POST": {
+    "operationId": "retry_download_models_download__model_id__retry_post",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/cache-usage": {
+   "GET": {
+    "operationId": "cache_usage_models_cache_usage_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/download/qwen-gguf": {
+   "GET": {
+    "operationId": "download_qwen_gguf_models_download_qwen_gguf_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/file/{model_id}/{file_path}": {
+   "GET": {
+    "operationId": "serve_model_file_models_file__model_id___file_path__get",
+    "params": [
+     {
+      "name": "file_path",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/external/servers": {
+   "GET": {
+    "operationId": "list_external_servers_models_external_servers_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "register_external_server_models_external_servers_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ExternalServerRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/external/servers/{name}": {
+   "DELETE": {
+    "operationId": "remove_external_server_models_external_servers__name__delete",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/external/models": {
+   "GET": {
+    "operationId": "list_external_models_models_external_models_get",
+    "params": [
+     {
+      "name": "server",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/external/download": {
+   "POST": {
+    "operationId": "download_external_model_models_external_download_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ExternalDownloadRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/history": {
+   "GET": {
+    "operationId": "download_history_models_history_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/backends": {
+   "GET": {
+    "operationId": "list_backends_models_backends_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/backends/active": {
+   "GET": {
+    "operationId": "get_active_backend_models_backends_active_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "set_active_backend_models_backends_active_post",
+    "params": [
+     {
+      "name": "backend_name",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/visual-load": {
+   "POST": {
+    "operationId": "visual_model_load_models_visual_load_post",
+    "params": [
+     {
+      "name": "model_dir",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "model_id",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/quantize": {
+   "POST": {
+    "operationId": "quantize_model_models_quantize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "QuantizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/dequantize": {
+   "POST": {
+    "operationId": "dequantize_model_models_dequantize_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/precision": {
+   "POST": {
+    "operationId": "set_precision_models_precision_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PrecisionRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/catalog": {
+   "GET": {
+    "operationId": "get_catalog_models_catalog_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/catalog/stats": {
+   "GET": {
+    "operationId": "get_catalog_stats_models_catalog_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/conversion-status": {
+   "GET": {
+    "operationId": "get_conversion_status_models_conversion_status_get",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/process-guard": {
+   "GET": {
+    "operationId": "get_process_guard_models_process_guard_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "set_process_guard_models_process_guard_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ProcessGuardRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/engine/status": {
+   "GET": {
+    "operationId": "get_engine_status_models_engine_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/engine/reload": {
+   "POST": {
+    "operationId": "reload_engine_models_engine_reload_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Req"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/models/debug/providers": {
+   "GET": {
+    "operationId": "debug_providers_models_debug_providers_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/memory-cleanup": {
+   "POST": {
+    "operationId": "memory_cleanup_models_memory_cleanup_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/models/memory-pressure": {
+   "GET": {
+    "operationId": "memory_pressure_models_memory_pressure_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/inference/generate": {
+   "POST": {
+    "operationId": "generate_inference_generate_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__inference__GenerateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/inference/generate/stream": {
+   "POST": {
+    "operationId": "generate_stream_inference_generate_stream_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__inference__GenerateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/info": {
+   "GET": {
+    "operationId": "get_info_info_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/info/soul": {
+   "GET": {
+    "operationId": "get_info_soul_info_soul_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/": {
+   "GET": {
+    "operationId": "root__get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/chat/tools": {
+   "GET": {
+    "operationId": "list_chat_tools_chat_tools_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/chat/stream": {
+   "POST": {
+    "operationId": "stream_chat_stream_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__chat__ChatRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/control": {
+   "POST": {
+    "operationId": "chat_control_chat_control_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ChatControlRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/context/inspect": {
+   "GET": {
+    "operationId": "inspect_context_context_inspect_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/context/fact": {
+   "POST": {
+    "operationId": "store_fact_context_fact_post",
+    "params": [
+     {
+      "name": "key",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "value",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/context/facts": {
+   "GET": {
+    "operationId": "get_facts_context_facts_get",
+    "params": [
+     {
+      "name": "query",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/context/reset": {
+   "POST": {
+    "operationId": "reset_context_context_reset_post",
+    "params": [
+     {
+      "name": "all",
+      "in": "query",
+      "required": false,
+      "type": "boolean"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat": {
+   "POST": {
+    "operationId": "respond_chat_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__chat__ChatRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/voice/{session_id}": {
+   "POST": {
+    "operationId": "send_voice_message_chat_voice__session_id__post",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_send_voice_message_chat_voice__session_id__post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/audio/{session_id}/{message_id}": {
+   "GET": {
+    "operationId": "get_voice_audio_chat_audio__session_id___message_id__get",
+    "params": [
+     {
+      "name": "message_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/sessions": {
+   "GET": {
+    "operationId": "list_sessions_chat_sessions_get",
+    "params": [
+     {
+      "name": "archived",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "POST": {
+    "operationId": "create_session_chat_sessions_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "CreateSessionRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/sessions/search": {
+   "GET": {
+    "operationId": "search_sessions_chat_sessions_search_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/sessions/current": {
+   "GET": {
+    "operationId": "get_current_session_chat_sessions_current_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/chat/sessions/{session_id}": {
+   "PUT": {
+    "operationId": "upsert_session_chat_sessions__session_id__put",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UpsertSessionRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "GET": {
+    "operationId": "get_session_chat_sessions__session_id__get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_session_chat_sessions__session_id__delete",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/suggestions": {
+   "GET": {
+    "operationId": "chat_suggestions_chat_suggestions_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/providers": {
+   "GET": {
+    "operationId": "list_model_providers_providers_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/operations": {
+   "GET": {
+    "operationId": "list_operations_operations_get",
+    "params": [
+     {
+      "name": "type",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/cancel/{op_id}": {
+   "POST": {
+    "operationId": "cancel_operation_cancel__op_id__post",
+    "params": [
+     {
+      "name": "op_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/cancel-all": {
+   "POST": {
+    "operationId": "cancel_all_operations_cancel_all_post",
+    "params": [
+     {
+      "name": "type",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/operations/purge": {
+   "POST": {
+    "operationId": "purge_operations_operations_purge_post",
+    "params": [
+     {
+      "name": "max_age_s",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/feedback/workflow-record": {
+   "POST": {
+    "operationId": "record_feedback_workflow_feedback_workflow_record_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "WorkflowFeedbackRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/feedback": {
+   "POST": {
+    "operationId": "record_feedback_feedback_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "FeedbackRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/feedback/stats/summary": {
+   "GET": {
+    "operationId": "get_feedback_stats_feedback_stats_summary_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/feedback/conversations": {
+   "POST": {
+    "operationId": "create_conversation_feedback_conversations_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ConversationCreate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "GET": {
+    "operationId": "list_conversations_feedback_conversations_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/feedback/conversations/{conv_id}": {
+   "GET": {
+    "operationId": "get_conversation_feedback_conversations__conv_id__get",
+    "params": [
+     {
+      "name": "conv_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_conversation_feedback_conversations__conv_id__patch",
+    "params": [
+     {
+      "name": "conv_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ConversationUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_conversation_feedback_conversations__conv_id__delete",
+    "params": [
+     {
+      "name": "conv_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/feedback/{message_id}": {
+   "GET": {
+    "operationId": "get_feedback_feedback__message_id__get",
+    "params": [
+     {
+      "name": "message_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge": {
+   "GET": {
+    "operationId": "list_knowledge_knowledge_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "POST": {
+    "operationId": "add_knowledge_knowledge_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "KnowledgeCreate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/{item_id}": {
+   "PATCH": {
+    "operationId": "update_knowledge_knowledge__item_id__patch",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "KnowledgeUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_knowledge_knowledge__item_id__delete",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/batch": {
+   "POST": {
+    "operationId": "batch_ingest_knowledge_batch_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "KnowledgeBatchRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/search": {
+   "GET": {
+    "operationId": "search_knowledge_knowledge_search_get",
+    "params": [
+     {
+      "name": "query",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/stats": {
+   "GET": {
+    "operationId": "knowledge_stats_knowledge_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/topics": {
+   "GET": {
+    "operationId": "list_topics_knowledge_topics_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/ingest-url": {
+   "POST": {
+    "operationId": "ingest_url_knowledge_ingest_url_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UrlIngestRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/batch-delete": {
+   "POST": {
+    "operationId": "batch_delete_knowledge_knowledge_batch_delete_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "BatchDeleteRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/suggest-topic": {
+   "POST": {
+    "operationId": "suggest_topic_knowledge_suggest_topic_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SuggestTopicRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/train-adapter": {
+   "POST": {
+    "operationId": "train_knowledge_adapter_route_knowledge_train_adapter_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/adapter-status": {
+   "GET": {
+    "operationId": "knowledge_adapter_status_knowledge_adapter_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/{item_id}/related": {
+   "GET": {
+    "operationId": "related_knowledge_knowledge__item_id__related_get",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "top_k",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/context": {
+   "GET": {
+    "operationId": "get_context_knowledge_context_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/ingest-file": {
+   "POST": {
+    "operationId": "ingest_file_knowledge_ingest_file_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_ingest_file_knowledge_ingest_file_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/search-files": {
+   "POST": {
+    "operationId": "search_files_knowledge_search_files_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "FileSearchRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/check-duplicate": {
+   "POST": {
+    "operationId": "check_duplicate_knowledge_check_duplicate_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DuplicateCheckRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/categorize": {
+   "POST": {
+    "operationId": "categorize_knowledge_knowledge_categorize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "CategorizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/gaps": {
+   "GET": {
+    "operationId": "knowledge_gaps_knowledge_gaps_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/bulk-ingest": {
+   "POST": {
+    "operationId": "bulk_ingest_knowledge_bulk_ingest_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "BulkIngestRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/train-embedder": {
+   "POST": {
+    "operationId": "train_embedder_endpoint_knowledge_train_embedder_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/embedder-status": {
+   "GET": {
+    "operationId": "embedder_status_knowledge_embedder_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/reviews/due": {
+   "GET": {
+    "operationId": "get_due_reviews_knowledge_reviews_due_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/reviews/{item_id}/schedule": {
+   "POST": {
+    "operationId": "schedule_review_knowledge_reviews__item_id__schedule_post",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "performance",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/label": {
+   "GET": {
+    "operationId": "label_text_knowledge_label_get",
+    "params": [
+     {
+      "name": "text",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/rag/ingest": {
+   "POST": {
+    "operationId": "rag_ingest_knowledge_rag_ingest_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "RAGIngestRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/rag/query": {
+   "POST": {
+    "operationId": "rag_query_knowledge_rag_query_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "RAGQueryRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/rag/verify": {
+   "POST": {
+    "operationId": "rag_verify_knowledge_rag_verify_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "RAGVerifyRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/knowledge/rag/documents": {
+   "GET": {
+    "operationId": "rag_list_documents_knowledge_rag_documents_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/rag/clear": {
+   "POST": {
+    "operationId": "rag_clear_knowledge_rag_clear_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/rag/stats": {
+   "GET": {
+    "operationId": "rag_stats_knowledge_rag_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/kg/sync": {
+   "POST": {
+    "operationId": "kg_sync_to_rag_knowledge_kg_sync_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/knowledge/kg/pipeline-stats": {
+   "GET": {
+    "operationId": "kg_pipeline_stats_knowledge_kg_pipeline_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/agents": {
+   "GET": {
+    "operationId": "list_agents_agents_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_agent_agents_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "AgentCreate"
+    },
+    "responses": [
+     "201",
+     "422"
+    ]
+   }
+  },
+  "/agents/runs": {
+   "GET": {
+    "operationId": "list_runs_agents_runs_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/agents/runs/{run_id}": {
+   "GET": {
+    "operationId": "get_run_agents_runs__run_id__get",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/agents/{agent_id}": {
+   "GET": {
+    "operationId": "get_agent_agents__agent_id__get",
+    "params": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PUT": {
+    "operationId": "update_agent_agents__agent_id__put",
+    "params": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "AgentUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_agent_agents__agent_id__delete",
+    "params": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/agents/{agent_id}/execute": {
+   "POST": {
+    "operationId": "execute_agent_agents__agent_id__execute_post",
+    "params": [
+     {
+      "name": "agent_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ExecuteRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/agents/orchestrate": {
+   "POST": {
+    "operationId": "orchestrate_agents_agents_orchestrate_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "OrchestrateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/metrics": {
+   "GET": {
+    "operationId": "get_metrics_system_metrics_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/system/info": {
+   "GET": {
+    "operationId": "get_info_system_info_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/system/disk": {
+   "GET": {
+    "operationId": "get_disk_system_disk_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/system/battery": {
+   "GET": {
+    "operationId": "get_battery_system_battery_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/system/battery/limit": {
+   "POST": {
+    "operationId": "set_battery_limit_system_battery_limit_post",
+    "params": [
+     {
+      "name": "percent",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/battery/policy": {
+   "PUT": {
+    "operationId": "set_battery_policy_system_battery_policy_put",
+    "params": [
+     {
+      "name": "ceiling",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "enabled",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "floor",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "interval",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "mode",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/lifecycle": {
+   "GET": {
+    "operationId": "get_lifecycle_status_system_lifecycle_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/system/stream": {
+   "GET": {
+    "operationId": "stream_output_system_stream_get",
+    "params": [
+     {
+      "name": "tail",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/output": {
+   "GET": {
+    "operationId": "tail_output_system_output_get",
+    "params": [
+     {
+      "name": "n",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/executor": {
+   "GET": {
+    "operationId": "get_executor_status_system_executor_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/system/executor/{job_id}": {
+   "GET": {
+    "operationId": "get_executor_job_system_executor__job_id__get",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/executor/{job_id}/result": {
+   "GET": {
+    "operationId": "get_executor_job_result_system_executor__job_id__result_get",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/executor/purge": {
+   "POST": {
+    "operationId": "purge_executor_jobs_system_executor_purge_post",
+    "params": [
+     {
+      "name": "max_age_s",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/executor/{job_id}/cancel": {
+   "POST": {
+    "operationId": "cancel_executor_job_system_executor__job_id__cancel_post",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/system/inference-pool": {
+   "GET": {
+    "operationId": "get_inference_pool_status_system_inference_pool_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/souls/chat": {
+   "POST": {
+    "operationId": "soul_chat_souls_chat_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SloChatRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/souls/switch": {
+   "POST": {
+    "operationId": "switch_soul_souls_switch_post",
+    "params": [
+     {
+      "name": "checkpoint_name",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__souls__SwitchRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/souls": {
+   "GET": {
+    "operationId": "list_souls_souls_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/souls/weights": {
+   "GET": {
+    "operationId": "get_trait_weights_souls_weights_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "save_trait_weights_souls_weights_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SaveWeightsRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/souls/weights/modes": {
+   "GET": {
+    "operationId": "get_trait_modes_souls_weights_modes_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/souls/current": {
+   "GET": {
+    "operationId": "get_current_soul_souls_current_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/souls/weights/snapshots": {
+   "GET": {
+    "operationId": "list_weight_snapshots_souls_weights_snapshots_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/souls/weights/snapshot/{name}": {
+   "POST": {
+    "operationId": "save_weight_snapshot_souls_weights_snapshot__name__post",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_weight_snapshot_souls_weights_snapshot__name__delete",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/souls/weights/snapshot/{name}/load": {
+   "POST": {
+    "operationId": "load_weight_snapshot_souls_weights_snapshot__name__load_post",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/souls/stats": {
+   "GET": {
+    "operationId": "get_soul_stats_souls_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/souls/{soul_name}": {
+   "GET": {
+    "operationId": "get_soul_souls__soul_name__get",
+    "params": [
+     {
+      "name": "soul_name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/config/generation": {
+   "GET": {
+    "operationId": "get_generation_config_config_generation_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PUT": {
+    "operationId": "update_generation_config_put",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ConfigUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_generation_config_patch",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ConfigUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings": {
+   "GET": {
+    "operationId": "get_settings_settings_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/generation": {
+   "GET": {
+    "operationId": "get_generation_settings_generation_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_settings_generation",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "GenerationSettingsUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training": {
+   "GET": {
+    "operationId": "get_training_settings_training_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_settings_training",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TrainingSettingsUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/adaptive": {
+   "GET": {
+    "operationId": "get_adaptive_settings_adaptive_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_settings_adaptive",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "AdaptiveSettingsUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/voice": {
+   "GET": {
+    "operationId": "get_voice_settings_voice_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_settings_voice",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "VoiceSettingsUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/ui": {
+   "GET": {
+    "operationId": "get_ui_settings_ui_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_settings_ui",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UISettingsUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/providers/api": {
+   "GET": {
+    "operationId": "get_providers_api_settings_providers_api_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_settings_providers_api",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ProviderApiSettingsUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/reset": {
+   "POST": {
+    "operationId": "reset_settings_settings_reset_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/adaptive/insights": {
+   "GET": {
+    "operationId": "get_adaptive_insights_settings_adaptive_insights_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/training/batch-status": {
+   "GET": {
+    "operationId": "get_batch_training_status_settings_training_batch_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/training/presets": {
+   "GET": {
+    "operationId": "list_training_presets_settings_training_presets_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/training/presets/{preset_name}": {
+   "GET": {
+    "operationId": "get_training_preset_settings_training_presets__preset_name__get",
+    "params": [
+     {
+      "name": "preset_name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/presets/{preset_name}/apply": {
+   "POST": {
+    "operationId": "apply_training_preset_settings_training_presets__preset_name__apply_post",
+    "params": [
+     {
+      "name": "preset_name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/history/export": {
+   "GET": {
+    "operationId": "export_training_history_settings_training_history_export_get",
+    "params": [
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/model-card": {
+   "POST": {
+    "operationId": "generate_model_card_settings_model_card_post",
+    "params": [
+     {
+      "name": "base_model",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "batch_size",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "dataset",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "dataset_size",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "description",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "epochs",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "final_loss",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     },
+     {
+      "name": "learning_rate",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     },
+     {
+      "name": "name",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "perplexity",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     },
+     {
+      "name": "quality_score",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     },
+     {
+      "name": "training_method",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "training_time_s",
+      "in": "query",
+      "required": false,
+      "type": "number"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/compare": {
+   "GET": {
+    "operationId": "compare_training_runs_settings_training_compare_get",
+    "params": [
+     {
+      "name": "run_a",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "run_b",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs": {
+   "GET": {
+    "operationId": "filter_training_runs_settings_training_runs_get",
+    "params": [
+     {
+      "name": "converged",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "method",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "min_quality",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "model",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/bulk/delete": {
+   "POST": {
+    "operationId": "bulk_delete_runs_settings_training_runs_bulk_delete_post",
+    "params": [
+     {
+      "name": "run_ids",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/bulk/tag": {
+   "POST": {
+    "operationId": "bulk_add_tag_settings_training_runs_bulk_tag_post",
+    "params": [
+     {
+      "name": "run_ids",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "tag",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/bulk/bookmark": {
+   "POST": {
+    "operationId": "bulk_bookmark_settings_training_runs_bulk_bookmark_post",
+    "params": [
+     {
+      "name": "bookmarked",
+      "in": "query",
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "name": "run_ids",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/{run_id}": {
+   "GET": {
+    "operationId": "get_training_run_settings_training_runs__run_id__get",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_training_run_settings_training_runs__run_id__delete",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/history/clear": {
+   "POST": {
+    "operationId": "clear_training_history_settings_training_history_clear_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/training/runs/{run_id}/tags": {
+   "POST": {
+    "operationId": "add_run_tag_settings_training_runs__run_id__tags_post",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "tag",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/{run_id}/tags/{tag}": {
+   "DELETE": {
+    "operationId": "remove_run_tag_settings_training_runs__run_id__tags__tag__delete",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "tag",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/{run_id}/notes": {
+   "PUT": {
+    "operationId": "set_run_notes_settings_training_runs__run_id__notes_put",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "notes",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/tags": {
+   "GET": {
+    "operationId": "get_all_tags_settings_training_tags_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/training/tags/{tag}": {
+   "GET": {
+    "operationId": "get_runs_by_tag_settings_training_tags__tag__get",
+    "params": [
+     {
+      "name": "tag",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/{run_id}/export": {
+   "GET": {
+    "operationId": "export_training_run_settings_training_runs__run_id__export_get",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "format",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/runs/{run_id}/bookmark": {
+   "POST": {
+    "operationId": "toggle_bookmark_settings_training_runs__run_id__bookmark_post",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/bookmarks": {
+   "GET": {
+    "operationId": "get_bookmarked_runs_settings_training_bookmarks_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/training/runs/{run_id}/duplicate": {
+   "POST": {
+    "operationId": "duplicate_training_run_settings_training_runs__run_id__duplicate_post",
+    "params": [
+     {
+      "name": "run_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "new_run_id",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/auto-train/status": {
+   "GET": {
+    "operationId": "auto_train_status_settings_training_auto_train_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/settings/training/auto-train/config": {
+   "PATCH": {
+    "operationId": "auto_train_config_settings_training_auto_train_config_patch",
+    "params": [
+     {
+      "name": "interval_s",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "threshold",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/settings/training/analytics": {
+   "GET": {
+    "operationId": "get_training_analytics_settings_training_analytics_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/security/audit": {
+   "GET": {
+    "operationId": "get_audit_logs_security_audit_get",
+    "params": [
+     {
+      "name": "before",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "event_type",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "history",
+      "in": "query",
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys": {
+   "GET": {
+    "operationId": "list_keys_security_keys_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_key_security_keys_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "CreateKeyRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys/validate": {
+   "POST": {
+    "operationId": "validate_key_security_keys_validate_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Body"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys/{key_id}": {
+   "GET": {
+    "operationId": "get_key_security_keys__key_id__get",
+    "params": [
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_key_security_keys__key_id__delete",
+    "params": [
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/security/keys/{key_id}/rotate": {
+   "POST": {
+    "operationId": "rotate_key_security_keys__key_id__rotate_post",
+    "params": [
+     {
+      "name": "key_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets": {
+   "GET": {
+    "operationId": "list_datasets_datasets_get",
+    "params": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "type",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "POST": {
+    "operationId": "create_dataset_datasets_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DatasetCreate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/local": {
+   "POST": {
+    "operationId": "import_from_local_datasets_import_local_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "LocalImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/github": {
+   "POST": {
+    "operationId": "import_from_github_datasets_import_github_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "GitHubImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/huggingface": {
+   "POST": {
+    "operationId": "import_from_huggingface_datasets_import_huggingface_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "HuggingFaceImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/url": {
+   "POST": {
+    "operationId": "import_from_url_datasets_import_url_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "URLImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/kaggle": {
+   "POST": {
+    "operationId": "import_from_kaggle_datasets_import_kaggle_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "KaggleImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/csv": {
+   "POST": {
+    "operationId": "import_from_csv_datasets_import_csv_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "CSVImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/batch": {
+   "POST": {
+    "operationId": "batch_import_datasets_import_batch_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "BatchImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/search/books": {
+   "GET": {
+    "operationId": "search_books_datasets_search_books_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/search/github": {
+   "GET": {
+    "operationId": "search_github_datasets_search_github_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/import/isbn": {
+   "POST": {
+    "operationId": "import_from_isbn_datasets_import_isbn_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ISBNImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/search": {
+   "GET": {
+    "operationId": "search_datasets_datasets_search_get",
+    "params": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}": {
+   "GET": {
+    "operationId": "get_dataset_datasets__dataset_id__get",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_dataset_datasets__dataset_id__patch",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DatasetUpdate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_dataset_datasets__dataset_id__delete",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}/stats": {
+   "GET": {
+    "operationId": "get_dataset_stats_datasets__dataset_id__stats_get",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}/versions": {
+   "POST": {
+    "operationId": "create_version_datasets__dataset_id__versions_post",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "GET": {
+    "operationId": "list_versions_datasets__dataset_id__versions_get",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}/versions/{timestamp}": {
+   "POST": {
+    "operationId": "restore_version_datasets__dataset_id__versions__timestamp__post",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "timestamp",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}/data": {
+   "POST": {
+    "operationId": "add_dataset_data_datasets__dataset_id__data_post",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DatasetDataRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}/preview": {
+   "GET": {
+    "operationId": "preview_dataset_datasets__dataset_id__preview_get",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}/export": {
+   "POST": {
+    "operationId": "export_dataset_datasets__dataset_id__export_post",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DatasetExportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/{dataset_id}/quality": {
+   "GET": {
+    "operationId": "quality_dataset_datasets__dataset_id__quality_get",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/from-chat": {
+   "POST": {
+    "operationId": "create_dataset_from_chat_datasets_from_chat_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "FromChatRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/datasets/convert-to-messages": {
+   "POST": {
+    "operationId": "convert_to_messages_datasets_convert_to_messages_post",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "system_prompt",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/rate-limit/status": {
+   "GET": {
+    "operationId": "get_rate_limit_status_rate_limit_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/rate-limit/check": {
+   "GET": {
+    "operationId": "check_rate_limit_rate_limit_check_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/workflow/status": {
+   "GET": {
+    "operationId": "get_workflow_status_workflow_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/workflow/start": {
+   "POST": {
+    "operationId": "start_workflow_workflow_start_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "WorkflowStartRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workflow/stop": {
+   "POST": {
+    "operationId": "stop_workflow_workflow_stop_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/workflow/trigger/{action}": {
+   "POST": {
+    "operationId": "trigger_workflow_workflow_trigger__action__post",
+    "params": [
+     {
+      "name": "action",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments": {
+   "GET": {
+    "operationId": "list_experiments_experiments_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_experiment_experiments_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ExperimentCreate"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments/compare": {
+   "GET": {
+    "operationId": "compare_experiments_experiments_compare_get",
+    "params": [
+     {
+      "name": "ids",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments/{experiment_id}": {
+   "GET": {
+    "operationId": "get_experiment_experiments__experiment_id__get",
+    "params": [
+     {
+      "name": "experiment_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_experiment_experiments__experiment_id__delete",
+    "params": [
+     {
+      "name": "experiment_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments/{experiment_id}/runs": {
+   "GET": {
+    "operationId": "get_experiment_runs_experiments__experiment_id__runs_get",
+    "params": [
+     {
+      "name": "experiment_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments/{experiment_id}/data": {
+   "GET": {
+    "operationId": "get_experiment_data_experiments__experiment_id__data_get",
+    "params": [
+     {
+      "name": "experiment_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments/{experiment_id}/complete": {
+   "POST": {
+    "operationId": "complete_experiment_experiments__experiment_id__complete_post",
+    "params": [
+     {
+      "name": "experiment_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments/{experiment_id}/log_metric": {
+   "POST": {
+    "operationId": "log_metric_experiments__experiment_id__log_metric_post",
+    "params": [
+     {
+      "name": "experiment_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "metric_name",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "step",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "value",
+      "in": "query",
+      "required": true,
+      "type": "number"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/experiments/{experiment_id}/log_param": {
+   "POST": {
+    "operationId": "log_param_experiments__experiment_id__log_param_post",
+    "params": [
+     {
+      "name": "experiment_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "param_name",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "value",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/benchmark/run": {
+   "POST": {
+    "operationId": "run_benchmark_benchmark_run_post",
+    "params": [
+     {
+      "name": "model",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/benchmark/metrics": {
+   "GET": {
+    "operationId": "get_model_metrics_benchmark_metrics_get",
+    "params": [
+     {
+      "name": "model",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/benchmark/perplexity": {
+   "POST": {
+    "operationId": "calculate_perplexity_benchmark_perplexity_post",
+    "params": [
+     {
+      "name": "text",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/benchmark/quality": {
+   "GET": {
+    "operationId": "get_quality_metrics_benchmark_quality_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "model",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/benchmark/responses": {
+   "GET": {
+    "operationId": "get_logged_responses_benchmark_responses_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "model",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/benchmark/stats": {
+   "GET": {
+    "operationId": "get_tracker_stats_benchmark_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/benchmark/history/clear": {
+   "POST": {
+    "operationId": "clear_history_benchmark_history_clear_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/benchmark/program": {
+   "GET": {
+    "operationId": "get_program_benchmark_program_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/benchmark/score": {
+   "POST": {
+    "operationId": "score_results_benchmark_score_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Payload"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/benchmark/{model_id}": {
+   "GET": {
+    "operationId": "get_benchmark_by_id_benchmark__model_id__get",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/user-adapters": {
+   "GET": {
+    "operationId": "list_adapters_user_adapters_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/user-adapters/quality": {
+   "GET": {
+    "operationId": "get_quality_user_adapters_quality_get",
+    "params": [
+     {
+      "name": "max_age_days",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "min_feedback_count",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/user-adapters/{user_id}": {
+   "GET": {
+    "operationId": "get_adapter_user_adapters__user_id__get",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_user_adapter_user_adapters__user_id__delete",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/user-adapters/{user_id}/update": {
+   "POST": {
+    "operationId": "update_adapter_user_adapters__user_id__update_post",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "AdapterUpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/user-adapters/{user_id}/reset": {
+   "POST": {
+    "operationId": "reset_adapter_user_adapters__user_id__reset_post",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/user-adapters/merge": {
+   "POST": {
+    "operationId": "merge_adapters_user_adapters_merge_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/user-adapters/aggregate-best": {
+   "POST": {
+    "operationId": "aggregate_best_user_adapters_aggregate_best_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "AggregateBestRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/user-adapters/prune": {
+   "POST": {
+    "operationId": "prune_low_quality_adapters_user_adapters_prune_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PruneAdaptersRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vector/init": {
+   "POST": {
+    "operationId": "init_vector_store_vector_init_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "VectorStoreConfig"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vector/stats": {
+   "GET": {
+    "operationId": "get_stats_vector_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/vector/upsert": {
+   "POST": {
+    "operationId": "upsert_vectors_vector_upsert_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UpsertRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vector/search": {
+   "POST": {
+    "operationId": "search_vectors_vector_search_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SearchRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vector/ingest/status": {
+   "GET": {
+    "operationId": "ingest_status_vector_ingest_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/models": {
+   "GET": {
+    "operationId": "list_models_registry_models_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/models/{model_id}": {
+   "GET": {
+    "operationId": "get_model_registry_models__model_id__get",
+    "params": [
+     {
+      "name": "model_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/registry/best": {
+   "GET": {
+    "operationId": "get_best_model_registry_best_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/stats": {
+   "GET": {
+    "operationId": "get_registry_stats_registry_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/registry/artifacts": {
+   "GET": {
+    "operationId": "list_artifacts_registry_artifacts_get",
+    "params": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/registry/verify": {
+   "GET": {
+    "operationId": "verify_artifacts_registry_verify_get",
+    "params": [
+     {
+      "name": "kind",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/{session_id}/regenerate": {
+   "POST": {
+    "operationId": "regenerate_chat__session_id__regenerate_post",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/{session_id}/cancel": {
+   "POST": {
+    "operationId": "cancel_chat__session_id__cancel_post",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/chat/active": {
+   "GET": {
+    "operationId": "active_sessions_chat_active_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/chat/health": {
+   "GET": {
+    "operationId": "health_chat_health_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/chat/addons": {
+   "GET": {
+    "operationId": "addons_chat_addons_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/session/{session_id}/context": {
+   "POST": {
+    "operationId": "set_session_context_session__session_id__context_post",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SessionContext"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/session/{session_id}/messages": {
+   "GET": {
+    "operationId": "get_session_messages_session__session_id__messages_get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/session/{session_id}/inspector": {
+   "GET": {
+    "operationId": "get_session_inspector_session__session_id__inspector_get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/meta-weights/ping": {
+   "GET": {
+    "operationId": "ping_meta_weights_ping_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/meta-weights/get": {
+   "POST": {
+    "operationId": "get_meta_weights_meta_weights_get_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "GetMetaWeightsRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/meta-weights/stats": {
+   "GET": {
+    "operationId": "get_meta_weight_stats_meta_weights_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/lora-eval/run": {
+   "POST": {
+    "operationId": "run_eval_lora_eval_run_post",
+    "params": [
+     {
+      "name": "adapter_path",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "soul",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/lora-eval/history": {
+   "GET": {
+    "operationId": "get_eval_history_lora_eval_history_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/lora-eval/aggregate": {
+   "POST": {
+    "operationId": "trigger_aggregation_lora_eval_aggregate_post",
+    "params": [
+     {
+      "name": "min_feedback",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "output_name",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "run_eval",
+      "in": "query",
+      "required": false,
+      "type": "boolean"
+     },
+     {
+      "name": "top_k",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/": {
+   "GET": {
+    "operationId": "get_companion_info_companion__get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "DELETE": {
+    "operationId": "reset_companion_companion__delete",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/companion/personality": {
+   "POST": {
+    "operationId": "set_personality_companion_personality_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SetPersonalityRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PATCH": {
+    "operationId": "patch_personality_companion_personality_patch",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PatchPersonalityRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/preset": {
+   "POST": {
+    "operationId": "use_preset_companion_preset_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "type": "string",
+      "title": "Preset Id"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/prompt": {
+   "GET": {
+    "operationId": "get_prompt_companion_prompt_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/companion/chat": {
+   "POST": {
+    "operationId": "chat_companion_chat_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__companion__ChatRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/presets": {
+   "GET": {
+    "operationId": "list_presets_companion_presets_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_preset_companion_presets_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PresetCreateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/companion/presets/{preset_id}": {
+   "DELETE": {
+    "operationId": "delete_preset_companion_presets__preset_id__delete",
+    "params": [
+     {
+      "name": "preset_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/status": {
+   "GET": {
+    "operationId": "status_multimodal_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/multimodal/train": {
+   "POST": {
+    "operationId": "train_on_image_multimodal_train_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_train_on_image_multimodal_train_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/train-batch": {
+   "POST": {
+    "operationId": "train_batch_multimodal_train_batch_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_train_batch_multimodal_train_batch_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/train-video": {
+   "POST": {
+    "operationId": "train_video_multimodal_train_video_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "VideoTrainRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/video-infer": {
+   "POST": {
+    "operationId": "video_infer_multimodal_video_infer_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "VideoInferRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/dpo": {
+   "POST": {
+    "operationId": "trigger_dpo_multimodal_dpo_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DPOTriggerRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/analyze": {
+   "POST": {
+    "operationId": "analyze_image_multimodal_analyze_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_analyze_image_multimodal_analyze_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/detect": {
+   "POST": {
+    "operationId": "detect_objects_multimodal_detect_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_detect_objects_multimodal_detect_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/ask": {
+   "POST": {
+    "operationId": "ask_question_multimodal_ask_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_ask_question_multimodal_ask_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/pdf/upload": {
+   "POST": {
+    "operationId": "analyze_pdf_multimodal_pdf_upload_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_analyze_pdf_multimodal_pdf_upload_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/process-video": {
+   "POST": {
+    "operationId": "process_video_multimodal_process_video_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_process_video_multimodal_process_video_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/transcribe": {
+   "POST": {
+    "operationId": "transcribe_audio_multimodal_transcribe_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_transcribe_audio_multimodal_transcribe_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/synthesize-speech": {
+   "POST": {
+    "operationId": "synthesize_speech_multimodal_synthesize_speech_post",
+    "params": [],
+    "body": {
+     "content_type": "application/x-www-form-urlencoded",
+     "schema": "Body_synthesize_speech_multimodal_synthesize_speech_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/generate-image": {
+   "POST": {
+    "operationId": "generate_image_multimodal_generate_image_post",
+    "params": [],
+    "body": {
+     "content_type": "application/x-www-form-urlencoded",
+     "schema": "Body_generate_image_multimodal_generate_image_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/visual-dataset": {
+   "POST": {
+    "operationId": "create_visual_dataset_multimodal_visual_dataset_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "VisualDatasetRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/checkpoints": {
+   "GET": {
+    "operationId": "list_checkpoints_multimodal_checkpoints_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/multimodal/checkpoints/{name}/load": {
+   "POST": {
+    "operationId": "load_checkpoint_multimodal_checkpoints__name__load_post",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/checkpoints/{name}": {
+   "DELETE": {
+    "operationId": "delete_checkpoint_multimodal_checkpoints__name__delete",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/encode-phonemes": {
+   "POST": {
+    "operationId": "encode_phonemes_multimodal_encode_phonemes_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Request"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/decode-phonemes": {
+   "POST": {
+    "operationId": "decode_phonemes_multimodal_decode_phonemes_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Request"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/score-pronunciation": {
+   "POST": {
+    "operationId": "score_pronunciation_multimodal_score_pronunciation_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Request"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/batch-encode-phonemes": {
+   "POST": {
+    "operationId": "batch_encode_phonemes_multimodal_batch_encode_phonemes_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Request"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/detect-language": {
+   "POST": {
+    "operationId": "detect_language_multimodal_detect_language_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Request"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/batch-score-pronunciation": {
+   "POST": {
+    "operationId": "batch_score_pronunciation_multimodal_batch_score_pronunciation_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Request"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/multimodal/reset": {
+   "POST": {
+    "operationId": "reset_multimodal_reset_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tokenizer/stats": {
+   "GET": {
+    "operationId": "get_tokenizer_stats_tokenizer_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tokenizer/pretokenize": {
+   "POST": {
+    "operationId": "pretokenize_text_tokenizer_pretokenize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PretokenizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/decompose": {
+   "POST": {
+    "operationId": "decompose_token_tokenizer_decompose_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DecomposeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/analyze": {
+   "POST": {
+    "operationId": "analyze_corpus_tokenizer_analyze_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "AnalyzeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/tokenize": {
+   "POST": {
+    "operationId": "tokenize_text_tokenizer_tokenize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__tokenizer__TokenizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/detokenize": {
+   "POST": {
+    "operationId": "detokenize_ids_tokenizer_detokenize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__tokenizer__DetokenizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/vocab": {
+   "GET": {
+    "operationId": "get_vocab_tokenizer_vocab_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/merges": {
+   "GET": {
+    "operationId": "get_merges_tokenizer_merges_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/train": {
+   "POST": {
+    "operationId": "train_tokenizer_tokenizer_train_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TrainTokenizerRequest2"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokenizer/sample": {
+   "GET": {
+    "operationId": "get_tokenization_sample_tokenizer_sample_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tokenizer/samples": {
+   "GET": {
+    "operationId": "get_tokenization_sample_tokenizer_samples_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/learn/search": {
+   "POST": {
+    "operationId": "learn_search_learn_search_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "LearnSearchRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/learn/feed": {
+   "GET": {
+    "operationId": "learn_feed_get",
+    "params": [
+     {
+      "name": "action",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "poll_interval",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "url",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "POST": {
+    "operationId": "learn_feed_post",
+    "params": [
+     {
+      "name": "action",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "poll_interval",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "url",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/learn/ingest-url": {
+   "POST": {
+    "operationId": "learn_ingest_url_learn_ingest_url_post",
+    "params": [
+     {
+      "name": "url",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/learn/knowledge": {
+   "GET": {
+    "operationId": "learn_knowledge_learn_knowledge_get",
+    "params": [
+     {
+      "name": "query",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "top_k",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "topic",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/learn/ingest": {
+   "POST": {
+    "operationId": "learn_ingest_learn_ingest_post",
+    "params": [
+     {
+      "name": "text",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "type": "array",
+        "items": {
+         "type": "array",
+         "items": {
+          "type": "string"
+         }
+        }
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Conversations"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/learn/train": {
+   "POST": {
+    "operationId": "learn_train_learn_train_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/learn/deploy": {
+   "POST": {
+    "operationId": "learn_deploy_learn_deploy_post",
+    "params": [
+     {
+      "name": "name",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/learn/evaluate": {
+   "POST": {
+    "operationId": "learn_evaluate_learn_evaluate_post",
+    "params": [
+     {
+      "name": "text",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/learn/status": {
+   "GET": {
+    "operationId": "learn_status_learn_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/self-train/start": {
+   "POST": {
+    "operationId": "start_self_train_self_train_start_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SelfTrainRequest"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Req"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/self-train/stop": {
+   "POST": {
+    "operationId": "stop_self_train_self_train_stop_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/self-train/status": {
+   "GET": {
+    "operationId": "get_self_train_status_self_train_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/token-tree/stats": {
+   "GET": {
+    "operationId": "get_stats_token_tree_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/token-tree/vocab": {
+   "GET": {
+    "operationId": "get_vocab_token_tree_vocab_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/merges": {
+   "GET": {
+    "operationId": "get_merges_token_tree_merges_get",
+    "params": [
+     {
+      "name": "query",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "top_n",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/saved": {
+   "GET": {
+    "operationId": "get_saved_token_tree_saved_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/token-tree/save": {
+   "POST": {
+    "operationId": "save_tree_token_tree_save_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TreeNameRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/load": {
+   "POST": {
+    "operationId": "load_tree_token_tree_load_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TreeNameRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/saved/{name}": {
+   "DELETE": {
+    "operationId": "delete_saved_tree_token_tree_saved__name__delete",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/train": {
+   "POST": {
+    "operationId": "train_tree_token_tree_train_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TrainTreeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/similar": {
+   "POST": {
+    "operationId": "similar_token_tree_similar_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SimilarRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/embedding": {
+   "POST": {
+    "operationId": "embedding_token_tree_embedding_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "EmbeddingRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/encode": {
+   "POST": {
+    "operationId": "encode_token_tree_encode_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TokenTextRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/path": {
+   "POST": {
+    "operationId": "path_token_tree_path_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TokenTextRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/decode": {
+   "POST": {
+    "operationId": "decode_token_tree_decode_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TokenIdsRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/lineage": {
+   "POST": {
+    "operationId": "lineage_token_tree_lineage_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "LineageRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/matrix": {
+   "GET": {
+    "operationId": "matrix_token_tree_matrix_get",
+    "params": [
+     {
+      "name": "top_k",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/token-tree/compare": {
+   "POST": {
+    "operationId": "compare_token_tree_compare_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "CompareTreesRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/log": {
+   "GET": {
+    "operationId": "get_opencode_log_errors_log_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "log_errors_errors_log_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ErrorBatch"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/logs/ingest": {
+   "POST": {
+    "operationId": "ingest_frontend_logs_errors_logs_ingest_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "FrontendLogBatch"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/recent": {
+   "GET": {
+    "operationId": "get_recent_errors_errors_recent_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/grouped": {
+   "GET": {
+    "operationId": "get_grouped_errors_errors_grouped_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/errors/trends": {
+   "GET": {
+    "operationId": "get_error_trends_errors_trends_get",
+    "params": [
+     {
+      "name": "hours",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/export": {
+   "GET": {
+    "operationId": "export_errors_errors_export_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/errors/clear": {
+   "DELETE": {
+    "operationId": "clear_errors_errors_clear_delete",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/errors/unread": {
+   "GET": {
+    "operationId": "unread_count_errors_unread_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/errors/stream": {
+   "GET": {
+    "operationId": "error_stream_errors_stream_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/dashboard": {
+   "GET": {
+    "operationId": "get_dashboard_mobile_dashboard_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/conversations": {
+   "GET": {
+    "operationId": "list_conversations_mobile_conversations_get",
+    "params": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "per_page",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "search",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/conversations/{session_id}": {
+   "GET": {
+    "operationId": "get_conversation_mobile_conversations__session_id__get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/models": {
+   "GET": {
+    "operationId": "get_models_mobile_models_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/models/switch": {
+   "POST": {
+    "operationId": "switch_model_mobile_models_switch_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__mobile__SwitchRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/health": {
+   "GET": {
+    "operationId": "get_health_mobile_health_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/knowledge": {
+   "GET": {
+    "operationId": "list_knowledge_mobile_knowledge_get",
+    "params": [
+     {
+      "name": "page",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "per_page",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "search",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "topic",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "POST": {
+    "operationId": "create_knowledge_mobile_knowledge_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "KnowledgeCreateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/knowledge/{item_id}": {
+   "PATCH": {
+    "operationId": "update_knowledge_mobile_knowledge__item_id__patch",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "KnowledgeUpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_knowledge_mobile_knowledge__item_id__delete",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/sync": {
+   "POST": {
+    "operationId": "sync_offline_mobile_sync_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SyncRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/sync/status": {
+   "GET": {
+    "operationId": "sync_status_mobile_sync_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/notifications/register": {
+   "POST": {
+    "operationId": "register_device_mobile_notifications_register_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "DeviceRegistrationRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/notifications/unregister": {
+   "POST": {
+    "operationId": "unregister_device_mobile_notifications_unregister_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UnregisterDeviceRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/notifications/devices": {
+   "GET": {
+    "operationId": "list_devices_mobile_notifications_devices_get",
+    "params": [
+     {
+      "name": "topic",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/notifications/send": {
+   "POST": {
+    "operationId": "send_notification_mobile_notifications_send_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "NotificationSendRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/notifications/history": {
+   "GET": {
+    "operationId": "notification_history_mobile_notifications_history_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/notifications/cleanup": {
+   "POST": {
+    "operationId": "cleanup_devices_mobile_notifications_cleanup_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/notify/training-complete": {
+   "POST": {
+    "operationId": "notify_training_complete_mobile_notify_training_complete_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/train": {
+   "POST": {
+    "operationId": "mobile_train_mobile_train_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "MobileTrainRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/stats": {
+   "GET": {
+    "operationId": "get_training_stats_mobile_train_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/train/pending": {
+   "GET": {
+    "operationId": "get_pending_pairs_mobile_train_pending_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/pairs": {
+   "GET": {
+    "operationId": "list_training_pairs_mobile_train_pairs_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "min_quality",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "search",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "session_id",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/export": {
+   "GET": {
+    "operationId": "export_training_pairs_mobile_train_export_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "min_quality",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "session_id",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/session/{session_id}": {
+   "GET": {
+    "operationId": "get_session_pairs_mobile_train_session__session_id__get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/pair/{pair_id}": {
+   "PATCH": {
+    "operationId": "update_pair_quality_mobile_train_pair__pair_id__patch",
+    "params": [
+     {
+      "name": "pair_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "QualityUpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_pair_mobile_train_pair__pair_id__delete",
+    "params": [
+     {
+      "name": "pair_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/synced": {
+   "DELETE": {
+    "operationId": "delete_synced_pairs_mobile_train_synced_delete",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/train/pairs/bulk": {
+   "DELETE": {
+    "operationId": "delete_pairs_bulk_mobile_train_pairs_bulk_delete",
+    "params": [
+     {
+      "name": "ids",
+      "in": "query",
+      "required": true,
+      "type": "array"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/compact": {
+   "POST": {
+    "operationId": "compact_training_store_mobile_train_compact_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/train/from-sessions": {
+   "POST": {
+    "operationId": "train_from_sessions_mobile_train_from_sessions_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "FromSessionsRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mobile/train/auto-status": {
+   "GET": {
+    "operationId": "get_auto_train_status_mobile_train_auto_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mobile/train/auto-config": {
+   "PATCH": {
+    "operationId": "update_auto_train_config_mobile_train_auto_config_patch",
+    "params": [
+     {
+      "name": "interval_s",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "threshold",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/images/generate": {
+   "POST": {
+    "operationId": "generate_image_images_generate_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__images__GenerateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/images/gallery": {
+   "GET": {
+    "operationId": "list_gallery_images_gallery_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/images/styles": {
+   "GET": {
+    "operationId": "list_styles_images_styles_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/files": {
+   "GET": {
+    "operationId": "list_files_files_get",
+    "params": [
+     {
+      "name": "order",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "sort",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "tag",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/files/upload": {
+   "POST": {
+    "operationId": "upload_file_files_upload_post",
+    "params": [],
+    "body": {
+     "content_type": "multipart/form-data",
+     "schema": "Body_upload_file_files_upload_post"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/files/search": {
+   "GET": {
+    "operationId": "search_files_files_search_get",
+    "params": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "tag",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/files/{file_id}": {
+   "GET": {
+    "operationId": "get_file_files__file_id__get",
+    "params": [
+     {
+      "name": "file_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_file_files__file_id__delete",
+    "params": [
+     {
+      "name": "file_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/files/{file_id}/ingest": {
+   "POST": {
+    "operationId": "ingest_file_files__file_id__ingest_post",
+    "params": [
+     {
+      "name": "file_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/voice/tts": {
+   "POST": {
+    "operationId": "text_to_speech_voice_tts_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TTSRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/voice/status": {
+   "GET": {
+    "operationId": "voice_status_voice_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/infer": {
+   "POST": {
+    "operationId": "infer_infer_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "InferRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/stream": {
+   "POST": {
+    "operationId": "infer_stream_infer_stream_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "InferRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/embed": {
+   "POST": {
+    "operationId": "infer_embed_infer_embed_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "EmbedRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/tokenize": {
+   "POST": {
+    "operationId": "infer_tokenize_infer_tokenize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__infer__TokenizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/detokenize": {
+   "POST": {
+    "operationId": "infer_detokenize_infer_detokenize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "routers__infer__DetokenizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/infer/health": {
+   "GET": {
+    "operationId": "infer_health_infer_health_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/infer/info": {
+   "GET": {
+    "operationId": "infer_info_infer_info_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/vm/run": {
+   "POST": {
+    "operationId": "run_assembly_vm_run_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "VMRunRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vm/training/jobs/{job_id}": {
+   "GET": {
+    "operationId": "training_job_status_vm_training_jobs__job_id__get",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vm/training/jobs/{job_id}/stop": {
+   "POST": {
+    "operationId": "training_job_stop_vm_training_jobs__job_id__stop_post",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/vm/builtins": {
+   "GET": {
+    "operationId": "list_builtins_vm_builtins_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/vm/info": {
+   "GET": {
+    "operationId": "vm_info_vm_info_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/memory/stats": {
+   "GET": {
+    "operationId": "stats_memory_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/memory/list": {
+   "GET": {
+    "operationId": "list_memory_memory_list_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/search": {
+   "GET": {
+    "operationId": "search_memory_search_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/store": {
+   "POST": {
+    "operationId": "store_memory_store_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "StoreRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/remember": {
+   "POST": {
+    "operationId": "remember_memory_remember_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "RememberRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/config": {
+   "GET": {
+    "operationId": "get_config_memory_config_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "set_config_memory_config_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ConfigRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/clear": {
+   "POST": {
+    "operationId": "clear_memory_clear_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/memory/consolidate": {
+   "POST": {
+    "operationId": "consolidate_memory_consolidate_post",
+    "params": [
+     {
+      "name": "threshold",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/archive": {
+   "GET": {
+    "operationId": "archive_memory_archive_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/archive/stats": {
+   "GET": {
+    "operationId": "archive_stats_memory_archive_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/memory/archive/prune": {
+   "POST": {
+    "operationId": "archive_prune_memory_archive_prune_post",
+    "params": [
+     {
+      "name": "retain_days",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/memory/{item_id}": {
+   "DELETE": {
+    "operationId": "delete_item_memory__item_id__delete",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PATCH": {
+    "operationId": "update_item_memory__item_id__patch",
+    "params": [
+     {
+      "name": "item_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/docstore/message-notes": {
+   "GET": {
+    "operationId": "list_message_notes_docstore_message_notes_get",
+    "params": [
+     {
+      "name": "session_id",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "POST": {
+    "operationId": "put_message_note_docstore_message_notes_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "title": "Body"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/docstore/message-notes/search": {
+   "GET": {
+    "operationId": "search_message_notes_docstore_message_notes_search_get",
+    "params": [
+     {
+      "name": "q",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/docstore/message-notes/{session_id}/{message_id}": {
+   "DELETE": {
+    "operationId": "delete_message_note_docstore_message_notes__session_id___message_id__delete",
+    "params": [
+     {
+      "name": "message_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "session_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/docstore/{collection}/bulk": {
+   "POST": {
+    "operationId": "bulk_put_docstore__collection__bulk_post",
+    "params": [
+     {
+      "name": "collection",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "title": "Body"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/docstore/{collection}": {
+   "GET": {
+    "operationId": "list_docs_docstore__collection__get",
+    "params": [
+     {
+      "name": "collection",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "dir",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": null
+     },
+     {
+      "name": "sort",
+      "in": "query",
+      "required": false,
+      "type": null
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "clear_collection_docstore__collection__delete",
+    "params": [
+     {
+      "name": "collection",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/docstore/{collection}/{doc_id}": {
+   "GET": {
+    "operationId": "get_doc_docstore__collection___doc_id__get",
+    "params": [
+     {
+      "name": "collection",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "doc_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PUT": {
+    "operationId": "put_doc_docstore__collection___doc_id__put",
+    "params": [
+     {
+      "name": "collection",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "doc_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "title": "Body"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PATCH": {
+    "operationId": "patch_doc_docstore__collection___doc_id__patch",
+    "params": [
+     {
+      "name": "collection",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "doc_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "type": "object",
+      "additionalProperties": true,
+      "title": "Body"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_doc_docstore__collection___doc_id__delete",
+    "params": [
+     {
+      "name": "collection",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "doc_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/shell/exec": {
+   "POST": {
+    "operationId": "exec_command_shell_exec_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ShellExecRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/shell/exec/stream": {
+   "POST": {
+    "operationId": "exec_command_stream_shell_exec_stream_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ShellExecRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/world/render": {
+   "POST": {
+    "operationId": "render_world_world_render_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/RenderConfigRequest"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Config"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/world/render/image": {
+   "POST": {
+    "operationId": "render_world_image_world_render_image_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/RenderConfigRequest"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Config"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/world/neural": {
+   "POST": {
+    "operationId": "neural_process_world_neural_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/RenderConfigRequest"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Config"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/world/tick": {
+   "POST": {
+    "operationId": "run_tick_world_tick_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SimTickRequest"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Config"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/world/stats": {
+   "GET": {
+    "operationId": "get_stats_world_stats_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tokens/balance": {
+   "GET": {
+    "operationId": "get_balance_tokens_balance_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tokens/usage/summary": {
+   "GET": {
+    "operationId": "get_usage_summary_tokens_usage_summary_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tokens/usage/history": {
+   "GET": {
+    "operationId": "get_usage_history_tokens_usage_history_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     },
+     {
+      "name": "offset",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokens/topup": {
+   "POST": {
+    "operationId": "topup_credits_tokens_topup_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TopUpRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokens/upgrade": {
+   "POST": {
+    "operationId": "upgrade_tier_tokens_upgrade_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UpgradeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tokens/check": {
+   "POST": {
+    "operationId": "check_tokens_tokens_check_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "CheckRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/profiles/apply": {
+   "POST": {
+    "operationId": "apply_profile_profiles_apply_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ApplyProfileRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/profiles/active": {
+   "GET": {
+    "operationId": "get_active_profile_profiles_active_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/profiles/recommend": {
+   "GET": {
+    "operationId": "recommend_profile_profiles_recommend_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/profiles": {
+   "GET": {
+    "operationId": "list_profiles_profiles_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/profiles/{profile_id}": {
+   "GET": {
+    "operationId": "get_profile_profiles__profile_id__get",
+    "params": [
+     {
+      "name": "profile_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/users": {
+   "GET": {
+    "operationId": "list_users_users_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_user_users_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UserCreateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/users/{user_id}": {
+   "GET": {
+    "operationId": "get_user_users__user_id__get",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PUT": {
+    "operationId": "update_user_users__user_id__put",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "UserUpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_user_users__user_id__delete",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/users/me/password": {
+   "POST": {
+    "operationId": "change_password_users_me_password_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "PasswordChangeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/users/me/profile": {
+   "GET": {
+    "operationId": "get_profile_users_me_profile_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "PUT": {
+    "operationId": "update_profile_users_me_profile_put",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ProfileUpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tenants": {
+   "GET": {
+    "operationId": "list_tenants_tenants_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_tenant_tenants_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TenantCreateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tenants/{tenant_id}": {
+   "GET": {
+    "operationId": "get_tenant_tenants__tenant_id__get",
+    "params": [
+     {
+      "name": "tenant_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PUT": {
+    "operationId": "update_tenant_tenants__tenant_id__put",
+    "params": [
+     {
+      "name": "tenant_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "TenantUpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_tenant_tenants__tenant_id__delete",
+    "params": [
+     {
+      "name": "tenant_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/tenants/{tenant_id}/stats": {
+   "GET": {
+    "operationId": "get_tenant_stats_tenants__tenant_id__stats_get",
+    "params": [
+     {
+      "name": "tenant_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces": {
+   "GET": {
+    "operationId": "list_workspaces_workspaces_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   },
+   "POST": {
+    "operationId": "create_workspace_workspaces_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "WorkspaceCreateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}": {
+   "GET": {
+    "operationId": "get_workspace_workspaces__workspace_id__get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PUT": {
+    "operationId": "update_workspace_workspaces__workspace_id__put",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "WorkspaceUpdateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "DELETE": {
+    "operationId": "delete_workspace_workspaces__workspace_id__delete",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/members": {
+   "GET": {
+    "operationId": "list_members_workspaces__workspace_id__members_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "POST": {
+    "operationId": "add_member_workspaces__workspace_id__members_post",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "MemberAddRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/members/{user_id}": {
+   "DELETE": {
+    "operationId": "remove_member_workspaces__workspace_id__members__user_id__delete",
+    "params": [
+     {
+      "name": "user_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/stats": {
+   "GET": {
+    "operationId": "get_workspace_stats_workspaces__workspace_id__stats_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/usage": {
+   "GET": {
+    "operationId": "get_workspace_usage_workspaces__workspace_id__usage_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/activity": {
+   "GET": {
+    "operationId": "get_workspace_activity_workspaces__workspace_id__activity_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "from_date",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "to_date",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "type",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/export": {
+   "GET": {
+    "operationId": "export_workspace_data_workspaces__workspace_id__export_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/import": {
+   "POST": {
+    "operationId": "import_workspace_data_workspaces_import_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "WorkspaceImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/health": {
+   "GET": {
+    "operationId": "workspace_health_check_workspaces__workspace_id__health_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/settings": {
+   "GET": {
+    "operationId": "get_workspace_settings_workspaces__workspace_id__settings_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   },
+   "PUT": {
+    "operationId": "update_workspace_settings_workspaces__workspace_id__settings_put",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "WorkspaceSettingsRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/invite": {
+   "POST": {
+    "operationId": "invite_member_workspaces__workspace_id__invite_post",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "InviteMemberRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/cleanup": {
+   "POST": {
+    "operationId": "cleanup_workspace_data_workspaces__workspace_id__cleanup_post",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/members/bulk": {
+   "POST": {
+    "operationId": "bulk_import_members_workspaces__workspace_id__members_bulk_post",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "BulkMemberImportRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/notifications": {
+   "GET": {
+    "operationId": "get_workspace_notifications_workspaces__workspace_id__notifications_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/clone": {
+   "POST": {
+    "operationId": "clone_workspace_workspaces__workspace_id__clone_post",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/search": {
+   "GET": {
+    "operationId": "search_workspace_workspaces__workspace_id__search_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/permissions": {
+   "GET": {
+    "operationId": "get_workspace_permissions_workspaces__workspace_id__permissions_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/share": {
+   "POST": {
+    "operationId": "share_data_workspaces__workspace_id__share_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ShareDataRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/shared": {
+   "GET": {
+    "operationId": "list_shared_data_workspaces__workspace_id__shared_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/share/{share_id}": {
+   "DELETE": {
+    "operationId": "revoke_share_workspaces__workspace_id__share__share_id__delete",
+    "params": [
+     {
+      "name": "share_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/shared/datasets": {
+   "GET": {
+    "operationId": "get_shared_datasets_workspaces__workspace_id__shared_datasets_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/shared/knowledge": {
+   "GET": {
+    "operationId": "get_shared_knowledge_workspaces__workspace_id__shared_knowledge_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/workspaces/{workspace_id}/shared/api-keys": {
+   "GET": {
+    "operationId": "get_shared_api_keys_workspaces__workspace_id__shared_api_keys_get",
+    "params": [
+     {
+      "name": "workspace_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/openwebui/datasets": {
+   "GET": {
+    "operationId": "list_datasets_openwebui_datasets_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/openwebui/checkpoints": {
+   "GET": {
+    "operationId": "list_checkpoints_openwebui_checkpoints_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/openwebui/checkpoint/reload": {
+   "POST": {
+    "operationId": "reload_checkpoint_openwebui_checkpoint_reload_post",
+    "params": [
+     {
+      "name": "checkpoint_id",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/openwebui/training/start": {
+   "POST": {
+    "operationId": "start_training_openwebui_training_start_post",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "query",
+      "required": true,
+      "type": "string"
+     },
+     {
+      "name": "method",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/openwebui/training/stop": {
+   "POST": {
+    "operationId": "stop_training_openwebui_training_stop_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/openwebui/training/status": {
+   "GET": {
+    "operationId": "training_status_openwebui_training_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/cloud-training/jobs": {
+   "GET": {
+    "operationId": "list_jobs_cloud_training_jobs_get",
+    "params": [
+     {
+      "name": "limit",
+      "in": "query",
+      "required": false,
+      "type": "integer"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/cloud-training/submit": {
+   "POST": {
+    "operationId": "submit_job_cloud_training_submit_post",
+    "params": [
+     {
+      "name": "dataset_id",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     },
+     {
+      "name": "provider",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/cloud-training/{job_id}/status": {
+   "GET": {
+    "operationId": "job_status_cloud_training__job_id__status_get",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/cloud-training/{job_id}/cancel": {
+   "POST": {
+    "operationId": "cancel_job_cloud_training__job_id__cancel_post",
+    "params": [
+     {
+      "name": "job_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/plugins": {
+   "GET": {
+    "operationId": "list_plugins_plugins_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/plugins/{plugin_name}/enable": {
+   "POST": {
+    "operationId": "enable_plugin_plugins__plugin_name__enable_post",
+    "params": [
+     {
+      "name": "plugin_name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/plugins/{plugin_name}/disable": {
+   "POST": {
+    "operationId": "disable_plugin_plugins__plugin_name__disable_post",
+    "params": [
+     {
+      "name": "plugin_name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/plugins/reload": {
+   "POST": {
+    "operationId": "reload_plugins_plugins_reload_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tools": {
+   "GET": {
+    "operationId": "list_tools_tools_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/tools/{tool_id}/generate": {
+   "POST": {
+    "operationId": "generate_tool_tools__tool_id__generate_post",
+    "params": [
+     {
+      "name": "tool_id",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ToolGenerateRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/model-stack": {
+   "GET": {
+    "operationId": "get_stack_model_stack_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/model-stack/base": {
+   "POST": {
+    "operationId": "set_base_model_stack_base_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Payload"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/model-stack/push": {
+   "POST": {
+    "operationId": "push_layer_model_stack_push_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "additionalProperties": true,
+      "type": "object",
+      "title": "Payload"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/model-stack/{name}": {
+   "DELETE": {
+    "operationId": "remove_layer_model_stack__name__delete",
+    "params": [
+     {
+      "name": "name",
+      "in": "path",
+      "required": true,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/model-stack/clear": {
+   "POST": {
+    "operationId": "clear_layers_model_stack_clear_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Payload"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/encode": {
+   "POST": {
+    "operationId": "encode_phoneme_encode_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "EncodeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/decode": {
+   "POST": {
+    "operationId": "decode_phoneme_decode_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": {
+      "items": {
+       "type": "integer"
+      },
+      "type": "array",
+      "title": "Ids"
+     }
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/visualize": {
+   "POST": {
+    "operationId": "visualize_phoneme_visualize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "EncodeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/score": {
+   "POST": {
+    "operationId": "score_phoneme_score_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "ScoreRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/batch-encode": {
+   "POST": {
+    "operationId": "batch_encode_phoneme_batch_encode_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "BatchEncodeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/detect-language": {
+   "POST": {
+    "operationId": "detect_language_phoneme_detect_language_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "EncodeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/synthesize": {
+   "POST": {
+    "operationId": "synthesize_phoneme_synthesize_post",
+    "params": [],
+    "body": {
+     "content_type": "application/json",
+     "schema": "SynthesizeRequest"
+    },
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/phoneme/languages": {
+   "GET": {
+    "operationId": "languages_phoneme_languages_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/phoneme/status": {
+   "GET": {
+    "operationId": "status_phoneme_status_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/contracts": {
+   "GET": {
+    "operationId": "contracts.list.get",
+    "params": [
+     {
+      "name": "prefix",
+      "in": "query",
+      "required": false,
+      "type": "string"
+     }
+    ],
+    "body": null,
+    "responses": [
+     "200",
+     "422"
+    ]
+   }
+  },
+  "/mole/report": {
+   "GET": {
+    "operationId": "get_report_mole_report_get",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  },
+  "/mole/run": {
+   "POST": {
+    "operationId": "run_mole_mole_run_post",
+    "params": [],
+    "body": null,
+    "responses": [
+     "200"
+    ]
+   }
+  }
+ }
+}

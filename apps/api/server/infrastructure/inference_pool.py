@@ -14,11 +14,12 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import builtins
 import logging
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from contextlib import asynccontextmanager
-from typing import Any, Callable, Optional
+from typing import Any
 
 logger = logging.getLogger("slo.infrastructure.inference_pool")
 
@@ -30,7 +31,7 @@ class InferencePool:
     and per-task timeouts.
     """
 
-    _instance: Optional[InferencePool] = None
+    _instance: InferencePool | None = None
     _lock = asyncio.Lock()
 
     def __init__(self, max_workers: int = 4, queue_timeout: float = 30.0):
@@ -48,13 +49,17 @@ class InferencePool:
         if cls._instance is None:
             async with cls._lock:
                 if cls._instance is None:
-                    from domains.infrastructure.resource_manager import get_resource_manager
+                    from domain.infrastructure.resource_manager import get_resource_manager
+
                     rm = get_resource_manager()
                     import os
-                    max_workers = int(os.environ.get(
-                        "SLO_INFERENCE_POOL_SIZE",
-                        rm.inference_pool_size,
-                    ))
+
+                    max_workers = int(
+                        os.environ.get(
+                            "SLO_INFERENCE_POOL_SIZE",
+                            rm.inference_pool_size,
+                        )
+                    )
                     cls._instance = cls(max_workers=max_workers)
         return cls._instance
 
@@ -68,7 +73,7 @@ class InferencePool:
         self,
         fn: Callable[..., Any],
         *args: Any,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         **kwargs: Any,
     ) -> Any:
         """Submit a synchronous function to the thread pool.
@@ -94,9 +99,13 @@ class InferencePool:
                 loop.run_in_executor(self._executor, lambda: fn(*args, **kwargs)),
                 timeout=timeout or self._queue_timeout,
             )
-        except asyncio.TimeoutError:
-            logger.warning("InferencePool task timed out (fn=%s)", getattr(fn, "__name__", str(fn)), extra={"tag": "INFRA"})
-            raise TimeoutError("Inference task timed out")
+        except builtins.TimeoutError:
+            logger.warning(
+                "InferencePool task timed out (fn=%s)",
+                getattr(fn, "__name__", str(fn)),
+                extra={"tag": "INFRA"},
+            )
+            raise TimeoutError("Inference task timed out") from None
         finally:
             self._semaphore.release()
 
@@ -104,7 +113,7 @@ class InferencePool:
         self,
         fn: Callable[..., Any],
         *args: Any,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         **kwargs: Any,
     ):
         """Run a synchronous generator in the thread pool, yielding results.
@@ -158,7 +167,9 @@ class InferencePool:
 
     async def shutdown(self):
         self._executor.shutdown(wait=True, cancel_futures=False)
-        logger.info("InferencePool shut down (workers=%d)", self._max_workers, extra={"tag": "INFRA"})
+        logger.info(
+            "InferencePool shut down (workers=%d)", self._max_workers, extra={"tag": "INFRA"}
+        )
 
 
 _SENTINEL = object()

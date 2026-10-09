@@ -1,6 +1,7 @@
 'use client'
 
-import { Card, CardContent } from '@sloughgpt/strui'
+import { memo } from 'react'
+import { cn, Card, CardContent } from '@sloughgpt/strui'
 import { StatCard, KpiGrid } from '@sloughgpt/strui'
 import type { AutoTrainStatus } from '@/lib/training-controller'
 
@@ -8,7 +9,7 @@ interface AutoTrainCardProps {
   status: AutoTrainStatus
 }
 
-export function AutoTrainCard({ status }: AutoTrainCardProps) {
+export const AutoTrainCard = memo(function AutoTrainCard({ status }: AutoTrainCardProps) {
   return (
     <Card className="p-3">
       <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Auto-Trainer</span>
@@ -17,7 +18,7 @@ export function AutoTrainCard({ status }: AutoTrainCardProps) {
           <StatCard
             label="Status"
             value={status.enabled ? <span className="font-mono">Running</span> : <span className="font-mono">Off</span>}
-            icon={<span className={`inline-block w-2 h-2 rounded-full ${status.enabled ? 'bg-success' : 'bg-muted-foreground/50'}`} />}
+            icon={<span className={cn('inline-block w-2 h-2 rounded-full', status.enabled ? 'bg-success' : 'bg-muted-foreground/50')} />}
           />
           <StatCard label="Queue" value={`${status.pending_conversations ?? 0}/${status.threshold ?? 0}`} numeric />
           <StatCard label="Trains" value={(status.total_trains ?? 0).toString()} numeric />
@@ -35,4 +36,4 @@ export function AutoTrainCard({ status }: AutoTrainCardProps) {
       </CardContent>
     </Card>
   )
-}
+})

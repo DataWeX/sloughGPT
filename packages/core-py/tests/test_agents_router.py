@@ -3,13 +3,12 @@
 Covers: list, create, get, update, delete, execute, list_runs, get_run.
 Agent system is mocked.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, AsyncMock
-
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -25,11 +24,39 @@ from routers.agents import AgentsRouter  # noqa: E402
 def _mock_system(**overrides) -> MagicMock:
     sys = MagicMock()
     sys.list.return_value = [
-        {"id": "a1", "name": "Agent One", "description": "desc", "instructions": "", "tools": [], "avatar": ""},
+        {
+            "id": "a1",
+            "name": "Agent One",
+            "description": "desc",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+        },
     ]
-    sys.get.return_value = {"id": "a1", "name": "Agent One", "description": "desc", "instructions": "", "tools": [], "avatar": ""}
-    sys.create.return_value = {"id": "new-agent", "name": "New", "description": "", "instructions": "", "tools": [], "avatar": ""}
-    sys.update.return_value = {"id": "a1", "name": "Updated", "description": "", "instructions": "", "tools": [], "avatar": ""}
+    sys.get.return_value = {
+        "id": "a1",
+        "name": "Agent One",
+        "description": "desc",
+        "instructions": "",
+        "tools": [],
+        "avatar": "",
+    }
+    sys.create.return_value = {
+        "id": "new-agent",
+        "name": "New",
+        "description": "",
+        "instructions": "",
+        "tools": [],
+        "avatar": "",
+    }
+    sys.update.return_value = {
+        "id": "a1",
+        "name": "Updated",
+        "description": "",
+        "instructions": "",
+        "tools": [],
+        "avatar": "",
+    }
     sys.delete.return_value = True
     sys.execute = AsyncMock(return_value={"result": "done"})
     return sys
@@ -38,6 +65,9 @@ def _mock_system(**overrides) -> MagicMock:
 def _app(ar: AgentsRouter) -> FastAPI:
     app = FastAPI()
     app.include_router(ar.router)
+    from infrastructure.exception_handlers import register_all_handlers
+
+    register_all_handlers(app)
     return app
 
 
@@ -49,8 +79,12 @@ class TestListAgents:
         client = TestClient(_app(ar))
         resp = client.get("/agents")
         assert resp.status_code == 200
-        assert len(resp.json()) == 1
-        assert resp.json()[0]["id"] == "a1"
+        body = resp.json()
+        data = body.get("data", body)
+        if isinstance(data, dict):
+            data = data.get("agents", data.get("items", []))
+        assert len(data) == 1
+        assert data[0]["id"] == "a1"
 
 
 class TestCreateAgent:
@@ -63,7 +97,9 @@ class TestCreateAgent:
         client = TestClient(_app(ar))
         resp = client.post("/agents", json={"name": "New"})
         assert resp.status_code == 201
-        assert resp.json()["id"] == "new-agent"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["id"] == "new-agent"
 
     @patch.object(AgentsRouter, "_get_system")
     def test_create_duplicate(self, mock_gs):
@@ -84,7 +120,9 @@ class TestGetAgent:
         client = TestClient(_app(ar))
         resp = client.get("/agents/a1")
         assert resp.status_code == 200
-        assert resp.json()["id"] == "a1"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["id"] == "a1"
 
     @patch.object(AgentsRouter, "_get_system")
     def test_get_not_found(self, mock_gs):
@@ -105,7 +143,9 @@ class TestUpdateAgent:
         client = TestClient(_app(ar))
         resp = client.put("/agents/a1", json={"name": "Updated"})
         assert resp.status_code == 200
-        assert resp.json()["name"] == "Updated"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["name"] == "Updated"
 
     @patch.object(AgentsRouter, "_get_system")
     def test_update_not_found(self, mock_gs):
@@ -146,7 +186,9 @@ class TestExecuteAgent:
         client = TestClient(_app(ar))
         resp = client.post("/agents/a1/execute", json={"request": "do something"})
         assert resp.status_code == 200
-        assert resp.json()["result"] == "done"
+        body = resp.json()
+        data = body.get("data", body)
+        assert data["result"] == "done"
 
 
 class TestListRuns:
@@ -155,7 +197,7 @@ class TestListRuns:
         mock_gs.return_value = _mock_system()
         ar = AgentsRouter()
         # runs comes from run_history store
-        with patch("domains.agents.run_history.get_agent_run_store") as mock_rs:
+        with patch("domain.agents._internal.run_history.get_agent_run_store") as mock_rs:
             mock_rs.return_value.list_runs.return_value = []
             client = TestClient(_app(ar))
             resp = client.get("/agents/runs")

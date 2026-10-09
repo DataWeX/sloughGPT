@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type KeyboardEvent, type ChangeEvent } from 'react'
+import { useCallback, useEffect, useState, memo, type KeyboardEvent, type ChangeEvent } from 'react'
 import { Textarea } from '@sloughgpt/strui'
 
 interface ChatInputFieldProps {
@@ -9,8 +9,9 @@ interface ChatInputFieldProps {
   onSend: () => void
   placeholder: string
   disabled: boolean
-  textareaRef: React.RefObject<HTMLTextAreaElement>
+  textareaRef: React.RefObject<HTMLTextAreaElement | null>
   suppressEnter?: boolean
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void
 }
 
 const PLACEHOLDERS = [
@@ -27,7 +28,7 @@ function autoResize(textarea: HTMLTextAreaElement | null) {
   }
 }
 
-export function ChatInputField({ value, onChange, onSend, placeholder, disabled, textareaRef, suppressEnter }: ChatInputFieldProps) {
+export const ChatInputField = memo(function ChatInputField({ value, onChange, onSend, placeholder, disabled, textareaRef, suppressEnter, onKeyDown }: ChatInputFieldProps) {
   const [phIndex, setPhIndex] = useState(0)
 
   useEffect(() => {
@@ -46,16 +47,17 @@ export function ChatInputField({ value, onChange, onSend, placeholder, disabled,
   }, [onChange, textareaRef])
 
   const handleKeyDown = useCallback((e: KeyboardEvent<HTMLTextAreaElement>) => {
+    onKeyDown?.(e)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       if (!suppressEnter) onSend()
     }
-  }, [onSend, suppressEnter])
+  }, [onSend, suppressEnter, onKeyDown])
 
   return (
     <>
       <Textarea
-        ref={textareaRef}
+        ref={textareaRef as React.RefObject<HTMLTextAreaElement>}
         value={value}
         onChange={handleChange}
         onKeyDown={handleKeyDown}
@@ -69,4 +71,4 @@ export function ChatInputField({ value, onChange, onSend, placeholder, disabled,
       <p id="chat-input-hint" className="sr-only">Press Enter to send, Shift+Enter for new line</p>
     </>
   )
-}
+})

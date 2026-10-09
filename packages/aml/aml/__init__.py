@@ -8,12 +8,22 @@ MIME type: application/aml
 File extension: .aml
 """
 
+from aml.mime import detect_mime, is_aml, register_mime
 from aml.parser import parse, parse_file
-from aml.serializer import serialize, serialize_file, dict_to_aml
-from aml.schema import AmlDocument, AmlBlock, AmlValue
-from aml.mime import register_mime, detect_mime, is_aml
+from aml.schema import AmlBlock, AmlDocument, AmlValue
+from aml.serializer import dict_to_aml, serialize, serialize_file
 
 __version__ = "0.1.0"
-__all__ = ["parse", "parse_file", "serialize", "serialize_file",
-           "dict_to_aml", "AmlDocument", "AmlBlock", "AmlValue",
-           "register_mime", "detect_mime", "is_aml"]
+__all__ = [
+    "parse",
+    "parse_file",
+    "serialize",
+    "serialize_file",
+    "dict_to_aml",
+    "AmlDocument",
+    "AmlBlock",
+    "AmlValue",
+    "register_mime",
+    "detect_mime",
+    "is_aml",
+]

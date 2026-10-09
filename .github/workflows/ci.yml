@@ -21,25 +21,18 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
-      - run: npm ci
-        working-directory: apps/web
-      - run: npm ci
-        working-directory: packages/strui
-      - name: Ensure @sloughgpt/strui symlink
-        run: |
-          if [ ! -L node_modules/@sloughgpt/strui ] && [ ! -d node_modules/@sloughgpt/strui ]; then
-            mkdir -p node_modules/@sloughgpt
-            ln -sfn ../../../../packages/strui node_modules/@sloughgpt/strui
-          fi
-        working-directory: apps/web
+          cache-dependency-path: package-lock.json
+      # ONE workspace-root install. npm ci inside a member climbs to the root
+      # anyway; a second member install wipes and replaces the root tree
+      # (losing next + @webgpu/types -> TS2688 and `next` 127, seen
+      # 2026-10-05 on feat/contract-gates run 37267302387). The workspace
+      # link for @sloughgpt/strui is created by this install itself.
+      - run: npm ci --ignore-scripts
       - run: npx tsc --noEmit
         working-directory: apps/web
 
   frontend-lib-tests:
-    name: Frontend lib tests
+    name: Frontend unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,12 +40,12 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
-      - run: npm ci
-        working-directory: apps/web
-      - run: npm run test:lib
+          cache-dependency-path: package-lock.json
+      - run: npm ci --ignore-scripts
+      # Full suite (843 files), not just lib/: the 700+ component/feature/
+      # hook/app tests previously ran in NO CI job (ci_cd test-web is
+      # needs:test-strui and strui is red -> skipped forever).
+      - run: npm run test
         working-directory: apps/web
 
   frontend-build:
@@ -64,20 +57,19 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
-      - run: npm ci
-        working-directory: apps/web
-      - run: npm ci --omit=peer
-        working-directory: packages/strui
+          cache-dependency-path: package-lock.json
+      # ONE workspace-root install — see the typecheck job's comment.
+      - run: npm ci --ignore-scripts
       - run: npm run build
         working-directory: apps/web
 
   frontend-e2e:
     name: E2E tests
     runs-on: ubuntu-latest
-    needs: [frontend-build]
+    # No frontend-build dependency: the 21 specs target the Vite dev server
+    # (cypress.config.ts defaults baseUrl to 5173; next-compat shims are
+    # react-router-backed and SSR under `next start` throws useLocation()).
+    # The Vite server needs no .next production build.
     env:
       NEXTAUTH_SECRET: ci-test-secret
     steps:
@@ -86,16 +78,20 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
-      - run: npm ci
-        working-directory: apps/web
-      - run: npm ci --omit=peer
-        working-directory: packages/strui
-      - run: npm run build
-        working-directory: apps/web
-      - run: npx start-server-and-test "npx next start -p 3010" http://localhost:3010 "npx cypress run --config baseUrl=http://localhost:3010"
+          cache-dependency-path: package-lock.json
+      # Cache the Cypress binary (~120 MB) keyed on the exact lockfile
+      # version — `npx cypress install` skips the download when warm.
+      - name: Resolve Cypress version
+        id: cypress
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/cypress'].version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/Cypress
+          key: cypress-${{ runner.os }}-${{ steps.cypress.outputs.version }}
+      - run: npm ci --ignore-scripts
+      # --ignore-scripts skips cypress's binary download; fetch it explicitly.
+      - run: npx cypress install
+      - run: npm run e2e:vite
         working-directory: apps/web
 
   python-checks:
@@ -103,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.9", "3.11"]
+        python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -119,13 +115,16 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install pytest
+          # Root pytest.ini filterwarnings reference starlette; the mogdb job
+          # otherwise aborts at collection when it is not installed.
+          pip install starlette
           pip install -e packages/mogdb
       - name: Syntax check
         run: |
           python3 -m py_compile packages/mogdb/src/mogdb/collection.py
           python3 -m py_compile packages/mogdb/src/mogdb/database.py
       - name: Run mogdb tests
-        run: python3 -m pytest packages/mogdb/tests/test_mogdb.py -q -o "addopts="
+        run: python3 -m pytest packages/mogdb/tests/test_mogdb.py -q -o "addopts=" -o "filterwarnings="
 
   feature-tags:
     name: Feature Tags
@@ -139,4 +138,6 @@ jobs:
           python-version: "3.11"
       - name: Check feature tags
         run: |
-          PYTHONPATH=packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
+          # domain/ lives at the repo root (packages/core-py has no domain/);
+          # the script imports domain.shared._internal.feature_flags.
+          PYTHONPATH=.:packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions

@@ -6,8 +6,8 @@ import argparse
 import json
 import sys
 
-from aml.parser import parse, parse_file
-from aml.serializer import serialize, dict_to_aml
+from aml.parser import parse_file
+from aml.serializer import dict_to_aml, serialize
 
 
 def cmd_parse(args: argparse.Namespace) -> int:
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     p_json.add_argument("file", help="AML file to convert")
     p_json.add_argument("--pretty", "-p", action="store_true", help="Pretty-print JSON")
 
-    p_aml = sub.add_parser("from-json", help="Convert JSON (stdin) to AML")
+    sub.add_parser("from-json", help="Convert JSON (stdin) to AML")
 
     p_val = sub.add_parser("validate", help="Validate AML syntax")
     p_val.add_argument("file", help="AML file to validate")

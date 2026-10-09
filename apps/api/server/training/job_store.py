@@ -4,15 +4,19 @@ Stores training jobs in MogDB (the project's embedded document database)
 for crash recovery. Jobs persist across server restarts.
 """
 
+from __future__ import annotations
+
+import builtins
 import json
-import threading
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-from datetime import datetime
 import logging
+import threading
+from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 from mogdb import MogDB
-from domains.shared import find_repo_root
+
+from domain.shared import find_repo_root
 
 logger = logging.getLogger("slo.job_store")
 
@@ -31,7 +35,7 @@ class JobStore:
     collection journals (``jobs`` and ``job_events``).
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         if db_path is None:
             db_path = str(find_repo_root(Path(__file__).resolve()) / "data" / "training_jobs.db")
         self.db_path = Path(db_path)
@@ -45,8 +49,7 @@ class JobStore:
             self._jobs = self._db.collection("jobs")
             self._events = self._db.collection("job_events")
         except Exception:
-            import logging
-            logging.getLogger("slo.training").warning(
+            logger.warning(
                 "JobStore: failed to open MogDB at %s, operating in degraded mode", self.db_path
             )
 
@@ -58,10 +61,12 @@ class JobStore:
     def _new_job_doc(
         job_id: str,
         name: str,
-        config: Dict[str, Any],
+        config: dict[str, Any],
         dataset: str,
         now: str,
-    ) -> Dict[str, Any]:
+        user_id: str = "",
+        workspace_id: str = "",
+    ) -> dict[str, Any]:
         """Build the full stored document for a new job."""
         return {
             "_id": job_id,
@@ -81,6 +86,8 @@ class JobStore:
             "checkpoint_path": None,
             "checkpoint_dir": None,
             "error": None,
+            "user_id": user_id,
+            "workspace_id": workspace_id,
             "created_at": now,
             "started_at": None,
             "updated_at": now,
@@ -90,44 +97,67 @@ class JobStore:
         }
 
     @staticmethod
-    def _doc_to_job(doc: Dict[str, Any]) -> Dict[str, Any]:
+    def _doc_to_job(doc: dict[str, Any]) -> dict[str, Any]:
         """Convert a stored MogDB document to the job dict returned to callers."""
-        return {
-            k: v
-            for k, v in doc.items()
-            if k not in ("_id", "_created", "_updated")
-        }
+        return {k: v for k, v in doc.items() if k not in ("_id", "_created", "_updated")}
 
-    def create(self, job_id: str, name: str, config: Dict[str, Any], dataset: str = "") -> Dict:
+    def create(
+        self,
+        job_id: str,
+        name: str,
+        config: dict[str, Any],
+        dataset: str = "",
+        user_id: str = "",
+        workspace_id: str = "",
+    ) -> dict:
         """Create a new job."""
         if not self.is_available:
             return {"id": job_id, "status": "error", "error": "Job store unavailable"}
         now = datetime.now().isoformat()
         with self._lock:
-            self._jobs.insert_one(self._new_job_doc(job_id, name, config, dataset, now))
+            self._jobs.insert_one(
+                self._new_job_doc(job_id, name, config, dataset, now, user_id, workspace_id)
+            )
         return self.get(job_id)
 
-    def get(self, job_id: str) -> Optional[Dict]:
+    def get(self, job_id: str) -> dict | None:
         """Get a job by ID."""
         if not self.is_available:
             return None
         doc = self._jobs.find_one({"_id": job_id})
         return self._doc_to_job(doc) if doc else None
 
-    def list(self, status: Optional[str] = None, include_crashed: bool = True) -> List[Dict]:
-        """List all jobs, optionally filtered by status."""
+    def list(
+        self,
+        status: str | None = None,
+        include_crashed: bool = True,
+        user_id: str = "",
+    ) -> list[dict]:
+        """List all jobs, optionally filtered by status and user."""
         if not self.is_available:
             return []
-        query: Dict[str, Any] = {}
+        query: dict[str, Any] = {}
         if status:
             query["status"] = status
         if not include_crashed:
             query["crashed"] = 0
+        if user_id:
+            query["user_id"] = user_id
 
         docs = self._jobs.find(query, sort=[("created_at", -1)])
         return [self._doc_to_job(d) for d in docs]
 
-    def update(self, job_id: str, **kwargs) -> Optional[Dict]:
+    def list_by_workspace(self, workspace_id: str, status: str | None = None) -> list[dict]:
+        """List jobs for a workspace."""
+        if not self.is_available:
+            return []
+        query: dict[str, Any] = {"workspace_id": workspace_id}
+        if status:
+            query["status"] = status
+        docs = self._jobs.find(query, sort=[("created_at", -1)])
+        return [self._doc_to_job(d) for d in docs]
+
+    def update(self, job_id: str, **kwargs) -> dict | None:
         """Update job fields."""
         kwargs["updated_at"] = datetime.now().isoformat()
 
@@ -145,7 +175,7 @@ class JobStore:
         progress: float,
         epoch: int = 0,
         step: int = 0,
-        loss: Optional[float] = None,
+        loss: float | None = None,
     ) -> None:
         """Update job progress."""
         self.update(
@@ -200,7 +230,7 @@ class JobStore:
         )
 
     @staticmethod
-    def is_stale_heartbeat(job: Dict, timeout_seconds: int = 300) -> bool:
+    def is_stale_heartbeat(job: dict, timeout_seconds: int = 300) -> bool:
         """Return True when a job's heartbeat is absent or older than ``timeout_seconds``.
 
         ``job`` is a store row dict (as returned by ``get`` / ``list``).
@@ -225,7 +255,7 @@ class JobStore:
             self._events.delete_many({"job_id": job_id})
             return deleted
 
-    def detect_crashed_jobs(self, timeout_seconds: int = 300) -> List[Dict]:
+    def detect_crashed_jobs(self, timeout_seconds: int = 300) -> builtins.list[dict]:
         """
         Detect jobs that may have crashed.
 
@@ -246,7 +276,7 @@ class JobStore:
         )
         return [self._doc_to_job(d) for d in docs]
 
-    def get_recoverable_jobs(self) -> List[Dict]:
+    def get_recoverable_jobs(self) -> builtins.list[dict]:
         """Get jobs that can be recovered.
 
         Returns 'interrupted' and 'failed' jobs (both are accepted by the
@@ -269,7 +299,7 @@ class JobStore:
 
         return [self._doc_to_job(d) for d in recoverable]
 
-    def log_event(self, job_id: str, event: str, data: Optional[Dict] = None) -> None:
+    def log_event(self, job_id: str, event: str, data: dict | None = None) -> None:
         """Log a job event."""
         with self._lock:
             self._events.insert_one(
@@ -281,7 +311,7 @@ class JobStore:
                 }
             )
 
-    def get_events(self, job_id: str, limit: int = 50) -> List[Dict]:
+    def get_events(self, job_id: str, limit: int = 50) -> builtins.list[dict]:
         """Get events for a job."""
         docs = self._events.find(
             {"job_id": job_id},
@@ -289,21 +319,27 @@ class JobStore:
             limit=limit,
         )
 
+        def _safe_json(s: str) -> Any:
+            try:
+                return json.loads(s)
+            except (json.JSONDecodeError, TypeError):
+                return None
+
         return [
             {
                 "event": doc.get("event"),
-                "data": json.loads(doc["data"]) if doc.get("data") else None,
+                "data": _safe_json(doc["data"]) if doc.get("data") else None,
                 "timestamp": doc.get("timestamp"),
             }
             for doc in docs
         ]
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get job statistics."""
         with self._lock:
             docs = self._jobs.find()
 
-            stats: Dict[str, Any] = {}
+            stats: dict[str, Any] = {}
             for doc in docs:
                 status = doc.get("status", "unknown")
                 stats[status] = stats.get(status, 0) + 1
@@ -314,7 +350,7 @@ class JobStore:
 
 
 # Global store instance
-_job_store: Optional[JobStore] = None
+_job_store: JobStore | None = None
 
 
 def get_job_store() -> JobStore:
@@ -323,3 +359,164 @@ def get_job_store() -> JobStore:
     if _job_store is None:
         _job_store = JobStore()
     return _job_store
+
+
+class PersistentTrainingJobs:
+    """Dict-like wrapper around JobStore for backward compatibility.
+
+    Provides the same ``training_jobs[job_id]`` interface while persisting
+    all mutations to MogDB. Falls back to an in-memory dict if JobStore
+    is unavailable.
+
+    ``__getitem__`` returns the LIVE in-process object, so the established
+    ``training_jobs[job_id][field] = value`` pattern works as callers
+    expect. Only JSON-serializable, non-private fields are persisted to
+    MogDB (private ``_`` keys hold threads/events); the live object keeps
+    everything for the life of the process.
+    """
+
+    def __init__(self):
+        self._fallback: dict[str, dict[str, Any]] = {}
+        self._live: dict[str, dict[str, Any]] = {}
+
+    def _store(self) -> JobStore | None:
+        try:
+            s = get_job_store()
+            return s if s.is_available else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _persistable(value: dict[str, Any]) -> dict[str, Any]:
+        """Strip private/non-serializable keys before MogDB persistence."""
+        return {k: v for k, v in value.items() if not k.startswith("_")}
+
+    def _persist(self, key: str, value: dict[str, Any]) -> None:
+        store = self._store()
+        persistable = self._persistable(value)
+        if store:
+            try:
+                existing = store.get(key)
+                if existing:
+                    # Merge: update existing doc with new values
+                    updates = {k: v for k, v in persistable.items() if k not in ("id", "_id")}
+                    if updates:
+                        store.update(key, **updates)
+                else:
+                    # Create new doc
+                    doc = {**persistable, "_id": key, "id": key}
+                    store._jobs.insert_one(doc)
+            except Exception as exc:
+                logger.debug("JobStore persist failed for %s: %s", key, exc)
+        else:
+            self._fallback[key] = value
+
+    def save(self, key: str) -> None:
+        """Write the live object back to MogDB (after in-place mutation)."""
+        live = self._live.get(key)
+        if live is not None:
+            self._persist(key, live)
+
+    def __getitem__(self, key: str) -> dict[str, Any]:
+        if key in self._live:
+            return self._live[key]
+        store = self._store()
+        if store:
+            doc = store.get(key)
+            if doc is not None:
+                self._live[key] = doc
+                return doc
+        return self._fallback[key]
+
+    def __setitem__(self, key: str, value: dict[str, Any]) -> None:
+        self._live[key] = value
+        self._persist(key, value)
+
+    def __delitem__(self, key: str) -> None:
+        self._live.pop(key, None)
+        store = self._store()
+        if store:
+            store.delete(key)
+        else:
+            del self._fallback[key]
+
+    def __contains__(self, key: object) -> bool:
+        store = self._store()
+        if store:
+            return store.get(str(key)) is not None
+        return key in self._fallback
+
+    def __len__(self) -> int:
+        store = self._store()
+        if store:
+            return len(store.list())
+        return len(self._fallback)
+
+    def __iter__(self):
+        store = self._store()
+        if store:
+            return iter(j["id"] for j in store.list())
+        return iter(self._fallback)
+
+    def get(self, key: str, default=None) -> dict[str, Any] | None:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def pop(self, key: str, *args):
+        self._live.pop(key, None)
+        store = self._store()
+        if store:
+            doc = store.get(key)
+            if doc:
+                store.delete(key)
+                return doc
+            if args:
+                return args[0]
+            raise KeyError(key)
+        return self._fallback.pop(key, *args)
+
+    def values(self):
+        # Live objects win: in-place progress/status mutations between
+        # persists must be visible to polling readers in the same process.
+        store = self._store()
+        if store:
+            merged = {j["id"]: j for j in store.list()}
+            merged.update(self._live)
+            return list(merged.values())
+        merged = dict(self._fallback)
+        merged.update(self._live)
+        return list(merged.values())
+
+    def items(self):
+        return [(j["id"], j) for j in self.values()]
+
+    def keys(self):
+        store = self._store()
+        if store:
+            return [j["id"] for j in store.list()]
+        return self._fallback.keys()
+
+    def update(self, other=None, **kwargs):
+        if other:
+            for k, v in other.items() if hasattr(other, "items") else other:
+                self[k] = v
+        for k, v in kwargs.items():
+            self[k] = v
+
+    def setdefault(self, key: str, default=None):
+        if key not in self:
+            self[key] = default if default is not None else {}
+        return self[key]
+
+    def clear(self) -> None:
+        """Remove all jobs from both the persistent store and the fallback dict."""
+        self._live.clear()
+        store = self._store()
+        if store:
+            for doc in store.list():
+                doc_id = doc.get("id") or doc.get("_id")
+                if doc_id:
+                    store.delete(doc_id)
+        self._fallback.clear()

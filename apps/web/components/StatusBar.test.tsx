@@ -9,6 +9,7 @@ vi.mock('@/hooks/useLiveStatus', () => ({
   useLiveStatus: () => {
     const h = mockHealthState()
     if (h === 'offline') return { connectionStatus: 'offline', health: null, healthLegacy: 'offline', lastUpdate: null, failureCount: 1, connected: false, live: false }
+    if (h === 'error') return { connectionStatus: 'error', health: null, healthLegacy: null, lastUpdate: null, failureCount: 6, connected: false, live: false }
     if (h === null) return { connectionStatus: 'connecting', health: null, healthLegacy: null, lastUpdate: null, failureCount: 0, connected: false, live: false }
     return { connectionStatus: 'connected', health: h, healthLegacy: h, lastUpdate: Date.now(), failureCount: 0, connected: true, live: true }
   },
@@ -34,16 +35,68 @@ vi.mock('@/components/WhatsNewDialog', () => ({
 
 const mockHealthSummary = { score: 85, summary: 'Healthy', tokens_per_sec: 15, model_loaded: true, model_type: 'gpt2', soul: 'friendly', uptime_seconds: 100, request_count: 50, error_count: 0, cpu_percent: 30, memory_percent: 40 }
 
+const mockClearFailures = vi.fn()
+
 const { useApiMonitor: _useApiMonitor, setHealthSummaryData } = vi.hoisted(() => {
   let hc: typeof mockHealthSummary | null = null
   return {
-    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc, recentFailures: [], failureCount: 0, lastOffline: null }),
+    useApiMonitor: (selector: (s: any) => any) => selector({ healthSummary: hc, recentFailures: [], failureCount: 0, lastOffline: null, clearFailures: mockClearFailures }),
     setHealthSummaryData: (v: typeof mockHealthSummary | null) => { hc = v },
   }
 })
 
 vi.mock('@/lib/api-monitor-store', () => ({
   useApiMonitor: _useApiMonitor,
+}))
+
+vi.mock('@/lib/config', () => ({
+  PUBLIC_API_URL: 'http://localhost:8000',
+}))
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
+  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+  Tooltip: ({ children }: any) => <div>{children}</div>,
+  TooltipTrigger: ({ children }: any) => <div>{children}</div>,
+  TooltipContent: ({ children }: any) => <div>{children}</div>,
+  IconMenu: (props: any) => <span />,
+  IconGrid: (props: any) => <span />,
+  IconRefresh: (props: any) => <span />,
+  IconX: (props: any) => <span />,
+
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { StatusBar } from './StatusBar'
@@ -74,14 +127,14 @@ describe('StatusBar', () => {
   it('renders tokens per second from live health', async () => {
     mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 15, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
     render(<StatusBar />)
-    const tps = await screen.findAllByText('15 t/s')
+    const tps = await screen.findAllByText('15 tok/s')
     expect(tps.length).toBeGreaterThanOrEqual(1)
   })
 
   it('renders inference count when no tps', async () => {
     mockHealthState.mockReturnValue({ model_loaded: true, model_type: 'gpt2', inference_count: 42, health_score: 85, health_status: 'healthy', health_summary: 'Healthy', tokens_per_sec: 0, is_inferencing: false, cpu_percent: 30, memory_percent: 40, uptime_seconds: 100, request_count: 50, error_count: 0, soul: 'friendly' })
     render(<StatusBar />)
-    const count = await screen.findAllByText('42 responses')
+    const count = await screen.findAllByText('42 reqs')
     expect(count.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -89,6 +142,14 @@ describe('StatusBar', () => {
     mockHealthState.mockReturnValue('offline')
     render(<StatusBar />)
     expect(screen.getByText(/Offline/)).toBeDefined()
+  })
+
+  it('shows the recoverable not-responding status when reload protection engaged', () => {
+    mockHealthState.mockReturnValue('error')
+    render(<StatusBar />)
+    // 'error' must not fall through to the healthy branch ("No model").
+    expect(screen.getByText(/Not responding — retrying/)).toBeDefined()
+    expect(screen.queryByText('No model')).toBeNull()
   })
 
   it('does not re-fetch soul on health-only ticks', async () => {

@@ -44,7 +44,15 @@ vi.mock('@/lib/error-store', () => ({ useErrorStore: { getState: vi.fn(() => ({ 
 
 vi.mock('@/lib/dev-log', () => ({
   devDebug: vi.fn(),
-  logger: { child: vi.fn(() => ({ info: vi.fn(), warning: vi.fn(), error: vi.fn() })) },
+  trackEvent: vi.fn(),
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warning: vi.fn(),
+    error: vi.fn(),
+    critical: vi.fn(),
+    child: vi.fn(() => ({ debug: vi.fn(), info: vi.fn(), warning: vi.fn(), error: vi.fn(), critical: vi.fn() })),
+  },
 }))
 
 

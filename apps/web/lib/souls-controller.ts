@@ -2,7 +2,10 @@
  * Souls Controller — axios-based API for personality management.
  */
 
-import { apiGet, apiPost, apiDelete } from './http-client'
+import { apiGet, apiPost, apiDelete, authFetch } from './http-client'
+import { logger } from './dev-log'
+
+const _log = logger.child('souls-controller')
 
 export interface Soul {
   name: string
@@ -54,6 +57,8 @@ export interface Checkpoint {
   training_dataset?: string
   training_duration_s?: number
   source?: string
+  avg_quality?: number
+  data_quality?: { avg_quality: number; repetition_rate: number; diversity: number; language_quality: number }
 }
 
 export interface SoulsResponse {
@@ -77,7 +82,8 @@ export const soulsController = {
   async getCurrent(): Promise<Soul | null> {
     try {
       return await apiGet<Soul>('/souls/current')
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get current soul', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
@@ -89,13 +95,13 @@ export const soulsController = {
   },
 
   async listCheckpoints(): Promise<CheckpointsResponse> {
-    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/training/checkpoints')
     const checkpoints = Array.isArray(data) ? data : (data?.checkpoints ?? [])
     return {checkpoints}
   },
 
   async loadCheckpoint(name: string): Promise<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }> {
-    return apiPost<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }>(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`)
+    return apiPost<{ status: string; name: string; soul?: string; loss?: number; steps?: number; traits?: Record<string, number>; path?: string }>(`/training/checkpoints/${encodeURIComponent(name)}/load`)
   },
 
   // ── Trait Weights ──
@@ -143,7 +149,7 @@ export const soulsController = {
     const res = await apiDelete<{ deleted: boolean } | { status: string; data: { deleted: boolean } }>(
       `/souls/weights/snapshot/${encodeURIComponent(name)}`
     )
-    return ('deleted' in res ? (res as { deleted: boolean }).deleted : false) ?? ('data' in res ? (res as { data: { deleted: boolean } }).data?.deleted : false) ?? false
+    return 'deleted' in res ? (res as { deleted: boolean }).deleted : false
   },
 
   async saveTraitWeights(weights: Record<string, Record<string, number>>): Promise<{ status: string }> {
@@ -151,13 +157,14 @@ export const soulsController = {
   },
 
   async deleteCheckpoint(name: string): Promise<{ status: string }> {
-    return apiDelete<{ status: string }>(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
+    return apiDelete<{ status: string }>(`/training/checkpoints/${encodeURIComponent(name)}`)
   },
 
   async getSoul(name: string): Promise<Soul | null> {
     try {
       return await apiGet<Soul>(`/souls/${encodeURIComponent(name)}`)
-    } catch {
+    } catch (err) {
+      _log.debug('Failed to get soul', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
@@ -168,15 +175,16 @@ export const soulsController = {
 
   async checkpointInfo(name: string): Promise<Checkpoint | null> {
     try {
-      return await apiGet<Checkpoint>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
-    } catch {
+      return await apiGet<Checkpoint>(`/training/checkpoints/${encodeURIComponent(name)}/info`)
+    } catch (err) {
+      _log.debug('Failed to get checkpoint info', { error: err instanceof Error ? err.message : String(err) })
       return null
     }
   },
 
   async downloadCheckpoint(name: string): Promise<Blob> {
-    const response = await fetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
-    if (!response.ok) throw new Error('Download failed')
+    const response = await authFetch(`/training/checkpoints/${encodeURIComponent(name)}/download`)
+    if (!response.ok) throw new Error('Could not download')
     return response.blob()
   },
 }

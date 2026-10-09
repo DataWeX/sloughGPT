@@ -1,4 +1,4 @@
-"""Tests for domains/training/export.py (model export utilities).
+"""Tests for domain.training._internal.export.py (model export utilities).
 
 Tests ModelMetadata, configs, GGUF wrappers, SOU export, and format listing.
 """
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from domains.training.export import (
+from domain.training._internal.export import (
     ExportConfig,
     GGUFExportOptions,
     ModelMetadata,
@@ -48,9 +48,7 @@ class TestModelMetadata:
         assert isinstance(d["tags"], list)
 
     def test_from_dict_filters_unknown(self):
-        md = ModelMetadata.from_dict(
-            {"name": "x", "vocab_size": 64, "unknown_field": 123}
-        )
+        md = ModelMetadata.from_dict({"name": "x", "vocab_size": 64, "unknown_field": 123})
         assert md.name == "x"
         assert md.vocab_size == 64
         assert not hasattr(md, "unknown_field")
@@ -161,8 +159,13 @@ class TestModelMetadata:
 
     def test_validate_full_ok(self):
         md = ModelMetadata(
-            vocab_size=10, n_embed=10, n_layer=2, n_head=2,
-            training_dataset="d", epochs_trained=1, lineage="l",
+            vocab_size=10,
+            n_embed=10,
+            n_layer=2,
+            n_head=2,
+            training_dataset="d",
+            epochs_trained=1,
+            lineage="l",
         )
         assert md.validate() == []
 
@@ -177,7 +180,13 @@ class TestCreateModelMetadata:
         md = create_model_metadata(
             FakeModel(),
             name="nm",
-            training_info={"dataset": "d", "epochs": 3, "train_loss": 0.1, "val_loss": 0.2, "steps": 5},
+            training_info={
+                "dataset": "d",
+                "epochs": 3,
+                "train_loss": 0.1,
+                "val_loss": 0.2,
+                "steps": 5,
+            },
             soul_info={"soul_name": "S", "personality": {"x": 1}, "soul_hash": "h"},
         )
         assert md.training_dataset == "d"
@@ -219,13 +228,23 @@ class TestConfigs:
         assert g.use_gpu is False
 
     def test_gguf_options_custom(self):
-        g = GGUFExportOptions(model_name="m", quantization="Q5_K_M", n_ctx=4096, rope_freq_base=50000.0, rope_freq_scale=0.5, use_gpu=True)
+        g = GGUFExportOptions(
+            model_name="m",
+            quantization="Q5_K_M",
+            n_ctx=4096,
+            rope_freq_base=50000.0,
+            rope_freq_scale=0.5,
+            use_gpu=True,
+        )
         assert g.model_name == "m"
         assert g.quantization == "Q5_K_M"
         assert g.n_ctx == 4096
         assert g.rope_freq_base == 50000.0
         assert g.rope_freq_scale == 0.5
         assert g.use_gpu is True
+
+
+pytest.importorskip("gguf", reason="gguf not installed")
 
 
 class TestGGUFWrappers:
@@ -239,7 +258,7 @@ class TestGGUFWrappers:
             rec["config"] = config
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf", stub)
+        monkeypatch.setattr("domain.training._internal.gguf_export.export_to_gguf", stub)
         tok = object()
         r = export_to_gguf(object(), "out.gguf", "Q8_0", tok)
         assert r == "out.gguf"
@@ -253,7 +272,7 @@ class TestGGUFWrappers:
             rec["config"] = config
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf", stub)
+        monkeypatch.setattr("domain.training._internal.gguf_export.export_to_gguf", stub)
         export_to_gguf(object(), "out.gguf")
         assert rec["config"].quantization == "Q4_K_M"
 
@@ -264,7 +283,7 @@ class TestGGUFWrappers:
             rec["tokenizer"] = tokenizer
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf_fp16", stub)
+        monkeypatch.setattr("domain.training._internal.gguf_export.export_to_gguf_fp16", stub)
         tok = object()
         r = export_to_gguf_fp16(object(), "out.gguf", tok)
         assert r == "out.gguf"
@@ -277,7 +296,7 @@ class TestGGUFWrappers:
             rec["tokenizer"] = tokenizer
             return output_path
 
-        monkeypatch.setattr("domains.training.gguf_export.export_to_gguf_q4_k_m", stub)
+        monkeypatch.setattr("domain.training._internal.gguf_export.export_to_gguf_q4_k_m", stub)
         r = export_to_gguf_q4_k_m(object(), "out.gguf")
         assert r == "out.gguf"
 
@@ -301,7 +320,7 @@ class TestExportToSou:
         assert Path(out).exists()
 
     def test_with_soul_profile(self, tmp_path):
-        from domains.inference import create_soul_profile
+        from domain.inference import create_soul_profile
 
         model = FakeModel(state={"w": np.ones((1,))})
         profile = create_soul_profile(name="profile-name", lineage="base")

@@ -1,15 +1,15 @@
 """Tests for production RAG system."""
 
-import pytest
 import numpy as np
-from domains.cognitive.rag import (
-    TextChunk,
-    RetrievalResult,
+
+from domain.cognition._internal.rag import (
     BM25Indexer,
-    HybridRetriever,
     CitationTracker,
     HallucinationDetector,
+    HybridRetriever,
     ProductionRAG,
+    RetrievalResult,
+    TextChunk,
 )
 
 
@@ -35,7 +35,9 @@ class TestTextChunk:
 class TestRetrievalResult:
     def test_fields(self):
         chunk = TextChunk(id="c1", content="test", metadata={})
-        rr = RetrievalResult(chunk=chunk, dense_score=0.8, sparse_score=0.5, combined_score=0.7, rank=1)
+        rr = RetrievalResult(
+            chunk=chunk, dense_score=0.8, sparse_score=0.5, combined_score=0.7, rank=1
+        )
         assert rr.dense_score == 0.8
         assert rr.sparse_score == 0.5
         assert rr.combined_score == 0.7
@@ -221,7 +223,13 @@ class TestCitationTracker:
 
     def test_cite_with_support(self):
         ct = CitationTracker()
-        claim = {"subject": "Python", "predicate": "is a language", "text": "Python is a language", "start": 0, "end": 10}
+        claim = {
+            "subject": "Python",
+            "predicate": "is a language",
+            "text": "Python is a language",
+            "start": 0,
+            "end": 10,
+        }
         sources = [TextChunk(id="s1", content="Python is a language", metadata={"source": "wiki"})]
         cited = ct.cite(claim, sources)
         assert cited["supported"] is True
@@ -230,7 +238,13 @@ class TestCitationTracker:
 
     def test_cite_no_support(self):
         ct = CitationTracker()
-        claim = {"subject": "Python", "predicate": "is a language", "text": "Python is a language", "start": 0, "end": 10}
+        claim = {
+            "subject": "Python",
+            "predicate": "is a language",
+            "text": "Python is a language",
+            "start": 0,
+            "end": 10,
+        }
         cited = ct.cite(claim, [])
         assert cited["supported"] is False
 
@@ -340,3 +354,92 @@ class TestProductionRAG:
         assert result["num_results"] > 0
         if result["results"]:
             assert "Alice" in result["results"][0]["content"]
+
+
+class TestBM25IdempotentIndex:
+    """Regression: index() must reset (bulk loads blew up O(n^2))."""
+
+    def _chunks(self, n=5):
+        return [
+            TextChunk(id=f"c{i}", content=f"document number {i} about cats", metadata={})
+            for i in range(n)
+        ]
+
+    def test_reindex_same_chunks_is_stable(self):
+        bm25 = BM25Indexer()
+        chunks = self._chunks()
+        bm25.index(chunks)
+        snapshot = (
+            list(bm25.doc_lengths),
+            dict(bm25.doc_freq),
+            {k: list(v) for k, v in bm25.inverted_index.items()},
+        )
+        bm25.index(chunks)
+        assert bm25.num_docs == len(chunks)
+        assert list(bm25.doc_lengths) == snapshot[0]
+        assert dict(bm25.doc_freq) == snapshot[1]
+        assert {k: list(v) for k, v in bm25.inverted_index.items()} == snapshot[2]
+
+    def test_no_triangular_growth(self):
+        bm25 = BM25Indexer()
+        bm25.index(self._chunks(5))
+        assert len(bm25.doc_lengths) == 5
+
+    def test_bulk_add_matches_per_doc_rebuild(self):
+        docs = [f"bulk document {i} about dogs and birds" for i in range(10)]
+        incremental = ProductionRAG()
+        for d in docs:
+            incremental.add_document(d)
+        bulk = ProductionRAG()
+        for d in docs:
+            bulk.add_document(d, rebuild_index=False)
+        bulk.retriever.build_index()
+        a = incremental.retriever.bm25
+        b = bulk.retriever.bm25
+        assert a.num_docs == b.num_docs == len(bulk.retriever.chunks)
+        assert list(a.doc_lengths) == list(b.doc_lengths)
+        assert dict(a.doc_freq) == dict(b.doc_freq)
+        assert {k: list(v) for k, v in a.inverted_index.items()} == {
+            k: list(v) for k, v in b.inverted_index.items()
+        }
+        # Both answer queries identically
+        ra = incremental.query("dogs", top_k=3)
+        rb = bulk.query("dogs", top_k=3)
+        assert [r["chunk_id"] for r in ra["results"]] == [r["chunk_id"] for r in rb["results"]]
+
+    def test_bulk_load_queries_correctly(self):
+        rag = ProductionRAG()
+        for i in range(20):
+            rag.add_document(f"training note {i} about neural networks", rebuild_index=False)
+        rag.retriever.build_index()
+        result = rag.query("neural networks", top_k=5)
+        assert result["num_results"] > 0
+
+    def test_invariants_hold_after_every_mutation_path(self):
+        """Structural invariants hold no matter how the index was built."""
+        import random
+
+        rng = random.Random(42)
+        words = ["alpha", "beta", "gamma", "delta", "epsilon"]
+        for trial in range(5):
+            n = rng.randint(1, 12)
+            docs = [
+                " ".join(rng.choice(words) for _ in range(rng.randint(1, 30))) for _ in range(n)
+            ]
+            rag = ProductionRAG()
+            if trial % 2:
+                for d in docs:
+                    rag.add_document(d)
+            else:
+                for d in docs:
+                    rag.add_document(d, rebuild_index=False)
+                rag.retriever.build_index()
+            bm25 = rag.retriever.bm25
+            n_chunks = len(rag.retriever.chunks)
+            assert len(bm25.doc_lengths) == n_chunks
+            assert all(df <= n_chunks for df in bm25.doc_freq.values())
+            # Rebuild stability: a second build changes nothing.
+            before = (list(bm25.doc_lengths), dict(bm25.doc_freq))
+            bm25.index(rag.retriever.chunks)
+            assert list(bm25.doc_lengths) == before[0]
+            assert dict(bm25.doc_freq) == before[1]

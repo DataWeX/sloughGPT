@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Skeleton, Chip } from '@sloughgpt/strui'
+import { ActionCard, Button, Input, Skeleton, Chip } from '@sloughgpt/strui'
 import { IconRefresh, IconSearch } from '@sloughgpt/strui'
 import { tokenTreeController, type MergeRule, type LineageResult } from '@/lib/token-tree-controller'
 
@@ -35,8 +35,7 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
 
   useEffect(() => {
     load(limit, query)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
+  }, [refreshKey, limit, query, load])
 
   const handleSearch = async () => {
     setExpanded(null)
@@ -70,14 +69,15 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Merge Rules Explorer</CardTitle>
+    <ActionCard
+      title="Merge Rules Explorer"
+      actions={
         <Button size="sm" variant="ghost" onClick={() => load(limit, query.trim())} disabled={loading} aria-label="Refresh merge rules">
           <IconRefresh className="h-4 w-4" />
         </Button>
-      </CardHeader>
-      <CardContent className="space-y-3">
+      }
+      contentClassName="space-y-3"
+    >
         <div className="flex items-center gap-2">
           <div className="relative flex-1 max-w-xs">
             <IconSearch className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -114,6 +114,7 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
             {merges.map(m => (
               <div key={m.rank}>
                 <button
+                  type="button"
                   onClick={() => handleToggleRule(m)}
                   className="w-full flex items-center gap-3 py-1.5 text-sm text-left hover:bg-muted/40 transition-colors px-1 -mx-1 rounded"
                   aria-label={`Toggle lineage for ${display(m.token)}`}
@@ -131,7 +132,7 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
                 {expanded?.rank === m.rank && (
                   <div className="rounded-md bg-muted/50 px-3 py-2 my-1">
                     <div className="text-xs text-muted-foreground mb-1">
-                      Merge lineage of <span className="font-mono text-primary">"{display(m.token)}"</span>
+                      Merge lineage of <span className="font-mono text-primary">{'"' + display(m.token) + '"'}</span>
                       <span className="text-muted-foreground/70"> — {lineage?.leaves.length ?? '…'} character leaves</span>
                     </div>
                     {lineageLoading ? (
@@ -167,7 +168,6 @@ export function TokenTreeMergesCard({ refreshKey = 0 }: TokenTreeMergesCardProps
           The most frequent BPE merges the tree learned from its corpus, ranked by count. Search filters rules by
           their parts; click a rule to expand its lineage down to character leaves.
         </p>
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

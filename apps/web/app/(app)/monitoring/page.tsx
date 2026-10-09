@@ -6,18 +6,30 @@ import { PageContainer } from '@/components/PageContainer'
 import { Card, CardContent, FoldSection } from '@sloughgpt/strui'
 import { Button, Switch } from '@sloughgpt/strui'
 import { Skeleton } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { extractErrorMessage } from '@/lib/error-utils'
-import { systemController, type DetailedHealth, type SystemMetrics, type SystemInfo, type DiskUsage, type GPUInfo, type ExecutorStatus } from '@/lib/system-controller'
+import {
+  systemController,
+  type DetailedHealth,
+  type SystemMetrics,
+  type SystemInfo,
+  type DiskUsage,
+  type GPUInfo,
+  type BatteryInfo,
+  type ExecutorStatus,
+  type ServicesHealth,
+} from '@/lib/system-controller'
 import { trainingController, type TrainingJob } from '@/lib/training-controller'
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { benchmarkController } from '@/lib/benchmark-controller'
 import { multimodalController } from '@/lib/controllers'
 import type { AutoTrainStatus } from '@/lib/training-controller'
-import dynamicNext from 'next/dynamic'
+import dynamicNext from '@/vite/next-compat/dynamic'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { downloadJson } from '@/lib/download-utils'
+import { useToastStore } from '@/lib/toast-store'
 import { todayDateString, getJsonItem, setJsonItem } from '@/lib/format-bytes'
-import { StatusCard } from '@/components/monitoring/StatusCard'
+import { SystemStatusCard } from '@/components/monitoring/SystemStatusCard'
 import { DiagnosticsCard } from '@/components/monitoring/DiagnosticsCard'
 import { TrafficCard } from '@/components/monitoring/TrafficCard'
 import { ModelMetricsCard } from '@/components/monitoring/ModelMetricsCard'
@@ -27,6 +39,7 @@ import { ModelEventsCard } from '@/components/monitoring/ModelEventsCard'
 import { RateViolationsCard } from '@/components/monitoring/RateViolationsCard'
 import { ResourceCard } from '@/components/monitoring/ResourceCard'
 import { LatencyCard } from '@/components/monitoring/LatencyCard'
+import { InferencePoolCard } from '@/components/monitoring/InferencePoolCard'
 import { AlertPanel } from '@/components/monitoring/AlertPanel'
 import { KnowledgeCard } from '@/components/monitoring/KnowledgeCard'
 import { AutoTrainCard } from '@/components/monitoring/AutoTrainCard'
@@ -35,8 +48,13 @@ import { FeedbackCard } from '@/components/monitoring/FeedbackCard'
 import { TrainingHistory } from '@/components/monitoring/TrainingHistory'
 import { ExecutorPool } from '@/components/monitoring/ExecutorPool'
 import { ProcessCard } from '@/components/monitoring/ProcessCard'
-import { KvCacheCard } from '@/components/monitoring/KvCacheCard'
-import { GpuCard, DiskCard, ServerInfoCard } from '@/components/monitoring/SystemInfoCards'
+import { KVCacheCard } from '@/components/monitoring/KVCacheCard'
+import {
+  GpuCard,
+  DiskCard,
+  ServerInfoCard,
+  BatteryCard,
+} from '@/components/monitoring/SystemInfoCards'
 import { WorkflowCard } from '@/components/monitoring/WorkflowCard'
 import { ActivityTicker, ErrorList } from '@/components/ActivityTicker'
 import { OutputCard } from '@/components/OutputCard'
@@ -45,15 +63,21 @@ const POLL_INTERVAL_MS = 5000
 const POLL_MAX_BACKOFF_MS = 60_000
 const MAX_ALERT_HISTORY = 20
 
-const SystemChart = dynamicNext(() => import('@/components/monitoring/SystemChart').then(m => m.SystemChart), {
-  ssr: false,
-  loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
-})
+const SystemChart = dynamicNext(
+  () => import('@/components/monitoring/SystemChart').then((m) => m.SystemChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-40 w-full rounded-lg" />,
+  },
+)
 
-const TrendChart = dynamicNext(() => import('@/components/monitoring/TrendChart').then(m => m.TrendChart), {
-  ssr: false,
-  loading: () => <div className="h-40 w-full animate-pulse bg-muted rounded-lg" />,
-})
+const TrendChart = dynamicNext(
+  () => import('@/components/monitoring/TrendChart').then((m) => m.TrendChart),
+  {
+    ssr: false,
+    loading: () => <Skeleton className="h-40 w-full rounded-lg" />,
+  },
+)
 
 export default function SystemHealthPage() {
   const { health: liveHealth, connectionStatus } = useLiveStatus()
@@ -61,24 +85,60 @@ export default function SystemHealthPage() {
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null)
   const [info, setInfo] = useState<SystemInfo | null>(null)
   const [disk, setDisk] = useState<DiskUsage | null>(null)
+  const [battery, setBattery] = useState<BatteryInfo | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(true)
-  const [knowledgeStats, setKnowledgeStats] = useState<{ total_items: number; topic_count: number; avg_importance: number; searchable: boolean } | null>(null)
-  const [adapterStatus, setAdapterStatus] = useState<{ adapter_exists: boolean; fact_count: number; total_facts_available: number } | null>(null)
-  const [benchQuality, setBenchQuality] = useState<{
-    status: string; total_responses: number; coherence_score: number; quality_score: number;
-    repetition_rate: number; avg_length: number; empty_rate: number;
+  const [knowledgeStats, setKnowledgeStats] = useState<{
+    total_items: number
+    topic_count: number
+    avg_importance: number
+    searchable: boolean
   } | null>(null)
-  const [benchStats, setBenchStats] = useState<{ total: number; avg_tokens: number; models: string[] } | null>(null)
+  const [adapterStatus, setAdapterStatus] = useState<{
+    adapter_exists: boolean
+    fact_count: number
+    total_facts_available: number
+  } | null>(null)
+  const [benchQuality, setBenchQuality] = useState<{
+    status: string
+    total_responses: number
+    coherence_score: number
+    quality_score: number
+    repetition_rate: number
+    avg_length: number
+    empty_rate: number
+  } | null>(null)
+  const [benchStats, setBenchStats] = useState<{
+    total: number
+    avg_tokens: number
+    models: string[]
+  } | null>(null)
   const [lastUpdated, setLastUpdated] = useState<string | null>(null)
-  const [chartHistory, setChartHistory] = useState<Array<{ time: string; cpu: number; mem: number; tokens?: number; latency?: number }>>([])
-  const [dpoStatus, setDpoStatus] = useState<{ status: string; last_run: string | null; accepted_count: number; rejected_count: number; result: { perplexity_delta?: number; bleu_delta?: number; verdict?: string; report_path?: string } | null } | null>(null)
+  const [chartHistory, setChartHistory] = useState<
+    Array<{ time: string; cpu: number; mem: number; tokens?: number; latency?: number }>
+  >([])
+  const [dpoStatus, setDpoStatus] = useState<{
+    status: string
+    last_run: string | null
+    accepted_count: number
+    rejected_count: number
+    result: {
+      perplexity_delta?: number
+      bleu_delta?: number
+      verdict?: string
+      report_path?: string
+    } | null
+  } | null>(null)
   const [dpoRunning, setDpoRunning] = useState(false)
-  const [visualStatus, setVisualStatus] = useState<{ visual_loaded: boolean; training: { status: string } } | null>(null)
+  const [visualStatus, setVisualStatus] = useState<{
+    visual_loaded: boolean
+    training: { status: string }
+  } | null>(null)
   const [executorStatus, setExecutorStatus] = useState<ExecutorStatus | null>(null)
   const [autoTrainStatus, setAutoTrainStatus] = useState<AutoTrainStatus | null>(null)
   const [trainingJobs, setTrainingJobs] = useState<TrainingJob[]>([])
+  const [servicesHealth, setServicesHealth] = useState<ServicesHealth | null>(null)
   const MAX_HISTORY = 30
   const [inferenceRate, setInferenceRate] = useState<number>(0)
   const prevInferenceRef = useRef<{ count: number; time: number } | null>(null)
@@ -91,18 +151,59 @@ export default function SystemHealthPage() {
 
   useEffect(() => {
     let cancelled = false
-    getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).then(t => {
+    getJsonItem<Record<string, number>>('sloughgpt-monitoring-thresholds', {}).then((t) => {
       if (!cancelled) {
         if (t.cpu != null) setCpuThreshold(t.cpu)
         if (t.mem != null) setMemThreshold(t.mem)
       }
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   useEffect(() => {
-    setJsonItem('sloughgpt-monitoring-thresholds', { cpu: cpuThreshold, mem: memThreshold }).catch(() => {})
+    setJsonItem('sloughgpt-monitoring-thresholds', { cpu: cpuThreshold, mem: memThreshold }).catch(
+      () => {},
+    )
   }, [cpuThreshold, memThreshold])
+
+  const addToast = useToastStore((s) => s.addToast)
+
+  const handleBatteryLimit = useCallback(
+    async (percent: number) => {
+      try {
+        const result = await systemController.setBatteryLimit(percent)
+        const next = await systemController.getBattery().catch(() => null)
+        if (next) setBattery(next)
+        addToast(result.reason, result.applied ? 'success' : 'error')
+      } catch (e: unknown) {
+        addToast(extractErrorMessage(e, 'Could not change the charge cap'), 'error')
+      }
+    },
+    [addToast],
+  )
+
+  const handleBatteryPolicy = useCallback(
+    async (enabled: boolean) => {
+      try {
+        const result = await systemController.setBatteryPolicy({ enabled })
+        if (!result.ok) {
+          addToast(result.error || 'Could not update the charge policy', 'error')
+          return
+        }
+        const next = await systemController.getBattery().catch(() => null)
+        if (next) setBattery(next)
+        addToast(
+          result.policy.enabled ? 'Battery management on' : 'Battery management off',
+          'success',
+        )
+      } catch (e: unknown) {
+        addToast(extractErrorMessage(e, 'Could not update the charge policy'), 'error')
+      }
+    },
+    [addToast],
+  )
 
   const fetchAll = useCallback(async (showRefreshing = false): Promise<boolean> => {
     if (showRefreshing) setRefreshing(true)
@@ -113,10 +214,11 @@ export default function SystemHealthPage() {
       setDetailed(d)
 
       // Non-critical endpoints — each degrades independently on failure.
-      const [m, i, di, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
+      const [m, i, di, bt, ks, as_, bq, bs, dsRes, vs, ex, at, tj] = await Promise.all([
         systemController.getMetrics().catch(() => null),
         systemController.getInfo().catch(() => null),
         systemController.getDisk().catch(() => null),
+        systemController.getBattery().catch(() => null),
         knowledgeController.stats().catch(() => null),
         knowledgeController.getAdapterStatus().catch(() => null),
         benchmarkController.quality().catch(() => null),
@@ -130,20 +232,35 @@ export default function SystemHealthPage() {
       if (m != null) setMetrics(m)
       if (i != null) setInfo(i)
       if (di != null) setDisk(di)
+      if (bt != null) setBattery(bt)
       if (ks != null) setKnowledgeStats(ks)
       if (as_ != null) setAdapterStatus(as_)
       if (bq && 'coherence_score' in bq) {
-        setBenchQuality(bq as { status: string; total_responses: number; coherence_score: number; quality_score: number; repetition_rate: number; avg_length: number; empty_rate: number })
+        setBenchQuality(
+          bq as {
+            status: string
+            total_responses: number
+            coherence_score: number
+            quality_score: number
+            repetition_rate: number
+            avg_length: number
+            empty_rate: number
+          },
+        )
       }
-      if (bs != null) setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
+      if (bs != null)
+        setBenchStats(bs as { total: number; avg_tokens: number; models: string[] } | null)
       if (dsRes != null) setDpoStatus(dsRes as typeof dpoStatus)
-      if (vs != null) setVisualStatus({
-        visual_loaded: vs.engine.vision_model != null,
-        training: { status: vs.engine.status },
-      })
+      if (vs != null)
+        setVisualStatus({
+          visual_loaded: vs.engine.vision_model != null,
+          training: { status: vs.engine.status },
+        })
       if (ex != null) setExecutorStatus(ex)
       if (at != null) setAutoTrainStatus(at)
       if (Array.isArray(tj)) setTrainingJobs(tj)
+      const sh = await systemController.getServicesHealth().catch(() => null)
+      if (sh != null) setServicesHealth(sh)
       setLastUpdated(new Date().toLocaleTimeString())
       return true
     } catch (e: unknown) {
@@ -154,7 +271,9 @@ export default function SystemHealthPage() {
     }
   }, [])
 
-  useEffect(() => { fetchAll() }, [fetchAll])
+  useEffect(() => {
+    fetchAll()
+  }, [fetchAll])
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission === 'default') {
@@ -176,7 +295,10 @@ export default function SystemHealthPage() {
       alertsRef.current = [alert, ...alertsRef.current.slice(0, MAX_ALERT_HISTORY - 1)]
       setAlerts(alertsRef.current)
       if (Notification.permission === 'granted') {
-        new Notification('High CPU Usage', { body: `CPU at ${cpu.toFixed(0)}% (threshold: ${cpuThreshold}%)`, icon: '/favicon.svg' })
+        new Notification('High CPU Usage', {
+          body: `CPU at ${cpu.toFixed(0)}% (threshold: ${cpuThreshold}%)`,
+          icon: '/favicon.svg',
+        })
       }
     }
     prevCpuOverRef.current = cpuOver
@@ -186,18 +308,24 @@ export default function SystemHealthPage() {
       alertsRef.current = [alert, ...alertsRef.current.slice(0, MAX_ALERT_HISTORY - 1)]
       setAlerts(alertsRef.current)
       if (Notification.permission === 'granted') {
-        new Notification('High Memory Usage', { body: `Memory at ${mem.toFixed(0)}% (threshold: ${memThreshold}%)`, icon: '/favicon.svg' })
+        new Notification('High Memory Usage', {
+          body: `Memory at ${mem.toFixed(0)}% (threshold: ${memThreshold}%)`,
+          icon: '/favicon.svg',
+        })
       }
     }
     prevMemOverRef.current = memOver
-    setChartHistory(prev => {
-      const next = [...prev, {
-        time: now,
-        cpu,
-        mem,
-        tokens: liveHealth.tokens_per_sec ?? 0,
-        latency: liveHealth.avg_latency_ms ?? 0,
-      }]
+    setChartHistory((prev) => {
+      const next = [
+        ...prev,
+        {
+          time: now,
+          cpu,
+          mem,
+          tokens: liveHealth.tokens_per_sec ?? 0,
+          latency: liveHealth.avg_latency_ms ?? 0,
+        },
+      ]
       if (next.length > MAX_HISTORY) next.shift()
       return next
     })
@@ -240,7 +368,10 @@ export default function SystemHealthPage() {
 
     const tick = () => {
       const gen = ++generation
-      if (timer !== null) { clearTimeout(timer); timer = null }
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
       run(gen)
     }
 
@@ -277,7 +408,10 @@ export default function SystemHealthPage() {
       executor_status: executorStatus,
       visual_status: visualStatus,
     }
-    downloadJson(report, `system-report-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`)
+    downloadJson(
+      report,
+      `system-report-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.json`,
+    )
   }
 
   const handleExportHistory = () => {
@@ -288,7 +422,9 @@ export default function SystemHealthPage() {
   const headerRight = (
     <div className="flex items-center gap-3">
       {lastUpdated && (
-        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">Updated {lastUpdated}</span>
+        <span className="text-[11px] text-muted-foreground hidden sm:inline font-mono">
+          Updated {lastUpdated}
+        </span>
       )}
       <div className="flex items-center gap-1.5">
         <label className="text-[10px] text-muted-foreground">Auto</label>
@@ -297,48 +433,91 @@ export default function SystemHealthPage() {
       <Button variant="outline" size="sm" onClick={handleExportReport} disabled={!loaded}>
         Export
       </Button>
-      <Button variant="outline" size="sm" onClick={() => fetchAll(true)} disabled={refreshing || !loaded}>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => fetchAll(true)}
+        disabled={refreshing || !loaded}
+      >
         {refreshing ? 'Refreshing...' : 'Refresh'}
       </Button>
     </div>
   )
 
   return (
-    <PageContainer
-      title="System Health"
-      headerRight={headerRight}
-    >
-      {/* Loading: skeleton while fetch is in progress */}
+    <PageContainer title="System Health" headerRight={headerRight}>
+      {/* Loading: skeleton matching actual 3-card layout */}
       {!loaded && !error && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
-          <Card className="p-4"><CardContent className="p-0"><div className="grid grid-cols-2 gap-3">
-            {[1,2,3,4].map(i => <div key={i} className="space-y-1"><Skeleton className="h-3 w-12" /><Skeleton className="h-5 w-16" /></div>)}
-          </div></CardContent></Card>
+          {/* Status card skeleton: 2x4 KPI grid */}
+          <Card className="p-3">
+            <Skeleton className="h-3 w-12 mb-2" />
+            <CardContent className="p-0">
+              <div className="grid grid-cols-2 gap-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton className="h-2 w-10" />
+                    <Skeleton className="h-4 w-16" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          {/* Resources card skeleton: 2x2 KPI grid + text line */}
+          <Card className="p-3">
+            <Skeleton className="h-3 w-16 mb-2" />
+            <CardContent className="p-0">
+              <div className="grid grid-cols-2 gap-3">
+                {[1, 2, 3, 4].map((i) => (
+                  <div key={i} className="space-y-1">
+                    <Skeleton className="h-2 w-12" />
+                    <Skeleton className="h-4 w-12" />
+                  </div>
+                ))}
+              </div>
+              <Skeleton className="h-2 w-32 mx-auto mt-2" />
+            </CardContent>
+          </Card>
+          {/* Alert thresholds skeleton: 2 sliders + alerts list */}
+          <Card className="p-3">
+            <div className="flex items-center justify-between mb-2">
+              <Skeleton className="h-3 w-28" />
+              <Skeleton className="h-2 w-20" />
+            </div>
+            <CardContent className="p-0 space-y-3">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-2 w-8" />
+                  <Skeleton className="h-2 w-8" />
+                </div>
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Skeleton className="h-2 w-8" />
+                  <Skeleton className="h-2 w-8" />
+                </div>
+                <Skeleton className="h-1.5 w-full rounded-full" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {/* Error: fetch failed — show message with retry */}
       {!loaded && error && (
-        <Card className="p-6">
-          <CardContent className="p-0 flex flex-col items-center gap-3 text-center">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button size="sm" variant="outline" onClick={() => fetchAll(true)} disabled={refreshing}>
-              {refreshing ? 'Retrying...' : 'Retry'}
-            </Button>
-          </CardContent>
-        </Card>
+        <StatusBanner
+          variant="error"
+          message={error}
+          dismissible={false}
+          onRetry={() => fetchAll(true)}
+        />
       )}
 
       {/* Row 1: Status + Resources + Alerts — essential overview */}
       {loaded && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <StatusCard
+          <SystemStatusCard
             liveHealth={liveHealth}
             detailed={detailed}
             connectionStatus={connectionStatus}
@@ -369,7 +548,9 @@ export default function SystemHealthPage() {
       {/* Row 3: Health & memory trend — always visible */}
       {loaded && (
         <Card className="p-4">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Health &amp; memory trend</span>
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+            Health &amp; memory trend
+          </span>
           <CardContent className="p-0">
             <div className="h-40">
               <TrendChart liveHealth={liveHealth} />
@@ -389,7 +570,7 @@ export default function SystemHealthPage() {
             <ModelEventsCard liveHealth={liveHealth} />
             <RateViolationsCard liveHealth={liveHealth} />
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <LatencyCard chartHistory={chartHistory} />
+              <LatencyCard liveHealth={liveHealth} />
               <ProcessCard detailed={detailed} />
             </div>
           </div>
@@ -416,7 +597,12 @@ export default function SystemHealthPage() {
             </div>
             {(trainingJobs.length > 0 || (executorStatus && executorStatus.initialized)) && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <TrainingHistory jobs={trainingJobs} />
+                <TrainingHistory
+                  jobs={trainingJobs}
+                  onRecovered={() => {
+                    void fetchAll()
+                  }}
+                />
                 {executorStatus && <ExecutorPool status={executorStatus} onRefresh={fetchAll} />}
               </div>
             )}
@@ -428,23 +614,65 @@ export default function SystemHealthPage() {
       {loaded && (
         <FoldSection heading="System Info" open={false}>
           <div className="space-y-3">
-            <KnowledgeCard knowledgeStats={knowledgeStats} adapterStatus={adapterStatus} loaded={loaded} />
+            <KnowledgeCard
+              knowledgeStats={knowledgeStats}
+              adapterStatus={adapterStatus}
+              loaded={loaded}
+            />
+            {servicesHealth && (
+              <Card className="p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <div
+                    className={`h-2 w-2 rounded-full ${servicesHealth.status === 'healthy' ? 'bg-success' : 'bg-warning'}`}
+                  />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Services Health
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {Object.entries(servicesHealth.services).map(([name, svc]) => (
+                    <div key={name} className="flex items-center gap-2 text-sm">
+                      <div
+                        className={`h-1.5 w-1.5 rounded-full ${svc.status === 'ok' ? 'bg-success' : 'bg-destructive'}`}
+                      />
+                      <span className="capitalize">{name}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <GpuCard gpu={detailed?.gpu as GPUInfo | undefined} />
               <DiskCard disk={disk ?? undefined} />
+              <BatteryCard
+                battery={battery ?? undefined}
+                onSetLimit={handleBatteryLimit}
+                onTogglePolicy={handleBatteryPolicy}
+              />
               <ServerInfoCard info={info ?? undefined} />
             </div>
-            {detailed?.kv_sessions?.enabled && <KvCacheCard kvSessions={detailed.kv_sessions} />}
+            {detailed?.kv_sessions?.enabled && <KVCacheCard kvSessions={detailed.kv_sessions} />}
+            <InferencePoolCard onRefresh={fetchAll} />
             {chartHistory.length > 1 && (
               <Card className="p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Real-time chart</span>
-                  <button onClick={handleExportHistory} className="text-[10px] text-muted-foreground hover:text-primary transition-colors" aria-label="Export history">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                    Real-time chart
+                  </span>
+                  <button
+                    onClick={handleExportHistory}
+                    className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                    aria-label="Export history"
+                  >
                     Export
                   </button>
                 </div>
                 <CardContent className="p-0">
-                  <div className="h-48" role="img" aria-label="CPU and memory usage chart over time">
+                  <div
+                    className="h-48"
+                    role="img"
+                    aria-label="CPU and memory usage chart over time"
+                  >
                     <SystemChart data={chartHistory} />
                   </div>
                 </CardContent>
@@ -464,7 +692,9 @@ export default function SystemHealthPage() {
                 <ActivityTicker />
               </div>
               <Card className="p-4">
-                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">Errors</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2 block">
+                  Errors
+                </span>
                 <CardContent className="p-0 max-h-[200px] overflow-y-auto">
                   <ErrorList />
                 </CardContent>
@@ -473,7 +703,6 @@ export default function SystemHealthPage() {
           </div>
         </FoldSection>
       )}
-
     </PageContainer>
   )
 }

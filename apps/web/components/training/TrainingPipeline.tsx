@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { memo, useState } from 'react'
+import { cn, Card, CardContent, CardHeader, CardTitle, IconCheck } from '@sloughgpt/strui'
 import { Button, Progress } from '@sloughgpt/strui'
 import { TrainingErrorBanner } from '@/components/training/TrainingStatus'
 import dynamic from 'next/dynamic'
@@ -14,9 +14,12 @@ import { DataStep } from '@/components/training/DataStep'
 import { ConfigureStep } from '@/components/training/ConfigureStep'
 import { TrainStep } from '@/components/training/TrainStep'
 import { ResultsStep } from '@/components/training/ResultsStep'
-import { formatDuration } from '@/components/training/formatDuration'
+import { formatDuration } from '@/lib/formatDuration'
 
-const LossChart = dynamic(() => import('@/components/training/LossChart').then(m => m.LossChart), { ssr: false })
+const LossChart = dynamic(
+  () => import('@/components/training/LossChart').then((m) => m.LossChart),
+  { ssr: false },
+)
 
 const STEPS = [
   { id: 'data', label: 'Data', description: 'Pick your training data' },
@@ -25,58 +28,116 @@ const STEPS = [
   { id: 'results', label: 'Results', description: 'View checkpoints & eval' },
 ] as const
 
-type StepId = typeof STEPS[number]['id']
+type StepId = (typeof STEPS)[number]['id']
 
-function StepIndicator({ current, completed, onStepClick }: { current: StepId; completed: Set<StepId>; onStepClick: (id: StepId) => void }) {
+function StepIndicator({
+  current,
+  completed,
+  onStepClick,
+  animatingStep,
+}: {
+  current: StepId
+  completed: Set<StepId>
+  onStepClick: (id: StepId) => void
+  animatingStep?: StepId | null
+}) {
   return (
-    <div className="flex items-center gap-1" role="navigation" aria-label="Training steps">
+    <nav className="flex items-center gap-0" role="navigation" aria-label="Training steps">
       {STEPS.map((step, i) => {
         const isDone = completed.has(step.id)
         const isCurrent = step.id === current
+        const isAnimating = step.id === animatingStep
         const clickable = isDone && !isCurrent
         const content = (
-          <>
-            <div className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-medium transition-colors ${
-              isCurrent ? 'bg-primary text-primary-foreground' :
-              isDone ? 'bg-primary/15 text-primary' :
-              'bg-muted text-muted-foreground'
-            }`}>
-              {isDone ? '✓' : i + 1}
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                'relative flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-semibold transition-all duration-500',
+                isCurrent && 'bg-primary text-primary-foreground shadow-md shadow-primary/25',
+                isDone &&
+                  !isAnimating &&
+                  'bg-primary text-primary-foreground shadow-md shadow-primary/30',
+                isAnimating &&
+                  'bg-primary text-primary-foreground shadow-lg shadow-primary/50 scale-110',
+                !isCurrent &&
+                  !isDone &&
+                  !isAnimating &&
+                  'bg-background text-muted-foreground border-2 border-border',
+              )}
+            >
+              {isDone ? <IconCheck className="h-3.5 w-3.5" /> : i + 1}
+              {isCurrent && (
+                <span
+                  className="absolute inset-0 rounded-full bg-primary/20 animate-ping [animation-duration:2s]"
+                  aria-hidden="true"
+                />
+              )}
+              {isAnimating && (
+                <span
+                  className="absolute inset-0 rounded-full bg-primary/30 animate-ping [animation-duration:0.6s]"
+                  aria-hidden="true"
+                />
+              )}
             </div>
-            <span className={`text-xs ${isCurrent ? 'font-medium text-foreground' : 'text-muted-foreground'}`}>
-              {step.label}
-            </span>
-          </>
+            <div className="hidden sm:block">
+              <span
+                className={cn(
+                  'text-xs font-medium block leading-tight transition-colors duration-500',
+                  isCurrent
+                    ? 'text-foreground'
+                    : isDone
+                      ? 'text-primary'
+                      : 'text-muted-foreground/70',
+                )}
+              >
+                {step.label}
+              </span>
+              <span className="text-[10px] text-muted-foreground/50 leading-tight hidden lg:block">
+                {step.description}
+              </span>
+            </div>
+          </div>
         )
         return (
-          <div key={step.id} className="flex items-center gap-1">
-            {i > 0 && <div className={`w-6 h-px ${isDone || isCurrent ? 'bg-primary' : 'bg-border'}`} />}
+          <div key={step.id} className="flex items-center">
+            {i > 0 && (
+              <div
+                className={cn(
+                  'w-8 sm:w-12 h-px mx-1 transition-colors duration-500',
+                  isDone || isAnimating ? 'bg-primary' : 'bg-border/40',
+                )}
+              />
+            )}
             {clickable ? (
               <button
                 type="button"
                 onClick={() => onStepClick(step.id)}
-                className="flex items-center gap-1.5 rounded-md transition-colors hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="rounded-lg transition-all duration-200 hover:bg-primary/5 px-1 py-0.5 -mx-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 aria-label={`Go to ${step.label} step`}
               >
                 {content}
               </button>
             ) : (
-              <div className="flex items-center gap-1.5">{content}</div>
+              <div className="px-1 py-0.5 -mx-1">{content}</div>
             )}
           </div>
         )
       })}
-    </div>
+    </nav>
   )
 }
 
-export function TrainingPipeline({
+export const TrainingPipeline = memo(function TrainingPipeline({
   form,
   datasets,
   session,
   checkpoints,
   onTest,
   addToast,
+  step,
+  onStepChange,
+  completedSteps,
+  onStepComplete,
 }: {
   form: TrainingFormState
   datasets: UseTrainingDatasetsReturn
@@ -84,31 +145,62 @@ export function TrainingPipeline({
   checkpoints: UseTrainingCheckpointsReturn
   onTest: () => void
   addToast: (msg: string, type?: 'success' | 'error' | 'info') => void
+  step: StepId
+  onStepChange: (step: StepId) => void
+  completedSteps: Set<StepId>
+  onStepComplete: (id: StepId) => void
 }) {
-  const [step, setStep] = useState<StepId>('data')
-  const [completedSteps, setCompletedSteps] = useState<Set<StepId>>(new Set())
+  const runningJob =
+    form.allJobs.find((j) => j.status === 'running' && !j.id.startsWith('pending-')) ??
+    form.allJobs.find((j) => j.status === 'running')
+  const isTurbo = session.method === 'turbo' && session.trainingRunning
+  const isTraining = (session.trainingRunning || !!runningJob) && !isTurbo
 
-  const completeStep = (id: StepId) => setCompletedSteps(prev => new Set(prev).add(id))
+  const displayLoss = session.loss ?? runningJob?.loss ?? runningJob?.train_loss ?? null
+  const displayEpoch = session.epoch || runningJob?.current_epoch || 0
+  const displayTotalEpochs = session.totalEpochs || runningJob?.epochs || 0
+  const displayGlobalStep = session.globalStep || runningJob?.global_step || 0
+  const displayTotalSteps = session.totalSteps || runningJob?.total_steps || 0
+  // Unknown progress renders as “--” instead of misleading “0%”.
+  // 0 with no step/epoch evidence means the backend hasn't reported progress yet.
+  const rawProgress = session.progress ?? runningJob?.progress ?? null
+  const hasProgressEvidence =
+    displayGlobalStep > 0 ||
+    displayTotalSteps > 0 ||
+    displayEpoch > 0 ||
+    (rawProgress != null && rawProgress > 0)
+  const displayProgress: number | null = hasProgressEvidence ? (rawProgress ?? 0) : null
+  const displayStepsPerSec = session.stepsPerSec ?? runningJob?.steps_per_sec ?? null
+  const displayEta = session.eta ?? runningJob?.eta_s ?? null
+  const displayElapsed = session.elapsedSeconds ?? runningJob?.elapsed_s ?? null
+  const displayLossHistory =
+    session.lossHistory.length > 0
+      ? session.lossHistory
+      : (runningJob?.loss_history?.map((l) => ({ step: l.step, loss: l.value })) ?? [])
+  const displayMethod = session.method || runningJob?.method || null
 
-  const runningJob = form.allJobs.find(j => j.status === 'running')
-  const isTraining = session.trainingRunning || !!runningJob
-
-  const stepIdx = STEPS.findIndex(s => s.id === step)
+  const stepIdx = STEPS.findIndex((s) => s.id === step)
+  const [animatingStep, setAnimatingStep] = useState<StepId | null>(null)
 
   const advance = () => {
-    completeStep(step)
-    const next = STEPS[stepIdx + 1]
-    if (next) setStep(next.id)
+    const currentStep = step
+    onStepComplete(currentStep)
+    setAnimatingStep(currentStep)
+    setTimeout(() => {
+      setAnimatingStep(null)
+      const next = STEPS[stepIdx + 1]
+      if (next) onStepChange(next.id)
+    }, 400)
   }
 
   const goBack = () => {
     const prev = STEPS[stepIdx - 1]
-    if (prev) setStep(prev.id)
+    if (prev) onStepChange(prev.id)
   }
 
-  const goToTrain = () => setStep('train')
+  const goToTrain = () => onStepChange('train')
 
-  const stepProps = { form, datasets, onNext: advance, onBack: goBack, addToast }
+  const stepProps = { form, datasets, checkpoints, onNext: advance, onBack: goBack, addToast }
 
   if (isTraining) {
     return (
@@ -121,75 +213,203 @@ export function TrainingPipeline({
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
-              {session.epoch > 0 && session.totalEpochs > 0 && (
-                <span>Epoch {session.epoch}/{session.totalEpochs}</span>
+              {displayEpoch > 0 && displayTotalEpochs > 0 && (
+                <span>
+                  Epoch {displayEpoch}/{displayTotalEpochs}
+                </span>
               )}
-              {session.loss != null && (
-                <span>Loss: {session.loss.toFixed(4)}</span>
+              {displayLoss != null && <span>Loss: {displayLoss.toFixed(4)}</span>}
+              {session.avgQuality != null && (
+                <span>Quality: {session.avgQuality.toFixed(1)}/5</span>
+              )}
+              {displayMethod && (
+                <span className="px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                  {displayMethod}
+                </span>
               )}
             </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {session.lossHistory.length > 0 && (
-            <LossChart data={session.lossHistory.map(p => ({ step: p.step, value: p.loss, type: 'train' as const }))} height={200} />
+          {displayLossHistory.length > 0 && (
+            <LossChart
+              data={displayLossHistory.map((p) => ({
+                step: p.step,
+                value: p.loss,
+                type: 'train' as const,
+              }))}
+              height={200}
+            />
           )}
 
           {session.phase !== 'complete' && session.phase !== 'error' && (
-            <div className="space-y-2">
-              <Progress value={session.progress} max={100} label="Progress" showValue size="sm" />
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                {session.totalSteps > 0 && (
-                  <span>Step {session.globalStep}/{session.totalSteps}</span>
+            <div className="space-y-3">
+              {session.paused && (
+                <div
+                  className="rounded-md bg-warning/10 border border-warning/20 px-3 py-1.5 text-xs text-warning font-medium"
+                  role="status"
+                >
+                  Paused
+                </div>
+              )}
+              <Progress value={displayProgress} max={100} label="Progress" showValue size="sm" />
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {displayTotalSteps > 0 && (
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Step
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {displayGlobalStep}
+                      <span className="text-muted-foreground/40 font-normal">
+                        /{displayTotalSteps}
+                      </span>
+                    </p>
+                  </div>
                 )}
-                {session.stepsPerSec != null && session.stepsPerSec > 0 && (
-                  <span>{session.stepsPerSec.toFixed(1)} steps/s</span>
+                {displayEpoch > 0 && displayTotalEpochs > 0 && (
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Epoch
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {displayEpoch}
+                      <span className="text-muted-foreground/40 font-normal">
+                        /{displayTotalEpochs}
+                      </span>
+                    </p>
+                  </div>
                 )}
-                {session.eta != null && (
-                  <span>ETA {formatDuration(session.eta)}</span>
+                {displayLoss != null && (
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Loss
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">{displayLoss.toFixed(4)}</p>
+                  </div>
                 )}
-                <span>Elapsed {formatDuration(session.elapsedSeconds)}</span>
+                {displayStepsPerSec != null && displayStepsPerSec > 0 && (
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      Speed
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {displayStepsPerSec.toFixed(1)}
+                      <span className="text-muted-foreground/40 font-normal text-xs"> steps/s</span>
+                    </p>
+                  </div>
+                )}
+                {displayEta != null && (
+                  <div className="rounded-lg bg-muted/30 px-3 py-2">
+                    <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                      ETA
+                    </p>
+                    <p className="text-sm font-semibold tabular-nums">
+                      {formatDuration(displayEta)}
+                    </p>
+                  </div>
+                )}
+                <div className="rounded-lg bg-muted/30 px-3 py-2">
+                  <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                    Elapsed
+                  </p>
+                  <p className="text-sm font-semibold tabular-nums">
+                    {formatDuration(displayElapsed)}
+                  </p>
+                </div>
               </div>
+              {session.dataQuality && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span>
+                    Repetition: {((1 - session.dataQuality.repetition_rate) * 100).toFixed(0)}%
+                  </span>
+                  <span>Diversity: {(session.dataQuality.diversity * 100).toFixed(0)}%</span>
+                  <span>Language: {(session.dataQuality.language_quality * 100).toFixed(0)}%</span>
+                </div>
+              )}
             </div>
           )}
 
           {session.phase === 'complete' && (
             <div className="space-y-3">
-              <div className="rounded-md bg-success/10 border border-success/20 p-3 text-sm text-success">
+              <div
+                className="rounded-md bg-success/10 border border-success/20 p-3 text-sm text-success"
+                role="status"
+                aria-live="polite"
+              >
                 Training complete
-                {session.distillCheckpoint && <span className="text-muted-foreground ml-1">— {session.distillCheckpoint}</span>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={onTest}>Test model</Button>
                 {session.distillCheckpoint && (
-                  <Button size="sm" variant="outline" onClick={() => {
-                    checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, addToast)
-                  }}>Load checkpoint</Button>
+                  <span className="text-muted-foreground ml-1">— {session.distillCheckpoint}</span>
                 )}
-                {session.method === 'hf' && session.checkpoint && session.checkpoint.endsWith('.npz') && (
-                  <Button size="sm" variant="outline" onClick={async () => {
-                    try {
-                      await trainingJobsController.loadAdapter(session.checkpoint!, false)
-                      addToast('LoRA adapter loaded into model', 'success')
-                    } catch (e) {
-                      addToast('Failed to load adapter: ' + (e instanceof Error ? e.message : String(e)), 'error')
-                    }
-                  }}>Load LoRA adapter</Button>
+              </div>
+              {session.dataQuality && (
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span>Data quality: {session.dataQuality.avg_quality.toFixed(1)}/5</span>
+                  <span>
+                    Repetition: {((1 - session.dataQuality.repetition_rate) * 100).toFixed(0)}%
+                  </span>
+                  <span>Diversity: {(session.dataQuality.diversity * 100).toFixed(0)}%</span>
+                  <span>Language: {(session.dataQuality.language_quality * 100).toFixed(0)}%</span>
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={onTest}>
+                  Test model
+                </Button>
+                {session.distillCheckpoint && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      checkpoints.handleLoadCheckpoint(session.distillCheckpoint!, addToast)
+                    }}
+                  >
+                    Load checkpoint
+                  </Button>
                 )}
-                <Button size="sm" variant="ghost" onClick={() => {
-                  session.resetTraining()
-                  setStep('results')
-                  completeStep('train')
-                }}>View results</Button>
+                {session.method === 'hf' &&
+                  session.checkpoint &&
+                  session.checkpoint.endsWith('.npz') && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        try {
+                          await trainingJobsController.loadAdapter(session.checkpoint!, false)
+                          addToast('LoRA adapter loaded into model', 'success')
+                        } catch (e) {
+                          addToast(
+                            'Could not load adapter: ' +
+                              (e instanceof Error ? e.message : String(e)),
+                            'error',
+                          )
+                        }
+                      }}
+                    >
+                      Load LoRA adapter
+                    </Button>
+                  )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    session.resetTraining()
+                    onStepChange('results')
+                    onStepComplete('train')
+                  }}
+                >
+                  View results
+                </Button>
               </div>
             </div>
           )}
 
           {session.phase === 'error' && (
             <TrainingErrorBanner
-              error={session.message || 'Training failed'}
+              error={session.error || session.message || 'Training failed'}
               onRetry={session.resetTraining}
               onDismiss={session.resetTraining}
+              onStop={session.stopTraining}
             />
           )}
         </CardContent>
@@ -199,12 +419,24 @@ export function TrainingPipeline({
 
   return (
     <div className="space-y-4">
-      <StepIndicator current={step} completed={completedSteps} onStepClick={setStep} />
+      <StepIndicator
+        current={step}
+        completed={completedSteps}
+        onStepClick={onStepChange}
+        animatingStep={animatingStep}
+      />
 
       {step === 'data' && <DataStep {...stepProps} />}
       {step === 'configure' && <ConfigureStep {...stepProps} />}
       {step === 'train' && <TrainStep {...stepProps} />}
-      {step === 'results' && <ResultsStep checkpoints={checkpoints} goToTrain={goToTrain} onTest={onTest} addToast={addToast} />}
+      {step === 'results' && (
+        <ResultsStep
+          checkpoints={checkpoints}
+          goToTrain={goToTrain}
+          onTest={onTest}
+          addToast={addToast}
+        />
+      )}
     </div>
   )
-}
+})

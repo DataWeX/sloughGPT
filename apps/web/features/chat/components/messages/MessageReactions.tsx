@@ -59,7 +59,7 @@ export const MessageReactions = memo(function MessageReactions({ reactions = {},
         <button
           type="button"
           onClick={() => setShowPicker(!showPicker)}
-          className="inline-flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 transition-colors opacity-0 group-hover:opacity-100"
+          className="inline-flex items-center justify-center w-6 h-6 rounded-full text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/50 transition-colors transition-opacity duration-150 opacity-0 group-hover:opacity-100"
           aria-label="Add reaction"
         >
           <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

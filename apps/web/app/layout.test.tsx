@@ -6,11 +6,6 @@ vi.mock('next/font/local', () => ({
   default: () => ({ variable: '--mock-font' }),
 }))
 
-vi.mock('next/font/google', () => ({
-  Rubik: () => ({ variable: '--mock-font' }),
-  Lato: () => ({ variable: '--mock-font' }),
-}))
-
 vi.mock('./Providers', () => ({
   Providers: ({ children }: any) => <div data-testid="providers">{children}</div>,
 }))
@@ -38,24 +33,24 @@ describe('RootLayout', () => {
   })
 
   it('applies the font variables to the html element', () => {
-    const { container } = render(
+    render(
       <RootLayout>
         <span>x</span>
       </RootLayout>,
     )
-    const html = container.querySelector('html')
+    const html = document.querySelector('html')
     expect(html).toBeTruthy()
     expect(html?.className).toContain('--mock-font')
     expect(html?.getAttribute('lang')).toBe('en')
   })
 
   it('injects the theme bootstrap script', () => {
-    const { container } = render(
+    render(
       <RootLayout>
         <span>x</span>
       </RootLayout>,
     )
-    const script = container.querySelector('script')
+    const script = document.querySelector('script')
     expect(script).toBeTruthy()
     expect(script?.textContent ?? '').toContain('theme-')
     expect(script?.textContent ?? '').toContain('localStorage')
@@ -64,6 +59,16 @@ describe('RootLayout', () => {
   it('exports the platform metadata', () => {
     expect(metadata.title).toBe('Man - AI Platform')
     expect(metadata.icons).toEqual({ icon: '/favicon.svg' })
+    expect(metadata.description).toContain('personal AI')
+    expect(metadata.description).not.toContain('Enterprise-grade')
+    expect(metadata.manifest).toBe('/manifest.json')
+    const og = metadata.openGraph as { title?: string; type?: string; images?: unknown }
+    expect(og.title).toBe('Man - AI Platform')
+    expect(og.type).toBe('website')
+    expect(og.images).toMatchObject([{ url: '/og.png', width: 1200, height: 630 }])
+    const tw = metadata.twitter as { card?: string; images?: unknown }
+    expect(tw.card).toBe('summary_large_image')
+    expect(tw.images).toEqual(['/og.png'])
   })
 
   it('exports a mobile-safe viewport', () => {
@@ -71,7 +76,7 @@ describe('RootLayout', () => {
   })
 
   it('renders without crashing with no children', () => {
-    const { container } = render(<RootLayout children={null} />)
-    expect(container.querySelector('html')).toBeTruthy()
+    render(<RootLayout>{null}</RootLayout>)
+    expect(document.querySelector('html')).toBeTruthy()
   })
 })

@@ -1,11 +1,25 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, StatCard, KpiGrid } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Button,
+  Input,
+  StatCard,
+  KpiGrid,
+} from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { PageContainer } from '@/components/PageContainer'
+import { ManLockup } from '@/components/brand/ManMark'
 import { AuthSessionInfoCard } from '@/components/auth/AuthSessionInfoCard'
-import { authController, type UserInfo } from '@/lib/auth-controller'
+import { AuthWorkspaceCard } from '@/components/auth/AuthWorkspaceCard'
+import { AuthTokenCard } from '@/components/auth/AuthTokenCard'
+import { AuthActivityCard, recordAuthEvent } from '@/components/auth/AuthActivityCard'
+import { authController, type UserInfo, type WorkspaceInfo } from '@/lib/auth-controller'
+import { useAuthStore } from '@/lib/auth'
 import { chatDB } from '@/lib/db'
 
 type Mode = 'login' | 'register'
@@ -20,22 +34,38 @@ export default function AuthPage() {
   const [currentUser, setCurrentUser] = useState<UserInfo | null>(null)
   const [checking, setChecking] = useState(true)
   const [token, setToken] = useState<string | null>(null)
+  const [workspaces, setWorkspaces] = useState<WorkspaceInfo[]>([])
+  const { login, setWorkspaces: setStoreWorkspaces } = useAuthStore()
 
   useEffect(() => {
     let cancelled = false
-    chatDB.getKV<string>('auth_token').then(saved => {
+    chatDB.getKV<string>('auth_token').then((saved) => {
       if (cancelled) return
       if (saved) {
         setToken(saved)
-        authController.getMe(saved)
-          .then(d => setCurrentUser(d))
-          .catch(() => { chatDB.deleteKV('auth_token').catch(() => {}); setToken(null) })
+        authController
+          .getMe(saved)
+          .then((d) => setCurrentUser(d))
+          .then(() => authController.getWorkspaces(saved!))
+          .then((ws) => {
+            if (!cancelled) setWorkspaces(ws)
+          })
+          .catch(async () => {
+            try {
+              await chatDB.deleteKV('auth_token')
+            } catch {
+              /* best-effort */
+            }
+            setToken(null)
+          })
           .finally(() => setChecking(false))
       } else {
         setChecking(false)
       }
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -43,12 +73,24 @@ export default function AuthPage() {
     setLoading(true)
     setError(null)
     try {
-      const data = mode === 'login'
-        ? await authController.login(username, password)
-        : await authController.register(username, email, password)
+      const data =
+        mode === 'login'
+          ? await authController.login(username, password)
+          : await authController.register(username, email, password)
       setToken(data.token)
       setCurrentUser(data.user)
-      chatDB.setKV('auth_token', data.token).catch(() => {})
+      // Sync to zustand store
+      login(data.user, data.token)
+      // Load workspaces
+      const ws = await authController.getWorkspaces(data.token)
+      setWorkspaces(ws)
+      setStoreWorkspaces(ws)
+      recordAuthEvent(mode === 'login' ? 'login' : 'register', `User: ${data.user.username}`)
+      try {
+        await chatDB.setKV('auth_token', data.token)
+      } catch {
+        setError('Warning: login succeeded but session may not persist after refresh')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Connection failed')
     } finally {
@@ -57,6 +99,7 @@ export default function AuthPage() {
   }
 
   const handleLogout = () => {
+    recordAuthEvent('logout', currentUser?.username)
     setToken(null)
     setCurrentUser(null)
     chatDB.deleteKV('auth_token').catch(() => {})
@@ -70,14 +113,26 @@ export default function AuthPage() {
           <StatCard label="Loading" value="..." />
           <StatCard label="Loading" value="..." />
         </KpiGrid>
-        <Card><CardContent><div className="h-32 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
-        <Card><CardContent><div className="h-24 animate-pulse bg-muted/50 rounded" /></CardContent></Card>
+        <Card>
+          <CardContent>
+            <div className="h-32 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <div className="h-24 animate-pulse bg-muted/50 rounded" />
+          </CardContent>
+        </Card>
       </PageContainer>
     )
   }
 
   return (
-    <PageContainer title="Auth" subtitle={currentUser ? `Logged in as ${currentUser.username}` : 'Authentication'}>
+    <PageContainer
+      title="Auth"
+      subtitle={currentUser ? `Logged in as ${currentUser.username}` : 'Authentication'}
+    >
+      {!currentUser && <ManLockup />}
       <KpiGrid>
         <StatCard label="Status" value={currentUser ? 'Logged In' : 'Guest'} />
         <StatCard label="User" value={currentUser?.username ?? '—'} />
@@ -105,10 +160,15 @@ export default function AuthPage() {
                   <div className="text-sm font-mono font-medium truncate">{currentUser.id}</div>
                 </div>
               </div>
-              <Button size="sm" variant="outline" onClick={handleLogout}>Logout</Button>
+              <Button size="sm" variant="outline" onClick={handleLogout}>
+                Logout
+              </Button>
             </CardContent>
           </Card>
           <AuthSessionInfoCard token={token} user={currentUser} onLogout={handleLogout} />
+          <AuthTokenCard token={token} onVerify={async (t) => await authController.verify(t)} />
+          <AuthWorkspaceCard workspaces={workspaces} />
+          <AuthActivityCard />
         </>
       ) : (
         <Card>
@@ -119,7 +179,7 @@ export default function AuthPage() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <Input
                 value={username}
-                onChange={e => setUsername(e.target.value)}
+                onChange={(e) => setUsername(e.target.value)}
                 placeholder="Username"
                 required
               />
@@ -127,7 +187,7 @@ export default function AuthPage() {
                 <Input
                   type="email"
                   value={email}
-                  onChange={e => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value)}
                   placeholder="Email"
                   required
                 />
@@ -135,11 +195,11 @@ export default function AuthPage() {
               <Input
                 type="password"
                 value={password}
-                onChange={e => setPassword(e.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 placeholder="Password"
                 required
               />
-              {error && <div className="text-xs text-destructive">{error}</div>}
+              {error && <StatusBanner variant="error" message={error} dismissible={false} />}
               <div className="flex items-center gap-3">
                 <Button size="sm" type="submit" disabled={loading}>
                   {loading ? 'Processing...' : mode === 'login' ? 'Login' : 'Register'}
@@ -147,7 +207,10 @@ export default function AuthPage() {
                 <button
                   type="button"
                   className="text-xs text-primary hover:text-primary/80"
-                  onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(null) }}
+                  onClick={() => {
+                    setMode(mode === 'login' ? 'register' : 'login')
+                    setError(null)
+                  }}
                 >
                   {mode === 'login' ? 'Create account' : 'Already have an account?'}
                 </button>
@@ -166,7 +229,9 @@ export default function AuthPage() {
             <div className="space-y-2">
               <div className="rounded-md bg-muted/30 p-3">
                 <div className="text-xs text-muted-foreground mb-1">JWT Token</div>
-                <div className="text-[10px] font-mono break-all text-muted-foreground">{token.slice(0, 60)}...</div>
+                <div className="text-[10px] font-mono break-all text-muted-foreground">
+                  {token.slice(0, 60)}...
+                </div>
               </div>
               <Button
                 size="sm"
@@ -174,8 +239,11 @@ export default function AuthPage() {
                 onClick={async () => {
                   try {
                     const data = await authController.verify(token!)
-                    alert(data?.data?.valid ? 'Token valid' : 'Token invalid')
-                  } catch { alert('Verification failed') }
+                    alert(data?.valid ? 'Token valid' : 'Token invalid')
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err)
+                    alert(`Verification failed: ${msg}`)
+                  }
                 }}
               >
                 Verify Token

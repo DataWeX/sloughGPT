@@ -3,17 +3,16 @@
 from __future__ import annotations
 
 import math
-import random
+
 import pytest
 
-from domains.soul.quantum import (
-    QuantumState,
+from domain.soul._internal.quantum import (
+    HyperdimensionalProcessor,
     QuantumCognitiveEngine,
     QuantumParallelProcessor,
-    HyperdimensionalProcessor,
+    QuantumState,
     TemporalReasoningEngine,
 )
-
 
 # ── QuantumState ─────────────────────────────────────────────────────────────
 

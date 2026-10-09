@@ -7,6 +7,10 @@ vi.mock('@/components/AppLayout', () => ({
   default: ({ children }: any) => <div data-testid="app-layout">{children}</div>,
 }))
 
+vi.mock('@/components/consciousness/ConsciousnessQuickActionsWrapper', () => ({
+  ConsciousnessQuickActionsWrapper: () => null,
+}))
+
 afterEach(() => {
   cleanup()
 })

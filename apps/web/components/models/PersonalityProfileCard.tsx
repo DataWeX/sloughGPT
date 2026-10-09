@@ -10,9 +10,12 @@ import TraitEditor from '@/components/souls/TraitEditor'
 import { soulsController } from '@/lib/souls-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
+import { formatMonthDay } from '@/lib/time-format'
 
 interface SnapshotMeta {
-  name: string; saved_at?: string; label?: string
+  name: string
+  saved_at?: string
+  label?: string
 }
 
 interface PersonalityProfileCardProps {
@@ -23,9 +26,12 @@ interface PersonalityProfileCardProps {
 }
 
 export default function PersonalityProfileCard({
-  traitWeights, currentSoulName, onTraitsSaved, onTraitsChanged,
+  traitWeights,
+  currentSoulName,
+  onTraitsSaved,
+  onTraitsChanged,
 }: PersonalityProfileCardProps) {
-  const addToast = useToastStore(s => s.addToast)
+  const addToast = useToastStore((s) => s.addToast)
   const [editingTraits, setEditingTraits] = useState(false)
   const [snapshots, setSnapshots] = useState<SnapshotMeta[]>([])
   const [snapshotName, setSnapshotName] = useState('')
@@ -34,7 +40,9 @@ export default function PersonalityProfileCard({
     try {
       const list = await soulsController.listWeightSnapshots()
       setSnapshots(list)
-    } catch { addToast('Could not load weight snapshots', 'info') }
+    } catch {
+      addToast('Could not load weight snapshots', 'info')
+    }
   }
 
   const handleSaveSnapshot = async () => {
@@ -46,7 +54,7 @@ export default function PersonalityProfileCard({
       addToast(`Saved "${name}"`, 'success')
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to save'), 'error')
+      addToast(extractErrorMessage(err, 'Could not save'), 'error')
     }
   }
 
@@ -56,7 +64,7 @@ export default function PersonalityProfileCard({
       addToast(`Loaded "${name}" (${count} traits)`, 'success')
       await onTraitsChanged()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to load'), 'error')
+      addToast(extractErrorMessage(err, 'Could not load'), 'error')
     }
   }
 
@@ -67,7 +75,7 @@ export default function PersonalityProfileCard({
       addToast(`Deleted "${name}"`, 'success')
       await fetchSnapshots()
     } catch (err) {
-      addToast(extractErrorMessage(err, 'Failed to delete'), 'error')
+      addToast(extractErrorMessage(err, 'Could not delete'), 'error')
     }
   }
 
@@ -89,7 +97,9 @@ export default function PersonalityProfileCard({
         </div>
       </CardHeader>
       <CardContent className="relative">
-        <p className="text-[10px] text-muted-foreground mb-3">Traits shape how your personality responds &mdash; like a character sheet for your AI.</p>
+        <p className="text-[10px] text-muted-foreground mb-3">
+          Traits shape how your personality responds &mdash; like a character sheet for your AI.
+        </p>
         {editingTraits ? (
           <TraitEditor
             traitWeights={traitWeights}
@@ -109,32 +119,56 @@ export default function PersonalityProfileCard({
           <div className="flex items-center gap-2 mb-3">
             <Input
               value={snapshotName}
-              onChange={e => setSnapshotName(e.target.value)}
+              onChange={(e) => setSnapshotName(e.target.value)}
               placeholder="Name this state..."
               className="h-7 text-[11px]"
-              onKeyDown={e => { if (e.key === 'Enter') handleSaveSnapshot() }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSaveSnapshot()
+              }}
             />
-            <Button size="sm" className="h-7 text-[11px] px-2 shrink-0" onClick={handleSaveSnapshot} disabled={!snapshotName.trim()}>
+            <Button
+              size="sm"
+              className="h-7 text-[11px] px-2 shrink-0"
+              onClick={handleSaveSnapshot}
+              disabled={!snapshotName.trim()}
+            >
               <IconPlus className="w-3 h-3 mr-1" /> Save
             </Button>
           </div>
           {snapshots.length === 0 ? (
-            <div className="text-[10px] text-muted-foreground">Save weight presets to switch between personalities quickly</div>
+            <div className="text-[10px] text-muted-foreground">
+              Save weight presets to switch between personalities quickly
+            </div>
           ) : (
             <div className="space-y-1">
-              {snapshots.map(s => (
-                <div key={s.name} className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30 hover:bg-primary/[0.05] transition-colors group">
+              {snapshots.map((s) => (
+                <div
+                  key={s.name}
+                  className="flex items-center justify-between px-2 py-1.5 rounded bg-muted/30 hover:bg-primary/[0.05] transition-colors group"
+                >
                   <div className="min-w-0 flex-1">
                     <span className="text-[11px] font-medium">{s.label || s.name}</span>
-                    {s.saved_at && (
+                    {formatMonthDay(s.saved_at) && (
                       <span className="text-[9px] text-muted-foreground ml-2">
-                        {new Date(s.saved_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        {formatMonthDay(s.saved_at)}
                       </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                    <button type="button" className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10" onClick={() => handleLoadSnapshot(s.name)}>Load</button>
-                    <button type="button" className="text-[10px] text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10" onClick={() => handleDeleteSnapshot(s.name)}>Delete</button>
+                    <button
+                      type="button"
+                      className="text-[10px] text-primary hover:text-primary/80 px-1.5 py-0.5 rounded hover:bg-primary/10"
+                      onClick={() => handleLoadSnapshot(s.name)}
+                    >
+                      Load
+                    </button>
+                    <button
+                      type="button"
+                      className="text-[10px] text-destructive hover:text-destructive/80 px-1.5 py-0.5 rounded hover:bg-destructive/10"
+                      onClick={() => handleDeleteSnapshot(s.name)}
+                    >
+                      Delete
+                    </button>
                   </div>
                 </div>
               ))}

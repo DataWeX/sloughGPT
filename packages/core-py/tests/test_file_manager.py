@@ -1,14 +1,13 @@
-"""Tests for domains.shell.file_manager — unified VFS + host FS resolution."""
+"""Tests for domain.shell._internal.file_manager — unified VFS + host FS resolution."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from domains.shell.file_manager import (
+from domain.shell._internal.file_manager import (
     FileManager,
     get_file_manager,
     reset_file_manager,
@@ -193,7 +192,7 @@ class TestFileManagerResolve:
 class TestGetVfsFallback:
     def test_import_error_sets_sentinel(self):
         fm = FileManager()
-        with patch.dict("sys.modules", {"domains.shell.vfs": None}):
+        with patch.dict("sys.modules", {"domain.shell._internal.vfs": None}):
             result = fm._get_vfs()
         assert result is None
         assert fm._vfs is False  # sentinel

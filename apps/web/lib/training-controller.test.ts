@@ -18,28 +18,28 @@ import { trainingJobsController } from './training-controller'
 describe('trainingJobsController.startAutoTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/start with params', async () => {
+  it('POSTs to /training/start with params', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started', teacher: 'gpt2', student: 'lstm' })
 
     const result = await trainingJobsController.startAutoTrain({ teacher_model: 'gpt2' })
     expect(result.status).toBe('started')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/start', { teacher_model: 'gpt2' })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/start', { teacher_model: 'gpt2' })
   })
 
   it('sends null body when no params', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'started' })
     await trainingJobsController.startAutoTrain()
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/start', null)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/start', null)
   })
 })
 
 describe('trainingJobsController.stopAutoTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/stop', async () => {
+  it('POSTs to /training/stop', async () => {
     apiClient.apiPost.mockResolvedValue(undefined)
     await trainingJobsController.stopAutoTrain()
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/stop')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/stop')
   })
 })
 
@@ -57,10 +57,10 @@ describe('trainingJobsController.loadAdapter', () => {
 describe('trainingJobsController.startTurboTrain', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/start-turbo', async () => {
+  it('POSTs to /training/turbo-start', async () => {
     apiClient.apiPost.mockResolvedValue({ status: 'done', final_loss: 0.5 })
     const result = await trainingJobsController.startTurboTrain({ epochs: 5 })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/start-turbo', { epochs: 5 })
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/turbo-start', { epochs: 5 })
     expect(result.status).toBe('done')
   })
 })
@@ -87,11 +87,11 @@ describe('trainingJobsController.list', () => {
 describe('trainingJobsController.listCheckpoints', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('GETs /auto-train/checkpoints', async () => {
+  it('GETs /training/checkpoints', async () => {
     apiClient.apiGet.mockResolvedValue([{ name: 'v1', soul: 'friendly' }])
     const result = await trainingJobsController.listCheckpoints()
     expect(result).toHaveLength(1)
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/auto-train/checkpoints')
+    expect(apiClient.apiGet).toHaveBeenCalledWith('/training/checkpoints')
   })
 })
 
@@ -116,8 +116,8 @@ describe('trainingJobsController.get', () => {
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/jobs/j1')
   })
 
-  it('returns null on error', async () => {
-    apiClient.apiGet.mockRejectedValue(new Error('not found'))
+  it('returns null on 404', async () => {
+    apiClient.apiGet.mockRejectedValue(new Error('404 not found'))
     const result = await trainingJobsController.get('missing')
     expect(result).toBeNull()
   })
@@ -178,21 +178,6 @@ describe('trainingJobsController.startLoraFinetune', () => {
       adapter_name: undefined,
     })
     expect(result.job_id).toBe('lora1')
-  })
-})
-
-describe('trainingJobsController.startQuick', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to /training/quick', async () => {
-    apiClient.apiPost.mockResolvedValue({ job_id: 'q1', status: 'ok', config: {}, explanation: 'done' })
-    const result = await trainingJobsController.startQuick({ dataset: 'shakespeare' })
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/quick', {
-      dataset: 'shakespeare',
-      name: undefined,
-      model: undefined,
-    })
-    expect(result.job_id).toBe('q1')
   })
 })
 
@@ -282,9 +267,9 @@ describe('trainingJobsController.webhooks', () => {
   })
 
   it('webhookStats GETs /training/webhooks/stats', async () => {
-    apiClient.apiGet.mockResolvedValue({ total: 5, success_rate: 0.9 })
+    apiClient.apiGet.mockResolvedValue({ total_webhooks: 5, success_rate: 0.9, total_deliveries: 10, successful_deliveries: 9, failed_deliveries: 1, active_webhooks: 3, pending_retries: 0, dead_letters: 0 })
     const result = await trainingJobsController.webhookStats()
-    expect(result.total).toBe(5)
+    expect(result.total_webhooks).toBe(5)
     expect(apiClient.apiGet).toHaveBeenCalledWith('/training/webhooks/stats')
   })
 })
@@ -342,22 +327,22 @@ describe('trainingJobsController.exportFeedbackPairs', () => {
 describe('trainingJobsController.loadCheckpoint', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('POSTs to /auto-train/checkpoints/{name}/load', async () => {
+  it('POSTs to /training/checkpoints/{name}/load', async () => {
     apiClient.apiPost.mockResolvedValue({ success: true })
     const result = await trainingJobsController.loadCheckpoint('my-checkpoint')
     expect(result.success).toBe(true)
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/auto-train/checkpoints/my-checkpoint/load')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/training/checkpoints/my-checkpoint/load')
   })
 })
 
 describe('trainingJobsController.deleteCheckpoint', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
-  it('DELETEs /auto-train/checkpoints/{name}', async () => {
+  it('DELETEs /training/checkpoints/{name}', async () => {
     apiClient.apiDelete.mockResolvedValue({ success: true })
     const result = await trainingJobsController.deleteCheckpoint('old-checkpoint')
     expect(result.success).toBe(true)
-    expect(apiClient.apiDelete).toHaveBeenCalledWith('/auto-train/checkpoints/old-checkpoint')
+    expect(apiClient.apiDelete).toHaveBeenCalledWith('/training/checkpoints/old-checkpoint')
   })
 })
 
@@ -400,10 +385,9 @@ describe('trainingJobsController.listFineTuned', () => {
     expect(result).toHaveLength(1)
   })
 
-  it('returns empty array on error', async () => {
+  it('propagates errors', async () => {
     apiClient.apiGet.mockRejectedValue(new Error('boom'))
-    const result = await trainingJobsController.listFineTuned()
-    expect(result).toEqual([])
+    await expect(trainingJobsController.listFineTuned()).rejects.toThrow('boom')
   })
 })
 

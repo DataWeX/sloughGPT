@@ -22,7 +22,7 @@ export function TokenTreePathCard() {
     try {
       setResult(await tokenTreeController.path(term))
     } catch {
-      addToast('Failed to trace the token path', 'error')
+      addToast('Could not trace the token path', 'error')
     } finally {
       setTracing(false)
     }

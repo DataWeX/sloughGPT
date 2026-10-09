@@ -16,13 +16,17 @@ vi.mock('@/hooks/useLocale', () => ({
   useLocale: () => ({ t: mockT, locale: 'en' }),
 }))
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+}))
+
 import { EmptyState } from './EmptyState'
 
 const mockSuggestions = [
-  { text: 'Write a poem', icon: '✍️' },
-  { text: 'Explain quantum physics', icon: '💡' },
-  { text: 'Plan a weekend trip', icon: '🗺️' },
-  { text: 'Help me practice Spanish', icon: '🌐' },
+  { text: 'Write a poem', icon: <span data-testid="icon-write" /> },
+  { text: 'Explain quantum physics', icon: <span data-testid="icon-explain" /> },
+  { text: 'Plan a weekend trip', icon: <span data-testid="icon-trip" /> },
+  { text: 'Help me practice Spanish', icon: <span data-testid="icon-spanish" /> },
 ]
 
 beforeAll(() => {
@@ -51,28 +55,28 @@ describe('EmptyState', () => {
 
   it('renders suggestion chips when suggestions prop provided', () => {
     render(<EmptyState hasModel suggestions={mockSuggestions} onSuggestionClick={() => {}} />)
-    expect(screen.getByText('Try asking')).toBeTruthy()
+    expect(screen.getByText('Or try asking')).toBeTruthy()
     expect(screen.getByRole('button', { name: /Write a poem/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /Plan a weekend trip/ })).toBeTruthy()
   })
 
   it('shows fallback suggestions when suggestions is empty', () => {
     render(<EmptyState hasModel suggestions={[]} />)
-    expect(screen.getByText('Try asking')).toBeTruthy()
+    expect(screen.getByText('Or try asking')).toBeTruthy()
     expect(screen.getByRole('button', { name: /quantum computing/ })).toBeTruthy()
   })
 
   it('shows fallback suggestions when suggestions not provided', () => {
     render(<EmptyState hasModel />)
-    expect(screen.getByText('Try asking')).toBeTruthy()
-    expect(screen.getByRole('button', { name: /poem about the ocean/ })).toBeTruthy()
+    expect(screen.getByText('Or try asking')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /professional email/ })).toBeTruthy()
   })
 
   it('shows connecting state when hasModel is false', () => {
     render(<EmptyState hasModel={false} />)
     expect(screen.getByText('Starting...')).toBeTruthy()
     expect(screen.getByText('Model is loading, one moment')).toBeTruthy()
-    expect(screen.queryByText('Try asking')).toBeNull()
+    expect(screen.queryByText('Or try asking')).toBeNull()
   })
 
   it('renders keyboard shortcuts hint', () => {

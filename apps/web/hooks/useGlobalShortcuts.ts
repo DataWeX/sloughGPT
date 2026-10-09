@@ -84,6 +84,14 @@ export function useGlobalShortcuts() {
         // `?` toggles the dialog itself — no closeIfOpen needed, toggle-shortcuts handles it
         window.dispatchEvent(new CustomEvent('toggle-shortcuts'))
       }
+
+      // Toggle dark mode: Ctrl+Shift+M
+      if (ctrl && e.shiftKey && e.key === 'M') {
+        e.preventDefault()
+        closeIfOpen()
+        window.dispatchEvent(new CustomEvent('toggle-dark-mode'))
+        return
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown)

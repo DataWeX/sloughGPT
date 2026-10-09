@@ -1,26 +1,22 @@
 'use client'
 
+import { cn, IconHeart, IconBrain } from '@sloughgpt/strui'
+import type { ReactNode } from 'react'
+import { SOUL_GROUP_LABELS, SOUL_GROUP_COLORS, SOUL_GROUP_KEYS } from './soul-constants'
+import type { SoulGroupKey } from './soul-constants'
+
 interface PersonalitySummaryProps {
   traitWeights: Record<string, Record<string, number>>
   currentSoulName: string | null
 }
 
-const GROUP_LABELS: Record<string, string> = {
-  personality: 'Personality',
-  cognition: 'Cognition',
-  emotion: 'Emotion',
-}
+const GROUP_LABELS = SOUL_GROUP_LABELS
+const GROUP_COLORS = SOUL_GROUP_COLORS
 
-const GROUP_COLORS: Record<string, string> = {
-  personality: 'rgb(var(--primary))',
-  cognition: 'rgb(var(--chart-4))',
-  emotion: 'rgb(var(--destructive))',
-}
-
-const GROUP_ICONS: Record<string, string> = {
-  personality: '❤️',
-  cognition: '🧠',
-  emotion: '💖',
+const GROUP_ICONS: Record<string, ReactNode> = {
+  personality: <IconHeart className="h-3 w-3" />,
+  cognition: <IconBrain className="h-3 w-3" />,
+  emotion: <IconHeart className="h-3 w-3" />,
 }
 
 interface ArchetypeDef {
@@ -80,7 +76,7 @@ const staggerDelay = (index: number) => ({ animationDelay: `${(index + 1) * 80}m
 export default function PersonalitySummary({ traitWeights, currentSoulName }: PersonalitySummaryProps) {
   const archetype = deriveArchetype(traitWeights)
 
-  const groups = ['personality', 'cognition', 'emotion'] as const
+  const groups = SOUL_GROUP_KEYS
 
   let totalVal = 0
   let totalCount = 0
@@ -104,30 +100,6 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
 
   return (
     <>
-      <style>{`
-        @keyframes scaleBar {
-          from { transform: scaleX(0); }
-          to { transform: scaleX(1); }
-        }
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(6px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes glowPulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.15); }
-          50% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.05); }
-        }
-        .trait-bar-inner {
-          transform-origin: left;
-          animation: scaleBar 0.5s ease-out forwards;
-        }
-        .stat-card {
-          animation: fadeSlideUp 0.4s ease-out both;
-        }
-        .badge-glow {
-          animation: glowPulse 3s ease-in-out infinite;
-        }
-      `}</style>
 
       {/* ── Archetype Badge ── */}
       {currentSoulName && (
@@ -147,7 +119,7 @@ export default function PersonalitySummary({ traitWeights, currentSoulName }: Pe
             </div>
             <div className="flex flex-col items-center shrink-0">
               <span className="text-[9px] text-muted-foreground uppercase tracking-wider">Overall</span>
-              <span className={`text-2xl font-bold ${ratingColor(overall)}`}>{overall}</span>
+              <span className={cn('text-base font-bold', ratingColor(overall))}>{overall}</span>
               <span className="text-[8px] text-muted-foreground/50">/100</span>
             </div>
           </div>

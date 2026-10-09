@@ -1,11 +1,10 @@
 """Tests for TruthMaintainer — post-epoch self-retrain on misclassified texts."""
 
 import numpy as np
-import pytest
 
-from domains.infrastructure.anchor_store import MeaningTags
-from domains.infrastructure.truth_labeler import LabelResult
-from domains.infrastructure.truth_maintainer import (
+from domain.infrastructure._internal.anchor_store import MeaningTags
+from domain.infrastructure._internal.truth_labeler import LabelResult
+from domain.infrastructure._internal.truth_maintainer import (
     TruthMaintainer,
     _encode_tokens,
     get_truth_maintainer,
@@ -83,7 +82,9 @@ class TestFindMisclassified:
         store = _tag_store()
         m = TruthMaintainer(labeler=_FakeLabeler("factual", 0.8))
         texts = ["a", "b", "c"]
-        embeddings = np.stack([store.get("interrogative"), store.get("factual"), store.get("interrogative")])
+        embeddings = np.stack(
+            [store.get("interrogative"), store.get("factual"), store.get("interrogative")]
+        )
         found = m.find_misclassified(texts, embeddings, store)
         assert [f["index"] for f in found] == [0, 2]
 
@@ -118,7 +119,9 @@ class TestGenerateCorrectivePairs:
         m = TruthMaintainer()
         texts, embeddings = self._scenario(store)
         mis = m.find_misclassified(texts, embeddings, store)
-        queries, positives, negatives = m.generate_corrective_pairs(mis, texts, embeddings, store, max_pairs=1)
+        queries, positives, negatives = m.generate_corrective_pairs(
+            mis, texts, embeddings, store, max_pairs=1
+        )
         assert len(queries) == len(positives) == len(negatives) == 1
 
     def test_no_positive_skips_pair(self):
@@ -148,7 +151,7 @@ class TestApplyCorrection:
         assert loss == 0.0
 
     def test_runs_and_updates_params(self):
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
 
         rng = np.random.default_rng(7)
         params = [Tensor(rng.standard_normal((1, 4)).astype(np.float64), requires_grad=True)]
@@ -184,7 +187,7 @@ class TestApplyCorrection:
         assert not np.allclose(before, params[0].data)
 
     def test_fallback_tokenizer_path(self):
-        from domains.training.slonet import Tensor
+        from domain.training._internal.slonet import Tensor
 
         rng = np.random.default_rng(3)
         params = [Tensor(rng.standard_normal((1, 4)).astype(np.float64), requires_grad=True)]
@@ -211,16 +214,14 @@ class TestApplyCorrection:
         assert isinstance(loss, float)
 
     def test_clips_large_gradients(self, monkeypatch):
-        from domains.training import slonet
-        from domains.training.slonet import Tensor
+        from domain.training._internal import slonet
+        from domain.training._internal.slonet import Tensor
 
         seen = {}
 
         class RecordingAdam(slonet.SloAdam):
             def step(self, params):
-                seen["norms"] = [
-                    np.linalg.norm(p.grad.data) for p in params if p.grad is not None
-                ]
+                seen["norms"] = [np.linalg.norm(p.grad.data) for p in params if p.grad is not None]
                 return super().step(params)
 
         monkeypatch.setattr(slonet, "SloAdam", RecordingAdam)
@@ -271,7 +272,9 @@ class TestEncodeTokens:
         assert ids[1] == 9
 
     def test_truncates_long_text(self):
-        ids = _encode_tokens("a b c d e f g", {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6, "g": 7}, max_len=3)
+        ids = _encode_tokens(
+            "a b c d e f g", {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5, "f": 6, "g": 7}, max_len=3
+        )
         assert ids.tolist() == [1, 2, 3]
 
     def test_lowercases(self):

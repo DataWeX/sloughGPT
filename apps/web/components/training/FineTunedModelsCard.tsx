@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { cn, Card, CardContent, CardHeader, CardTitle, Button, Skeleton } from '@sloughgpt/strui'
+import { cn, ActionCard, Button, Skeleton, Checkbox } from '@sloughgpt/strui'
+import { StatusBanner } from '@/components/composed/StatusBanner'
 import { IconTrash, IconRefresh, IconX } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -25,20 +26,26 @@ export function FineTunedModelsCard({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
 
+  const activeRef = useRef(true)
+
   const fetchModels = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
       const list = await trainingJobsController.listFineTuned()
-      setModels(list)
+      if (activeRef.current) setModels(list)
     } catch (e) {
-      setError(extractErrorMessage(e, 'Failed to load models'))
+      if (activeRef.current) setError(extractErrorMessage(e, 'Could not load models'))
     } finally {
-      setLoading(false)
+      if (activeRef.current) setLoading(false)
     }
   }, [])
 
-  useEffect(() => { void fetchModels() }, [fetchModels])
+  useEffect(() => {
+    activeRef.current = true
+    void fetchModels()
+    return () => { activeRef.current = false }
+  }, [fetchModels])
 
   const handleLoad = async (name: string) => {
     setLoadingName(name)
@@ -47,7 +54,7 @@ export function FineTunedModelsCard({
       addToast(`${name} loaded for chat`, 'success')
       onLoaded?.()
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Load failed'), 'error')
+      addToast(extractErrorMessage(e, 'Could not load'), 'error')
     } finally {
       setLoadingName(null)
     }
@@ -59,18 +66,18 @@ export function FineTunedModelsCard({
       addToast(`Deleted ${name}`, 'success')
       void fetchModels()
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Delete failed'), 'error')
+      addToast(extractErrorMessage(e, 'Could not delete'), 'error')
     }
   }
 
   const handleUnload = async (name: string) => {
     setLoadingName(name)
     try {
-      await modelController.unloadModel(name)
+      await modelController.unloadModel()
       addToast(`${name} unloaded`, 'info')
       onLoaded?.()
     } catch (e) {
-      addToast(extractErrorMessage(e, 'Unload failed'), 'error')
+      addToast(extractErrorMessage(e, 'Could not unload'), 'error')
     } finally {
       setLoadingName(null)
     }
@@ -102,23 +109,23 @@ export function FineTunedModelsCard({
       addToast(`Deleted ${selectedIds.size} models`, 'success')
       void fetchModels()
     } catch {
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     } finally {
       setBatchDeleting(false)
     }
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-base">Fine-tuned models</CardTitle>
+    <ActionCard
+      title="Fine-tuned models"
+      actions={
         <Button size="sm" variant="ghost" onClick={() => void fetchModels()} aria-label="Refresh fine-tuned models">
           <IconRefresh className="h-3.5 w-3.5" />
         </Button>
-      </CardHeader>
-      <CardContent>
+      }
+    >
         {loading ? (
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2" aria-busy="true">
             {[1, 2].map(i => (
               <div key={i} className="flex items-center justify-between rounded-lg border border-border/50 p-3">
                 <div className="space-y-1.5 flex-1">
@@ -130,10 +137,7 @@ export function FineTunedModelsCard({
             ))}
           </div>
         ) : error ? (
-          <div className="text-center py-4">
-            <p className="text-xs text-destructive mb-2">{error}</p>
-            <Button size="sm" variant="ghost" onClick={() => void fetchModels()}>Retry</Button>
-          </div>
+          <StatusBanner variant="error" message={error} dismissible={false} onRetry={() => void fetchModels()} />
         ) : models.length === 0 ? (
           <div className="text-center py-4 space-y-2">
             <p className="text-xs text-muted-foreground">No fine-tuned models yet. HF fine-tuned outputs under models/hf-finetuned appear here.</p>
@@ -156,35 +160,35 @@ export function FineTunedModelsCard({
             )}
             {models.length > 2 && (
               <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer mb-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={selectedIds.size === models.length && models.length > 0}
-                  onChange={toggleSelectAll}
+                  onCheckedChange={toggleSelectAll}
                   className="rounded border-border"
                 />
                 Select all ({models.length})
               </label>
             )}
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-1.5 sm:grid-cols-2">
               {models.map((m) => {
                 const isActive = !!activeModelId && (activeModelId === m.model_name || activeModelId === m.name)
                 const isSelected = selectedIds.has(m.name)
                 return (
                   <div key={m.name} className={cn(
-                    'flex items-center justify-between rounded-lg border p-3 text-sm transition-colors',
-                    isActive ? 'border-primary/30 bg-primary/[0.08]' : isSelected ? 'border-primary/40 bg-primary/5' : 'border-border/50 hover:bg-muted/30',
+                    'flex items-center justify-between rounded-lg border p-2.5 text-sm transition-colors',
+                    isActive ? 'border-primary/30 bg-primary/[0.08]' : isSelected ? 'border-primary/40 bg-primary/5' : 'border-border/40 hover:bg-muted/20',
                   )}>
                     <div className="flex items-start gap-2 min-w-0 flex-1">
                       {models.length > 2 && (
-                        <input
-                          type="checkbox"
+                        <Checkbox
                           checked={isSelected}
-                          onChange={() => toggleSelect(m.name)}
+                          onCheckedChange={() => toggleSelect(m.name)}
+                          aria-label={`Select ${m.name}`}
                           className="mt-1 rounded border-border shrink-0"
                         />
                       )}
                       <div className="min-w-0 flex-1">
                         <button
+                          type="button"
                           onClick={() => router.push(`/model/${encodeURIComponent(m.name)}`)}
                           className="flex items-center gap-2 text-left w-full"
                           aria-label={`View details for ${m.name}`}
@@ -192,7 +196,7 @@ export function FineTunedModelsCard({
                           <p className="truncate font-medium text-xs hover:text-primary transition-colors">{m.name}</p>
                           {isActive && <span className="text-primary text-[10px]">✓</span>}
                         </button>
-                        <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground mt-0.5">
+                        <div className="flex flex-wrap gap-x-1.5 gap-y-0.5 text-[10px] text-muted-foreground/60 mt-0.5">
                           <span>{m.model}</span>
                           {m.dataset && <span>· {m.dataset}</span>}
                           {m.size_mb > 0 && <span>· {m.size_mb.toFixed(1)} MB</span>}
@@ -201,23 +205,23 @@ export function FineTunedModelsCard({
                         </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                    <div className="flex items-center gap-0.5 shrink-0 ml-2">
                       {!isActive && (
-                        <Button size="sm" variant="ghost" className="h-6 text-xs" disabled={loadingName !== null} onClick={() => handleLoad(m.name)}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={loadingName !== null} onClick={() => handleLoad(m.name)}>
                           {loadingName === m.name ? 'Loading...' : 'Load'}
                         </Button>
                       )}
                       {isActive && (
-                        <Button size="sm" variant="ghost" className="h-6 text-xs" disabled={loadingName !== null} onClick={() => handleUnload(m.name)} aria-label={`Unload ${m.name}`}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" disabled={loadingName !== null} onClick={() => handleUnload(m.name)} aria-label={`Unload ${m.name}`}>
                           {loadingName === m.name ? 'Unloading...' : (
                             <>
-                              <IconX className="h-3 w-3 mr-1" />
+                              <IconX className="h-3 w-3 mr-0.5" />
                               Unload
                             </>
                           )}
                         </Button>
                       )}
-                      <Button size="sm" variant="ghost" className="h-6 text-xs text-destructive hover:text-destructive" onClick={() => handleDelete(m.name)} aria-label={`Delete ${m.name}`}>
+                      <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive hover:text-destructive" onClick={() => handleDelete(m.name)} aria-label={`Delete ${m.name}`}>
                         <IconTrash className="h-3 w-3" />
                       </Button>
                     </div>
@@ -227,7 +231,6 @@ export function FineTunedModelsCard({
             </div>
           </>
         )}
-      </CardContent>
-    </Card>
+    </ActionCard>
   )
 }

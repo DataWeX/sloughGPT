@@ -1,5 +1,13 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('@/lib/sync-html-theme', () => ({
+  syncHtmlTheme: vi.fn(),
+}))
+
+vi.mock('@/lib/dev-log', () => ({
+  trackEvent: vi.fn(),
+}))
 
 import { ThemeProvider, useTheme } from './ThemeProvider'
 
@@ -37,28 +45,32 @@ describe('ThemeProvider', () => {
     expect(lastMode.textContent).toBe('dark')
   })
 
-  it('reads saved theme and mode from localStorage', () => {
+  it('reads saved theme and mode from localStorage', async () => {
     localStorage.setItem('man_theme', 'green')
     localStorage.setItem('man_mode', 'light')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const themes = container.querySelectorAll('[data-testid="theme"]')
-    const lastTheme = themes[themes.length - 1]
-    const modes = container.querySelectorAll('[data-testid="mode"]')
-    const lastMode = modes[modes.length - 1]
-    expect(lastTheme.textContent).toBe('green')
-    expect(lastMode.textContent).toBe('light')
+    await waitFor(() => {
+      const themes = container.querySelectorAll('[data-testid="theme"]')
+      const lastTheme = themes[themes.length - 1]
+      const modes = container.querySelectorAll('[data-testid="mode"]')
+      const lastMode = modes[modes.length - 1]
+      expect(lastTheme.textContent).toBe('green')
+      expect(lastMode.textContent).toBe('light')
+    })
   })
 
-  it('falls back to defaults for invalid localStorage values', () => {
+  it('falls back to defaults for invalid localStorage values', async () => {
     localStorage.setItem('man_theme', 'invalid')
     localStorage.setItem('man_mode', 'invalid')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const themes = container.querySelectorAll('[data-testid="theme"]')
-    const lastTheme = themes[themes.length - 1]
-    const modes = container.querySelectorAll('[data-testid="mode"]')
-    const lastMode = modes[modes.length - 1]
-    expect(lastTheme.textContent).toBe('purple')
-    expect(lastMode.textContent).toBe('dark')
+    await waitFor(() => {
+      const themes = container.querySelectorAll('[data-testid="theme"]')
+      const lastTheme = themes[themes.length - 1]
+      const modes = container.querySelectorAll('[data-testid="mode"]')
+      const lastMode = modes[modes.length - 1]
+      expect(lastTheme.textContent).toBe('purple')
+      expect(lastMode.textContent).toBe('dark')
+    })
   })
 
   it('throws when useTheme is used outside provider', () => {
@@ -86,20 +98,24 @@ describe('ThemeProvider — palette', () => {
     expect(last.textContent).toBe('noir-violet')
   })
 
-  it('reads saved palette from localStorage', () => {
+  it('reads saved palette from localStorage', async () => {
     localStorage.setItem('man_palette', 'neural-precision')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const palettes = container.querySelectorAll('[data-testid="palette"]')
-    const last = palettes[palettes.length - 1]
-    expect(last.textContent).toBe('neural-precision')
+    await waitFor(() => {
+      const palettes = container.querySelectorAll('[data-testid="palette"]')
+      const last = palettes[palettes.length - 1]
+      expect(last.textContent).toBe('neural-precision')
+    })
   })
 
-  it('falls back to noir-violet for invalid localStorage value', () => {
+  it('falls back to noir-violet for invalid localStorage value', async () => {
     localStorage.setItem('man_palette', 'solarized')
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
-    const palettes = container.querySelectorAll('[data-testid="palette"]')
-    const last = palettes[palettes.length - 1]
-    expect(last.textContent).toBe('noir-violet')
+    await waitFor(() => {
+      const palettes = container.querySelectorAll('[data-testid="palette"]')
+      const last = palettes[palettes.length - 1]
+      expect(last.textContent).toBe('noir-violet')
+    })
   })
 
   it('setPalette updates context value', async () => {
@@ -115,10 +131,27 @@ describe('ThemeProvider — palette', () => {
 
   it('persists palette to localStorage', async () => {
     const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    await act(async () => { await new Promise(r => setTimeout(r, 0)) })
     const btn = container.querySelector('[data-testid="set-palette"]') as HTMLButtonElement
     btn.click()
     await waitFor(() => {
       expect(localStorage.getItem('man_palette')).toBe('neural-precision')
     })
+  })
+
+  it('toggles mode when toggle-dark-mode event fires', async () => {
+    const { container } = render(<ThemeProvider><TestChild /></ThemeProvider>)
+    const modes = () => container.querySelectorAll('[data-testid="mode"]')
+    const lastMode = () => modes()[modes().length - 1]
+    expect(lastMode().textContent).toBe('dark')
+    act(() => { window.dispatchEvent(new CustomEvent('toggle-dark-mode')) })
+    await waitFor(() => expect(lastMode().textContent).toBe('light'))
+    act(() => { window.dispatchEvent(new CustomEvent('toggle-dark-mode')) })
+    await waitFor(() => expect(lastMode().textContent).toBe('dark'))
+  })
+
+  it('does not toggle mode when event listener fires outside provider', () => {
+    render(<ThemeProvider><TestChild /></ThemeProvider>)
+    act(() => { window.dispatchEvent(new CustomEvent('toggle-dark-mode')) })
   })
 })

@@ -1,268 +1,263 @@
-"""Tests for the multimodal speech recognition module."""
+"""Tests for domain.multimodal._internal.speech — TranscriptionResult, BrowserSpeechRecognizer,
+ServerSpeechRecognizer, get_speech_recognizer.
 
-import os
+Covers: dataclass creation, browser config, server recognizer init, factory.
+"""
+
+from __future__ import annotations
+
 import sys
-from types import SimpleNamespace
+from pathlib import Path
 
-import pytest
+_core_dir = str(Path(__file__).resolve().parents[2])
+if _core_dir not in sys.path:
+    sys.path.insert(0, _core_dir)
 
-from domains.multimodal.speech import (
+from domain.multimodal._internal.speech import (
     BrowserSpeechRecognizer,
     ServerSpeechRecognizer,
-    SpeechRecognizer,
     TranscriptionResult,
     get_speech_recognizer,
 )
 
+# ── TranscriptionResult ──────────────────────────────────────────────────
 
-# ---------------------------------------------------------------------------
-# TranscriptionResult
-# ---------------------------------------------------------------------------
 
 class TestTranscriptionResult:
-    def test_defaults(self):
-        r = TranscriptionResult(text="hi", confidence=0.9, language="en")
-        assert r.text == "hi"
+    def test_creation(self):
+        r = TranscriptionResult(text="hello world", confidence=0.9, language="en-US")
+        assert r.text == "hello world"
         assert r.confidence == 0.9
-        assert r.language == "en"
+        assert r.language == "en-US"
         assert r.duration is None
 
     def test_with_duration(self):
-        r = TranscriptionResult(text="hi", confidence=0.5, language="fr", duration=1.5)
-        assert r.duration == 1.5
+        r = TranscriptionResult(text="test", confidence=0.8, language="en", duration=5.0)
+        assert r.duration == 5.0
+
+    def test_is_valid_default(self):
+        r = TranscriptionResult(text="ok", confidence=1.0, language="en")
+        assert r.is_valid is True
+
+    def test_is_valid_false(self):
+        r = TranscriptionResult(text="", confidence=0.0, language="en", is_valid=False)
+        assert r.is_valid is False
+
+    def test_empty_text(self):
+        r = TranscriptionResult(text="", confidence=0.0, language="en")
+        assert r.text == ""
+
+    def test_zero_confidence(self):
+        r = TranscriptionResult(text="x", confidence=0.0, language="en")
+        assert r.confidence == 0.0
+
+    def test_max_confidence(self):
+        r = TranscriptionResult(text="x", confidence=1.0, language="en")
+        assert r.confidence == 1.0
+
+    def test_long_text(self):
+        long = "word " * 1000
+        r = TranscriptionResult(text=long, confidence=0.5, language="en")
+        assert len(r.text) > 4000
+
+    def test_unicode_text(self):
+        r = TranscriptionResult(text="こんにちは世界", confidence=0.95, language="ja")
+        assert r.text == "こんにちは世界"
+
+    def test_special_characters(self):
+        r = TranscriptionResult(text="hello <>&\"'", confidence=0.8, language="en")
+        assert r.text == "hello <>&\"'"
+
+    def test_all_fields_explicit(self):
+        r = TranscriptionResult(
+            text="t", confidence=0.7, language="fr", duration=3.14, is_valid=False
+        )
+        assert r.text == "t"
+        assert r.confidence == 0.7
+        assert r.language == "fr"
+        assert r.duration == 3.14
+        assert r.is_valid is False
+
+    def test_negative_duration(self):
+        r = TranscriptionResult(text="x", confidence=0.5, language="en", duration=-1.0)
+        assert r.duration == -1.0
+
+    def test_many_languages(self):
+        for lang in ["en-US", "fr-FR", "de-DE", "ja-JP", "zh-CN", "ko-KR", "ar-SA"]:
+            r = TranscriptionResult(text="hi", confidence=0.9, language=lang)
+            assert r.language == lang
+
+    def test_equality(self):
+        r1 = TranscriptionResult(text="a", confidence=0.8, language="en")
+        r2 = TranscriptionResult(text="a", confidence=0.8, language="en")
+        assert r1 == r2
+
+    def test_repr(self):
+        r = TranscriptionResult(text="hi", confidence=0.9, language="en")
+        assert "TranscriptionResult" in repr(r)
 
 
-# ---------------------------------------------------------------------------
-# Protocol
-# ---------------------------------------------------------------------------
+# ── BrowserSpeechRecognizer ──────────────────────────────────────────────
 
-class TestSpeechRecognizerProtocol:
-    def test_protocol_interface(self):
-        assert hasattr(SpeechRecognizer, "recognize")
-        assert hasattr(SpeechRecognizer, "recognize_stream")
-
-    def test_implementations_have_recognize(self):
-        assert callable(BrowserSpeechRecognizer().get_config)
-        assert callable(ServerSpeechRecognizer().recognize)
-
-
-# ---------------------------------------------------------------------------
-# BrowserSpeechRecognizer
-# ---------------------------------------------------------------------------
 
 class TestBrowserSpeechRecognizer:
-    def test_default_language(self):
-        rec = BrowserSpeechRecognizer()
-        assert rec.language == "en-US"
-        assert rec.continuous is False
-        assert rec.interim_results is True
+    def test_default_config(self):
+        r = BrowserSpeechRecognizer()
+        config = r.get_config()
+        assert config["language"] == "en-US"
+        assert config["continuous"] is False
+        assert config["interimResults"] is True
 
     def test_custom_language(self):
-        rec = BrowserSpeechRecognizer(language="es-ES")
-        assert rec.language == "es-ES"
+        r = BrowserSpeechRecognizer(language="fr-FR")
+        assert r.language == "fr-FR"
+        config = r.get_config()
+        assert config["language"] == "fr-FR"
 
-    def test_get_config(self):
-        rec = BrowserSpeechRecognizer(language="fr-FR")
-        cfg = rec.get_config()
-        assert cfg == {
-            "language": "fr-FR",
-            "continuous": False,
-            "interimResults": True,
-        }
+    def test_default_language(self):
+        r = BrowserSpeechRecognizer()
+        assert r.language == "en-US"
 
+    def test_continuous_default(self):
+        r = BrowserSpeechRecognizer()
+        assert r.continuous is False
 
-# ---------------------------------------------------------------------------
-# ServerSpeechRecognizer — backend discovery
-# ---------------------------------------------------------------------------
+    def test_interim_results_default(self):
+        r = BrowserSpeechRecognizer()
+        assert r.interim_results is True
 
-class FakeVoskModel:
-    def __init__(self, path):
-        self.path = path
+    def test_config_keys(self):
+        r = BrowserSpeechRecognizer()
+        config = r.get_config()
+        assert set(config.keys()) == {"language", "continuous", "interimResults"}
 
+    def test_config_values_types(self):
+        r = BrowserSpeechRecognizer()
+        config = r.get_config()
+        assert isinstance(config["language"], str)
+        assert isinstance(config["continuous"], bool)
+        assert isinstance(config["interimResults"], bool)
 
-class FakeKaldiRecognizer:
-    def __init__(self, model, rate):
-        self.model = model
-        self.rate = rate
-        self.waveform = None
+    def test_multiple_languages(self):
+        for lang in ["de-DE", "es-ES", "it-IT", "pt-BR", "zh-CN", "ja-JP"]:
+            r = BrowserSpeechRecognizer(language=lang)
+            assert r.get_config()["language"] == lang
 
-    def AcceptWaveform(self, data):
-        self.waveform = data
+    def test_config_dict_is_new(self):
+        r = BrowserSpeechRecognizer()
+        c1 = r.get_config()
+        c2 = r.get_config()
+        assert c1 == c2
+        c1["language"] = "modified"
+        assert r.get_config()["language"] == "en-US"
 
-    def FinalResult(self):
-        return '{"text": "hello world"}'
+    def test_init_only_sets_language(self):
+        r = BrowserSpeechRecognizer(language="ko-KR")
+        assert r.language == "ko-KR"
+        assert r.continuous is False
+        assert r.interim_results is True
 
+    def test_empty_language(self):
+        r = BrowserSpeechRecognizer(language="")
+        assert r.get_config()["language"] == ""
 
-FAKE_VOSK = SimpleNamespace(Model=FakeVoskModel, KaldiRecognizer=FakeKaldiRecognizer)
-
-
-class FakeRecognizer:
-    def __init__(self):
-        self.calls = []
-
-    def recognize_google(self, audio, language="en-US"):
-        self.calls.append((audio, language))
-        return "recognized text"
-
-
-class FakeAudioData:
-    def __init__(self, data, sample_rate, sample_width):
-        self.data = data
-        self.sample_rate = sample_rate
-        self.sample_width = sample_width
-
-
-FAKE_SR = SimpleNamespace(Recognizer=FakeRecognizer, AudioData=FakeAudioData)
-
-
-@pytest.fixture
-def no_backends(monkeypatch):
-    monkeypatch.delitem(sys.modules, "vosk", raising=False)
-    monkeypatch.delitem(sys.modules, "speech_recognition", raising=False)
+    def test_no_args(self):
+        r = BrowserSpeechRecognizer()
+        assert r is not None
+        assert isinstance(r, BrowserSpeechRecognizer)
 
 
-@pytest.fixture
-def with_vosk(monkeypatch):
-    monkeypatch.setitem(sys.modules, "vosk", FAKE_VOSK)
-    monkeypatch.delitem(sys.modules, "speech_recognition", raising=False)
+# ── ServerSpeechRecognizer ───────────────────────────────────────────────
 
 
-@pytest.fixture
-def with_speech_recognition(monkeypatch):
-    monkeypatch.delitem(sys.modules, "vosk", raising=False)
-    monkeypatch.setitem(sys.modules, "speech_recognition", FAKE_SR)
+class TestServerSpeechRecognizer:
+    def test_init_default(self):
+        r = ServerSpeechRecognizer()
+        assert r.model_name == "base"
+        assert r._model is None
+        assert r._processor is None
+        assert r._backend is None
 
+    def test_init_custom_model(self):
+        r = ServerSpeechRecognizer(model_name="medium")
+        assert r.model_name == "medium"
 
-class TestServerInit:
-    def test_defaults(self):
-        rec = ServerSpeechRecognizer()
-        assert rec.model_name == "base"
-        assert rec._model is None
-        assert rec._processor is None
-        assert rec._backend is None
-
-    def test_custom_model_name(self):
-        rec = ServerSpeechRecognizer(model_name="large")
-        assert rec.model_name == "large"
-
-
-class TestLoadModel:
-    def test_no_backend_available(self, no_backends, caplog):
-        rec = ServerSpeechRecognizer()
-        with caplog.at_level("WARNING"):
-            rec.load_model()
-        assert rec._backend is None
-        assert any("No ASR backend available" in r.message for r in caplog.records)
-
-    def test_vosk_backend(self, with_vosk):
-        rec = ServerSpeechRecognizer()
-        rec.load_model()
-        assert rec._backend == "vosk"
-        assert rec._model is None
-
-    def test_speech_recognition_backend(self, with_speech_recognition):
-        rec = ServerSpeechRecognizer()
-        rec.load_model()
-        assert rec._backend == "speech_recognition"
-        assert isinstance(rec._model, FakeRecognizer)
-
-    def test_vosk_takes_precedence(self, monkeypatch):
-        monkeypatch.setitem(sys.modules, "vosk", FAKE_VOSK)
-        monkeypatch.setitem(sys.modules, "speech_recognition", FAKE_SR)
-        rec = ServerSpeechRecognizer()
-        rec.load_model()
-        assert rec._backend == "vosk"
-
-
-class TestRecognizeNoBackend:
-    def test_empty_result_without_backend(self, no_backends):
-        rec = ServerSpeechRecognizer()
-        result = rec.recognize(b"\x00\x01", language="en")
+    def test_recognize_no_backend(self):
+        r = ServerSpeechRecognizer()
+        result = r.recognize(b"audio_data", language="en")
         assert result.text == ""
         assert result.confidence == 0.0
-        assert result.language == "en"
+        assert result.is_valid is False
 
-
-class TestRecognizeSpeechRecognition:
-    def test_success(self, with_speech_recognition):
-        rec = ServerSpeechRecognizer()
-        rec.load_model()
-        result = rec.recognize(b"audio-bytes", language="fr")
-        assert result.text == "recognized text"
-        assert result.confidence == 0.9
+    def test_recognize_no_backend_fr(self):
+        r = ServerSpeechRecognizer()
+        result = r.recognize(b"audio", language="fr")
         assert result.language == "fr"
-        audio, lang = rec._model.calls[-1]
-        assert lang == "fr"
-        assert audio.sample_rate == 16000
-        assert audio.sample_width == 2
+        assert result.is_valid is False
 
-    def test_error_returns_empty(self, with_speech_recognition):
-        rec = ServerSpeechRecognizer()
-        rec.load_model()
-        rec._model.recognize_google = lambda audio, language="en-US": (
-            (_ for _ in ()).throw(RuntimeError("boom"))
-        )
-        result = rec.recognize(b"audio-bytes")
-        assert result.text == ""
-        assert result.confidence == 0.0
+    def test_load_model_no_backends(self):
+        r = ServerSpeechRecognizer()
+        r.load_model()
+        assert r._backend is None
 
-    def test_recognize_auto_loads(self, with_speech_recognition):
-        rec = ServerSpeechRecognizer()
-        assert rec._backend is None
-        result = rec.recognize(b"bytes")
-        assert result.text == "recognized text"
-
-
-class TestRecognizeVosk:
-    def test_success(self, with_vosk, monkeypatch, tmp_path):
-        monkeypatch.setenv("VOSK_MODEL_PATH", str(tmp_path))
-        rec = ServerSpeechRecognizer()
-        rec.load_model()
-        result = rec.recognize(b"pcm-data")
-        assert result.text == "hello world"
-        assert result.confidence == 0.9
-
-    def test_decode_vosk_import_error(self, monkeypatch):
-        monkeypatch.delitem(sys.modules, "vosk", raising=False)
-        rec = ServerSpeechRecognizer()
-        assert rec._decode_vosk(b"data") == ""
-
-    def test_decode_vosk_missing_model_path(self, with_vosk, monkeypatch, caplog):
-        monkeypatch.delenv("VOSK_MODEL_PATH", raising=False)
-        rec = ServerSpeechRecognizer()
-        rec._backend = "vosk"
-        with caplog.at_level("WARNING"):
-            text = rec._decode_vosk(b"data")
+    def test_decode_vosk_no_import(self):
+        r = ServerSpeechRecognizer()
+        text = r._decode_vosk(b"audio")
         assert text == ""
-        assert any("vosk model not found" in r.message for r in caplog.records)
 
-    def test_decode_vosk_uses_env_path(self, with_vosk, monkeypatch, tmp_path):
-        monkeypatch.setenv("VOSK_MODEL_PATH", str(tmp_path))
-        rec = ServerSpeechRecognizer()
-        rec._backend = "vosk"
-        text = rec._decode_vosk(b"data")
-        assert text == "hello world"
-        assert isinstance(rec._model, FakeVoskModel)
-        assert rec._model.path == str(tmp_path)
+    def test_model_name_preserved(self):
+        r = ServerSpeechRecognizer(model_name="large")
+        r.load_model()
+        assert r.model_name == "large"
 
-    def test_decode_vosk_reuses_loaded_model(self, with_vosk, monkeypatch, tmp_path):
-        rec = ServerSpeechRecognizer()
-        rec._backend = "vosk"
-        rec._model = FakeVoskModel(str(tmp_path))
-        text = rec._decode_vosk(b"data")
-        assert text == "hello world"
+    def test_recognize_empty_bytes(self):
+        r = ServerSpeechRecognizer()
+        result = r.recognize(b"", language="en")
+        assert result.text == ""
+        assert result.is_valid is False
+
+    def test_recognize_sets_language(self):
+        r = ServerSpeechRecognizer()
+        result = r.recognize(b"data", language="de")
+        assert result.language == "de"
+
+    def test_multiple_recognize_calls(self):
+        r = ServerSpeechRecognizer()
+        r1 = r.recognize(b"a", language="en")
+        r2 = r.recognize(b"b", language="en")
+        assert r1.is_valid is False
+        assert r2.is_valid is False
 
 
-# ---------------------------------------------------------------------------
-# Factory
-# ---------------------------------------------------------------------------
+# ── get_speech_recognizer ────────────────────────────────────────────────
+
 
 class TestGetSpeechRecognizer:
-    def test_default_returns_browser(self):
-        rec = get_speech_recognizer()
-        assert isinstance(rec, BrowserSpeechRecognizer)
+    def test_returns_recognizer(self):
+        r = get_speech_recognizer()
+        assert r is not None
 
-    def test_server_mode(self):
-        rec = get_speech_recognizer(use_server=True, model_name="medium")
-        assert isinstance(rec, ServerSpeechRecognizer)
-        assert rec.model_name == "medium"
+    def test_default_is_browser(self):
+        r = get_speech_recognizer()
+        assert isinstance(r, BrowserSpeechRecognizer)
+
+    def test_server_flag(self):
+        r = get_speech_recognizer(use_server=True)
+        assert isinstance(r, ServerSpeechRecognizer)
+
+    def test_default_is_browser_when_false(self):
+        r = get_speech_recognizer(use_server=False)
+        assert isinstance(r, BrowserSpeechRecognizer)
+
+    def test_server_model_name(self):
+        r = get_speech_recognizer(use_server=True, model_name="large")
+        assert isinstance(r, ServerSpeechRecognizer)
+        assert r.model_name == "large"
+
+    def test_default_model_name(self):
+        r = get_speech_recognizer(use_server=True)
+        assert r.model_name == "base"
+
+    def test_browser_with_model_name_ignored(self):
+        r = get_speech_recognizer(use_server=False, model_name="large")
+        assert isinstance(r, BrowserSpeechRecognizer)

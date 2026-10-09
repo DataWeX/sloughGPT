@@ -49,7 +49,7 @@ export default function AudioCard({ transcribing, transcript, synthesizing, synt
               <IconUpload className="h-3.5 w-3.5 mr-1" />
               {transcribing ? 'Transcribing…' : 'Upload audio'}
             </Button>
-            <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onTranscribe(f) }} />
+            <input ref={audioInputRef} type="file" accept="audio/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onTranscribe(f) }} aria-label="Upload audio" />
           </div>
           {transcript && (
             <div className="mt-2 p-2 rounded bg-muted/30 border border-border/40 text-xs text-muted-foreground">{transcript}</div>

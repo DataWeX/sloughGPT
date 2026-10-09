@@ -6,17 +6,18 @@ Response caching for the SloughGPT SDK.
 import hashlib
 import json
 import time
-from typing import Optional, Dict, Any, Any
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
 class CacheEntry:
     """A cached response entry."""
+
     key: str
     value: Any
     created_at: float
-    ttl: Optional[float] = None
+    ttl: float | None = None
 
     def is_expired(self) -> bool:
         """Check if entry has expired."""
@@ -40,7 +41,7 @@ class InMemoryCache:
     ```
     """
 
-    def __init__(self, ttl: Optional[float] = None, max_size: int = 1000):
+    def __init__(self, ttl: float | None = None, max_size: int = 1000):
         """
         Initialize cache.
 
@@ -48,7 +49,7 @@ class InMemoryCache:
             ttl: Default TTL in seconds.
             max_size: Maximum number of entries.
         """
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: dict[str, CacheEntry] = {}
         self._ttl = ttl
         self._max_size = max_size
         self._hits = 0
@@ -59,7 +60,7 @@ class InMemoryCache:
         key_data = json.dumps({"args": args, "kwargs": kwargs}, sort_keys=True)
         return hashlib.sha256(key_data.encode()).hexdigest()
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value from cache."""
         if key not in self._cache:
             self._misses += 1
@@ -74,7 +75,7 @@ class InMemoryCache:
         self._hits += 1
         return entry.value
 
-    def set(self, key: str, value: Any, ttl: Optional[float] = None):
+    def set(self, key: str, value: Any, ttl: float | None = None):
         """Set value in cache."""
         if len(self._cache) >= self._max_size:
             self._evict_oldest()
@@ -111,7 +112,7 @@ class InMemoryCache:
         return len(self._cache)
 
     @property
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """Get cache statistics."""
         total = self._hits + self._misses
         hit_rate = self._hits / total if total > 0 else 0
@@ -141,7 +142,7 @@ class DiskCache:
     def __init__(
         self,
         cache_dir: str = "./.sloughgpt_cache",
-        ttl: Optional[float] = None,
+        ttl: float | None = None,
         max_size_mb: int = 100,
     ):
         """
@@ -153,7 +154,6 @@ class DiskCache:
             max_size_mb: Maximum cache size in MB.
         """
         import os
-        import struct
 
         self._cache_dir = cache_dir
         self._ttl = ttl
@@ -172,7 +172,7 @@ class DiskCache:
         key_data = json.dumps({"args": args, "kwargs": kwargs}, sort_keys=True)
         return hashlib.sha256(key_data.encode()).hexdigest()[:32]
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Get value from cache."""
         import os
 
@@ -182,7 +182,7 @@ class DiskCache:
             return None
 
         try:
-            with open(path, "r") as f:
+            with open(path) as f:
                 data = json.load(f)
 
             if "expires_at" in data:
@@ -193,13 +193,12 @@ class DiskCache:
 
             self._hits += 1
             return data.get("value")
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             self._misses += 1
             return None
 
-    def set(self, key: str, value: Any, ttl: Optional[float] = None):
+    def set(self, key: str, value: Any, ttl: float | None = None):
         """Set value in cache."""
-        import os
 
         ttl = ttl or self._ttl
         data = {"value": value}
@@ -216,6 +215,7 @@ class DiskCache:
     def delete(self, key: str):
         """Delete value from cache."""
         import os
+
         path = self._get_path(key)
         if os.path.exists(path):
             os.remove(path)
@@ -223,6 +223,7 @@ class DiskCache:
     def clear(self):
         """Clear all cached values."""
         import os
+
         for filename in os.listdir(self._cache_dir):
             if filename.endswith(".json"):
                 os.remove(os.path.join(self._cache_dir, filename))
@@ -232,7 +233,6 @@ class DiskCache:
     def _check_size(self):
         """Check and enforce size limit."""
         import os
-        import shutil
 
         total_size = sum(
             os.path.getsize(os.path.join(self._cache_dir, f))
@@ -243,7 +243,7 @@ class DiskCache:
         if total_size > self._max_size_mb * 1024 * 1024:
             files = sorted(
                 os.listdir(self._cache_dir),
-                key=lambda f: os.path.getmtime(os.path.join(self._cache_dir, f))
+                key=lambda f: os.path.getmtime(os.path.join(self._cache_dir, f)),
             )
             for filename in files:
                 if total_size <= self._max_size_mb * 1024 * 1024 * 0.8:
@@ -256,10 +256,11 @@ class DiskCache:
     def size(self) -> int:
         """Get number of cached items."""
         import os
+
         return len([f for f in os.listdir(self._cache_dir) if f.endswith(".json")])
 
     @property
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         import os
 
@@ -279,7 +280,7 @@ class DiskCache:
         }
 
 
-def cached(ttl: Optional[float] = None, cache: Optional[InMemoryCache] = None):
+def cached(ttl: float | None = None, cache: InMemoryCache | None = None):
     """
     Decorator for caching function results.
 

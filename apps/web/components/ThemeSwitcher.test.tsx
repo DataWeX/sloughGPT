@@ -1,8 +1,10 @@
 import { render, screen, fireEvent } from '@testing-library/react'
+import { renderToString } from 'react-dom/server'
 import { describe, it, expect, beforeEach } from 'vitest'
 
 import { ThemeProvider } from './ThemeProvider'
 import { ThemeSwitcher } from './ThemeSwitcher'
+import { MODE_STORAGE_KEY, THEME_STORAGE_KEY, PALETTE_STORAGE_KEY } from '@/lib/theme-storage'
 
 function renderSwitcher() {
   return render(<ThemeProvider><ThemeSwitcher /></ThemeProvider>)
@@ -11,6 +13,22 @@ function renderSwitcher() {
 describe('ThemeSwitcher', () => {
   beforeEach(() => {
     localStorage.clear()
+  })
+
+  it('renders mode-stable markup on the server (prevents hydration mismatch)', () => {
+    const html = renderToString(<ThemeProvider><ThemeSwitcher /></ThemeProvider>)
+    expect(html).toContain('Switch to light mode')
+    expect(html).not.toContain('Switch to dark mode')
+    expect(html).not.toContain('aria-checked="true"')
+  })
+
+  it('reflects stored light mode only after client mount', () => {
+    localStorage.setItem(MODE_STORAGE_KEY, 'light')
+    localStorage.setItem(THEME_STORAGE_KEY, 'blue')
+    localStorage.setItem(PALETTE_STORAGE_KEY, 'noir-violet')
+    renderSwitcher()
+    const toggle = screen.getAllByRole('button')[0]
+    expect(toggle.getAttribute('aria-label')).toBe('Switch to dark mode')
   })
 
   it('renders mode toggle button', () => {

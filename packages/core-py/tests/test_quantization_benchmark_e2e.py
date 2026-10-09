@@ -24,7 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
 
 import benchmark_quantization as bq  # noqa: E402
 
-from domains.infrastructure.quantization import walk_slo_linears  # noqa: E402
+from domain.infrastructure._internal.quantization import walk_slo_linears  # noqa: E402
 
 EXPECTED_TEST_NAMES = [
     "throughput_vs_length",
@@ -89,7 +89,7 @@ class TestEndToEndInt8:
     def test_throughput_results_carry_metrics(self, int8_bench):
         metrics = _result(int8_bench, "throughput_vs_length").metrics
         assert len(metrics) == 3  # quick mode lengths
-        for length, point in metrics.items():
+        for _length, point in metrics.items():
             assert point["speedup"] > 0
             assert point["non_quantized_tps"] > 0
             assert point["quantized_tps"] > 0
@@ -275,7 +275,7 @@ class TestMultiPrecision:
         bench8 = bq.QuantizationBenchmark(tiny=True, quick=True, bits=8)
         bench8.model, _ = _quiet(bench8._load_model)
         bench8.quant_model = _quiet(lambda: bench8._quantize_model(bench8.model))
-        nq8 = sum(m.weight.data.nbytes for m in walk_slo_linears(bench8.model).values())
+        sum(m.weight.data.nbytes for m in walk_slo_linears(bench8.model).values())
         q8 = _quantized_weight_bytes(bench8.quant_model)
 
         bench4 = bq.QuantizationBenchmark(tiny=True, quick=True, bits=4)
@@ -314,11 +314,21 @@ class TestValidateMode:
 
     def test_validate_json_output(self):
         """Validate + --json produces valid JSON with 2 results."""
-        import subprocess, sys
+        import subprocess
+        import sys
+
         result = subprocess.run(
-            [sys.executable, "scripts/benchmark_quantization.py",
-             "--validate", "--bits", "8", "--json"],
-            capture_output=True, text=True, timeout=120,
+            [
+                sys.executable,
+                "scripts/benchmark_quantization.py",
+                "--validate",
+                "--bits",
+                "8",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=120,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
         assert result.returncode == 0
@@ -334,7 +344,7 @@ class TestValidateMode:
 
     def test_validate_exits_1_on_failure(self):
         """Validate mode exits 1 when quality check fails."""
-        import subprocess, sys
+
         # Force failure by monkeypatching the quality floor to impossibly high
         bench = bq.QuantizationBenchmark(tiny=True, quick=True, bits=4)
         with contextlib.redirect_stdout(io.StringIO()):
@@ -342,11 +352,13 @@ class TestValidateMode:
             bench.quant_model = bench._quantize_model(bench.model)
         # Patch the quality test to use a floor of 1.0 (impossible)
         original_test = bench.test_quality_degradation
+
         def forced_fail():
             r = original_test()
             r.passed = False
             r.metrics["avg_logit_cosine"] = 0.85
             return r
+
         bench.test_quality_degradation = forced_fail
         with contextlib.redirect_stdout(io.StringIO()):
             bench.results.append(bench.test_memory_usage())
@@ -358,17 +370,33 @@ class TestValidateMode:
 class TestBaselineCompare:
     """Direct tests for _compare_baselines regression gating."""
 
-    def _make_run(self, passed=7, total=7, tiny=False, cosine=0.95,
-                  ppl_ratio=1.0, compression=4.0, tag="tiny:int8"):
+    def _make_run(
+        self,
+        passed=7,
+        total=7,
+        tiny=False,
+        cosine=0.95,
+        ppl_ratio=1.0,
+        compression=4.0,
+        tag="tiny:int8",
+    ):
         """Build a headline-metrics dict for one model:int key."""
-        return {tag: {
-            "tiny": tiny, "passed": passed, "total": total,
-            "gen_geomean": 1.5, "prompt_geomean": 1.5, "temp_geomean": 1.5,
-            "weight_compression": compression,
-            "avg_logit_cosine": cosine, "avg_token_agreement": 0.5,
-            "perplexity_ratio": ppl_ratio,
-            "cold_start_s": 1.0, "warm_median_s": 0.5,
-        }}
+        return {
+            tag: {
+                "tiny": tiny,
+                "passed": passed,
+                "total": total,
+                "gen_geomean": 1.5,
+                "prompt_geomean": 1.5,
+                "temp_geomean": 1.5,
+                "weight_compression": compression,
+                "avg_logit_cosine": cosine,
+                "avg_token_agreement": 0.5,
+                "perplexity_ratio": ppl_ratio,
+                "cold_start_s": 1.0,
+                "warm_median_s": 0.5,
+            }
+        }
 
     def test_validate_subset_does_not_regress_passed(self):
         """A 2-test validate subset must not flag 'passed' vs a 7-test baseline."""
@@ -407,25 +435,33 @@ class TestBaselineCompare:
         assert result["regressions"] == []
 
 
+# Every test here shells out via _run (subprocess timeout=600); the global
+# pytest-timeout default of 120s (ca167dbd) kills legitimately running
+# benchmark CLIs under load — part of Run5's timeout cluster (card 56b49cf1).
+@pytest.mark.timeout(600)
 class TestModelsCli:
     """CLI-level --models multi-model comparison."""
 
     def _run(self, *args):
-        import subprocess, sys
+        import subprocess
+        import sys
+
         return subprocess.run(
             [sys.executable, "scripts/benchmark_quantization.py", *args],
-            capture_output=True, text=True, timeout=180,
+            capture_output=True,
+            text=True,
+            timeout=600,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
 
+    @pytest.mark.slow
     def test_models_json_has_model_comparison(self):
         """--models --json emits a model_comparison block keyed by model."""
-        result = self._run("--models", "tiny,tiny", "--bits", "8,4",
-                           "--json", "--quick")
+        result = self._run("--models", "tiny,tiny", "--bits", "8,4", "--json", "--quick")
         assert result.returncode == 0, result.stderr
         data = json.loads(result.stdout)
         assert len(data["runs"]) == 4
-        assert set(r["model"] for r in data["runs"]) == {"tiny"}
+        assert {r["model"] for r in data["runs"]} == {"tiny"}
         assert list(data["model_comparison"].keys()) == ["tiny"]
         assert "int8" in data["model_comparison"]["tiny"]
         assert "int4" in data["model_comparison"]["tiny"]
@@ -433,17 +469,18 @@ class TestModelsCli:
 
     def test_models_validate_json_valid(self):
         """--models --validate --json stays valid JSON."""
-        result = self._run("--models", "tiny,tiny", "--bits", "8",
-                           "--validate", "--json")
+        result = self._run("--models", "tiny,tiny", "--bits", "8", "--validate", "--json")
         assert result.returncode == 0, result.stderr
         data = json.loads(result.stdout)
         assert all(r["passed"] == r["total"] for r in data["runs"])
 
+    @pytest.mark.slow
     def test_models_report_contains_comparison(self, tmp_path):
         """--models --report writes a model comparison section."""
         report = tmp_path / "mc.md"
-        result = self._run("--models", "tiny,tiny", "--bits", "8,4",
-                           "--quick", "--report", str(report))
+        result = self._run(
+            "--models", "tiny,tiny", "--bits", "8,4", "--quick", "--report", str(report)
+        )
         assert result.returncode == 0, result.stderr
         text = report.read_text()
         assert "## Model Comparison" in text
@@ -465,11 +502,14 @@ class TestCsvOutput:
         bench4 = bq.QuantizationBenchmark(tiny=True, quick=True, bits=4)
         _quiet(bench8.run_all)
         _quiet(bench4.run_all)
-        text = bq._csv_output([
-            json.loads(bench8.to_json()),
-            json.loads(bench4.to_json()),
-        ])
+        text = bq._csv_output(
+            [
+                json.loads(bench8.to_json()),
+                json.loads(bench4.to_json()),
+            ]
+        )
         import csv
+
         lines = text.splitlines()
         assert lines[0].startswith("model,bits,quick,tiny,passed,total")
         rows = list(csv.DictReader(lines))
@@ -488,6 +528,7 @@ class TestCsvOutput:
         run["model"] = "Qwen/Qwen2.5"
         text = bq._csv_output([run])
         import csv
+
         row = next(csv.DictReader(text.splitlines()))
         assert row["model"] == "Qwen/Qwen2.5"
         assert row["tiny"] == "True"
@@ -495,16 +536,28 @@ class TestCsvOutput:
     def test_csv_cli_writes_file(self, tmp_path):
         """--csv PATH writes a parseable CSV file."""
         import subprocess
+
         out = tmp_path / "bench.csv"
         result = subprocess.run(
-            [sys.executable, "scripts/benchmark_quantization.py",
-             "--models", "tiny", "--bits", "8,4", "--quick",
-             "--csv", str(out)],
-            capture_output=True, text=True, timeout=180,
+            [
+                sys.executable,
+                "scripts/benchmark_quantization.py",
+                "--models",
+                "tiny",
+                "--bits",
+                "8,4",
+                "--quick",
+                "--csv",
+                str(out),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
         assert result.returncode == 0, result.stderr
         import csv
+
         rows = list(csv.DictReader(out.read_text().splitlines()))
         assert len(rows) == 2
         assert {r["bits"] for r in rows} == {"8", "4"}
@@ -570,9 +623,10 @@ class TestCachedModelDiscovery:
         cached = bq._list_cached_models()
         if cached:
             # Every returned id must resolve to an existing model.slnc
-            from domains.infrastructure.safetensors_loader import _get_model_dir
+            from domain.infrastructure._internal.model_resolver import get_model_dir
+
             for mid in cached:
-                assert (_get_model_dir(mid) / "model.slnc").exists(), f"{mid} missing"
+                assert (get_model_dir(mid) / "model.slnc").exists(), f"{mid} missing"
 
 
 class TestWeightCosines:
@@ -619,10 +673,20 @@ class TestWeightCosines:
     def test_json_per_layer_structure(self):
         """--per-layer --json emits a per_layer dict in the JSON output."""
         import subprocess
+
         result = subprocess.run(
-            [sys.executable, "scripts/benchmark_quantization.py",
-             "--per-layer", "--bits", "8", "--json", "--quick"],
-            capture_output=True, text=True, timeout=180,
+            [
+                sys.executable,
+                "scripts/benchmark_quantization.py",
+                "--per-layer",
+                "--bits",
+                "8",
+                "--json",
+                "--quick",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
         assert result.returncode == 0
@@ -639,12 +703,22 @@ class TestWeightCosines:
     def test_report_includes_per_layer(self, tmp_path):
         """--report --per-layer writes a markdown table of layer stats."""
         import subprocess
+
         report = tmp_path / "report.md"
         result = subprocess.run(
-            [sys.executable, "scripts/benchmark_quantization.py",
-             "--per-layer", "--bits", "8", "--quick",
-             "--report", str(report)],
-            capture_output=True, text=True, timeout=180,
+            [
+                sys.executable,
+                "scripts/benchmark_quantization.py",
+                "--per-layer",
+                "--bits",
+                "8",
+                "--quick",
+                "--report",
+                str(report),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
         assert result.returncode == 0
@@ -712,14 +786,16 @@ class TestRecommendations:
         run = {
             "model": "tiny",
             "bits": 8,
-            "results": [{
-                "name": "cold_vs_warm",
-                "metrics": {
-                    "n_runs": 5,
-                    "non_quantized": {"cold_s": 0.1, "warm_median_s": 0.05},
-                    "quantized": {"cold_s": 0.2, "warm_median_s": 0.08},
-                },
-            }],
+            "results": [
+                {
+                    "name": "cold_vs_warm",
+                    "metrics": {
+                        "n_runs": 5,
+                        "non_quantized": {"cold_s": 0.1, "warm_median_s": 0.05},
+                        "quantized": {"cold_s": 0.2, "warm_median_s": 0.08},
+                    },
+                }
+            ],
         }
         assert bq._run_nested_metric(run, "cold_vs_warm", "cold_s") == 0.1
         assert bq._run_nested_metric(run, "cold_vs_warm", "warm_median_s") == 0.05
@@ -731,13 +807,15 @@ class TestRecommendations:
         run = {
             "model": "tiny",
             "bits": 8,
-            "results": [{
-                "name": "cold_vs_warm",
-                "metrics": {
-                    "cold_s": 9.9,
-                    "non_quantized": {"cold_s": 0.1},
-                },
-            }],
+            "results": [
+                {
+                    "name": "cold_vs_warm",
+                    "metrics": {
+                        "cold_s": 9.9,
+                        "non_quantized": {"cold_s": 0.1},
+                    },
+                }
+            ],
         }
         assert bq._run_nested_metric(run, "cold_vs_warm", "cold_s") == 9.9
 
@@ -794,10 +872,19 @@ class TestRecommendations:
     def test_recommendation_json_in_main_output(self):
         """--bits 8,4 --json emits a recommendations block."""
         import subprocess
+
         result = subprocess.run(
-            [sys.executable, "scripts/benchmark_quantization.py",
-             "--bits", "8,4", "--quick", "--json"],
-            capture_output=True, text=True, timeout=180,
+            [
+                sys.executable,
+                "scripts/benchmark_quantization.py",
+                "--bits",
+                "8,4",
+                "--quick",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
         assert result.returncode == 0, result.stderr
@@ -809,11 +896,21 @@ class TestRecommendations:
     def test_recommendations_in_report(self, tmp_path):
         """--report writes a Recommendations section for multi-precision runs."""
         import subprocess
+
         report = tmp_path / "rec.md"
         result = subprocess.run(
-            [sys.executable, "scripts/benchmark_quantization.py",
-             "--bits", "8,4", "--quick", "--report", str(report)],
-            capture_output=True, text=True, timeout=180,
+            [
+                sys.executable,
+                "scripts/benchmark_quantization.py",
+                "--bits",
+                "8,4",
+                "--quick",
+                "--report",
+                str(report),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
         assert result.returncode == 0, result.stderr
@@ -825,9 +922,12 @@ class TestBaseline:
 
     def _run(self, *args):
         import subprocess
+
         return subprocess.run(
             [sys.executable, "scripts/benchmark_quantization.py", *args],
-            capture_output=True, text=True, timeout=180,
+            capture_output=True,
+            text=True,
+            timeout=180,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
 
@@ -845,10 +945,8 @@ class TestBaseline:
 
     def test_compare_detects_quality_regression(self):
         """Cos dropping beyond the absolute tolerance is a regression."""
-        current = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.90, comp=4.0, gen=1.5)])
-        baseline = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        current = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.90, comp=4.0, gen=1.5)])
+        baseline = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
         out = bq._compare_baselines(current, baseline)
         assert len(out["regressions"]) == 1
         assert out["regressions"][0]["metric"] == "avg_logit_cosine"
@@ -856,29 +954,23 @@ class TestBaseline:
 
     def test_compare_tolerates_small_drift(self):
         """Small absolute drift within tolerance is not a regression."""
-        current = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.985, comp=4.0, gen=1.5)])
-        baseline = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        current = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.985, comp=4.0, gen=1.5)])
+        baseline = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
         out = bq._compare_baselines(current, baseline)
         assert out["regressions"] == []
 
     def test_compare_relative_tolerance_for_speed(self):
         """Throughput falling more than 25% relative is a regression."""
-        current = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.0)])
-        baseline = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=2.0)])
+        current = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.0)])
+        baseline = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=2.0)])
         out = bq._compare_baselines(current, baseline)
         assert any(r["metric"] == "gen_geomean" for r in out["regressions"])
 
     def test_compare_tiny_speed_never_gates(self):
         """Speed drops on the tiny fixture record deltas, never regressions."""
-        current = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=0.5)])
+        current = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=0.5)])
         current["tiny:int8"]["tiny"] = True
-        baseline = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        baseline = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
         baseline["tiny:int8"]["tiny"] = True
         out = bq._compare_baselines(current, baseline)
         assert out["regressions"] == []
@@ -887,29 +979,23 @@ class TestBaseline:
 
     def test_compare_passed_must_not_drop(self):
         """A drop in passed tests is always a regression."""
-        current = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        current = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
         current["tiny:int8"]["passed"] = 1
-        baseline = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        baseline = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
         out = bq._compare_baselines(current, baseline)
         assert any(r["metric"] == "passed" for r in out["regressions"])
 
     def test_compare_skips_unknown_keys(self):
         """Runs absent from the baseline are not flagged."""
-        current = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
-        baseline = bq._headline_metrics(
-            [_synthetic_run(8, "other", cos=0.99, comp=4.0, gen=1.5)])
+        current = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        baseline = bq._headline_metrics([_synthetic_run(8, "other", cos=0.99, comp=4.0, gen=1.5)])
         out = bq._compare_baselines(current, baseline)
         assert out["regressions"] == []
 
     def test_compare_cold_warm_informational_only(self):
         """Worse cold/warm latency records a delta but never regresses."""
-        current = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
-        baseline = bq._headline_metrics(
-            [_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        current = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
+        baseline = bq._headline_metrics([_synthetic_run(8, "tiny", cos=0.99, comp=4.0, gen=1.5)])
         current["tiny:int8"]["cold_start_s"] = 5.0
         current["tiny:int8"]["warm_median_s"] = 2.0
         baseline["tiny:int8"]["cold_start_s"] = 1.0
@@ -919,6 +1005,11 @@ class TestBaseline:
         assert out["deltas"]["tiny:int8"]["cold_start_s"]["regressed"] is False
         assert out["deltas"]["tiny:int8"]["warm_median_s"]["delta"] == 1.5
 
+    # _run's subprocess allows 600s; the global 120s pytest-timeout was
+    # killing these mid-benchmark (Run5 "44 timeouts" cluster, card
+    # 56b49cf1). Timeout marks go on the CLI-spawning tests only so the
+    # pure-python compare tests keep the fast 120s hang ceiling.
+    @pytest.mark.timeout(600)
     def test_baseline_cli_creates_then_validates(self, tmp_path):
         """First run writes the baseline; second run passes with no regressions."""
         bl = tmp_path / "bl.json"
@@ -930,31 +1021,35 @@ class TestBaseline:
         assert second.returncode == 0, second.stderr
         assert "No regressions vs baseline" in second.stdout
 
+    @pytest.mark.timeout(600)
     def test_baseline_cli_json_block(self, tmp_path):
         """--baseline --json emits a baseline block with exists flag."""
         bl = tmp_path / "bl2.json"
-        first = self._run("--bits", "8", "--quick", "--baseline", str(bl),
-                          "--json")
+        first = self._run("--bits", "8", "--quick", "--baseline", str(bl), "--json")
         data = json.loads(first.stdout)
         assert data["baseline"]["exists"] is False
-        second = self._run("--bits", "8", "--quick", "--baseline", str(bl),
-                           "--json")
+        second = self._run("--bits", "8", "--quick", "--baseline", str(bl), "--json")
         data = json.loads(second.stdout)
         assert data["baseline"]["exists"] is True
         assert data["baseline"]["regressions"] == []
 
+    @pytest.mark.timeout(600)
     def test_baseline_cli_exit_1_on_regression(self, tmp_path):
         """A fabricated high-compression baseline forces exit code 1."""
         bl = tmp_path / "bl3.json"
         payload = {
             "metrics": {
                 "tiny:int8": {
-                    "passed": 7, "total": 7,
-                    "gen_geomean": 1.0, "prompt_geomean": 1.0,
+                    "passed": 7,
+                    "total": 7,
+                    "gen_geomean": 1.0,
+                    "prompt_geomean": 1.0,
                     "temp_geomean": 1.0,
-                    "weight_compression": 8.0, "avg_logit_cosine": 0.999,
+                    "weight_compression": 8.0,
+                    "avg_logit_cosine": 0.999,
                     "avg_token_agreement": 0.01,
-                    "cold_start_s": 0.1, "warm_median_s": 0.05,
+                    "cold_start_s": 0.1,
+                    "warm_median_s": 0.05,
                 }
             }
         }
@@ -963,12 +1058,12 @@ class TestBaseline:
         assert result.returncode == 1
         assert "Regression" in result.stdout
 
+    @pytest.mark.timeout(600)
     def test_baseline_report_section(self, tmp_path):
         """--report writes the baseline section."""
         bl = tmp_path / "bl4.json"
         report = tmp_path / "bl.md"
-        first = self._run("--bits", "8", "--quick", "--baseline", str(bl),
-                          "--report", str(report))
+        first = self._run("--bits", "8", "--quick", "--baseline", str(bl), "--report", str(report))
         assert first.returncode == 0, first.stderr
         assert "## Baseline" in report.read_text()
 
@@ -1021,6 +1116,7 @@ class TestPerplexity:
         comp = bq._comparison_json([run])["int8"]
         assert comp["perplexity_ratio"] == 1.05
         import csv
+
         rows = list(csv.DictReader(bq._csv_output([run]).splitlines()))
         assert rows[0]["perplexity_ratio"] == "1.05"
 
@@ -1044,11 +1140,21 @@ class TestPerplexity:
     def test_report_mentions_perplexity(self, tmp_path):
         """--report includes the perplexity line for quality."""
         import subprocess
+
         report = tmp_path / "ppl.md"
         result = subprocess.run(
-            [sys.executable, "scripts/benchmark_quantization.py",
-             "--bits", "8", "--quick", "--report", str(report)],
-            capture_output=True, text=True, timeout=180,
+            [
+                sys.executable,
+                "scripts/benchmark_quantization.py",
+                "--bits",
+                "8",
+                "--quick",
+                "--report",
+                str(report),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=180,
             cwd=str(Path(__file__).resolve().parents[3]),
         )
         assert result.returncode == 0, result.stderr

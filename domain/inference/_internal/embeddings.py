@@ -1,0 +1,261 @@
+from __future__ import annotations
+
+"""
+Production-Grade Embedding Models
+
+Supports:
+- In-memory n-gram TF-IDF (default, zero-dependency)
+- OpenAI (text-embedding-ada-002, text-embedding-3-small, text-embedding-3-large)
+
+Usage:
+    from domain.inference._internal.embeddings import Embedder, EmbeddingModel
+
+    # Default: in-memory (zero-dependency)
+    embedder = Embedder()
+    vectors = embedder.embed(["Hello world", "How are you?"])
+
+    # OpenAI (or any OpenAI-compatible endpoint: ollama, LM Studio, vLLM)
+    embedder = Embedder(provider="openai", api_key="sk-...")
+    embedder = Embedder(provider="openai", base_url="http://localhost:11434/v1")
+    vectors = embedder.embed("Hello world")
+"""
+
+import hashlib
+import logging
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import Enum
+
+import numpy as np
+
+from domain.infrastructure._internal.config import get_config
+
+logger = logging.getLogger("slo.embeddings")
+
+
+class EmbeddingProvider(Enum):
+    SENTENCE_TRANSFORMERS = "sentence_transformers"
+    OPENAI = "openai"
+    HUGGINGFACE = "huggingface"
+    IN_MEMORY = "in_memory"
+
+
+@dataclass
+class EmbeddingResult:
+    embedding: list[float]
+    model: str
+    dimension: int
+    token_count: int | None = None
+
+
+class BaseEmbedder(ABC):
+    @abstractmethod
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
+        pass  # pragma: no cover (abstractmethod body)
+
+    @abstractmethod
+    def get_dimension(self) -> int:
+        pass  # pragma: no cover (abstractmethod body)
+
+    @abstractmethod
+    def get_model_name(self) -> str:
+        pass  # pragma: no cover (abstractmethod body)
+
+
+class InMemoryEmbedder(BaseEmbedder):
+    """Fast hash-based embeddings for development/testing."""
+
+    def __init__(self, dimension: int = 384):
+        self.dimension = dimension
+
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
+        if isinstance(texts, str):
+            texts = [texts]
+
+        vectors = []
+        for text in texts:
+            vec = np.zeros(self.dimension)
+            words = text.lower().split()
+
+            for i, word in enumerate(words[: self.dimension]):
+                word_hash = int(hashlib.md5(word.encode()).hexdigest()[:8], 16)
+                vec[i % self.dimension] += np.sin(word_hash * (i + 1) * 0.1)
+
+            norm = np.linalg.norm(vec)
+            if norm > 0:
+                vec /= norm
+            vectors.append(vec.tolist())
+
+        return vectors
+
+    def get_dimension(self) -> int:
+        return self.dimension
+
+    def get_model_name(self) -> str:
+        return "in_memory"
+
+
+class OpenAIEmbedder(BaseEmbedder):
+    """OpenAI embeddings — also works against any OpenAI-compatible endpoint
+    (ollama, LM Studio, vLLM) via ``base_url``."""
+
+    DIMENSIONS = {
+        "text-embedding-ada-002": 1536,
+        "text-embedding-3-small": 1536,
+        "text-embedding-3-large": 3072,
+    }
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        model: str = "text-embedding-3-small",
+        dimensions: int | None = None,
+        base_url: str | None = None,
+    ):
+        cfg = get_config().embedding
+        self.api_key = api_key or cfg.api_key or cfg.openai_api_key or None
+        self.model_name = model
+        self.dimensions = dimensions or self.DIMENSIONS.get(model, 1536)
+        self.base_url = base_url or cfg.base_url or None
+
+        if not self.api_key:
+            raise ValueError(
+                "OpenAI API key required (api_key arg or config "
+                "embedding.api_key / embedding.openai_api_key)"
+            )
+
+        try:
+            from openai import OpenAI
+
+            self.client = OpenAI(api_key=self.api_key, base_url=self.base_url)
+        except ImportError:
+            raise ImportError("pip install openai") from None
+
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
+        if isinstance(texts, str):
+            texts = [texts]
+
+        response = self.client.embeddings.create(
+            model=self.model_name,
+            input=texts,
+            dimensions=self.dimensions if "3-" in self.model_name else None,
+        )
+
+        return [item.embedding for item in response.data]
+
+    def get_dimension(self) -> int:
+        return self.dimensions
+
+    def get_model_name(self) -> str:
+        return self.model_name
+
+
+class Embedder:
+    """
+    Unified embedding interface.
+
+    Usage:
+        embedder = Embedder()  # sentence-transformers default
+        embedder = Embedder(provider="openai", api_key="sk-...")
+        embedder = Embedder(model="all-MiniLM-L6-v2")
+    """
+
+    def __init__(
+        self,
+        provider: str | None = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        dimension: int = 384,
+        base_url: str | None = None,
+        **kwargs,
+    ):
+        provider = provider or get_config().embedding.provider
+
+        if provider == "openai":
+            model_name = model or "text-embedding-3-small"
+            self._impl = OpenAIEmbedder(api_key=api_key, model=model_name, base_url=base_url)
+        else:
+            self._impl = InMemoryEmbedder(dimension=dimension)
+
+    def embed(self, texts: str | list[str]) -> list[list[float]]:
+        return self._impl.embed(texts)
+
+    def embed_single(self, text: str) -> list[float]:
+        return self.embed(text)[0]
+
+    def get_dimension(self) -> int:
+        return self._impl.get_dimension()
+
+    def get_model_name(self) -> str:
+        return self._impl.get_model_name()
+
+    def __call__(self, texts: str | list[str]) -> list[list[float]]:
+        return self.embed(texts)
+
+
+class BatchEmbedder:
+    """Efficient batch embedding with caching."""
+
+    def __init__(
+        self,
+        embedder: Embedder | None = None,
+        batch_size: int = 32,
+        cache_size: int = 1000,
+    ):
+        self.embedder = embedder or Embedder()
+        self.batch_size = batch_size
+        self._cache: dict[str, list[float]] = {}
+        self._cache_size = cache_size
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        results = []
+        to_embed = []
+        indices = []
+
+        for i, text in enumerate(texts):
+            cache_key = hashlib.md5(text.encode()).hexdigest()
+
+            if cache_key in self._cache:
+                results.append((i, self._cache[cache_key]))
+            else:
+                to_embed.append(text)
+                indices.append(i)
+
+        if to_embed:
+            for i in range(0, len(to_embed), self.batch_size):
+                batch = to_embed[i : i + self.batch_size]
+                embeddings = self.embedder.embed(batch)
+
+                for j, text, emb in zip(
+                    indices[i : i + self.batch_size], batch, embeddings, strict=False
+                ):
+                    self._cache[hashlib.md5(text.encode()).hexdigest()] = emb
+                    results.append((j, emb))
+
+        results.sort(key=lambda x: x[0])
+        return [emb for _, emb in results]
+
+    def clear_cache(self):
+        self._cache.clear()
+
+
+def create_embedder(
+    provider: str | None = None,
+    model: str | None = None,
+    **kwargs,
+) -> BaseEmbedder:
+    """Factory function for creating embedders."""
+    embedder = Embedder(provider=provider, model=model, **kwargs)
+    return embedder._impl
+
+
+__all__ = [
+    "Embedder",
+    "BaseEmbedder",
+    "InMemoryEmbedder",
+    "OpenAIEmbedder",
+    "BatchEmbedder",
+    "EmbeddingProvider",
+    "EmbeddingResult",
+    "create_embedder",
+]

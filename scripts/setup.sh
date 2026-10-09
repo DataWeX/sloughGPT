@@ -18,7 +18,9 @@ CONDA_ENV="sloughgpt"
 MODE="all"
 GPU_SUPPORT=false
 CUDA_VERSION="cpu"
-USE_CONDA=false
+# "auto" → use conda when it is installed, else fall back to a venv.
+# `--venv [DIR]` forces the venv path; `--conda`/`--conda-env` force conda.
+USE_CONDA="auto"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -30,6 +32,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --venv)
             VENV_DIR="$2"
+            USE_CONDA=false
             shift 2
             ;;
         --conda)
@@ -60,8 +63,8 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --gpu              Enable GPU support (requires CUDA)"
-            echo "  --venv DIR         Virtual environment directory (default: .venv)"
-            echo "  --conda            Use conda (recommended for macOS Intel)"
+            echo "  --venv DIR         Force a virtualenv at DIR (conda is the default)"
+            echo "  --conda            Force conda (default when conda is installed)"
             echo "  --conda-env NAME   Conda environment name (default: sloughgpt)"
             echo "  --python CMD       Python command (default: python3)"
             echo "  --docker-only      Setup Docker only"
@@ -69,11 +72,11 @@ while [[ $# -gt 0 ]]; do
             echo "  --help, -h        Show this help message"
             echo ""
             echo "Examples:"
-            echo "  ./scripts/setup.sh                    # Full setup (local + Docker)"
-            echo "  ./scripts/setup.sh --conda            # Use conda (recommended for macOS)"
+            echo "  ./scripts/setup.sh                    # Full setup (conda env, local + Docker)"
+            echo "  ./scripts/setup.sh --venv .venv       # Opt out of conda"
             echo "  ./scripts/setup.sh --gpu              # Setup with GPU support"
             echo "  ./scripts/setup.sh --docker-only      # Docker only"
-            echo "  ./scripts/setup.sh --venv myenv       # Custom venv directory"
+            echo "  ./scripts/setup.sh --conda-env dev    # Custom conda env name"
             exit 0
             ;;
         *)
@@ -206,7 +209,16 @@ setup_directories() {
 
 # Install Python dependencies
 install_python_deps() {
-    # Check if conda should be used
+    # "auto" → prefer conda (project env is conda-first), else venv.
+    if [ "$USE_CONDA" = "auto" ]; then
+        if command -v conda &> /dev/null; then
+            USE_CONDA=true
+        else
+            USE_CONDA=false
+            print_warning "conda not found — falling back to a virtualenv"
+        fi
+    fi
+
     if [ "$USE_CONDA" = true ]; then
         install_conda_deps
         return
@@ -273,7 +285,7 @@ install_conda_deps() {
     if conda env list | grep -q "^$CONDA_ENV "; then
         print_info "Conda environment '$CONDA_ENV' already exists"
     else
-        conda create -n "$CONDA_ENV" python=3.11 -y
+        conda create -n "$CONDA_ENV" python=3.12 -y
         print_status "Created conda environment: $CONDA_ENV"
     fi
 
@@ -372,10 +384,10 @@ create_scripts() {
 # Start SloughGPT API server
 set -e
 ROOT="$(cd "$(dirname "$0")" && git rev-parse --show-toplevel)"
-source "$ROOT/.venv/bin/activate"
 export CUDA_VISIBLE_DEVICES=""
 cd "$ROOT/apps/api/server"
-exec python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+# conda env first, then .venv — see scripts/python
+exec "$ROOT/scripts/python" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 EOF
     chmod +x scripts/deploy/start.sh
     print_status "Created scripts/deploy/start.sh"
@@ -390,11 +402,11 @@ EOF
 # Start SloughGPT in development mode with debug logging
 set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-source "$ROOT/.venv/bin/activate"
 export SLO_ENV=development
 export SLO_LOG_LEVEL=DEBUG
 cd "$ROOT/apps/api/server"
-exec python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+# conda env first, then .venv — see scripts/python
+exec "$ROOT/scripts/python" -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
 EOF
     chmod +x dev.sh
     print_status "Created dev.sh"
@@ -430,16 +442,17 @@ EOF
 #!/bin/bash
 # Run SloughGPT tests
 
-source .venv/bin/activate
+# conda env first, then .venv — see scripts/python
+PY="./scripts/python"
 
 export CUDA_VISIBLE_DEVICES=""
 
 echo "Running unit tests..."
-python3 -m pytest tests/test_*.py -v
+"$PY" -m pytest tests/test_*.py -v
 
 echo ""
 echo "Running with coverage..."
-python3 -m pytest tests/ --cov=domains --cov-report=html --cov-report=term
+"$PY" -m pytest tests/ --cov=domain --cov-report=html --cov-report=term
 EOF
     chmod +x test.sh
     print_status "Created test.sh"
@@ -447,37 +460,6 @@ EOF
     print_status "Keeping existing test.sh"
     fi
 
-    # Benchmark script
-    if [ ! -f benchmark.sh ]; then
-    cat > benchmark.sh << 'EOF'
-#!/bin/bash
-# Run performance benchmarks
-
-source .venv/bin/activate
-
-export CUDA_VISIBLE_DEVICES=""
-
-echo "Running benchmarks..."
-python3 -c "
-from domains.inference.engine import create_engine
-from domains.ml_infrastructure.benchmarking import benchmark_model
-
-print('Loading model...')
-engine = create_engine('gpt2', device='cpu')
-
-print('Running benchmark...')
-result = benchmark_model(engine.model, engine.tokenizer, device='cpu')
-print(f'Model: {result.model_name}')
-print(f'Parameters: {result.num_parameters:,}')
-print(f'Memory: {result.memory_mb:.2f} MB')
-print(f'Throughput: {result.throughput_tokens_per_sec:.2f} tokens/sec')
-"
-EOF
-    chmod +x benchmark.sh
-    print_status "Created benchmark.sh"
-    else
-    print_status "Keeping existing benchmark.sh"
-    fi
 
     echo ""
 }

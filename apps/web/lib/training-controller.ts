@@ -3,6 +3,7 @@
  */
 
 import { apiGet, apiPost, apiDelete, apiPatch, authFetch, streamSSE } from './http-client'
+import { extractErrorMessage } from '@/lib/error-utils'
 import type { Checkpoint } from './souls-controller'
 
 export interface TrainingJob {
@@ -39,18 +40,23 @@ export interface TrainingJob {
   error?: string
   explanation?: string
   status_message?: string
+  avg_quality?: number
 }
 
 export interface TrainingStatus {
   status: string
   job_id?: string
   progress?: number
+  message?: string
+  recovery_job_id?: string
 }
 
 export interface RecoverableJob {
   id: string
   name: string
   failed_at: string
+  updated_at?: string
+  progress?: number
 }
 
 export interface Webhook {
@@ -63,8 +69,10 @@ export interface Webhook {
 }
 
 export interface AutoTrainStartRequest {
+  name?: string
+  model?: string
   algo?: string
-  dataset_id?: string
+  dataset?: string
   soul_name?: string
   epochs?: number
   learning_rate?: number
@@ -72,6 +80,7 @@ export interface AutoTrainStartRequest {
   temperature?: number
   source_text?: string
   checkpoint_name?: string
+  experiment_id?: string
 }
 
 export interface AutoTrainStartResponse {
@@ -83,8 +92,14 @@ export interface AutoTrainStartResponse {
 }
 
 export interface WebhookStats {
-  total: number
-  success_rate: number
+  total_webhooks: number
+  active_webhooks: number
+  total_deliveries: number
+  successful_deliveries: number
+  failed_deliveries: number
+  success_rate: string | number
+  pending_retries: number
+  dead_letters: number
 }
 
 export interface FineTunedModel {
@@ -130,6 +145,7 @@ export interface TurboTrainStartRequest {
   method?: 'slonet' | 'transformer'
   dataset_id?: string
   data_path?: string
+  checkpoint_name?: string
   epochs?: number
   batch_size?: number
   learning_rate?: number
@@ -139,6 +155,7 @@ export interface TurboTrainStartRequest {
   n_layer?: number
   block_size?: number
   dropout?: number
+  experiment_id?: string
   // Legacy fields (kept for backward compat)
   n_decoder_layers?: number
   max_tgt_len?: number
@@ -165,8 +182,10 @@ export interface TurboJobStatus {
   steps_per_sec?: number | null
   eta_s?: number | null
   elapsed_s?: number | null
+  avg_quality?: number | null
   error?: string | null
   result?: Record<string, unknown> | null
+  paused?: boolean
 }
 
 export interface TrainFromSessionsParams {
@@ -180,18 +199,22 @@ export interface TrainFromSessionsParams {
   min_pair_quality?: number
   max_pairs?: number
   session_ids?: string[]
+  experiment_id?: string
 }
 
 export const trainingJobsController = {
   async startAutoTrain(params?: AutoTrainStartRequest): Promise<AutoTrainStartResponse> {
-    return apiPost<AutoTrainStartResponse>('/auto-train/start', params ?? null)
+    return apiPost<AutoTrainStartResponse>('/training/start', params ?? null)
   },
 
   async stopAutoTrain(): Promise<void> {
-    await apiPost('/auto-train/stop')
+    await apiPost('/training/stop')
   },
 
-  async loadAdapter(adapterPath: string, merge: boolean = false): Promise<{
+  async loadAdapter(
+    adapterPath: string,
+    merge: boolean = false,
+  ): Promise<{
     status: string
     adapter_path: string
     rank: number
@@ -207,48 +230,46 @@ export const trainingJobsController = {
   },
 
   async pauseTraining(): Promise<{ success: boolean }> {
-    return apiPost('/auto-train/pause')
+    return apiPost('/training/control/pause')
   },
 
   async getTrainingLog(): Promise<string[]> {
-    try {
-      const data = await apiGet<{ lines: string[] }>('/auto-train/log')
-      return data.lines ?? []
-    } catch { return [] }
+    const data = await apiGet<{ lines: string[] }>('/training/log')
+    return data?.lines ?? []
   },
 
   async resumeTraining(): Promise<{ success: boolean }> {
-    return apiPost('/auto-train/resume')
+    return apiPost('/training/control/resume')
   },
 
   async startTurboTrain(params?: TurboTrainStartRequest): Promise<TurboTrainResponse> {
-    return apiPost<TurboTrainResponse>('/auto-train/start-turbo', params ?? null)
+    return apiPost<TurboTrainResponse>('/training/turbo-start', params ?? null)
   },
 
   async getTurboStatus(): Promise<TurboJobStatus> {
-    return apiGet<TurboJobStatus>('/auto-train/turbo/status')
+    return apiGet<TurboJobStatus>('/training/turbo/status')
   },
 
   async list(): Promise<TrainingJob[]> {
     const data = await apiGet<TrainingJob[] | { jobs: TrainingJob[] }>('/training/jobs')
-    return Array.isArray(data) ? data : data.jobs || []
+    return Array.isArray(data) ? data : (data?.jobs ?? [])
   },
 
   async listCheckpoints(): Promise<Checkpoint[]> {
-    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/auto-train/checkpoints')
+    const data = await apiGet<Checkpoint[] | { checkpoints: Checkpoint[] }>('/training/checkpoints')
     return Array.isArray(data) ? data : (data?.checkpoints ?? [])
   },
 
   async listBuilds(): Promise<TrainingBuild[]> {
     const data = await apiGet<{ builds: TrainingBuild[] }>('/training/builds')
-    return data.builds || []
+    return data?.builds ?? []
   },
 
   async listFineTuned(): Promise<FineTunedModel[]> {
-    try {
-      const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>('/training/finetuned-models')
-      return Array.isArray(data) ? data : (data?.models ?? [])
-    } catch { return [] }
+    const data = await apiGet<FineTunedModel[] | { models: FineTunedModel[] }>(
+      '/training/finetuned-models',
+    )
+    return Array.isArray(data) ? data : (data?.models ?? [])
   },
 
   async loadFineTuned(name: string): Promise<FineTunedModelLoadResponse> {
@@ -262,8 +283,9 @@ export const trainingJobsController = {
   async get(id: string): Promise<TrainingJob | null> {
     try {
       return await apiGet<TrainingJob>(`/training/jobs/${id}`)
-    } catch {
-      return null
+    } catch (err) {
+      if (extractErrorMessage(err).includes('404')) return null
+      throw err
     }
   },
 
@@ -304,15 +326,9 @@ export const trainingJobsController = {
     return apiPost('/training/lora-finetune', params)
   },
 
-  async startQuick(params: {
-    dataset: string
-    name?: string
-    model?: string
-  }): Promise<{ job_id: string; status: string; config: Record<string, unknown>; explanation: string }> {
-    return apiPost('/training/quick', params)
-  },
-
-  async getSummary(jobId: string): Promise<{ job_id: string; summary: string; status: string; model: string; dataset: string }> {
+  async getSummary(
+    jobId: string,
+  ): Promise<{ job_id: string; summary: string; status: string; model: string; dataset: string }> {
     return apiGet(`/training/jobs/${jobId}/summary`)
   },
 
@@ -361,7 +377,7 @@ export const trainingJobsController = {
 
   async recoverable(): Promise<RecoverableJob[]> {
     const data = await apiGet<{ jobs: RecoverableJob[] }>('/recovery/recoverable')
-    return data.jobs || []
+    return data?.jobs ?? []
   },
 
   async recover(id: string): Promise<TrainingStatus> {
@@ -370,7 +386,7 @@ export const trainingJobsController = {
 
   async listWebhooks(): Promise<Webhook[]> {
     const data = await apiGet<{ webhooks: Webhook[] }>('/training/webhooks')
-    return data.webhooks || []
+    return data?.webhooks ?? []
   },
 
   async createWebhook(url: string, events: string[]): Promise<Webhook> {
@@ -383,6 +399,52 @@ export const trainingJobsController = {
 
   async webhookStats(): Promise<WebhookStats> {
     return apiGet<WebhookStats>('/training/webhooks/stats')
+  },
+
+  async getWebhookRetryQueue(): Promise<{
+    retries: Array<{
+      delivery_id: string
+      webhook_id: string
+      event: string
+      attempt_count: number
+      next_retry_at: number
+    }>
+  }> {
+    const data = await apiGet<{
+      retries?: Array<{
+        delivery_id: string
+        webhook_id: string
+        event: string
+        attempt_count: number
+        next_retry_at: number
+      }>
+    }>('/training/webhooks/retry-queue')
+    return { retries: data?.retries ?? [] }
+  },
+
+  async getWebhookDeadLetters(limit: number = 50): Promise<{
+    dead_letters: Array<{
+      delivery_id: string
+      webhook_id: string
+      event: string
+      error: string | null
+      status_code: number | null
+      attempt_count: number
+      dead_lettered_at: string
+    }>
+  }> {
+    const data = await apiGet<{
+      dead_letters?: Array<{
+        delivery_id: string
+        webhook_id: string
+        event: string
+        error: string | null
+        status_code: number | null
+        attempt_count: number
+        dead_lettered_at: string
+      }>
+    }>(`/training/webhooks/dead-letters?limit=${limit}`)
+    return { dead_letters: data?.dead_letters ?? [] }
   },
 
   // Recovery
@@ -399,54 +461,101 @@ export const trainingJobsController = {
     return apiPost('/training/webhooks/test', { url })
   },
 
+  async getWebhookDeliveries(
+    webhookId: string,
+    limit?: number,
+  ): Promise<
+    Array<{
+      id: string
+      webhook_id: string
+      event: string
+      status: number
+      success: boolean
+      delivered_at: string
+    }>
+  > {
+    const qs = limit ? `?limit=${limit}` : ''
+    const data = await apiGet<{
+      deliveries: Array<{
+        id: string
+        webhook_id: string
+        event: string
+        status: number
+        success: boolean
+        delivered_at: string
+      }>
+    }>(`/training/webhooks/${webhookId}/deliveries${qs}`)
+    return data?.deliveries ?? []
+  },
+
   // Training status
   async getStatus(): Promise<Record<string, unknown>> {
     return apiGet<Record<string, unknown>>('/training/status')
   },
 
-  async trainFromFeedback(params?: { epochs?: number; batch_size?: number; learning_rate?: number; use_lora?: boolean }): Promise<{
-    status: string; job_id?: string; samples?: number; message?: string
+  async trainFromFeedback(params?: {
+    epochs?: number
+    batch_size?: number
+    learning_rate?: number
+    use_lora?: boolean
+  }): Promise<{
+    status: string
+    job_id?: string
+    samples?: number
+    checkpoint?: string
+    message?: string
   }> {
     return apiPost('/training/from-feedback', params ?? {})
   },
 
-  async exportFeedbackPairs(minQuality: number, targetCount: number): Promise<Record<string, unknown>> {
-    return apiPost<Record<string, unknown>>('/training/export-text', { min_quality: minQuality, target_count: targetCount })
+  async exportFeedbackPairs(
+    minQuality: number,
+    targetCount: number,
+  ): Promise<Record<string, unknown>> {
+    return apiPost<Record<string, unknown>>('/training/export-text', {
+      min_quality: minQuality,
+      target_count: targetCount,
+    })
   },
 
   async loadCheckpoint(name: string): Promise<{ success: boolean }> {
-    return apiPost(`/auto-train/checkpoints/${encodeURIComponent(name)}/load`)
+    return apiPost(`/training/checkpoints/${encodeURIComponent(name)}/load`)
   },
 
   async deleteCheckpoint(name: string): Promise<{ success: boolean }> {
-    return apiDelete(`/auto-train/checkpoints/${encodeURIComponent(name)}`)
+    return apiDelete(`/training/checkpoints/${encodeURIComponent(name)}`)
   },
 
   async deleteCheckpointsBatch(names: string[]): Promise<{ deleted: number }> {
-    const results = await Promise.allSettled(names.map(n => this.deleteCheckpoint(n)))
-    return { deleted: results.filter(r => r.status === 'fulfilled').length }
+    const results = await Promise.allSettled(names.map((n) => this.deleteCheckpoint(n)))
+    return { deleted: results.filter((r) => r.status === 'fulfilled').length }
   },
 
   async downloadCheckpoint(name: string): Promise<Blob> {
-    const res = await authFetch(`/auto-train/checkpoints/${encodeURIComponent(name)}/download`)
+    const res = await authFetch(`/training/checkpoints/${encodeURIComponent(name)}/download`)
     if (!res.ok) throw new Error(`Download failed (${res.status})`)
     return res.blob()
   },
 
   async exportMetrics(): Promise<Blob> {
-    const res = await authFetch('/auto-train/metrics/export')
+    const res = await authFetch('/training/metrics/export')
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
 
   async getCheckpointInfo(name: string): Promise<Record<string, unknown>> {
-    return apiGet<Record<string, unknown>>(`/auto-train/checkpoints/${encodeURIComponent(name)}/info`)
+    return apiGet<Record<string, unknown>>(`/training/checkpoints/${encodeURIComponent(name)}/info`)
   },
 
   async downloadTrainingJob(jobId: string): Promise<Blob> {
     const res = await authFetch(`/training/export/${jobId}`)
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
+  },
+
+  async purgeJobs(status?: string): Promise<{ purged: number }> {
+    const qs = status ? `?status=${encodeURIComponent(status)}` : ''
+    return apiPost<{ purged: number }>(`/training/jobs/purge${qs}`)
   },
 
   // ---------------------------------------------------------------------------
@@ -468,7 +577,14 @@ export const trainingJobsController = {
   }> {
     try {
       for await (const event of streamSSE('/mobile/train/from-sessions', { body: params ?? {} })) {
-        yield event as { stream: string; phase: string; status: string; data: Record<string, unknown>; meta: Record<string, unknown>; message: string }
+        yield event as {
+          stream: string
+          phase: string
+          status: string
+          data: Record<string, unknown>
+          meta: Record<string, unknown>
+          message: string
+        }
         if (event.status === 'complete' || event.status === 'error') return
       }
     } catch (err) {
@@ -495,7 +611,7 @@ export const trainingJobsController = {
       if (event.status === 'complete') {
         finalResult = event.data ?? {}
       } else if (event.status === 'error') {
-        throw new Error(event.message || 'Training failed')
+        throw new Error(event.message || 'Training request failed')
       }
     }
     return {
@@ -513,7 +629,7 @@ export const trainingJobsController = {
   // ---------------------------------------------------------------------------
 
   async startFromSessionsSloNet(params: TrainFromSessionsParams): Promise<void> {
-    await apiPost('/auto-train/from-sessions/start', params)
+    await apiPost('/training/from-sessions-start', params)
   },
 
   async *streamFromSessionsSloNet(): AsyncGenerator<{
@@ -525,8 +641,15 @@ export const trainingJobsController = {
     message: string
   }> {
     try {
-      for await (const event of streamSSE('/auto-train/from-sessions/stream', { method: 'GET' })) {
-        yield event as { stream: string; phase: string; status: string; data: Record<string, unknown>; meta: Record<string, unknown>; message: string }
+      for await (const event of streamSSE('/training/from-sessions-stream', { method: 'GET' })) {
+        yield event as {
+          stream: string
+          phase: string
+          status: string
+          data: Record<string, unknown>
+          meta: Record<string, unknown>
+          message: string
+        }
         if (event.status === 'complete' || event.status === 'error') return
       }
     } catch (err) {
@@ -535,14 +658,17 @@ export const trainingJobsController = {
   },
 
   async cancelFromSessionsSloNet(): Promise<void> {
-    await apiGet('/auto-train/from-sessions/cancel')
+    await apiGet('/training/from-sessions/cancel')
   },
 
   async getAutoTrainStatus(): Promise<AutoTrainStatus> {
     return apiGet<AutoTrainStatus>('/mobile/train/auto-status')
   },
 
-  async updateAutoTrainConfig(params: { threshold?: number; interval_s?: number }): Promise<AutoTrainStatus> {
+  async updateAutoTrainConfig(params: {
+    threshold?: number
+    interval_s?: number
+  }): Promise<AutoTrainStatus> {
     const query = new URLSearchParams()
     if (params.threshold != null) query.set('threshold', String(params.threshold))
     if (params.interval_s != null) query.set('interval_s', String(params.interval_s))
@@ -559,7 +685,9 @@ export const trainingJobsController = {
   },
 
   async getPendingPairs(limit = 50): Promise<{ pairs: TrainingPair[]; count: number }> {
-    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>('/mobile/train/pending', { limit: String(limit) })
+    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>('/mobile/train/pending', {
+      limit: String(limit),
+    })
     return data
   },
 
@@ -567,14 +695,22 @@ export const trainingJobsController = {
     return apiGet('/lora-eval/history', { limit: String(limit) })
   },
 
-  async runEval(adapterPath: string = 'data/user_adapters/best_aggregated.npz', soul: string = 'assistant'): Promise<{
+  async runEval(
+    adapterPath: string = 'data/user_adapters/best_aggregated.npz',
+    soul: string = 'assistant',
+  ): Promise<{
     status: string
     baseline?: EvalResult
     with_adapter?: EvalResult
-    delta?: { perplexity_delta: number; bleu_delta: number; throughput_delta: number; verdict: string }
+    delta?: {
+      perplexity_delta: number
+      bleu_delta: number
+      throughput_delta: number
+      verdict: string
+    }
     report?: string
   }> {
-    return apiGet('/lora-eval/run', { adapter_path: adapterPath, soul })
+    return apiPost('/lora-eval/run', { adapter_path: adapterPath, soul })
   },
 
   async listTrainingPairs(params?: {
@@ -594,7 +730,9 @@ export const trainingJobsController = {
   },
 
   async getSessionPairs(sessionId: string): Promise<{ pairs: TrainingPair[]; count: number }> {
-    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>(`/mobile/train/session/${encodeURIComponent(sessionId)}`)
+    const data = await apiGet<{ pairs: TrainingPair[]; count: number }>(
+      `/mobile/train/session/${encodeURIComponent(sessionId)}`,
+    )
     return data
   },
 
@@ -603,7 +741,9 @@ export const trainingJobsController = {
   },
 
   async updatePairQuality(pairId: string, quality: number): Promise<{ status: string }> {
-    return apiPatch<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`, { quality })
+    return apiPatch<{ status: string }>(`/mobile/train/pair/${encodeURIComponent(pairId)}`, {
+      quality,
+    })
   },
 
   async deleteSyncedPairs(): Promise<{ status: string; count: number }> {
@@ -611,13 +751,23 @@ export const trainingJobsController = {
   },
 
   async deletePairsBulk(ids: string[]): Promise<{ status: string; count: number }> {
-    const params = ids.map(id => `ids=${encodeURIComponent(id)}`).join('&')
+    const params = ids.map((id) => `ids=${encodeURIComponent(id)}`).join('&')
     return apiDelete<{ status: string; count: number }>(`/mobile/train/pairs/bulk?${params}`)
   },
 
   async listChatSessions(): Promise<ChatSession[]> {
-    const data = await apiGet<{ data: ChatSession[] } | ChatSession[]>('/chat/sessions')
-    return Array.isArray(data) ? data : (data as { data: ChatSession[] }).data || []
+    const data = await apiGet<ChatSession[]>('/chat/sessions')
+    return Array.isArray(data) ? data : []
+  },
+
+  async getTrainingRecommendation(
+    datasetPath: string = '',
+    method: string = 'distill',
+  ): Promise<TrainingRecommendationResponse> {
+    const query: Record<string, string> = {}
+    if (datasetPath) query.dataset_path = datasetPath
+    if (method) query.method = method
+    return apiGet<TrainingRecommendationResponse>('/training/recommend', query)
   },
 
   async exportTrainingPairs(params?: {
@@ -634,7 +784,6 @@ export const trainingJobsController = {
     if (!res.ok) throw new Error(`Export failed (${res.status})`)
     return res.blob()
   },
-
 }
 
 export interface AutoTrainStatus {
@@ -698,6 +847,22 @@ export interface EvalHistoryEntry {
     verdict: string
   }
   report?: string
+}
+
+export interface TrainingRecommendation {
+  learning_rate: number
+  batch_size: number
+  epochs: number
+  warmup_steps: number
+  early_stopping_patience: number
+  reason: string
+  confidence: number
+}
+
+export interface TrainingRecommendationResponse {
+  dataset_size: number
+  recommendation: TrainingRecommendation
+  tips: string[]
 }
 
 export const trainingController = trainingJobsController

@@ -1,21 +1,26 @@
 """Tests for DatasetsController."""
-import pytest
+
 import json
-from pathlib import Path
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'api', 'server'))
+import os
+import sys
+
+import pytest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api", "server"))
 
 from controllers.datasets import DatasetsController
 
 
 @pytest.fixture
-def tmp_repo(tmp_path):
+def tmp_repo(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
     return DatasetsController(tmp_path)
 
 
 @pytest.fixture
-def repo_with_datasets(tmp_path):
-    ds_dir = tmp_path / "datasets"
+def repo_with_datasets(tmp_path, monkeypatch):
+    monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+    ds_dir = tmp_path / "data"
     ds_dir.mkdir()
     (ds_dir / "shakespeare").mkdir()
     (ds_dir / "shakespeare" / "input.txt").write_text("hello world")
@@ -66,9 +71,36 @@ class TestListDatasets:
         code = next(d for d in result if d["name"] == "Code")
         assert code["type"] == "text"
 
-    def test_empty_dir_no_datasets_dir(self, tmp_path):
+    def test_empty_dir_no_datasets_dir(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
         ctrl = DatasetsController(tmp_path)
         assert ctrl.list_datasets() == []
+
+    def test_datasets_container_expanded(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("SLO_CACHE_DIR", str(tmp_path / "cache"))
+        nested = tmp_path / "data" / "datasets" / "chat_ds"
+        nested.mkdir(parents=True)
+        (nested / "corpus.jsonl").write_text('{"text":"a"}\n')
+        ctrl = DatasetsController(tmp_path)
+        by_id = {d["id"]: d for d in ctrl.list_datasets()}
+        assert "datasets" not in by_id
+        assert by_id["chat_ds"]["source"] == "data/datasets"
+        assert by_id["chat_ds"]["kind"] == "dataset"
+        assert by_id["chat_ds"]["num_samples"] == 1
+        assert ctrl.get_dataset_stats("chat_ds")["samples"] == 1
+
+    def test_kind_tags_mime_present(self, repo_with_datasets, tmp_path):
+        adapters = tmp_path / "data" / "user_adapters"
+        adapters.mkdir()
+        (adapters / "a.npz").write_bytes(b"x")
+        result = repo_with_datasets.list_datasets()
+        by_id = {d["id"]: d for d in result}
+        assert by_id["shakespeare"]["kind"] == "dataset"
+        assert "dataset" in by_id["shakespeare"]["tags"]
+        assert by_id["shakespeare"]["mime"] == "application/x-ndjson"
+        assert by_id["shakespeare"]["source"] == "data"
+        assert by_id["user_adapters"]["kind"] == "adapter"
+        assert "adapter" in by_id["user_adapters"]["tags"]
 
 
 class TestGetDataset:
@@ -102,11 +134,21 @@ class TestGetDatasetStats:
         assert result is None
 
     def test_messages_format(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "convo"
+        ds_dir = tmp_path / "data" / "convo"
         ds_dir.mkdir()
         msgs = [
-            {"messages": [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]},
-            {"messages": [{"role": "user", "content": "bye"}, {"role": "assistant", "content": "goodbye"}]},
+            {
+                "messages": [
+                    {"role": "user", "content": "hi"},
+                    {"role": "assistant", "content": "hello"},
+                ]
+            },
+            {
+                "messages": [
+                    {"role": "user", "content": "bye"},
+                    {"role": "assistant", "content": "goodbye"},
+                ]
+            },
         ]
         (ds_dir / "corpus.jsonl").write_text("\n".join(json.dumps(m) for m in msgs) + "\n")
         ctrl = DatasetsController(tmp_path)
@@ -115,7 +157,7 @@ class TestGetDatasetStats:
         assert result["has_messages"] is True
 
     def test_dialogue_format(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "dialog"
+        ds_dir = tmp_path / "data" / "dialog"
         ds_dir.mkdir()
         (ds_dir / "corpus.jsonl").write_text(
             "User: hello\nAssistant: hi there\nUser: how are you\nAssistant: fine\n"
@@ -126,11 +168,13 @@ class TestGetDatasetStats:
 
 
 class TestCreateDataset:
-    def test_creates_directory(self, tmp_repo):
+    def test_creates_directory(self, tmp_repo, tmp_path):
         result = tmp_repo.create_dataset("test_ds")
         assert result["created"] is True
         assert result["id"] == "test_ds"
-        assert (tmp_repo.datasets_dir / "test_ds").exists()
+        # Just-cache is the write target; legacy data dir stays untouched.
+        assert (tmp_path / "cache" / "external" / "test_ds").is_dir()
+        assert not (tmp_repo.datasets_dir / "test_ds").exists()
 
     def test_creates_with_description(self, tmp_repo):
         result = tmp_repo.create_dataset("test_ds", description="A test dataset")
@@ -177,7 +221,7 @@ class TestAddData:
     def test_add_data(self, repo_with_datasets):
         count = repo_with_datasets.add_data("shakespeare", ["line1", "line2", "line3"])
         assert count == 3
-        corpus = (repo_with_datasets.datasets_dir / "shakespeare" / "corpus.jsonl")
+        corpus = repo_with_datasets.datasets_dir / "shakespeare" / "corpus.jsonl"
         lines = [l for l in corpus.read_text().splitlines() if l.strip()]
         assert len(lines) >= 5
 
@@ -218,14 +262,14 @@ class TestPreviewDataset:
         assert result is None
 
     def test_preview_visual_dataset(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "vis"
+        ds_dir = tmp_path / "data" / "vis"
         ds_dir.mkdir()
         entry = {
             "image_path": "/img/test.jpg",
             "conversations": [
                 {"from": "human", "value": "What is this?"},
                 {"from": "gpt", "value": "A cat sitting on a mat."},
-            ]
+            ],
         }
         (ds_dir / "corpus.jsonl").write_text(json.dumps(entry) + "\n")
         (ds_dir / ".visual_metadata.json").write_text("{}")
@@ -291,7 +335,7 @@ class TestDescribeDataset:
         assert "small dataset" in desc
 
     def test_describe_dataset_with_content(self, repo_with_datasets, tmp_path):
-        ds_dir = tmp_path / "datasets" / "medium"
+        ds_dir = tmp_path / "data" / "medium"
         ds_dir.mkdir()
         (ds_dir / "input.txt").write_text("hello world " * 200)
         desc = repo_with_datasets._describe_dataset(ds_dir, [], 1024)
@@ -308,6 +352,7 @@ class TestDescribeDataset:
 class TestSingleton:
     def test_singleton_same_instance(self):
         from controllers.datasets import get_datasets_controller
+
         a = get_datasets_controller()
         b = get_datasets_controller()
         assert a is b

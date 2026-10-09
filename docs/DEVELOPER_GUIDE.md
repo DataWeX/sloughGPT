@@ -11,7 +11,7 @@ This guide covers development practices, contribution guidelines, and technical 
 SloughGPT uses a domain-driven architecture where each domain represents a bounded context with its own:
 
 - **Models**: Business logic and entities
-- **Services**: Domain services and application logic  
+- **Services**: Domain services and application logic
 - **Interfaces**: Contracts between domains
 - **Infrastructure**: External dependencies and persistence
 
@@ -42,7 +42,7 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 ### Key Conventions
 
 - **Routers** in `apps/api/server/routers/` — one per domain, thin wrapper around domain logic
-- **Domains** in `packages/core-py/domains/` — business logic, no framework imports
+- **Domains** in `domain/` — business logic, no framework imports
 - **Controllers** on frontend (`apps/web/lib/*-controller.ts`) — axios-based API wrappers
 - **No PyTorch in SloNet** — pure NumPy autograd for the custom training pipeline
 
@@ -63,12 +63,16 @@ SloughGPT uses a domain-driven architecture where each domain represents a bound
 git clone https://github.com/iamtowbee/sloughGPT.git
 cd sloughGPT
 
-# Create virtual environment
-python3 -m venv .venv
-source .venv/bin/activate
+# Project Python env: conda env `sloughgpt` is the default
+# (a `.venv` still works — see `scripts/python` for the resolution order)
+conda env list | grep -q sloughgpt || conda create -n sloughgpt python=3.12 -y
+conda activate sloughgpt
 
 # Install development dependencies
 python3 -m pip install -e ".[dev]"
+
+# Or skip activation entirely — every script uses the same resolver:
+./scripts/python -m pytest tests/ -q
 ```
 
 ### API + web (local)
@@ -76,7 +80,7 @@ python3 -m pip install -e ".[dev]"
 Run the FastAPI app and the Next.js dev server in **one terminal** or two. Full options are in **QUICKSTART.md**.
 
 ```bash
-# One terminal (API :8000 + web :3000)
+# One terminal (API :8000 + web :5173)
 ./scripts/dev-stack.sh
 # or: make dev-stack
 # or: npm install && npm run dev:stack   # repo root; same shell script
@@ -89,6 +93,7 @@ npm run test:repo-root
 ### Development Workflow
 
 1. **Create Feature Branch**
+
 ```bash
 git checkout -b feature/your-feature-name
 ```
@@ -100,11 +105,13 @@ git checkout -b feature/your-feature-name
    - Ensure type safety
 
 3. **Run Tests**
+
 ```bash
 pytest tests/ -q -k "your_keyword"
 ```
 
 4. **Commit Changes**
+
 ```bash
 git add .
 git commit -m "feat: add your feature description"
@@ -128,19 +135,19 @@ import logging
 from typing import Dict, Any, List, Optional
 
 # Class definitions
-class ExampleService(BaseService):
-    """Example service following OOP principles."""
+class ExampleService:
+    """Example service following the project's patterns."""
 
     def __init__(self, config: Dict[str, Any]) -> None:
         """Initialize service with configuration."""
-        super().__init__()
         self.config = config
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("slo.services.example")
 
     async def process_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Process data and return results."""
+        self.logger.info("Processing data", extra={"tag": "SERVICE", "context": {"keys": list(data.keys())}})
         # Implementation
-        pass
+        return {}
 ```
 
 ### Type Hints
@@ -219,12 +226,13 @@ cd apps/web && npx tsc --noEmit
 [tool.coverage.run]
 source = ["domains"]
 omit = [
-    "*/tests/*",
-    "*/test_*",
-    "*/__pycache__/*",
-    "*/site-packages/*",
+"_/tests/_",
+"_/test__",
+"_/**pycache**/_",
+"_/site-packages/_",
 ]
-```
+
+````
 
 ### Running Tests
 
@@ -236,11 +244,11 @@ python3 -m pytest tests/ -q
 python3 -m pytest tests/test_api.py -v
 
 # Run with coverage (domains live under packages/core-py)
-python3 -m pytest tests/ --cov=domains --cov-report=html
+python3 -m pytest tests/ --cov=domain --cov-report=html
 
 # Run integration-focused tests
 python3 -m pytest tests/test_integration.py -v
-```
+````
 
 ## 📊 Monitoring & Debugging
 
@@ -251,41 +259,39 @@ Use structured logging with appropriate levels:
 ```python
 import logging
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("slo.services.example")
 
-class CognitiveService:
+class ExampleService:
     def __init__(self):
-        self.logger = logging.getLogger(f"man.{self.__class__.__name__}")
+        self.logger = logging.getLogger(f"slo.services.{self.__class__.__name__}")
 
     async def process_request(self, request):
-        self.logger.info(f"Processing request: {request.id}")
+        self.logger.info("Processing request: %s", request.id)
         try:
             result = await self._do_process(request)
-            self.logger.info(f"Request {request.id} completed successfully")
+            self.logger.info("Request %s completed successfully", request.id)
             return result
         except Exception as e:
-            self.logger.error(f"Error processing request {request.id}: {e}")
+            self.logger.error("Error processing request %s: %s", request.id, e)
             raise
 ```
 
 ### Metrics Collection
 
-All domains support comprehensive metrics collection:
+Use the built-in `ServerState` for metrics tracking:
 
 ```python
-from domains.shared.monitoring import MetricsCollector
+from domain.infrastructure.server_state import get_server_state
 
-# Track performance
-metrics = MetricsCollector()
-
-# Track custom metrics
-await metrics.track_metric("cognitive_processing_time", processing_time)
-await metrics.track_counter("api_requests_total")
+state = get_server_state()
+state.record_inference(tokens=100, elapsed_ms=500, model="sloughgpt-7b")
+state.record_training(tokens=1000, elapsed_ms=30000)
 ```
 
 ### Debugging
 
 #### Local Development
+
 ```python
 # Enable debug mode
 import os
@@ -336,44 +342,48 @@ class OptimizedProcessor:
 
 ### Connection Pooling
 
-Database and cache connections use pooling:
+The server uses `httpx.AsyncClient` for internal calls and `httpx.AsyncClient` for external API calls:
 
 ```python
-from domains.infrastructure.database import DatabaseManager
+import httpx
 
-# Initialize with connection pooling
-db_manager = DatabaseManager(pool_size=20)
-await db_manager.initialize()
-
-# Connections are automatically pooled
-for _ in range(100):
-    result = await db_manager.execute_query("SELECT * FROM table")
+# Async client with connection pooling
+async with httpx.AsyncClient(base_url="http://localhost:8000", timeout=30.0) as client:
+    resp = await client.get("/health")
+    data = resp.json()
 ```
+
+    result = await db_manager.execute_query("SELECT * FROM table")
+
+````
 
 ### Caching Strategy
 
-Implement multi-level caching:
+The server uses in-memory caching with TTL for performance:
 
 ```python
-class CacheStrategy:
-    async def get_data(self, key: str) -> Optional[Any]:
-        # L1: In-memory cache
-        if key in self.memory_cache:
-            return self.memory_cache[key]
+from functools import lru_cache
+import time
 
-        # L2: Redis cache
-        if await self.redis_cache.exists(key):
-            return await self.redis_cache.get(key)
+# Simple TTL cache
+_cache: dict[str, tuple[float, Any]] = {}
+CACHE_TTL = 60.0  # seconds
 
-        # L3: Database cache
-        return await self.database_cache.get(key)
-
-    async def set_data(self, key: str, value: Any, ttl: int = 3600):
-        # Set in all cache levels with different TTLs
-        await self.set_memory_cache(key, value, ttl=60)
-        await self.set_redis_cache(key, value, ttl=300)
-        await self.set_database_cache(key, value, ttl=86400)
-```
+def cached_get(key: str):
+    """Decorator for caching function results with TTL."""
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            now = time.monotonic()
+            if key in _cache:
+                ts, val = _cache[key]
+                if now - ts < CACHE_TTL:
+                    return val
+            result = func(*args, **kwargs)
+            _cache[key] = (now, result)
+            return result
+        return wrapper
+    return decorator
+````
 
 ## 🔒 Security Best Practices
 
@@ -480,7 +490,7 @@ python3 apps/api/server/main.py
 # or, with reload:
 # cd apps/api/server && python3 -m uvicorn main:app --reload --port 8000
 
-# Web UI (separate terminal; port 3000)
+# Web UI (separate terminal; port 5173)
 cd apps/web && npm install && npm run dev
 ```
 
@@ -582,8 +592,8 @@ Docs live flat in `docs/`. Auto-generated API docs at `http://localhost:8000/doc
 # Clone and set up
 git clone https://github.com/iamtowbee/sloughGPT.git
 cd sloughGPT
-python3 -m venv .venv
-source .venv/bin/activate
+conda env list | grep -q sloughgpt || conda create -n sloughgpt python=3.12 -y
+conda activate sloughgpt        # or skip activation: ./scripts/python ...
 python3 -m pip install -e ".[dev]"
 
 # Set up environment
@@ -595,7 +605,7 @@ cp .env.example .env
 
 ```bash
 # Full suite
-python3 -m pytest tests/ -q
+./scripts/python -m pytest tests/ -q
 
 # Skip slow tests
 python3 -m pytest tests/ -m "not slow"
@@ -610,7 +620,7 @@ cd apps/web && npx vitest run && npx tsc --noEmit
 # API (http://localhost:8000 — OpenAPI at /docs)
 python3 apps/api/server/main.py
 
-# Web UI (http://localhost:3000)
+# Web UI (http://localhost:5173)
 cd apps/web && npm run dev
 ```
 

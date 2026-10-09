@@ -136,7 +136,7 @@ export function useChatToolbarValue(config: UseChatToolbarValueConfig): ChatTool
             name: `chat-${todayDateString()}`,
           })
           showToast(`Saved ${res.messages_exported} messages as dataset: ${res.name}`, 'success')
-        } catch { showToast('Failed to save dataset', 'error') }
+        } catch { showToast('Could not save dataset', 'error') }
       },
       hasMessages: chat.messages.length > 0,
       messageCount: chat.messages.length,

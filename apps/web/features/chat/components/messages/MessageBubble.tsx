@@ -1,13 +1,22 @@
 'use client'
 
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { cn, IconStar } from '@sloughgpt/strui'
-import { MS_PER_MINUTE } from '@/lib/format-bytes'
-import { MessageActions } from './MessageActions'
-import { MessageContextMenu } from './MessageContextMenu'
+import { formatRelativeTime } from '@/lib/time-format'
+import { ConsciousnessMessageBadge } from '../ConsciousnessMessageBadge'
+
 import { MessageImages } from './MessageImages'
 import { MessageContent } from './MessageContent'
 import type { ImageAttachment } from './../input/ImageUpload'
+
+const MessageActions = dynamic(() => import('./MessageActions').then((m) => m.MessageActions), {
+  ssr: false,
+})
+const MessageContextMenu = dynamic(
+  () => import('./MessageContextMenu').then((m) => m.MessageContextMenu),
+  { ssr: false },
+)
 
 export interface MessageBubbleProps {
   content: string
@@ -16,7 +25,7 @@ export interface MessageBubbleProps {
   showTimestamp: boolean
   images?: ImageAttachment[]
   onCopy?: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
@@ -31,17 +40,13 @@ export interface MessageBubbleProps {
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  onReact?: (messageId: string, emoji: string) => void
+  onPin?: (messageId: string) => void
+  hasNote?: boolean
+  onAddNote?: (messageId: string) => void
+  hasThread?: boolean
+  onThread?: (messageId: string) => void
   'aria-live'?: 'polite' | 'assertive' | 'off'
-}
-
-function formatTime(date: Date | string): string {
-  const d = typeof date === 'string' ? new Date(date) : date
-  const now = new Date()
-  const diffMs = now.getTime() - d.getTime()
-  const diffMins = Math.floor(diffMs / MS_PER_MINUTE)
-  if (diffMins < 1) return 'just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
 export const MessageBubble = memo(function MessageBubble({
@@ -66,6 +71,12 @@ export const MessageBubble = memo(function MessageBubble({
   onDelete,
   onSaveToKnowledge,
   collapsibleLength = 0,
+  onReact,
+  onPin,
+  hasNote,
+  onAddNote,
+  hasThread,
+  onThread,
   'aria-live': ariaLive,
 }: MessageBubbleProps) {
   const [isEditing, setIsEditing] = useState(false)
@@ -86,6 +97,9 @@ export const MessageBubble = memo(function MessageBubble({
     }
   }, [])
 
+  const handleEditStart = useCallback(() => setIsEditing(true), [])
+  const handleEditCancel = useCallback(() => setIsEditing(false), [])
+
   useEffect(() => {
     const feed = document.getElementById('chat-messages')
     if (!feed) return
@@ -98,114 +112,134 @@ export const MessageBubble = memo(function MessageBubble({
       content={content}
       role={role}
       isBookmarked={isBookmarked}
+      isPinned={false}
+      hasNote={hasNote}
+      hasThread={hasThread}
       onCopy={onCopy}
-      onEdit={onEdit ? () => setIsEditing(true) : undefined}
+      onEdit={onEdit ? handleEditStart : undefined}
       onBookmark={onBookmark}
+      onPin={onPin}
       onRegenerate={showActions ? onRegenerate : undefined}
       onDelete={onDelete}
       onSaveToKnowledge={onSaveToKnowledge}
+      onAddNote={onAddNote}
+      onThread={onThread}
     >
-    <div
-      id={messageId ? `msg-${messageId}` : undefined}
-      ref={bubbleRef}
-      role="article"
-      tabIndex={0}
-      aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
-      aria-live={isStreaming ? 'polite' : ariaLive}
-      onKeyDown={handleKeyDown}
-      className={cn(
-        "group flex flex-col transition-all duration-300 ease-out",
-        role === 'user' ? 'items-end' : 'items-start'
-      )}
-    >
-      {/* Role label — outside bubble for clear separation */}
-      <span className={cn(
-        "text-[10px] font-semibold tracking-wider uppercase mb-0.5 block",
-        role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70'
-      )}>
-        {role === 'user' ? 'You' : 'Assistant'}
-        {isBookmarked && (
-          <span className="ml-1.5 text-warning" aria-label="Bookmarked">
-            <IconStar className="h-2.5 w-2.5 inline" filled />
-          </span>
-        )}
-        {role === 'assistant' && model && !isError && (
-          <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
-            {model}
-          </span>
-        )}
-        {isError && (
-          <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
-            Interrupted
-          </span>
-        )}
-      </span>
-
       <div
+        id={messageId ? `msg-${messageId}` : undefined}
+        ref={bubbleRef}
+        role="article"
+        tabIndex={0}
+        aria-label={`Message from ${role === 'user' ? 'You' : 'Assistant'}`}
+        aria-live={isStreaming ? 'polite' : ariaLive}
+        onKeyDown={handleKeyDown}
         className={cn(
-          "relative rounded-2xl px-3.5 py-2 sm:px-4 sm:py-2.5 max-w-[90%] sm:max-w-[80%] lg:max-w-[72%] transition-all duration-200 leading-relaxed",
-          role === 'user'
-            ? 'bg-primary text-primary-foreground rounded-br-md shadow-md'
-            : 'bg-card text-foreground rounded-bl-md border border-border/40 shadow-sm',
-          isStreaming && role === 'assistant' && "ring-1 ring-primary/20 animate-pulse",
-          isError && role === 'assistant' && "ring-1 ring-destructive/40 border-destructive/30"
+          'group flex flex-col transition-all duration-300 ease-out',
+          role === 'user' ? 'items-end' : 'items-start',
         )}
       >
-        {images && images.length > 0 && <MessageImages images={images} role={role} />}
+        {/* Role label — outside bubble for clear separation */}
+        <span
+          className={cn(
+            'text-[10px] font-semibold tracking-wider uppercase mb-0.5 block',
+            role === 'user' ? 'text-primary/70 text-right' : 'text-muted-foreground/70',
+          )}
+        >
+          {role === 'user' ? 'You' : 'Assistant'}
+          {isBookmarked && (
+            <span className="ml-1.5 text-warning" aria-label="Bookmarked">
+              <IconStar className="h-2.5 w-2.5 inline" filled />
+            </span>
+          )}
+          {role === 'assistant' && model && !isError && (
+            <span className="ml-1.5 text-[9px] font-mono text-muted-foreground/40 group-hover:opacity-100 opacity-0 transition-opacity">
+              {model}
+            </span>
+          )}
+          {isError && (
+            <span className="inline-flex items-center gap-1 ml-1.5 px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive text-[10px] font-medium">
+              Interrupted
+            </span>
+          )}
+        </span>
 
-        <MessageContent
-          content={content}
-          role={role}
-          searchQuery={searchQuery}
-          messageId={messageId}
-          isStreaming={isStreaming}
-          isError={isError}
-          collapsibleLength={collapsibleLength}
-          isEditing={isEditing}
-          onEdit={onEdit}
-          onEditStart={() => setIsEditing(true)}
-          onEditCancel={() => setIsEditing(false)}
-        />
+        <div
+          className={cn(
+            'relative rounded-2xl px-4 py-2.5 sm:px-5 sm:py-3 max-w-full transition-all duration-200 leading-relaxed',
+            role === 'user'
+              ? 'bg-primary text-primary-foreground rounded-br-md shadow-md max-w-[85%] sm:max-w-[75%] lg:max-w-[65%] ml-auto'
+              : 'bg-card text-foreground rounded-bl-md shadow-sm',
+            isStreaming && role === 'assistant' && 'ring-1 ring-primary/20',
+            isError &&
+              role === 'assistant' &&
+              'ring-1 ring-destructive/40 border border-destructive/30',
+          )}
+        >
+          {images && images.length > 0 && <MessageImages images={images} role={role} />}
 
-        {showTimestamp && (
-          <p className={cn(
-            "mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity",
-            role === 'user' ? 'text-primary-foreground/50 text-right' : 'text-muted-foreground/40'
-          )}>
-            {formatTime(timestamp)}
-          </p>
+          <MessageContent
+            content={content}
+            role={role}
+            searchQuery={searchQuery}
+            messageId={messageId}
+            isStreaming={isStreaming}
+            isError={isError}
+            collapsibleLength={collapsibleLength}
+            isEditing={isEditing}
+            onEdit={onEdit}
+            onEditStart={handleEditStart}
+            onEditCancel={handleEditCancel}
+          />
+
+          {showTimestamp && (
+            <p
+              className={cn(
+                'mt-1 text-[10px] font-normal leading-none opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity',
+                role === 'user'
+                  ? 'text-primary-foreground/50 text-right'
+                  : 'text-muted-foreground/40',
+              )}
+            >
+              {formatRelativeTime(timestamp)}
+              {role === 'assistant' && messageId && (
+                <span className="ml-1.5">
+                  <ConsciousnessMessageBadge messageId={messageId} />
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+
+        {(showActions || isError) && (
+          <MessageActions
+            content={content}
+            messageId={id}
+            role={role}
+            onCopy={onCopy}
+            onRegenerate={onRegenerate}
+            onThumbsUp={onThumbsUp}
+            onThumbsDown={onThumbsDown}
+            onSuggestionClick={onSuggestionClick}
+            isBookmarked={isBookmarked}
+            onBookmark={onBookmark}
+            onDelete={onDelete}
+            onSaveToKnowledge={onSaveToKnowledge}
+            onReact={onReact}
+          />
+        )}
+
+        {role === 'user' && hasContent && !isEditing && (
+          <MessageActions
+            content={content}
+            messageId={id}
+            role={role}
+            onCopy={onCopy}
+            onEdit={handleEditStart}
+            onSuggestionClick={onSuggestionClick}
+            onDelete={onDelete}
+          />
         )}
       </div>
-
-      {(showActions || isError) && (
-        <MessageActions
-          content={content}
-          messageId={id}
-          role={role}
-          onCopy={onCopy}
-          onRegenerate={onRegenerate}
-          onThumbsUp={onThumbsUp}
-          onThumbsDown={onThumbsDown}
-          onSuggestionClick={onSuggestionClick}
-          isBookmarked={isBookmarked}
-          onBookmark={onBookmark}
-          onDelete={onDelete}
-          onSaveToKnowledge={onSaveToKnowledge}
-        />
-      )}
-
-      {role === 'user' && hasContent && !isEditing && (
-        <MessageActions
-          content={content}
-          messageId={id}
-          role={role}
-          onCopy={onCopy}
-          onEdit={() => setIsEditing(true)}
-          onSuggestionClick={onSuggestionClick}
-          onDelete={onDelete}
-        />
-      )}
-    </div>
     </MessageContextMenu>
   )
 })

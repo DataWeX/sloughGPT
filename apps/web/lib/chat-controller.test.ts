@@ -280,3 +280,39 @@ describe('chatController.regenerateStream', () => {
     expect(results[0].error).toContain('connection lost')
   })
 })
+
+describe('chatController control methods', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('cancelStream sends cancel control', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'ok', data: { cancelled: true } })
+    await chatController.cancelStream('session-1')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat/control', {
+      session_id: 'session-1',
+      action: 'cancel',
+    })
+  })
+
+  it('approveTool sends approve control', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'ok', data: { stored: true } })
+    await chatController.approveTool('session-1', 'calculator', true)
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat/control', {
+      session_id: 'session-1',
+      action: 'approve',
+      tool_name: 'calculator',
+      approved: true,
+    })
+  })
+
+  it('injectContext sends context control', async () => {
+    apiClient.apiPost.mockResolvedValue({ status: 'ok', data: { stored: true } })
+    await chatController.injectContext('session-1', 'extra context')
+    expect(apiClient.apiPost).toHaveBeenCalledWith('/chat/control', {
+      session_id: 'session-1',
+      action: 'context',
+      context: 'extra context',
+    })
+  })
+})

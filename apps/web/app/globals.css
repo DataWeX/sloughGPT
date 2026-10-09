@@ -29,6 +29,7 @@
 :root {
   /* App shell */
   --app-mobile-header-h: 3.25rem;
+  --app-bottom-nav-h: 3.5rem;
   --sidebar-width: 13rem;
   --sidebar-collapsed-width: 3rem;
   --conv-sidebar-width: 16rem;
@@ -63,6 +64,7 @@
   --warning: 236 168 60;
   --destructive: 220 80 90;
   --destructive-foreground: 250 248 255;
+  --info: 90 150 220;
   --chart-1: 124 82 196;
   --chart-2: 52 176 125;
   --chart-3: 236 145 95;
@@ -94,6 +96,7 @@ html.dark {
   --warning: 240 192 80;
   --destructive: 235 100 110;
   --destructive-foreground: 25 22 36;
+  --info: 100 165 240;
   --chart-1: 192 170 244;
   --chart-2: 72 192 140;
   --chart-3: 240 176 130;
@@ -217,11 +220,14 @@ html {
   gap: 0.5rem;
   flex-shrink: 0;
   height: 1.75rem;
-  background-color: color-mix(in srgb, rgb(var(--warning)) 15%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 30%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--warning)) 9%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, rgb(var(--warning)) 20%, transparent);
   font-size: 11px;
   font-weight: 500;
-  color: rgb(var(--warning));
+  /* Faded warning ink: full-saturation amber read as a glowing strip. The
+     status dot still carries the pure tone; the copy sits at 65% warning over
+     the page background so it stays legible without flaring. */
+  color: color-mix(in srgb, rgb(var(--warning)) 65%, rgb(var(--background)));
 }
 
 /* Mobile drawer backdrop */
@@ -268,13 +274,274 @@ html {
   }
 }
 
+/* ── Bottom Navigation Bar (mobile) ──────────────────────── */
+.sl-bottom-nav {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  height: var(--app-bottom-nav-h);
+  min-height: var(--app-bottom-nav-h);
+  flex-shrink: 0;
+  border-top: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--background)) 85%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  backdrop-filter: blur(12px) saturate(150%);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  z-index: 40;
+}
+.sl-bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.125rem;
+  flex: 1;
+  min-width: 0;
+  color: rgb(var(--muted-foreground));
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 150ms ease, transform 100ms ease;
+  position: relative;
+}
+.sl-bottom-nav-item:active {
+  transform: scale(0.92);
+}
+.sl-bottom-nav-item:hover {
+  color: rgb(var(--foreground));
+}
+.sl-bottom-nav-item--active {
+  color: rgb(var(--primary));
+}
+.sl-bottom-nav-item--active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1.5rem;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background-color: rgb(var(--primary));
+}
+.sl-bottom-nav-label {
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  padding: 0 0.25rem;
+}
+@media (min-width: 1024px) {
+  .sl-bottom-nav { display: none; }
+}
+@media (max-width: 1023px) {
+  .sl-app-main { padding-bottom: var(--app-bottom-nav-h); }
+}
+
+/* ── Bottom Status Bar ──────────────────────────────────── */
+.sl-status-bar {
+  flex-shrink: 0;
+  border-top: 1px solid color-mix(in srgb, rgb(var(--border)) 30%, transparent);
+  background-color: color-mix(in srgb, rgb(var(--background)) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  backdrop-filter: blur(8px) saturate(120%);
+  font-size: 10px;
+  color: rgb(var(--muted-foreground));
+  z-index: 40;
+}
+.sl-status-bar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  background: rgb(var(--card));
+  border-top: 1px solid rgb(var(--border));
+  border-radius: 0;
+  transition: background-color 150ms ease;
+}
+.sl-status-bar-row:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 50%, transparent);
+}
+@media (min-width: 640px) {
+  .sl-status-bar-row { height: 2rem; padding: 0 0.75rem; }
+}
+.sl-status-bar-status {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-width: 0;
+  flex: 1;
+  text-decoration: none;
+  color: inherit;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.sl-status-bar-status:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 60%, transparent);
+  color: rgb(var(--foreground));
+}
+.sl-status-bar-status:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: -2px;
+}
+.sl-status-bar-dot {
+  display: inline-block;
+  height: 6px;
+  width: 6px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+.sl-status-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+@media (min-width: 640px) {
+  .sl-status-bar-actions { gap: 0.5rem; }
+}
+.sl-status-bar-metric {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  transition: background-color 150ms ease;
+}
+.sl-status-bar-metric:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 50%, transparent);
+}
+.sl-status-bar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.25rem;
+  width: 1.25rem;
+  padding: 0;
+  border-radius: 0.25rem;
+  color: rgb(var(--muted-foreground));
+  transition: background-color 150ms ease, color 150ms ease;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.sl-status-bar-btn:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted)) 60%, transparent);
+  color: rgb(var(--foreground));
+}
+.sl-status-bar-btn:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: -2px;
+}
+.sl-status-bar-details {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-top: 1px solid color-mix(in srgb, rgb(var(--border)) 20%, transparent);
+  font-size: 9px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sl-status-bar-details::-webkit-scrollbar { display: none; }
+@media (min-width: 640px) {
+  .sl-status-bar-details { gap: 1rem; padding: 0.25rem 0.75rem; }
+}
+.sl-status-bar-detail-group {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+.sl-status-bar-detail-label {
+  color: rgb(var(--muted-foreground));
+  opacity: 0.6;
+}
+.sl-status-bar-detail-value {
+  color: rgb(var(--foreground));
+  font-weight: 500;
+}
+.sl-status-bar-detail-spacer {
+  flex: 1;
+}
+/* Badges inside status bar */
+.sl-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition: background-color 150ms ease;
+}
+.sl-badge-success {
+  background-color: color-mix(in srgb, rgb(var(--success)) 12%, transparent);
+  color: rgb(var(--success));
+}
+.sl-badge-success:hover {
+  background-color: color-mix(in srgb, rgb(var(--success)) 20%, transparent);
+}
+.sl-badge-destructive {
+  background-color: color-mix(in srgb, rgb(var(--destructive)) 12%, transparent);
+  color: rgb(var(--destructive));
+}
+.sl-badge-destructive:hover {
+  background-color: color-mix(in srgb, rgb(var(--destructive)) 20%, transparent);
+}
+.sl-badge-primary {
+  background-color: color-mix(in srgb, rgb(var(--primary)) 10%, transparent);
+  color: rgb(var(--primary));
+  opacity: 0.8;
+}
+.sl-badge-primary:hover {
+  background-color: color-mix(in srgb, rgb(var(--primary)) 18%, transparent);
+  opacity: 1;
+}
+.sl-badge-secondary {
+  background-color: color-mix(in srgb, rgb(var(--muted-foreground)) 10%, transparent);
+  color: rgb(var(--muted-foreground));
+}
+.sl-badge-secondary:hover {
+  background-color: color-mix(in srgb, rgb(var(--muted-foreground)) 18%, transparent);
+}
+/* Hide on mobile: show only compact row */
+@media (max-width: 639px) {
+  .sl-status-bar-metric,
+  .sl-badge-primary,
+  .sl-status-bar-metric { display: none; }
+}
+/* Mobile: compact status bar */
+@media (max-width: 639px) {
+  .sl-status-bar-row { height: 1.5rem; font-size: 9px; }
+  .sl-status-bar-dot { height: 5px; width: 5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sl-status-bar-row,
+  .sl-status-bar-status,
+  .sl-status-bar-btn,
+  .sl-status-bar-metric,
+  .sl-badge {
+    transition: none;
+  }
+}
+
 /*
  * sl-page — standard page content wrapper
  * Used by non-chat pages (settings, models, training, etc.)
- * Provides scroll containment and responsive padding.
+ * Provides responsive padding; scrolling is handled by parent .sl-app-content.
+ * Inner centered column (.mx-auto max-w-*) controls width, not this wrapper.
  */
 .sl-page {
-  @apply min-h-0 flex-1 overflow-y-auto overscroll-contain text-foreground;
+  @apply w-full text-foreground;
   padding: 0.75rem;
   background-color: rgb(var(--background));
 }
@@ -427,10 +694,150 @@ html {
   }
 }
 
+@keyframes scaleBar {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+
+@keyframes sl-bar-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(420%); }
+}
+
+.sl-bar-shimmer {
+  animation: sl-bar-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes sl-dot-pulse {
+  0%, 100% { transform: scale(1.25); opacity: 1; }
+  50% { transform: scale(1.55); opacity: 0.65; }
+}
+
+.sl-dot-pulse {
+  animation: sl-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.sl-dot-wave {
+  animation: str-dot-bounce 1.2s ease-in-out infinite;
+}
+
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.15); }
+  50% { box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.05); }
+}
+
+.trait-bar-inner {
+  transform-origin: left;
+  animation: scaleBar 0.5s ease-out forwards;
+}
+
+.stat-card {
+  animation: fadeSlideUp 0.4s ease-out both;
+}
+
+.badge-glow {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  /* End at `none` (not translateY(0)) so the element does not keep a
+     composited transform after the animation — a lingering transform would
+     make .sl-page the containing block for position:fixed descendants
+     (dialogs), breaking viewport-centered positioning. */
+  to { opacity: 1; transform: none; }
+}
+
+.view-pane {
+  animation: viewFadeIn 0.3s ease-out both;
+}
+
+/* ── Flashcard flip ──────────────────────────────────────────────── */
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+/* ── Kanban Tray — ceramic/plastic finish ───────────────────────── */
+.sl-kanban-tray {
+  position: relative;
+}
+
+.sl-kanban-tray::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 1rem;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+html.dark .sl-kanban-tray::after {
+  box-shadow: 0 8px 40px -8px rgb(var(--primary) / 0.15);
+  opacity: 1;
+}
+
+.sl-kanban-tray-surface {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgb(var(--card)) 100%, white) 0%,
+      rgb(var(--card)) 40%,
+      color-mix(in srgb, rgb(var(--card)) 96%, black) 100%
+    );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 4px 16px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04);
+}
+
+html.dark .sl-kanban-tray-surface {
+  background:
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, rgb(var(--card)) 100%, rgba(255, 255, 255, 0.04)) 0%,
+      rgb(var(--card)) 30%,
+      color-mix(in srgb, rgb(var(--card)) 94%, black) 100%
+    );
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.2),
+    0 4px 16px rgba(0, 0, 0, 0.25),
+    0 12px 48px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .str-dot {
     animation: none;
     opacity: 0.75;
+  }
+  .sl-bar-shimmer {
+    animation: none;
+    opacity: 0.55;
+    transform: none;
+  }
+  .sl-dot-pulse,
+  .sl-dot-wave {
+    animation: none;
   }
   .sl-toast {
     animation: none;
@@ -438,6 +845,18 @@ html {
   .sl-toast--exit {
     animation: none;
     opacity: 0;
+  }
+  .sl-interactive {
+    transition: none;
+  }
+  .sl-interactive:hover {
+    transform: none;
+  }
+  .sl-interactive:active {
+    transform: none;
+  }
+  .view-pane {
+    animation: none;
   }
 }
 
@@ -479,6 +898,20 @@ html {
   .str-chat-scroll {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+  }
+
+  /* Interactive hover lift — apply to clickable cards/links */
+  .sl-interactive {
+    transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .sl-interactive:hover {
+      transform: translateY(-1px);
+      box-shadow: var(--shadow-md);
+    }
+  }
+  .sl-interactive:active {
+    transform: scale(0.985);
   }
 }
 
@@ -649,40 +1082,130 @@ html.dark.palette-neural-precision {
    buttons, focus rings). Override --primary/--ring on <html> so the chosen
    accent wins even when a palette class is present; the palette still
    controls the rest of the color system (background, card, border, etc.). */
+/* ── Aura: Blue — calm ocean, trustworthy ─────────────────────── */
 html.theme-blue,
 html.dark.theme-blue {
   --primary: 90 130 220;
   --ring: 140 176 240;
+  --secondary: 230 237 250;
+  --secondary-foreground: 35 45 70;
+  --muted: 240 244 252;
+  --border: 218 228 248;
+  --input: 218 228 248;
 }
+html.dark.theme-blue {
+  --secondary: 38 48 72;
+  --muted: 30 38 58;
+  --border: 44 56 80;
+  --input: 44 56 80;
+}
+
+/* ── Aura: Purple — ethereal lilac, mystical ──────────────────── */
 html.theme-purple,
 html.dark.theme-purple {
   --primary: 155 108 214;
   --ring: 192 162 238;
+  --secondary: 240 232 252;
+  --secondary-foreground: 50 37 70;
+  --muted: 246 242 252;
+  --border: 230 222 248;
+  --input: 230 222 248;
 }
+html.dark.theme-purple {
+  --secondary: 50 40 72;
+  --muted: 40 34 58;
+  --border: 58 48 80;
+  --input: 58 48 80;
+}
+
+/* ── Aura: Pink — soft rose, delicate ─────────────────────────── */
 html.theme-pink,
 html.dark.theme-pink {
   --primary: 218 130 170;
   --ring: 238 178 206;
+  --secondary: 250 234 242;
+  --secondary-foreground: 70 35 52;
+  --muted: 252 244 248;
+  --border: 242 222 234;
+  --input: 242 222 234;
 }
+html.dark.theme-pink {
+  --secondary: 62 40 52;
+  --muted: 50 34 44;
+  --border: 72 48 62;
+  --input: 72 48 62;
+}
+
+/* ── Aura: Red — warm coral, energetic ────────────────────────── */
 html.theme-red,
 html.dark.theme-red {
   --primary: 230 120 130;
   --ring: 242 172 180;
+  --secondary: 250 234 236;
+  --secondary-foreground: 70 35 40;
+  --muted: 252 244 244;
+  --border: 242 222 224;
+  --input: 242 222 224;
 }
+html.dark.theme-red {
+  --secondary: 62 38 42;
+  --muted: 50 32 36;
+  --border: 72 46 50;
+  --input: 72 46 50;
+}
+
+/* ── Aura: Orange — peachy bread crust, warm bakery ───────────── */
 html.theme-orange,
 html.dark.theme-orange {
   --primary: 236 155 90;
   --ring: 244 194 144;
+  --secondary: 250 240 230;
+  --secondary-foreground: 70 50 30;
+  --muted: 252 246 240;
+  --border: 242 232 218;
+  --input: 242 232 218;
 }
+html.dark.theme-orange {
+  --secondary: 62 48 34;
+  --muted: 50 40 28;
+  --border: 72 56 40;
+  --input: 72 56 40;
+}
+
+/* ── Aura: Green — fresh mint, natural ────────────────────────── */
 html.theme-green,
 html.dark.theme-green {
   --primary: 72 178 130;
   --ring: 134 210 174;
+  --secondary: 232 248 240;
+  --secondary-foreground: 30 60 48;
+  --muted: 242 252 248;
+  --border: 218 240 230;
+  --input: 218 240 230;
 }
+html.dark.theme-green {
+  --secondary: 34 56 44;
+  --muted: 28 46 38;
+  --border: 42 66 52;
+  --input: 42 66 52;
+}
+
+/* ── Aura: Teal — cool dew, refreshing ────────────────────────── */
 html.theme-teal,
 html.dark.theme-teal {
   --primary: 72 166 200;
   --ring: 134 202 228;
+  --secondary: 232 244 250;
+  --secondary-foreground: 30 55 68;
+  --muted: 242 250 252;
+  --border: 218 236 244;
+  --input: 218 236 244;
+}
+html.dark.theme-teal {
+  --secondary: 34 50 62;
+  --muted: 28 42 52;
+  --border: 42 60 72;
+  --input: 42 60 72;
 }
 
 /* Shadow design tokens — layered depth system */
@@ -758,4 +1281,153 @@ html.dark {
     radial-gradient(ellipse at 20% 0%, color-mix(in srgb, rgb(var(--primary)) 8%, transparent) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 100%, color-mix(in srgb, rgb(var(--accent)) 10%, transparent) 0%, transparent 50%);
   border-bottom: 1px solid color-mix(in srgb, rgb(var(--border)) 50%, transparent);
+}
+
+/* ── Prism syntax highlighting (Noir Violet) ──────────────────────── */
+code[class*="language-"],
+pre[class*="language-"] {
+  color: #e0daf0;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  direction: ltr;
+  text-align: left;
+  white-space: pre;
+  word-spacing: normal;
+  word-break: normal;
+  tab-size: 2;
+  hyphens: none;
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: #8a80a0;
+}
+
+.token.punctuation {
+  color: #b0a8c4;
+}
+
+.token.namespace {
+  opacity: 0.8;
+}
+
+.token.property,
+.token.tag,
+.token.boolean,
+.token.number,
+.token.constant,
+.token.symbol,
+.token.deleted {
+  color: #ec915f;
+}
+
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted {
+  color: #7cc88e;
+}
+
+.token.operator,
+.token.entity,
+.token.url,
+.language-css .token.string,
+.style .token.string {
+  color: #c4a8d8;
+}
+
+.token.atrule,
+.token.attr-value,
+.token.keyword {
+  color: #c4aaf0;
+}
+
+.token.function,
+.token.class-name {
+  color: #ec915f;
+}
+
+.token.regex,
+.token.important,
+.token.variable {
+  color: #e8c87a;
+}
+
+.token.important,
+.token.bold {
+  font-weight: bold;
+}
+
+.token.italic {
+  font-style: italic;
+}
+
+.token.entity {
+  cursor: help;
+}
+
+/* Light mode overrides */
+html.light code[class*="language-"],
+html.light pre[class*="language-"] {
+  color: #2d2640;
+}
+
+html.light .token.comment,
+html.light .token.prolog,
+html.light .token.doctype,
+html.light .token.cdata {
+  color: #7a7090;
+}
+
+html.light .token.punctuation {
+  color: #5a5070;
+}
+
+html.light .token.property,
+html.light .token.tag,
+html.light .token.boolean,
+html.light .token.number,
+html.light .token.constant,
+html.light .token.symbol,
+html.light .token.deleted {
+  color: #c45a20;
+}
+
+html.light .token.selector,
+html.light .token.attr-name,
+html.light .token.string,
+html.light .token.char,
+html.light .token.builtin,
+html.light .token.inserted {
+  color: #2a8a4a;
+}
+
+html.light .token.operator,
+html.light .token.entity,
+html.light .token.url,
+html.light .language-css .token.string,
+html.light .style .token.string {
+  color: #7c52c4;
+}
+
+html.light .token.atrule,
+html.light .token.attr-value,
+html.light .token.keyword {
+  color: #7c52c4;
+}
+
+html.light .token.function,
+html.light .token.class-name {
+  color: #c45a20;
+}
+
+html.light .token.regex,
+html.light .token.important,
+html.light .token.variable {
+  color: #8a6a20;
 }

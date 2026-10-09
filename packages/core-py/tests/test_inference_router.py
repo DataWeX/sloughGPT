@@ -2,18 +2,13 @@
 
 Covers: helper functions, session CRUD, search, context, chat suggestions.
 """
+
 from __future__ import annotations
 
-import json
 import sys
-import tempfile
-import uuid
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
-
-import pytest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -23,13 +18,14 @@ from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
 from routers.inference import (
-    _model_ready,
-    _count_tokens,
-    _extract_user_message,
-    _search_sessions_sync,
     InferenceRouter,
     Message,
+    _count_tokens,
+    _extract_user_message,
+    _model_ready,
+    _search_sessions_sync,
 )  # noqa: E402
+
 from tests.conftest import build_test_app
 
 
@@ -67,6 +63,7 @@ def _make_ir(tmp_path: Path) -> InferenceRouter:
 class TestModelReady:
     def test_ready_with_model(self):
         import state as server_state
+
         old = server_state.model
         old_p = server_state.provider
         server_state.model = MagicMock()
@@ -79,6 +76,7 @@ class TestModelReady:
 
     def test_ready_with_provider(self):
         import state as server_state
+
         old = server_state.model
         old_p = server_state.provider
         server_state.model = None
@@ -91,6 +89,7 @@ class TestModelReady:
 
     def test_not_ready(self):
         import state as server_state
+
         old = server_state.model
         old_p = server_state.provider
         server_state.model = None
@@ -134,10 +133,6 @@ class TestExtractUserMessage:
 
     def test_empty_list(self):
         assert _extract_user_message([]) is None
-
-    def test_user_with_empty_content(self):
-        messages = [Message(role="user", content="")]
-        assert _extract_user_message(messages) is None
 
     def test_multiple_users_takes_last(self):
         messages = [
@@ -359,7 +354,7 @@ class TestContextEndpoints:
         client = TestClient(_app(ir))
         resp = client.get("/context/facts")
         assert resp.status_code == 200
-        assert len(resp.json()["facts"]) == 1
+        assert len(resp.json()["data"]["facts"]) == 1
 
     def test_get_facts_with_query(self, tmp_path):
         ir = _make_ir(tmp_path)

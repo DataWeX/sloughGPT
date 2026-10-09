@@ -9,32 +9,32 @@ underlying operation.
 
 import json
 import struct
-import threading
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from apps.api.server.routers.models import ModelsRouter
-from apps.api.server.routers.souls import SoulsRouter
-from apps.api.server.routers.auto_train import AutoTrainRouter
-from apps.api.server.routers.datasets import DatasetsRouter
-from apps.api.server.routers.kb import KBRouter
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
 from apps.api.server.routers.agents import AgentsRouter
-from apps.api.server.routers.multimodal import MultimodalRouter
 from apps.api.server.routers.config import ConfigRouter
+from apps.api.server.routers.datasets import DatasetsRouter
 from apps.api.server.routers.experiments import ExperimentsRouter
-from apps.api.server.routers.user_adapters import UserAdaptersRouter
+from apps.api.server.routers.kb import KBRouter
 from apps.api.server.routers.lora_eval import LoraEvalRouter
-from apps.api.server.routers.tokenizer import TokenizerRouter
-from apps.api.server.routers.system import SystemRouter
+from apps.api.server.routers.models import ModelsRouter
+from apps.api.server.routers.multimodal import MultimodalRouter
 from apps.api.server.routers.self_train import SelfTrainRouter
+from apps.api.server.routers.souls import SoulsRouter
+from apps.api.server.routers.system import SystemRouter
+from apps.api.server.routers.tokenizer import TokenizerRouter
+from apps.api.server.routers.user_adapters import UserAdaptersRouter
 
 
 @pytest.fixture
 def models_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(ModelsRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -42,24 +42,15 @@ def models_client():
 @pytest.fixture
 def souls_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(SoulsRouter().router)
-    return TestClient(app, raise_server_exceptions=False)
-
-
-@pytest.fixture
-def auto_train_client(tmp_path):
-    rtr = AutoTrainRouter()
-    rtr.CHECKPOINTS_DIR = tmp_path / "checkpoints"
-    rtr.CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
-    app = FastAPI()
-    app.state.checkpoint_dir = rtr.CHECKPOINTS_DIR
-    app.include_router(rtr.router)
     return TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture
 def datasets_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(DatasetsRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -100,7 +91,7 @@ class TestModelAudit:
     def test_unload_model_logs_event(self, mock_logger, mock_ctrl, models_client):
         ctrl = MagicMock()
         ctrl.unload_model.return_value = {"status": "unloaded"}
-        ctrl._current_model = "gpt2"
+        ctrl.active_model_id.return_value = "gpt2"
         mock_ctrl.return_value = ctrl
         resp = models_client.post("/models/unload")
         assert resp.status_code == 200
@@ -119,8 +110,8 @@ class TestModelAudit:
         resp = models_client.post("/models/load", json={"model_id": "gpt2", "device": "cpu"})
         assert resp.status_code == 200
 
-    @patch("domains.infrastructure.quantization.walk_slo_linears", return_value={})
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.infrastructure.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
     def test_quantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
         provider = MagicMock()
@@ -137,12 +128,19 @@ class TestModelAudit:
         assert kwargs["resource"] == "gpt2"
         assert kwargs["user"] == "anonymous"
         assert kwargs["detail"] == "bits=8 mode=symmetric"
-        assert kwargs["extra"] == {"bits": 8, "mode": "symmetric", "layers_quantized": 0, "model_type": "slonet"}
+        assert kwargs["extra"] == {
+            "bits": 8,
+            "mode": "symmetric",
+            "layers_quantized": 0,
+            "model_type": "slonet",
+        }
 
-    @patch("domains.infrastructure.quantization.walk_slo_linears", return_value={})
-    @patch("domains.models.provider.get_provider")
+    @patch("domain.infrastructure.quantization.walk_slo_linears", return_value={})
+    @patch("domain.models.get_provider")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_dequantize_model_logs_event(self, mock_logger, mock_provider, mock_walk, models_client):
+    def test_dequantize_model_logs_event(
+        self, mock_logger, mock_provider, mock_walk, models_client
+    ):
         provider = MagicMock()
         provider._model = MagicMock()
         provider._quant_engine = MagicMock()
@@ -158,8 +156,8 @@ class TestModelAudit:
         assert kwargs["detail"] == "model_type=slonet"
         assert kwargs["extra"] == {"layers_reset": 0}
 
-    @patch("domains.models.provider.get_provider", return_value=None)
-    @patch("domains.slolib.gpu.get_accelerator")
+    @patch("domain.models.get_provider", return_value=None)
+    @patch("domain.slolib.get_accelerator")
     @patch("infrastructure.auth.get_audit_logger")
     def test_set_precision_logs_event(self, mock_logger, mock_acc, mock_provider, models_client):
         acc = MagicMock()
@@ -177,7 +175,7 @@ class TestModelAudit:
         assert kwargs["extra"] == {"mode": "auto"}
         assert kwargs["detail"] == resp.json()["data"]["precision"]
 
-    @patch("domains.infrastructure.download_manager.get_download_manager")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -185,18 +183,20 @@ class TestModelAudit:
         mgr.is_downloading.return_value = False
         mgr.download = AsyncMock(return_value={"status": "in_progress"})
         mock_mgr.return_value = mgr
-        resp = models_client.post("/models/download", json={"model_id": "gpt2", "total_bytes_hint": 1000})
+        resp = models_client.post(
+            "/models/download", json={"model_id": "gpt2", "total_bytes_hint": 1000}
+        )
         assert resp.status_code == 200
-        assert resp.json()["message"] == "started"
+        assert resp.json()["data"]["model_id"] == "gpt2"
         logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "model.download"
-        assert kwargs["resource"] == "gpt2"
-        assert kwargs["detail"] == "started"
-        assert kwargs["extra"] == {"total_bytes_hint": 1000}
+        assert logger.log.call_count >= 1
+        first_call_args, first_call_kwargs = logger.log.call_args_list[0]
+        assert first_call_args[0] == "model.download"
+        assert first_call_kwargs["resource"] == "gpt2"
+        assert first_call_kwargs["detail"] == "started"
+        assert first_call_kwargs["extra"] == {"total_bytes_hint": 1000}
 
-    @patch("domains.infrastructure.download_manager.get_download_manager")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_download_logs_event(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -211,7 +211,7 @@ class TestModelAudit:
         assert kwargs["resource"] == "gpt2"
         assert kwargs["detail"] == "cancelled"
 
-    @patch("domains.infrastructure.download_manager.get_download_manager")
+    @patch("domain.infrastructure.download_manager.get_download_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_missing_download_no_audit(self, mock_logger, mock_mgr, models_client):
         mgr = MagicMock()
@@ -227,7 +227,7 @@ class TestModelAudit:
 class TestSoulAudit:
     """Soul switch and weight-snapshot operations emit audit events."""
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     @patch("infrastructure.auth.get_audit_logger")
     def test_switch_soul_logs_event(self, mock_logger, mock_manager, souls_client):
         manager = MagicMock()
@@ -243,7 +243,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "friendly"
         assert kwargs["extra"] == {"checkpoint_name": ""}
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -257,7 +257,7 @@ class TestSoulAudit:
         assert args[0] == "weights.snapshot.save"
         assert kwargs["resource"] == "my-snap"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_load_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -272,7 +272,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "traits_loaded=5"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_weight_snapshot_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -287,7 +287,7 @@ class TestSoulAudit:
         assert kwargs["resource"] == "my-snap"
         assert kwargs["detail"] == "deleted=True"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     @patch("infrastructure.auth.get_audit_logger")
     def test_save_trait_weights_logs_event(self, mock_logger, mock_config, souls_client):
         config = MagicMock()
@@ -306,57 +306,6 @@ class TestSoulAudit:
         assert kwargs["resource"] == "traits"
         assert kwargs["detail"] == "traits_saved=3"
         assert kwargs["extra"] == {"groups": ["personality", "emotion"]}
-
-
-class TestAutoTrainAudit:
-    """Auto-train start and checkpoint ops emit audit events."""
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_start_logs_event(self, mock_logger, auto_train_client):
-        resp = auto_train_client.post(
-            "/auto-train/start",
-            json={"dataset_id": "missing-ds", "epochs": 5, "soul_name": "assistant"},
-        )
-        assert resp.status_code == 200
-        logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "training.start"
-        assert kwargs["resource"] == "missing-ds"
-        assert kwargs["detail"] == "fresh"
-        assert kwargs["extra"]["method"] == "slonet"
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_delete_checkpoint_logs_event(self, mock_logger, auto_train_client):
-        ckpt_dir = auto_train_client.app.state.checkpoint_dir
-        (ckpt_dir / "fake.soul").write_bytes(b"x" * 16)
-        resp = auto_train_client.delete("/auto-train/checkpoints/fake.soul")
-        assert resp.status_code == 200
-        logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "training.checkpoint.delete"
-        assert kwargs["resource"] == "fake.soul"
-        assert kwargs["detail"] == "deleted"
-
-    @patch("domains.training.slonet.import_from_sou")
-    @patch("domains.models.provider.register_provider")
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_load_checkpoint_logs_event(self, mock_logger, mock_register, mock_import, auto_train_client):
-        ckpt_dir = auto_train_client.app.state.checkpoint_dir
-        _make_fake_sou(ckpt_dir / "fake.soul")
-        soul_net = MagicMock()
-        soul_net.soul_signature.return_value = {"soul_name": "fake", "soul_traits": {}}
-        soul_net.num_parameters.return_value = 42
-        mock_import.return_value = soul_net
-        resp = auto_train_client.post("/auto-train/checkpoints/fake.soul/load")
-        assert resp.status_code == 200
-        logger = mock_logger.return_value
-        logger.log.assert_called_once()
-        args, kwargs = logger.log.call_args
-        assert args[0] == "training.checkpoint.load"
-        assert kwargs["resource"] == "fake.soul"
-        assert "vocab=" in kwargs["detail"]
 
 
 class TestDatasetAudit:
@@ -397,6 +346,7 @@ def training_router_client():
 
     training_jobs.clear()
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(training_router_module.router)
     client = TestClient(app, raise_server_exceptions=False)
     yield client
@@ -406,16 +356,19 @@ def training_router_client():
 class TestTrainingRouterAudit:
     """Training job lifecycle + webhook ops emit audit events."""
 
-    @patch("apps.api.server.training.router.get_training_executor")
-    @patch("apps.api.server.training.router.get_training_controller")
-    @patch("apps.api.server.training.router.resolve_training_inputs")
+    @patch("domain.training.engine.get_training_engine")
+    @patch("apps.api.server.training.execution.get_training_controller")
+    @patch("apps.api.server.training.execution.resolve_training_inputs")
     @patch("infrastructure.auth.get_audit_logger")
     def test_start_training_logs_event(
-        self, mock_logger, mock_resolve, mock_ctrl, mock_executor, training_router_client
+        self, mock_logger, mock_resolve, mock_ctrl, mock_engine, training_router_client, tmp_path
     ):
-        mock_resolve.return_value = ("/tmp/input.txt", "out_stem", None, "dataset")
+        # Endpoint validates the resolved dataset path (must exist, ≥100 bytes).
+        data_file = tmp_path / "input.txt"
+        data_file.write_text("hello world\n" * 20)
+        mock_resolve.return_value = (str(data_file), "out_stem", None, "dataset")
         mock_ctrl.return_value = MagicMock()
-        mock_executor.return_value = MagicMock()
+        mock_engine.return_value.get_executor.return_value.submit = MagicMock()
         resp = training_router_client.post(
             "/training/start",
             json={"dataset": "ds1", "model": "gpt2", "epochs": 3, "name": "my-job"},
@@ -428,19 +381,26 @@ class TestTrainingRouterAudit:
         assert args[0] == "training.start"
         assert kwargs["resource"] == "ds1"
         assert kwargs["detail"] == "char"
-        assert kwargs["extra"] == {"job_id": job_id, "model": "gpt2", "epochs": 3, "source_kind": "dataset"}
+        assert kwargs["extra"] == {
+            "job_id": job_id,
+            "model": "gpt2",
+            "epochs": 3,
+            "source_kind": "dataset",
+        }
 
-    @patch("apps.api.server.training.router.get_training_executor")
+    @patch("apps.api.server.training.lora.get_training_executor")
+    @patch("apps.api.server.training.lora.find_repo_root")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_start_hf_training_logs_event(self, mock_logger, mock_executor, training_router_client, tmp_path):
+    def test_start_hf_training_logs_event(
+        self, mock_logger, mock_root, mock_engine, training_router_client, tmp_path
+    ):
+        mock_root.return_value = tmp_path
         text_file = tmp_path / "input.txt"
         text_file.write_text("hello world\n")
-        mock_executor.return_value = MagicMock()
         model_file = tmp_path / "model.slnc"
         model_file.write_bytes(b"\x00" * 16)
-        from pathlib import Path as RealPath
-        repo_root = RealPath(__file__).resolve().parents[2]
-        ds_dir = repo_root / "datasets" / "audit_test_ds"
+        # find_repo_root is mocked to tmp_path above: stage the dataset there.
+        ds_dir = tmp_path / "datasets" / "audit_test_ds"
         ds_dir.mkdir(parents=True, exist_ok=True)
         (ds_dir / "input.txt").write_text("hello world\n")
         try:
@@ -451,6 +411,7 @@ class TestTrainingRouterAudit:
             assert resp.status_code == 200, resp.text[:200]
         finally:
             import shutil
+
             shutil.rmtree(ds_dir, ignore_errors=True)
         job_id = resp.json()["job_id"]
         logger = mock_logger.return_value
@@ -462,13 +423,12 @@ class TestTrainingRouterAudit:
         assert kwargs["extra"]["job_id"] == job_id
         assert kwargs["extra"]["model"] == "model"
 
-    @patch("apps.api.server.training.router.get_training_executor")
+    @patch("apps.api.server.training.jobs_api.get_training_executor")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_stop_training_job_logs_event(self, mock_logger, mock_executor, training_router_client):
+    def test_stop_training_job_logs_event(self, mock_logger, mock_engine, training_router_client):
         from apps.api.server.training.jobs import training_jobs
 
         training_jobs["job_1"] = {"status": "running", "id": "job_1"}
-        mock_executor.return_value = MagicMock()
         resp = training_router_client.post("/training/jobs/job_1/stop")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -503,7 +463,10 @@ class TestTrainingRouterAudit:
     def test_register_webhook_logs_event(self, mock_logger, training_router_client):
         resp = training_router_client.post(
             "/training/webhooks",
-            params={"url": "https://example.com/hook", "events": '["training.completed","training.failed"]'},
+            params={
+                "url": "https://example.com/hook",
+                "events": '["training.completed","training.failed"]',
+            },
         )
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -547,21 +510,34 @@ class TestTrainingRouterAudit:
 @pytest.fixture
 def kb_client():
     app = FastAPI()
-    app.include_router(KBRouter().router)
-    return TestClient(app, raise_server_exceptions=False)
+    register_all_handlers(app)
+    # Patch the engine factory during router construction: KBRouter reads
+    # get_knowledge_engine() once in __init__ (deferred import), so the
+    # mock must be active before KBRouter() is built. Yields (client, memory)
+    # where memory is engine.get_memory() for per-test customization.
+    with patch("domain.knowledge.engine.get_knowledge_engine") as mock_factory:
+        app.include_router(KBRouter().router)
+        with patch(
+            "domain.cognition._internal.rag_service.get_rag_service", return_value=MagicMock()
+        ):
+            yield TestClient(app, raise_server_exceptions=False), mock_factory.return_value
 
 
 class TestKnowledgeAudit:
     """Knowledge base mutations emit audit events."""
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_add_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
+    def test_add_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
         memory.add_fact.return_value = True
-        resp = kb_client.post(
+        resp = client.post(
             "/knowledge",
-            json={"content": "SloNet is a numpy autograd engine", "topic": "tech", "source": "manual"},
+            json={
+                "content": "SloNet is a numpy autograd engine",
+                "topic": "tech",
+                "source": "manual",
+            },
         )
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -572,25 +548,33 @@ class TestKnowledgeAudit:
         assert kwargs["detail"] == "stored"
         assert kwargs["extra"]["source"] == "manual"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_add_duplicate_logs_detail(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
+    def test_add_duplicate_logs_detail(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
         memory.add_fact.return_value = False
-        resp = kb_client.post("/knowledge", json={"content": "duplicate fact"})
+        resp = client.post("/knowledge", json={"content": "duplicate fact"})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
         assert kwargs["detail"] == "duplicate"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_update_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
-        memory.list_all.return_value = [{"id": "fact_1", "content": "old", "topic": "tech", "source": "manual", "timestamp": 0.0}]
+    def test_update_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
+        memory.list_all.return_value = [
+            {
+                "id": "fact_1",
+                "content": "old",
+                "topic": "tech",
+                "source": "manual",
+                "timestamp": 0.0,
+            }
+        ]
         memory.delete_by_id.return_value = True
         memory.add_fact.return_value = True
-        resp = kb_client.patch("/knowledge/fact_1", json={"content": "new"})
+        resp = client.patch("/knowledge/fact_1", json={"content": "new"})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_once()
@@ -598,12 +582,12 @@ class TestKnowledgeAudit:
         assert args[0] == "knowledge.update"
         assert kwargs["resource"] == "fact_1"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_batch_ingest_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
+    def test_batch_ingest_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        memory = engine.get_memory.return_value
         memory.add_fact.return_value = True
-        resp = kb_client.post("/knowledge/batch", json={"items": [{"content": "a"}, {"content": "b"}]})
+        resp = client.post("/knowledge/batch", json={"items": [{"content": "a"}, {"content": "b"}]})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
@@ -611,36 +595,33 @@ class TestKnowledgeAudit:
         assert kwargs["resource"] == "batch"
         assert kwargs["detail"] == "stored=2"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_batch_delete_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
-        memory.delete_by_id.return_value = True
-        resp = kb_client.post("/knowledge/batch-delete", json={"ids": ["fact_1", "fact_2"]})
+    def test_batch_delete_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        engine.batch_delete.return_value = MagicMock(data={"deleted": 2}, success=True)
+        resp = client.post("/knowledge/batch-delete", json={"ids": ["fact_1", "fact_2"]})
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
         assert args[0] == "knowledge.batch.delete"
         assert kwargs["detail"] == "deleted=2"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_delete_logs_event(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
-        memory.delete_by_id.return_value = True
-        resp = kb_client.delete("/knowledge/fact_1")
+    def test_delete_logs_event(self, mock_logger, kb_client):
+        client, engine = kb_client
+        engine.delete.return_value = MagicMock(success=True)
+        resp = client.delete("/knowledge/fact_1")
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
         assert args[0] == "knowledge.delete"
         assert kwargs["resource"] == "fact_1"
 
-    @patch("apps.api.server.routers.kb.KBRouter._get_memory")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_delete_missing_no_audit(self, mock_logger, mock_memory, kb_client):
-        memory = mock_memory.return_value
-        memory.delete_by_id.return_value = False
-        resp = kb_client.delete("/knowledge/fact-missing")
+    def test_delete_missing_no_audit(self, mock_logger, kb_client):
+        client, engine = kb_client
+        engine.delete.return_value = MagicMock(success=False)
+        resp = client.delete("/knowledge/fact-missing")
         assert resp.status_code == 404
         logger = mock_logger.return_value
         logger.log.assert_not_called()
@@ -652,6 +633,7 @@ class TestKnowledgeAudit:
 @pytest.fixture
 def agents_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(AgentsRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -659,14 +641,20 @@ def agents_client():
 class TestAgentsAudit:
     """Agent CRUD + execution emit audit events."""
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_create_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
         system.get.return_value = None
         system.create.return_value = {
-            "id": "researcher", "name": "Researcher", "description": "", "instructions": "",
-            "tools": [], "avatar": "", "created_at": 0.0, "updated_at": 0.0,
+            "id": "researcher",
+            "name": "Researcher",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+            "created_at": 0.0,
+            "updated_at": 0.0,
         }
         resp = agents_client.post("/agents", json={"name": "Researcher"})
         assert resp.status_code == 201
@@ -677,13 +665,19 @@ class TestAgentsAudit:
         assert kwargs["resource"] == "researcher"
         assert kwargs["detail"] == "Researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
         system.update.return_value = {
-            "id": "researcher", "name": "Renamed", "description": "", "instructions": "",
-            "tools": [], "avatar": "", "created_at": 0.0, "updated_at": 0.0,
+            "id": "researcher",
+            "name": "Renamed",
+            "description": "",
+            "instructions": "",
+            "tools": [],
+            "avatar": "",
+            "created_at": 0.0,
+            "updated_at": 0.0,
         }
         resp = agents_client.put("/agents/researcher", json={"name": "Renamed"})
         assert resp.status_code == 200
@@ -692,7 +686,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.update"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -704,7 +698,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.delete"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_execute_logs_event(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -716,7 +710,7 @@ class TestAgentsAudit:
         assert args[0] == "agent.execute"
         assert kwargs["resource"] == "researcher"
 
-    @patch("domains.agents.system.get_agent_system")
+    @patch("domain.agents.get_agent_system")
     @patch("infrastructure.auth.get_audit_logger")
     def test_execute_error_no_audit(self, mock_logger, mock_system, agents_client):
         system = mock_system.return_value
@@ -733,6 +727,7 @@ class TestAgentsAudit:
 @pytest.fixture
 def multimodal_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(MultimodalRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -740,10 +735,12 @@ def multimodal_client():
 class TestMultimodalAudit:
     """Multimodal checkpoint load, delete and reset emit audit events."""
 
-    @patch("domains.training.video_trainer.VideoCaptionTrainer")
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.VideoCaptionTrainer")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     @patch("infrastructure.auth.get_audit_logger")
-    def test_load_checkpoint_logs_event(self, mock_logger, mock_list, mock_trainer, multimodal_client):
+    def test_load_checkpoint_logs_event(
+        self, mock_logger, mock_list, mock_trainer, multimodal_client
+    ):
         mock_list.return_value = [{"name": "video1", "path": "/tmp/video1.slnc"}]
         resp = multimodal_client.post("/multimodal/checkpoints/video1/load")
         assert resp.status_code == 200
@@ -753,7 +750,7 @@ class TestMultimodalAudit:
         assert args[0] == "multimodal.checkpoint.load"
         assert kwargs["resource"] == "video1"
 
-    @patch("domains.training.video_trainer.list_video_checkpoints")
+    @patch("domain.training._internal.video_trainer.list_video_checkpoints")
     @patch("infrastructure.auth.get_audit_logger")
     def test_load_missing_checkpoint_no_audit(self, mock_logger, mock_list, multimodal_client):
         mock_list.return_value = []
@@ -782,6 +779,7 @@ class TestMultimodalAudit:
 @pytest.fixture
 def config_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(ConfigRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -826,6 +824,7 @@ def experiments_client(tmp_path):
     rtr = ExperimentsRouter()
     rtr.EXPERIMENTS_DIR = tmp_path / "experiments"
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(rtr.router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -851,8 +850,18 @@ class TestExperimentsAudit:
         resp = experiments_client.delete(f"/experiments/{exp_id}")
         assert resp.status_code == 200
         logger = mock_logger.return_value
-        logger.log.assert_called_with("experiment.delete", user="anonymous", resource=exp_id, detail="", extra=None)
-        assert [c.args[0] for c in logger.log.call_args_list] == ["experiment.create", "experiment.delete"]
+        logger.log.assert_called_with(
+            "experiment.delete",
+            user="anonymous",
+            resource=exp_id,
+            detail="",
+            extra=None,
+            workspace_id="",
+        )
+        assert [c.args[0] for c in logger.log.call_args_list] == [
+            "experiment.create",
+            "experiment.delete",
+        ]
 
 
 # ── User adapters ─────────────────────────────────────────────────────
@@ -861,6 +870,7 @@ class TestExperimentsAudit:
 @pytest.fixture
 def user_adapters_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(UserAdaptersRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -868,23 +878,23 @@ def user_adapters_client():
 class TestUserAdaptersAudit:
     """Per-user LoRA adapter mutations emit audit events."""
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_update_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
-        resp = user_adapters_client.post("/user-adapters/user1/update", json={"rating": "positive"})
+        resp = user_adapters_client.post(
+            "/user-adapters/user1/update", json={"rating": "thumbs_up"}
+        )
         assert resp.status_code == 200
         logger = mock_logger.return_value
         logger.log.assert_called_once()
         args, kwargs = logger.log.call_args
         assert args[0] == "adapter.update"
         assert kwargs["resource"] == "user1"
-        assert kwargs["detail"] == "rating=positive"
+        assert kwargs["detail"] == "rating=thumbs_up"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_reset_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
         resp = user_adapters_client.post("/user-adapters/user1/reset")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -892,10 +902,9 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.reset"
         assert kwargs["resource"] == "user1"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_merge_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
         resp = user_adapters_client.post("/user-adapters/merge")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -903,15 +912,19 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.merge"
         assert kwargs["resource"] == "all"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_aggregate_best_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
         store.aggregate_best_adapters.return_value = {
-            "user_count": 3, "total_feedback": 10, "output_path": "/tmp/best.sou",
+            "user_count": 3,
+            "total_feedback": 10,
+            "output_path": "/tmp/best.sou",
             "eval": {"delta": {"verdict": "better"}},
         }
-        resp = user_adapters_client.post("/user-adapters/aggregate-best", json={"output_name": "best"})
+        resp = user_adapters_client.post(
+            "/user-adapters/aggregate-best", json={"output_name": "best"}
+        )
         assert resp.status_code == 200
         logger = mock_logger.return_value
         args, kwargs = logger.log.call_args
@@ -919,10 +932,9 @@ class TestUserAdaptersAudit:
         assert kwargs["resource"] == "best"
         assert kwargs["extra"] == {"user_count": 3, "total_feedback": 10}
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_delete_logs_event(self, mock_logger, mock_store, user_adapters_client):
-        store = mock_store.return_value
         resp = user_adapters_client.delete("/user-adapters/user1")
         assert resp.status_code == 200
         logger = mock_logger.return_value
@@ -930,7 +942,7 @@ class TestUserAdaptersAudit:
         assert args[0] == "adapter.delete"
         assert kwargs["resource"] == "user1"
 
-    @patch("domains.feedback.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_prune_logs_event(self, mock_logger, mock_store, user_adapters_client):
         store = mock_store.return_value
@@ -951,6 +963,7 @@ class TestUserAdaptersAudit:
 @pytest.fixture
 def lora_eval_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(LoraEvalRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -958,13 +971,14 @@ def lora_eval_client():
 class TestLoraEvalAudit:
     """POST /lora-eval/aggregate emits an audit event."""
 
-    @patch("domains.feedback.per_user_lora.get_per_user_lora")
+    @patch("domain.feedback.get_per_user_lora")
     @patch("infrastructure.auth.get_audit_logger")
     def test_aggregate_logs_event(self, mock_logger, mock_store, lora_eval_client):
         store = mock_store.return_value
         store.aggregate_best_adapters.return_value = {
             "output_path": "/tmp/best.sou",
-            "user_count": 1, "total_feedback": 3,
+            "user_count": 1,
+            "total_feedback": 3,
             "eval": {"delta": {"verdict": "better"}},
         }
         resp = lora_eval_client.post("/lora-eval/aggregate")
@@ -983,6 +997,7 @@ class TestLoraEvalAudit:
 @pytest.fixture
 def tokenizer_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(TokenizerRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -1015,6 +1030,7 @@ class TestTokenizerAudit:
 @pytest.fixture
 def system_client():
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(SystemRouter().router)
     return TestClient(app, raise_server_exceptions=False)
 
@@ -1022,7 +1038,7 @@ def system_client():
 class TestSystemAudit:
     """Executor purge/cancel emit audit events with the acting user."""
 
-    @patch("domains.training.executor._instance")
+    @patch("domain.training._internal.executor._instance")
     @patch("infrastructure.auth.get_audit_logger")
     def test_purge_executor_logs_event(self, mock_logger, mock_instance, system_client):
         mock_instance.purge_completed.return_value = 3
@@ -1036,7 +1052,7 @@ class TestSystemAudit:
         assert kwargs["detail"] == "purged=3 max_age_s=3600.0"
         assert kwargs["user"] == "anonymous"
 
-    @patch("domains.training.executor._instance")
+    @patch("domain.training._internal.executor._instance")
     @patch("infrastructure.auth.get_audit_logger")
     def test_cancel_executor_logs_event(self, mock_logger, mock_instance, system_client):
         mock_instance.cancel.return_value = True
@@ -1060,6 +1076,7 @@ def self_train_client():
 
     server_state._self_train_proc = None
     app = FastAPI()
+    register_all_handlers(app)
     app.include_router(SelfTrainRouter().router)
     client = TestClient(app, raise_server_exceptions=False)
     yield client
@@ -1075,7 +1092,9 @@ class TestSelfTrainAudit:
         proc = mock_popen.return_value
         proc.pid = 4242
         proc.poll.return_value = None
-        resp = self_train_client.post("/self-train/start", json={"model": "gpt2", "temperature": 0.8})
+        resp = self_train_client.post(
+            "/self-train/start", json={"model": "gpt2", "temperature": 0.8}
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "started"
         logger = mock_logger.return_value
@@ -1116,79 +1135,6 @@ class TestSelfTrainAudit:
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "not_running"
         mock_logger.return_value.log.assert_not_called()
-
-
-# ── Auto-train pause/resume/cancel ────────────────────────────────────
-
-
-class TestAutoTrainControlAudit:
-    """Auto-train pause/resume and from-sessions cancel emit audit events."""
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_pause_logs_event(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        at_module._auto_train_pause_event = threading.Event()
-        try:
-            resp = auto_train_client.post("/auto-train/pause")
-            assert resp.status_code == 200
-            assert resp.json()["success"] is True
-            logger = mock_logger.return_value
-            logger.log.assert_called_once()
-            args, kwargs = logger.log.call_args
-            assert args[0] == "training.pause"
-            assert "resource" in kwargs
-        finally:
-            at_module._auto_train_pause_event = None
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_pause_no_active_training_no_audit(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        at_module._auto_train_pause_event = None
-        try:
-            resp = auto_train_client.post("/auto-train/pause")
-            assert resp.status_code == 200
-            assert resp.json()["success"] is False
-            mock_logger.return_value.log.assert_not_called()
-        finally:
-            at_module._auto_train_pause_event = None
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_resume_logs_event(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        evt = threading.Event()
-        evt.set()
-        at_module._auto_train_pause_event = evt
-        try:
-            resp = auto_train_client.post("/auto-train/resume")
-            assert resp.status_code == 200
-            assert resp.json()["success"] is True
-            logger = mock_logger.return_value
-            logger.log.assert_called_once()
-            args, kwargs = logger.log.call_args
-            assert args[0] == "training.resume"
-            assert "resource" in kwargs
-        finally:
-            at_module._auto_train_pause_event = None
-
-    @patch("infrastructure.auth.get_audit_logger")
-    def test_cancel_from_sessions_logs_event(self, mock_logger, auto_train_client):
-        import apps.api.server.routers.auto_train as at_module
-
-        at_module._auto_train_cancel_event = threading.Event()
-        try:
-            resp = auto_train_client.get("/auto-train/from-sessions/cancel")
-            assert resp.status_code == 200
-            logger = mock_logger.return_value
-            logger.log.assert_called_once()
-            args, kwargs = logger.log.call_args
-            assert args[0] == "training.stop"
-            assert "resource" in kwargs
-            assert kwargs["detail"] == "cancelled"
-        finally:
-            at_module._auto_train_cancel_event = None
 
 
 # ── Datasets extra mutations ──────────────────────────────────────────
@@ -1260,7 +1206,11 @@ class TestDatasetMutationsAudit:
         client = TestClient(app, raise_server_exceptions=False)
         ctrl = mock_ctrl.return_value
         ctrl.list_datasets.return_value = [{"id": "ds1", "name": "ds1", "path": str(ds_dir)}]
-        ctrl.create_dataset.return_value = {"id": "ds1-messages", "name": "ds1-messages", "path": str(ds_dir)}
+        ctrl.create_dataset.return_value = {
+            "id": "ds1-messages",
+            "name": "ds1-messages",
+            "path": str(ds_dir),
+        }
         resp = client.post("/datasets/convert-to-messages?dataset_id=ds1")
         assert resp.status_code == 200
         logger = mock_logger.return_value

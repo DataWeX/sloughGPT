@@ -1,0 +1,63 @@
+{{- if .Values.monitoring.enabled }}
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "sloughgpt.fullname" . }}-api-monitor
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "sloughgpt.labels" . | nindent 4 }}
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      {{- include "sloughgpt.api.selectorLabels" . | nindent 6 }}
+  endpoints:
+  - port: http
+    path: /metrics/prometheus
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
+    scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Values.global.namespace }}
+{{- end }}
+{{- if .Values.monitoring.prometheusRule.enabled }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "sloughgpt.fullname" . }}-alerts
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "sloughgpt.labels" . | nindent 4 }}
+    release: prometheus
+spec:
+  groups:
+  - name: sloughgpt.rules
+    rules:
+    - alert: SloughGPTAPIHighLatency
+      expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="{{ include "sloughgpt.fullname" . }}-api"}[5m])) > 2
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "SloughGPT API high latency"
+        description: "API latency P95 is above 2 seconds for more than 5 minutes"
+    - alert: SloughGPTAPIErrorRate
+      expr: rate(http_requests_total{job="{{ include "sloughgpt.fullname" . }}-api", status=~"5.."}[5m]) > 0.01
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "SloughGPT API high error rate"
+        description: "API error rate is above 1%"
+    - alert: SloughGPTHighGPUMemory
+      expr: gpu_memory_used_bytes / gpu_memory_total_bytes > 0.9
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "SloughGPT GPU memory usage high"
+        description: "GPU memory usage is above 90%"
+{{- end }}
+{{- end }}

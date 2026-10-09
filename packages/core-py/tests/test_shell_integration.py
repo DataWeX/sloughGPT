@@ -6,19 +6,15 @@ All tests skip if the API server is not running on localhost:8000.
 
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
-import time
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import requests
 
-from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.runtime import DaitRuntime
-
+from domain.shell._internal.repl import ShellREPL
+from domain.shell._internal.runtime import DaitRuntime
 
 _API_AVAILABLE: bool | None = None
 
@@ -124,7 +120,12 @@ class TestApiCommands:
 class TestLocalCommands:
     def test_help_shows_builtins(self, repl):
         out = _capture(repl, "help")
-        assert "health" in out
+        # Help is organised into colour-coded sections and lists neither
+        # `health` (an ext command) nor `help` itself — assert real builtins.
+        assert "Navigation:" in out
+        assert "  cd" in out
+        assert "  pwd" in out
+        assert "  exit" in out
 
     def test_echo_works(self, repl):
         out = _capture(repl, "echo hello world")
@@ -172,10 +173,14 @@ class TestLocalCommands:
 def test_subprocess_shell_launches():
     pkgs = str(Path(__file__).resolve().parents[1])
     import os
+
     env = {**os.environ, "PYTHONPATH": pkgs}
     result = subprocess.run(
-        [sys.executable, "-c", "from domains.shell.repl import ShellREPL; print('ok')"],
-        capture_output=True, text=True, timeout=10, env=env,
+        [sys.executable, "-c", "from domain.shell._internal.repl import ShellREPL; print('ok')"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
     )
     assert "ok" in result.stdout, result.stderr
 
@@ -186,20 +191,20 @@ def test_subprocess_shell_cmd():
     pkgs = repr(str(Path(__file__).resolve().parents[1]))
     code = """import sys; sys.path.insert(0, {pkgs})
 from pathlib import Path
-from unittest.mock import patch
-from domains.shell.repl import ShellREPL, _CaptureOutput
-from domains.shell.runtime import DaitRuntime
-import tempfile, json, os
+from domain.shell._internal.repl import ShellREPL, _CaptureOutput
+from domain.shell._internal.runtime import DaitRuntime
+from domain.shell._internal.state import set_shell_state_db
+import tempfile, os
 tmp = tempfile.mkdtemp()
-with open(Path(tmp) / "state.json", "w") as f:
-    json.dump({"version": 1, "first_run": False, "history": [], "aliases": {}, "env": {}, "cwd": os.getcwd()}, f)
-with patch("domains.shell.state._STATE_FILE", Path(tmp) / "state.json"):
-    r = ShellREPL(DaitRuntime())
-    r._running = True
-    out = r._execute_single("health")
-    assert "healthy" in out.lower() or "ok" in out.lower()
+set_shell_state_db(tmp + "/mogdb")
+r = ShellREPL(DaitRuntime())
+r._running = True
+out = r._execute_single("health")
+assert "healthy" in out.lower() or "ok" in out.lower()
 """.replace("{pkgs}", pkgs)
-    result = subprocess.run(
+    subprocess.run(
         [sys.executable, "-c", code],
-        capture_output=True, text=True, timeout=30,
+        capture_output=True,
+        text=True,
+        timeout=30,
     )

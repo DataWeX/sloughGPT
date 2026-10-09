@@ -2,8 +2,8 @@
 PermissionsManager — CLI-side download confirmation and size-aware prompts.
 
 Enforces the bandwidth policy: never download large files without user
-confirmation. Queries HuggingFace Hub for model size, shows a Rich panel
-with the estimate, and prompts the user to confirm.
+confirmation. Queries HuggingFace Hub for model size, shows an estimate
+with the download details, and prompts the user to confirm.
 
 Usage::
 
@@ -14,15 +14,14 @@ Usage::
         # proceed with download
 """
 
+import logging
 import os
 import sys
-import logging
 from dataclasses import dataclass
-from typing import Optional
 
 import click
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
 from utils.formatting import format_size
@@ -76,12 +75,13 @@ class PermissionsManager:
             self.auto_yes = True
         else:
             try:
-                from domains.infrastructure.config import get_config
+                from domain.infrastructure._internal.config import get_config
+
                 self.auto_yes = get_config().features.auto_download
-            except Exception:
+            except (ImportError, AttributeError):
                 self.auto_yes = False
 
-    def estimate_model_size(self, model_id: str) -> Optional[ModelSizeEstimate]:
+    def estimate_model_size(self, model_id: str) -> ModelSizeEstimate | None:
         """Query HuggingFace Hub API for model file list and total size.
 
         Args:
@@ -91,7 +91,7 @@ class PermissionsManager:
             ModelSizeEstimate with total bytes and file list, or None on failure.
         """
         try:
-            from domains.infrastructure.hf_hub import fetch_model_info
+            from domain.infrastructure.hf_hub import fetch_model_info
 
             info = fetch_model_info(model_id)
             if info is None:
@@ -124,7 +124,7 @@ class PermissionsManager:
     def confirm_download(self, model_id: str, *, force: bool = False) -> bool:
         """Prompt user to confirm a model download.
 
-        Shows a Rich panel with model ID, estimated size, and file count.
+        Shows download details with model ID, estimated size, and file count.
         Respects ``--yes`` flag, ``SLO_AUTO_DOWNLOAD`` env var, and the
         50 MB auto-approve threshold.
 
@@ -206,10 +206,10 @@ class PermissionsManager:
     def _is_cached(self, model_id: str) -> bool:
         """Check if model has weight files in HF cache."""
         try:
-            from domains.infrastructure.download_manager import (
+            from domain.infrastructure.download_manager import (
                 _cache_dir,
-                _has_weight_files,
                 _has_complete_snapshot,
+                _has_weight_files,
             )
 
             cache = _cache_dir(model_id)
@@ -217,7 +217,7 @@ class PermissionsManager:
                 return True
             if cache.exists() and _has_weight_files(cache):
                 return True
-        except Exception:
+        except (ImportError, OSError):
             pass
 
         # Fallback: check standard HF cache location
@@ -236,33 +236,39 @@ class PermissionsManager:
         return False
 
     def _show_download_panel(self, estimate: ModelSizeEstimate, *, context: str = ""):
-        """Display a Rich panel with download details."""
-        from rich.console import Console
-        from rich.panel import Panel
-        from rich.table import Table
+        """Display download details with ANSI formatting."""
 
-        console = Console(highlight=False)
+        _tty = sys.stdout.isatty()
 
-        table = Table(show_header=False, box=None, padding=(0, 2))
-        table.add_column("Key", style="dim")
-        table.add_column("Value")
+        def _c(text, code):
+            return f"{code}{text}\033[0m" if _tty else text
 
-        table.add_row("Model", estimate.model_id)
-        table.add_row("Size", estimate.human_size)
-        table.add_row("Files", str(estimate.file_count))
+        _BOLD = "\033[1m"
+        _DIM = "\033[2m"
+        _YELLOW = "\033[33m"
 
-        # Show top 5 largest files
-        if estimate.files:
-            sorted_files = sorted(estimate.files, key=lambda x: x["size"], reverse=True)[:5]
-            top_files = ", ".join(
-                f"{f['name'].split('/')[-1]} ({format_size(f['size'])})"
-                for f in sorted_files
-            )
-            table.add_row("Largest", top_files)
+        _p = sys.stdout.write
+        _flush = sys.stdout.flush
+
+        def _line(text=""):
+            _p(text + "\n")
+            _flush()
 
         title = "Download Required"
         if context:
             title = f"Download Required ({context})"
 
-        console.print()
-        console.print(Panel(table, title=title, border_style="yellow"))
+        _line()
+        _line(f"  {_c(title, _BOLD + _YELLOW)}")
+        _line(f"  {'─' * 40}")
+        _line(f"    {_c('Model:', _DIM)} {estimate.model_id}")
+        _line(f"    {_c('Size:', _DIM)} {estimate.human_size}")
+        _line(f"    {_c('Files:', _DIM)} {estimate.file_count}")
+
+        # Show top 5 largest files
+        if estimate.files:
+            sorted_files = sorted(estimate.files, key=lambda x: x["size"], reverse=True)[:5]
+            top_files = ", ".join(
+                f"{f['name'].split('/')[-1]} ({format_size(f['size'])})" for f in sorted_files
+            )
+            _line(f"    {_c('Largest:', _DIM)} {top_files}")

@@ -1,11 +1,11 @@
-"""Tests for domains/inference/embeddings.py."""
+"""Tests for domain.inference._internal.embeddings.py."""
 
 import sys
 
 import numpy as np
 import pytest
 
-from domains.inference.embeddings import (
+from domain.inference._internal.embeddings import (
     BatchEmbedder,
     Embedder,
     EmbeddingProvider,
@@ -110,7 +110,7 @@ class TestOpenAIEmbedder:
                 return FakeData()
 
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = FakeEmbeddings()
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -133,7 +133,7 @@ class TestOpenAIEmbedder:
                 return FakeData()
 
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = FakeEmbeddings()
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -143,7 +143,7 @@ class TestOpenAIEmbedder:
 
     def test_unknown_model_defaults_dimension(self, monkeypatch):
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = None
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -152,7 +152,7 @@ class TestOpenAIEmbedder:
 
     def test_custom_dimensions(self, monkeypatch):
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = None
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -161,7 +161,7 @@ class TestOpenAIEmbedder:
 
     def test_get_model_name(self, monkeypatch):
         class FakeClient:
-            def __init__(self, api_key):
+            def __init__(self, api_key, base_url=None):
                 self.embeddings = None
 
         monkeypatch.setitem(sys.modules, "openai", type("openai", (), {"OpenAI": FakeClient}))
@@ -245,7 +245,7 @@ class TestBatchEmbedder:
 
 class TestCreateEmbedder:
     def test_returns_base_impl(self):
-        from domains.inference.embeddings import BaseEmbedder
+        from domain.inference._internal.embeddings import BaseEmbedder
 
         embedder = create_embedder(provider="in_memory", dimension=16)
         assert isinstance(embedder, BaseEmbedder)

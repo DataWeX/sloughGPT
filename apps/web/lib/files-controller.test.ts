@@ -17,22 +17,25 @@ beforeEach(() => {
 })
 
 describe('filesController', () => {
-  const mockFiles = [
-    { id: '1', filename: 'test.txt', size: 100, content_type: 'text/plain', uploaded_at: '2026-01-01', ingested: false },
-    { id: '2', filename: 'data.csv', size: 200, content_type: 'text/csv', uploaded_at: '2026-01-02', ingested: true, chunk_count: 5 },
+  const backendFiles = [
+    { id: '1', filename: 'test.txt', extension: 'txt', size_bytes: 100, uploaded_at: '2026-01-01', tags: ['doc'] },
+    { id: '2', filename: 'data.csv', extension: 'csv', size_bytes: 200, uploaded_at: '2026-01-02', tags: [] },
   ]
 
-  it('list returns files from {files} response', async () => {
-    apiGet.mockResolvedValue({ files: mockFiles })
+  it('list returns mapped files from array response', async () => {
+    apiGet.mockResolvedValue(backendFiles)
     const result = await filesController.list()
-    expect(result).toEqual(mockFiles)
+    expect(result[0].id).toBe('1')
+    expect(result[0].size).toBe(100)
+    expect(result[0].content_type).toBe('txt')
     expect(apiGet).toHaveBeenCalledWith('/files/')
   })
 
-  it('list handles flat array response', async () => {
-    apiGet.mockResolvedValue(mockFiles)
+  it('list handles {files} response', async () => {
+    apiGet.mockResolvedValue({ files: backendFiles })
     const result = await filesController.list()
-    expect(result).toEqual(mockFiles)
+    expect(result).toHaveLength(2)
+    expect(result[0].id).toBe('1')
   })
 
   it('list handles empty response', async () => {
@@ -62,30 +65,22 @@ describe('filesController', () => {
   })
 
   it('search calls apiGet with encoded query', async () => {
-    apiGet.mockResolvedValue({ results: [mockFiles[0]] })
+    apiGet.mockResolvedValue({ files: [backendFiles[0]] })
     const result = await filesController.search('hello world')
-    expect(result).toEqual([mockFiles[0]])
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('1')
     expect(apiGet).toHaveBeenCalledWith('/files/search?q=hello%20world')
   })
 
-  it('search handles flat array response', async () => {
-    apiGet.mockResolvedValue(mockFiles)
+  it('search handles {files} response', async () => {
+    apiGet.mockResolvedValue({ files: backendFiles })
     const result = await filesController.search('test')
-    expect(result).toEqual(mockFiles)
+    expect(result).toHaveLength(2)
   })
 
   it('search handles empty/undefined response', async () => {
     apiGet.mockResolvedValue(undefined)
     const result = await filesController.search('test')
     expect(result).toEqual([])
-  })
-
-  it('extract calls apiPost with FormData and raw option', async () => {
-    const file = new File(['content'], 'test.txt', { type: 'text/plain' })
-    const expected = { text: 'content', filename: 'test.txt', chars: 7 }
-    apiPost.mockResolvedValue(expected)
-    const result = await filesController.extract(file)
-    expect(result).toEqual(expected)
-    expect(apiPost).toHaveBeenCalledWith('/files/extract', expect.any(FormData), { raw: true })
   })
 })

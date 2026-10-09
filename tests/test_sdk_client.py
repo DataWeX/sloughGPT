@@ -1,4 +1,5 @@
 """Coverage for sloughgpt_sdk.client."""
+
 import json
 import sys
 from pathlib import Path
@@ -21,7 +22,7 @@ from sloughgpt_sdk.client import (  # noqa: E402
     _unwrap_response,
 )
 from sloughgpt_sdk.exceptions import SloughGPTError  # noqa: E402
-from sloughgpt_sdk.models import ChatMessage, ChatRequest  # noqa: E402
+from sloughgpt_sdk.models import ChatMessage  # noqa: E402
 
 
 def _resp(data=None, text="", status=200):
@@ -117,6 +118,24 @@ class TestHealthAndInfo:
         assert h.model_loaded is True
         assert h.version == "1"
 
+    def test_health_unwraps_envelope(self):
+        c, _ = _mock_client(
+            data={"status": "success", "data": {"status": "healthy", "model_loaded": True}}
+        )
+        h = c.health()
+        assert h.status == "healthy"
+        assert h.is_healthy
+        assert h.model_loaded is True
+
+    def test_get_token(self):
+        c, session = _mock_client(
+            data={"status": "success", "data": {"access_token": "jwt", "token_type": "bearer"}}
+        )
+        result = c.get_token("secret")
+        assert session.request.call_args.args[1] == "http://localhost:8000/auth/token"
+        assert session.request.call_args.kwargs["json"] == {"api_key": "secret"}
+        assert result["access_token"] == "jwt"
+
     def test_liveness_readiness_detailed(self):
         c, _ = _mock_client(data={"alive": True})
         assert c.liveness() == {"alive": True}
@@ -162,8 +181,10 @@ class TestGeneration:
         resp = Mock()
         resp.raise_for_status.return_value = None
         resp.iter_lines.return_value = [
-            "data: one",
-            "data: two",
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "one"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "two"}}),
             "data: [DONE]",
             "ignored",
         ]
@@ -176,35 +197,43 @@ class TestGeneration:
         c = SloughGPTClient()
         resp = Mock()
         resp.raise_for_status.return_value = None
-        resp.iter_lines.return_value = ["data:", "data: tok"]
+        resp.iter_lines.return_value = [
+            "data:",
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "tok"}}),
+        ]
         c._session = Mock()
         c._session.request.return_value = resp
         assert list(c.generate_stream("p")) == ["tok"]
 
-    def test_generate_stream_recovers_json_decode_error(self):
+    def test_generate_stream_skips_non_json_stops_on_error(self):
         c = SloughGPTClient()
         resp = Mock()
         resp.raise_for_status.return_value = None
-        resp.iter_lines.return_value = ["data: hello", "data: [DONE]"]
+        resp.iter_lines.return_value = [
+            "data: not-json",
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "one"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "error", "data": {"error": "boom"}}),
+            "data: "
+            + json.dumps({"stream": "generate", "status": "working", "data": {"token": "two"}}),
+        ]
         c._session = Mock()
         c._session.request.return_value = resp
-        gen = c.generate_stream("p")
-        assert next(gen) == "hello"
-        assert gen.throw(json.JSONDecodeError("x", "doc", 0)) == "hello"
-        with pytest.raises(StopIteration):
-            next(gen)
+        assert list(c.generate_stream("p")) == ["one"]
 
 
 class TestChat:
     def test_chat_with_message_objects(self):
-        c, session = _mock_client(data={"text": "hi there"})
+        c, session = _mock_client(data={"message": "hi there"})
         result = c.chat([client_module.ChatMessage.user("hey")])
         body = session.request.call_args.kwargs["json"]
         assert body["messages"] == [{"role": "user", "content": "hey"}]
         assert result.message.content == "hi there"
 
     def test_chat_with_dicts(self):
-        c, session = _mock_client(data={"text": "yo"})
+        c, session = _mock_client(data={"message": "yo"})
         result = c.chat([{"role": "user", "content": "hello"}, {"content": "no role"}])
         body = session.request.call_args.kwargs["json"]
         assert body["messages"][0]["role"] == "user"
@@ -220,12 +249,12 @@ class TestChat:
         assert result.model == "gpt2"
 
     def test_chat_error_raises(self):
-        c, _ = _mock_client(data={"error": "boom", "text": ""})
+        c, _ = _mock_client(data={"error": "boom", "message": ""})
         with pytest.raises(SloughGPTError, match="boom"):
             c.chat([ChatMessage.user("q")])
 
-    def test_chat_error_ignored_when_text_present(self):
-        c, _ = _mock_client(data={"error": "boom", "text": "still here"})
+    def test_chat_error_ignored_when_message_present(self):
+        c, _ = _mock_client(data={"error": "boom", "message": "still here"})
         result = c.chat([ChatMessage.user("q")])
         assert result.message.content == "still here"
 
@@ -234,12 +263,12 @@ class TestChat:
         resp = Mock()
         resp.raise_for_status.return_value = None
         resp.iter_lines.return_value = [
-            "data: " + json.dumps({"token": "a"}),
-            "data: " + json.dumps({"token": "b"}),
-            "data: " + json.dumps({}),
+            "data: " + json.dumps({"stream": "chat", "status": "working", "data": {"token": "a"}}),
+            "data: " + json.dumps({"stream": "chat", "status": "working", "data": {"token": "b"}}),
+            "data: " + json.dumps({"stream": "chat", "status": "working", "data": {}}),
             "",
-            "data: " + json.dumps({"error": "stop"}),
-            "data: " + json.dumps({"token": "c"}),
+            "data: " + json.dumps({"stream": "chat", "status": "error", "data": {"error": "stop"}}),
+            "data: " + json.dumps({"stream": "chat", "status": "working", "data": {"token": "c"}}),
         ]
         c._session = Mock()
         c._session.request.return_value = resp
@@ -249,7 +278,10 @@ class TestChat:
         c = SloughGPTClient()
         resp = Mock()
         resp.raise_for_status.return_value = None
-        resp.iter_lines.return_value = ["data: not-json", "data: " + json.dumps({"token": "x"})]
+        resp.iter_lines.return_value = [
+            "data: not-json",
+            "data: " + json.dumps({"stream": "chat", "status": "working", "data": {"token": "x"}}),
+        ]
         c._session = Mock()
         c._session.request.return_value = resp
         assert list(c.chat_stream([{"role": "user", "content": "q"}])) == ["x"]
@@ -258,7 +290,9 @@ class TestChat:
         c = SloughGPTClient()
         resp = Mock()
         resp.raise_for_status.return_value = None
-        resp.iter_lines.return_value = ["data: " + json.dumps({"token": "z"})]
+        resp.iter_lines.return_value = [
+            "data: " + json.dumps({"stream": "chat", "status": "working", "data": {"token": "z"}})
+        ]
         c._session = Mock()
         c._session.request.return_value = resp
         assert list(c.chat_stream([client_module.ChatMessage.user("q")])) == ["z"]
@@ -272,6 +306,12 @@ class TestModels:
         models = c.list_models()
         assert models[0].id == "gpt2"
         assert models[0].name == "GPT-2"
+
+    def test_list_models_unwraps_envelope(self):
+        c, _ = _mock_client(data={"status": "success", "data": [{"id": "gpt2", "name": "GPT-2"}]})
+        models = c.list_models()
+        assert len(models) == 1
+        assert models[0].id == "gpt2"
 
     def test_list_models_bare_list(self):
         c, _ = _mock_client(data=[{"id": "a"}])
@@ -336,10 +376,14 @@ class TestSouls:
     def test_switch_soul(self):
         c, session = _mock_client(data={"ok": True})
         c.switch_soul("warm")
-        assert session.request.call_args.kwargs["json"] == {}
+        assert session.request.call_args.args[1] == "http://localhost:8000/souls/switch"
+        assert session.request.call_args.kwargs["json"] == {"name": "warm"}
         c, session = _mock_client(data={"ok": True})
         c.switch_soul("warm", checkpoint_name="cp1")
-        assert session.request.call_args.kwargs["json"] == {"checkpoint_name": "cp1"}
+        assert session.request.call_args.kwargs["json"] == {
+            "name": "warm",
+            "checkpoint_name": "cp1",
+        }
 
 
 class TestKnowledge:
@@ -523,7 +567,9 @@ class TestFeedbackWorkflow:
         c, session = _mock_client(data={"ok": True})
         c.record_feedback("s", "m", 1)
         assert session.request.call_args.kwargs["json"] == {
-            "session_id": "s", "message_id": "m", "score": 1
+            "session_id": "s",
+            "message_id": "m",
+            "score": 1,
         }
         c, session = _mock_client(data={"ok": True})
         c.record_feedback("s", "m", 1, tags=["a"])
@@ -552,7 +598,11 @@ class TestExperiments:
         assert session.request.call_args.kwargs["json"] == {"metric": "loss", "value": 0.1}
         c, session = _mock_client(data={"ok": True})
         c.log_metric("e1", "loss", 0.1, step=2)
-        assert session.request.call_args.kwargs["json"] == {"metric": "loss", "value": 0.1, "step": 2}
+        assert session.request.call_args.kwargs["json"] == {
+            "metric": "loss",
+            "value": 0.1,
+            "step": 2,
+        }
         c, session = _mock_client(data={"ok": True})
         c.log_param("e1", "lr", 1e-3)
         assert session.request.call_args.kwargs["json"] == {"param": "lr", "value": 1e-3}
@@ -701,7 +751,7 @@ class TestAsyncClient:
 
         client._request = fake_request
         await client.switch_soul("warm", checkpoint_name="c")
-        assert captured["json"] == {"checkpoint_name": "c"}
+        assert captured["json"] == {"name": "warm", "checkpoint_name": "c"}
 
     @pytest.mark.asyncio
     async def test_knowledge(self):
@@ -838,9 +888,7 @@ class TestAsyncClient:
         fake_httpx = SimpleNamespace(AsyncClient=FakeAsyncClient)
         client = AsyncSloughGPTClient(api_key="k")
         with patch.dict(sys.modules, {"httpx": fake_httpx}):
-            data = await client._request(
-                "POST", "/x", json={"a": 1}, extra_headers={"X-A": "1"}
-            )
+            data = await client._request("POST", "/x", json={"a": 1}, extra_headers={"X-A": "1"})
         assert data == {"status": "success", "data": {"version": "1"}}
         inst = FakeAsyncClient.last
         assert inst.kw["headers"]["X-API-Key"] == "k"

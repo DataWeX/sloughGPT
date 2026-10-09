@@ -17,9 +17,7 @@ def _parse_api_key_list(raw: str) -> frozenset[str]:
     return frozenset(x.strip() for x in raw.split(",") if x.strip())
 
 
-from typing import Optional
-
-def _getenv_prefer_canonical(canonical: str, legacy_typo: str) -> Optional[str]:
+def _getenv_prefer_canonical(canonical: str, legacy_typo: str) -> str | None:
     """Prefer ``SLO_*``; if unset or blank, use legacy ``SLAUGHGPT_*`` (historical typo)."""
     v = os.getenv(canonical)
     if v is not None and str(v).strip() != "":
@@ -51,10 +49,12 @@ class SecuritySettings:
 @lru_cache(maxsize=1)
 def get_security_settings() -> SecuritySettings:
     """Return cached security settings (singleton for the process)."""
-    primary = _getenv_prefer_canonical("SLO_API_KEY", "SLAUGHGPT_API_KEY") or secrets.token_urlsafe(32)
-    jwt_secret = (
-        _getenv_prefer_canonical("SLO_JWT_SECRET", "SLAUGHGPT_JWT_SECRET") or secrets.token_urlsafe(64)
+    primary = _getenv_prefer_canonical("SLO_API_KEY", "SLAUGHGPT_API_KEY") or secrets.token_urlsafe(
+        32
     )
+    jwt_secret = _getenv_prefer_canonical(
+        "SLO_JWT_SECRET", "SLAUGHGPT_JWT_SECRET"
+    ) or secrets.token_urlsafe(64)
     keys = set(_parse_api_key_list(_getenv_api_keys_raw()))
     if primary:
         keys.add(primary)

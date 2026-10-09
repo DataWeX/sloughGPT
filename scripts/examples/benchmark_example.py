@@ -4,10 +4,13 @@ Example: Benchmark model performance
 """
 
 import sys
+
 sys.path.insert(0, "..")
 
-import torch
 import time
+
+import torch
+
 
 def main():
     print("=" * 60)
@@ -15,7 +18,13 @@ def main():
     print("=" * 60)
 
     # Check device
-    device = "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
     print(f"\nDevice: {device}")
 
     if device == "cpu":
@@ -37,7 +46,7 @@ def main():
     # Benchmark
     start = time.time()
     for _ in range(iterations):
-        c = torch.matmul(a, b)
+        torch.matmul(a, b)
     if device != "cpu":
         torch.cuda.synchronize() if device == "cuda" else torch.mps.synchronize()
     elapsed = time.time() - start
@@ -48,6 +57,7 @@ def main():
 
     print("\nRun full benchmark with:")
     print("  python3 cli.py benchmark -m gpt2")
+
 
 if __name__ == "__main__":
     main()

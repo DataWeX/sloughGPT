@@ -7,7 +7,7 @@
  *   for await (const line of systemController.streamOutput()) { ... }
  */
 
-import { apiGet, streamSSE } from './http-client'
+import { apiGet, apiPost, apiPut, streamSSE } from './http-client'
 
 export interface SystemMetrics {
   cpu_percent: number
@@ -40,6 +40,106 @@ export interface GPUInfo {
   memory_hint: string
 }
 
+export interface BatteryStatus {
+  level: number
+  is_charging: boolean
+  is_plugged: boolean
+  health: string
+  capacity: number
+  voltage_mv: number
+  current_ma: number
+  time_to_full_min: number | null
+  time_to_empty_min: number | null
+  source: 'sysfs' | 'simulated'
+  name: string
+  level_band: 'low' | 'ok' | 'high' | 'full'
+  updated_at: number
+  cycle_count: number
+  energy_full: number
+  energy_full_design: number
+  health_percent: number
+}
+
+export interface BatteryControl {
+  supported: boolean
+  writable: boolean
+  path: string | null
+  current_limit: number | null
+  reason: string
+  start_supported: boolean
+  start_path: string | null
+  current_floor: number | null
+  incumbent: string | null
+}
+
+export interface BatteryAdvice {
+  limit: number
+  action: 'unplug' | 'cap_at_80' | 'plug_in' | 'maintain'
+  reason: string
+}
+
+export interface BatteryPolicyValues {
+  enabled: boolean
+  floor: number
+  ceiling: number
+  mode: 'band' | 'ceiling'
+  interval_seconds: number
+  band: string
+}
+
+export interface BatteryPolicy extends BatteryPolicyValues {
+  file: string
+  error: string | null
+  explain: string
+}
+
+export interface BatteryDaemonState {
+  present: boolean
+  active: boolean
+  pid?: number | null
+  age_seconds?: number | null
+  owned?: boolean
+  dry_run?: boolean
+  last_action?: string | null
+  last_value?: number | null
+  last_reason?: string | null
+  last_outcome?: string | null
+  explain?: string | null
+}
+
+export interface BatteryInfo {
+  status: BatteryStatus
+  control: BatteryControl
+  advice: BatteryAdvice
+  policy: BatteryPolicy
+  daemon: BatteryDaemonState
+}
+
+export interface BatteryLimitResult {
+  applied: boolean
+  supported: boolean
+  limit: number | null
+  reason: string
+  path: string | null
+  floor_limit: number | null
+}
+
+export interface BatteryPolicyInput {
+  enabled?: boolean
+  floor?: number
+  ceiling?: number
+  mode?: 'band' | 'ceiling'
+}
+
+export interface BatteryPolicyResult {
+  ok: boolean
+  error: string | null
+  load_error?: string | null
+  policy: BatteryPolicyValues
+  file?: string
+  explain?: string
+}
+
 export interface KvSessionsInfo {
   enabled?: boolean
   active_sessions?: number
@@ -56,16 +156,30 @@ export interface DetailedHealth {
   request_count: number
   error_count: number
   avg_latency_ms: number
+  p95_latency_ms: number
   requests_per_minute: number
   path_latencies: Array<{ path: string; avg_ms: number; count: number; p95_ms: number }>
-  recent_errors: Array<{ path: string; method: string; status: number; message: string; error_type: string; ts: number }>
+  recent_errors: Array<{
+    path: string
+    method: string
+    status: number
+    message: string
+    error_type: string
+    ts: number
+  }>
   inference_count: number
   total_tokens: number
   tokens_per_sec: number
   avg_tokens_per_request: number
   health_score: { score: number; status: string }
   status_message: string
-  model_metrics: Array<{ model: string; count: number; total_tokens: number; tokens_per_sec: number; avg_tokens: number }>
+  model_metrics: Array<{
+    model: string
+    count: number
+    total_tokens: number
+    tokens_per_sec: number
+    avg_tokens: number
+  }>
   model_events: Array<{ type: string; model: string; detail: string; ts: number }>
   health_history: Array<{ score: number; status: string; ts: number }>
   memory_history: Array<{ rss_mb: number; virtual_mb: number; system_percent: number; ts: number }>
@@ -98,6 +212,53 @@ export interface DetailedHealth {
   kv_sessions?: KvSessionsInfo
   quantization?: unknown
   training_pool?: { active_jobs: number; max_workers: number; total_tracked: number } | null
+  lifecycle?: {
+    phase: string
+    profile?: string
+    is_running: boolean
+    is_draining?: boolean
+    uptime?: number
+    in_flight?: number
+    error?: string
+  }
+  resource_allocation?: {
+    mode?: string
+    compute_threads?: number
+    io_threads?: number
+    omp_num_threads?: number
+    mkl_num_threads?: number
+    openblas_num_threads?: number
+    numexpr_num_threads?: number
+    inference_pool_size?: number
+    train_pool_size?: number
+    task_queue_workers?: number
+    dataloader_workers?: number
+    concurrent_reads?: number
+    concurrent_writes?: number
+    process_guard_concurrent?: number
+  }
+  process_guard?: {
+    active?: boolean
+    enabled?: boolean
+    health?: { alive: boolean; memory_mb?: number; restarts?: number }
+  } | null
+  memory_pressure?: {
+    current_mb?: number
+    peak_mb?: number
+    pressure_level?: string
+    tracked_count?: number
+  } | null
+  registry?: { healthy: boolean; default_model?: string; models?: Array<Record<string, unknown>> }
+  versions?: {
+    app?: string
+    api?: string
+    package?: string
+    torch?: string
+    pydantic?: string
+    features?: Record<string, { backend: string; api: string }>
+  }
+  mps_monitor?: { usage: number; locked_to_cpu: boolean } | null
+  idle?: { enabled: boolean; idle_seconds?: number }
 }
 
 export interface OutputLine {
@@ -151,6 +312,11 @@ export interface ProcessGuardStatus {
   health: { alive: boolean; memory_mb?: number; restarts?: number } | null
 }
 
+export interface ServicesHealth {
+  status: 'healthy' | 'degraded'
+  services: Record<string, { status: string; error?: string; [key: string]: unknown }>
+}
+
 export const systemController = {
   async getMetrics(): Promise<SystemMetrics> {
     return apiGet<SystemMetrics>('/system/metrics', undefined, { silent: true })
@@ -164,6 +330,28 @@ export const systemController = {
     return apiGet<DiskUsage>('/system/disk', undefined, { silent: true })
   },
 
+  async getBattery(): Promise<BatteryInfo> {
+    return apiGet<BatteryInfo>('/system/battery', undefined, { silent: true })
+  },
+
+  async setBatteryLimit(percent: number): Promise<BatteryLimitResult> {
+    return apiPost<BatteryLimitResult>(`/system/battery/limit?percent=${percent}`, undefined, {
+      silent: true,
+    })
+  },
+
+  async setBatteryPolicy(input: BatteryPolicyInput = {}): Promise<BatteryPolicyResult> {
+    const params = new URLSearchParams()
+    if (input.enabled !== undefined) params.set('enabled', String(input.enabled))
+    if (input.floor !== undefined) params.set('floor', String(input.floor))
+    if (input.ceiling !== undefined) params.set('ceiling', String(input.ceiling))
+    if (input.mode !== undefined) params.set('mode', input.mode)
+    const qs = params.toString()
+    return apiPut<BatteryPolicyResult>(`/system/battery/policy${qs ? `?${qs}` : ''}`, undefined, {
+      silent: true,
+    })
+  },
+
   async getDetailedHealth(): Promise<DetailedHealth> {
     return apiGet<DetailedHealth>('/health/detailed', undefined, { silent: true })
   },
@@ -172,11 +360,20 @@ export const systemController = {
     return apiGet<OutputResponse>(`/system/output?n=${n}`, undefined, { silent: true })
   },
 
-  async *streamOutput(tail: number = 50): AsyncGenerator<OutputLine> {
+  async *streamOutput(tail: number = 50, signal?: AbortSignal): AsyncGenerator<OutputLine> {
     try {
-      for await (const event of streamSSE(`/system/stream?tail=${tail}`, { method: 'GET' })) {
+      for await (const event of streamSSE(`/system/stream?tail=${tail}`, {
+        method: 'GET',
+        signal,
+      })) {
         const d = event.data
-        if (d && typeof d.text === 'string' && typeof d.level === 'string' && typeof d.source === 'string' && typeof d.ts === 'number') {
+        if (
+          d &&
+          typeof d.text === 'string' &&
+          typeof d.level === 'string' &&
+          typeof d.source === 'string' &&
+          typeof d.ts === 'number'
+        ) {
           const line: OutputLine = { text: d.text, level: d.level, source: d.source, ts: d.ts }
           yield line
         }
@@ -211,5 +408,9 @@ export const systemController = {
   async setProcessGuardEnabled(enabled: boolean): Promise<ProcessGuardStatus> {
     const { apiPost } = await import('./http-client')
     return apiPost<ProcessGuardStatus>('/models/process-guard', { enabled })
+  },
+
+  async getServicesHealth(): Promise<ServicesHealth> {
+    return apiGet<ServicesHealth>('/health/services', undefined, { silent: true })
   },
 }

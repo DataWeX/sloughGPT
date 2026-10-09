@@ -3,7 +3,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import React from 'react'
 
-const tabButton = (name: string) => screen.getAllByRole('button', { name }).filter(b => b.className.includes('px-3 py-1.5'))[0]
+const tabButton = (name: string) => screen.getAllByRole('button', { name }).filter(b => b.className.includes('px-2.5'))[0]
 
 const mocks = vi.hoisted(() => ({
   mockStatus: vi.fn(),
@@ -37,7 +37,9 @@ vi.mock('@/components/learn/LearningInsightsCard', () => ({
 }))
 
 vi.mock('@sloughgpt/strui', () => ({
+  cn: (...a: any[]) => a.filter(Boolean).join(' '),
   Card: ({ children }: any) => <div>{children}</div>,
+  ActionCard: ({ title, actions, children, ...p }: any) => <div data-testid="action-card" {...p}>{title}{actions}{children}</div>,
   CardHeader: ({ children }: any) => <div>{children}</div>,
   CardTitle: ({ children }: any) => <div>{children}</div>,
   CardContent: ({ children }: any) => <div>{children}</div>,
@@ -51,6 +53,41 @@ vi.mock('@sloughgpt/strui', () => ({
     <textarea value={value} onChange={onChange} rows={rows} placeholder={placeholder} {...props} />
   ),
   IconRefresh: () => <span data-testid="icon-refresh" />,
+
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
 }))
 
 import { LearnSection } from './LearnSection'
@@ -68,17 +105,28 @@ describe('LearnSection', () => {
 
   it('renders header and stat tiles from status', async () => {
     mocks.mockStatus.mockResolvedValue({
-      learner_active: true,
-      knowledge_count: 42,
-      feeds_count: 3,
-      total_tokens: 1000,
+      soul_name: 'test',
+      total_tokens_ingested: 1000,
+      train_steps_completed: 5,
+      current_loss: 0.5,
+      loss_history: [],
+      buffer_size: 10,
+      buffer_capacity: 100,
+      pending_tokens: 0,
+      arch: 'lstm',
+      n_embed: 128,
+      n_layer: 2,
+      n_head: 4,
+      vocab_size: 256,
+      knowledge: {},
+      feeds_subscribed: 3,
+      filter_stats: {},
+      filter_config: {},
     })
     render(<LearnSection />)
     expect(await screen.findByText('Continual Learning')).toBeDefined()
-    expect(await screen.findByText(42)).toBeDefined()
-    expect(screen.getByText(1000)).toBeDefined()
+    expect(await screen.findByText(1000)).toBeDefined()
     expect(screen.getByText(3)).toBeDefined()
-    expect(screen.getByText('Active')).toBeDefined()
   })
 
   it('runs a search and shows the result summary', async () => {

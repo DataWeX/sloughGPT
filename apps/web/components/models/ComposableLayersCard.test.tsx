@@ -52,11 +52,9 @@ describe('ComposableLayersCard', () => {
     expect(screen.getAllByText(/Trained checkpoints/).length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows layer icons', () => {
-    render(<ComposableLayersCard modelsCount={0} soulsCount={0} checkpoints={[]} />)
-    expect(screen.getAllByText('🧠').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('🎭').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('🧩').length).toBeGreaterThanOrEqual(1)
-    expect(screen.getAllByText('📦').length).toBeGreaterThanOrEqual(1)
+  it('shows layer icons as SVG elements', () => {
+    const { container } = render(<ComposableLayersCard modelsCount={0} soulsCount={0} checkpoints={[]} />)
+    const svgs = container.querySelectorAll('svg')
+    expect(svgs.length).toBeGreaterThanOrEqual(4)
   })
 })

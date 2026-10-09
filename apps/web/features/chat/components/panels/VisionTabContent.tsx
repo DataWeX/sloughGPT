@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { cn, Button } from '@sloughgpt/strui'
 import { VisionStudioDialog } from './VisionStudioDialog'
 
@@ -8,16 +8,13 @@ interface VisionTabContentProps {
   visionImagesLearned?: number
   visionTrained?: boolean
   visionStatus?: string
-  visionCaptionHistory?: string[]
   visionVocabSize?: number
   sessionId: string | null
   onGeneratedImage: (dataUrl: string, prompt: string) => void
   meanAccuracy?: number
-  lastAccuracy?: number
-  onSendText: (text: string) => void
 }
 
-export function VisionTabContent({
+export const VisionTabContent = memo(function VisionTabContent({
   visionImagesLearned,
   visionTrained,
   visionStatus,
@@ -107,4 +104,4 @@ export function VisionTabContent({
       />
     </>
   )
-}
+})

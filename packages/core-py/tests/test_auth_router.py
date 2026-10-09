@@ -3,13 +3,12 @@
 Covers: AuthRouter password hashing (static methods, no HTTP mocking needed).
 HTTP-level auth tests deferred — instance method patching requires careful setup.
 """
+
 from __future__ import annotations
 
 import hashlib
 import sys
 from pathlib import Path
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -34,11 +33,11 @@ class TestPasswordHashing:
         assert h1 != h2  # salt-based
 
     def test_legacy_hash_verify(self):
-        legacy = hashlib.sha256("testpass".encode()).hexdigest()
+        legacy = hashlib.sha256(b"testpass").hexdigest()
         assert AuthRouter._verify_password("testpass", legacy) is True
 
     def test_legacy_hash_wrong_password(self):
-        legacy = hashlib.sha256("testpass".encode()).hexdigest()
+        legacy = hashlib.sha256(b"testpass").hexdigest()
         assert AuthRouter._verify_password("wrong", legacy) is False
 
     def test_non_v1_non_hex_rejects(self):

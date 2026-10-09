@@ -2,23 +2,29 @@ import React, {useEffect, useState, useRef, useCallback} from 'react';
 import {
   ScrollView,
   TextInput,
-  Modal,
+  Platform,
+  KeyboardAvoidingView,
   RefreshControl,
   ActivityIndicator,
   Alert,
   Pressable,
+  Dimensions,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {YStack, XStack, Text} from 'tamagui';
 import {useColors} from '../theme/colors';
 import {
   useTrainingStore,
-  type TrainPhase,
+  cleanupTraining,
 } from '../stores/training-store';
 import {useModelStore} from '../stores/model-store';
 import {api} from '../services/api-client';
+import {toast} from '../services/toast';
 import {StatusBadge} from '../components/StatusBadge';
 import {Icon} from '../components/Icon';
+import {DatasetPreviewModal} from '../components/training/DatasetPreviewModal';
+import {ImportDatasetModal} from '../components/training/ImportDatasetModal';
+import {TestModelModal} from '../components/training/TestModelModal';
 import {useHapticPress} from '../hooks/useHapticPress';
 import {triggerHaptic} from '../services/haptics';
 
@@ -36,15 +42,6 @@ const PHASE_LABELS: Record<string, {text: string; variant: string}> = {
   FAILED: {text: 'Failed', variant: 'error'},
 };
 
-type ImportSource = 'url' | 'github' | 'huggingface' | 'csv';
-
-const IMPORT_SOURCES: {key: ImportSource; label: string; placeholder: string}[] = [
-  {key: 'url', label: 'URL', placeholder: 'https://example.com/data.txt'},
-  {key: 'github', label: 'GitHub', placeholder: 'owner/repo or full URL'},
-  {key: 'huggingface', label: 'HuggingFace', placeholder: 'dataset-id or org/dataset'},
-  {key: 'csv', label: 'CSV', placeholder: 'https://example.com/data.csv'},
-];
-
 export function TrainingScreen() {
   const colors = useColors();
   const {
@@ -55,6 +52,8 @@ export function TrainingScreen() {
     epoch,
     totalEpochs,
     steps,
+    stepsPerSec,
+    eta,
     checkpoint,
     error,
     checkpoints,
@@ -80,6 +79,7 @@ export function TrainingScreen() {
     deleteFinetunedModel,
     importDataset,
     clearError,
+    rehydrate,
   } = useTrainingStore();
   const modelStore = useModelStore();
   const [sourceText, setSourceText] = useState('');
@@ -90,14 +90,8 @@ export function TrainingScreen() {
   const [previewData, setPreviewData] = useState<string[]>([]);
   const [previewVisible, setPreviewVisible] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [importSource, setImportSource] = useState('');
-  const [importName, setImportName] = useState('');
-  const [importType, setImportType] = useState<ImportSource>('url');
-  const [importing, setImporting] = useState(false);
-  const [testPrompt, setTestPrompt] = useState('');
-  const [testResult, setTestResult] = useState('');
-  const [testLoading, setTestLoading] = useState(false);
   const [testModalVisible, setTestModalVisible] = useState(false);
+  const [soulNames, setSoulNames] = useState<string[]>([]);
   const prevPhaseRef = useRef(phase);
   const hapticPress = useHapticPress();
 
@@ -117,11 +111,34 @@ export function TrainingScreen() {
 
   const prevErrorRef = useRef(error);
   useEffect(() => {
-    if (error && error !== prevErrorRef.current) {
+    if (prevErrorRef.current !== error && error) {
       triggerHaptic('error');
     }
     prevErrorRef.current = error;
   }, [error]);
+
+  // Cleanup SSE + poll timers on unmount (BUG 1 fix)
+  useEffect(() => {
+    return () => {
+      cleanupTraining();
+    };
+  }, []);
+
+  // Rehydrate training state from server on mount
+  useEffect(() => {
+    rehydrate();
+  }, []);
+
+  useEffect(() => {
+    api.get<{souls: {name: string}[]}>('/souls')
+      .then(data => {
+        const names = (data?.souls || []).map((s: any) => s.name || '').filter(Boolean);
+        if (names.length > 0) setSoulNames(names);
+      })
+      .catch(() => {
+        toast.warn('Could not load model list');
+      });
+  }, []);
 
   useEffect(() => {
     refresh();
@@ -133,26 +150,8 @@ export function TrainingScreen() {
       const result = await api.get<{rows: string[]}>(`/datasets/${datasetId}/preview`);
       setPreviewData(result.rows || []);
       setPreviewVisible(true);
-    } catch {}
-  };
-
-  const handleImport = async () => {
-    if (!importSource.trim()) {
-      Alert.alert('Import', 'Enter a source');
-      return;
-    }
-    setImporting(true);
-    try {
-      await importDataset(importSource.trim(), importName.trim(), importType);
-      triggerHaptic('success');
-      Alert.alert('Imported', 'Dataset imported successfully');
-      setShowImportModal(false);
-      setImportSource('');
-      setImportName('');
-    } catch (err: any) {
-      Alert.alert('Import Failed', err.message || 'Failed to import dataset');
-    } finally {
-      setImporting(false);
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to load dataset preview');
     }
   };
 
@@ -162,16 +161,48 @@ export function TrainingScreen() {
     setRefreshing(false);
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (inputMode === 'text') {
       if (!sourceText.trim()) {
         Alert.alert('Training', 'Enter some training text first');
+        return;
+      }
+      if (sourceText.trim().length < 200) {
+        Alert.alert('Training', 'Training text too short. Need at least 200 characters for meaningful training.');
         return;
       }
       setConfig({source_text: sourceText, dataset_id: undefined});
     } else {
       if (!selectedDataset) {
         Alert.alert('Training', 'Select a dataset first');
+        return;
+      }
+      // Pre-flight quality check
+      try {
+        const quality = await api.get<any>(`/datasets/${selectedDataset}/quality`);
+        const avg = quality?.avg_quality ?? 0;
+        const tox = quality?.toxicity_rate ?? 0;
+        if (avg < 1.0) {
+          Alert.alert('Low Quality', `Dataset quality is low (${avg.toFixed(2)}/5.0). Training may produce poor results.`);
+          return;
+        }
+        if (tox > 0.5) {
+          Alert.alert('High Toxicity', `Dataset has high toxicity (${(tox * 100).toFixed(0)}%). Please clean the data first.`);
+          return;
+        }
+      } catch (err: any) {
+        Alert.alert(
+          'Quality Check Unavailable',
+          'Could not verify dataset quality. Proceed anyway?',
+          [
+            {text: 'Cancel', style: 'cancel'},
+            {text: 'Proceed', onPress: () => {
+              setConfig({dataset_id: selectedDataset, source_text: undefined});
+              triggerHaptic('medium');
+              start();
+            }},
+          ]
+        );
         return;
       }
       setConfig({dataset_id: selectedDataset, source_text: undefined});
@@ -193,25 +224,6 @@ export function TrainingScreen() {
     }
   };
 
-  const handleTestModel = async () => {
-    if (!testPrompt.trim()) {
-      return;
-    }
-    setTestLoading(true);
-    setTestResult('');
-    try {
-      const result = await api.post<{text: string}>('/inference/generate', {
-        prompt: testPrompt,
-        max_new_tokens: 150,
-      });
-      setTestResult(result.text || 'No response');
-    } catch (err: any) {
-      setTestResult(`Error: ${err.message || 'Failed to generate'}`);
-    } finally {
-      setTestLoading(false);
-    }
-  };
-
   const isTraining =
     phase === 'TRAINING' ||
     phase === 'EVALUATING' ||
@@ -224,12 +236,14 @@ export function TrainingScreen() {
   const isFailed = phase === 'FAILED';
   const accent = colors.primary;
   const progress =
-    totalEpochs > 0 ? Math.round((epoch / totalEpochs) * 100) : 0;
+    totalEpochs > 0 ? Math.min(100, Math.round((epoch / totalEpochs) * 100)) : 0;
   const phaseInfo = PHASE_LABELS[phase] || PHASE_LABELS.idle;
 
   const LossChart = useCallback(
     ({data}: {data: {step: number; value: number}[]}) => {
-      if (data.length < 2) {
+      // Filter NaN/Inf values
+      const valid = data.filter(d => Number.isFinite(d.value));
+      if (valid.length < 2) {
         return (
           <YStack
             height={80}
@@ -244,10 +258,10 @@ export function TrainingScreen() {
         );
       }
 
-      const maxLoss = Math.max(...data.map(d => d.value));
-      const minLoss = Math.min(...data.map(d => d.value));
+      const maxLoss = valid.reduce((max, d) => (d.value > max ? d.value : max), valid[0].value);
+      const minLoss = valid.reduce((min, d) => (d.value < min ? d.value : min), valid[0].value);
       const range = maxLoss - minLoss || 1;
-      const W = 280;
+      const W = Dimensions.get('window').width - 32;
       const H = 80;
       const pad = 4;
 
@@ -258,15 +272,15 @@ export function TrainingScreen() {
             borderRadius={4}
             overflow="hidden"
             style={{width: W, height: H}}>
-            {data.map((point, i) => {
-              const x = pad + (i / (data.length - 1)) * (W - pad * 2);
+            {valid.map((point, i) => {
+              const x = pad + (i / (valid.length - 1)) * (W - pad * 2);
               const y =
                 H -
                 pad -
                 ((point.value - minLoss) / range) * (H - pad * 2);
-              const dotSize = i === data.length - 1 ? 6 : 3;
+              const dotSize = i === valid.length - 1 ? 6 : 3;
               const color =
-                i === data.length - 1 ? colors.primary : '#C0AAF4';
+                i === valid.length - 1 ? colors.primary : colors.primaryAlpha(0.5);
               return (
                 <YStack
                   key={i}
@@ -288,7 +302,7 @@ export function TrainingScreen() {
               {minLoss.toFixed(2)}
             </Text>
             <Text fontSize={11} color={colors.textSecondary}>
-              {data.length} points
+              {((minLoss + maxLoss) / 2).toFixed(2)}
             </Text>
             <Text fontSize={11} color={colors.textSecondary}>
               {maxLoss.toFixed(2)}
@@ -347,7 +361,7 @@ export function TrainingScreen() {
       pressStyle={{opacity: 0.7}}>
       <Text
         fontSize={11}
-        color={selected ? '#FFFFFF' : '$color10'}
+        color={selected ? colors.white : colors.textMuted}
         letterSpacing={0.2}>
         {label}
       </Text>
@@ -356,6 +370,9 @@ export function TrainingScreen() {
 
   return (
     <SafeAreaView style={{flex: 1}} edges={['top']}>
+      <KeyboardAvoidingView
+        style={{flex: 1}}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -421,7 +438,7 @@ export function TrainingScreen() {
                     pressStyle={{opacity: 0.7}}>
                     <Text
                       fontSize={13}
-                      color={method === m ? '#FFFFFF' : '$color10'}
+                      color={method === m ? colors.white : colors.textMuted}
                       fontWeight="500">
                       {m === 'distill' ? 'Distill' : 'Fine-tune'}
                     </Text>
@@ -451,13 +468,13 @@ export function TrainingScreen() {
                   autoCorrect={false}
                   style={{
                     fontSize: 15,
-                    color: '#1A1625',
+                    color: colors.text,
                     backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
                     paddingVertical: 8,
                     borderWidth: 1,
-                    borderColor: '#E4E0F2',
+                    borderColor: colors.border,
                     lineHeight: 22,
                   }}
                 />
@@ -470,6 +487,7 @@ export function TrainingScreen() {
                   marginBottom={4}>
                   Dataset
                 </Text>
+                <ScrollView style={{maxHeight: 200}}>
                 <YStack gap={4}>
                   {datasets.length === 0 ? (
                     <Text
@@ -550,6 +568,7 @@ export function TrainingScreen() {
                     ))
                   )}
                 </YStack>
+                </ScrollView>
               </YStack>
               <YStack marginBottom={12}>
                 <Text
@@ -639,7 +658,7 @@ export function TrainingScreen() {
                       width={20}
                       height={20}
                       borderRadius={10}
-                      backgroundColor="transparent"
+                      backgroundColor={colors.white}
                       alignSelf={
                         hfOpts.use_lora ? 'flex-end' : 'flex-start'
                       }
@@ -700,7 +719,7 @@ export function TrainingScreen() {
                     <Text
                       fontSize={13}
                       color={
-                        inputMode === mode ? '#FFFFFF' : '$color10'
+                        inputMode === mode ? colors.white : colors.textMuted
                       }
                       fontWeight="500">
                       {mode === 'text' ? 'Paste Text' : 'Dataset'}
@@ -719,7 +738,7 @@ export function TrainingScreen() {
                   textAlignVertical="top"
                   style={{
                     fontSize: 15,
-                    color: '#1A1625',
+                    color: colors.text,
                     backgroundColor: colors.primaryAlpha(0.04),
                     borderRadius: 8,
                     paddingHorizontal: 12,
@@ -729,6 +748,7 @@ export function TrainingScreen() {
                   }}
                 />
               ) : (
+                <ScrollView style={{maxHeight: 200}}>
                 <YStack gap={4}>
                   {datasets.length === 0 ? (
                     <Text
@@ -827,6 +847,7 @@ export function TrainingScreen() {
                     </Text>
                   </YStack>
                 </YStack>
+                </ScrollView>
               )}
             </Section>
           )}
@@ -881,7 +902,7 @@ export function TrainingScreen() {
                   Soul
                 </Text>
                 <XStack gap={4} flexWrap="wrap">
-                  {['assistant', 'creative', 'coder', 'teacher', 'analyst'].map(
+                  {(soulNames.length > 0 ? soulNames : ['assistant', 'creative', 'coder', 'teacher', 'analyst']).map(
                     v => (
                       <Pill
                         key={v}
@@ -946,7 +967,7 @@ export function TrainingScreen() {
                     fontSize={16}
                     fontWeight="600"
                     color={colors.text}>
-                    {loss !== null ? loss.toFixed(4) : '—'}
+                    {loss !== null && Number.isFinite(loss) ? loss.toFixed(4) : '—'}
                   </Text>
                 </YStack>
                 <YStack>
@@ -960,9 +981,41 @@ export function TrainingScreen() {
                     fontSize={16}
                     fontWeight="600"
                     color={colors.text}>
-                    {steps}
+                    {steps.toLocaleString()}
                   </Text>
                 </YStack>
+                {stepsPerSec != null && stepsPerSec > 0 && (
+                  <YStack>
+                    <Text
+                      fontSize={11}
+                      color={colors.textSecondary}
+                      letterSpacing={0.2}>
+                      Speed
+                    </Text>
+                    <Text
+                      fontSize={16}
+                      fontWeight="600"
+                      color={colors.text}>
+                      {stepsPerSec.toFixed(1)}/s
+                    </Text>
+                  </YStack>
+                )}
+                {eta != null && eta > 0 && (
+                  <YStack>
+                    <Text
+                      fontSize={11}
+                      color={colors.textSecondary}
+                      letterSpacing={0.2}>
+                      ETA
+                    </Text>
+                    <Text
+                      fontSize={16}
+                      fontWeight="600"
+                      color={colors.text}>
+                      {eta < 60 ? `${Math.round(eta)}s` : `${Math.round(eta / 60)}m`}
+                    </Text>
+                  </YStack>
+                )}
               </XStack>
               <LossChart data={lossHistory} />
               {isTraining && (
@@ -1034,7 +1087,7 @@ export function TrainingScreen() {
                 color={colors.textSecondary}
                 letterSpacing={0.2}
                 marginTop={4}>
-                Final loss: {loss?.toFixed(4) || '—'} · {steps} steps
+                Final loss: {loss?.toFixed(4) || '—'} · {steps.toLocaleString()} steps
               </Text>
               <XStack gap={8} marginTop={12}>
                 <YStack
@@ -1098,7 +1151,7 @@ export function TrainingScreen() {
                 color={colors.textSecondary}
                 letterSpacing={0.2}
                 marginTop={4}>
-                Loss: {loss?.toFixed(4) || '—'} · {steps} steps
+                Loss: {loss?.toFixed(4) || '—'} · {steps.toLocaleString()} steps
               </Text>
               <XStack gap={8} marginTop={12}>
                 <YStack
@@ -1154,13 +1207,13 @@ export function TrainingScreen() {
           {/* ── Job History (with per-job stop + delete) ─────────────────── */}
           {hfJobs.length > 0 && (
             <Section title="Job History">
-              {hfJobs.slice().reverse().map((job: any) => {
+              {hfJobs.slice().reverse().map((job: any, index: number) => {
                 const jobId = job.job_id || job.id;
                 const isRunning =
                   job.status === 'running' || job.phase === 'TRAINING';
                 return (
                   <XStack
-                    key={jobId || Math.random()}
+                    key={jobId || `job-${index}`}
                     alignItems="center"
                     justifyContent="space-between"
                     paddingVertical={8}
@@ -1218,7 +1271,7 @@ export function TrainingScreen() {
                           height={28}
                           borderRadius={999}
                           style={{
-                            backgroundColor: 'rgba(212, 76, 86, 0.15)',
+                            backgroundColor: colors.errorAlpha(0.15),
                           }}
                           alignItems="center"
                           justifyContent="center"
@@ -1321,7 +1374,7 @@ export function TrainingScreen() {
                       height={28}
                       borderRadius={999}
                       style={{
-                        backgroundColor: 'rgba(212, 76, 86, 0.15)',
+                        backgroundColor: colors.errorAlpha(0.15),
                       }}
                       alignItems="center"
                       justifyContent="center"
@@ -1429,7 +1482,7 @@ export function TrainingScreen() {
                       height={28}
                       borderRadius={999}
                       style={{
-                        backgroundColor: 'rgba(212, 76, 86, 0.15)',
+                        backgroundColor: colors.errorAlpha(0.15),
                       }}
                       alignItems="center"
                       justifyContent="center"
@@ -1464,329 +1517,24 @@ export function TrainingScreen() {
           )}
         </YStack>
       </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* ── Dataset Preview Modal ──────────────────────────────────────── */}
-      <Modal visible={previewVisible} animationType="slide" transparent>
-        <YStack
-          flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
-          justifyContent="flex-end">
-          <YStack
-            backgroundColor={colors.background}
-            borderTopLeftRadius={24}
-            borderTopRightRadius={24}
-            maxHeight="70%">
-            <XStack
-              alignItems="center"
-              justifyContent="space-between"
-              paddingHorizontal={20}
-              paddingVertical={16}
-              borderBottomWidth={1}
-              borderBottomColor="$borderColor">
-              <Text
-                fontSize={16}
-                fontWeight="600"
-                color={colors.text}>
-                Dataset Preview
-              </Text>
-              <Pressable
-                onPress={hapticPress('light', () => setPreviewVisible(false))}
-                accessibilityLabel="Close preview">
-                <YStack
-                  width={28}
-                  height={28}
-                  borderRadius={9}
-                  alignItems="center"
-                  justifyContent="center">
-                  <Icon name="x" size={16} color={colors.textSecondary} />
-                </YStack>
-              </Pressable>
-            </XStack>
-            <ScrollView
-              style={{paddingHorizontal: 20, paddingVertical: 12}}>
-              {previewData.map((line, i) => (
-                <XStack
-                  key={i}
-                  gap={8}
-                  paddingVertical={4}
-                  borderBottomWidth={1}
-                  borderBottomColor="$borderColor">
-                  <Text
-                    fontSize={11}
-                    color={colors.textSecondary}
-                    letterSpacing={0.2}
-                    width={24}>
-                    {i + 1}
-                  </Text>
-                  <Text
-                    fontSize={13}
-                    color={colors.text}
-                    lineHeight={18}
-                    flex={1}
-                    numberOfLines={3}>
-                    {line}
-                  </Text>
-                </XStack>
-              ))}
-              {previewData.length === 0 && (
-                <Text
-                  fontSize={13}
-                  color={colors.textSecondary}
-                  lineHeight={18}
-                  textAlign="center"
-                  padding={24}>
-                  No preview available
-                </Text>
-              )}
-            </ScrollView>
-          </YStack>
-        </YStack>
-      </Modal>
+      <DatasetPreviewModal
+        visible={previewVisible}
+        onClose={() => setPreviewVisible(false)}
+        data={previewData}
+      />
 
-      {/* ── Import Dataset Modal (multi-source) ────────────────────────── */}
-      <Modal visible={showImportModal} animationType="slide" transparent>
-        <YStack
-          flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
-          justifyContent="flex-end">
-          <YStack
-            backgroundColor={colors.background}
-            borderTopLeftRadius={24}
-            borderTopRightRadius={24}>
-            <XStack
-              alignItems="center"
-              justifyContent="space-between"
-              paddingHorizontal={20}
-              paddingVertical={16}
-              borderBottomWidth={1}
-              borderBottomColor="$borderColor">
-              <Text
-                fontSize={16}
-                fontWeight="600"
-                color={colors.text}>
-                Import Dataset
-              </Text>
-              <Pressable
-                onPress={hapticPress('light', () => setShowImportModal(false))}
-                accessibilityLabel="Close import">
-                <YStack
-                  width={28}
-                  height={28}
-                  borderRadius={9}
-                  alignItems="center"
-                  justifyContent="center">
-                  <Icon name="x" size={16} color={colors.textSecondary} />
-                </YStack>
-              </Pressable>
-            </XStack>
-            <YStack padding={20} gap={16}>
-              <YStack gap={8}>
-                <Text
-                  fontSize={13}
-                  color={colors.textSecondary}
-                  fontWeight="500">
-                  Source
-                </Text>
-                <XStack gap={4} flexWrap="wrap">
-                  {IMPORT_SOURCES.map(src => (
-                    <Pill
-                      key={src.key}
-                      label={src.label}
-                      selected={importType === src.key}
-                      onPress={() => {
-                        setImportType(src.key);
-                        setImportSource('');
-                      }}
-                    />
-                  ))}
-                </XStack>
-              </YStack>
-              <YStack gap={4}>
-                <Text fontSize={13} color={colors.textSecondary}>
-                  {importType === 'github'
-                    ? 'Repository'
-                    : importType === 'huggingface'
-                    ? 'Dataset ID'
-                    : 'URL or Path'}
-                </Text>
-                <TextInput
-                  value={importSource}
-                  onChangeText={setImportSource}
-                  placeholder={
-                    IMPORT_SOURCES.find(s => s.key === importType)
-                      ?.placeholder
-                  }
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    fontSize: 15,
-                    color: '#1A1625',
-                    backgroundColor: colors.primaryAlpha(0.04),
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  }}
-                />
-              </YStack>
-              <YStack gap={4}>
-                <Text fontSize={13} color={colors.textSecondary}>
-                  Name (optional)
-                </Text>
-                <TextInput
-                  value={importName}
-                  onChangeText={setImportName}
-                  placeholder="my-dataset"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    fontSize: 15,
-                    color: '#1A1625',
-                    backgroundColor: colors.primaryAlpha(0.04),
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                  }}
-                />
-              </YStack>
-              <YStack
-                paddingVertical={12}
-                borderRadius={10}
-                alignItems="center"
-                backgroundColor={
-                  importing || !importSource.trim()
-                    ? 'rgba(124, 82, 196, 0.3)'
-                    : colors.primary
-                }
-                onPress={hapticPress('light', handleImport)}
-                disabled={importing || !importSource.trim()}
-                pressStyle={{opacity: 0.7}}>
-                {importing ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <Text
-                    fontSize={14}
-                    fontWeight="600"
-                    color={colors.white}>
-                    Import
-                  </Text>
-                )}
-              </YStack>
-            </YStack>
-          </YStack>
-        </YStack>
-      </Modal>
+      <ImportDatasetModal
+        visible={showImportModal}
+        onClose={() => setShowImportModal(false)}
+      />
 
-      {/* ── Test Model Modal ───────────────────────────────────────────── */}
-      <Modal visible={testModalVisible} animationType="slide" transparent>
-        <YStack
-          flex={1}
-          backgroundColor="rgba(0,0,0,0.4)"
-          justifyContent="flex-end">
-          <YStack
-            backgroundColor={colors.background}
-            borderTopLeftRadius={24}
-            borderTopRightRadius={24}
-            maxHeight="80%">
-            <XStack
-              alignItems="center"
-              justifyContent="space-between"
-              paddingHorizontal={20}
-              paddingVertical={16}
-              borderBottomWidth={1}
-              borderBottomColor="$borderColor">
-              <Text
-                fontSize={16}
-                fontWeight="600"
-                color={colors.text}>
-                Test Model
-              </Text>
-              <Pressable
-                onPress={hapticPress('light', () => {
-                  setTestModalVisible(false);
-                  setTestResult('');
-                  setTestPrompt('');
-                })}
-                accessibilityLabel="Close test">
-                <YStack
-                  width={28}
-                  height={28}
-                  borderRadius={9}
-                  alignItems="center"
-                  justifyContent="center">
-                  <Icon name="x" size={16} color={colors.textSecondary} />
-                </YStack>
-              </Pressable>
-            </XStack>
-            <YStack padding={20} gap={12}>
-              <YStack gap={4}>
-                <Text fontSize={13} color={colors.textSecondary}>
-                  Prompt
-                </Text>
-                <TextInput
-                  value={testPrompt}
-                  onChangeText={setTestPrompt}
-                  placeholder="Type a prompt to test the trained model..."
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    fontSize: 15,
-                    color: '#1A1625',
-                    backgroundColor: colors.primaryAlpha(0.04),
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    paddingVertical: 10,
-                    minHeight: 60,
-                  }}
-                />
-              </YStack>
-              <YStack
-                paddingVertical={12}
-                borderRadius={10}
-                alignItems="center"
-                backgroundColor={
-                  testLoading || !testPrompt.trim()
-                    ? 'rgba(124, 82, 196, 0.3)'
-                    : colors.primary
-                }
-                onPress={hapticPress('light', handleTestModel)}
-                disabled={testLoading || !testPrompt.trim()}
-                pressStyle={{opacity: 0.7}}>
-                {testLoading ? (
-                  <ActivityIndicator color={colors.white} />
-                ) : (
-                  <Text
-                    fontSize={14}
-                    fontWeight="600"
-                    color={colors.white}>
-                    Generate
-                  </Text>
-                )}
-              </YStack>
-              {testResult ? (
-                <YStack gap={4}>
-                  <Text fontSize={13} color={colors.textSecondary}>
-                    Response
-                  </Text>
-                  <YStack
-                    backgroundColor={colors.primaryAlpha(0.04)}
-                    borderRadius={8}
-                    padding={12}>
-                    <Text
-                      fontSize={14}
-                      color={colors.text}
-                      lineHeight={20}>
-                      {testResult}
-                    </Text>
-                  </YStack>
-                </YStack>
-              ) : null}
-            </YStack>
-          </YStack>
-        </YStack>
-      </Modal>
+      <TestModelModal
+        visible={testModalVisible}
+        onClose={() => setTestModalVisible(false)}
+        checkpoint={checkpoint}
+      />
     </SafeAreaView>
   );
 }

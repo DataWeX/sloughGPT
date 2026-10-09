@@ -8,8 +8,8 @@ Usage:
     sloughgpt serve --web          # preferred way
 """
 
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 

@@ -11,10 +11,11 @@ import stat as stat_mod
 import sys
 import types
 
-import pytest
-
-from domains.shell.addons.filesystem import (
-    VFS, VFSEntry, VFSDirectory, VFSWriteOnlyFile,
+from domain.shell._internal.addons.filesystem import (
+    VFS,
+    VFSDirectory,
+    VFSEntry,
+    VFSWriteOnlyFile,
 )
 
 
@@ -22,8 +23,8 @@ def _psutil_stub(cpu_freq_val):
     """Programmatic psutil stand-in: real computed values, no hardcoded tables."""
     mod = types.ModuleType("psutil")
     mod.virtual_memory = lambda: types.SimpleNamespace(
-        total=16 * 1024 ** 3,
-        available=8 * 1024 ** 3,
+        total=16 * 1024**3,
+        available=8 * 1024**3,
     )
     mod.cpu_count = lambda: 4
     mod.cpu_freq = lambda: cpu_freq_val
@@ -44,18 +45,19 @@ def _block_psutil(monkeypatch):
 
 def _broken_resource_manager(monkeypatch):
     """Make resource_manager importable but raise at call time."""
-    mod = types.ModuleType("domains.infrastructure.resource_manager")
+    mod = types.ModuleType("domain.infrastructure.resource_manager")
 
     def _raise():
         raise RuntimeError("no resource manager in test")
 
     mod.get_resource_manager = _raise
-    monkeypatch.setitem(sys.modules, "domains.infrastructure.resource_manager", mod)
+    monkeypatch.setitem(sys.modules, "domain.infrastructure.resource_manager", mod)
 
 
 # ---------------------------------------------------------------------------
 # VFSWriteOnlyFile debug logging
 # ---------------------------------------------------------------------------
+
 
 class TestVFSWriteOnlyFileDebug:
     def test_write_logs_truthy_result(self, caplog):
@@ -68,6 +70,7 @@ class TestVFSWriteOnlyFileDebug:
 # ---------------------------------------------------------------------------
 # set_devices / set_kernel mount rebuilds
 # ---------------------------------------------------------------------------
+
 
 class TestSetDevices:
     def test_set_devices_with_names_builds_mount(self):
@@ -97,6 +100,7 @@ class TestSetKernelProc:
 # ---------------------------------------------------------------------------
 # /proc generator branches
 # ---------------------------------------------------------------------------
+
 
 class TestProcGenerators:
     def test_meminfo_fallback_without_psutil(self, monkeypatch):
@@ -131,7 +135,8 @@ class TestProcGenerators:
     def test_cpuinfo_psutil_fallback_with_freq(self, monkeypatch):
         _broken_resource_manager(monkeypatch)
         monkeypatch.setitem(
-            sys.modules, "psutil",
+            sys.modules,
+            "psutil",
             _psutil_stub(types.SimpleNamespace(current=2500.5)),
         )
         vfs = VFS()
@@ -167,6 +172,7 @@ class TestProcGenerators:
 # _resolve_in_dir edge cases
 # ---------------------------------------------------------------------------
 
+
 class TestResolveInDir:
     def test_empty_part_skipped(self):
         vfs = VFS()
@@ -200,6 +206,7 @@ class TestResolveInDir:
 # callable (non-VFSDirectory) mount fallbacks
 # ---------------------------------------------------------------------------
 
+
 class TestCallableMounts:
     def test_exists_returns_true_for_callable_mount(self):
         vfs = VFS()
@@ -231,6 +238,7 @@ class TestCallableMounts:
 # real-filesystem error paths
 # ---------------------------------------------------------------------------
 
+
 class TestRealFsErrorPaths:
     def test_listdir_real_directory(self, tmp_path):
         (tmp_path / "b").write_text("")
@@ -259,6 +267,7 @@ class TestRealFsErrorPaths:
 # ---------------------------------------------------------------------------
 # virtual directory / file dispatch branches
 # ---------------------------------------------------------------------------
+
 
 class TestVirtualDispatchBranches:
     def test_listdir_file_returns_none(self):

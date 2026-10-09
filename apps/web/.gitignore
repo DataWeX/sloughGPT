@@ -46,6 +46,10 @@ tmp/
 temp/
 *.tmp
 
+# Vite static build (deployed by the gateway as its document root; rebuilt by `npm run build:vite`)
+dist-vite/
+
 # Next.js build outputs (dev uses .next-dev, prod build uses .next)
 .next-dev/
 .next-build*/
+.hydration-dump.json

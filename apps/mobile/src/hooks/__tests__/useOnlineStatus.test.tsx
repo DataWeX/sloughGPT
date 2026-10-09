@@ -1,6 +1,6 @@
 import React from 'react';
 import {Text} from 'react-native';
-import {render, waitFor} from '@testing-library/react-native';
+import {render, waitFor, act} from '@testing-library/react-native';
 import * as apiClient from '../../services/api-client';
 
 jest.mock('../../services/api-client');
@@ -16,12 +16,15 @@ function HookDisplay() {
 }
 
 beforeEach(() => {
+  jest.useFakeTimers();
   jest.clearAllMocks();
   jest.restoreAllMocks();
   mockGetApiUrl.mockResolvedValue('http://localhost:8000');
 });
 
 afterEach(() => {
+  jest.runOnlyPendingTimers();
+  jest.useRealTimers();
   jest.restoreAllMocks();
 });
 
@@ -34,25 +37,57 @@ describe('useOnlineStatus', () => {
     });
   });
 
-  it('returns false when health check fails with non-ok', async () => {
-    jest.spyOn(global, 'fetch').mockResolvedValue({ok: false} as Response);
-    const {getByTestId} = await render(<HookDisplay />);
-    await waitFor(() => {
-      expect(getByTestId('val').children[0]).toBe('false');
-    });
-  });
-
-  it('returns false when fetch throws', async () => {
+  it('returns true on first failure (never connected)', async () => {
     jest.spyOn(global, 'fetch').mockRejectedValue(new Error('fail'));
     const {getByTestId} = await render(<HookDisplay />);
     await waitFor(() => {
+      expect(getByTestId('val').children[0]).toBe('true');
+    });
+  });
+
+  it('returns false after connected then health check fails', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    spy.mockResolvedValueOnce({ok: true} as Response);
+    const {getByTestId} = await render(<HookDisplay />);
+    await waitFor(() => {
+      expect(getByTestId('val').children[0]).toBe('true');
+    });
+    spy.mockResolvedValueOnce({ok: false} as Response);
+    await act(async () => {
+      jest.advanceTimersByTime(10000);
+    });
+    await waitFor(() => {
       expect(getByTestId('val').children[0]).toBe('false');
     });
   });
 
-  it('returns false when getApiUrl throws', async () => {
-    mockGetApiUrl.mockRejectedValue(new Error('fail'));
+  it('returns false after connected then fetch throws', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    spy.mockResolvedValueOnce({ok: true} as Response);
     const {getByTestId} = await render(<HookDisplay />);
+    await waitFor(() => {
+      expect(getByTestId('val').children[0]).toBe('true');
+    });
+    spy.mockRejectedValueOnce(new Error('fail'));
+    await act(async () => {
+      jest.advanceTimersByTime(10000);
+    });
+    await waitFor(() => {
+      expect(getByTestId('val').children[0]).toBe('false');
+    });
+  });
+
+  it('returns false after connected then getApiUrl throws', async () => {
+    const spy = jest.spyOn(global, 'fetch');
+    spy.mockResolvedValueOnce({ok: true} as Response);
+    const {getByTestId} = await render(<HookDisplay />);
+    await waitFor(() => {
+      expect(getByTestId('val').children[0]).toBe('true');
+    });
+    mockGetApiUrl.mockRejectedValueOnce(new Error('fail'));
+    await act(async () => {
+      jest.advanceTimersByTime(10000);
+    });
     await waitFor(() => {
       expect(getByTestId('val').children[0]).toBe('false');
     });

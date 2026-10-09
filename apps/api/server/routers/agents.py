@@ -4,15 +4,21 @@ Agents Router - Full CRUD for AI agent definitions with execution and orchestrat
 
 import asyncio
 import logging
+from collections.abc import AsyncGenerator
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from infrastructure.auth import require_auth_if_enabled
 from pydantic import BaseModel, Field
-from typing import Optional, List, AsyncGenerator
+from schemas.common import (
+    classify_and_raise,
+    endpoint,
+    raise_error,
+    safe_audit_log,
+    success_response,
+)
 
-from domains.api.sse_envelope import sse_event, sse_complete, sse_error
-
-from schemas.common import success_response, classify_and_raise, safe_audit_log
+from domain.api import sse_complete, sse_error, sse_event
 
 logger = logging.getLogger("slo.routers.agents")
 
@@ -22,7 +28,7 @@ class AgentOut(BaseModel):
     name: str
     description: str
     instructions: str = ""
-    tools: List[str] = []
+    tools: list[str] = []
     avatar: str = ""
 
 
@@ -31,16 +37,16 @@ class AgentCreate(BaseModel):
     name: str = Field(..., min_length=1)
     description: str = ""
     instructions: str = ""
-    tools: List[str] = []
+    tools: list[str] = []
     avatar: str = ""
 
 
 class AgentUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    instructions: Optional[str] = None
-    tools: Optional[List[str]] = None
-    avatar: Optional[str] = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    description: str | None = Field(default=None, max_length=2000)
+    instructions: str | None = Field(default=None, max_length=50000)
+    tools: list[str] | None = None
+    avatar: str | None = Field(default=None, max_length=500)
 
 
 class ExecuteRequest(BaseModel):
@@ -52,7 +58,9 @@ class ExecuteRequest(BaseModel):
 class OrchestrateRequest(BaseModel):
     goal: str = Field(..., min_length=1, description="The goal for multi-agent orchestration")
     context: str = Field(default="", description="Additional context for the orchestrator")
-    agent_ids: List[str] = Field(default_factory=list, description="Specific agent IDs to use (empty = all agents)")
+    agent_ids: list[str] = Field(
+        default_factory=list, description="Specific agent IDs to use (empty = all agents)"
+    )
 
 
 class AgentsRouter:
@@ -63,332 +71,359 @@ class AgentsRouter:
         self._register_routes()
 
     def _register_routes(self):
-        self.router.add_api_route("", self.list_agents, methods=["GET"], response_model=List[AgentOut])
-        self.router.add_api_route("", self.create_agent, methods=["POST"], response_model=AgentOut, status_code=201)
+        self.router.add_api_route("", self.list_agents, methods=["GET"])
+        self.router.add_api_route("", self.create_agent, methods=["POST"], status_code=201)
         self.router.add_api_route("/runs", self.list_runs, methods=["GET"])
         self.router.add_api_route("/runs/{run_id}", self.get_run, methods=["GET"])
-        self.router.add_api_route("/{agent_id}", self.get_agent, methods=["GET"], response_model=AgentOut)
-        self.router.add_api_route("/{agent_id}", self.update_agent, methods=["PUT"], response_model=AgentOut)
+        self.router.add_api_route("/{agent_id}", self.get_agent, methods=["GET"])
+        self.router.add_api_route("/{agent_id}", self.update_agent, methods=["PUT"])
         self.router.add_api_route("/{agent_id}", self.delete_agent, methods=["DELETE"])
         self.router.add_api_route("/{agent_id}/execute", self.execute_agent, methods=["POST"])
-        self.router.add_api_route("/orchestrate", self.orchestrate_agents, methods=["POST"], response_model=None)
+        self.router.add_api_route(
+            "/orchestrate", self.orchestrate_agents, methods=["POST"], response_model=None
+        )
 
     def _get_system(self):
         """Get the agent system singleton."""
-        from domains.agents.system import get_agent_system
+        from domain.agents import get_agent_system
+
         return get_agent_system()
 
+    @endpoint("agents.list_agents")
     async def list_agents(self) -> dict:
-        """List all agents stored in the agent system.
-
-        Returns:
-            List of AgentOut objects, each containing id, name,
-            description, instructions, tools, and avatar fields.
-
-        Side effects:
-            Reads from the agent system singleton.
-        """
-        return [AgentOut(**a) for a in self._get_system().list()]
-
-    async def create_agent(self, req: AgentCreate) -> dict:
-        """Create a new agent with the given name, description, tools, and instructions.
-
-        Args:
-            req: AgentCreate with name (required), description, instructions,
-                tools list, and avatar. If id is empty, a slug is derived from
-                the name.
-
-        Returns:
-            AgentOut with the created agent's data.
-
-        Side effects:
-            Persists the agent to the agent system store.
-            Logs an audit entry for agent creation.
-            Raises 409 if an agent with the same ID already exists.
-        """
-        agent_id = req.id or req.name.lower().replace(" ", "-").replace("_", "-")[:32]
+        """List all agents stored in the agent system."""
         system = self._get_system()
-        if system.get(agent_id):
-            raise HTTPException(status_code=409, detail="Agent ID already exists")
-        result = system.create(
-            agent_id=agent_id,
-            name=req.name,
-            description=req.description,
-            instructions=req.instructions,
-            tools=req.tools,
-            avatar=req.avatar,
-        )
-        safe_audit_log("agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or []))
-        return AgentOut(**result)
+        agents = await asyncio.to_thread(system.list)
+        return success_response(data=[AgentOut(**a).model_dump() for a in agents])
 
+    @endpoint("agents.create_agent")
+    async def create_agent(
+        self, req: AgentCreate, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        try:
+            """Create a new agent with the given name, description, tools, and instructions.
+
+            Args:
+                req: AgentCreate with name (required), description, instructions,
+                    tools list, and avatar. If id is empty, a slug is derived from
+                    the name.
+
+            Returns:
+                AgentOut with the created agent's data.
+
+            Side effects:
+                Persists the agent to the agent system store.
+                Logs an audit entry for agent creation.
+                Raises 409 if an agent with the same ID already exists.
+            """
+            agent_id = req.id or req.name.lower().replace(" ", "-").replace("_", "-")[:32]
+            system = self._get_system()
+            existing = await asyncio.to_thread(system.get, agent_id)
+            if existing:
+                raise_error("Agent ID already exists", "E_INFRA_BUSY", status_code=409)
+            result = await asyncio.to_thread(
+                system.create,
+                agent_id=agent_id,
+                name=req.name,
+                description=req.description,
+                instructions=req.instructions,
+                tools=req.tools,
+                avatar=req.avatar,
+            )
+            safe_audit_log(
+                "agent.create", resource=agent_id, detail=req.name, tools=list(req.tools or [])
+            )
+            return success_response(data=AgentOut(**result).model_dump())
+
+        except Exception as e:
+            classify_and_raise(e, source="agents.create_agent")
+
+    @endpoint("agents.get_agent")
     async def get_agent(self, agent_id: str) -> dict:
         """Get a specific agent by ID."""
         result = self._get_system().get(agent_id)
         if result is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        return AgentOut(**result)
+            raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data=AgentOut(**result).model_dump())
 
-    async def update_agent(self, agent_id: str, req: AgentUpdate) -> dict:
-        """Update an existing agent by ID with partial field changes.
+    @endpoint("agents.update_agent")
+    async def update_agent(
+        self, agent_id: str, req: AgentUpdate, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Update an existing agent by ID with partial field changes."""
+        try:
+            system = self._get_system()
+            result = await asyncio.to_thread(
+                system.update,
+                agent_id=agent_id,
+                name=req.name,
+                description=req.description,
+                instructions=req.instructions,
+                tools=req.tools,
+                avatar=req.avatar,
+            )
+            if result is None:
+                raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
+            safe_audit_log("agent.update", resource=agent_id)
+            return success_response(data=AgentOut(**result).model_dump())
+        except Exception as e:
+            classify_and_raise(e, source="agents.update")
 
-        Args:
-            agent_id: The unique identifier of the agent to update.
-            req: AgentUpdate with optional name, description, instructions,
-                tools, and avatar fields. Only non-None fields are applied.
+    @endpoint("agents.delete_agent")
+    async def delete_agent(
+        self, agent_id: str, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
+        """Delete an agent by its unique identifier."""
+        try:
+            if not await asyncio.to_thread(self._get_system().delete, agent_id):
+                raise_error("Agent not found", "E_NOT_FOUND", status_code=404)
+            safe_audit_log("agent.delete", resource=agent_id)
+            return success_response(data={"status": "deleted"})
+        except Exception as e:
+            classify_and_raise(e, source="agents.delete")
 
-        Returns:
-            AgentOut with the updated agent data.
-
-        Side effects:
-            Modifies the agent record in the agent system store.
-            Logs an audit entry for agent update.
-            Raises 404 if no agent with the given ID is found.
-        """
-        system = self._get_system()
-        result = system.update(
-            agent_id=agent_id,
-            name=req.name,
-            description=req.description,
-            instructions=req.instructions,
-            tools=req.tools,
-            avatar=req.avatar,
-        )
-        if result is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
-        safe_audit_log("agent.update", resource=agent_id)
-        return AgentOut(**result)
-
-    async def delete_agent(self, agent_id: str) -> dict:
-        """Delete an agent by its unique identifier.
-
-        Args:
-            agent_id: The unique identifier of the agent to delete.
-
-        Returns:
-            Success response with status "deleted".
-
-        Side effects:
-            Removes the agent from the agent system store.
-            Logs an audit entry for agent deletion.
-            Raises 404 if no agent with the given ID is found.
-        """
-        if not self._get_system().delete(agent_id):
-            raise HTTPException(status_code=404, detail="Agent not found")
-        safe_audit_log("agent.delete", resource=agent_id)
-        return success_response(data={"status": "deleted"})
-
-    async def execute_agent(self, agent_id: str, req: ExecuteRequest) -> dict:
+    @endpoint("agents.execute_agent")
+    async def execute_agent(
+        self, agent_id: str, req: ExecuteRequest, auth_user: dict = Depends(require_auth_if_enabled)
+    ) -> dict:
         """Execute an agent on a user request."""
-        result = await self._get_system().execute(
-            agent_id=agent_id,
-            request=req.request,
-            session_id=req.session_id,
-            user_id=req.user_id,
-        )
-        if "error" in result:
-            raise HTTPException(status_code=404, detail=result["error"])
-        safe_audit_log("agent.execute", resource=agent_id, user_id=req.user_id or "", session_id=req.session_id or "")
-        return result
+        try:
+            result = await self._get_system().execute(
+                agent_id=agent_id,
+                request=req.request,
+                session_id=req.session_id,
+                user_id=req.user_id,
+            )
+            if "error" in result:
+                raise_error(result["error"], "E_NOT_FOUND", status_code=404)
+            safe_audit_log(
+                "agent.execute",
+                resource=agent_id,
+                user_id=req.user_id or "",
+                session_id=req.session_id or "",
+            )
+            return result
+        except Exception as e:
+            classify_and_raise(e, source="agents.execute")
 
     # ── Orchestration ─────────────────────────────────────────────────────
 
-    async def orchestrate_agents(self, req: OrchestrateRequest, request: Request) -> AsyncGenerator[str, None]:
-        """Orchestrate multiple agents on a goal with SSE streaming.
+    @endpoint("agents.orchestrate_agents")
+    async def orchestrate_agents(
+        self,
+        req: OrchestrateRequest,
+        request: Request,
+        auth_user: dict = Depends(require_auth_if_enabled),
+    ) -> AsyncGenerator[str, None]:
+        try:
+            """Orchestrate multiple agents on a goal with SSE streaming.
 
-        Streams plan → per-level task execution → composition → complete.
-        Uses async HTTP for non-blocking inference calls.
-        """
-        from domains.agents.multi import MultiAgentOrchestrator
-        from domains.agents.run_history import get_agent_run_store
+            Streams plan → per-level task execution → composition → complete.
+            Uses async HTTP for non-blocking inference calls.
+            """
+            from domain.agents import MultiAgentOrchestrator, get_agent_run_store
 
-        store = get_agent_run_store()
+            store = get_agent_run_store()
 
-        async def event_stream() -> AsyncGenerator[str, None]:
-            """event_stream."""
-            run_id = None
-            try:
-                orch = MultiAgentOrchestrator()
-                # Filter agents if specific IDs provided
-                if req.agent_ids:
-                    filtered = {k: v for k, v in orch.agents.items() if k in req.agent_ids or v.name in req.agent_ids}
-                    if filtered:
-                        orch = MultiAgentOrchestrator(agents=filtered)
-                run_id = store.start(req.goal, req.context or "")
-                safe_audit_log("agent.orchestrate", resource=run_id, detail=req.goal[:200])
-                yield sse_event(
-                    stream="agent-orchestrate",
-                    phase="PLAN",
-                    status="working",
-                    data={"goal": req.goal, "run_id": run_id},
-                    message="Planning orchestration...",
-                )
-
-                if await request.is_disconnected():
-                    return
-
-                # Plan
-                tasks = await orch._async_plan(req.goal, req.context or "")
-                if not tasks:
-                    store.fail(run_id, "Could not plan this goal")
+            async def event_stream() -> AsyncGenerator[str, None]:
+                """event_stream."""
+                run_id = None
+                try:
+                    orch = MultiAgentOrchestrator()
+                    # Filter agents if specific IDs provided
+                    if req.agent_ids:
+                        filtered = {
+                            k: v
+                            for k, v in orch.agents.items()
+                            if k in req.agent_ids or v.name in req.agent_ids
+                        }
+                        if filtered:
+                            orch = MultiAgentOrchestrator(agents=filtered)
+                    run_id = store.start(req.goal, req.context or "")
+                    safe_audit_log("agent.orchestrate", resource=run_id, detail=req.goal[:200])
                     yield sse_event(
                         stream="agent-orchestrate",
                         phase="PLAN",
-                        status="error",
-                        data={"error": "Could not plan this goal"},
-                        message="Planning failed",
+                        status="working",
+                        data={"goal": req.goal, "run_id": run_id},
+                        message="Planning orchestration...",
                     )
-                    return
 
-                task_dicts = [t.to_dict() for t in tasks]
-                store.set_tasks(run_id, task_dicts)
-                yield sse_event(
-                    stream="agent-orchestrate",
-                    phase="PLAN",
-                    status="success",
-                    data={"tasks": task_dicts, "task_count": len(tasks), "run_id": run_id},
-                    message=f"Planned {len(tasks)} subtasks",
-                )
-
-                if await request.is_disconnected():
-                    return
-
-                # Execute level by level via async orchestrator
-                task_map = {t.id: t for t in tasks}
-                levels = orch._compute_levels(tasks)
-                results_ctx: dict = {}
-
-                yield sse_event(
-                    stream="agent-orchestrate",
-                    phase="EXECUTE",
-                    status="working",
-                    data={"levels": len(levels)},
-                    message="Starting execution",
-                )
-
-                for level_idx, task_ids in enumerate(levels):
                     if await request.is_disconnected():
                         return
+
+                    # Plan
+                    tasks = await orch._async_plan(req.goal, req.context or "")
+                    if not tasks:
+                        store.fail(run_id, "Could not plan this goal")
+                        yield sse_event(
+                            stream="agent-orchestrate",
+                            phase="PLAN",
+                            status="error",
+                            data={"error": "Could not plan this goal"},
+                            message="Planning failed",
+                        )
+                        return
+
+                    task_dicts = [t.to_dict() for t in tasks]
+                    store.set_tasks(run_id, task_dicts)
+                    yield sse_event(
+                        stream="agent-orchestrate",
+                        phase="PLAN",
+                        status="success",
+                        data={"tasks": task_dicts, "task_count": len(tasks), "run_id": run_id},
+                        message=f"Planned {len(tasks)} subtasks",
+                    )
+
+                    if await request.is_disconnected():
+                        return
+
+                    # Execute level by level via async orchestrator
+                    task_map = {t.id: t for t in tasks}
+                    levels = orch._compute_levels(tasks)
+                    results_ctx: dict = {}
 
                     yield sse_event(
                         stream="agent-orchestrate",
                         phase="EXECUTE",
                         status="working",
-                        data={"level": level_idx, "tasks": task_ids},
-                        message=f"Executing level {level_idx + 1}/{len(levels)} ({len(task_ids)} tasks)",
+                        data={"levels": len(levels)},
+                        message="Starting execution",
                     )
 
-                    async def run_and_yield(tid: str) -> dict:
-                        """run_and_yield."""
-                        task = task_map[tid]
-                        task.status = "in_progress"
-                        dep_context = orch._build_dep_context(task, task_map, results_ctx)
-                        try:
-                            result = await orch._async_run_agent(task, req.goal, dep_context)
-                            task.result = result
-                            task.status = "completed"
-                            results_ctx[task.id] = result
-                            store.set_tasks(run_id, [t.to_dict() for t in tasks])
-                            return sse_event(
-                                stream="agent-orchestrate",
-                                phase="EXECUTE",
-                                status="success",
-                                data={
-                                    "task_id": task.id,
-                                    "agent": task.assigned_agent,
-                                    "description": task.description,
-                                    "result_preview": result[:200],
-                                },
-                                message=f"Completed: {task.description}",
-                            )
-                        except Exception as e:
-                            classify_and_raise(e, source="agents_orchestrate_run_task")
-                            error = str(e)
-                            task.error = error
-                            task.status = "failed"
-                            results_ctx[task.id] = f"[error: {error}]"
-                            store.set_tasks(run_id, [t.to_dict() for t in tasks])
-                            return sse_event(
-                                stream="agent-orchestrate",
-                                phase="EXECUTE",
-                                status="error",
-                                data={
-                                    "task_id": task.id,
-                                    "agent": task.assigned_agent,
-                                    "description": task.description,
-                                    "error": error,
-                                },
-                                message=f"Failed: {task.description}",
-                            )
+                    for level_idx, task_ids in enumerate(levels):
+                        if await request.is_disconnected():
+                            return
 
-                    events = await asyncio.gather(*[run_and_yield(tid) for tid in task_ids], return_exceptions=True)
-                    for ev in events:
-                        if isinstance(ev, str):
-                            yield ev
-                        elif isinstance(ev, Exception):
-                            logger.warning("Task exception: %s", ev, extra={"tag": "MODEL"})
+                        yield sse_event(
+                            stream="agent-orchestrate",
+                            phase="EXECUTE",
+                            status="working",
+                            data={"level": level_idx, "tasks": task_ids},
+                            message=f"Executing level {level_idx + 1}/{len(levels)} ({len(task_ids)} tasks)",
+                        )
 
-                    if await request.is_disconnected():
-                        return
+                        async def run_and_yield(tid: str) -> dict:
+                            """run_and_yield."""
+                            task = task_map[tid]
+                            task.status = "in_progress"
+                            dep_context = orch._build_dep_context(task, task_map, results_ctx)
+                            try:
+                                result = await orch._async_run_agent(task, req.goal, dep_context)
+                                task.result = result
+                                task.status = "completed"
+                                results_ctx[task.id] = result
+                                store.set_tasks(run_id, [t.to_dict() for t in tasks])
+                                return sse_event(
+                                    stream="agent-orchestrate",
+                                    phase="EXECUTE",
+                                    status="success",
+                                    data={
+                                        "task_id": task.id,
+                                        "agent": task.assigned_agent,
+                                        "description": task.description,
+                                        "result_preview": result[:200],
+                                    },
+                                    message=f"Completed: {task.description}",
+                                )
+                            except Exception as e:
+                                error = str(e)
+                                task.error = error
+                                task.status = "failed"
+                                results_ctx[task.id] = f"[error: {error}]"
+                                store.set_tasks(run_id, [t.to_dict() for t in tasks])
+                                return sse_event(
+                                    stream="agent-orchestrate",
+                                    phase="EXECUTE",
+                                    status="error",
+                                    data={
+                                        "task_id": task.id,
+                                        "agent": task.assigned_agent,
+                                        "description": task.description,
+                                        "error": error,
+                                    },
+                                    message=f"Failed: {task.description}",
+                                )
 
-                # Compose
-                yield sse_event(
-                    stream="agent-orchestrate",
-                    phase="COMPOSE",
-                    status="working",
-                    message="Composing final response...",
-                )
+                        events = await asyncio.gather(
+                            *[run_and_yield(tid) for tid in task_ids], return_exceptions=True
+                        )
+                        for ev in events:
+                            if isinstance(ev, str):
+                                yield ev
+                            elif isinstance(ev, Exception):
+                                logger.warning("Task exception: %s", ev, extra={"tag": "MODEL"})
 
-                final = await orch._async_compose(req.goal, tasks)
+                        if await request.is_disconnected():
+                            return
 
-                store.complete(
-                    run_id,
-                    response=final,
-                    tasks=[t.to_dict() for t in tasks],
-                )
+                    # Compose
+                    yield sse_event(
+                        stream="agent-orchestrate",
+                        phase="COMPOSE",
+                        status="working",
+                        message="Composing final response...",
+                    )
 
-                yield sse_complete(
-                    stream="agent-orchestrate",
-                    phase="COMPLETE",
-                    data={
-                        "response": final,
-                        "tasks": [t.to_dict() for t in tasks],
-                        "completed": sum(1 for t in tasks if t.status == "completed"),
-                        "failed": sum(1 for t in tasks if t.status == "failed"),
-                        "run_id": run_id,
-                    },
-                    message="Orchestration complete",
-                )
+                    final = await orch._async_compose(req.goal, tasks)
 
-            except Exception as e:
-                classify_and_raise(e, source="agents_orchestrate")
-                logger.exception("Orchestration error", extra={"tag": "MODEL"})
-                if run_id:
-                    store.fail(run_id, str(e))
-                yield sse_error(
-                    stream="agent-orchestrate",
-                    phase="ERROR",
-                    error=str(e),
-                )
+                    store.complete(
+                        run_id,
+                        response=final,
+                        tasks=[t.to_dict() for t in tasks],
+                    )
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
+                    yield sse_complete(
+                        stream="agent-orchestrate",
+                        phase="COMPLETE",
+                        data={
+                            "response": final,
+                            "tasks": [t.to_dict() for t in tasks],
+                            "completed": sum(1 for t in tasks if t.status == "completed"),
+                            "failed": sum(1 for t in tasks if t.status == "failed"),
+                            "run_id": run_id,
+                        },
+                        message="Orchestration complete",
+                    )
 
-    # ── Run history ─────────────────────────────────────────────────────
+                except Exception as e:
+                    logger.exception("Orchestration error", extra={"tag": "MODEL"})
+                    if run_id:
+                        store.fail(run_id, str(e))
+                    yield sse_error(
+                        stream="agent-orchestrate",
+                        phase="ERROR",
+                        error=str(e),
+                        code="E_INFRA_GENERATION",
+                        http_status=500,
+                    )
 
+            return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+        # ── Run history ─────────────────────────────────────────────────────
+
+        except Exception as e:
+            classify_and_raise(e, source="agents.orchestrate_agents")
+
+    @endpoint("agents.list_runs")
     async def list_runs(self, limit: int = 20) -> dict:
         """List orchestration run history, newest first."""
-        from domains.agents.run_history import get_agent_run_store
+        from domain.agents import get_agent_run_store
 
-        runs = get_agent_run_store().list_runs(limit=max(1, min(int(limit), 200)))
-        return {"runs": runs, "count": len(runs)}
+        runs = await asyncio.to_thread(
+            get_agent_run_store().list_runs, limit=max(1, min(int(limit), 200))
+        )
+        return success_response(data={"runs": runs, "count": len(runs)})
 
+    @endpoint("agents.get_run")
     async def get_run(self, run_id: str) -> dict:
         """Return a single orchestration run record."""
-        from domains.agents.run_history import get_agent_run_store
+        from domain.agents import get_agent_run_store
 
-        record = get_agent_run_store().get(run_id)
+        record = await asyncio.to_thread(get_agent_run_store().get, run_id)
         if record is None:
-            raise HTTPException(status_code=404, detail="Run not found")
-        return record
+            raise_error("Run not found", "E_NOT_FOUND", status_code=404)
+        return success_response(data=record)
 
 
 router = AgentsRouter().router

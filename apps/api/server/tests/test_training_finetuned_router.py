@@ -1,3 +1,5 @@
+from infrastructure.exception_handlers import register_app_error_handler
+
 """
 Tests for the /training/finetuned-models endpoints (list, load, delete).
 
@@ -7,14 +9,15 @@ temporary dir via ``_finetuned_dir`` and the models controller is mocked.
 
 import tempfile
 from pathlib import Path
-import pytest
-from unittest.mock import patch, MagicMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from unittest.mock import MagicMock, patch
 
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from training import router as training_router
 
 app = FastAPI()
+register_app_error_handler(app)
 app.include_router(training_router)
 client = TestClient(app)
 
@@ -25,15 +28,21 @@ _FINETUNED = tempfile.mkdtemp(prefix="slough-finetuned-")
 @pytest.fixture(autouse=True)
 def _point_at_tmpdir():
     """Redirect the router's finetuned dir to a temp location and reset it."""
+    import importlib
+
+    _rt = importlib.import_module("training.router")
     base = Path(_FINETUNED)
     for child in base.iterdir():
         if child.is_dir():
             import shutil
+
             shutil.rmtree(child)
         else:
             child.unlink()
-    with patch("training.router._finetuned_dir", return_value=base):
+    _rt._finetuned_models_cache = None
+    with patch.object(_rt, "_finetuned_dir", return_value=base):
         yield
+    _rt._finetuned_models_cache = None
 
 
 def _make_model(name="gpt2_finetune_a_1"):
@@ -78,6 +87,7 @@ def test_list_finetuned_returns_dirs():
 def test_list_finetuned_newest_first():
     _make_model("older")
     import time
+
     time.sleep(0.01)
     _make_model("newer")
     models = client.get("/training/finetuned-models").json()["models"]
@@ -86,15 +96,23 @@ def test_list_finetuned_newest_first():
 
 def test_list_finetuned_prefers_metadata_over_dir_name():
     import json
+
     d = _make_model("legacy_weird_name")
-    (d / "metadata.json").write_text(json.dumps({
-        "model": "Qwen/Qwen2.5-0.5B-Instruct",
-        "dataset": "my_awesome_dataset",
-        "final_loss": 0.42,
-        "epochs": 3,
-    }))
-    gpt2 = next(m for m in client.get("/training/finetuned-models").json()["models"]
-                if m["name"] == "legacy_weird_name")
+    (d / "metadata.json").write_text(
+        json.dumps(
+            {
+                "model": "Qwen/Qwen2.5-0.5B-Instruct",
+                "dataset": "my_awesome_dataset",
+                "final_loss": 0.42,
+                "epochs": 3,
+            }
+        )
+    )
+    gpt2 = next(
+        m
+        for m in client.get("/training/finetuned-models").json()["models"]
+        if m["name"] == "legacy_weird_name"
+    )
     assert gpt2["model"] == "Qwen/Qwen2.5-0.5B-Instruct"
     assert gpt2["dataset"] == "my_awesome_dataset"
     assert gpt2["final_loss"] == 0.42
@@ -103,8 +121,11 @@ def test_list_finetuned_prefers_metadata_over_dir_name():
 
 def test_list_finetuned_falls_back_to_dir_parse_without_metadata():
     _make_model("gpt2_finetune_a_1")
-    gpt2 = next(m for m in client.get("/training/finetuned-models").json()["models"]
-                if m["name"] == "gpt2_finetune_a_1")
+    gpt2 = next(
+        m
+        for m in client.get("/training/finetuned-models").json()["models"]
+        if m["name"] == "gpt2_finetune_a_1"
+    )
     assert gpt2["model"] == "gpt2"
     assert gpt2["dataset"] == "finetune"
     assert gpt2["final_loss"] is None
@@ -118,15 +139,21 @@ def test_load_finetuned_delegates_to_controller():
     _make_model("gpt2_finetune_a_1")
     ctrl = MagicMock()
     ctrl.load_model_path.return_value = {
-        "status": "loaded", "model_id": "gpt2_finetune_a_1", "type": "slonet", "device": "cpu",
+        "status": "loaded",
+        "model_id": "gpt2_finetune_a_1",
+        "type": "slonet",
+        "device": "cpu",
         "model_path": str(Path(_FINETUNED) / "gpt2_finetune_a_1"),
     }
     with patch("controllers.models.get_models_controller", return_value=ctrl):
         resp = client.post("/training/finetuned-models/gpt2_finetune_a_1/load")
     assert resp.status_code == 200
-    assert resp.json() == {"status": "loaded", "name": "gpt2_finetune_a_1",
-                           "model_path": str(Path(_FINETUNED) / "gpt2_finetune_a_1"),
-                           "model_id": "gpt2_finetune_a_1"}
+    assert resp.json() == {
+        "status": "loaded",
+        "name": "gpt2_finetune_a_1",
+        "model_path": str(Path(_FINETUNED) / "gpt2_finetune_a_1"),
+        "model_id": "gpt2_finetune_a_1",
+    }
     ctrl.load_model_path.assert_called_once()
     args, kwargs = ctrl.load_model_path.call_args
     assert args[1] == "cpu"
@@ -146,7 +173,7 @@ def test_load_finetuned_controller_error():
     with patch("controllers.models.get_models_controller", return_value=ctrl):
         resp = client.post("/training/finetuned-models/broken/load")
     assert resp.status_code == 500
-    assert "boom" in resp.json()["detail"]
+    assert "boom" in resp.json()["error"]
 
 
 # ── DELETE /training/finetuned-models/{name} ───────────────────────────────
@@ -182,6 +209,7 @@ def test_delete_finetuned_rejects_path_traversal():
 def _clean_training_jobs():
     """Reset the in-memory job registry between tests."""
     import training.jobs as tj
+
     tj.training_jobs.clear()
     yield
     tj.training_jobs.clear()
@@ -190,9 +218,11 @@ def _clean_training_jobs():
 def test_list_jobs_serializes_with_internal_fields():
     """A job carrying a threading.Event cancel handle must serialize cleanly."""
     import threading
+
     import training.jobs as tj
 
     tj.training_jobs["job_1"] = {
+        "id": "job_1",
         "status": "running",
         "model": "gpt2",
         "dataset": "shakespeare",
@@ -214,6 +244,7 @@ def test_list_jobs_serializes_with_internal_fields():
 def test_get_single_job_serializes_with_internal_fields():
     """GET /training/jobs/{id} must also strip internal (underscore) fields."""
     import threading
+
     import training.jobs as tj
 
     tj.training_jobs["job_2"] = {

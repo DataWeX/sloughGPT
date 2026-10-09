@@ -2,17 +2,19 @@
 SloughGPT Unit Tests
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+
 torch = pytest.importorskip("torch")
 
 try:
-    from domains.models import SloughGPTModel
+    from domain.models._internal import SloughGPTModel  # noqa: F401
 except (ImportError, ModuleNotFoundError):
-    pytest.skip("domains.models not available", allow_module_level=True)
+    pytest.skip("domain.models not available", allow_module_level=True)
 
 
 class TestSloughGPTModel:
@@ -20,30 +22,18 @@ class TestSloughGPTModel:
 
     def test_model_creation(self):
         """Test SloughGPTModel can be created."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
-        model = SloughGPTModel(
-            vocab_size=100,
-            n_embed=64,
-            n_layer=2,
-            n_head=2,
-            block_size=32
-        )
+        model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
         assert model is not None
         assert model.num_parameters() > 0
 
     def test_forward_pass(self):
         """Test forward pass."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
-        model = SloughGPTModel(
-            vocab_size=100,
-            n_embed=64,
-            n_layer=2,
-            n_head=2,
-            block_size=32
-        )
+        model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
         x = torch.randint(0, 100, (2, 10))
         logits, loss = model(x)
@@ -52,15 +42,9 @@ class TestSloughGPTModel:
 
     def test_generation(self):
         """Test text generation."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
-        model = SloughGPTModel(
-            vocab_size=100,
-            n_embed=64,
-            n_layer=2,
-            n_head=2,
-            block_size=32
-        )
+        model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
         idx = torch.tensor([[1]])
         output = model.generate(idx, max_new_tokens=10)
@@ -73,7 +57,7 @@ class TestSloughGPTModel:
 
     def test_model_creation(self):
         """Test SloughGPTModel can be created."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=100,
@@ -90,7 +74,7 @@ class TestSloughGPTModel:
 
     def test_forward_pass(self):
         """Test forward pass."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=100,
@@ -109,7 +93,7 @@ class TestSloughGPTModel:
 
     def test_generation(self):
         """Test text generation."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=100,
@@ -129,7 +113,7 @@ class TestSloughGPTModel:
 
     def test_gradient_checkpointing(self):
         """Test gradient checkpointing."""
-        from domains.models import SloughGPTModel
+        from domain.models._internal import SloughGPTModel
 
         model = SloughGPTModel(
             vocab_size=50,
@@ -149,16 +133,10 @@ class TestLoRA:
 
     def test_apply_lora(self):
         """Test LoRA can be applied."""
-        from domains.models import SloughGPTModel
-        from domains.training.lora import apply_lora_to_model, LoRAConfig
+        from domain.models._internal import SloughGPTModel
+        from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
 
-        model = SloughGPTModel(
-            vocab_size=100,
-            n_embed=64,
-            n_layer=2,
-            n_head=2,
-            block_size=32
-        )
+        model = SloughGPTModel(vocab_size=100, n_embed=64, n_layer=2, n_head=2, block_size=32)
 
         lora_config = LoRAConfig(rank=4, alpha=16)
         model_lora = apply_lora_to_model(model, config=lora_config)
@@ -171,16 +149,11 @@ class TestQuantization:
 
     def test_dynamic_quantization(self):
         """Test dynamic quantization (SloNet skips — PyTorch-specific)."""
-        from domains.models import SloughGPTModel
-        from domains.training.efficient_inference import Quantizer
+        from domain.training._internal.efficient_inference import Quantizer
 
-        model = SloughGPTModel(
-            vocab_size=50,
-            n_embed=32,
-            n_layer=2,
-            n_head=2,
-            block_size=16
-        )
+        from domain.models._internal import SloughGPTModel
+
+        model = SloughGPTModel(vocab_size=50, n_embed=32, n_layer=2, n_head=2, block_size=16)
 
         # SloNet is pure NumPy — no PyTorch nn.Module internals.
         # Dynamic quantization requires torch.nn.Module._modules dict.
@@ -197,16 +170,16 @@ class TestPersonality:
 
     def test_list_personalities(self):
         """Test listing personalities."""
-        from domains.ai_personality import list_personalities
+        from domain.ai_personality._internal import list_personalities
 
         personalities = list_personalities()
 
         assert len(personalities) > 0
-        assert any(p['name'] == 'Helpful' for p in personalities)
+        assert any(p["name"] == "Helpful" for p in personalities)
 
     def test_personality_manager(self):
         """Test personality manager."""
-        from domains.ai_personality import PersonalityManager, PersonalityType
+        from domain.ai_personality._internal import PersonalityManager, PersonalityType
 
         manager = PersonalityManager()
 
@@ -214,7 +187,7 @@ class TestPersonality:
 
         manager.set_personality(PersonalityType.CREATIVE)
 
-        assert manager.current.name == 'Creative'
+        assert manager.current.name == "Creative"
 
 
 class TestAPI:
@@ -222,8 +195,9 @@ class TestAPI:
 
     def test_health_endpoint(self):
         """Test health endpoint."""
-        from apps.api.server.main import app
         from fastapi.testclient import TestClient
+
+        from apps.api.server.main import app
 
         with TestClient(app) as client:
             response = client.get("/health")
@@ -232,8 +206,9 @@ class TestAPI:
 
     def test_souls_endpoint(self):
         """Test souls endpoint (mapped from old /personalities)."""
-        from apps.api.server.main import app
         from fastapi.testclient import TestClient
+
+        from apps.api.server.main import app
 
         with TestClient(app) as client:
             response = client.get("/souls")

@@ -2,7 +2,7 @@
 
 import pytest
 
-from domains.multimodal.bpe_tokenizer import BPETokenizer
+from domain.multimodal._internal.bpe_tokenizer import BPETokenizer
 
 
 @pytest.fixture
@@ -57,6 +57,7 @@ class TestStatsAndMerge:
     def test_get_stats_counts_adjacent(self):
         t = BPETokenizer()
         from collections import Counter
+
         stats = t._get_stats(Counter({"a b a b": 3, "a b": 1}))
         assert stats[("a", "b")] == 7  # 2 per word × 3, plus 1
         assert stats[("b", "a")] == 3
@@ -64,6 +65,7 @@ class TestStatsAndMerge:
     def test_merge_vocab_combines_pair(self):
         t = BPETokenizer()
         from collections import Counter
+
         out = t._merge_vocab(("a", "b"), Counter({"a b a b": 2}))
         assert out == Counter({"ab ab": 2})
 
@@ -204,3 +206,20 @@ class TestVocabProperties:
         t.train(captions)
         ids = list(t.vocab.values())
         assert ids == sorted(ids)
+
+
+class TestDecodeStreaming:
+    """Single-token decode must keep the word-boundary space (card 053)."""
+
+    @pytest.fixture
+    def tok(self):
+        t = BPETokenizer()
+        t.vocab = {"cat</w>": 4, "dog</w>": 5}
+        t.itos = {4: "cat</w>", 5: "dog</w>"}
+        return t
+
+    def test_single_token_decode_keeps_boundary_space(self, tok):
+        assert tok.decode([4]) == "cat "
+
+    def test_multi_token_decode_still_strips(self, tok):
+        assert tok.decode([4, 5]) == "cat dog"

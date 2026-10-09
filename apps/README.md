@@ -4,6 +4,7 @@ Runnable services and application entrypoints.
 
 - `api/` — FastAPI server and routers (`api/server/main.py`; see **`api/README.md`**). HTTP training uses **`SloughGPTTrainer`** **`.soul`** charset semantics — **`docs/policies/CONTRIBUTING.md`** (*Checkpoint vocabulary*).
 - `web/` — Next.js frontend (**`app/(app)/`** routes under **`app/`**). Talks to the API over HTTP only (`NEXT_PUBLIC_API_URL`); no Python in the bundle — see **`web/README.md`** (*UI vs core engine*).
+- `lib/` — shared frontend TypeScript libraries for the apps (not runnable on its own). Holds the split **http-client** (`lib/*.ts`: verbs, retry/timeout policies, cache/circuit-breaker/throttler, SSE) behind the **`web/lib/http-client.ts`** facade.
 - `cli/` — CLI (`sloughgpt` entrypoint via `pyproject.toml`; see **`cli/README.md`** for **`sloughgpt train`** export naming (**`--save-stem`**) and **`sloughgpt generate`** local `.soul` resolution). `sloughgpt shell` is the interactive TUI (split-pane curses; `sloughgpt tui` is an alias) and the line-mode REPL when run without `--tui`.
 
 ### Quick start (repo root)

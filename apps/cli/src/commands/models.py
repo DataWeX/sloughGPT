@@ -1,16 +1,24 @@
 """
 Model commands - Model listing, export, and soul management.
 """
-import sys
-import os
+
 import json
 from pathlib import Path
-from typing import Optional
 
-from domains.logging import get_global
+from domain.logging import get_global
 
 log = get_global()
-from utils.formatting import format_size, format_number, truncate
+from utils.formatting import format_number, format_size
+
+
+def _fmt_model_option(model_id: str, display: str) -> str:
+    """Format a model option for InteractivePrompt.select()."""
+    return f"{model_id}  ({display})"
+
+
+def _parse_model_option(option: str) -> str:
+    """Extract model_id from a formatted option string."""
+    return option.split("  (")[0]
 
 
 def cmd_models(args):
@@ -72,7 +80,8 @@ def cmd_models(args):
 def _cmd_models_info(args):
     """Show .soul checkpoint info."""
     import numpy as np
-    from domains.training.slonet import import_from_sou
+
+    from domain.training._internal.slonet import import_from_sou
 
     model_path = Path(args.model)
     if not model_path.exists():
@@ -109,13 +118,12 @@ def _interactive_download_select():
     """Show an interactive fuzzy-searchable list of popular HuggingFace models.
 
     Queries the HuggingFace Hub API for trending text-generation models,
-    displays them in a curses-based fuzzy selector, and returns the selected
-    model ID. Returns None if the user cancels.
+    displays them in an interactive selector with arrow keys and type-to-filter,
+    and returns the selected model ID. Returns None if the user cancels.
 
     Returns:
         Selected model ID string, or None if cancelled.
     """
-    import curses
     import requests
 
     log.step("Fetching popular models from HuggingFace Hub...")
@@ -146,7 +154,7 @@ def _interactive_download_select():
         if not mid:
             continue
         downloads = m.get("downloads", 0)
-        tags = m.get("tags", [])
+        m.get("tags", [])
         # Short display: model name + download count
         dl_str = f"{downloads:,}" if downloads else "?"
         model_list.append((f"{mid}  ({dl_str} downloads)", mid, downloads))
@@ -158,91 +166,21 @@ def _interactive_download_select():
     # Sort by downloads descending
     model_list.sort(key=lambda x: x[2], reverse=True)
 
-    # ── curses fuzzy selector ──
-    def _run_selector(stdscr):
-        curses.curs_set(0)
-        curses.use_default_colors()
-        stdscr.nodelay(False)
+    # Build formatted options for InteractivePrompt
+    from domain.shell._internal.interactive import InteractivePrompt
+    from domain.shell._internal.io import ConsoleIO
 
-        height, width = stdscr.getmaxyx()
-        query = ""
-        selected = 0
-        scroll_offset = 0
+    io = ConsoleIO()
+    prompt = InteractivePrompt(io)
 
-        while True:
-            stdscr.clear()
-            stdscr.addstr(0, 0, " Download Model from HuggingFace ", curses.A_REVERSE)
-            stdscr.addstr(2, 0, f" Search: {query}_")
-            stdscr.addstr(3, 0, "─" * min(width - 1, 60))
+    options = [_fmt_model_option(mid, display) for display, mid, _ in model_list]
+    result = prompt.select("Download Model from HuggingFace", options)
 
-            # Fuzzy filter
-            filtered = [
-                (display, mid, dl)
-                for display, mid, dl in model_list
-                if query.lower() in mid.lower() or query.lower() in display.lower()
-            ]
-
-            if not filtered:
-                stdscr.addstr(5, 0, " No matching models — type to search")
-                key = stdscr.getch()
-                if key == 27:
-                    return None
-                elif key == 263 or key == 127:
-                    query = query[:-1]
-                elif 32 <= key <= 126:
-                    query += chr(key)
-                continue
-
-            selected = min(selected, len(filtered) - 1)
-            if selected < scroll_offset:
-                scroll_offset = selected
-            if selected >= scroll_offset + height - 6:
-                scroll_offset = selected - height + 7
-
-            max_display = height - 6
-            for i, (display, mid, dl) in enumerate(filtered[scroll_offset:scroll_offset + max_display]):
-                line_y = 5 + i
-                prefix = "▸ " if i + scroll_offset == selected else "  "
-                label = f"{prefix}{display}"
-                if len(label) > width - 1:
-                    label = label[:width - 4] + "..."
-                if i + scroll_offset == selected:
-                    stdscr.addstr(line_y, 0, label, curses.A_REVERSE)
-                else:
-                    stdscr.addstr(line_y, 0, label)
-
-            footer = f" {len(filtered)} models  ↑↓ navigate  Enter select  ESC cancel  / search"
-            stdscr.addstr(height - 1, 0, footer[:width - 1])
-
-            key = stdscr.getch()
-            if key == 27:
-                return None
-            elif key in (10, 13):
-                return filtered[selected]
-            elif key == 259:
-                selected = max(0, selected - 1)
-            elif key == 258:
-                selected = min(len(filtered) - 1, selected + 1)
-            elif key == 338 or key == 261:
-                selected = min(len(filtered) - 1, selected + 10)
-            elif key == 339 or key == 260:
-                selected = max(0, selected - 10)
-            elif key == 263 or key == 127:
-                query = query[:-1]
-            elif 32 <= key <= 126:
-                query += chr(key)
-
-    try:
-        result = curses.wrapper(_run_selector)
-    except Exception as e:
-        log.error(f"Selector error: {e}")
-        return None
-
-    if result is None:
+    if not result:
         log.info("Selection cancelled")
         return None
 
-    name, model_id, _ = result
+    model_id = _parse_model_option(result)
     log.success(f"Selected: {model_id}")
     return model_id
 
@@ -251,31 +189,21 @@ def _cmd_models_download(args):
     """Download a HuggingFace model with size confirmation and live progress.
 
     Enforces the bandwidth policy: queries HuggingFace Hub for model size,
-    shows a Rich panel with the estimate, and requires user confirmation
-    for downloads over 50 MB. Use ``--yes`` or ``SLO_AUTO_DOWNLOAD=1``
-    to skip the prompt.
+    shows the estimate, and requires user confirmation for downloads over
+    50 MB. Use ``--yes`` or ``SLO_AUTO_DOWNLOAD=1`` to skip the prompt.
 
-    Shows a live ``rich.progress`` bar with percentage, speed, ETA, and
-    current filename. Ctrl+C cancels gracefully.
+    Shows a live progress bar with percentage, speed, ETA, and current
+    filename. Ctrl+C cancels gracefully.
 
     If no model_id is provided, shows an interactive fuzzy-searchable list
     of popular text-generation models from HuggingFace Hub.
 
     Side effects:
         - May download model files to HF cache directory
-        - Prints to stdout via Rich panels and progress bars
+        - Prints to stdout via ANSI progress bars
     """
     from core.permissions import PermissionsManager
-    from rich.console import Console
-    from rich.progress import (
-        Progress,
-        SpinnerColumn,
-        BarColumn,
-        TextColumn,
-        TimeRemainingColumn,
-        TransferSpeedColumn,
-        MofNCompleteColumn,
-    )
+    from utils.progress import ProgressBar
 
     # ── Interactive model selection if no model_id ──────────
     if not getattr(args, "model_id", None):
@@ -288,11 +216,10 @@ def _cmd_models_download(args):
     log.key_value("Model ID", args.model_id)
     log.blank()
 
-    console = Console(highlight=False)
-
     try:
-        from domains.infrastructure.download_manager import get_download_manager
         import asyncio
+
+        from domain.infrastructure.download_manager import get_download_manager
 
         mgr = get_download_manager()
 
@@ -307,54 +234,33 @@ def _cmd_models_download(args):
             return
 
         # ── Live progress bar ──────────────────────────────
-        cancel_requested = False
-        progress_task_id = None
+        bar = ProgressBar(total=100, desc="Downloading", width=30, show_eta=True)
         current_file = ""
-
-        progress = Progress(
-            SpinnerColumn(),
-            TextColumn("[bold blue]{task.description}"),
-            BarColumn(bar_width=30),
-            MofNCompleteColumn(),
-            TransferSpeedColumn(),
-            TimeRemainingColumn(),
-            console=console,
-        )
 
         def _render_progress(progress_dict):
             nonlocal current_file
             pct = progress_dict.get("percentage", 0)
-            downloaded = progress_dict.get("bytes_downloaded", 0)
-            total = progress_dict.get("total_bytes", 0)
             fname = progress_dict.get("current_file", "")
             if fname:
                 current_file = fname.split("/")[-1][:40]
-
-            if progress_task_id is not None and total > 0:
-                progress.update(
-                    progress_task_id,
-                    completed=downloaded,
-                    total=total,
-                    description=current_file or "Downloading",
-                )
+            bar.desc = current_file or "Downloading"
+            bar.set_progress(int(pct))
 
         async def _do_download():
-            nonlocal progress_task_id
             mgr.on_progress(args.model_id, _render_progress)
-
-            with progress:
-                progress_task_id = progress.add_task(
-                    "Downloading", total=None, completed=0
-                )
+            bar.start()
+            try:
                 result = await mgr.download(args.model_id)
                 return result
+            finally:
+                bar.finish()
 
         result = asyncio.run(_do_download())
 
         if result.get("status") == "complete":
             log.success(
                 f"Downloaded in {result.get('elapsed_seconds', '?')}s "
-                f"→ {result.get('cache_dir', '')}"
+                f"-> {result.get('cache_dir', '')}"
             )
         elif result.get("status") == "failed":
             log.error(f"Download failed: {result.get('error', 'unknown error')}")
@@ -365,7 +271,7 @@ def _cmd_models_download(args):
         try:
             mgr = get_download_manager()
             mgr.cancel(args.model_id)
-        except Exception:
+        except (OSError, AttributeError):
             pass
     except Exception as e:
         log.error(f"Download failed: {e}")
@@ -378,10 +284,6 @@ def _cmd_models_status(args):
     their sizes, and indicates whether each has been converted to .slnc
     format. Useful for managing disk space and verifying downloads.
     """
-    from rich.console import Console
-    from rich.table import Table
-
-    console = Console(highlight=False)
 
     hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
     if not hf_cache.exists():
@@ -394,7 +296,7 @@ def _cmd_models_status(args):
     for entry in sorted(hf_cache.iterdir()):
         if not entry.name.startswith("models--") or not entry.is_dir():
             continue
-        model_id = entry.name[len("models--"):].replace("--", "/")
+        model_id = entry.name[len("models--") :].replace("--", "/")
 
         # Calculate total size of weight files
         total_bytes = 0
@@ -424,18 +326,20 @@ def _cmd_models_status(args):
 
         # Determine format status
         if has_slnc:
-            status = "[green].slnc[/]"
+            status = ".slnc"
         elif has_safetensors:
-            status = "[yellow]safetensors[/]"
+            status = "safetensors"
         else:
-            status = "[dim]other[/]"
+            status = "other"
 
-        models.append({
-            "id": model_id,
-            "size": total_bytes,
-            "files": file_count,
-            "status": status,
-        })
+        models.append(
+            {
+                "id": model_id,
+                "size": total_bytes,
+                "files": file_count,
+                "status": status,
+            }
+        )
 
     if not models:
         log.info("No cached models found")
@@ -449,23 +353,14 @@ def _cmd_models_status(args):
 
     log.header(f"Cached Models ({len(models)} models, {format_size(total_cache)} total)")
 
-    table = Table(show_header=True, header_style="bold")
-    table.add_column("Model", style="cyan")
-    table.add_column("Size", justify="right")
-    table.add_column("Files", justify="right")
-    table.add_column("Format")
+    log.table(
+        ["Model", "Size", "Files", "Format"],
+        [[m["id"], format_size(m["size"]), str(m["files"]), m["status"]] for m in models],
+        align=["l", "r", "r", "l"],
+    )
 
-    for m in models:
-        table.add_row(
-            m["id"],
-            format_size(m["size"]),
-            str(m["files"]),
-            m["status"],
-        )
-
-    console.print(table)
-    console.print()
-    console.print(f"  [dim]Cache: {hf_cache}[/]")
+    log.blank()
+    log.key_value("Cache", str(hf_cache))
 
 
 def _cmd_models_compare(args):
@@ -482,13 +377,19 @@ def _cmd_models_compare(args):
             for bf in sorted(benchmarks)[:5]:
                 with open(bf) as f:
                     data = json.load(f)
-                rows.append([
-                    data.get("model", "unknown")[:18],
-                    f'{data.get("tokens_per_second", 0):.2f}',
-                    f'{data.get("latency_ms", 0):.1f}',
-                    f'{data.get("memory_mb", 0):.1f}',
-                ])
-            log.table(["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"], rows, align=["l", "r", "r", "r"])
+                rows.append(
+                    [
+                        data.get("model", "unknown")[:18],
+                        f"{data.get('tokens_per_second', 0):.2f}",
+                        f"{data.get('latency_ms', 0):.1f}",
+                        f"{data.get('memory_mb', 0):.1f}",
+                    ]
+                )
+            log.table(
+                ["Model", "Tokens/s", "Latency (ms)", "Memory (MB)"],
+                rows,
+                align=["l", "r", "r", "r"],
+            )
 
     # Compare models
     log.section("Model Specifications")
@@ -509,7 +410,7 @@ def _cmd_models_compare(args):
 def _cmd_models_personalities(args):
     """List available personalities."""
     try:
-        from domains.ai_personality import PERSONALITIES
+        from domain.ai_personality import PERSONALITIES
     except ImportError:
         log.error("Personalities module not found")
         return
@@ -517,14 +418,22 @@ def _cmd_models_personalities(args):
     log.header("Available Personalities")
     rows = []
     for ptype, personality in PERSONALITIES.items():
-        rows.append([ptype.value.upper(), personality.name, personality.description[:50], ", ".join(personality.traits)])
+        rows.append(
+            [
+                ptype.value.upper(),
+                personality.name,
+                personality.description[:50],
+                ", ".join(personality.traits),
+            ]
+        )
     log.table(["Type", "Name", "Description", "Traits"], rows)
 
 
 def cmd_export_cli(args):
     """Export a .soul model to different formats."""
     import numpy as np
-    from domains.training.export import export_model, list_export_formats, ExportConfig
+
+    from domain.training._internal.export import ExportConfig, export_model, list_export_formats
 
     log.header("Model Export")
 
@@ -541,7 +450,8 @@ def cmd_export_cli(args):
 
     log.blank()
     log.step(f"Loading: {args.model}")
-    from domains.training.slonet import import_from_sou
+    from domain.training._internal.slonet import import_from_sou
+
     net = import_from_sou(str(model_path))
     metadata = dict(getattr(net, "metadata", None) or {})
     metadata.setdefault("name", getattr(net, "soul_name", "SloughGPT"))
@@ -568,8 +478,6 @@ def cmd_export_cli(args):
     meta_with_name = {**metadata, **cli_metadata}
     if args.soul_name:
         meta_with_name["name"] = args.soul_name
-
-    from domains.training.export import ExportConfig
 
     config = ExportConfig(
         input_path=args.model,
@@ -635,7 +543,7 @@ def cmd_soul(args):
         return
 
     if args.info:
-        from domains.inference.slo_format import SouParser
+        from domain.inference._internal.slo_format import SouParser
 
         try:
             soul = SouParser.load(args.info)
@@ -658,8 +566,8 @@ def cmd_soul(args):
         return
 
     if args.create:
-        from domains.inference.slo_format import create_soul_profile, SouParser
-        from domains.training.slonet import export_to_sou, import_from_sou
+        from domain.inference._internal.slo_format import SouParser, create_soul_profile
+        from domain.training._internal.slonet import export_to_sou, import_from_sou
 
         soul = create_soul_profile(
             name=args.name or "SloughGPT-Slo",
@@ -688,11 +596,13 @@ def cmd_soul(args):
 
 def cmd_benchmark(args):
     """Benchmark a .soul checkpoint using pure-numpy SloNet inference."""
-    import time
     import statistics
+    import time
+
     import numpy as np
-    from domains.training.slonet import _get_accelerator
-    from domains.inference.slonet_provider import SloNetChatProvider
+
+    from domain.inference._internal.slonet_provider import SloNetChatProvider
+    from domain.training._internal.slonet import _get_accelerator
 
     acc = _get_accelerator()
     backend = acc.name if acc is not None else "cpu"
@@ -753,7 +663,7 @@ def cmd_benchmark(args):
 
 def _cmd_models_select(args):
     """Interactive model selector with fuzzy search."""
-    import curses
+
     import requests
 
     base_url = f"http://{args.host}:{args.port}"
@@ -795,95 +705,25 @@ def _cmd_models_select(args):
     model_list.sort(key=lambda x: x[0].lower())
     log.success(f"Found {len(model_list)} models")
 
-    # ── curses interactive selector ──
-    def _run_selector(stdscr):
-        curses.curs_set(0)
-        curses.use_default_colors()
-        stdscr.nodelay(False)
+    # Build formatted options for InteractivePrompt
+    from domain.shell._internal.interactive import InteractivePrompt
+    from domain.shell._internal.io import ConsoleIO
 
-        height, width = stdscr.getmaxyx()
-        query = ""
-        selected = 0
-        scroll_offset = 0
+    io = ConsoleIO()
+    prompt = InteractivePrompt(io)
 
-        while True:
-            stdscr.clear()
-            # Header
-            stdscr.addstr(0, 0, " SloughGPT Model Selector ", curses.A_REVERSE)
-            stdscr.addstr(2, 0, f" Search: {query}")
-            stdscr.addstr(3, 0, "─" * min(width - 1, 60))
+    options = [
+        _fmt_model_option(mid, f"{name} [{'HF' if src == 'hf' else 'LOCAL'}]")
+        for name, mid, src in model_list
+    ]
+    result = prompt.select("SloughGPT Model Selector", options)
 
-            # Filter models
-            filtered = [(n, i, s) for n, i, s in model_list
-                        if query.lower() in n.lower() or query.lower() in i.lower()]
-
-            if not filtered:
-                stdscr.addstr(5, 0, " No matching models")
-                key = stdscr.getch()
-                if key == 27:  # ESC
-                    return None
-                elif key in (10, 13):  # Enter
-                    continue
-                elif key == 263 or key == 127:  # Backspace
-                    query = query[:-1]
-                elif 32 <= key <= 126:
-                    query += chr(key)
-                continue
-
-            # Ensure selected index is valid
-            selected = min(selected, len(filtered) - 1)
-            if selected < scroll_offset:
-                scroll_offset = selected
-            if selected >= scroll_offset + height - 6:
-                scroll_offset = selected - height + 7
-
-            # Draw list
-            max_display = height - 6
-            for i, (name, mid, src) in enumerate(filtered[scroll_offset:scroll_offset + max_display]):
-                line_y = 5 + i
-                prefix = "▸ " if i + scroll_offset == selected else "  "
-                src_tag = " [HF]" if src == "hf" else " [LOCAL]"
-                label = f"{prefix}{name}{src_tag}"
-                if len(label) > width - 1:
-                    label = label[:width - 4] + "..."
-                if i + scroll_offset == selected:
-                    stdscr.addstr(line_y, 0, label, curses.A_REVERSE)
-                else:
-                    stdscr.addstr(line_y, 0, label)
-
-            # Footer
-            stdscr.addstr(height - 1, 0, f" {len(filtered)} matches  ↑↓ navigate  Enter select  ESC cancel  / search")
-
-            key = stdscr.getch()
-            if key == 27:  # ESC
-                return None
-            elif key in (10, 13):  # Enter
-                return filtered[selected]
-            elif key == 259:  # Up
-                selected = max(0, selected - 1)
-            elif key == 258:  # Down
-                selected = min(len(filtered) - 1, selected + 1)
-            elif key == 338 or key == 261:  # PageDown / Right
-                selected = min(len(filtered) - 1, selected + 10)
-            elif key == 339 or key == 260:  # PageUp / Left
-                selected = max(0, selected - 10)
-            elif key == 263 or key == 127:  # Backspace
-                query = query[:-1]
-            elif 32 <= key <= 126:
-                query += chr(key)
-
-    try:
-        result = curses.wrapper(_run_selector)
-    except Exception as e:
-        log.error(f"Selector error: {e}")
-        return
-
-    if result is None:
+    if not result:
         log.info("Selection cancelled")
         return
 
-    name, model_id, source = result
-    log.success(f"Selected: {name} ({model_id})")
+    model_id = _parse_model_option(result)
+    log.success(f"Selected: {model_id}")
 
     # Load the model
     log.step(f"Loading {model_id}...")
@@ -907,7 +747,9 @@ def register(subparsers):
     models_sub = models_parser.add_subparsers(dest="models_cmd", metavar="SUBCOMMAND")
 
     # Select (interactive)
-    models_select = models_sub.add_parser("select", help="Interactive model selector with fuzzy search")
+    models_select = models_sub.add_parser(
+        "select", help="Interactive model selector with fuzzy search"
+    )
     models_select.add_argument("--host", default="localhost", help="API host")
     models_select.add_argument("--port", type=int, default=8000, help="API port")
     models_select.set_defaults(func=_cmd_models_select)
@@ -922,9 +764,21 @@ def register(subparsers):
     info_parser.set_defaults(func=_cmd_models_info)
 
     # Download
-    download_parser = models_sub.add_parser("download", help="Download model from HuggingFace (interactive if no model given)")
-    download_parser.add_argument("model_id", nargs="?", default=None, help="HuggingFace model ID (e.g., gpt2) — omit for interactive selection")
-    download_parser.add_argument("--yes", "-y", action="store_true", help="Override: skip confirmation for this download (default from config: confirm on/off)")
+    download_parser = models_sub.add_parser(
+        "download", help="Download model from HuggingFace (interactive if no model given)"
+    )
+    download_parser.add_argument(
+        "model_id",
+        nargs="?",
+        default=None,
+        help="HuggingFace model ID (e.g., gpt2) — omit for interactive selection",
+    )
+    download_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Override: skip confirmation for this download (default from config: confirm on/off)",
+    )
     download_parser.set_defaults(func=_cmd_models_download)
 
     # Status
@@ -947,20 +801,39 @@ def register(subparsers):
         "export",
         help="Export model to different formats",
     )
-    export_parser.add_argument("model", nargs="?", default="models/sloughgpt.soul", help="Input model (.soul)")
+    export_parser.add_argument(
+        "model", nargs="?", default="models/sloughgpt.soul", help="Input model (.soul)"
+    )
     export_parser.add_argument("--output", "-o", help="Output path")
     export_parser.add_argument(
-        "--format", "-f",
+        "--format",
+        "-f",
         default="safetensors",
-        choices=["safetensors", "safetensors_bf16", "onnx", "gguf_q4_k_m", "gguf_fp16", "gguf_q5_k_m", "gguf_q8_0", "sou", "all"],
+        choices=[
+            "safetensors",
+            "safetensors_bf16",
+            "onnx",
+            "gguf_q4_k_m",
+            "gguf_fp16",
+            "gguf_q5_k_m",
+            "gguf_q8_0",
+            "sou",
+            "all",
+        ],
         help="Export format",
     )
-    export_parser.add_argument("--quantize", dest="quantization", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"])
+    export_parser.add_argument(
+        "--quantize", dest="quantization", choices=["Q4_K_M", "Q5_K_M", "Q8_0", "F16", "F32"]
+    )
     export_parser.add_argument("--seq-len", type=int, default=128, help="Sequence length for ONNX")
     export_parser.add_argument("--opset", type=int, default=17, help="ONNX opset")
-    export_parser.add_argument("--ctx", type=int, dest="n_ctx", default=2048, help="Context length for GGUF")
+    export_parser.add_argument(
+        "--ctx", type=int, dest="n_ctx", default=2048, help="Context length for GGUF"
+    )
     export_parser.add_argument("--soul-name", type=str, default=None, help="Slo name")
-    export_parser.add_argument("--metadata", type=str, nargs="+", default=None, help="Metadata KEY=VALUE")
+    export_parser.add_argument(
+        "--metadata", type=str, nargs="+", default=None, help="Metadata KEY=VALUE"
+    )
     export_parser.set_defaults(func=cmd_export_cli)
 
     # Slo
@@ -980,25 +853,44 @@ def register(subparsers):
     soul_parser.set_defaults(func=cmd_soul)
 
     # Benchmark
-    bench_parser = subparsers.add_parser("benchmark", help="Run performance benchmarks on a .soul checkpoint")
-    bench_parser.add_argument("--model", "-m", default="models/sloughgpt.soul", help="Path to .soul checkpoint")
-    bench_parser.add_argument("--test", "-t", default="all", choices=["all", "latency", "throughput"], help="Test type")
+    bench_parser = subparsers.add_parser(
+        "benchmark", help="Run performance benchmarks on a .soul checkpoint"
+    )
+    bench_parser.add_argument(
+        "--model", "-m", default="models/sloughgpt.soul", help="Path to .soul checkpoint"
+    )
+    bench_parser.add_argument(
+        "--test", "-t", default="all", choices=["all", "latency", "throughput"], help="Test type"
+    )
     bench_parser.add_argument("--runs", "-r", type=int, default=10, help="Number of runs")
     bench_parser.add_argument("--tokens", "-k", type=int, default=50, help="Max new tokens")
-    bench_parser.add_argument("--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt")
+    bench_parser.add_argument(
+        "--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt"
+    )
     bench_parser.set_defaults(func=cmd_benchmark)
 
     # Standalone aliases for backward compat (forward to models subcommands)
-    hf_download_parser = subparsers.add_parser("hf-download", help="Download model from HuggingFace")
+    hf_download_parser = subparsers.add_parser(
+        "hf-download", help="Download model from HuggingFace"
+    )
     hf_download_parser.add_argument("model_id", help="HuggingFace model ID")
-    hf_download_parser.add_argument("--yes", "-y", action="store_true", help="Override: skip confirmation for this download (default from config: confirm on/off)")
+    hf_download_parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Override: skip confirmation for this download (default from config: confirm on/off)",
+    )
     hf_download_parser.set_defaults(func=_cmd_models_download)
 
     info_parser = subparsers.add_parser("info", help="Show model checkpoint info")
-    info_parser.add_argument("model", nargs="?", default="models/sloughgpt.soul", help="Checkpoint path")
+    info_parser.add_argument(
+        "model", nargs="?", default="models/sloughgpt.soul", help="Checkpoint path"
+    )
     info_parser.set_defaults(func=_cmd_models_info)
 
-    personalities_parser = subparsers.add_parser("personalities", help="List built-in personalities")
+    personalities_parser = subparsers.add_parser(
+        "personalities", help="List built-in personalities"
+    )
     personalities_parser.set_defaults(func=_cmd_models_personalities)
 
     compare_parser = subparsers.add_parser("compare", help="Compare models or benchmarks")

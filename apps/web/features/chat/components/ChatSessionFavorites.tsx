@@ -104,12 +104,13 @@ export const ChatSessionFavorites = memo(function ChatSessionFavorites({
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      className="h-5 w-5 opacity-0 group-hover:opacity-100"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                       onClick={(e) => {
                         e.stopPropagation()
                         handleRemove(session.id)
                       }}
                       title="Remove from favorites"
+                      aria-label="Remove from favorites"
                     >
                       <span className="text-destructive">×</span>
                     </Button>

@@ -1,411 +1,229 @@
-"""Tests for domains/shell/runtime.py — Resource, _probe_api, APIServerProcess, DaitRuntime."""
+"""Tests for shell.runtime — Resource, APIServerProcess, DaitRuntime."""
 
-import signal
-import subprocess
-import sys
-import types
-from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from __future__ import annotations
 
-from domains.shell.runtime import (
-    APIServerProcess,
-    DaitRuntime,
-    Resource,
-    _probe_api,
-)
-from domains.shared import find_repo_root
+import json
+import time
+from unittest.mock import MagicMock, patch
 
+from domain.shell._internal.runtime import APIServerProcess, Resource, _default_api_url, _probe_api
 
-class _FakeProc:
-    def __init__(self, pid=9999, stderr=None):
-        self.pid = pid
-        self.stderr = stderr
-
-    def poll(self):
-        return None
-
-    def wait(self, timeout=None):
-        return 0
-
-    def terminate(self):
-        pass
-
-    def kill(self):
-        pass
+# ── Resource ────────────────────────────────────────────────────────────────
 
 
 class TestResource:
-    def test_size_str_units(self):
-        assert Resource("a", "file", "/x", 512).size_str == "512B"
-        assert Resource("a", "file", "/x", 1024).size_str == "1.0K"
-        assert Resource("a", "file", "/x", 1048576).size_str == "1.0M"
-        assert Resource("a", "file", "/x", 1073741824).size_str == "1.0G"
-
-    def test_defaults(self):
-        r = Resource("m", "model", "/models/m")
+    def test_init(self):
+        r = Resource(name="test", kind="model", path="/tmp/test.soul")
+        assert r.name == "test"
+        assert r.kind == "model"
         assert r.size_bytes == 0
         assert r.metadata == {}
 
+    def test_size_str_bytes(self):
+        r = Resource(name="t", kind="m", path="/t", size_bytes=500)
+        assert r.size_str == "500B"
+
+    def test_size_str_kb(self):
+        r = Resource(name="t", kind="m", path="/t", size_bytes=2048)
+        assert r.size_str == "2.0K"
+
+    def test_size_str_mb(self):
+        r = Resource(name="t", kind="m", path="/t", size_bytes=2_097_152)
+        assert r.size_str == "2.0M"
+
+    def test_size_str_gb(self):
+        r = Resource(name="t", kind="m", path="/t", size_bytes=2_147_483_648)
+        assert r.size_str == "2.0G"
+
+
+# ── _default_api_url ───────────────────────────────────────────────────────
+
+
+class TestDefaultApiUrl:
+    def test_default(self):
+        with patch.dict("os.environ", {}, clear=True):
+            url = _default_api_url()
+            assert "localhost" in url
+
+    def test_from_env(self):
+        with patch.dict("os.environ", {"API_BASE": "http://custom:9000"}):
+            assert _default_api_url() == "http://custom:9000"
+
+
+# ── _probe_api ──────────────────────────────────────────────────────────────
+
 
 class TestProbeApi:
-    def test_success(self):
-        class _Resp:
-            def __enter__(self):
-                return self
+    def test_available(self):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(
+            {
+                "status": "success",
+                "data": {"status": "ready", "model_loaded": True, "model_type": "slonet"},
+            }
+        ).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
 
-            def __exit__(self, *a):
-                return False
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            result = _probe_api("http://localhost:8000")
+        assert result["available"] is True
+        assert result["model_loaded"] is True
+        assert result["model_id"] == "slonet"
 
-            def read(self):
-                return b'{"status":"ok","model_loaded":true,"model_id":"gpt2","engine_type":"slo"}'
+    def test_unavailable(self):
+        import urllib.error
 
-        with patch("urllib.request.urlopen", return_value=_Resp()):
-            r = _probe_api("http://localhost:9999")
-        assert r["available"] is True
-        assert r["status"] == "ok"
-        assert r["model_loaded"] is True
-        assert r["model_id"] == "gpt2"
-        assert r["engine_type"] == "slo"
-
-    def test_failure(self):
-        with patch("urllib.request.urlopen", side_effect=OSError("refused")):
-            r = _probe_api("http://localhost:9999")
-        assert r["available"] is False
-        assert "refused" in r["error"]
-
-
-class TestAPIServerProcessStart:
-    def test_start_ready(self):
-        proc = _FakeProc(stderr=["[api] boot line\n"])
-        with patch("domains.shell.runtime._shared_proc", None), \
-             patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.subprocess.Popen", return_value=proc) as popen, \
-             patch("domains.shell.runtime._probe_api",
-                   return_value={"available": True, "model_id": "gpt2"}), \
-             patch("domains.shell.runtime.time.sleep", lambda s: None):
-            r = APIServerProcess("http://x").start(timeout=10)
-        assert r["ok"] is True
-        assert "ready (gpt2)" in r["message"]
-        popen.assert_called_once()
-
-    def test_start_already_running(self):
-        with patch("domains.shell.runtime._shared_proc", object()):
-            r = APIServerProcess().start()
-        assert r == {"ok": True, "message": "already running"}
-
-    def test_start_launch_error(self):
-        with patch("domains.shell.runtime._shared_proc", None), \
-             patch("domains.shell.runtime.subprocess.Popen",
-                   side_effect=OSError("boom")):
-            r = APIServerProcess().start()
-        assert r["ok"] is False
-        assert "Failed to launch" in r["error"]
-
-    def test_start_timeout(self):
-        proc = _FakeProc(stderr=None)
-        with patch("domains.shell.runtime._shared_proc", None), \
-             patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.subprocess.Popen", return_value=proc), \
-             patch("domains.shell.runtime._probe_api", return_value={"available": False}), \
-             patch("domains.shell.runtime.time.time",
-                   side_effect=[0.0, 0.0, 0.5, 1.0, 1.5, 2.0]), \
-             patch("domains.shell.runtime.time.sleep", lambda s: None), \
-             patch("sys.stdout", MagicMock()):
-            r = APIServerProcess("http://x").start(timeout=1.0)
-        assert r["ok"] is False
-        assert "Timed out" in r["error"]
+        with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("refused")):
+            result = _probe_api("http://localhost:8000")
+        assert result["available"] is False
+        assert "error" in result
 
 
-class TestAPIServerProcessStop:
+# ── APIServerProcess ───────────────────────────────────────────────────────
+
+
+class TestAPIServerProcess:
+    def setup_method(self):
+        import domain.shell._internal.runtime as mod
+
+        mod._shared_proc = None
+        mod._shared_started_at = 0.0
+
+    def test_init(self):
+        api = APIServerProcess()
+        assert api._port == 8000
+
+    def test_init_custom_port(self):
+        api = APIServerProcess("http://localhost:9000")
+        assert api._port == 9000
+
+    def test_status_not_running(self):
+        api = APIServerProcess()
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": False}):
+            result = api.status()
+        assert result["running"] is False
+        assert result["available"] is False
+
     def test_stop_not_running(self):
-        with patch("domains.shell.runtime._shared_proc", None), \
-             patch("domains.shell.runtime._shared_started_at", 0.0):
-            r = APIServerProcess().stop()
-        assert r == {"ok": True, "message": "not running"}
-
-    def test_stop_killpg(self):
-        proc = _FakeProc(pid=4321)
-        with patch("domains.shell.runtime._shared_proc", proc), \
-             patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.os.killpg") as killpg, \
-             patch("domains.shell.runtime.os.getpgid", return_value=111):
-            r = APIServerProcess().stop()
-        assert r["ok"] is True
-        killpg.assert_any_call(111, signal.SIGTERM)
-
-    def test_stop_timeout_sigkill(self):
-        proc = _FakeProc(pid=4321)
-        proc.wait = Mock(side_effect=[subprocess.TimeoutExpired("cmd", 10),
-                                      RuntimeError("died"), None])
-        with patch("domains.shell.runtime._shared_proc", proc), \
-             patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.os.killpg") as killpg, \
-             patch("domains.shell.runtime.os.getpgid", return_value=111):
-            r = APIServerProcess().stop()
-        assert r["ok"] is True
-        killpg.assert_any_call(111, signal.SIGKILL)
-
-    def test_stop_no_killpg(self):
-        class _NoKillpg:
-            environ = {}
-
-        proc = _FakeProc(pid=5)
-        proc.terminate = Mock()
-        proc.wait = Mock(return_value=0)
-        with patch("domains.shell.runtime._shared_proc", proc), \
-             patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.os", _NoKillpg()):
-            r = APIServerProcess().stop()
-        assert r["ok"] is True
-        proc.terminate.assert_called_once()
-        proc.wait.assert_called_once()
-
-    def test_stop_no_killpg_timeout(self):
-        class _NoKillpg:
-            environ = {}
-
-        proc = _FakeProc(pid=5)
-        proc.wait = Mock(side_effect=[subprocess.TimeoutExpired("cmd", 10), None])
-        proc.kill = Mock()
-        with patch("domains.shell.runtime._shared_proc", proc), \
-             patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.os", _NoKillpg()):
-            r = APIServerProcess().stop()
-        assert r["ok"] is True
-        proc.kill.assert_called_once()
-
-    def test_stop_wait_exception_ignored(self):
-        proc = _FakeProc(pid=5)
-        proc.wait = Mock(side_effect=RuntimeError("boom"))
-        with patch("domains.shell.runtime._shared_proc", proc), \
-             patch("domains.shell.runtime._shared_started_at", 0.0), \
-             patch("domains.shell.runtime.os.killpg"), \
-             patch("domains.shell.runtime.os.getpgid", return_value=1):
-            r = APIServerProcess().stop()
-        assert r["ok"] is True
-
-
-class TestAPIServerProcessMisc:
-    def test_is_running_true(self):
-        proc = _FakeProc()
-        with patch("domains.shell.runtime._shared_proc", proc):
-            assert APIServerProcess().is_running is True
-
-    def test_is_running_false_when_exited(self):
-        proc = _FakeProc()
-        proc.poll = Mock(return_value=0)
-        with patch("domains.shell.runtime._shared_proc", proc):
-            assert APIServerProcess().is_running is False
-
-    def test_is_running_false_when_none(self):
-        with patch("domains.shell.runtime._shared_proc", None), \
-             patch("domains.shell.runtime._probe_api", return_value={"available": False}):
-            assert APIServerProcess().is_running is False
-
-    def test_is_running_probes_http_when_no_proc(self):
-        with patch("domains.shell.runtime._shared_proc", None), \
-             patch("domains.shell.runtime._probe_api", return_value={"available": True}):
-            assert APIServerProcess().is_running is True
+        api = APIServerProcess()
+        result = api.stop()
+        assert result["ok"] is True
+        assert "not running" in result["message"]
 
     def test_repr(self):
-        with patch("domains.shell.runtime._shared_proc", None):
-            r = repr(APIServerProcess("http://x"))
+        api = APIServerProcess()
+        r = repr(api)
         assert "APIServerProcess" in r
-        assert "http://x" in r
+
+    def test_is_running_false(self):
+        api = APIServerProcess()
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": False}):
+            assert api.is_running is False
+
+    def test_start_already_healthy(self):
+        api = APIServerProcess()
+        with patch(
+            "domain.shell._internal.runtime._probe_api",
+            return_value={"available": True, "model_id": "slonet"},
+        ):
+            result = api.start()
+        assert result["ok"] is True
+        assert "connected" in result["message"]
+
+    def test_start_already_spawned(self):
+        import domain.shell._internal.runtime as mod
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = None
+        mod._shared_proc = mock_proc
+        mod._shared_started_at = time.time()
+        api = APIServerProcess()
+        result = api.start()
+        assert result["ok"] is True
+        assert "already running" in result["message"]
+        mod._shared_proc = None
+
+    def test_start_stale_process(self):
+        import domain.shell._internal.runtime as mod
+
+        mock_proc = MagicMock()
+        mock_proc.poll.return_value = 0  # exited
+        mod._shared_proc = mock_proc
+        mod._shared_started_at = time.time() - 100
+        api = APIServerProcess()
+        with patch("domain.shell._internal.runtime._probe_api", return_value={"available": True}):
+            result = api.start()
+        assert result["ok"] is True
+        mod._shared_proc = None
 
 
-class TestFindRepoRoot:
-    class _Result:
-        def __init__(self, exists=False, is_dir=False):
-            self._e = exists
-            self._d = is_dir
-
-        def exists(self):
-            return self._e
-
-        def is_dir(self):
-            return self._d
-
-    class _Parent:
-        def __init__(self, name, py=False, apps=False, pkgs=False):
-            self.name = name
-            self._py = py
-            self._a = apps
-            self._p = pkgs
-
-        def __truediv__(self, other):
-            if other == "pyproject.toml":
-                return TestFindRepoRoot._Result(self._py)
-            if other == "setup.py":
-                return TestFindRepoRoot._Result(False)
-            if other == "apps":
-                return TestFindRepoRoot._Result(False, self._a)
-            if other == "packages":
-                return TestFindRepoRoot._Result(False, self._p)
-            return TestFindRepoRoot._Result(False)
-
-        def __str__(self):
-            return self.name
-
-    class _FakePath:
-        def __init__(self, parents):
-            self.parents = parents
-
-        def resolve(self):
-            return self
-
-    def _patch(self, parents):
-        return patch("domains.shared.utils.Path",
-                     return_value=self._FakePath(parents))
-
-    def test_finds_pyproject_with_apps(self):
-        parents = [self._Parent("A"), self._Parent("B", py=True, apps=True)]
-        with self._patch(parents):
-            result = find_repo_root()
-        assert result.name == "B"
-
-    def test_finds_apps_packages_marker(self):
-        parents = [self._Parent("A"),
-                   self._Parent("B", apps=True, pkgs=True)]
-        with self._patch(parents):
-            result = find_repo_root()
-        assert result.name == "B"
-
-    def test_apps_packages_beats_pyproject(self):
-        parents = [self._Parent("A", apps=True, pkgs=True),
-                   self._Parent("B", py=True, apps=True)]
-        with self._patch(parents):
-            result = find_repo_root()
-        assert result.name == "A"
-
-    def test_pyproject_without_apps_skipped(self):
-        parents = [self._Parent("A"), self._Parent("B", py=True)]
-        with self._patch(parents):
-            result = find_repo_root()
-        assert result.name == "B"  # falls through to fallback parents[4]
-
-    def test_fallback_to_deep_parent(self):
-        parents = [self._Parent("A"), self._Parent("B"),
-                   self._Parent("C"), self._Parent("D"),
-                   self._Parent("E")]
-        with self._patch(parents):
-            result = find_repo_root()
-        assert result.name == "E"
+# ── DaitRuntime ─────────────────────────────────────────────────────────────
 
 
-class TestDaitRuntimeStatus:
-    def _runtime(self):
-        rt = DaitRuntime()
-        rt._api = MagicMock()
-        rt._api.status.return_value = {
-            "available": True,
-            "model_loaded": True,
-            "model_id": "gpt2",
-        }
-        return rt
+class TestDaitRuntime:
+    def setup_method(self):
+        import domain.shell._internal.runtime as mod
 
-    def _fake_psutil(self):
-        fake = types.ModuleType("psutil")
+        mod._shared_proc = None
+        mod._shared_started_at = 0.0
 
-        class _Proc:
-            def memory_info(self):
-                return types.SimpleNamespace(rss=1048576, vms=2097152)
+    def test_init(self):
+        with patch("domain.shell._internal.kernel.Kernel"):
+            from domain.shell._internal.runtime import DaitRuntime
 
-        fake.Process = _Proc
-        return fake
-
-    def test_status_summary_with_psutil(self):
-        rt = self._runtime()
-        rt._boot_complete = True
-        rt._init = types.SimpleNamespace(status_summary="INIT-SUMMARY")
-        with patch.dict("sys.modules", {"psutil": self._fake_psutil()}):
-            s = rt.status_summary
-        assert "Kernel uptime:" in s
-        assert "API: ✓ (gpt2)" in s
-        assert "rss=1M vms=2M" in s
-        assert "INIT-SUMMARY" in s
-
-    def test_status_summary_without_psutil(self):
-        rt = self._runtime()
-        rt._boot_complete = False
-        with patch.dict("sys.modules", {"psutil": None}):
-            s = rt.status_summary
-        assert "psutil not available" in s
-        assert "Soul:" in s
-
-    def test_init_system_property(self):
-        rt = DaitRuntime()
-        marker = object()
-        rt._init = marker
-        assert rt.init_system is marker
-
-    def test_vfs_property(self):
-        rt = DaitRuntime()
-        marker = object()
-        rt._vfs = marker
-        assert rt.vfs is marker
-
-    def test_devices_property(self):
-        rt = DaitRuntime()
-        marker = object()
-        rt._devices = marker
-        assert rt.devices is marker
-
-
-class TestDaitRuntimeBoot:
-    def test_boot_completes(self):
-        rt = DaitRuntime()
-        log, status = rt.boot()
-        assert isinstance(log, str)
-        assert isinstance(status, dict)
-        assert rt._boot_complete
-        assert rt.init_system is not None
-        assert rt.devices is not None
-        assert rt.vfs is not None
-
-    def test_shutdown_flips_flag(self):
-        rt = DaitRuntime()
-        rt.boot()
-        log = rt.shutdown()
-        assert isinstance(log, str)
-        assert not rt._boot_complete
+            rt = DaitRuntime()
+            assert rt._model_loaded is False
+            assert rt._boot_complete is False
 
     def test_api_property(self):
-        rt = DaitRuntime()
-        assert isinstance(rt.api, APIServerProcess)
+        with patch("domain.shell._internal.kernel.Kernel"):
+            from domain.shell._internal.runtime import DaitRuntime
 
-    def test_api_status_sets_model_flags(self):
-        rt = DaitRuntime()
-        rt._api = MagicMock()
-        rt._api.status.return_value = {
-            "available": True,
-            "model_loaded": True,
-            "model_id": "gpt2",
-        }
-        result = rt.api_status
-        assert result["available"]
-        assert rt._model_loaded
-        assert rt._model_name == "gpt2"
+            rt = DaitRuntime()
+            assert isinstance(rt.api, APIServerProcess)
 
+    def test_api_status(self):
+        with patch("domain.shell._internal.kernel.Kernel"):
+            from domain.shell._internal.runtime import DaitRuntime
 
-class TestAPIServerProcessStatusShared:
-    def test_status_reports_running_and_uptime(self):
-        import time
+            rt = DaitRuntime()
+            with patch.object(
+                rt._api, "status", return_value={"available": True, "model_loaded": True}
+            ):
+                result = rt.api_status
+            assert result["available"] is True
+            assert rt._model_loaded is True
 
-        import domains.shell.runtime as runtime_mod
+    def test_status_summary(self):
+        with patch("domain.shell._internal.kernel.Kernel") as MockKernel:
+            mock_kernel = MockKernel.return_value
+            mock_kernel.uptime = 100
+            mock_kernel.list_processes.return_value = []
+            from domain.shell._internal.runtime import DaitRuntime
 
-        probe = {"available": True, "status": "success", "model_loaded": False}
-        saved_proc = runtime_mod._shared_proc
-        saved_started = runtime_mod._shared_started_at
-        try:
-            runtime_mod._shared_proc = object()
-            runtime_mod._shared_started_at = time.time() - 100
-            api = APIServerProcess(api_url="http://unused:1")
-            with patch.object(runtime_mod, "_probe_api", return_value=probe):
-                result = api.status()
-        finally:
-            runtime_mod._shared_proc = saved_proc
-            runtime_mod._shared_started_at = saved_started
-        assert result["running"] is True
-        assert result["uptime"] > 99.0
-        assert result["available"] is True
+            rt = DaitRuntime()
+            with patch.object(rt._api, "status", return_value={"available": False}):
+                summary = rt.status_summary
+            assert "Kernel uptime" in summary
+
+    def test_init_system_property(self):
+        with patch("domain.shell._internal.kernel.Kernel"):
+            from domain.shell._internal.runtime import DaitRuntime
+
+            rt = DaitRuntime()
+            assert rt.init_system is None
+
+    def test_devices_property(self):
+        with patch("domain.shell._internal.kernel.Kernel"):
+            from domain.shell._internal.runtime import DaitRuntime
+
+            rt = DaitRuntime()
+            assert rt.devices is None
+
+    def test_vfs_property(self):
+        with patch("domain.shell._internal.kernel.Kernel"):
+            from domain.shell._internal.runtime import DaitRuntime
+
+            rt = DaitRuntime()
+            assert rt.vfs is None

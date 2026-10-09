@@ -275,33 +275,123 @@ button {
 }
 
 /* Accent chips — RGB triples for Tailwind /opacity */
+/* ── Aura: Blue — calm ocean, trustworthy ─────────────────────── */
 .theme-blue {
   --primary: 90 130 220;
   --ring: 140 176 240;
+  --secondary: 230 237 250;
+  --secondary-foreground: 35 45 70;
+  --muted: 240 244 252;
+  --border: 218 228 248;
+  --input: 218 228 248;
 }
+html.dark .theme-blue {
+  --secondary: 38 48 72;
+  --muted: 30 38 58;
+  --border: 44 56 80;
+  --input: 44 56 80;
+}
+
+/* ── Aura: Purple — ethereal lilac, mystical ──────────────────── */
 .theme-purple {
   --primary: 155 108 214;
   --ring: 192 162 238;
+  --secondary: 240 232 252;
+  --secondary-foreground: 50 37 70;
+  --muted: 246 242 252;
+  --border: 230 222 248;
+  --input: 230 222 248;
 }
+html.dark .theme-purple {
+  --secondary: 50 40 72;
+  --muted: 40 34 58;
+  --border: 58 48 80;
+  --input: 58 48 80;
+}
+
+/* ── Aura: Pink — soft rose, delicate ─────────────────────────── */
 .theme-pink {
   --primary: 218 130 170;
   --ring: 238 178 206;
+  --secondary: 250 234 242;
+  --secondary-foreground: 70 35 52;
+  --muted: 252 244 248;
+  --border: 242 222 234;
+  --input: 242 222 234;
 }
+html.dark .theme-pink {
+  --secondary: 62 40 52;
+  --muted: 50 34 44;
+  --border: 72 48 62;
+  --input: 72 48 62;
+}
+
+/* ── Aura: Red — warm coral, energetic ────────────────────────── */
 .theme-red {
   --primary: 230 120 130;
   --ring: 242 172 180;
+  --secondary: 250 234 236;
+  --secondary-foreground: 70 35 40;
+  --muted: 252 244 244;
+  --border: 242 222 224;
+  --input: 242 222 224;
 }
+html.dark .theme-red {
+  --secondary: 62 38 42;
+  --muted: 50 32 36;
+  --border: 72 46 50;
+  --input: 72 46 50;
+}
+
+/* ── Aura: Orange — peachy bread crust, warm bakery ───────────── */
 .theme-orange {
   --primary: 236 155 90;
   --ring: 244 194 144;
+  --secondary: 250 240 230;
+  --secondary-foreground: 70 50 30;
+  --muted: 252 246 240;
+  --border: 242 232 218;
+  --input: 242 232 218;
 }
+html.dark .theme-orange {
+  --secondary: 62 48 34;
+  --muted: 50 40 28;
+  --border: 72 56 40;
+  --input: 72 56 40;
+}
+
+/* ── Aura: Green — fresh mint, natural ────────────────────────── */
 .theme-green {
   --primary: 72 178 130;
   --ring: 134 210 174;
+  --secondary: 232 248 240;
+  --secondary-foreground: 30 60 48;
+  --muted: 242 252 248;
+  --border: 218 240 230;
+  --input: 218 240 230;
 }
+html.dark .theme-green {
+  --secondary: 34 56 44;
+  --muted: 28 46 38;
+  --border: 42 66 52;
+  --input: 42 66 52;
+}
+
+/* ── Aura: Teal — cool dew, refreshing ────────────────────────── */
 .theme-teal {
   --primary: 72 166 200;
   --ring: 134 202 228;
+  --secondary: 232 244 250;
+  --secondary-foreground: 30 55 68;
+  --muted: 242 250 252;
+  --border: 218 236 244;
+  --input: 218 236 244;
+}
+html.dark .theme-teal {
+  --secondary: 34 50 62;
+  --muted: 28 42 52;
+  --border: 42 60 72;
+  --input: 42 60 72;
 }
 
 /* Palettes — full-spectrum overrides applied via html class */

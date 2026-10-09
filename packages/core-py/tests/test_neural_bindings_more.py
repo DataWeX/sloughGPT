@@ -1,4 +1,4 @@
-"""Coverage-completing tests for the neural facade (domains.shell.addons.neural_bindings).
+"""Coverage-completing tests for the neural facade (domain.shell.addons.neural_bindings).
 
 Run: PYTHONPATH=packages/core-py python -m pytest tests/test_neural_bindings_more.py -q
 """
@@ -6,9 +6,9 @@ Run: PYTHONPATH=packages/core-py python -m pytest tests/test_neural_bindings_mor
 import numpy as np
 import pytest
 
-from domains.shell.addons.neural import NeuralEmbeddingStore
-from domains.shell.addons.neural_bindings import Property, engine
-from domains.shell.kernel import Kernel
+from domain.shell._internal.addons.neural import NeuralEmbeddingStore
+from domain.shell._internal.addons.neural_bindings import engine
+from domain.shell._internal.kernel import Kernel
 
 
 def _booted() -> Kernel:
@@ -89,7 +89,6 @@ class TestTokenizationFacade:
         k = _booted()
         monkeypatch.setattr(k._tokenizer_device, "ioctl", lambda *a, **kw: None)
         assert k.detokenize([104, 105]) == "hi"
-
 
     def test_tokenize_success(self):
         k = _booted()

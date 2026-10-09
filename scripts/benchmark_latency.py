@@ -6,9 +6,10 @@ Usage:
     python scripts/benchmark_latency.py --update  # update baseline
     python scripts/benchmark_latency.py --ci      # exit non-zero if regression >20%
 """
+
 import json
-import time
 import sys
+import time
 import uuid
 from pathlib import Path
 
@@ -24,18 +25,20 @@ SAMPLE_PROMPTS = [
 
 def measure_latency(url: str = "http://localhost:8000", runs: int = 5) -> dict:
     """Measure chat latency for sample prompts."""
-    import urllib.request
     import json as _json
+    import urllib.request
 
     latencies = []
     for prompt in SAMPLE_PROMPTS:
         for _ in range(runs):
-            payload = _json.dumps({
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 20,
-                "temperature": 0.01,
-                "session_id": f"bench-{uuid.uuid4().hex[:8]}",
-            }).encode()
+            payload = _json.dumps(
+                {
+                    "messages": [{"role": "user", "content": prompt}],
+                    "max_tokens": 20,
+                    "temperature": 0.01,
+                    "session_id": f"bench-{uuid.uuid4().hex[:8]}",
+                }
+            ).encode()
             req = urllib.request.Request(
                 f"{url}/chat",
                 data=payload,

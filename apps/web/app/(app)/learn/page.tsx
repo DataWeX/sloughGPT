@@ -1,14 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea } from '@sloughgpt/strui'
-import { IconRefresh } from '@sloughgpt/strui'
+import { Card, CardHeader, CardTitle, CardContent, Button, Input, Textarea, cn, Spinner } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
 import { learnerController, type LearnerStatus } from '@/lib/learner-controller'
 import { LearningInsightsCard } from '@/components/learn/LearningInsightsCard'
 import { useToastStore } from '@/lib/toast-store'
 
-type Tab = 'search' | 'ingest' | 'knowledge' | 'feeds'
+type Tab = 'search' | 'ingest' | 'knowledge' | 'feeds' | 'train' | 'evaluate' | 'deploy'
 
 export default function LearnPage() {
   const [status, setStatus] = useState<LearnerStatus | null>(null)
@@ -31,7 +30,55 @@ export default function LearnPage() {
   const [feeds, setFeeds] = useState<Array<{ url: string; interval: number; last_poll?: string }>>([])
   const [newFeedUrl, setNewFeedUrl] = useState('')
   const [feedMsg, setFeedMsg] = useState<string | null>(null)
+  const [training, setTraining] = useState(false)
+  const [trainResult, setTrainResult] = useState<{ status: string; loss?: number } | null>(null)
+  const [evaluating, setEvaluating] = useState(false)
+  const [evalResult, setEvalResult] = useState<Record<string, unknown> | null>(null)
+  const [deploying, setDeploying] = useState(false)
+  const [deployResult, setDeployResult] = useState<string | null>(null)
   const addToast = useToastStore(s => s.addToast)
+
+  const handleTrain = async () => {
+    setTraining(true)
+    setTrainResult(null)
+    try {
+      const result = await learnerController.train()
+      setTrainResult(result)
+      addToast('Training complete', 'success')
+    } catch (e) {
+      addToast(`Training failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setTraining(false)
+    }
+  }
+
+  const handleEvaluate = async () => {
+    setEvaluating(true)
+    setEvalResult(null)
+    try {
+      const result = await learnerController.evaluate()
+      setEvalResult(result.metrics)
+      addToast('Evaluation complete', 'success')
+    } catch (e) {
+      addToast(`Evaluation failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setEvaluating(false)
+    }
+  }
+
+  const handleDeploy = async () => {
+    setDeploying(true)
+    setDeployResult(null)
+    try {
+      const result = await learnerController.deploy()
+      setDeployResult(result.status)
+      addToast('Deploy complete', 'success')
+    } catch (e) {
+      addToast(`Deploy failed: ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
+    } finally {
+      setDeploying(false)
+    }
+  }
 
   useEffect(() => {
     learnerController.status().then(s => {
@@ -48,7 +95,7 @@ export default function LearnPage() {
       const res = await learnerController.search(searchQuery)
       setSearchResult(`Ingested ${res.tokens_ingested} tokens, ${res.new_facts} new facts`)
     } catch (err) {
-      setSearchResult(err instanceof Error ? err.message : 'Search failed')
+      setSearchResult(err instanceof Error ? err.message : 'Could not search')
     } finally {
       setSearching(false)
     }
@@ -63,7 +110,7 @@ export default function LearnPage() {
       setIngestResult(`Added ${res.facts_added} facts from URL`)
       setIngestUrl('')
     } catch (err) {
-      setIngestResult(err instanceof Error ? err.message : 'Ingest failed')
+      setIngestResult(err instanceof Error ? err.message : 'Could not ingest')
     } finally {
       setIngesting(false)
     }
@@ -78,7 +125,7 @@ export default function LearnPage() {
       setIngestResult(`Added ${res.facts_added} facts from text`)
       setIngestText('')
     } catch (err) {
-      setIngestResult(err instanceof Error ? err.message : 'Ingest failed')
+      setIngestResult(err instanceof Error ? err.message : 'Could not ingest')
     } finally {
       setIngesting(false)
     }
@@ -90,7 +137,7 @@ export default function LearnPage() {
       const res = await learnerController.queryKnowledge(knowledgeQuery || undefined)
       setKnowledge(res.facts ?? [])
     } catch {
-      addToast('Failed to load knowledge', 'error')
+      addToast('Could not load knowledge', 'error')
     } finally {
       setLoadingKnowledge(false)
     }
@@ -101,7 +148,7 @@ export default function LearnPage() {
       const res = await learnerController.listFeeds()
       setFeeds(res.feeds ?? [])
     } catch {
-      addToast('Failed to load feeds', 'error')
+      addToast('Could not load feeds', 'error')
     }
   }
 
@@ -120,14 +167,13 @@ export default function LearnPage() {
       {(['search', 'ingest', 'knowledge', 'feeds'] as Tab[]).map(t => (
         <button
           key={t}
+          type="button"
           onClick={() => {
             setTab(t)
             if (t === 'knowledge') handleLoadKnowledge()
             if (t === 'feeds') handleLoadFeeds()
           }}
-          className={`px-3 py-1.5 text-xs font-medium rounded-t transition-colors ${
-            tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
+          className={cn('px-3 py-1.5 text-xs font-medium rounded-t transition-colors', tab === t ? 'bg-primary/10 text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground')}
         >
           {t.charAt(0).toUpperCase() + t.slice(1)}
         </button>
@@ -138,21 +184,21 @@ export default function LearnPage() {
   return (
     <PageContainer
       title="Learner"
-      subtitle={status ? `${status.knowledge_count} facts · ${status.total_tokens} tokens` : 'Continual web learning'}
+      subtitle={status ? `${status.total_tokens_ingested} tokens · ${status.feeds_subscribed} feeds` : 'Continual web learning'}
       loading={loading}
       toolbar={toolbar}
     >
       {status && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
           {[
-            { label: 'Knowledge', value: status.knowledge_count },
-            { label: 'Tokens', value: status.total_tokens },
-            { label: 'Feeds', value: status.feeds_count },
-            { label: 'Status', value: status.learner_active ? 'Active' : 'Idle' },
+            { label: 'Tokens Ingested', value: status.total_tokens_ingested },
+            { label: 'Train Steps', value: status.train_steps_completed },
+            { label: 'Feeds', value: status.feeds_subscribed },
+            { label: 'Buffer', value: `${status.buffer_size}/${status.buffer_capacity}` },
           ].map(s => (
             <div key={s.label} className="rounded-md bg-muted/30 p-4 text-center">
               <div className="text-xs text-muted-foreground">{s.label}</div>
-              <div className="text-lg font-mono font-medium">{s.value}</div>
+              <div className="text-[11px] font-mono font-medium tabular-nums">{s.value}</div>
             </div>
           ))}
         </div>
@@ -162,7 +208,7 @@ export default function LearnPage() {
 
       {tab === 'search' && (
         <Card>
-          <CardContent className="pt-4 space-y-3">
+          <CardContent className="px-2.5 pb-2.5 pt-4 space-y-3">
             <p className="text-sm text-muted-foreground">Search the web, fetch articles, and learn from them.</p>
             {searchResult && (
               <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">{searchResult}</div>
@@ -184,7 +230,7 @@ export default function LearnPage() {
 
       {tab === 'ingest' && (
         <Card>
-          <CardContent className="pt-4 space-y-3">
+          <CardContent className="px-2.5 pb-2.5 pt-4 space-y-3">
             {ingestResult && (
               <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">{ingestResult}</div>
             )}
@@ -206,26 +252,26 @@ export default function LearnPage() {
 
       {tab === 'knowledge' && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Knowledge ({knowledge.length})</CardTitle>
-            <Button size="sm" variant="ghost" onClick={handleLoadKnowledge}>
-              <IconRefresh className={`h-4 w-4 ${loadingKnowledge ? 'animate-spin' : ''}`} />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Knowledge ({knowledge.length})</CardTitle>
+            <Button size="sm" variant="ghost" onClick={handleLoadKnowledge} aria-label="Refresh knowledge">
+              <Spinner className="h-4 w-4" />
             </Button>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="px-2.5 pb-2.5 space-y-3">
             <div className="flex gap-2">
               <Input value={knowledgeQuery} onChange={e => setKnowledgeQuery(e.target.value)} placeholder="Filter by topic..." />
               <Button size="sm" variant="outline" onClick={handleLoadKnowledge}>Search</Button>
             </div>
             {knowledge.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No knowledge yet. Use Search or Ingest to learn.</p>
+              <p className="text-[10px] text-muted-foreground/60">No knowledge yet. Use Search or Ingest to learn.</p>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {knowledge.map((f, i) => (
-                  <div key={i} className="rounded-md border border-border/60 px-3 py-2 text-sm">
+                  <div key={i} className="rounded-lg border border-border/40 p-2.5 hover:bg-muted/20 text-sm">
                     <div className="truncate">{f.content}</div>
                     <div className="text-xs text-muted-foreground mt-0.5">
-                      {f.topic && <span className="bg-muted px-1 rounded mr-1">{f.topic}</span>}
+                      {f.topic && <span className="bg-muted px-1 rounded-full text-[9px] mr-1">{f.topic}</span>}
                       {f.source}
                     </div>
                   </div>
@@ -238,10 +284,10 @@ export default function LearnPage() {
 
       {tab === 'feeds' && (
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base">RSS Feeds</CardTitle>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">RSS Feeds</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="px-2.5 pb-2.5 space-y-3">
             {feedMsg && (
               <div className="text-sm text-primary">{feedMsg}</div>
             )}
@@ -250,7 +296,7 @@ export default function LearnPage() {
               <Button size="sm" onClick={handleSubscribeFeed}>Subscribe</Button>
             </div>
             {feeds.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No feeds subscribed.</p>
+              <p className="text-[10px] text-muted-foreground/60">No feeds subscribed.</p>
             ) : (
               <div className="space-y-1">
                 {feeds.map((f, i) => (
@@ -259,6 +305,78 @@ export default function LearnPage() {
                     <span className="text-muted-foreground shrink-0 ml-2">{f.interval}s</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'train' && (
+        <Card>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Train Knowledge Model</CardTitle>
+          </CardHeader>
+          <CardContent className="px-2.5 pb-2.5 space-y-4">
+            <p className="text-sm text-muted-foreground">Train a model on ingested knowledge to improve retrieval quality and generate better embeddings.</p>
+            <Button onClick={() => void handleTrain()} disabled={training} className="w-full">
+              {training ? 'Training...' : 'Start Training'}
+            </Button>
+            {trainResult && (
+              <div className="rounded bg-muted/30 p-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Status</span>
+                  <span className="font-medium">{trainResult.status}</span>
+                </div>
+                {trainResult.loss != null && (
+                  <div className="flex justify-between mt-1">
+                    <span className="text-muted-foreground">Loss</span>
+                    <span className="font-mono">{trainResult.loss.toFixed(4)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'evaluate' && (
+        <Card>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Evaluate Knowledge Model</CardTitle>
+          </CardHeader>
+          <CardContent className="px-2.5 pb-2.5 space-y-4">
+            <p className="text-sm text-muted-foreground">Run evaluation metrics on the trained knowledge model to measure retrieval accuracy and quality.</p>
+            <Button onClick={() => void handleEvaluate()} disabled={evaluating} className="w-full">
+              {evaluating ? 'Evaluating...' : 'Run Evaluation'}
+            </Button>
+            {evalResult && (
+              <div className="grid grid-cols-2 gap-2">
+                {Object.entries(evalResult).map(([key, value]) => (
+                  <div key={key} className="rounded bg-muted/30 p-2 text-center">
+                    <div className="text-xs text-muted-foreground">{key}</div>
+                    <div className="text-xs font-mono font-medium">{String(value)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {tab === 'deploy' && (
+        <Card>
+          <CardHeader className="pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Deploy Knowledge Model</CardTitle>
+          </CardHeader>
+          <CardContent className="px-2.5 pb-2.5 space-y-4">
+            <p className="text-sm text-muted-foreground">Deploy the trained knowledge model to make it available for inference and retrieval.</p>
+            <Button onClick={() => void handleDeploy()} disabled={deploying} className="w-full">
+              {deploying ? 'Deploying...' : 'Deploy Model'}
+            </Button>
+            {deployResult && (
+              <div className="rounded bg-muted/30 p-3 text-sm">
+                <span className="text-muted-foreground">Status: </span>
+                <span className="font-medium">{deployResult}</span>
               </div>
             )}
           </CardContent>

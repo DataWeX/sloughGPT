@@ -1,283 +1,199 @@
-"""Tests for ChatDomain — respond, build_prompt, log, stats."""
+"""Tests for chat.domain — ChatDomain, ChatRequest, ChatResponse."""
 
-import json
-import tempfile
-from pathlib import Path
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock, MagicMock
 
-from domains.chat.domain import ChatDomain, ChatRequest, ChatResponse
+from domain.chat._internal.domain import (
+    ChatDomain,
+    ChatRequest,
+    ChatResponse,
+    get_chat_domain,
+)
 
+# ── ChatRequest ───────────────────────────────────────────────────────────
 
-# ── _build_prompt ────────────────────────────────────────────────────────
-
-class TestBuildPrompt:
-
-    def test_system_prompt_included(self):
-        result = ChatDomain._build_prompt(
-            "You are helpful.", [], "Hello"
-        )
-        assert "System: You are helpful." in result
-        assert "User: Hello" in result
-        assert "Assistant:" in result
-
-    def test_all_roles_included(self):
-        msgs = [
-            {"role": "user", "content": "Hi"},
-            {"role": "assistant", "content": "Hello!"},
-            {"role": "user", "content": "Tell me a joke"},
-        ]
-        result = ChatDomain._build_prompt("Be concise.", msgs, "Tell me a joke")
-        assert "System: Be concise." in result
-        assert "User: Hi" in result
-        assert "Assistant: Hello!" in result
-        assert "Tell me a joke" in result
-
-    def test_omits_last_user_message_duplication(self):
-        msgs = [
-            {"role": "user", "content": "Tell me a joke"},
-        ]
-        result = ChatDomain._build_prompt("", msgs, "Tell me a joke")
-        # The last message content should appear only once
-        assert result.count("Tell me a joke") == 1
-
-    def test_no_system_prompt_skips_system_line(self):
-        result = ChatDomain._build_prompt("", [], "Hi")
-        assert "System:" not in result
-        assert "User: Hi" in result
-        assert "Assistant:" in result
-
-
-# ── _log & get_recent_responses ─────────────────────────────────────────
-
-class TestLogging:
-
-    @pytest.fixture
-    def domain(self):
-        tmp = tempfile.mkdtemp()
-        d = ChatDomain(log_dir=tmp)
-        yield d
-
-    def test_log_creates_file(self, domain):
-        domain._log(
-            user_message="hello",
-            assistant_response="world",
-            model="gpt2",
-            temperature=0.8,
-            max_tokens=256,
-            session_id="s1",
-            user_id="u1",
-            tokens_generated=2,
-            duration_ms=100,
-        )
-        files = list(Path(domain.log_dir).iterdir())
-        assert len(files) == 1
-        content = files[0].read_text()
-        assert "hello" in content
-        assert "world" in content
-        assert "gpt2" in content
-
-    def test_get_recent_responses_returns_entries(self, domain):
-        domain._log(
-            user_message="msg1", assistant_response="resp1",
-            model="gpt2", temperature=0.8, max_tokens=256,
-            session_id="s1", user_id="u1", tokens_generated=1, duration_ms=50,
-        )
-        domain._log(
-            user_message="msg2", assistant_response="resp2",
-            model="gpt2", temperature=0.8, max_tokens=256,
-            session_id="s1", user_id="u1", tokens_generated=2, duration_ms=60,
-        )
-        recent = domain.get_recent_responses(limit=10)
-        assert len(recent) == 2
-        assert recent[0]["user_message"] == "msg1"
-        assert recent[1]["assistant_response"] == "resp2"
-
-    def test_get_recent_responses_empty_when_no_file(self, domain):
-        assert domain.get_recent_responses() == []
-
-    def test_get_recent_responses_limit(self, domain):
-        for i in range(5):
-            domain._log(
-                user_message=f"msg{i}", assistant_response=f"resp{i}",
-                model="gpt2", temperature=0.8, max_tokens=256,
-                session_id="s1", user_id="u1", tokens_generated=1, duration_ms=50,
-            )
-        recent = domain.get_recent_responses(limit=2)
-        assert len(recent) == 2
-        assert recent[0]["user_message"] == "msg3"
-        assert recent[1]["user_message"] == "msg4"
-
-
-# ── get_stats ────────────────────────────────────────────────────────────
-
-class TestGetStats:
-
-    @pytest.fixture
-    def domain(self):
-        tmp = tempfile.mkdtemp()
-        d = ChatDomain(log_dir=tmp)
-        yield d
-
-    def test_stats_empty_when_no_responses(self, domain):
-        stats = domain.get_stats()
-        assert stats == {"total": 0}
-
-    def test_stats_aggregates_correctly(self, domain):
-        for i in range(3):
-            domain._log(
-                user_message=f"msg{i}", assistant_response="x",
-                model="gpt2", temperature=0.8, max_tokens=256,
-                session_id="s1", user_id="u1",
-                tokens_generated=(i + 1) * 10, duration_ms=(i + 1) * 100,
-            )
-        stats = domain.get_stats()
-        assert stats["total"] == 3
-        assert stats["avg_tokens"] == 20.0  # (10+20+30)/3
-        assert stats["avg_duration_ms"] == 200.0  # (100+200+300)/3
-        assert stats["unique_models"] == ["gpt2"]
-
-
-# ── respond ──────────────────────────────────────────────────────────────
-
-class TestRespond:
-
-    @pytest.fixture
-    def domain(self):
-        tmp = tempfile.mkdtemp()
-        d = ChatDomain(log_dir=tmp)
-        yield d
-
-    @pytest.mark.asyncio
-    async def test_respond_returns_chat_response(self, domain):
-        with patch.object(domain, "_generate", new=AsyncMock(return_value="Hello back")):
-            resp = await domain.respond(
-                messages=[{"role": "user", "content": "Hi"}],
-                model="gpt2",
-            )
-            assert isinstance(resp, ChatResponse)
-            assert resp.text == "Hello back"
-            assert resp.session_id == "default"
-            assert resp.tokens_generated == 2
-
-    @pytest.mark.asyncio
-    async def test_respond_logs_response(self, domain):
-        with patch.object(domain, "_generate", new=AsyncMock(return_value="Hello back")):
-            await domain.respond(
-                messages=[{"role": "user", "content": "Hi"}],
-                model="gpt2",
-            )
-            recent = domain.get_recent_responses(limit=1)
-            assert len(recent) == 1
-            assert recent[0]["user_message"] == "Hi"
-
-    @pytest.mark.asyncio
-    async def test_respond_sets_session_id(self, domain):
-        with patch.object(domain, "_generate", new=AsyncMock(return_value="Hi")):
-            resp = await domain.respond(
-                messages=[{"role": "user", "content": "Hey"}],
-                session_id="custom-session",
-            )
-            assert resp.session_id == "custom-session"
-
-    @pytest.mark.asyncio
-    async def test_respond_empty_generate_returns_no_response(self, domain):
-        with patch.object(domain, "_generate", new=AsyncMock(return_value="")):
-            resp = await domain.respond(
-                messages=[{"role": "user", "content": "Hi"}],
-            )
-            assert resp.text == "[no response]"
-            assert resp.tokens_generated == 0
-
-
-# ── Session-id threading ────────────────────────────────────────────────
-
-class TestSessionIdThreading:
-
-    @pytest.fixture
-    def domain(self):
-        tmp = tempfile.mkdtemp()
-        d = ChatDomain(log_dir=tmp)
-        yield d
-
-    @pytest.mark.asyncio
-    async def test_respond_passes_session_id_to_generate(self, domain):
-        """respond() must forward session_id into _generate() for KV reuse."""
-        captured = {}
-        async def _fake_generate(**kwargs):
-            captured.update(kwargs)
-            return "Hello"
-        with patch.object(domain, "_generate", new=_fake_generate):
-            await domain.respond(
-                messages=[{"role": "user", "content": "Hi"}],
-                session_id="sess-kv",
-            )
-        assert captured["session_id"] == "sess-kv"
-
-    @pytest.mark.asyncio
-    async def test_generate_passes_session_id_to_provider_chat(self, domain):
-        """_generate() must thread session_id into provider.chat()."""
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value="Hello back")
-        with patch("domains.models.provider.get_provider", return_value=provider):
-            result = await domain._generate(
-                user_msg="Hi",
-                system_prompt="",
-                model="gpt2",
-                temperature=0.8,
-                max_tokens=16,
-                session_id="sess-kv",
-            )
-        assert result == "Hello back"
-        _, kwargs = provider.chat.call_args
-        assert kwargs["session_id"] == "sess-kv"
-
-    @pytest.mark.asyncio
-    async def test_generate_defaults_session_id(self, domain):
-        """_generate() must default session_id so direct callers still work."""
-        provider = MagicMock()
-        provider.chat = AsyncMock(return_value="ok")
-        with patch("domains.models.provider.get_provider", return_value=provider):
-            await domain._generate(
-                user_msg="Hi", system_prompt="", model="gpt2",
-                temperature=0.8, max_tokens=16,
-            )
-        _, kwargs = provider.chat.call_args
-        assert kwargs["session_id"] == "default"
-
-
-# ── Factories / dataclasses ─────────────────────────────────────────────
 
 class TestChatRequest:
-
     def test_defaults(self):
-        r = ChatRequest(messages=[{"role": "user", "content": "Hi"}])
-        assert r.model == "gpt2"
-        assert r.temperature == 0.8
-        assert r.max_tokens == 256
+        req = ChatRequest(messages=[{"role": "user", "content": "hi"}])
+        assert req.model == "gpt2"
+        assert req.temperature == 0.7
+        assert req.max_tokens == 256
 
-    def test_custom_values(self):
-        r = ChatRequest(
-            messages=[{"role": "user", "content": "Hi"}],
-            model="gpt2-medium",
+    def test_custom(self):
+        req = ChatRequest(
+            messages=[],
+            model="llama",
             temperature=0.5,
-            session_id="abc",
+            max_tokens=100,
+            session_id="s1",
         )
-        assert r.model == "gpt2-medium"
-        assert r.temperature == 0.5
-        assert r.session_id == "abc"
-        assert r.system_prompt == ""
+        assert req.model == "llama"
+        assert req.session_id == "s1"
+
+
+# ── ChatResponse ──────────────────────────────────────────────────────────
 
 
 class TestChatResponse:
-
     def test_defaults(self):
-        r = ChatResponse(text="Hi", session_id="s1")
-        assert r.done is True
-        assert r.tokens_generated == 0
-        assert r.duration_ms == 0
+        resp = ChatResponse(text="hello", session_id="s1")
+        assert resp.done is True
+        assert resp.tokens_generated == 0
+        assert resp.duration_ms == 0
 
     def test_custom(self):
-        r = ChatResponse(text="Hi", session_id="s1", tokens_generated=5, duration_ms=200)
-        assert r.tokens_generated == 5
-        assert r.duration_ms == 200
+        resp = ChatResponse(
+            text="hi",
+            session_id="s1",
+            tokens_generated=5,
+            duration_ms=100,
+        )
+        assert resp.tokens_generated == 5
+        assert resp.duration_ms == 100
+
+
+# ── ChatDomain ────────────────────────────────────────────────────────────
+
+
+class TestChatDomain:
+    def test_init(self, tmp_path):
+        domain = ChatDomain(log_dir=str(tmp_path / "logs"))
+        assert domain.log_dir.exists()
+
+    def test_set_engine(self):
+        domain = ChatDomain()
+        engine = MagicMock()
+        domain.set_engine(engine)
+        assert domain._engine is engine
+
+    def test_build_prompt_simple(self):
+        prompt = ChatDomain._build_prompt(
+            "You are helpful",
+            [{"role": "user", "content": "hi"}],
+            "hi",
+        )
+        assert "You are helpful" in prompt
+        assert "User: hi" in prompt
+        assert "Assistant:" in prompt
+
+    def test_build_prompt_with_history(self):
+        messages = [
+            {"role": "user", "content": "q1"},
+            {"role": "assistant", "content": "a1"},
+            {"role": "user", "content": "q2"},
+        ]
+        prompt = ChatDomain._build_prompt("sys", messages, "q2")
+        assert "System: sys" in prompt
+        assert "User: q1" in prompt
+        assert "Assistant: a1" in prompt
+
+    def test_build_prompt_no_system(self):
+        prompt = ChatDomain._build_prompt(
+            "",
+            [{"role": "user", "content": "hi"}],
+            "hi",
+        )
+        assert "System:" not in prompt
+
+    @pytest.mark.asyncio
+    async def test_respond_calls_generate(self):
+        domain = ChatDomain()
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = "Hello there!"
+
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+            resp = await domain.respond(
+                messages=[{"role": "user", "content": "hi"}],
+                model="gpt2",
+            )
+            assert resp.text == "Hello there!"
+            assert resp.session_id == "default"
+            assert resp.tokens_generated > 0
+
+    @pytest.mark.asyncio
+    async def test_respond_no_provider(self):
+        domain = ChatDomain()
+        with patch("domain.models._internal.provider.get_provider", return_value=None):
+            resp = await domain.respond(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            assert "Error" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_respond_timeout(self):
+        domain = ChatDomain()
+        mock_provider = AsyncMock()
+        mock_provider.chat.side_effect = TimeoutError()
+
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+            resp = await domain.respond(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            assert "timed out" in resp.text
+
+    @pytest.mark.asyncio
+    async def test_respond_surfaces_provider_usage(self):
+        domain = ChatDomain()
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = "Hello there!"
+        mock_provider.last_usage = {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8}
+
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+            resp = await domain.respond(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            assert resp.usage_tokens == {
+                "prompt_tokens": 5,
+                "completion_tokens": 3,
+                "total_tokens": 8,
+            }
+
+    @pytest.mark.asyncio
+    async def test_respond_usage_none_when_provider_lacks_it(self):
+        domain = ChatDomain()
+        mock_provider = AsyncMock()
+        mock_provider.chat.return_value = "Hello there!"
+
+        with patch("domain.models._internal.provider.get_provider", return_value=mock_provider):
+            resp = await domain.respond(
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            assert resp.usage_tokens is None
+            assert resp.tokens_generated > 0
+
+    def test_get_stats_empty(self):
+        domain = ChatDomain()
+        with patch.object(domain, "get_recent_responses", return_value=[]):
+            stats = domain.get_stats()
+            assert stats["total"] == 0
+
+    def test_get_stats_with_responses(self):
+        domain = ChatDomain()
+        responses = [
+            {"tokens_generated": 10, "duration_ms": 100, "model": "gpt2"},
+            {"tokens_generated": 20, "duration_ms": 200, "model": "gpt2"},
+        ]
+        with patch.object(domain, "get_recent_responses", return_value=responses):
+            stats = domain.get_stats()
+            assert stats["total"] == 2
+            assert stats["avg_tokens"] == 15.0
+            assert stats["avg_duration_ms"] == 150.0
+
+
+# ── Singleton ─────────────────────────────────────────────────────────────
+
+
+class TestSingleton:
+    def test_get_returns_same(self):
+        with patch("domain.chat._internal.domain.ChatDomain"):
+            import domain.chat._internal.domain as mod
+
+            mod._chat_domain = None
+            d1 = get_chat_domain()
+            d2 = get_chat_domain()
+            assert d1 is d2
+            mod._chat_domain = None

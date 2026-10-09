@@ -1,6 +1,7 @@
 import React, {useMemo, useState, useCallback} from 'react';
 import {Modal, FlatList, Pressable} from 'react-native';
 import {YStack, XStack, Text} from 'tamagui';
+import {TamaguiProvider} from '../theme/TamaguiProvider';
 import {useColors} from '../theme/colors';
 import {Icon} from './Icon';
 import {triggerHaptic} from '../services/haptics';
@@ -76,6 +77,7 @@ export function SlashCommandPicker({visible, query, onSelect, onExecute, onClose
 
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
+      <TamaguiProvider>
       <Pressable style={{flex: 1, justifyContent: 'flex-end', backgroundColor: colors.overlay(0.3)}} onPress={onClose}>
         <YStack
           backgroundColor={bg}
@@ -139,6 +141,7 @@ export function SlashCommandPicker({visible, query, onSelect, onExecute, onClose
           />
         </YStack>
       </Pressable>
+      </TamaguiProvider>
     </Modal>
   );
 }

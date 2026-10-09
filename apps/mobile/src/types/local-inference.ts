@@ -8,7 +8,7 @@ export interface MobileExportConfig {
   num_weights: number;
 }
 
-/** Response from GET /auto-train/checkpoints/{name}/export-mobile */
+/** Response from GET /training/checkpoints/{name}/export-mobile */
 export interface MobileExportResponse {
   config: MobileExportConfig;
   weights_b64: string;

@@ -17,8 +17,8 @@ KEY SECTIONS FOR NEW WORK:
 - Frontend Design Skills (when creating UIs)
 
 QUICK COMMANDS:
-- Type check: python3 -m pyright domains/
-- Lint fix: ruff check domains/ --fix && ruff format domains/
+- Type check: python3 -m pyright domain/
+- Lint fix: ruff check domain/ --fix && ruff format domain/
 - Test: python3 tests/test_domain_async_init.py
 
 Location: /Users/mac/sloughGPT/docs/OPENCODE_SKILLS.md
@@ -44,11 +44,11 @@ This document serves as a knowledge base for OpenCode agents working on the Slou
 ```bash
 # Type checking
 cd /Users/mac/sloughGPT
-python3 -m pyright domains/
+python3 -m pyright domain/
 
 # Linting
-python3 -m ruff check domains/
-python3 -m ruff format domains/
+python3 -m ruff check domain/
+python3 -m ruff format domain/
 
 # Run tests
 python3 tests/test_domain_async_init.py
@@ -244,10 +244,10 @@ user = await auth.authenticate({"username": username, "password": password})
 **Fix:** Use correct relative import level.
 
 ```python
-# In domains/cognitive/base.py (one level deep)
+# In domain/cognitive/_internal/base.py (one level deep)
 from ..__init__ import BaseDomain  # Correct - two levels up from cognitive
 
-# In domains/cognitive/memory/__init__.py (two levels deep)
+# In domain/cognitive/memory/__init__.py (two levels deep)
 from ...__init__ import IMemoryManager  # Correct - three levels up
 ```
 
@@ -309,8 +309,8 @@ class BaseDomain:
 
 ```bash
 # Auto-format and fix import sorting
-ruff format domains/
-ruff check domains/ --fix
+ruff format domain/
+ruff check domain/ --fix
 ```
 
 ### Suppress Line
@@ -326,7 +326,7 @@ very_long_line = "this_is_a_very_long_string_that_exceeds_the_100_character_limi
 
 ### Configuration
 
-Pyright is configured to check the `domains/` directory. Key settings:
+Pyright is configured to check the `domain/` directory. Key settings:
 - Python version: 3.9+
 - Type checking mode: basic
 - Report missing imports: true
@@ -355,7 +355,7 @@ value = some_dict.get("key", default)  # pyright may complain
 ### Domain Structure
 
 ```
-domains/
+domain/
 ├── __init__.py          # Exports interfaces, base classes, types
 ├── ui/
 │   ├── __init__.py     # Exports UI components
@@ -538,7 +538,7 @@ import pytest
 
 @pytest.mark.asyncio
 async def test_component_init():
-    from domains.domain import Component
+    from domain import Component
 
     component = Component()
     assert not component.is_initialized
@@ -556,14 +556,14 @@ async def test_component_init():
 
 When adding a new component:
 
-- [ ] Define interface in `domains/__init__.py`
+- [ ] Define interface in `domain/__init__.py`
 - [ ] Implement component class with proper inheritance
 - [ ] Add all required interface methods
 - [ ] Initialize `is_initialized` to `False`
 - [ ] Implement `initialize()` and `shutdown()` methods
 - [ ] Add to domain's `__init__.py` exports
 - [ ] Run `ruff format` to fix imports
-- [ ] Run `pyright domains/` to verify types
+- [ ] Run `pyright domain/` to verify types
 - [ ] Add test in `tests/test_domain_async_init.py`
 
 ---

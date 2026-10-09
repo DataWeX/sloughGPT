@@ -1,21 +1,25 @@
 'use client'
 
-import { forwardRef, memo, useImperativeHandle, useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { forwardRef, memo, useImperativeHandle, useMemo } from 'react'
 import { ChatInput } from './../input/ChatInput'
 import { ChatScreen } from './ChatScreen'
 import type { ChatInputProps } from './../input/ChatInput'
 import type { ChatMessage } from './../types'
 import type { ToolCallEvent } from '@/lib/stream-chat-response'
 import type { ApiHealthSnapshot } from '@/hooks/useApiHealth'
-import { cn, IconChevronDown } from '@sloughgpt/strui'
+import type { ChatMode } from '@/features/chat/components/toolbar/ModeBar'
+import { cn } from '@sloughgpt/strui'
 
-export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
+export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange' | 'onSend' | 'images' | 'onStop' | 'onCancel' | 'onAudioRecorded' | 'onAudioTranscript' | 'onGeneratedImage' | 'onPDFAnalysis' | 'onPDFError' | 'onExecuteCommand'> {
   messages: ChatMessage[]
   loading: boolean
   sessionLoading?: boolean
   health: ApiHealthSnapshot
+  chatMode?: ChatMode
   suggestions?: { text: string; icon: string }[]
   toolEvents?: ToolCallEvent[]
+  streamingStatus?: 'thinking' | 'generating' | 'tool_call' | 'context' | 'error'
+  streamingToolName?: string
   ragVerification?: {
     confidence: number
     is_verified: boolean
@@ -26,12 +30,15 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   } | null
   onRefreshHealth: () => void
   onCopy: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (fromMessageId?: string) => void
+  onRegenerateWithOptions?: (messageId: string, options: { temperature?: number; maxTokens?: number }) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string, newContent: string) => void
+  onReact?: (messageId: string, emoji: string) => void
   searchQuery?: string
   onSuggestionClick?: (text: string) => void
+  onModeSelect?: (mode: string) => void
   onAddImage?: (dataUrl: string) => void
   onRemoveImage?: (id: string) => void
   className?: string
@@ -41,13 +48,22 @@ export interface ChatAreaProps extends Pick<ChatInputProps, 'value' | 'onChange'
   onDelete?: (messageId: string) => void
   onSaveToKnowledge?: (messageId: string, content: string) => void
   collapsibleLength?: number
+  temperature?: number
+  contextLayers?: Array<{ type: 'knowledge' | 'memory' | 'rag' | 'tool' | 'soul' | 'system'; label: string; detail?: string }>
+  noteMap?: Record<string, string>
+  onAddNote?: (messageId: string) => void
+  onPin?: (messageId: string) => void
+  selectionMode?: boolean
+  selectedMessageIds?: Set<string>
+  onToggleSelection?: (messageId: string) => void
+  hasThread?: (id: string) => boolean
+  onThread?: (messageId: string) => void
+  onQuickReply?: (messageId: string) => void
 }
 
 export interface ChatAreaRef {
   scrollToBottom: () => void
 }
-
-const NEAR_BOTTOM_THRESHOLD = 100
 
 export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
   function ChatArea({
@@ -55,20 +71,25 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     loading,
     sessionLoading,
     health,
+    chatMode,
     suggestions,
     toolEvents,
     ragVerification,
     onRefreshHealth,
     onCopy,
     onRegenerate,
+    onRegenerateWithOptions,
     onThumbsUp,
     onThumbsDown,
     onEdit,
+    onReact,
     searchQuery,
     onSuggestionClick,
+    onModeSelect,
     images,
     onAddImage,
     onRemoveImage,
+    onAudioRecorded,
     onAudioTranscript,
     onGeneratedImage,
     className,
@@ -78,109 +99,79 @@ export const ChatArea = memo(forwardRef<ChatAreaRef, ChatAreaProps>(
     onDelete,
     onSaveToKnowledge,
     collapsibleLength,
+    temperature,
+    contextLayers,
+    noteMap,
+    onAddNote,
+    onPin,
+    selectionMode,
+    selectedMessageIds,
+    onToggleSelection,
+    hasThread,
+    onThread,
+    streamingStatus,
+    streamingToolName,
     ...inputProps
   }, ref) {
-    const scrollRef = useRef<HTMLDivElement>(null)
-    const containerRef = useRef<HTMLDivElement>(null)
-    const [isNearBottom, setIsNearBottom] = useState(true)
-    const prevMessageCountRef = useRef(messages.length)
-    const prevLastContentLenRef = useRef(0)
-    const lastScrollTimeRef = useRef(0)
-
-    const filteredMessages = searchQuery
+    const filteredMessages = useMemo(() => searchQuery
       ? messages.filter(m => m.content.toLowerCase().includes(searchQuery.toLowerCase()))
-      : messages
+      : messages, [messages, searchQuery])
 
+    // Virtuoso handles scroll via followOutput="smooth" — no manual scroll management needed.
+    // Expose a no-op scrollToBottom for backward compatibility.
     useImperativeHandle(ref, () => ({
-      scrollToBottom: () => {
-        scrollRef.current?.scrollIntoView({ behavior: 'smooth' })
-      }
+      scrollToBottom: () => {}
     }))
-
-    const handleScroll = useCallback(() => {
-      const now = Date.now()
-      if (now - lastScrollTimeRef.current < 50) return
-      lastScrollTimeRef.current = now
-      const el = containerRef.current
-      if (!el) return
-      const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-      setIsNearBottom(distFromBottom < NEAR_BOTTOM_THRESHOLD)
-    }, [])
-
-    // Auto-scroll on new messages AND during streaming when user is near bottom
-    useEffect(() => {
-      const lastMsg = messages[messages.length - 1]
-      const lastContentLen = lastMsg?.content?.length ?? 0
-      const contentGrew = lastContentLen > prevLastContentLenRef.current
-      const msgAdded = messages.length > prevMessageCountRef.current
-
-      if (isNearBottom && (msgAdded || contentGrew)) {
-        scrollRef.current?.scrollIntoView({ behavior: msgAdded ? 'smooth' : 'auto' })
-      }
-      prevMessageCountRef.current = messages.length
-      prevLastContentLenRef.current = lastContentLen
-    }, [messages, isNearBottom])
-
-    // Scroll to bottom on initial load
-    useEffect(() => {
-      scrollRef.current?.scrollIntoView()
-    }, [])
 
     return (
       <div className={cn("flex flex-col flex-1 min-h-0", className)}>
-        <div
-          ref={containerRef}
-          className="flex-1 min-h-0 overflow-y-auto"
-          onScroll={handleScroll}
-          role="region"
-          aria-label="Chat messages"
-        >
-          <ChatScreen
-            ref={scrollRef}
-            messages={filteredMessages}
-            loading={loading}
-            sessionLoading={sessionLoading}
-            model={model}
-            health={health}
-            suggestions={suggestions}
-            onRefreshHealth={onRefreshHealth}
-            onCopy={onCopy}
-            onRegenerate={onRegenerate}
-            onThumbsUp={onThumbsUp}
-            onThumbsDown={onThumbsDown}
-            onEdit={onEdit}
-            searchQuery={searchQuery}
-            onSuggestionClick={onSuggestionClick}
-            toolEvents={toolEvents}
-            ragVerification={ragVerification}
-            isBookmarked={isBookmarked}
-            onBookmark={onBookmark}
-            onDelete={onDelete}
-            onSaveToKnowledge={onSaveToKnowledge}
-            collapsibleLength={collapsibleLength}
-          />
-
-          {filteredMessages.length > 0 && !isNearBottom && (
-            <button
-              onClick={() => scrollRef.current?.scrollIntoView({ behavior: 'smooth' })}
-              className="sticky bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full border bg-background/80 backdrop-blur-sm shadow-lg hover:bg-accent/50 transition-all"
-              aria-label="Jump to latest messages"
-            >
-              <IconChevronDown className="h-3.5 w-3.5" />
-              {filteredMessages.length > 0 && (
-                <span className="text-muted-foreground">{filteredMessages.length}</span>
-              )}
-            </button>
-          )}
-        </div>
+        <ChatScreen
+          messages={filteredMessages}
+          loading={loading}
+          sessionLoading={sessionLoading}
+          model={model}
+          health={health}
+          suggestions={suggestions}
+          onRefreshHealth={onRefreshHealth}
+          onCopy={onCopy}
+          onRegenerate={onRegenerate}
+          onThumbsUp={onThumbsUp}
+          onThumbsDown={onThumbsDown}
+          onEdit={onEdit}
+          onReact={onReact}
+          onPin={onPin}
+          searchQuery={searchQuery}
+          onSuggestionClick={onSuggestionClick}
+          onModeSelect={onModeSelect}
+          toolEvents={toolEvents}
+          ragVerification={ragVerification}
+          isBookmarked={isBookmarked}
+          onBookmark={onBookmark}
+          onDelete={onDelete}
+          onSaveToKnowledge={onSaveToKnowledge}
+          collapsibleLength={collapsibleLength}
+          temperature={temperature}
+          contextLayers={contextLayers}
+          noteMap={noteMap}
+          onAddNote={onAddNote}
+          selectionMode={selectionMode}
+          selectedMessageIds={selectedMessageIds}
+          onToggleSelection={onToggleSelection}
+          hasThread={hasThread}
+          onThread={onThread}
+        />
 
         <ChatInput
           {...inputProps}
           loading={loading}
+          streamingStatus={streamingStatus}
+          streamingToolName={streamingToolName}
           health={health}
+          chatMode={chatMode}
           images={images}
           onAddImage={onAddImage}
           onRemoveImage={onRemoveImage}
+          onAudioRecorded={onAudioRecorded}
           onAudioTranscript={onAudioTranscript}
           onGeneratedImage={onGeneratedImage}
         />

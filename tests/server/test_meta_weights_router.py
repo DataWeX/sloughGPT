@@ -2,8 +2,9 @@
 Tests for the meta-weights router — POST /meta-weights/get and GET /meta-weights/stats.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -12,7 +13,10 @@ from apps.api.server.routers.meta_weights import router
 
 @pytest.fixture
 def app():
+    from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+
     _app = FastAPI()
+    register_all_handlers(_app)
     _app.include_router(router)
     return _app
 
@@ -22,21 +26,37 @@ def client(app):
     return TestClient(app, raise_server_exceptions=False)
 
 
-def _make_weight(temperature=0.8, repetition_penalty=1.0, top_p=0.9, top_k=50):
-    return type("W", (), {
-        "temperature": temperature,
-        "repetition_penalty": repetition_penalty,
-        "top_p": top_p,
-        "top_k": top_k,
-    })()
+def _make_weight(
+    temperature=0.7,
+    repetition_penalty=1.15,
+    top_p=0.85,
+    top_k=40,
+    style_bias=0.0,
+    confidence_boost=0.0,
+):
+    return type(
+        "W",
+        (),
+        {
+            "temperature": temperature,
+            "repetition_penalty": repetition_penalty,
+            "top_p": top_p,
+            "top_k": top_k,
+            "style_bias": style_bias,
+            "confidence_boost": confidence_boost,
+        },
+    )()
 
 
 class TestGetMetaWeights:
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_returns_adjustment(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight(
-            temperature=0.9, repetition_penalty=1.1, top_p=0.95, top_k=40,
+            temperature=0.9,
+            repetition_penalty=1.1,
+            top_p=0.95,
+            top_k=40,
         )
         mgr._weight_history = [1, 2, 3]
         resp = client.post("/meta-weights/get", json={"user_message": "hello"})
@@ -44,13 +64,13 @@ class TestGetMetaWeights:
         assert resp.json()["temperature"] == 0.9
         assert resp.json()["based_on_samples"] == 3
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_returns_503_when_unavailable(self, mock_get_mgr, client):
         mock_get_mgr.return_value = None
         resp = client.post("/meta-weights/get", json={"user_message": "hello"})
         assert resp.status_code == 503
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_default_k_value(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -59,7 +79,7 @@ class TestGetMetaWeights:
         args, kwargs = mgr.get_adjustment.call_args
         assert kwargs.get("k") == 5 or (len(args) > 1 and args[1] == 5)
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_custom_k_value(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -68,7 +88,7 @@ class TestGetMetaWeights:
         args, kwargs = mgr.get_adjustment.call_args
         assert kwargs.get("k") == 10 or (len(args) > 1 and args[1] == 10)
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_empty_user_message(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -76,7 +96,7 @@ class TestGetMetaWeights:
         resp = client.post("/meta-weights/get", json={"user_message": ""})
         assert resp.status_code == 200
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_custom_user_id(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -85,7 +105,7 @@ class TestGetMetaWeights:
         args, kwargs = mgr.get_adjustment.call_args
         assert kwargs.get("user_id") == "user-42" or (len(args) > 2 and args[2] == "user-42")
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_default_user_id(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -94,11 +114,14 @@ class TestGetMetaWeights:
         args, kwargs = mgr.get_adjustment.call_args
         assert kwargs.get("user_id") == "default" or (len(args) > 2 and args[2] == "default")
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_response_contains_all_weight_fields(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight(
-            temperature=0.7, repetition_penalty=1.3, top_p=0.85, top_k=30,
+            temperature=0.7,
+            repetition_penalty=1.3,
+            top_p=0.85,
+            top_k=30,
         )
         mgr._weight_history = [1]
         resp = client.post("/meta-weights/get", json={"user_message": "test"})
@@ -108,14 +131,14 @@ class TestGetMetaWeights:
         assert body["top_p"] == 0.85
         assert body["top_k"] == 30
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_manager_exception_propagates(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.side_effect = RuntimeError("db unavailable")
         resp = client.post("/meta-weights/get", json={"user_message": "hello"})
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_many_samples_reflected(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -123,7 +146,7 @@ class TestGetMetaWeights:
         resp = client.post("/meta-weights/get", json={"user_message": "hello"})
         assert resp.json()["based_on_samples"] == 1000
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_zero_k_falls_back_to_default(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -132,7 +155,7 @@ class TestGetMetaWeights:
         args, kwargs = mgr.get_adjustment.call_args
         assert kwargs.get("k") == 5 or (len(args) > 1 and args[1] == 5)
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_negative_k_passes_through(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -149,7 +172,7 @@ class TestGetMetaWeights:
         resp = client.post("/meta-weights/get", json={})
         assert resp.status_code == 422
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_extra_fields_ignored(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight()
@@ -160,11 +183,14 @@ class TestGetMetaWeights:
         )
         assert resp.status_code == 200
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_all_zero_weight_values_pass_through(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_adjustment.return_value = _make_weight(
-            temperature=0.0, repetition_penalty=0.0, top_p=0.0, top_k=0,
+            temperature=0.0,
+            repetition_penalty=0.0,
+            top_p=0.0,
+            top_k=0,
         )
         mgr._weight_history = []
         resp = client.post("/meta-weights/get", json={"user_message": "hello"})
@@ -176,7 +202,7 @@ class TestGetMetaWeights:
 
 
 class TestGetStats:
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_returns_stats(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_stats.return_value = {"total_adjustments": 10}
@@ -184,13 +210,13 @@ class TestGetStats:
         assert resp.status_code == 200
         assert resp.json()["data"]["total_adjustments"] == 10
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_returns_503_when_unavailable(self, mock_get_mgr, client):
         mock_get_mgr.return_value = None
         resp = client.get("/meta-weights/stats")
         assert resp.status_code == 503
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_empty_stats(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_stats.return_value = {"total_adjustments": 0, "users": 0}
@@ -198,21 +224,21 @@ class TestGetStats:
         assert resp.status_code == 200
         assert resp.json()["data"]["total_adjustments"] == 0
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_stats_has_success_status(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_stats.return_value = {"total_adjustments": 5}
         resp = client.get("/meta-weights/stats")
         assert resp.json()["status"] == "success"
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_stats_manager_exception(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         mgr.get_stats.side_effect = RuntimeError("corrupted")
         resp = client.get("/meta-weights/stats")
         assert resp.status_code == 500
 
-    @patch("domains.feedback.get_meta_weight_manager")
+    @patch("domain.feedback.get_meta_weight_manager")
     def test_stats_passthrough_full_data(self, mock_get_mgr, client):
         mgr = mock_get_mgr.return_value
         full = {"total_adjustments": 42, "users": 7, "last_adjustment": "2026-08-01"}

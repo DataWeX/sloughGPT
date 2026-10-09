@@ -1,36 +1,43 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { Card, CardHeader, CardTitle, CardContent, Button, Input } from '@sloughgpt/strui'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { Card, CardHeader, CardTitle, CardContent, Button, Checkbox, Input, cn } from '@sloughgpt/strui'
 import { IconRefresh } from '@sloughgpt/strui'
 import { PageContainer } from '@/components/PageContainer'
-import { filesController, type FileEntry } from '@/lib/files-controller'
+import { filesController, type FileEntry, type FileDetail } from '@/lib/files-controller'
 import { FileStatsCard } from '@/components/files/FileStatsCard'
 import { useToastStore } from '@/lib/toast-store'
+import { useRefreshShortcut } from '@/hooks/useRefreshShortcut'
 
 export default function FilesPage() {
   const [files, setFiles] = useState<FileEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [uploading, setUploading] = useState(false)
   const [uploadMsg, setUploadMsg] = useState<string | null>(null)
   const [ingesting, setIngesting] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [batchDeleting, setBatchDeleting] = useState(false)
+  const [previewFile, setPreviewFile] = useState<FileDetail | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const addToast = useToastStore(s => s.addToast)
 
-  const fetchFiles = async () => {
+  const fetchFiles = useCallback(async () => {
     try {
+      setLoadError(null)
       setFiles(await filesController.list())
     } catch {
-      addToast('Failed to load files', 'error')
+      setLoadError('Could not load files. Please try again.')
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
-  useEffect(() => { fetchFiles() }, [])
+  useRefreshShortcut(fetchFiles)
+
+  useEffect(() => { fetchFiles() }, [fetchFiles])
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -44,7 +51,7 @@ export default function FilesPage() {
       setUploadMsg(`Uploaded ${data.filename ?? file.name}`)
       await fetchFiles()
     } catch (err) {
-      addToast(err instanceof Error ? err.message : 'Upload failed', 'error')
+      addToast(err instanceof Error ? err.message : 'Could not upload', 'error')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -56,7 +63,7 @@ export default function FilesPage() {
       await filesController.delete(id)
       await fetchFiles()
     } catch {
-      addToast('Failed to delete file', 'error')
+      addToast('Could not delete file', 'error')
     }
   }
 
@@ -66,7 +73,7 @@ export default function FilesPage() {
       await filesController.ingest(id)
       await fetchFiles()
     } catch {
-      addToast('Failed to index file', 'error')
+      addToast('Could not index file', 'error')
     } finally {
       setIngesting(null)
     }
@@ -77,7 +84,7 @@ export default function FilesPage() {
     try {
       setFiles(await filesController.search(searchQuery))
     } catch {
-      addToast('Failed to search files', 'error')
+      addToast('Could not search files', 'error')
     }
   }
 
@@ -107,7 +114,7 @@ export default function FilesPage() {
       await fetchFiles()
       addToast(`Deleted ${selected.size} files`, 'success')
     } catch {
-      addToast('Batch delete failed', 'error')
+      addToast('Could not batch delete', 'error')
     } finally {
       setBatchDeleting(false)
     }
@@ -117,6 +124,19 @@ export default function FilesPage() {
     if (bytes < 1024) return `${bytes} B`
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
+  const handlePreview = async (file: FileEntry) => {
+    if (previewFile?.id === file.id) { setPreviewFile(null); return }
+    setPreviewLoading(true)
+    try {
+      const detail = await filesController.getDetail(file.id)
+      setPreviewFile(detail)
+    } catch {
+      addToast('Could not load file preview', 'error')
+    } finally {
+      setPreviewLoading(false)
+    }
   }
 
   const filtered = searchQuery.trim()
@@ -142,93 +162,100 @@ export default function FilesPage() {
     <PageContainer
       title="Files"
       subtitle={`${files.length} files`}
+      error={loadError}
+      onRetry={fetchFiles}
     >
         <FileStatsCard files={files} />
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Files</CardTitle>
-            <div className="flex gap-2">
-              <Button size="sm" variant="ghost" onClick={fetchFiles}>
-                <IconRefresh className="h-4 w-4" />
+          <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+            <CardTitle className="text-[11px] font-medium">Files</CardTitle>
+            <div className="flex gap-1">
+              <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={fetchFiles} aria-label="Refresh files">
+                <IconRefresh className="h-3 w-3" />
               </Button>
               <input
                 ref={fileInputRef}
                 type="file"
+                aria-label="Upload file"
                 className="hidden"
                 onChange={handleUpload}
                 accept=".txt,.md,.json,.jsonl,.csv,.pdf,.py,.js,.ts,.html,.css"
               />
-              <Button size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+              <Button size="sm" className="h-6 text-[10px]" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                 {uploading ? 'Uploading...' : 'Upload'}
               </Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-2 px-2.5 pb-2.5">
             {uploadMsg && (
-              <div className="rounded-md bg-primary/10 border border-primary/20 px-3 py-2 text-sm text-primary">{uploadMsg}</div>
+              <div className="rounded-lg bg-primary/5 border border-primary/20 px-2.5 py-1.5 text-[11px] text-primary">{uploadMsg}</div>
             )}
-            <div className="flex gap-2">
+            <div className="flex gap-1.5">
               <Input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
                 placeholder="Search files..."
+                className="h-7 text-[11px] flex-1"
               />
-              <Button size="sm" variant="outline" onClick={handleSearch}>Search</Button>
+              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={handleSearch}>Search</Button>
             </div>
             {filtered.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No files uploaded yet. Click Upload to add one.</p>
+              <p className="text-[10px] text-muted-foreground/60">No files uploaded yet. Click Upload to add one.</p>
             ) : (
               <>
                 {selected.size > 0 && (
-                  <div className="flex items-center gap-2 rounded-md bg-destructive/5 border border-destructive/20 px-3 py-2">
-                    <span className="text-sm text-destructive font-medium">{selected.size} selected</span>
-                    <Button size="sm" variant="ghost" className="text-destructive h-8 text-xs ml-auto" onClick={handleBatchDelete} disabled={batchDeleting}>
+                  <div className="flex items-center gap-1.5 rounded-lg bg-destructive/5 border border-destructive/20 px-2.5 py-1.5">
+                    <span className="text-[11px] text-destructive font-medium">{selected.size} selected</span>
+                    <Button size="sm" variant="ghost" className="text-destructive h-6 text-[10px] ml-auto" onClick={handleBatchDelete} disabled={batchDeleting}>
                       {batchDeleting ? 'Deleting...' : 'Delete Selected'}
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-8 text-xs" onClick={() => setSelected(new Set())}>
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setSelected(new Set())}>
                       Clear
                     </Button>
                   </div>
                 )}
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  <label className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground cursor-pointer hover:bg-muted/30 rounded">
-                    <input
-                      type="checkbox"
+                <div className="space-y-0.5 max-h-96 overflow-y-auto">
+                  <label className="flex items-center gap-1.5 px-2.5 py-1 text-[10px] text-muted-foreground/60 cursor-pointer hover:bg-muted/20 rounded-lg">
+                    <Checkbox
                       checked={selected.size === filtered.length && filtered.length > 0}
-                      onChange={toggleSelectAll}
-                      className="h-4 w-4 rounded border-border"
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all files"
+                      className="h-3.5 w-3.5 rounded border-border"
                     />
                     Select all ({filtered.length})
                   </label>
                   {filtered.map(f => (
-                    <div key={f.id} className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm group hover:bg-muted/50 transition-colors ${selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60'}`}>
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <input
-                          type="checkbox"
+                    <div key={f.id} className={cn('flex items-center justify-between rounded-lg border px-2.5 py-2 text-[11px] group hover:bg-muted/20 transition-colors', selected.has(f.id) ? 'border-primary/40 bg-primary/5' : 'border-border/40')}>
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Checkbox
                           checked={selected.has(f.id)}
-                          onChange={() => toggleSelect(f.id)}
-                          className="h-4 w-4 rounded border-border shrink-0"
+                          onCheckedChange={() => toggleSelect(f.id)}
+                          aria-label={`Select file ${f.filename}`}
+                          className="h-3.5 w-3.5 rounded border-border shrink-0"
                         />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             <span className="font-medium truncate">{f.filename}</span>
-                            {f.ingested && <span className="text-xs bg-success/10 text-success px-1 rounded">indexed</span>}
+                            {f.ingested && <span className="text-[9px] bg-success/10 text-success px-1.5 py-0.5 rounded-full">indexed</span>}
                           </div>
-                          <div className="text-xs text-muted-foreground mt-0.5">
+                          <div className="text-[10px] text-muted-foreground/60 mt-0.5 font-mono tabular-nums">
                             {formatSize(f.size)} · {f.content_type ?? 'unknown'} · {f.uploaded_at ? new Date(f.uploaded_at).toLocaleDateString() : '—'}
                             {f.chunk_count != null && ` · ${f.chunk_count} chunks`}
                           </div>
                         </div>
                       </div>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => void handlePreview(f)} disabled={previewLoading && previewFile?.id !== f.id}>
+                          {previewFile?.id === f.id ? 'Close' : 'Preview'}
+                        </Button>
                         {!f.ingested && (
-                          <Button size="sm" variant="ghost" onClick={() => handleIngest(f.id)} disabled={ingesting === f.id}>
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => handleIngest(f.id)} disabled={ingesting === f.id}>
                             {ingesting === f.id ? 'Indexing...' : 'Index'}
                           </Button>
                         )}
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(f.id)}>
+                        <Button size="sm" variant="ghost" className="h-6 text-[10px] text-destructive" onClick={() => handleDelete(f.id)}>
                           Delete
                         </Button>
                       </div>
@@ -239,6 +266,30 @@ export default function FilesPage() {
             )}
           </CardContent>
         </Card>
+
+        {previewFile && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 pt-2.5 px-2.5">
+              <CardTitle className="text-[11px] font-medium truncate">{previewFile.filename}</CardTitle>
+              <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60 shrink-0">
+                {previewFile.chars != null && <span className="font-mono tabular-nums">{previewFile.chars.toLocaleString()} chars</span>}
+                {previewFile.pages != null && <span className="font-mono tabular-nums">{previewFile.pages} pages</span>}
+                <Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={() => setPreviewFile(null)}>Close</Button>
+              </div>
+            </CardHeader>
+            <CardContent className="px-2.5 pb-2.5">
+              {previewLoading ? (
+                <div className="h-40 animate-pulse bg-muted/20 rounded-lg" />
+              ) : previewFile.text ? (
+                <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap break-all rounded-lg bg-muted/20 p-2.5 font-mono text-[11px] leading-relaxed">
+                  {previewFile.text}
+                </pre>
+              ) : (
+                <p className="text-[10px] text-muted-foreground/60 text-center py-3">No text content extracted</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
     </PageContainer>
   )
 }

@@ -2,12 +2,14 @@
 Tests for the system router — metrics, info, disk, lifecycle, executor, inference pool.
 """
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
+import domain.training._internal.executor as executor_mod
 from apps.api.server.routers.system import router
 
 
@@ -103,7 +105,7 @@ class TestLifecycle:
 class TestTailOutput:
     """GET /system/output"""
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_returns_output_lines(self, mock_get_buf, client):
         buf = MagicMock()
         buf.tail_dicts.return_value = []
@@ -116,7 +118,7 @@ class TestTailOutput:
         assert "lines" in data
         assert "size" in data
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_lists_actual_lines(self, mock_get_buf, client):
         buf = MagicMock()
         buf.tail_dicts.return_value = [{"text": "hello", "level": "info", "ts": 1.0}]
@@ -132,8 +134,21 @@ class TestTailOutput:
 class TestExecutor:
     """GET /system/executor"""
 
+    @pytest.fixture(autouse=True)
+    def _uninitialized_executor(self):
+        """Force the uninitialized precondition.
+
+        These tests were order-dependent: ambient ``_instance`` state left
+        by earlier files made the job-lookup tests see an initialized
+        executor (404 instead of 503). Every test now establishes its own
+        precondition, with the original state restored afterwards.
+        """
+        old = executor_mod._instance
+        executor_mod._instance = None
+        yield
+        executor_mod._instance = old
+
     def test_returns_uninitialized_when_not_setup(self, client):
-        import domains.training.executor as executor_mod
         old = executor_mod._instance
         try:
             executor_mod._instance = None
@@ -146,13 +161,15 @@ class TestExecutor:
 
     def test_executor_job_not_found(self, client):
         resp = client.get("/system/executor/nonexistent")
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 503
+        body = resp.json()
+        assert "error" in body
 
     def test_executor_job_result_not_found(self, client):
         resp = client.get("/system/executor/nonexistent/result")
-        assert resp.status_code == 200
-        assert "error" in resp.json()
+        assert resp.status_code == 503
+        body = resp.json()
+        assert "error" in body
 
     def test_purge_when_uninitialized(self, client):
         resp = client.post("/system/executor/purge")
@@ -169,17 +186,17 @@ class TestExecutorInitialized:
     """GET /system/executor with a real TrainingExecutor instance."""
 
     def _install(self):
-        import domains.training.executor as executor_mod
+
         self._old = executor_mod._instance
         executor_mod._instance = executor_mod.TrainingExecutor(max_workers=2)
         return executor_mod
 
     def _restore(self):
-        import domains.training.executor as executor_mod
+
         executor_mod._instance = self._old
 
     def test_initialized_status(self, client):
-        mod = self._install()
+        self._install()
         try:
             resp = client.get("/system/executor")
             assert resp.status_code == 200
@@ -191,20 +208,22 @@ class TestExecutorInitialized:
             self._restore()
 
     def test_job_status_unknown_id(self, client):
-        mod = self._install()
+        self._install()
         try:
             resp = client.get("/system/executor/ghost")
-            assert resp.status_code == 200
-            assert "error" in resp.json()
+            assert resp.status_code == 404
+            body = resp.json()
+            assert "error" in body
         finally:
             self._restore()
 
     def test_job_result_unknown_id(self, client):
-        mod = self._install()
+        self._install()
         try:
             resp = client.get("/system/executor/ghost/result")
-            assert resp.status_code == 200
-            assert "error" in resp.json()
+            assert resp.status_code == 404
+            body = resp.json()
+            assert "error" in body
         finally:
             self._restore()
 
@@ -223,7 +242,6 @@ class TestOutputStream:
     """GET /system/stream — SSE output stream."""
 
     def _make_sub(self, lines=(), timeout_raises=False):
-        import threading
 
         class FakeSub:
             name = "fake-sub"
@@ -238,11 +256,17 @@ class TestOutputStream:
                 self._items = []
                 return out
 
+            async def async_read(self, timeout=0.1):
+                if timeout_raises:
+                    raise Exception("timeout")
+                out = self._items
+                self._items = []
+                return out
+
         return FakeSub(lines)
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_stream_emits_history_then_exits(self, mock_get_buf, client):
-        import asyncio
         from unittest.mock import AsyncMock
 
         buf = MagicMock()
@@ -252,17 +276,18 @@ class TestOutputStream:
         buf.subscribe.return_value = sub
         mock_get_buf.return_value = buf
 
-        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
-             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+        with (
+            patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])),
+            patch("asyncio.sleep", new=AsyncMock(return_value=None)),
+        ):
             with client.stream("GET", "/system/stream") as resp:
                 assert resp.status_code == 200
                 assert resp.headers["content-type"].startswith("text/event-stream")
                 body = resp.read().decode()
                 assert '{"text": "boot"}' in body
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_stream_pushes_live_lines(self, mock_get_buf, client):
-        import asyncio
         from unittest.mock import AsyncMock
 
         buf = MagicMock()
@@ -271,15 +296,16 @@ class TestOutputStream:
         buf.subscribe.return_value = sub
         mock_get_buf.return_value = buf
 
-        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
-             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+        with (
+            patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])),
+            patch("asyncio.sleep", new=AsyncMock(return_value=None)),
+        ):
             with client.stream("GET", "/system/stream") as resp:
                 body = resp.read().decode()
                 assert '{"text": "live"}' in body
 
-    @patch("domains.infrastructure.output_buffer.get_server_buffer")
+    @patch("domain.infrastructure.get_server_buffer")
     def test_stream_unsubscribes_on_close(self, mock_get_buf, client):
-        import asyncio
         from unittest.mock import AsyncMock
 
         buf = MagicMock()
@@ -287,8 +313,10 @@ class TestOutputStream:
         buf.subscribe.return_value = self._make_sub([])
         mock_get_buf.return_value = buf
 
-        with patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])), \
-             patch("asyncio.sleep", new=AsyncMock(return_value=None)):
+        with (
+            patch("fastapi.Request.is_disconnected", new=AsyncMock(side_effect=[False, True])),
+            patch("asyncio.sleep", new=AsyncMock(return_value=None)),
+        ):
             with client.stream("GET", "/system/stream") as resp:
                 resp.read()
         buf.unsubscribe.assert_called_once()
@@ -332,6 +360,3 @@ class TestSystemValidation:
     def test_purge_max_age_below_zero_422(self, client):
         resp = client.post("/system/executor/purge?max_age_s=0")
         assert resp.status_code == 422
-
-
-

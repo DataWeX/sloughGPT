@@ -1,18 +1,13 @@
 'use client'
 
-import { useMemo } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button } from '@sloughgpt/strui'
+import { memo, useMemo } from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import type { Checkpoint } from '@/lib/souls-controller'
+import { formatDuration } from '@/lib/formatDuration'
 
 interface TrainingSummaryCardProps {
   checkpoints: Checkpoint[]
-  onTrainMore?: () => void
-}
-
-function fmtDuration(totalS: number): string {
-  if (totalS < 60) return `${totalS.toFixed(0)}s`
-  if (totalS < 3600) return `${Math.floor(totalS / 60)}m ${Math.round(totalS % 60)}s`
-  return `${Math.floor(totalS / 3600)}h ${Math.floor((totalS % 3600) / 60)}m`
+  loading?: boolean
 }
 
 interface Stat {
@@ -26,11 +21,13 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   const withLoss = checkpoints.filter(c => c.loss != null && c.loss > 0)
   const withDuration = checkpoints.filter(c => c.training_duration_s != null && c.training_duration_s > 0)
   const withVocab = checkpoints.filter(c => c.vocab_size != null && c.vocab_size > 0)
+  const withQuality = checkpoints.filter(c => c.avg_quality != null && c.avg_quality > 0)
 
   const bestLoss = withLoss.length > 0 ? Math.min(...withLoss.map(c => c.loss!)) : null
   const avgLoss = withLoss.length > 0 ? withLoss.reduce((s, c) => s + c.loss!, 0) / withLoss.length : null
   const totalDuration = withDuration.reduce((s, c) => s + c.training_duration_s!, 0)
   const bestDuration = withDuration.length > 0 ? Math.min(...withDuration.map(c => c.training_duration_s!)) : null
+  const avgQuality = withQuality.length > 0 ? withQuality.reduce((s, c) => s + c.avg_quality!, 0) / withQuality.length : null
 
   const modelTypes = new Map<string, number>()
   for (const c of checkpoints) {
@@ -49,8 +46,9 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
     const spread = Math.max(...withLoss.map(c => c.loss!)) - bestLoss!
     stats.push({ label: 'Loss spread', value: spread.toFixed(4) })
   }
-  if (totalDuration > 0) stats.push({ label: 'Total training time', value: fmtDuration(totalDuration) })
-  if (bestDuration != null) stats.push({ label: 'Fastest run', value: fmtDuration(bestDuration) })
+  if (totalDuration > 0) stats.push({ label: 'Total training time', value: formatDuration(totalDuration) })
+  if (bestDuration != null) stats.push({ label: 'Fastest run', value: formatDuration(bestDuration) })
+  if (avgQuality != null) stats.push({ label: 'Avg quality', value: `${avgQuality.toFixed(1)}/5` })
   if (withVocab.length > 0) {
     const maxVocab = Math.max(...withVocab.map(c => c.vocab_size!))
     stats.push({ label: 'Max vocab size', value: String(maxVocab) })
@@ -62,47 +60,46 @@ function computeStats(checkpoints: Checkpoint[]): Stat[] {
   return stats
 }
 
-export function TrainingSummaryCard({ checkpoints, onTrainMore }: TrainingSummaryCardProps) {
+export const TrainingSummaryCard = memo(function TrainingSummaryCard({ checkpoints, loading }: TrainingSummaryCardProps) {
   const stats = useMemo(() => computeStats(checkpoints), [checkpoints])
 
-  if (stats.length === 0) {
+  if (loading && stats.length === 0) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Training summary</CardTitle>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-xs">Training summary</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-center py-6">
-            <p className="text-sm text-muted-foreground">No checkpoints saved yet</p>
-            <p className="text-xs text-muted-foreground/70 mt-1">
-              Train a model to see loss, duration, and performance stats here.
-            </p>
-            {onTrainMore && (
-              <Button size="sm" variant="outline" className="mt-3" onClick={onTrainMore}>
-                Train your first model
-              </Button>
-            )}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded-lg bg-muted/20 p-2 space-y-1">
+                <div className="h-2 w-12 animate-pulse rounded bg-muted" />
+                <div className="h-3.5 w-10 animate-pulse rounded bg-muted" />
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>
     )
   }
 
+  if (stats.length === 0) return null
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Training summary</CardTitle>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs">Training summary</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
           {stats.map(s => (
-            <div key={s.label} className="space-y-0.5">
-              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</p>
-              <p className="text-sm font-mono font-medium">{s.value}</p>
+            <div key={s.label} className="rounded-lg bg-muted/20 px-2.5 py-2">
+              <p className="text-[9px] text-muted-foreground/60 uppercase tracking-wider">{s.label}</p>
+              <p className="text-[11px] font-mono font-medium tabular-nums mt-0.5">{s.value}</p>
             </div>
           ))}
         </div>
       </CardContent>
     </Card>
   )
-}
+})

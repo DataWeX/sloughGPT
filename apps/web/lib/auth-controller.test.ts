@@ -46,7 +46,7 @@ describe('authController', () => {
   })
 
   it('verify calls apiPost with auth header', async () => {
-    const mockResponse = { data: { valid: true } }
+    const mockResponse = { valid: true, subject: 'user-1' }
     vi.mocked(apiPost).mockResolvedValue(mockResponse)
 
     const result = await authController.verify('tok123')

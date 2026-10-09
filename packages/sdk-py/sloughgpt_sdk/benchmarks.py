@@ -3,18 +3,19 @@ SloughGPT SDK - Benchmarks
 Performance benchmarking utilities.
 """
 
-import time
 import statistics
 import threading
-import asyncio
-from typing import List, Dict, Any, Optional, Callable
-from dataclasses import dataclass, field
+import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
 class BenchmarkResult:
     """Result of a benchmark run."""
+
     name: str
     iterations: int
     total_time_ms: float
@@ -24,8 +25,8 @@ class BenchmarkResult:
     median_time_ms: float
     std_dev_ms: float
     ops_per_second: float
-    p95_ms: Optional[float] = None
-    p99_ms: Optional[float] = None
+    p95_ms: float | None = None
+    p99_ms: float | None = None
 
     def __str__(self):
         return (
@@ -39,7 +40,7 @@ class BenchmarkResult:
             f"  Ops/sec: {self.ops_per_second:.2f}"
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -59,6 +60,7 @@ class BenchmarkResult:
 @dataclass
 class LoadTestResult:
     """Result of a load test."""
+
     name: str
     concurrent_workers: int
     total_requests: int
@@ -73,9 +75,9 @@ class LoadTestResult:
     p95_latency_ms: float
     p99_latency_ms: float
     success_rate: float
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "name": self.name,
@@ -96,7 +98,7 @@ class LoadTestResult:
         }
 
 
-def percentile(data: List[float], p: float) -> float:
+def percentile(data: list[float], p: float) -> float:
     """Calculate percentile of data."""
     if not data:
         return 0.0
@@ -156,7 +158,7 @@ class Benchmark:
         for _ in range(warmup):
             func(*args, **kwargs)
 
-        start = time.perf_counter()
+        time.perf_counter()
         for _ in range(iterations):
             iter_start = time.perf_counter()
             func(*args, **kwargs)
@@ -182,9 +184,9 @@ class Benchmark:
     def compare(
         self,
         name: str,
-        funcs: Dict[str, Callable],
+        funcs: dict[str, Callable],
         iterations: int = 1000,
-    ) -> List[BenchmarkResult]:
+    ) -> list[BenchmarkResult]:
         """
         Compare multiple implementations.
 
@@ -207,7 +209,7 @@ class Benchmark:
         name: str,
         func: Callable,
         iterations: int = 100,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Benchmark memory usage."""
         import tracemalloc
 
@@ -216,7 +218,7 @@ class Benchmark:
         times = []
         for _ in range(iterations):
             start = time.perf_counter()
-            result = func()
+            func()
             times.append(time.perf_counter() - start)
 
         current, peak = tracemalloc.get_traced_memory()
@@ -304,7 +306,7 @@ class LoadTester:
         total_requests = successful + failed
 
         if latencies:
-            latencies_sorted = sorted(latencies)
+            sorted(latencies)
             return LoadTestResult(
                 name=name,
                 concurrent_workers=concurrent_workers,
@@ -347,7 +349,7 @@ class LoadTester:
         request_func: Callable,
         duration_seconds: int = 60,
         target_rps: int = 100,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Run a stress test for a duration.
 
@@ -400,7 +402,7 @@ class Profiler:
 
     def __init__(self):
         """Initialize profiler."""
-        self._timings: Dict[str, List[float]] = {}
+        self._timings: dict[str, list[float]] = {}
         self._lock = threading.Lock()
 
     def __enter__(self):
@@ -413,6 +415,7 @@ class Profiler:
 
     def profile(self, name: str):
         """Decorator for profiling a function."""
+
         def decorator(func):
             def wrapper(*args, **kwargs):
                 start = time.perf_counter()
@@ -424,12 +427,14 @@ class Profiler:
                             self._timings[name] = []
                         self._timings[name].append(elapsed)
                     return result
-                except Exception as e:
+                except Exception:
                     raise
+
             return wrapper
+
         return decorator
 
-    def get_report(self) -> Dict[str, Any]:
+    def get_report(self) -> dict[str, Any]:
         """Get profiling report."""
         report = {}
         for name, times in self._timings.items():
@@ -461,9 +466,11 @@ class Profiler:
 
 def benchmark_cache_operations():
     """Benchmark cache operations."""
-    from sloughgpt_sdk.cache import InMemoryCache
-    import sys
     import os
+    import sys
+
+    from sloughgpt_sdk.cache import InMemoryCache
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     cache = InMemoryCache()
@@ -492,8 +499,9 @@ def benchmark_cache_operations():
 
 
 if __name__ == "__main__":
-    import sys
     import os
+    import sys
+
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
     print("Running SDK Benchmarks...\n")

@@ -1,27 +1,35 @@
 """Tests for LR schedulers — config dataclasses, factory, scheduler creation."""
 
 import pytest
-from domains.training.lr_schedulers import (
-    SchedulerConfig, CosineAnnealingConfig, WarmupConfig,
-    OneCycleConfig, CyclicConfig, WarmupCosineScheduler,
-    PolynomialDecayScheduler, LinearWarmupScheduler,
-    create_scheduler, BEST_PRACTICES,
-)
-from domains.training.slonet import SloLRScheduler
 
+from domain.training._internal.lr_schedulers import (
+    BEST_PRACTICES,
+    CosineAnnealingConfig,
+    CyclicConfig,
+    LinearWarmupScheduler,
+    OneCycleConfig,
+    PolynomialDecayScheduler,
+    SchedulerConfig,
+    WarmupConfig,
+    WarmupCosineScheduler,
+    create_scheduler,
+)
+from domain.training._internal.slonet import SloLRScheduler
 
 # ── Mock Optimizer ─────────────────────────────────────────────────────────
 
+
 class MockOptimizer:
     """Minimal optimizer mock that provides param_groups for scheduler init."""
+
     def __init__(self, lr=1e-3):
         self.param_groups = [{"lr": lr}]
 
 
 # ── Config Dataclasses ─────────────────────────────────────────────────────
 
-class TestSchedulerConfig:
 
+class TestSchedulerConfig:
     def test_defaults(self):
         cfg = SchedulerConfig()
         assert cfg.name == "none"
@@ -34,7 +42,6 @@ class TestSchedulerConfig:
 
 
 class TestCosineAnnealingConfig:
-
     def test_defaults(self):
         cfg = CosineAnnealingConfig()
         assert cfg.name == "cosine"
@@ -51,7 +58,6 @@ class TestCosineAnnealingConfig:
 
 
 class TestWarmupConfig:
-
     def test_defaults(self):
         cfg = WarmupConfig()
         assert cfg.name == "warmup"
@@ -65,7 +71,6 @@ class TestWarmupConfig:
 
 
 class TestOneCycleConfig:
-
     def test_defaults(self):
         cfg = OneCycleConfig()
         assert cfg.name == "onecycle"
@@ -75,7 +80,6 @@ class TestOneCycleConfig:
 
 
 class TestCyclicConfig:
-
     def test_defaults(self):
         cfg = CyclicConfig()
         assert cfg.name == "cyclic"
@@ -88,8 +92,8 @@ class TestCyclicConfig:
 
 # ── Scheduler Classes (wrappers) ──────────────────────────────────────────
 
-class TestSchedulerClasses:
 
+class TestSchedulerClasses:
     def test_warmup_cosine_is_scheduler(self):
         assert issubclass(WarmupCosineScheduler, SloLRScheduler)
 
@@ -114,8 +118,8 @@ class TestSchedulerClasses:
 
 # ── create_scheduler factory ───────────────────────────────────────────────
 
-class TestCreateScheduler:
 
+class TestCreateScheduler:
     def test_cosine(self):
         sched = create_scheduler(MockOptimizer(), "cosine", total_steps=1000, warmup_steps=10)
         assert sched is not None
@@ -163,8 +167,8 @@ class TestCreateScheduler:
 
 # ── BEST_PRACTICES ─────────────────────────────────────────────────────────
 
-class TestBestPractices:
 
+class TestBestPractices:
     def test_is_string(self):
         assert isinstance(BEST_PRACTICES, str)
 
@@ -176,3 +180,39 @@ class TestBestPractices:
 
     def test_mentions_onecycle(self):
         assert "ONECYCLE" in BEST_PRACTICES
+
+
+class TestSchedulerConfigInheritance:
+    def test_cosine_config_inherits_scheduler_config(self):
+        cfg = CosineAnnealingConfig()
+        assert hasattr(cfg, "initial_lr")  # inherited from SchedulerConfig
+
+    def test_onecycle_config_inherits(self):
+        cfg = OneCycleConfig()
+        assert cfg.name == "onecycle"
+        assert hasattr(cfg, "initial_lr")
+
+    def test_cyclic_config_inherits(self):
+        cfg = CyclicConfig()
+        assert cfg.name == "cyclic"
+        assert cfg.base_lr == 1e-5
+
+    def test_warmup_config_inherits(self):
+        cfg = WarmupConfig()
+        assert cfg.name == "warmup"
+        assert hasattr(cfg, "initial_lr")
+
+
+class TestCreateSchedulerEdgeCases:
+    def test_unknown_type_raises_value_error(self):
+        """Unknown scheduler type should raise ValueError."""
+        with pytest.raises(ValueError, match="Unknown scheduler type"):
+            create_scheduler(MockOptimizer(), "unknown_type_xyz")
+
+    def test_onecycle_type(self):
+        """onecycle type should create a valid scheduler."""
+        sched = create_scheduler(MockOptimizer(lr=1e-3), "onecycle", total_steps=100)
+        assert sched is not None
+        lr = sched.get_lr()
+        assert isinstance(lr, list)
+        assert len(lr) > 0

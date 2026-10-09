@@ -3,13 +3,12 @@
 Covers: list, get_current, switch, weight snapshots.
 SloManager is mocked.
 """
+
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 _server_dir = str(Path(__file__).resolve().parents[3] / "apps" / "api" / "server")
 if _server_dir not in sys.path:
@@ -18,7 +17,8 @@ if _server_dir not in sys.path:
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
-from routers.souls import SoulsRouter, SloRouterState  # noqa: E402
+from routers.souls import SloRouterState, SoulsRouter  # noqa: E402
+
 from tests.conftest import build_test_app
 
 
@@ -42,7 +42,11 @@ def _mock_manager(**overrides) -> MagicMock:
     current.description = "Helpful assistant"
     current.traits = ["helpful"]
     mgr.get_current_soul.return_value = current
-    mgr.switch_soul.return_value = {"success": True, "name": "creative", "description": "Creative soul"}
+    mgr.switch_soul.return_value = {
+        "success": True,
+        "name": "creative",
+        "description": "Creative soul",
+    }
     mgr.get_soul.return_value = soul2
     mgr.get_soul_prompt.return_value = "You are a helpful assistant."
     mgr.get_trait_weights.return_value = {"warmth": 0.8, "creativity": 0.5}
@@ -54,7 +58,7 @@ def _app(sr: SoulsRouter):
 
 
 class TestListSouls:
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_list(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -67,7 +71,7 @@ class TestListSouls:
 
 
 class TestGetCurrentSoul:
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_get_current(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -78,7 +82,7 @@ class TestGetCurrentSoul:
 
 
 class TestSwitchSoul:
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_switch(self, mock_get):
         mock_get.return_value = _mock_manager()
         sr = SoulsRouter()
@@ -88,7 +92,7 @@ class TestSwitchSoul:
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "creative"
 
-    @patch("domains.inference.slo_manager.get_slo_manager")
+    @patch("domain.inference._internal.slo_manager.get_slo_manager")
     def test_switch_with_checkpoint(self, mock_get):
         mgr = _mock_manager()
         mgr.load_checkpoint.return_value = {"name": "assistant", "loss": 1.5}
@@ -113,7 +117,7 @@ class TestWeightSnapshots:
         assert "data" in data
         assert isinstance(data["data"], list)
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_save_snapshot(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.save_snapshot.return_value = "/tmp/snap.json"
@@ -125,7 +129,7 @@ class TestWeightSnapshots:
         assert resp.status_code == 200
         assert resp.json()["data"]["path"] == "/tmp/snap.json"
 
-    @patch("domains.context.managers.get_trait_config")
+    @patch("domain.context.get_trait_config")
     def test_delete_nonexistent_snapshot(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.delete_snapshot.return_value = False

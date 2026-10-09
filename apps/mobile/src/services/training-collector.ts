@@ -178,7 +178,7 @@ export async function pullWeights(
 ): Promise<{config: any; weights_b64: string} | null> {
   try {
     const data = await api.get<{config: any; weights_b64: string}>(
-      `/auto-train/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
+      `/training/checkpoints/${encodeURIComponent(checkpoint)}/export-mobile`,
     );
     return data || null;
   } catch {

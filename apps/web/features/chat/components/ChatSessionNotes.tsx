@@ -231,13 +231,14 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                         {formatDate(note.updatedAt)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100">
+                    <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                       <Button
                         variant="ghost"
                         size="icon-sm"
                         className="h-5 w-5"
                         onClick={() => handleEdit(note.id)}
                         title="Edit"
+                        aria-label="Edit note"
                       >
                         <span className="text-[10px]">✏</span>
                       </Button>
@@ -247,6 +248,7 @@ export const ChatSessionNotes = memo(function ChatSessionNotes({
                         className="h-5 w-5"
                         onClick={() => handleDelete(note.id)}
                         title="Delete"
+                        aria-label="Delete note"
                       >
                         <span className="text-destructive text-[10px]">×</span>
                       </Button>

@@ -1,12 +1,13 @@
 """
 Model Schemas - Data models for model management
 """
+
+from enum import StrEnum
+
 from pydantic import BaseModel, Field
-from typing import Optional, List
-from enum import Enum
 
 
-class ModelStatus(str, Enum):
+class ModelStatus(StrEnum):
     UNLOADED = "unloaded"
     LOADED = "loaded"
     LOADING = "loading"
@@ -14,7 +15,7 @@ class ModelStatus(str, Enum):
     AVAILABLE = "available"
 
 
-class Device(str, Enum):
+class Device(StrEnum):
     CPU = "cpu"
     MPS = "mps"
     CUDA = "cuda"
@@ -24,8 +25,8 @@ class Device(str, Enum):
 class LoadModelRequest(BaseModel):
     model_id: str = Field(..., description="HuggingFace model ID or local path")
     device: Device = Device.AUTO
-    mode: Optional[str] = Field(None, description="Load mode: local or api")
-    quantize: Optional[str] = Field(None, description="Quantization type: q4, q8, f16")
+    mode: str | None = Field(None, description="Load mode: local or api")
+    quantize: str | None = Field(None, description="Quantization type: q4, q8, f16")
 
 
 class ModelInfo(BaseModel):
@@ -34,20 +35,20 @@ class ModelInfo(BaseModel):
     device: str
     parameters: int = 0
     vocab_size: int = 0
-    loaded_at: Optional[str] = None
+    loaded_at: str | None = None
     description: str = ""
 
 
 class ModelListResponse(BaseModel):
-    models: List[ModelInfo]
-    current_model: Optional[str] = None
+    models: list[ModelInfo]
+    current_model: str | None = None
 
 
 class LoadModelResponse(BaseModel):
     status: str
-    model_id: Optional[str] = None
-    device: Optional[str] = None
+    model_id: str | None = None
+    device: str | None = None
     parameters: int = 0
-    error: Optional[str] = None
-    type: Optional[str] = None
-    loaded_at: Optional[str] = None
+    error: str | None = None
+    type: str | None = None
+    loaded_at: str | None = None

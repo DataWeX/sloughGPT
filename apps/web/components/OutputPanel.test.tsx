@@ -38,7 +38,7 @@ describe('OutputPanel', () => {
     mockHookReturn.mockReturnValue(defaultHookReturn())
     const { OutputPanel } = await import('@/components/OutputPanel')
     render(<OutputPanel open={true} onClose={vi.fn()} />)
-    expect(screen.getAllByText('Server Output').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('Service Output').length).toBeGreaterThanOrEqual(1)
   })
 
   it('shows line count', async () => {

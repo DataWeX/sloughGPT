@@ -1,0 +1,202 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, cleanup, waitFor, act } from '@testing-library/react'
+import React from 'react'
+
+const mockSearchMessageNotes = vi.fn()
+
+vi.mock('@/lib/db', () => ({
+  chatDB: { searchMessageNotes: (...args: any[]) => mockSearchMessageNotes(...args) },
+}))
+
+vi.mock('@/lib/conversations-utils', () => ({
+  truncateMessage: (s: string) => s?.slice(0, 60) || 'Empty conversation',
+}))
+
+vi.mock('@/lib/dev-log', () => ({
+  logger: { info: vi.fn(), warning: vi.fn(), error: vi.fn() },
+}))
+
+vi.mock('@sloughgpt/strui', () => ({
+  cn: (...args: any[]) => args.filter(Boolean).join(' '),
+  Button: ({ children, onClick, ...props }: any) => <button onClick={onClick} {...props}>{children}</button>,
+  IconSearch: (p: any) => <svg {...p} />,
+  IconX: (p: any) => <svg {...p} />,
+
+Spinner: ({ className }: any) => <div className={className} data-testid="spinner" />,
+    Skeleton: ({ className }: any) => <div className={className} data-testid="skeleton" />,
+    Select: ({ children, ...props }: any) => <select {...props}>{children}</select>,
+    ActionCard: ({ title, children }: any) => <div data-testid="action-card"><h3>{title}</h3>{children}</div>,
+    Tabs: ({ children }: any) => <div>{children}</div>,
+    TabsList: ({ children }: any) => <div>{children}</div>,
+    TabsTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    TabsContent: ({ children }: any) => <div>{children}</div>,
+    Badge: ({ children, ...props }: any) => <span {...props}>{children}</span>,
+    Textarea: ({ value, onChange, ...props }: any) => <textarea value={value} onChange={onChange} {...props} />,
+    Separator: () => <hr />,
+    Tooltip: ({ children }: any) => <>{children}</>,
+    TooltipTrigger: ({ children }: any) => <>{children}</>,
+    TooltipContent: ({ children }: any) => <>{children}</>,
+    Progress: ({ value }: any) => <div data-testid="progress" data-value={value} />,
+    Avatar: ({ children }: any) => <div>{children}</div>,
+    AvatarFallback: ({ children }: any) => <div>{children}</div>,
+    ScrollArea: ({ children }: any) => <div>{children}</div>,
+    Table: ({ children }: any) => <table>{children}</table>,
+    TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableRow: ({ children }: any) => <tr>{children}</tr>,
+    TableCell: ({ children }: any) => <td>{children}</td>,
+    TableHead: ({ children }: any) => <th>{children}</th>,
+    TableHeader: ({ children }: any) => <thead>{children}</thead>,
+    Collapsible: ({ children }: any) => <div>{children}</div>,
+    CollapsibleTrigger: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    CollapsibleContent: ({ children }: any) => <div>{children}</div>,
+    Toggle: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    ToggleGroup: ({ children }: any) => <div>{children}</div>,
+    ToggleGroupItem: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+    Command: ({ children }: any) => <div>{children}</div>,
+    CommandInput: ({ ...props }: any) => <input {...props} />,
+    CommandList: ({ children }: any) => <div>{children}</div>,
+    CommandEmpty: ({ children }: any) => <div>{children}</div>,
+    CommandGroup: ({ children }: any) => <div>{children}</div>,
+    CommandItem: ({ children, ...props }: any) => <div {...props}>{children}</div>,
+}))
+
+import { NoteSearchPanel } from './NoteSearchPanel'
+
+const defaultProps = {
+  open: true,
+  onClose: vi.fn(),
+  onNavigateToNote: vi.fn(),
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+  cleanup()
+})
+
+describe('NoteSearchPanel', () => {
+  it('renders nothing when closed', () => {
+    render(<NoteSearchPanel {...defaultProps} open={false} />)
+    expect(screen.queryByPlaceholderText(/Search notes/)).toBeNull()
+  })
+
+  it('renders when open', () => {
+    render(<NoteSearchPanel {...defaultProps} />)
+    expect(screen.getByPlaceholderText(/Search notes across all conversations/)).toBeDefined()
+  })
+
+  it('shows empty state initially', () => {
+    render(<NoteSearchPanel {...defaultProps} />)
+    expect(screen.getByText('Type to search notes across all conversations')).toBeDefined()
+  })
+
+  it('debounces search and fetches results', async () => {
+    mockSearchMessageNotes.mockResolvedValue([
+      { sessionId: 'sess-1', messageId: 'msg-1', content: 'Important note', createdAt: Date.now(), updatedAt: Date.now() },
+    ])
+    render(<NoteSearchPanel {...defaultProps} />)
+
+    const input = screen.getByPlaceholderText(/Search notes/)
+    fireEvent.change(input, { target: { value: 'note' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
+
+    expect(mockSearchMessageNotes).toHaveBeenCalledWith('note')
+    expect(screen.getByText(/1 note found/)).toBeDefined()
+    expect(screen.getByText(/Important/)).toBeDefined()
+  })
+
+  it('shows no results message', async () => {
+    mockSearchMessageNotes.mockResolvedValue([])
+    render(<NoteSearchPanel {...defaultProps} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'nothing' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
+
+    expect(screen.getByText(/No notes found for/)).toBeDefined()
+  })
+
+  it('handles search error gracefully', async () => {
+    mockSearchMessageNotes.mockRejectedValue(new Error('fail'))
+    render(<NoteSearchPanel {...defaultProps} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'err' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
+
+    expect(screen.queryByRole('button', { name: /err/ })).toBeNull()
+  })
+
+  it('clears results when query is cleared', async () => {
+    mockSearchMessageNotes.mockResolvedValue([
+      { sessionId: 's1', messageId: 'm1', content: 'Note', createdAt: Date.now(), updatedAt: Date.now() },
+    ])
+    render(<NoteSearchPanel {...defaultProps} />)
+
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'note' } })
+      vi.advanceTimersByTime(300)
+    })
+    expect(screen.getByText('Note')).toBeDefined()
+
+    fireEvent.click(screen.getByLabelText('Clear search'))
+    expect(screen.getByText('Type to search notes across all conversations')).toBeDefined()
+  })
+
+  it('navigates to note and closes on result click', async () => {
+    const onNavigate = vi.fn()
+    const onClose = vi.fn()
+    mockSearchMessageNotes.mockResolvedValue([
+      { sessionId: 'sess-abc', messageId: 'msg-123', content: 'Click me', createdAt: Date.now(), updatedAt: Date.now() },
+    ])
+    render(<NoteSearchPanel {...defaultProps} onNavigateToNote={onNavigate} onClose={onClose} />)
+
+    fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'click' } })
+    await act(() => vi.advanceTimersByTimeAsync(500))
+
+    const text = screen.getByText(/Click/)
+    fireEvent.click(text)
+    expect(onNavigate).toHaveBeenCalledWith('sess-abc', 'msg-123')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('closes on Escape key', () => {
+    const onClose = vi.fn()
+    render(<NoteSearchPanel {...defaultProps} onClose={onClose} />)
+    fireEvent.keyDown(screen.getByPlaceholderText(/Search notes/), { key: 'Escape' })
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('closes on backdrop click', () => {
+    const onClose = vi.fn()
+    render(<NoteSearchPanel {...defaultProps} onClose={onClose} />)
+    fireEvent.click(screen.getByText('Esc'))
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('does not search when query is whitespace only', async () => {
+    render(<NoteSearchPanel {...defaultProps} />)
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: '   ' } })
+      vi.advanceTimersByTime(300)
+    })
+    expect(mockSearchMessageNotes).not.toHaveBeenCalled()
+  })
+
+  it('shows note count with plural form', async () => {
+    mockSearchMessageNotes.mockResolvedValue([
+      { sessionId: 's1', messageId: 'm1', content: 'N1', createdAt: Date.now(), updatedAt: Date.now() },
+      { sessionId: 's1', messageId: 'm2', content: 'N2', createdAt: Date.now(), updatedAt: Date.now() },
+    ])
+    render(<NoteSearchPanel {...defaultProps} />)
+
+    await act(async () => {
+      fireEvent.change(screen.getByPlaceholderText(/Search notes/), { target: { value: 'test' } })
+      vi.advanceTimersByTime(300)
+    })
+
+    expect(screen.getByText(/2 notes found/)).toBeDefined()
+  })
+})

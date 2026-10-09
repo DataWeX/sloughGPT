@@ -1,23 +1,27 @@
 """Tests for mobile training data CRUD endpoints."""
 
-import pytest
+import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from routers.mobile import router
+from apps.api.server.infrastructure.exception_handlers import register_all_handlers
+from apps.api.server.routers.mobile import MobileRouter
 
 app = FastAPI()
-app.include_router(router)
+register_all_handlers(app)
+_m = MobileRouter()
+app.include_router(_m.router)
 client = TestClient(app, raise_server_exceptions=False)
 
 
 @pytest.fixture(autouse=True)
 def mock_store():
     """Mock MobileTrainingStore for all tests."""
-    with patch("domains.training.mobile_training_store.get_training_store") as mock:
+    with patch("domain.training._internal.mobile_training_store.get_training_store") as mock:
         store = MagicMock()
         store.add_pair.return_value = "pair_001"
         store.add_batch.return_value = ["pair_001", "pair_002"]
@@ -32,16 +36,32 @@ def mock_store():
             "timestamp": 1000.0,
         }
         store.get_pending_pairs.return_value = [
-            {"_id": f"pair_{i}", "user_msg": f"u{i}", "assistant_msg": f"a{i}",
-             "session_id": "s1", "quality": 0.0, "synced": False, "timestamp": 1000.0 + i}
+            {
+                "_id": f"pair_{i}",
+                "user_msg": f"u{i}",
+                "assistant_msg": f"a{i}",
+                "session_id": "s1",
+                "quality": 0.0,
+                "synced": False,
+                "timestamp": 1000.0 + i,
+            }
             for i in range(5)
         ]
         store.get_pairs_by_session.return_value = [
-            {"_id": "pair_001", "user_msg": "hello", "assistant_msg": "hi",
-             "session_id": "s1", "quality": 0.5, "timestamp": 1000.0},
+            {
+                "_id": "pair_001",
+                "user_msg": "hello",
+                "assistant_msg": "hi",
+                "session_id": "s1",
+                "quality": 0.5,
+                "timestamp": 1000.0,
+            },
         ]
         store.stats.return_value = {
-            "total": 100, "pending": 30, "synced": 70, "used": 65,
+            "total": 100,
+            "pending": 30,
+            "synced": 70,
+            "used": 65,
         }
         store.delete_pair.return_value = True
         store.delete_synced.return_value = 10
@@ -50,8 +70,14 @@ def mock_store():
         store.count.return_value = 100
         store.quality_breakdown.return_value = {"0": 1, "1": 1, "-1": 1}
         store.list_pairs.return_value = [
-            {"_id": "pair_001", "user_msg": "hello", "assistant_msg": "hi",
-             "quality": 0.8, "session_id": "s1", "timestamp": 1000.0},
+            {
+                "_id": "pair_001",
+                "user_msg": "hello",
+                "assistant_msg": "hi",
+                "quality": 0.8,
+                "session_id": "s1",
+                "timestamp": 1000.0,
+            },
         ]
         store.mark_used.return_value = None
         store.mark_synced.return_value = None
@@ -63,7 +89,7 @@ class TestTrainStats:
     def test_stats_returns_fields(self):
         resp = client.get("/mobile/train/stats")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["total"] == 100
         assert data["pending"] == 30
         assert data["synced"] == 70
@@ -75,7 +101,7 @@ class TestTrainPending:
     def test_pending_returns_pairs(self):
         resp = client.get("/mobile/train/pending")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["count"] == 5
         assert len(data["pairs"]) == 5
         assert data["pairs"][0]["id"] == "pair_0"
@@ -89,7 +115,7 @@ class TestTrainSession:
     def test_session_returns_pairs(self):
         resp = client.get("/mobile/train/session/s1")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["session_id"] == "s1"
         assert data["count"] == 1
 
@@ -98,7 +124,7 @@ class TestUpdateQuality:
     def test_update_quality(self):
         resp = client.patch("/mobile/train/pair/pair_001", json={"quality": 1.0})
         assert resp.status_code == 200
-        assert resp.json()["quality"] == 1.0
+        assert resp.json()["data"]["quality"] == 1.0
 
     def test_update_quality_not_found(self, mock_store):
         mock_store.update_quality.return_value = False
@@ -110,7 +136,7 @@ class TestDeletePair:
     def test_delete_pair(self):
         resp = client.delete("/mobile/train/pair/pair_001")
         assert resp.status_code == 200
-        assert resp.json()["pair_id"] == "pair_001"
+        assert resp.json()["data"]["pair_id"] == "pair_001"
 
     def test_delete_pair_not_found(self, mock_store):
         mock_store.delete_pair.return_value = False
@@ -122,19 +148,20 @@ class TestDeleteSynced:
     def test_delete_synced(self):
         resp = client.delete("/mobile/train/synced")
         assert resp.status_code == 200
-        assert resp.json()["count"] == 10
+        assert resp.json()["data"]["count"] == 10
 
 
 class TestCompactStore:
     def test_compact(self):
         resp = client.post("/mobile/train/compact")
         assert resp.status_code == 200
-        assert resp.json()["count"] == 90
+        assert resp.json()["data"]["count"] == 90
 
 
 def _parse_sse_events(resp) -> list[dict]:
     """Extract JSON events from SSE response (handles both raw SSE and TestClient JSON wrapper)."""
     import json as _json
+
     text = resp.text
     # TestClient may JSON-encode the SSE text as a string, or concatenate multiple JSON strings
     # Try to decode the full text first
@@ -169,13 +196,16 @@ def _make_mock_popen(stdout_lines: list[str], returncode: int = 0, stderr: str =
     proc = MagicMock()
     proc.returncode = None  # Still running
     lines = list(stdout_lines)
+
     def _readline():
         if lines:
             return lines.pop(0)
         return ""
+
     def _wait(timeout=None):
         proc.returncode = returncode
         return None
+
     proc.stdout.readline = _readline
     proc.stderr.read.return_value = stderr
     proc.stderr.readline.return_value = ""
@@ -188,8 +218,15 @@ def _make_mock_popen(stdout_lines: list[str], returncode: int = 0, stderr: str =
 class TestTrainFromSessions:
     def test_insufficient_pairs(self):
         """Yields SSE error event when server logs have < 5 pairs."""
-        with patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[]), \
-             patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[]):
+        with (
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=[],
+            ),
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[]
+            ),
+        ):
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
             assert resp.status_code == 200
             events = _parse_sse_events(resp)
@@ -205,15 +242,25 @@ class TestTrainFromSessions:
             for i in range(5)
         ]
         mock_proc = _make_mock_popen(
-            ['{"phase":"TRAIN","status":"loading","message":"Loading model"}',
-             '{"success":true,"loss":1.5,"steps":8,"elapsed_s":1.0,"model_path":"/tmp/final","phase":"COMPLETE","status":"complete"}'],
+            [
+                '{"phase":"TRAIN","status":"loading","message":"Loading model"}',
+                '{"success":true,"loss":1.5,"steps":8,"elapsed_s":1.0,"model_path":"/tmp/final","phase":"COMPLETE","status":"complete"}',
+            ],
             returncode=0,
         )
-        with patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=sessions_pairs) as mock_s, \
-             patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=[]) as mock_l, \
-             patch("domains.training.pair_extractor.write_training_text") as mock_w, \
-             patch("domains.training.mobile_training_store.get_training_store"), \
-             patch("routers.mobile.subprocess.Popen", return_value=mock_proc):
+        with (
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=sessions_pairs,
+            ) as mock_s,
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_logs", return_value=[]
+            ) as mock_l,
+            patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
+            patch("domain.training._internal.mobile_training_store.get_training_store"),
+            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
+            patch("apps.api.server.routers.mobile._venv_python", return_value=Path(sys.executable)),
+        ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
             assert resp.status_code == 200
@@ -231,15 +278,26 @@ class TestTrainFromSessions:
             for i in range(10)
         ]
         mock_proc = _make_mock_popen(
-            ['{"phase":"TRAIN","status":"loading","message":"Loading model"}',
-             '{"success":true,"loss":2.0,"steps":5,"elapsed_s":1.0,"model_path":"/tmp/final","phase":"COMPLETE","status":"complete"}'],
+            [
+                '{"phase":"TRAIN","status":"loading","message":"Loading model"}',
+                '{"success":true,"loss":2.0,"steps":5,"elapsed_s":1.0,"model_path":"/tmp/final","phase":"COMPLETE","status":"complete"}',
+            ],
             returncode=0,
         )
-        with patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=[]), \
-             patch("domains.training.pair_extractor.extract_pairs_from_logs", return_value=log_pairs), \
-             patch("domains.training.pair_extractor.write_training_text") as mock_w, \
-             patch("domains.training.mobile_training_store.get_training_store"), \
-             patch("routers.mobile.subprocess.Popen", return_value=mock_proc):
+        with (
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=[],
+            ),
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_logs",
+                return_value=log_pairs,
+            ),
+            patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
+            patch("domain.training._internal.mobile_training_store.get_training_store"),
+            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
+            patch("apps.api.server.routers.mobile._venv_python", return_value=Path(sys.executable)),
+        ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
             assert resp.status_code == 200
@@ -253,10 +311,16 @@ class TestTrainFromSessions:
         """Yields SSE error event when subprocess fails."""
         pairs = [{"user_msg": f"Q{i}", "assistant_msg": f"A{i} long enough"} for i in range(5)]
         mock_proc = _make_mock_popen([], returncode=1, stderr="RuntimeError: CUDA out of memory")
-        with patch("domains.training.pair_extractor.extract_pairs_from_sessions", return_value=pairs), \
-             patch("domains.training.pair_extractor.write_training_text") as mock_w, \
-             patch("domains.training.mobile_training_store.get_training_store"), \
-             patch("routers.mobile.subprocess.Popen", return_value=mock_proc):
+        with (
+            patch(
+                "domain.training._internal.pair_extractor.extract_pairs_from_sessions",
+                return_value=pairs,
+            ),
+            patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
+            patch("domain.training._internal.mobile_training_store.get_training_store"),
+            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
+            patch("apps.api.server.routers.mobile._venv_python", return_value=Path(sys.executable)),
+        ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions")
             assert resp.status_code == 200
@@ -269,7 +333,7 @@ class TestAutoTrainStatus:
     def test_status_returns_fields(self):
         resp = client.get("/mobile/train/auto-status")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "enabled" in data
         assert "threshold" in data
         assert "interval_s" in data
@@ -284,7 +348,7 @@ class TestListTrainingPairs:
     def test_list_top_level_fields(self):
         resp = client.get("/mobile/train/pairs")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["offset"] == 0
         assert data["total"] == 100
         assert data["count"] == 1
@@ -292,7 +356,13 @@ class TestListTrainingPairs:
     def test_passes_params(self, mock_store):
         client.get(
             "/mobile/train/pairs",
-            params={"limit": 25, "offset": 5, "min_quality": 0.8, "session_id": "s9", "search": "hello"},
+            params={
+                "limit": 25,
+                "offset": 5,
+                "min_quality": 0.8,
+                "session_id": "s9",
+                "search": "hello",
+            },
         )
         store = mock_store
         last_call = store.list_pairs.call_args
@@ -318,6 +388,7 @@ class TestExportTrainingPairs:
         lines = [l for l in resp.text.strip().split("\n") if l]
         assert len(lines) == 1
         import json as _json
+
         parsed = _json.loads(lines[0])
         assert parsed["user_msg"] == "hello"
         assert parsed["quality"] == 0.8
@@ -330,7 +401,7 @@ class TestDeletePairsBulk:
     def test_bulk_delete_counts(self):
         resp = client.delete("/mobile/train/pairs/bulk", params={"ids": ["pair_001", "pair_002"]})
         assert resp.status_code == 200
-        assert resp.json()["count"] == 2
+        assert resp.json()["data"]["count"] == 2
 
     def test_bulk_delete_missing_ids_is_422(self):
         assert client.delete("/mobile/train/pairs/bulk").status_code == 422
@@ -338,17 +409,21 @@ class TestDeletePairsBulk:
     def test_bulk_delete_skips_failed_deletes(self, mock_store):
         def _delete(pair_id):
             return pair_id != "pair_002"
+
         mock_store.delete_pair.side_effect = _delete
         resp = client.delete("/mobile/train/pairs/bulk", params={"ids": ["pair_001", "pair_002"]})
         assert resp.status_code == 200
-        assert resp.json()["count"] == 1
+        assert resp.json()["data"]["count"] == 1
 
 
 class TestMobileTrain:
     def test_insufficient_pairs_is_400(self):
-        body = {"checkpoint": "mobile_base", "pairs": [
-            {"id": f"p{i}", "user_msg": f"u{i}", "assistant_msg": f"a{i}"} for i in range(3)
-        ]}
+        body = {
+            "checkpoint": "mobile_base",
+            "pairs": [
+                {"id": f"p{i}", "user_msg": f"u{i}", "assistant_msg": f"a{i}"} for i in range(3)
+            ],
+        }
         resp = client.post("/mobile/train", json=body)
         assert resp.status_code == 400
 
@@ -359,17 +434,17 @@ class TestMobileTrain:
 
 class TestUpdateAutoConfig:
     def test_updates_threshold(self, mock_store):
-        with patch("domains.training.auto_trainer.get_auto_trainer") as mock_get:
+        with patch("domain.training._internal.auto_trainer.get_auto_trainer") as mock_get:
             trainer = MagicMock()
             trainer.status.return_value = {"threshold": 42, "interval_s": 60}
             mock_get.return_value = trainer
             resp = client.patch("/mobile/train/auto-config", params={"threshold": 42})
             assert resp.status_code == 200
             assert trainer.threshold == 42
-            assert resp.json()["threshold"] == 42
+            assert resp.json()["data"]["threshold"] == 42
 
     def test_updates_interval(self, mock_store):
-        with patch("domains.training.auto_trainer.get_auto_trainer") as mock_get:
+        with patch("domain.training._internal.auto_trainer.get_auto_trainer") as mock_get:
             trainer = MagicMock()
             trainer.status.return_value = {"threshold": 10, "interval_s": 300}
             mock_get.return_value = trainer
@@ -379,11 +454,18 @@ class TestUpdateAutoConfig:
 
     def test_threshold_out_of_range_is_422(self):
         assert client.patch("/mobile/train/auto-config", params={"threshold": 0}).status_code == 422
-        assert client.patch("/mobile/train/auto-config", params={"threshold": 101}).status_code == 422
+        assert (
+            client.patch("/mobile/train/auto-config", params={"threshold": 101}).status_code == 422
+        )
 
     def test_interval_out_of_range_is_422(self):
-        assert client.patch("/mobile/train/auto-config", params={"interval_s": 10}).status_code == 422
-        assert client.patch("/mobile/train/auto-config", params={"interval_s": 4000}).status_code == 422
+        assert (
+            client.patch("/mobile/train/auto-config", params={"interval_s": 10}).status_code == 422
+        )
+        assert (
+            client.patch("/mobile/train/auto-config", params={"interval_s": 4000}).status_code
+            == 422
+        )
 
 
 class TestParamValidation:

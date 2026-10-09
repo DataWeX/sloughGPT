@@ -1,0 +1,24 @@
+# Weighted benchmark program — OSBench-like
+# Programmable logic: weights + normalizations produce 0-100 score.
+metrics:
+  - name: latency_p99
+    weight: 0.30
+    norm: lower-better
+    lo: 0
+    hi: 500
+  - name: recall_at_5
+    weight: 0.25
+    norm: higher-better
+    lo: 0
+    hi: 1
+  - name: quality
+    weight: 0.25
+    norm: higher-better
+    lo: 0
+    hi: 1
+  - name: memory_mb
+    weight: 0.20
+    norm: lower-better
+    lo: 0
+    hi: 2048
+logic: "0.30*norm_latency_p99 + 0.25*recall_at_5 + 0.25*quality + 0.20*norm_memory_mb | if recall_at_5 < 0.8 then 0"

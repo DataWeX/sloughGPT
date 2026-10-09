@@ -160,7 +160,7 @@ export const tokenTreeController = {
 
   async listSaved(): Promise<SavedTree[]> {
     const data = await apiGet<{ trees: SavedTree[] }>('/token-tree/saved')
-    return data.trees
+    return data?.trees ?? []
   },
 
   async saveTree(name: string): Promise<SavedTree> {

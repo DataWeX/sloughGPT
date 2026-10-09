@@ -3,12 +3,13 @@ Tests for the security router — GET /security/audit and GET /security/keys.
 """
 
 import json
-import pytest
 from unittest.mock import patch
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from infrastructure.exception_handlers import register_all_handlers
+
 from apps.api.server.routers.security import router
 
 
@@ -98,10 +99,8 @@ class TestSecurityAudit:
 
     @patch("infrastructure.auth.get_audit_logger")
     def test_limit_zero_returns_all(self, mock_get_logger, client):
-        logger = mock_get_logger.return_value
-        logger.logs = [{"event_type": "a", "timestamp": str(i)} for i in range(4)]
         resp = client.get("/security/audit?limit=0")
-        assert resp.json()["data"]["count"] == 4
+        assert resp.status_code == 422
 
     @patch("infrastructure.auth.get_audit_logger")
     def test_combined_limit_and_filter(self, mock_get_logger, client):
@@ -122,11 +121,9 @@ class TestSecurityAudit:
         assert resp.status_code == 422
 
     @patch("infrastructure.auth.get_audit_logger")
-    def test_negative_limit_slices_from_end(self, mock_get_logger, client):
-        logger = mock_get_logger.return_value
-        logger.logs = [{"event_type": "a", "timestamp": str(i)} for i in range(6)]
+    def test_negative_limit_rejected(self, mock_get_logger, client):
         resp = client.get("/security/audit?limit=-2")
-        assert resp.json()["data"]["count"] == 4
+        assert resp.status_code == 422
 
     def test_wrong_method_returns_405(self, client):
         resp = client.post("/security/audit")
@@ -147,7 +144,9 @@ class TestSecurityAudit:
     @patch("infrastructure.auth.get_audit_logger")
     def test_extra_fields_passthrough(self, mock_get_logger, client):
         logger = mock_get_logger.return_value
-        logger.logs = [{"event_type": "model_loaded", "timestamp": "1", "model_id": "gpt2", "tag": "REQ"}]
+        logger.logs = [
+            {"event_type": "model_loaded", "timestamp": "1", "model_id": "gpt2", "tag": "REQ"}
+        ]
         resp = client.get("/security/audit")
         log = resp.json()["data"]["logs"][0]
         assert log["model_id"] == "gpt2"
@@ -211,8 +210,15 @@ class TestAuditLoggerReal:
 
     def test_log_appends_record_with_event_type(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "audit.log"))
-        logger.log("auth_success", user="u1", resource="/auth/token", detail="ok", extra={"action": "token_create"})
+        logger.log(
+            "auth_success",
+            user="u1",
+            resource="/auth/token",
+            detail="ok",
+            extra={"action": "token_create"},
+        )
         assert len(logger.logs) == 1
         rec = logger.logs[0]
         assert rec["event_type"] == "auth_success"
@@ -224,6 +230,7 @@ class TestAuditLoggerReal:
 
     def test_logs_property_returns_copy(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "audit.log"))
         logger.log("a", user="u")
         snapshot = logger.logs
@@ -232,6 +239,7 @@ class TestAuditLoggerReal:
 
     def test_logs_ring_buffer_caps_at_maxlen(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "audit.log"))
         for i in range(1005):
             logger.log(f"e{i}", user="u")
@@ -241,6 +249,7 @@ class TestAuditLoggerReal:
     def test_get_audit_logger_returns_singleton(self, tmp_path, monkeypatch):
         from infrastructure import auth
         from infrastructure.auth import get_audit_logger
+
         monkeypatch.setattr(auth, "_audit_logger_instance", None)
         first = get_audit_logger()
         second = get_audit_logger()
@@ -261,17 +270,22 @@ class TestAuditLoggerFileQuery:
 
     def test_reads_tail_newest_last(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
-        self._write(p, [
-            self._ev("2024-01-01T00:00:00+00:00", "a"),
-            self._ev("2024-01-01T00:00:01+00:00", "b"),
-            self._ev("2024-01-01T00:00:02+00:00", "c"),
-        ])
+        self._write(
+            p,
+            [
+                self._ev("2024-01-01T00:00:00+00:00", "a"),
+                self._ev("2024-01-01T00:00:01+00:00", "b"),
+                self._ev("2024-01-01T00:00:02+00:00", "c"),
+            ],
+        )
         logger = AuditLogger(log_path=p)
         assert [e["event_type"] for e in logger.file_query()] == ["c", "b", "a"]
 
     def test_limit_positive_zero_negative(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
         self._write(p, [self._ev(f"2024-01-01T00:00:{i:02d}+00:00", f"e{i}") for i in range(20)])
         logger = AuditLogger(log_path=p)
@@ -282,34 +296,45 @@ class TestAuditLoggerFileQuery:
 
     def test_event_type_filter(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
-        self._write(p, [
-            self._ev("2024-01-01T00:00:00+00:00", "auth_success"),
-            self._ev("2024-01-01T00:00:01+00:00", "auth_failed"),
-            self._ev("2024-01-01T00:00:02+00:00", "auth_success"),
-        ])
+        self._write(
+            p,
+            [
+                self._ev("2024-01-01T00:00:00+00:00", "auth_success"),
+                self._ev("2024-01-01T00:00:01+00:00", "auth_failed"),
+                self._ev("2024-01-01T00:00:02+00:00", "auth_success"),
+            ],
+        )
         logger = AuditLogger(log_path=p)
         res = logger.file_query(event_type="auth_success")
         assert [e["timestamp"] for e in res] == [
-            "2024-01-01T00:00:02+00:00", "2024-01-01T00:00:00+00:00",
+            "2024-01-01T00:00:02+00:00",
+            "2024-01-01T00:00:00+00:00",
         ]
 
     def test_before_cursor_excludes_newer(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
-        self._write(p, [
-            self._ev("2024-01-01T00:00:00+00:00", "a"),
-            self._ev("2024-01-01T00:00:01+00:00", "b"),
-            self._ev("2024-01-01T00:00:02+00:00", "c"),
-        ])
+        self._write(
+            p,
+            [
+                self._ev("2024-01-01T00:00:00+00:00", "a"),
+                self._ev("2024-01-01T00:00:01+00:00", "b"),
+                self._ev("2024-01-01T00:00:02+00:00", "c"),
+            ],
+        )
         logger = AuditLogger(log_path=p)
         res = logger.file_query(before="2024-01-01T00:00:02+00:00")
         assert [e["timestamp"] for e in res] == [
-            "2024-01-01T00:00:01+00:00", "2024-01-01T00:00:00+00:00",
+            "2024-01-01T00:00:01+00:00",
+            "2024-01-01T00:00:00+00:00",
         ]
 
     def test_malformed_lines_skipped(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
         self._write(p, ["not json", "", "{broken", self._ev("2024-01-01T00:00:00+00:00", "a")])
         logger = AuditLogger(log_path=p)
@@ -318,6 +343,7 @@ class TestAuditLoggerFileQuery:
 
     def test_missing_file_falls_back_to_buffer(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         logger = AuditLogger(log_path=str(tmp_path / "nope.log"))
         logger.log("auth_success", user="u")
         res = logger.file_query()
@@ -326,6 +352,7 @@ class TestAuditLoggerFileQuery:
 
     def test_limit_caps_return(self, tmp_path):
         from infrastructure.auth import AuditLogger
+
         p = str(tmp_path / "audit.log")
         self._write(p, [self._ev(f"2024-01-01T00:00:{i:02d}+00:00", "x") for i in range(10)])
         logger = AuditLogger(log_path=p)
@@ -339,7 +366,9 @@ class TestAuditLoggerFileQuery:
         assert resp.status_code == 200
         data = resp.json()["data"]
         assert data["count"] == 1
-        logger.file_query.assert_called_once_with(limit=100, event_type=None, before=None)
+        logger.file_query.assert_called_once_with(
+            limit=100, event_type=None, before=None, workspace_id=""
+        )
 
     @patch("infrastructure.auth.get_audit_logger")
     def test_router_history_before_and_filter_passthrough(self, mock_get_logger, client):
@@ -350,7 +379,10 @@ class TestAuditLoggerFileQuery:
         )
         assert resp.status_code == 200
         logger.file_query.assert_called_once_with(
-            limit=5, event_type="auth_failed", before="2024-01-01T00:00:00+00:00",
+            limit=5,
+            event_type="auth_failed",
+            before="2024-01-01T00:00:00+00:00",
+            workspace_id="",
         )
 
     @patch("infrastructure.auth.get_audit_logger")
@@ -362,59 +394,139 @@ class TestAuditLoggerFileQuery:
 
 
 class TestSecurityKeys:
-    """GET /security/keys"""
+    """GET /security/keys — lists MogDB-stored API keys."""
 
-    @patch("settings.get_security_settings")
-    def test_returns_key_info(self, mock_get_sec, client):
-        sec = mock_get_sec.return_value
-        sec.valid_api_keys = ["key1", "key2"]
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_returns_empty_list(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.list.return_value = []
         resp = client.get("/security/keys")
         assert resp.status_code == 200
         data = resp.json()["data"]
-        assert data["count"] == 2
-        assert data["configured"] is True
-
-    @patch("settings.get_security_settings")
-    def test_no_keys_configured(self, mock_get_sec, client):
-        sec = mock_get_sec.return_value
-        sec.valid_api_keys = []
-        resp = client.get("/security/keys")
-        data = resp.json()["data"]
         assert data["count"] == 0
-        assert data["configured"] is False
+        assert data["keys"] == []
 
-    @patch("settings.get_security_settings")
-    def test_single_key(self, mock_get_sec, client):
-        sec = mock_get_sec.return_value
-        sec.valid_api_keys = ["only-one"]
-        resp = client.get("/security/keys")
-        assert resp.json()["data"]["count"] == 1
-
-    @patch("settings.get_security_settings")
-    def test_keys_structure(self, mock_get_sec, client):
-        sec = mock_get_sec.return_value
-        sec.valid_api_keys = ["k1"]
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_lists_created_keys(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.list.return_value = [
+            {
+                "id": "1",
+                "name": "k1",
+                "key_hash": "abc",
+                "scopes": ["*"],
+                "created_at": 1,
+                "revoked": False,
+            },
+            {
+                "id": "2",
+                "name": "k2",
+                "key_hash": "def",
+                "scopes": ["*"],
+                "created_at": 2,
+                "revoked": False,
+            },
+        ]
         resp = client.get("/security/keys")
         data = resp.json()["data"]
-        assert "count" in data
-        assert "configured" in data
+        assert data["count"] == 2
+        assert len(data["keys"]) == 2
+
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_key_structure_hides_raw_key(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.list.return_value = [
+            {
+                "id": "1",
+                "name": "k1",
+                "key_hash": "abc",
+                "scopes": ["*"],
+                "created_at": 1,
+                "revoked": False,
+            }
+        ]
+        resp = client.get("/security/keys")
+        key_entry = resp.json()["data"]["keys"][0]
+        assert "key" not in key_entry
+        assert "key_hash" in key_entry
+        assert "name" in key_entry
+        assert "id" in key_entry
+
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_create_key(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.create.return_value = {
+            "id": "1",
+            "name": "test",
+            "key": "slo_abc123",
+            "key_hash": "abc",
+            "scopes": ["read"],
+            "created_at": 1,
+            "revoked": False,
+        }
+        resp = client.post("/security/keys", json={"name": "test", "scopes": ["read"]})
+        assert resp.status_code == 200
+        created = resp.json()["data"]
+        assert created["name"] == "test"
+        assert created["key"].startswith("slo_")
+
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_delete_key(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.revoke.return_value = None
+        resp = client.delete("/security/keys/k1")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["revoked"] is True
+
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_rotate_key(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.rotate.return_value = {
+            "id": "2",
+            "name": "k1",
+            "key": "slo_new456",
+            "key_hash": "new",
+            "scopes": ["*"],
+            "created_at": 2,
+            "revoked": False,
+        }
+        resp = client.post("/security/keys/k1/rotate")
+        assert resp.status_code == 200
+        assert resp.json()["data"]["key"].startswith("slo_")
 
     def test_wrong_method_returns_405(self, client):
-        resp = client.post("/security/keys")
+        resp = client.put("/security/keys")
         assert resp.status_code == 405
 
-    def test_keys_error_returns_500(self, client):
-        with patch("settings.get_security_settings", side_effect=RuntimeError("broken")):
-            resp = client.get("/security/keys")
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_keys_error_returns_500(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.list.side_effect = RuntimeError("broken")
+        resp = client.get("/security/keys")
         assert resp.status_code == 500
 
-    @patch("settings.get_security_settings")
-    def test_keys_exact_data_keys(self, mock_get_sec, client):
-        sec = mock_get_sec.return_value
-        sec.valid_api_keys = ["k1", "k2", "k3"]
+    @patch("apps.api.server.routers.security._get_key_manager")
+    def test_keys_exact_data_keys(self, mock_get_mgr, client):
+        mock_get_mgr.return_value.list.return_value = []
         resp = client.get("/security/keys")
-        assert set(resp.json()["data"].keys()) == {"count", "configured"}
+        assert set(resp.json()["data"].keys()) == {"count", "keys", "configured"}
 
     def test_keys_wrong_methods_return_405(self, client):
         assert client.put("/security/keys").status_code == 405
         assert client.delete("/security/keys").status_code == 405
+
+
+class TestAuthPermissionContract:
+    """Auth-enabled permission checks must return 403, not crash with 500.
+
+    raise_error takes keyword-only ``status_code``; passing ``status=`` raised
+    TypeError at request time → 500 instead of 403 whenever auth was enabled
+    and a non-admin hit an admin/key-owner route (auth-disabled tests skipped
+    these branches entirely).
+    """
+
+    def test_audit_non_admin_gets_403(self, app, client):
+        from infrastructure.auth import require_auth_if_enabled
+
+        app.dependency_overrides[require_auth_if_enabled] = lambda: {
+            "sub": "u1",
+            "role": "user",
+        }
+        try:
+            resp = client.get("/security/audit")
+        finally:
+            app.dependency_overrides.pop(require_auth_if_enabled, None)
+        assert resp.status_code == 403

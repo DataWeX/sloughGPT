@@ -3,15 +3,16 @@ SloughGPT Performance Testing Suite
 Tests inference performance with various models and configurations.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-import time
-import torch
 import argparse
-from typing import Dict, List, Optional
 import statistics
+import time
+
+import torch
 
 
 def get_device() -> str:
@@ -23,14 +24,14 @@ def get_device() -> str:
     return "cpu"
 
 
-def test_model_loading(model_name: str, device: str) -> Dict:
+def test_model_loading(model_name: str, device: str) -> dict:
     """Test model loading time and memory."""
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Testing: {model_name}")
     print(f"Device: {device}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     # Test tokenizer loading
     start = time.time()
@@ -50,7 +51,7 @@ def test_model_loading(model_name: str, device: str) -> Dict:
 
     # Count parameters
     params = sum(p.numel() for p in model.parameters())
-    print(f"Parameters: {params:,} ({params/1e9:.2f}B)")
+    print(f"Parameters: {params:,} ({params / 1e9:.2f}B)")
 
     # Memory usage
     if device == "cuda":
@@ -76,11 +77,11 @@ def test_inference_latency(
     device: str,
     num_runs: int = 10,
     max_new_tokens: int = 50,
-) -> Dict:
+) -> dict:
     """Test inference latency."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Latency Test")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
     prompt_length = input_ids.shape[1]
@@ -138,11 +139,11 @@ def test_throughput(
     device: str,
     num_runs: int = 5,
     max_new_tokens: int = 100,
-) -> Dict:
+) -> dict:
     """Test throughput (tokens per second)."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Throughput Test")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
 
@@ -166,7 +167,7 @@ def test_throughput(
         tokens_per_sec = total_tokens / elapsed
 
         throughputs.append(tokens_per_sec)
-        print(f"Run {i+1}: {tokens_per_sec:.1f} tokens/sec")
+        print(f"Run {i + 1}: {tokens_per_sec:.1f} tokens/sec")
 
     avg_throughput = statistics.mean(throughputs)
     print(f"\nAverage throughput: {avg_throughput:.1f} tokens/sec")
@@ -181,14 +182,16 @@ def test_throughput(
 def test_batch_inference(
     model: any,
     tokenizer: any,
-    prompts: List[str],
+    prompts: list[str],
     device: str,
-    batch_sizes: List[int] = [1, 2, 4, 8],
-) -> Dict:
+    batch_sizes: list[int] = None,
+) -> dict:
     """Test batch inference performance."""
-    print(f"\n{'='*60}")
+    if batch_sizes is None:
+        batch_sizes = [1, 2, 4, 8]
+    print(f"\n{'=' * 60}")
     print("Batch Inference Test")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     results = {}
 
@@ -221,7 +224,7 @@ def test_batch_inference(
         elapsed = time.perf_counter() - start
 
         tokens_per_sec = outputs.numel() / elapsed
-        print(f"Batch {batch_size}: {tokens_per_sec:.1f} tokens/sec ({elapsed*1000:.1f}ms)")
+        print(f"Batch {batch_size}: {tokens_per_sec:.1f} tokens/sec ({elapsed * 1000:.1f}ms)")
 
         results[batch_size] = {
             "tokens_per_sec": tokens_per_sec,
@@ -234,11 +237,11 @@ def test_batch_inference(
 def test_quantization_impact(
     model_name: str,
     device: str,
-) -> Dict:
+) -> dict:
     """Test performance with different quantization levels."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Quantization Impact Test")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -283,7 +286,7 @@ def test_quantization_impact(
                 "memory_gb": memory,
             }
 
-            print(f"  Latency: {elapsed*1000:.1f}ms, Memory: {memory:.2f}GB")
+            print(f"  Latency: {elapsed * 1000:.1f}ms, Memory: {memory:.2f}GB")
 
             del model
             torch.cuda.empty_cache() if device == "cuda" else None
@@ -299,20 +302,25 @@ def main():
     parser = argparse.ArgumentParser(description="SloughGPT Performance Testing")
     parser.add_argument("--model", "-m", default="gpt2", help="Model to test")
     parser.add_argument("--device", "-d", default="auto", help="Device (auto/cpu/cuda/mps)")
-    parser.add_argument("--test", "-t", default="all",
-                        choices=["all", "latency", "throughput", "batch", "quantization"],
-                        help="Test to run")
+    parser.add_argument(
+        "--test",
+        "-t",
+        default="all",
+        choices=["all", "latency", "throughput", "batch", "quantization"],
+        help="Test to run",
+    )
     parser.add_argument("--runs", "-r", type=int, default=10, help="Number of test runs")
     parser.add_argument("--tokens", "-k", type=int, default=50, help="Max new tokens")
-    parser.add_argument("--prompt", "-p", default="The quick brown fox jumps over the lazy dog",
-                        help="Test prompt")
+    parser.add_argument(
+        "--prompt", "-p", default="The quick brown fox jumps over the lazy dog", help="Test prompt"
+    )
 
     args = parser.parse_args()
 
     device = args.device if args.device != "auto" else get_device()
 
-    print(f"\nSloughGPT Performance Test Suite")
-    print(f"{'='*60}")
+    print("\nSloughGPT Performance Test Suite")
+    print(f"{'=' * 60}")
     print(f"Model: {args.model}")
     print(f"Device: {device}")
     print(f"PyTorch: {torch.__version__}")
@@ -333,28 +341,23 @@ def main():
     # Run selected tests
     if args.test in ["all", "latency"]:
         test_inference_latency(
-            model, tokenizer, args.prompt, device,
-            num_runs=args.runs, max_new_tokens=args.tokens
+            model, tokenizer, args.prompt, device, num_runs=args.runs, max_new_tokens=args.tokens
         )
 
     if args.test in ["all", "throughput"]:
         test_throughput(
-            model, tokenizer, args.prompt, device,
-            num_runs=args.runs, max_new_tokens=args.tokens
+            model, tokenizer, args.prompt, device, num_runs=args.runs, max_new_tokens=args.tokens
         )
 
     if args.test in ["all", "batch"]:
-        test_batch_inference(
-            model, tokenizer, prompts, device,
-            batch_sizes=[1, 2, 4]
-        )
+        test_batch_inference(model, tokenizer, prompts, device, batch_sizes=[1, 2, 4])
 
     if args.test in ["all", "quantization"]:
         test_quantization_impact(args.model, device)
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("All tests completed!")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
 
 if __name__ == "__main__":

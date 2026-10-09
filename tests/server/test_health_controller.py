@@ -1,18 +1,31 @@
 """Tests for HealthController."""
+
+import os
+import sys
+from unittest.mock import MagicMock, patch
+
 import pytest
-import time
-from unittest.mock import patch, MagicMock
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'apps', 'api', 'server'))
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "apps", "api", "server"))
 
 import controllers.health as controllers_health
 from controllers.health import (
-    HealthController, _health_start_time, _get_model_info,
-    _get_model_device, _is_app_ready,
-    _get_lifecycle_info, _get_inference_stats, _get_quantization_info,
-    _get_kv_session_info, _get_resource_allocation, _get_process_info,
-    _get_executor_stats, _get_process_guard_status, _get_mps_monitor_info,
-    _build_status_message, _is_model_loading,
+    HealthController,
+    _build_status_message,
+    _get_executor_stats,
+    _get_inference_stats,
+    _get_kv_session_info,
+    _get_lifecycle_info,
+    _get_model_device,
+    _get_model_info,
+    _get_mps_monitor_info,
+    _get_process_guard_status,
+    _get_process_info,
+    _get_quantization_info,
+    _get_resource_allocation,
+    _health_start_time,
+    _is_app_ready,
+    _is_model_loading,
 )
 
 
@@ -100,33 +113,95 @@ class TestHelpers:
 
 class TestBuildStatusMessage:
     def test_ready_with_model(self):
-        msg = _build_status_message(True, "gpt2", False, None, 10, 0, {"phase": "running", "profile": "default", "is_running": True, "is_draining": False})
+        msg = _build_status_message(
+            True,
+            "gpt2",
+            False,
+            None,
+            10,
+            0,
+            {"phase": "running", "profile": "default", "is_running": True, "is_draining": False},
+        )
         assert "Ready" in msg
         assert "gpt2" in msg
 
     def test_ready_with_soul(self):
-        msg = _build_status_message(True, "gpt2", False, "warm", 10, 0, {"phase": "running", "profile": "default", "is_running": True, "is_draining": False})
+        msg = _build_status_message(
+            True,
+            "gpt2",
+            False,
+            "warm",
+            10,
+            0,
+            {"phase": "running", "profile": "default", "is_running": True, "is_draining": False},
+        )
         assert "warm" in msg
 
     def test_ready_with_errors(self):
-        msg = _build_status_message(True, "gpt2", False, None, 10, 3, {"phase": "running", "profile": "default", "is_running": True, "is_draining": False})
+        msg = _build_status_message(
+            True,
+            "gpt2",
+            False,
+            None,
+            10,
+            3,
+            {"phase": "running", "profile": "default", "is_running": True, "is_draining": False},
+        )
         assert "3 errors" in msg
 
     def test_loading_model(self):
-        msg = _build_status_message(False, None, True, None, 0, 0, {"phase": "running", "profile": "default", "is_running": True, "is_draining": False})
+        msg = _build_status_message(
+            False,
+            None,
+            True,
+            None,
+            0,
+            0,
+            {"phase": "running", "profile": "default", "is_running": True, "is_draining": False},
+        )
         assert "Loading model" in msg
 
     def test_no_model(self):
-        msg = _build_status_message(False, None, False, None, 0, 0, {"phase": "running", "profile": "default", "is_running": True, "is_draining": False})
+        msg = _build_status_message(
+            False,
+            None,
+            False,
+            None,
+            0,
+            0,
+            {"phase": "running", "profile": "default", "is_running": True, "is_draining": False},
+        )
         assert "no model loaded" in msg
 
     def test_draining(self):
-        msg = _build_status_message(True, "gpt2", False, None, 10, 0, {"phase": "draining", "profile": "default", "is_running": True, "is_draining": True, "in_flight": 5})
+        msg = _build_status_message(
+            True,
+            "gpt2",
+            False,
+            None,
+            10,
+            0,
+            {
+                "phase": "draining",
+                "profile": "default",
+                "is_running": True,
+                "is_draining": True,
+                "in_flight": 5,
+            },
+        )
         assert "Draining" in msg
         assert "5" in msg
 
     def test_starting(self):
-        msg = _build_status_message(False, None, False, None, 0, 0, {"phase": "starting", "profile": "default", "is_running": False, "is_draining": False})
+        msg = _build_status_message(
+            False,
+            None,
+            False,
+            None,
+            0,
+            0,
+            {"phase": "starting", "profile": "default", "is_running": False, "is_draining": False},
+        )
         assert "Starting" in msg
 
 
@@ -166,6 +241,30 @@ class TestGetQuantizationInfo:
     def test_returns_dict(self):
         result = _get_quantization_info()
         assert isinstance(result, dict)
+
+    def test_health_payload_excludes_per_tensor(self):
+        """Health repeats on every poll/SSE event — per_tensor serializes
+        to ~10 MB (lm_head per-channel scales) and must never leave the
+        health controller, even if a provider misbehaves and returns it."""
+        fat_provider = MagicMock()
+        fat_provider.quantization_report.return_value = {
+            "quantized": True,
+            "bits": 8,
+            "mode": "symmetric",
+            "summary": {"tensors": 169, "bits": 8},
+            "per_tensor": {"lm_head": {"scale": [0.0] * 50_000}},
+        }
+        with patch(
+            "domain.models._internal.provider.get_provider",
+            return_value=fat_provider,
+        ):
+            result = _get_quantization_info()
+
+        assert "per_tensor" not in result
+        assert result["quantized"] is True
+        assert result["bits"] == 8
+        assert "summary" in result
+        fat_provider.quantization_report.assert_called_once_with(include_per_tensor=False)
 
 
 class TestGetKvSessionInfo:
@@ -226,7 +325,7 @@ class TestDetailedHealth:
         assert r1 is r2
 
     def test_cache_expired(self, ctrl):
-        r1 = ctrl.get_detailed_health()
+        ctrl.get_detailed_health()
         ctrl._cache_time = 0  # Force cache miss
         r2 = ctrl.get_detailed_health()
         assert r2 is not None
@@ -234,39 +333,41 @@ class TestDetailedHealth:
 
 class TestIsAppReady:
     def test_ready_when_lifecycle_running(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = True
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr):
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "running"}):
+            assert _is_app_ready() is True
+
+    def test_ready_when_phase_ready(self):
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "ready"}):
             assert _is_app_ready() is True
 
     def test_not_ready_when_lifecycle_not_running(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = False
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr):
+        with patch("startup_progress.STARTUP_PHASE", {"phase": "initializing"}):
             assert _is_app_ready() is False
 
     def test_ready_on_import_error(self):
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", side_effect=ImportError):
+        with patch.dict("sys.modules", {"startup_progress": None}):
             assert _is_app_ready() is True
 
 
 class TestGetModelInfoReadyGate:
     def test_model_info_false_before_ready(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = False
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr), \
-             patch("controllers.health._get_model_info_with_registry",
-                   return_value=(True, "gpt2", {})):
+        with (
+            patch("startup_progress.STARTUP_PHASE", {"phase": "initializing"}),
+            patch(
+                "controllers.health._get_model_info_with_registry", return_value=(True, "gpt2", {})
+            ),
+        ):
             loaded, model_type = _get_model_info()
             assert loaded is False
             assert model_type == "gpt2"
 
     def test_model_info_true_after_ready(self):
-        mgr = MagicMock()
-        mgr.is_running.return_value = True
-        with patch("domains.infrastructure.lifecycle.get_lifecycle_manager", return_value=mgr), \
-             patch("controllers.health._get_model_info_with_registry",
-                   return_value=(True, "gpt2", {})):
+        with (
+            patch("startup_progress.STARTUP_PHASE", {"phase": "running"}),
+            patch(
+                "controllers.health._get_model_info_with_registry", return_value=(True, "gpt2", {})
+            ),
+        ):
             loaded, model_type = _get_model_info()
             assert loaded is True
             assert model_type == "gpt2"
@@ -275,7 +376,9 @@ class TestGetModelInfoReadyGate:
 class TestIsModelLoading:
     def test_loading_when_no_model_and_recent(self):
         from datetime import datetime, timedelta
+
         import state as server_state
+
         old_model = getattr(server_state, "model", None)
         old_provider = getattr(server_state, "provider", None)
         old_start = controllers_health._health_start_time
@@ -292,6 +395,7 @@ class TestIsModelLoading:
 
     def test_not_loading_when_model_loaded(self):
         import state as server_state
+
         old_model = getattr(server_state, "model", None)
         try:
             server_state.model = MagicMock()

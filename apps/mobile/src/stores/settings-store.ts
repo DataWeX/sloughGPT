@@ -29,15 +29,15 @@ interface SettingsState {
 const STORAGE_KEY = '@sloughgpt/settings';
 
 const defaults: Omit<SettingsState, 'setTheme' | 'setFontFamily' | 'setFontSizeScale' | 'update' | 'reset'> = {
-  theme: 'system',
+  theme: 'dark',
   fontFamily: 'outfit',
   fontSizeScale: 1.0,
   accentColor: 'violet',
-  temperature: 0.8,
+  temperature: 0.7,
   maxTokens: 256,
-  topP: 0.9,
-  topK: 50,
-  repetitionPenalty: 1.2,
+  topP: 0.85,
+  topK: 40,
+  repetitionPenalty: 1.15,
   memoryContext: '',
   apiUrl: 'http://localhost:8000',
   chatBackground: '',

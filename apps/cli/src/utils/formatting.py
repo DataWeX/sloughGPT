@@ -3,7 +3,6 @@ Formatting utilities for consistent CLI output.
 
 Provides file size formatting, time formatting, and text wrapping.
 """
-from typing import Optional
 
 
 def format_size(size_bytes: int) -> str:

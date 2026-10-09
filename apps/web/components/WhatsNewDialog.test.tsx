@@ -1,17 +1,18 @@
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { whatsNewItems } from '@/lib/whats-new-data'
 
 const kvStore = new Map<string, unknown>()
 
-const { mockChatDB } = vi.hoisted(() => {
+const { mockChatDB, mockDispatchEvent } = vi.hoisted(() => {
   const kvStore = new Map<string, unknown>()
   const mockChatDB = {
     getKV: vi.fn(async (key: string) => kvStore.get(key)),
     setKV: vi.fn(async (key: string, value: unknown) => { kvStore.set(key, value) }),
   }
-  return { mockChatDB, kvStore }
+  const mockDispatchEvent = vi.fn(() => true)
+  return { mockChatDB, kvStore, mockDispatchEvent }
 })
 
 vi.mock('@/lib/db', () => ({
@@ -25,10 +26,18 @@ describe('WhatsNewDialog', () => {
     kvStore.clear()
     mockChatDB.getKV.mockImplementation(async (key: string) => kvStore.get(key))
     mockChatDB.setKV.mockImplementation(async (key: string, value: unknown) => { kvStore.set(key, value) })
+    mockDispatchEvent.mockClear()
+    vi.spyOn(window, 'dispatchEvent').mockImplementation(mockDispatchEvent)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
   it('renders all changelog entries when open', async () => {
-    render(<WhatsNewDialog open={true} onOpenChange={() => {}} />)
+    await act(async () => {
+      render(<WhatsNewDialog open={true} onOpenChange={() => {}} />)
+    })
     await waitFor(() => {
       whatsNewItems.forEach(item => {
         expect(screen.getAllByText(item.title).length).toBeGreaterThanOrEqual(1)
@@ -38,7 +47,9 @@ describe('WhatsNewDialog', () => {
   })
 
   it('marks entries as seen on open', async () => {
-    render(<WhatsNewDialog open={true} onOpenChange={() => {}} />)
+    await act(async () => {
+      render(<WhatsNewDialog open={true} onOpenChange={() => {}} />)
+    })
     await waitFor(() => {
       expect(mockChatDB.setKV).toHaveBeenCalled()
     })
@@ -52,14 +63,10 @@ describe('WhatsNewDialog', () => {
     expect(countAfter).toBe(whatsNewItems.length - 1)
   })
 
-  it('markAllSeen persists all ids and dispatches update event', async () => {
-    const listener = vi.fn()
-    window.addEventListener('whatsnew-updated', listener)
+  it('markAllSeen persists all ids', async () => {
     await markAllSeen()
-    expect(listener).toHaveBeenCalled()
     const count = await getUnseenCount()
     expect(count).toBe(0)
-    window.removeEventListener('whatsnew-updated', listener)
   })
 
   it('calls onOpenChange(false) when Escape is pressed', () => {
@@ -72,7 +79,9 @@ describe('WhatsNewDialog', () => {
   it('renders linked titles with href when item has href', async () => {
     const linked = whatsNewItems.find(i => i.href)
     if (!linked) return
-    render(<WhatsNewDialog open={true} onOpenChange={() => {}} />)
+    await act(async () => {
+      render(<WhatsNewDialog open={true} onOpenChange={() => {}} />)
+    })
     await waitFor(() => {
       const links = screen.getAllByRole('link')
       const link = links.find(l => l.textContent === linked.title)

@@ -7,13 +7,14 @@ import { IconCopy, IconCheck, IconRefresh, IconEdit, IconStar, IconTrash, IconTh
 import { knowledgeController } from '@/lib/knowledge-controller'
 import { useToastStore } from '@/lib/toast-store'
 import { toggleReaction, getReactions } from '@/lib/reaction-store'
+import { COPY_FEEDBACK_DURATION_MS } from '@/lib/constants'
 
 interface MessageActionsProps {
   content: string
   messageId: string
   role?: 'user' | 'assistant'
   onCopy?: (text: string) => void
-  onRegenerate?: () => void
+  onRegenerate?: (messageId: string) => void
   onThumbsUp?: (messageId: string) => void
   onThumbsDown?: (messageId: string) => void
   onEdit?: (messageId: string) => void
@@ -124,7 +125,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
       setCopied(true)
       onCopy(content)
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-      copiedTimerRef.current = setTimeout(() => setCopied(false), 1500)
+      copiedTimerRef.current = setTimeout(() => setCopied(false), COPY_FEEDBACK_DURATION_MS)
     } catch { /* clipboard API may be unavailable */ }
   }, [content, onCopy])
 
@@ -208,7 +209,7 @@ export const MessageActions = memo(function MessageActions({ content, messageId,
         <Button
           variant="ghost"
           size="icon-sm"
-          onClick={onRegenerate}
+          onClick={() => onRegenerate(messageId)}
           className="p-2"
           aria-label="Regenerate response"
         >

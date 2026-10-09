@@ -75,19 +75,19 @@ export function SearchScreen() {
 
         <YStack
           marginHorizontal={16}
-          backgroundColor="rgba(124, 82, 196, 0.04)"
+          backgroundColor={colors.primaryAlpha(0.04)}
           borderRadius={10}
           paddingHorizontal={14}
           borderWidth={0.5}
-          borderColor="rgba(124, 82, 196, 0.12)"
+          borderColor={colors.primaryAlpha(0.12)}
           alignItems="center">
           <Icon name="search" size={16} color={colors.textMuted} />
           <TextInput
-            style={{flex: 1, fontSize: 14, color: '#1A1625', paddingVertical: 10, marginLeft: 8}}
+            style={{flex: 1, fontSize: 14, color: colors.text, paddingVertical: 10, marginLeft: 8}}
             value={query}
             onChangeText={handleSearch}
             placeholder="Search across all conversations..."
-            placeholderTextColor="#827A96"
+            placeholderTextColor={colors.textMuted}
             autoFocus
             returnKeyType="search"
           />

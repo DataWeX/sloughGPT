@@ -3,15 +3,17 @@ Tests for the VM router endpoints.
 
 Tests the /vm/run, /vm/builtins, and /vm/info endpoints.
 """
-import sys
+
 import os
+import sys
 
 # Ensure the server directory is on the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from fastapi.testclient import TestClient
-from apps.api.server.main import app
 from routers.vm import router as vm_router
+
+from apps.api.server.main import app
 
 app.include_router(vm_router)
 client = TestClient(app)
@@ -94,7 +96,7 @@ HLT"""
         """GET /vm/builtins returns list of programs."""
         resp = client.get("/vm/builtins")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "programs" in data
         assert len(data["programs"]) >= 8
         names = [p["name"] for p in data["programs"]]
@@ -108,7 +110,7 @@ HLT"""
         """GET /vm/info returns VM capabilities."""
         resp = client.get("/vm/info")
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["isa"] == "x86-32"
         assert "EAX" in data["registers"]
         assert data["max_steps"] > 0
@@ -122,7 +124,9 @@ HLT"""
             def start(self, config_json):
                 return 1
 
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         source = """[BITS 32]
 MOV EBX, cfg
 MOV EAX, 28
@@ -145,7 +149,9 @@ cfg: db '{}', 0"""
                 calls.append(config_json)
                 return 1
 
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: FakeBridge())
+        monkeypatch.setattr(
+            "domain.shell._internal.vm_training_bridge.get_bridge", lambda: FakeBridge()
+        )
         source = """[BITS 32]
 MOV EBX, cfg
 MOV EAX, 28
@@ -171,7 +177,7 @@ cfg: db '{}', 0"""
 
     def test_run_captures_training_result(self, monkeypatch):
         """SYS_TRAIN_GET_RESULT bytes are surfaced as training_result in the response."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[1] = {
@@ -180,7 +186,7 @@ cfg: db '{}', 0"""
             "progress": 1.0,
             "_result_data": {"status": "completed", "loss": 1.5, "current_epoch": 2},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         source = """[BITS 32]
 MOV EBX, 1
@@ -197,13 +203,15 @@ HLT"""
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert data["training_result"] is not None, "expected result JSON read back from guest memory"
+        assert data["training_result"] is not None, (
+            "expected result JSON read back from guest memory"
+        )
         assert "final_loss" in data["training_result"]
         assert "1.5" in data["training_result"]
 
     def test_run_training_result_null_without_get_result(self, monkeypatch):
         """Runs without SYS_TRAIN_GET_RESULT leave training_result null."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[1] = {
@@ -212,7 +220,7 @@ HLT"""
             "progress": 1.0,
             "_result_data": {"status": "completed", "loss": 1.5},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         source = "[BITS 32]\nMOV EBX, 1\nMOV EAX, 29\nINT 0x80\nHLT"
         resp = client.post("/vm/run", json={"source": source, "role": "admin"})
@@ -221,7 +229,7 @@ HLT"""
 
     def test_training_job_status_endpoint(self, monkeypatch):
         """GET /vm/training/jobs/{id} returns bridge-tracked job status."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[7] = {
@@ -230,7 +238,7 @@ HLT"""
             "progress": 1.0,
             "_result_data": {"status": "completed", "loss": 1.2},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.get("/vm/training/jobs/7")
         assert resp.status_code == 200
@@ -244,16 +252,16 @@ HLT"""
 
     def test_training_job_status_result_null_when_not_completed(self, monkeypatch):
         """GET /vm/training/jobs/{id} leaves result null for running jobs."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[7] = {
-            "api_job_id": "abc-123",
+            "api_job_id": "",
             "status": "running",
             "progress": 0.5,
             "_result_data": {"status": "completed", "loss": 1.2},
         }
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.get("/vm/training/jobs/7")
         assert resp.status_code == 200
@@ -261,34 +269,35 @@ HLT"""
 
     def test_training_job_status_404(self, monkeypatch):
         """GET /vm/training/jobs/{id} returns 404 for unknown job."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.get("/vm/training/jobs/999")
         assert resp.status_code == 404
 
     def test_training_job_stop_endpoint(self, monkeypatch):
         """POST /vm/training/jobs/{id}/stop delegates to the bridge."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
         bridge._jobs[7] = {"api_job_id": "api-7", "status": "running"}
         bridge.stop = lambda job_id: True  # noqa: E731 — avoid network in wiring test
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
 
         resp = client.post("/vm/training/jobs/7/stop")
         assert resp.status_code == 200
-        assert resp.json()["job_id"] == 7
-        assert resp.json()["status"] == "stopping"
+        body = resp.json()["data"]
+        assert body["job_id"] == 7
+        assert body["status"] == "stopping"
 
     def test_training_job_stop_404(self, monkeypatch):
         """POST /vm/training/jobs/{id}/stop returns 404 for unknown job."""
-        from domains.shell.vm_training_bridge import VMTrainingBridge
+        from domain.shell._internal.vm_training_bridge import VMTrainingBridge
 
         bridge = VMTrainingBridge()
-        monkeypatch.setattr("domains.shell.vm_training_bridge.get_bridge", lambda: bridge)
+        monkeypatch.setattr("domain.shell._internal.vm_training_bridge.get_bridge", lambda: bridge)
         bridge.stop = lambda job_id: False  # noqa: E731
 
         resp = client.post("/vm/training/jobs/999/stop")

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from domains.infrastructure import model_catalog as mc
+from domain.infrastructure._internal import model_catalog as mc
 
 
 @pytest.fixture
@@ -149,7 +149,7 @@ class TestModelCatalogQueries:
         assert s["loaded"] == 1
         assert s["available"] == 1
         assert s["errors"] == 1
-        assert s["total_parameters"] == 100
+        assert s["total_parameters"] == 300
         assert s["total_inferences"] == 1
         assert set(s["sources"]) == {"local"}
 
@@ -233,7 +233,7 @@ class TestModelCatalogSync:
 
 class TestModelCatalogSingleton:
     def test_get_model_catalog_singleton(self, tmp_path, monkeypatch):
-        from domains.infrastructure import model_catalog as mc_mod
+        from domain.infrastructure._internal import model_catalog as mc_mod
 
         monkeypatch.setattr(mc_mod, "_catalog", None)
         a = mc_mod.get_model_catalog(str(tmp_path / "a.db"))

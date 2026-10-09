@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { useServerOutput } from '@/hooks/useServerOutput'
-import { Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
+import { cn, Card, CardContent, CardHeader, CardTitle } from '@sloughgpt/strui'
 import { Button } from '@sloughgpt/strui'
 import { IconDownload } from '@sloughgpt/strui'
 import type { OutputLine } from '@/lib/system-controller'
@@ -69,20 +69,20 @@ const LogLine = React.memo(function LogLine({ line }: { line: OutputLine }) {
       ) : (
         <span className="shrink-0 w-[96px] sm:w-[160px]" />
       )}
-      <span className={`flex-1 min-w-0 break-all ${line.level === 'error' || line.level === 'critical' ? 'text-destructive' : line.level === 'warning' ? 'text-warning' : ''}`}>
+      <span className={cn('flex-1 min-w-0 break-all', line.level === 'error' || line.level === 'critical' ? 'text-destructive' : line.level === 'warning' ? 'text-warning' : '')}>
         {line.text}
       </span>
     </div>
   )
 })
 
-export function OutputCard({ title = 'Server Output', height, tail, maxLines, compact }: OutputCardProps) {
+export function OutputCard({ title = 'Service Output', height, tail, maxLines, compact }: OutputCardProps) {
   const { lines, streaming, clear, scrollRef, paused, togglePause, exportLines } = useServerOutput({ tail, maxLines })
   const h = height ?? (compact ? 'h-[220px]' : 'h-[280px]')
 
   const controls = (
     <div className="flex items-center gap-2">
-      <span className={`inline-block w-2 h-2 rounded-full ${paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50'}`} />
+      <span className={cn('inline-block w-2 h-2 rounded-full', paused ? 'bg-warning' : streaming ? 'bg-success animate-pulse' : 'bg-muted-foreground/50')} />
       <span className="text-[11px] text-muted-foreground font-mono">{paused ? 'Paused' : streaming ? 'Live' : 'Off'}</span>
       <Button variant="ghost" size="sm" className="h-7 text-[10px]" onClick={togglePause} aria-label={paused ? 'Resume output' : 'Pause output'}>
         {paused ? '▶' : '⏸'}
@@ -90,7 +90,7 @@ export function OutputCard({ title = 'Server Output', height, tail, maxLines, co
       {lines.length > 0 && (
         <>
           <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => exportLines('text')} aria-label="Export as log file">
-            <IconDownload className="h-2.5 w-2.5" />
+            <IconDownload className="h-2.5 w-2.5" aria-hidden="true" />
           </Button>
           <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={clear} aria-label="Clear output">
             Clear
@@ -118,13 +118,14 @@ export function OutputCard({ title = 'Server Output', height, tail, maxLines, co
       <CardContent>
         <div
           ref={scrollRef}
-          className={`${h} overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3`}
+          className={cn(h, 'overflow-y-auto rounded-lg border bg-zinc-950 text-zinc-300 p-3')}
           role="log"
-          aria-label="Server output"
+          aria-live="polite"
+          aria-label="Service output"
         >
           {lines.length === 0 ? (
             <div className="text-zinc-500 py-4 text-center text-xs">
-              {streaming ? 'Waiting for output...' : 'Output will appear here during server activity'}
+              {streaming ? 'Waiting for output...' : 'Output will appear here during service activity'}
             </div>
           ) : (
             lines.map((line, i) => <LogLine key={`${line.ts}-${i}`} line={line} />)

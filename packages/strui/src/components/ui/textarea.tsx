@@ -17,7 +17,7 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
     const lineHeight = 20 // px, matches text-sm + py-2
     const minHeight = 80 // px, min-h-20
 
-    const handleInput = (e: React.FormEvent<HTMLTextAreaElement>) => {
+    const handleInput = (e: React.InputEvent<HTMLTextAreaElement>) => {
       if (autoResize) {
         const el = e.currentTarget
         el.style.height = 'auto'

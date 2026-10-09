@@ -184,3 +184,152 @@ three metrics after training.
 |------|--------|----------|
 | text | `input.txt` | Plain text file |
 | corpus | `corpus.jsonl` | Structured JSON Lines |
+
+## Consciousness System
+
+The consciousness system provides AI self-awareness monitoring and management with 26 pages:
+
+### Core Pages
+
+| Page | Path | Status | Description |
+|------|------|--------|-------------|
+| Dashboard | `/consciousness/dashboard` | ✅ Done | Main consciousness overview |
+| Health | `/consciousness/health` | ✅ Done | System health monitoring |
+| Training | `/consciousness/training` | ✅ Done | Consciousness training controls |
+| Settings | `/consciousness/settings` | ✅ Done | Configuration management |
+| All Settings | `/consciousness/all-settings` | ✅ Done | Advanced settings |
+| Export | `/consciousness/export` | ✅ Done | Data export functionality |
+| History | `/consciousness/history` | ✅ Done | Episode history viewer |
+| Quickstart | `/consciousness/quickstart` | ✅ Done | Getting started guide |
+
+### Analysis & Debugging
+
+| Page | Path | Status | Description |
+|------|------|--------|-------------|
+| Compare | `/consciousness/compare` | ✅ Done | Configuration comparison |
+| Benchmark | `/consciousness/benchmark` | ✅ Done | Performance benchmarking |
+| API Explorer | `/consciousness/api-explorer` | ✅ Done | Interactive API testing |
+| Testing | `/consciousness/testing` | ✅ Done | Debugging and testing tools |
+| Debug | `/consciousness/debug` | ✅ Done | Debugging tools |
+| Test Runner | `/consciousness/test-runner` | ✅ Done | Automated testing |
+
+### Documentation & Insights
+
+| Page | Path | Status | Description |
+|------|------|--------|-------------|
+| Docs | `/consciousness/docs` | ✅ Done | API documentation |
+| Help | `/consciousness/help` | ✅ Done | Help and FAQ |
+| Insights | `/consciousness/insights` | ✅ Done | AI-powered insights |
+
+### Monitoring & Analytics
+
+| Page | Path | Status | Description |
+|------|------|--------|-------------|
+| Alerts | `/consciousness/alerts` | ✅ Done | Alert management |
+| Statistics | `/consciousness/statistics` | ✅ Done | Analytics dashboard |
+| Analytics | `/consciousness/analytics` | ✅ Done | Trend analysis |
+| Monitor | `/consciousness/monitor` | ✅ Done | Real-time monitoring |
+| Versions | `/consciousness/versions` | ✅ Done | Version history |
+
+### Advanced Features
+
+| Page | Path | Status | Description |
+|------|------|--------|-------------|
+| Playground | `/consciousness/playground` | ✅ Done | Interactive experimentation |
+| Personality | `/consciousness/personality` | ✅ Done | Personality management |
+| Master | `/consciousness/master` | ✅ Done | Master dashboard |
+
+### Consciousness Components
+
+| Component | Status | Description |
+|-----------|--------|-------------|
+| ConsciousnessQuickActions | ✅ Done | Quick action buttons |
+| QuickActionsWrapper | ✅ Done | Wrapper component |
+| SidebarWidget | ✅ Done | Sidebar integration |
+| NotificationsPanel | ✅ Done | Notification display |
+| MessageBadge | ✅ Done | Message count badge |
+
+### Consciousness Hooks
+
+| Hook | Status | Description |
+|------|--------|-------------|
+| useConsciousnessBatch | ✅ Done | Batch operations |
+| useConsciousnessLive | ✅ Done | Live data updates |
+| useConsciousnessNotifications | ✅ Done | Notification management |
+| useConsciousnessShortcuts | ✅ Done | Keyboard shortcuts |
+| useConsciousnessStats | ✅ Done | Statistics computation |
+| useConsciousnessStatus | ✅ Done | Status monitoring |
+
+### Consciousness Lib
+
+| Module | Status | Description |
+|--------|--------|-------------|
+| consciousness-controller | ✅ Done | Main controller logic |
+| consciousness-bus | ✅ Done | Event bus |
+| consciousness-notifications | ✅ Done | Notification store |
+
+## Tools Pages
+
+| Tool | Path | Status | Description |
+|------|------|--------|-------------|
+| Brainstorm | `/brainstorm` | ✅ Done | AI brainstorming assistant |
+| Decide | `/decide` | ✅ Done | Decision-making helper |
+| Explain | `/explain` | ✅ Done | Simple explanations |
+| Rewrite | `/rewrite` | ✅ Done | Text rewriting & polish |
+| Translate | `/translate` | ✅ Done | Text translation |
+| Wellness | `/wellness` | ✅ Done | Wellness & relaxation |
+| Writing | `/writing` | ✅ Done | Writing assistant |
+
+## Spec-linked journey library (`domain/journeys`)
+
+The journeys of `UX_FLOWS.md` as executable flows. Every `Flow` carries its
+exact heading from that document as `spec`, and the offline registry tests
+fail if a heading is renamed or a flow loses its anchor — the spec and the
+journey suite cannot drift apart.
+
+| Piece | Where | Notes |
+|-------|-------|-------|
+| Flow registry | `domain/journeys/flows.py` | 13 flows, each spec-anchored to a `UX_FLOWS.md` heading |
+| Step builders | `domain/journeys/steps.py` | avion builders, repo-root discovery independent of cwd |
+| Runner | `python -m domain.journeys` | `--list`, `--flow <id>`, `--strict-errors` |
+| Registry tests | `tests/test_ux_flows_library.py` | offline: ids + spec headings + step construction; live sweep behind `SLO_UX_LIVE=1` (slow) |
+
+```bash
+.venv/bin/python -m domain.journeys --list  # registry + spec links, no stack needed
+.venv/bin/python -m domain.journeys         # live sweep against a running stack
+```
+
+`scripts/run_ux_flows.py` is the legacy runner; this library is the
+spec-linked successor.
+
+## Mole — app surface
+
+The read-only **Mole** monitoring app (probes in `domain/core/_internal/mole/`,
+documented in `TESTING.md` → *Mole*) surfaced in the app; the `/mole`
+routes, page, and nav label are grandfathered legacy paths.
+
+| Piece | Where | Notes |
+|-------|-------|-------|
+| Router | `apps/api/server/routers/mole.py` | `GET /mole/report`, `POST /mole/run` — registered additively in `routers/__init__.py` |
+| Page | `apps/web/app/(app)/mole/page.tsx` | header + `RunMoleButton`, summary, live component strip, findings |
+| Components | `apps/web/components/mole/` | `MoleSummary`, `FindingsList` (detail folded), `RunMoleButton`, `ComponentHealthStrip` |
+| Nav | `apps/web/lib/navigation.ts` | one **Mole** entry in the system section |
+
+- **Contract:** `GET /mole/report` → `{report, path, age_s}` (missing or
+  corrupt report file → `report: null`, an empty state rather than an error);
+  `POST /mole/run` → `{report}`.
+- **Light run only:** the API runs `run_mole(run_sweep=False, window_s=6.0)`
+  — `http` + `sse` probes plus journey findings read **from disk**. The
+  browser journey sweep is never triggered from the API.
+- **Data path:** the page uses `apiGet`/`apiPost` from `lib/http-client.ts`
+  exclusively; the component strip reads the shared `useLiveStatus` snapshot.
+
+## Test Coverage
+
+| Area | Coverage | Tests |
+|------|----------|-------|
+| Consciousness (all) | 100% | 384 |
+| Navigation | 100% | 8 |
+| Hooks/Lib | 95%+ | 1793 |
+| Features/Chat | 95%+ | 1467 |
+| Tools Pages | 100% | 7 |
