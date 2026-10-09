@@ -1625,7 +1625,7 @@ int 0x80
 ; If exec failed, print FAIL
 mov eax, 3
 mov ebx, 1
-push 0x000A46  ; "F\n\0"
+push 0x000A46  ; "F\\n\\0"
 mov ecx, esp
 mov edx, 2
 int 0x80

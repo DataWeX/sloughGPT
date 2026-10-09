@@ -10,12 +10,19 @@ and the keyboard/scancode helpers.
 
 All assertions pin the exact bytes the assembler currently emits, including
 documented quirks:
-  * ``adc``/``sbb`` are not in the opcode dispatch list -> NOP placeholder (0x90)
   * 16-bit CC-jump near fallback is off-by-one (target-3 vs target-2)
   * ``[bx]``/``inc [mem]`` encode as ``[disp32]`` with disp=0
   * ``xchg``/``ltr`` accept only specific register widths (silently emit nothing)
   * db items do not process backslash escapes (``db '\\n'`` -> 0x5C 0x6E)
   * expressions in immediates resolve to 0 (pass-2 eval path is unreachable)
+
+Intake gates (compat-matrix gap cards): unsupported input raises a *named*
+error instead of silently emitting garbage — ``bits 64``, ``%``-preprocessor
+directives, ``segment`` model directives, and unknown mnemonics; tolerated
+flat-model no-ops (``cpu``/``section``/``global``/bare section aliases) and
+bare ``bits``/``org`` are consumed; 16-bit forward branches converge instead
+of raising OverflowError on pass-1 placeholders; ``equ`` right-hand sides
+evaluate hex+symbol arithmetic.
 """
 
 import pytest
@@ -630,7 +637,9 @@ def test_bits_org_equ_directives():
 
 
 def test_section_directive_is_ignored():
-    assert _hex("section .text\nnop") == "9090"
+    # Tolerated flat-model no-op: consumed without emitting (the historical
+    # NOP-placeholder byte for unknown lines is gone — see intake gates).
+    assert _hex("section .text\nnop") == "90"
 
 
 def test_dollar_and_expressions_resolve_to_zero():
@@ -829,11 +838,12 @@ def test_estimate_data_size_dd():
     asm = X86Assembler()
     assert asm._estimate_data_size("dd 1, 2, 3") == 12
     assert asm._estimate_data_size("dd 0xDEADBEEF") == 4
+    assert asm._estimate_data_size("dq 1, 2") == 16
 
 
 def test_estimate_data_size_unknown_returns_1():
     asm = X86Assembler()
-    assert asm._estimate_data_size("dq 1") == 1  # unknown directive -> 1
+    assert asm._estimate_data_size("dt 1") == 1  # unknown directive -> 1
 
 
 def test_estimate_times_size():
@@ -1238,3 +1248,99 @@ class TestAssemblerMovCRDR:
 
     def test_mov_eax_dr0(self):
         assert self._hex("mov eax, dr0") == "0f21c0"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Intake gates — compat-matrix gap cards (feat/vm-asm-intake)
+#   card A: 16-bit forward rel16 must converge, genuine overflow must raise
+#   card B: unsupported directives/mnemonics raise named errors
+#   card C: equ right-hand side evaluates hex + symbol arithmetic
+# ══════════════════════════════════════════════════════════════════════════════
+
+
+def test_16bit_forward_call_jmp_with_org():
+    """Card A: pass-1 placeholder (target=0) must not crash rel16 emission."""
+    src = "[BITS 16]\nstart:\n call far_fn\n nop\n nop\nfar_fn:\n nop"
+    assert X86Assembler().assemble(src, org=0x100000).hex() == "e80200909090"
+    src = "[BITS 16]\nstart:\n jmp far_fn\n nop\n nop\nfar_fn:\n nop"
+    assert X86Assembler().assemble(src, org=0x100000).hex() == "e90200909090"
+
+
+def test_16bit_real_rel16_overflow_raises_after_convergence():
+    """A genuine >32 KiB displacement is a real rel16 constraint — it must
+    raise a named error once labels converge, not crash on pass-1 bytes."""
+    src = "[BITS 16]\n jmp far\ntimes 40000 nop\nfar:\n nop"
+    with pytest.raises(ValueError, match="out of range"):
+        X86Assembler().assemble(src)
+
+
+def test_alu_r16_unsigned_imm16_masks():
+    """81 /digit iw encodes imm16 unsigned (0x8000), not signed to_bytes."""
+    assert _hex("add bx, 0x8000") == "81c30080"
+    assert _hex("sub cx, 0x8000") == "81e90080"
+
+
+def test_bits64_named_gate():
+    with pytest.raises(ValueError, match="64"):
+        X86Assembler().assemble("[BITS 64]\nnop")
+    with pytest.raises(ValueError, match="64"):
+        X86Assembler().assemble("bits 64\nnop")
+
+
+def test_preprocessor_directives_named_gate():
+    with pytest.raises(ValueError, match="preprocessor"):
+        X86Assembler().assemble('%include "print.mac"\nnop')
+    with pytest.raises(ValueError, match="preprocessor"):
+        X86Assembler().assemble("%define A 1\nnop")
+    with pytest.raises(ValueError, match="preprocessor"):
+        X86Assembler().assemble("%assign B 0x7c00\nnop")
+
+
+def test_segment_directive_named_gate():
+    with pytest.raises(ValueError, match="segment"):
+        X86Assembler().assemble("segment data\nnop")
+
+
+def test_unknown_mnemonic_named_gate():
+    with pytest.raises(ValueError, match="frobnicate"):
+        X86Assembler().assemble("[BITS 32]\nfrobnicate eax")
+    # bare leftover directives fall into the same named gate
+    with pytest.raises(ValueError, match="directive"):
+        X86Assembler().assemble("assume ds:flat\nnop")
+
+
+def test_bare_bits_org_supported_cpu_tolerated():
+    # bare `bits 32` switches mode (32-bit mov encoding)
+    assert X86Assembler().assemble("bits 32\nmov eax, 1").hex() == "b801000000"
+    # bare `org` applies (jmp back to org base encodes rel -3)
+    assert X86Assembler().assemble("org 0x7c00\njmp 0x7c00").hex() == "e9fdff"
+    # cpu / global / bare section aliases: explicitly tolerated, emit nothing
+    assert X86Assembler().assemble("cpu 686\nglobal main\n.data\nnop").hex() == "90"
+
+
+def test_equ_hex_literal_arithmetic():
+    """Card C: hex-leading expression RHS must evaluate (was ValueError)."""
+    assert X86Assembler().assemble("A equ 0x8000 + 4\nmov bx, A").hex() == "bb0480"
+
+
+def test_equ_symbol_arithmetic_bweeper_pattern():
+    src = "TOP equ 3\nLEFT equ 2\nOFF equ 0x8000 + ((TOP * 80) + LEFT) * 2\nmov bx, OFF"
+    # 0x8000 + (3*80 + 2)*2 = 32768 + 484 = 33252 = 0x81E4
+    assert X86Assembler().assemble(src).hex() == "bbe481"
+
+
+def test_colonless_data_label():
+    """TASM/MASM-style `NAME db ...` defines a label and emits the data
+    (bweeper: `coltab      db 0x80, 0x79` — was silently dropped as a NOP)."""
+    src = "coltab db 0x80, 0x79\nmov bx, coltab"
+    assert X86Assembler().assemble(src).hex() == "8079bb0000"
+
+
+def test_dq_emits_8_bytes_le():
+    assert X86Assembler().assemble("dq 0x0102030405060708").hex() == "0807060504030201"
+
+
+def test_cmpsw_scasw_encodings():
+    # BITS 32: word ops take the 0x66 prefix (66 A7 / 66 AF); BITS 16: bare A7/AF.
+    assert X86Assembler().assemble("[BITS 32]\ncmpsw\nscasw").hex() == "66a766af"
+    assert X86Assembler().assemble("[BITS 16]\ncmpsw\nscasw").hex() == "a7af"

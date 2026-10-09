@@ -3017,7 +3017,9 @@ class TestCPUExecution:
 
     def test_cpuid(self):
         _, vs = run_asm("[BITS 32]\nMOV EAX, 0\nCPUID\nHLT")
-        assert vs._cpu._regs[0] == 0
+        # Real CPUID leaf 0 returns the max supported leaf in EAX (the old
+        # == 0 assertion pinned the NOP-placeholder era of the assembler).
+        assert vs._cpu._regs[0] == 1
 
     def test_lea(self):
         _, vs = run_asm("[BITS 32]\nMOV EBX, 10\nLEA EAX, [EBX+0x20]\nHLT")

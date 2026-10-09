@@ -45,20 +45,27 @@ def test_probe_assemble_accepts_known_good_source():
     assert ok and size > 0 and err == "" and line == 0
 
 
-def test_probe_attributes_16bit_forward_branch_gap_to_its_line():
-    # Known engine gap: 16-bit forward branches encode a pass-1 placeholder
-    # offset and raise OverflowError (see matrix.json / kanban gap cards).
+def test_probe_16bit_forward_branch_now_assembles():
+    # Card A regression: pass-1 placeholder rel16 converges (was OverflowError
+    # at org 0x100000 — see matrix.json / kanban gap cards for the history).
     src = "[BITS 16]\nstart:\n  call far_fn\nfar_fn:\n  nop\n"
+    ok, _, size, err, line, _ = ct.probe_assemble(src)
+    assert ok and size > 0 and err == "" and line == 0
+
+
+def test_probe_attributes_named_gate_to_its_line():
+    # Line attribution still works against an open intake gate (bits 64).
+    src = "[BITS 16]\nnop\n  bits 64\n  nop\n"
     ok, _, _, err, line, text = ct.probe_assemble(src)
     assert not ok
-    assert "OverflowError" in err
-    assert line == 3 and "call" in text
+    assert "BITS 64" in err
+    assert line == 3 and "bits" in text
 
 
-def test_probe_attributes_equ_hex_expression_gap():
-    ok, _, _, err, line, text = ct.probe_assemble("A equ 0x8000 + 4\n  nop\n")
-    assert not ok
-    assert "ValueError" in err and line == 1
+def test_probe_equ_hex_expression_now_assembles():
+    # Card C regression: hex-leading equ RHS evaluates (was ValueError).
+    ok, _, size, err, line, _ = ct.probe_assemble("A equ 0x8000 + 4\n  nop\n")
+    assert ok and size > 0 and err == "" and line == 0
 
 
 # ── a real run ──────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-08T09:55:59+00:00",
+  "generated": "2026-10-09T06:26:34+00:00",
   "manifest_version": 1,
   "steps_budget": 300000,
   "rows": [
@@ -9,9 +9,9 @@
       "source": "hello_x86",
       "verdict": "ok",
       "reason": "",
-      "asm_ms": 0.791,
+      "asm_ms": 1.155,
       "asm_bytes": 52,
-      "wall_ms": 0.30146400001740403,
+      "wall_ms": 0.18187199930252973,
       "steps": 8,
       "exit_code": 0,
       "syscalls": {
@@ -33,9 +33,9 @@
       "source": "test_syscalls",
       "verdict": "budget",
       "reason": "step budget 300000 reached (interactive/loop program)",
-      "asm_ms": 28.604,
+      "asm_ms": 22.42,
       "asm_bytes": 1824,
-      "wall_ms": 4510.934832000089,
+      "wall_ms": 3320.7097180002165,
       "steps": 300000,
       "exit_code": null,
       "syscalls": {
@@ -62,9 +62,9 @@
       "source": "cave_game",
       "verdict": "budget",
       "reason": "step budget 300000 reached (interactive/loop program)",
-      "asm_ms": 63.999,
+      "asm_ms": 62.485,
       "asm_bytes": 3095,
-      "wall_ms": 2893.9162440000246,
+      "wall_ms": 2147.6391430005606,
       "steps": 300000,
       "exit_code": null,
       "syscalls": {},
@@ -84,8 +84,8 @@
       "tier": "tier2",
       "source": "asteroids_main.asm",
       "verdict": "asm_gap",
-      "reason": "OverflowError: int too big to convert @ line 93",
-      "asm_ms": 1.196,
+      "reason": "ValueError: BITS 64 not supported \u2014 x86-64 has no VM implementation (intake gate: scripts/compat/manifest.json planned rows) @ line 1",
+      "asm_ms": 0.226,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -97,16 +97,16 @@
       "vga_bytes_changed": 0,
       "stdout_lines": 0,
       "stdout_head": "",
-      "asm_error_line": 93,
-      "asm_error_src": "call setup_window_and_renderer"
+      "asm_error_line": 1,
+      "asm_error_src": "bits 64"
     },
     {
       "name": "bootmine",
       "tier": "tier2",
       "source": "bootmine.asm",
       "verdict": "asm_gap",
-      "reason": "OverflowError: int too big to convert @ line 152",
-      "asm_ms": 0.923,
+      "reason": "ValueError: unsupported preprocessor directive '%assign' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 7",
+      "asm_ms": 0.053,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -118,18 +118,18 @@
       "vga_bytes_changed": 0,
       "stdout_lines": 0,
       "stdout_head": "",
-      "asm_error_line": 152,
-      "asm_error_src": "call GetTextBufIndex"
+      "asm_error_line": 7,
+      "asm_error_src": "%assign BootSector.Begin 0x7c00"
     },
     {
       "name": "bweeper",
       "tier": "tier2",
       "source": "bweeper.asm",
-      "verdict": "asm_gap",
-      "reason": "ValueError: invalid literal for int() with base 16: '0x8000 + ((BOARD_TOP * 80) + BOARD_LEFT) * 2' @ line 37",
-      "asm_ms": 0.171,
-      "asm_bytes": 0,
-      "wall_ms": 0.0,
+      "verdict": "fault",
+      "reason": "MemFault: read8 out of bounds at 0x660821EA",
+      "asm_ms": 10.939,
+      "asm_bytes": 562,
+      "wall_ms": 0.06195599962666165,
       "steps": 0,
       "exit_code": null,
       "syscalls": {},
@@ -139,16 +139,16 @@
       "vga_bytes_changed": 0,
       "stdout_lines": 0,
       "stdout_head": "",
-      "asm_error_line": 37,
-      "asm_error_src": "BOARD_OFFSET    equ 0x8000 + ((BOARD_TOP * 80) + BOARD_LEFT) * 2"
+      "asm_error_line": null,
+      "asm_error_src": ""
     },
     {
       "name": "nasm_tetris",
       "tier": "tier2",
       "source": "nasm_tetris.asm",
       "verdict": "asm_gap",
-      "reason": "OverflowError: int too big to convert @ line 58",
-      "asm_ms": 1.809,
+      "reason": "ValueError: segment directive not supported \u2014 flat memory model only (segmented intake is a planned tier) @ line 17",
+      "asm_ms": 0.739,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -160,16 +160,16 @@
       "vga_bytes_changed": 0,
       "stdout_lines": 0,
       "stdout_head": "",
-      "asm_error_line": 58,
-      "asm_error_src": "call drawFrame"
+      "asm_error_line": 17,
+      "asm_error_src": "segment data"
     },
     {
       "name": "snake_main",
       "tier": "tier2",
       "source": "snake_main.asm",
       "verdict": "asm_gap",
-      "reason": "OverflowError: int too big to convert @ line 146",
-      "asm_ms": 1.424,
+      "reason": "ValueError: unsupported preprocessor directive '%include' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 1",
+      "asm_ms": 0.052,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -181,12 +181,21 @@
       "vga_bytes_changed": 0,
       "stdout_lines": 0,
       "stdout_head": "",
-      "asm_error_line": 146,
-      "asm_error_src": "jmp .exit"
+      "asm_error_line": 1,
+      "asm_error_src": "%include \"print.mac\""
     }
   ],
   "coverage": {
-    "syscalls_observed": ["CLOSE", "EXIT", "FORK", "GETPID", "OPEN", "READ", "WAIT", "WRITE"],
+    "syscalls_observed": [
+      "CLOSE",
+      "EXIT",
+      "FORK",
+      "GETPID",
+      "OPEN",
+      "READ",
+      "WAIT",
+      "WRITE"
+    ],
     "syscalls_unobserved": [
       "BRK",
       "DISK_READ",
@@ -218,13 +227,17 @@
         "contract": "8250 UART serial",
         "status": "wired",
         "observed": true,
-        "via": ["port:0x3F8"]
+        "via": [
+          "port:0x3F8"
+        ]
       },
       {
         "contract": "8254 PIT system timer",
         "status": "wired",
         "observed": false,
-        "via": ["always-on"]
+        "via": [
+          "always-on"
+        ]
       },
       {
         "contract": "8259-style PIC dispatch",
@@ -236,7 +249,9 @@
         "contract": "VGA text buffer @0xB8000",
         "status": "wired",
         "observed": true,
-        "via": ["memory-diff"]
+        "via": [
+          "memory-diff"
+        ]
       },
       {
         "contract": "PS/2 keyboard",
@@ -260,7 +275,9 @@
         "contract": "ATA-like block storage",
         "status": "wired",
         "observed": true,
-        "via": ["syscall:OPEN"]
+        "via": [
+          "syscall:OPEN"
+        ]
       },
       {
         "contract": "virtio-style NIC",
@@ -272,13 +289,17 @@
         "contract": "FileDevice host-fs bridge",
         "status": "wired",
         "observed": true,
-        "via": ["syscall:READ"]
+        "via": [
+          "syscall:READ"
+        ]
       },
       {
         "contract": "ConsoleDevice engine sink",
         "status": "wired",
         "observed": false,
-        "via": ["engine-tier"]
+        "via": [
+          "engine-tier"
+        ]
       },
       {
         "contract": "BIOS video services INT 10h",
@@ -315,27 +336,27 @@
       {
         "entry": "asteroids_main",
         "verdict": "asm_gap",
-        "reason": "OverflowError: int too big to convert @ line 93"
+        "reason": "ValueError: BITS 64 not supported \u2014 x86-64 has no VM implementation (intake gate: scripts/compat/manifest.json planned rows) @ line 1"
       },
       {
         "entry": "bootmine",
         "verdict": "asm_gap",
-        "reason": "OverflowError: int too big to convert @ line 152"
+        "reason": "ValueError: unsupported preprocessor directive '%assign' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 7"
       },
       {
         "entry": "bweeper",
-        "verdict": "asm_gap",
-        "reason": "ValueError: invalid literal for int() with base 16: '0x8000 + ((BOARD_TOP * 80) + BOARD_LEFT) * 2' @ line 37"
+        "verdict": "fault",
+        "reason": "MemFault: read8 out of bounds at 0x660821EA"
       },
       {
         "entry": "nasm_tetris",
         "verdict": "asm_gap",
-        "reason": "OverflowError: int too big to convert @ line 58"
+        "reason": "ValueError: segment directive not supported \u2014 flat memory model only (segmented intake is a planned tier) @ line 17"
       },
       {
         "entry": "snake_main",
         "verdict": "asm_gap",
-        "reason": "OverflowError: int too big to convert @ line 146"
+        "reason": "ValueError: unsupported preprocessor directive '%include' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 1"
       }
     ]
   }

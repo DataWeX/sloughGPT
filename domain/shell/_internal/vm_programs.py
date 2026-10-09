@@ -735,7 +735,7 @@ TEST_EXEC_TARGET_ASM = """\
     ; write "X" to stdout to prove we're alive
     mov eax, 3
     mov ebx, 1
-    push 0x000A58     ; "X\n\0" (little-endian: 58 0A 00)
+    push 0x000A58     ; "X\\n\\0" (little-endian: 58 0A 00)
     mov ecx, esp
     mov edx, 2
     int 0x80
