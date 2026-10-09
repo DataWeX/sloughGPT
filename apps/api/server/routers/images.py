@@ -379,4 +379,3 @@ def hex_to_rgb(hex_color: str) -> tuple:
 
 
 router = ImagesRouter().router
-

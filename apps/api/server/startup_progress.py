@@ -6,4 +6,3 @@ lifespan) and health.py (reads phases for the /health/startup-progress endpoint)
 from __future__ import annotations
 
 STARTUP_PHASE: dict = {"phase": "initializing", "step": 0, "total": 8, "message": "Starting..."}
-

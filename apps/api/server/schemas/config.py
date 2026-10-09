@@ -23,4 +23,3 @@ class ConfigUpdate(BaseModel):
     repetition_penalty: float | None = None
     max_new_tokens: int | None = None
     max_context_length: int | None = None
-

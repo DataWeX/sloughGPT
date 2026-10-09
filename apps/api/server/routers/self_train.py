@@ -163,4 +163,3 @@ class SelfTrainRouter:
 
 
 router = SelfTrainRouter().router
-

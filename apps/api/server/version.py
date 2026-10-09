@@ -73,4 +73,3 @@ def version_info() -> dict:
         "pydantic": PYDANTIC_VERSION,
         "features": FEATURE_VERSIONS,
     }
-

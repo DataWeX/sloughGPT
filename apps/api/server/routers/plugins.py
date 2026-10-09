@@ -99,4 +99,3 @@ class PluginsRouter:
 
 
 router = PluginsRouter().router
-

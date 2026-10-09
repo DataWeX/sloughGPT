@@ -189,4 +189,3 @@ def wait_for_preload(timeout: float | None = None) -> PreloadStatus:
             with _lock:
                 return _status
         time.sleep(0.05)
-

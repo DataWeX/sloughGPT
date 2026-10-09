@@ -61,6 +61,8 @@ _INGEST_RESERVED_KEYS = frozenset(
         "asctime",
     }
 )
+
+
 def _get_error_db():
     """Process-wide singleton for the error store (see ``infrastructure.db_pool``).
 
@@ -630,4 +632,3 @@ _dedup_map = _errors_instance._dedup_map
 async def clear_errors() -> dict:
     """clear_errors — async backward-compat re-export."""
     return await _errors_instance.clear_errors()
-

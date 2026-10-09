@@ -105,4 +105,3 @@ def _json_safe(val: Any) -> Any:
     if hasattr(val, "item"):
         return val.item()
     return val
-

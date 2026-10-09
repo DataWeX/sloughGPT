@@ -2599,9 +2599,7 @@ class InferenceRouter:
                                             "CHAT_PIPELINE_TIMING corr=%s total=%.0fms %s",
                                             corr_id,
                                             (time.monotonic() - _t0) * 1000,
-                                            " ".join(
-                                                f"{k}={v:.0f}" for k, v in _marks.items()
-                                            ),
+                                            " ".join(f"{k}={v:.0f}" for k, v in _marks.items()),
                                             extra={
                                                 "tag": "CHAT",
                                                 "context": {
@@ -3518,9 +3516,7 @@ class InferenceRouter:
         def _add(model_id: str, owner: str) -> None:
             if model_id and model_id not in seen:
                 seen.add(model_id)
-                data.append(
-                    {"id": model_id, "object": "model", "created": 0, "owned_by": owner}
-                )
+                data.append({"id": model_id, "object": "model", "created": 0, "owned_by": owner})
 
         try:
             from controllers.models import get_models_controller

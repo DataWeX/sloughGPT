@@ -113,4 +113,3 @@ class ModelStackRouter:
 
 
 router = ModelStackRouter().router
-

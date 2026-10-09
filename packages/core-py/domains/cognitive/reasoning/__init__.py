@@ -111,4 +111,3 @@ class ReasoningEngine:
 
     async def get_history(self) -> list:
         return self.reasoning_history
-

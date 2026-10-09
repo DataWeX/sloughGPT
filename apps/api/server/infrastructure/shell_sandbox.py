@@ -193,4 +193,3 @@ def get_command_summary(command: str) -> str:
         return f"{tokens[0]} ... ({len(tokens)} args)"
     except ValueError:
         return command[:80]
-

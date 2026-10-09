@@ -40,4 +40,3 @@ def get_config_controller() -> ConfigController:
     if _config_controller is None:
         _config_controller = ConfigController()
     return _config_controller
-

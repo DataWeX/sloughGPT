@@ -59,4 +59,3 @@ class ConversationResponse(BaseModel):
     pinned: bool = False
     starred: bool = False
     message_count: int = 0
-

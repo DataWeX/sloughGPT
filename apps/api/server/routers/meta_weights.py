@@ -123,4 +123,3 @@ class MetaWeightsRouter:
 
 
 router = MetaWeightsRouter().router
-

@@ -144,4 +144,3 @@ class RegistryRouter:
 
 
 router = RegistryRouter().router
-

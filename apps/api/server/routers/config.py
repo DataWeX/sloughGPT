@@ -68,4 +68,3 @@ class ConfigRouter:
 
 
 router = ConfigRouter().router
-

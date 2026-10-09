@@ -38,4 +38,3 @@ class LivenessResponse(BaseModel):
 
 class ReadinessResponse(BaseModel):
     status: str
-

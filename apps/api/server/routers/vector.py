@@ -224,4 +224,3 @@ class VectorRouter:
 
 
 router = VectorRouter().router
-

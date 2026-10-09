@@ -147,4 +147,3 @@ class OpenWebUIRouter:
 
 
 router = OpenWebUIRouter().router
-

@@ -54,4 +54,3 @@ class LoadModelResponse(BaseModel):
     error: str | None = None
     type: str | None = None
     loaded_at: str | None = None
-

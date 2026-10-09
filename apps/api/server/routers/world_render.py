@@ -264,4 +264,3 @@ class WorldRenderRouter:
 
 
 router = WorldRenderRouter().router
-
