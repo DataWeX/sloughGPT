@@ -215,6 +215,7 @@ class ExternalDownloadBackend(DownloadBackend):
 
                 try:
                     hasher = hashlib.sha256()
+                    file_bytes = 0
                     req = urllib.request.Request(url)
                     with urllib.request.urlopen(req, timeout=300) as resp:
                         with open(dest, "wb") as out:
@@ -224,7 +225,12 @@ class ExternalDownloadBackend(DownloadBackend):
                                     break
                                 out.write(chunk)
                                 hasher.update(chunk)
-                                _progress(len(chunk), file_size)
+                                # Cumulative bytes for THIS file: the closure
+                                # adds bytes_done (completed files) on top, so
+                                # the caller sees a running total across the
+                                # whole download, not the last chunk size.
+                                file_bytes += len(chunk)
+                                _progress(file_bytes, file_size)
                 except Exception as e:
                     return {
                         "status": "error",
