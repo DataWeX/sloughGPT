@@ -66,6 +66,7 @@ QUALITY_NN_K = 3  # nearest-neighbour count for n-gram agreement diagnostic
 
 from contextlib import contextmanager
 
+from domain.infrastructure._internal.atomic_write import atomic_writer
 from domain.shared import find_repo_root, utc_now_iso
 
 
@@ -1141,7 +1142,6 @@ def _save_checkpoint(
     net._parameters_cache = encoder.parameters()
 
     # Manual save: just dump all parameter arrays
-    import tempfile
 
     quality = None
     embed_mean = None
@@ -1179,38 +1179,26 @@ def _save_checkpoint(
 
     from domain.training._internal.slonet import SOU_MAGIC
 
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(path) or ".",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(tmp_fd, "wb") as f:
-            f.write(SOU_MAGIC)
-            f.write(struct.pack("<I", 3))
-            f.write(struct.pack("<I", len(json_bytes)))
-            f.write(json_bytes)
+    with atomic_writer(path, binary=True) as f:
+        f.write(SOU_MAGIC)
+        f.write(struct.pack("<I", 3))
+        f.write(struct.pack("<I", len(json_bytes)))
+        f.write(json_bytes)
 
-            params = [
-                (f"p{i}", np.asarray(p.data, dtype=np.float32))
-                for i, p in enumerate(encoder.parameters())
-            ]
-            f.write(struct.pack("<I", len(params)))
-            for key, arr in params:
-                name_bytes = key.encode()
-                f.write(struct.pack("<I", len(name_bytes)))
-                f.write(name_bytes)
-                f.write(struct.pack("<I", arr.ndim))
-                for dim in arr.shape:
-                    f.write(struct.pack("<I", dim))
-                f.write(arr.tobytes())
+        params = [
+            (f"p{i}", np.asarray(p.data, dtype=np.float32))
+            for i, p in enumerate(encoder.parameters())
+        ]
+        f.write(struct.pack("<I", len(params)))
+        for key, arr in params:
+            name_bytes = key.encode()
+            f.write(struct.pack("<I", len(name_bytes)))
+            f.write(name_bytes)
+            f.write(struct.pack("<I", arr.ndim))
+            for dim in arr.shape:
+                f.write(struct.pack("<I", dim))
+            f.write(arr.tobytes())
 
-        os.rename(tmp_path, path)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
 
     # Save BPE tokenizer alongside the checkpoint
     if bpe is not None:
