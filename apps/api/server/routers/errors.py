@@ -384,9 +384,14 @@ class ErrorsRouter:
                 logger.debug("Skipping unparseable timestamp in error trends: %s", ts)
 
         try:
-            db = _get_error_db()
-            col = db.collection("errors")
-            all_errors = col.find()
+            # A fresh MogDB() replays the entire journal under the store lock
+            # (~221 ms measured on the live error store) — that must not run
+            # on the event loop. The hour-bucketing below is in-memory.
+            def _read_all() -> list:
+                found: list = _get_error_db().collection("errors").find()
+                return found
+
+            all_errors = await asyncio.to_thread(_read_all)
             for rec in all_errors:
                 ts = rec.get("timestamp", "")
                 if not ts:

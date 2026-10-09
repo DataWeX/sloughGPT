@@ -7,6 +7,7 @@ Presets are stored in MogDB and synced to JSON for human readability.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time as _time
 
@@ -290,10 +291,6 @@ class CompanionRouter:
     ) -> dict:
         """Create a new companion preset."""
         db = _get_db()
-        col = db.collection("presets")
-        existing = col.find_one({"id": req.id})
-        if existing:
-            raise_error(f"Preset '{req.id}' already exists", "E_CONFLICT", status_code=409)
         preset = {
             "id": req.id,
             "name": req.name,
@@ -301,7 +298,16 @@ class CompanionRouter:
             "traits": req.traits,
             "system_prompt": req.system_prompt,
         }
-        col.insert_one(preset)
+
+        def _store() -> None:
+            col = db.collection("presets")
+            if col.find_one({"id": req.id}):
+                raise_error(f"Preset '{req.id}' already exists", "E_CONFLICT", status_code=409)
+            col.insert_one(preset)
+
+        # Lookup + insert run under the store lock and journal fsync — off
+        # the event loop; AppError raised here propagates through the await.
+        await asyncio.to_thread(_store)
         safe_audit_log("companion.preset.create", resource=req.id)
         return success_response(data={"preset": preset})
 
@@ -311,8 +317,14 @@ class CompanionRouter:
     ) -> dict:
         """Delete a companion preset."""
         db = _get_db()
-        col = db.collection("presets")
-        deleted = col.delete_one({"id": preset_id})
+
+        def _store() -> int:
+            col = db.collection("presets")
+            deleted: int = col.delete_one({"id": preset_id})
+            return deleted
+
+        # delete_one journals + fsyncs — keep it off the event loop.
+        deleted = await asyncio.to_thread(_store)
         if not deleted:
             raise_error(f"Preset '{preset_id}' not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("companion.preset.delete", resource=preset_id)

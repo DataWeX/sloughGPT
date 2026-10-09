@@ -1478,7 +1478,12 @@ class MobileRouter:
             from domain.training.engine import get_training_engine
 
             store = get_training_engine().get_training_store()
-            updated = store.update_quality(pair_id, body.quality)
+
+            def _store() -> bool:
+                return bool(store.update_quality(pair_id, body.quality))
+
+            # update_quality journals + fsyncs under the store lock.
+            updated = await asyncio.to_thread(_store)
             if not updated:
                 raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
             return success_response(
@@ -1507,7 +1512,12 @@ class MobileRouter:
             from domain.training.engine import get_training_engine
 
             store = get_training_engine().get_training_store()
-            deleted = store.delete_pair(pair_id)
+
+            def _store() -> bool:
+                return bool(store.delete_pair(pair_id))
+
+            # delete_one journals + fsyncs under the store lock.
+            deleted = await asyncio.to_thread(_store)
             if not deleted:
                 raise_error("Pair not found", "E_NOT_FOUND", status_code=404)
             safe_audit_log("mobile.pair_delete", resource=pair_id)
@@ -1530,7 +1540,8 @@ class MobileRouter:
             from domain.training.engine import get_training_engine
 
             store = get_training_engine().get_training_store()
-            count = store.delete_synced()
+            # delete_many journals + fsyncs under the store lock.
+            count = await asyncio.to_thread(store.delete_synced)
             safe_audit_log("mobile.pairs_delete_synced", detail=f"count={count}")
             return success_response(data={"status": "deleted", "count": count})
 
@@ -1547,10 +1558,17 @@ class MobileRouter:
             from domain.training.engine import get_training_engine
 
             store = get_training_engine().get_training_store()
-            count = 0
-            for pair_id in ids:
-                if store.delete_pair(pair_id):
-                    count += 1
+
+            def _store() -> int:
+                deleted = 0
+                for pair_id in ids:
+                    if store.delete_pair(pair_id):
+                        deleted += 1
+                return deleted
+
+            # Each delete journals and fsyncs under the cross-process store
+            # lock — a whole bulk delete must not stall the event loop.
+            count = await asyncio.to_thread(_store)
             safe_audit_log("mobile.pairs_delete_bulk", detail=f"count={count} requested={len(ids)}")
             return success_response(data={"status": "deleted", "count": count})
 
@@ -1565,7 +1583,9 @@ class MobileRouter:
             from domain.training.engine import get_training_engine
 
             store = get_training_engine().get_training_store()
-            count = store.compact()
+            # compact rewrites the whole snapshot and fsyncs it while holding
+            # the store lock — measured ~440 ms for a 49 MB journal.
+            count = await asyncio.to_thread(store.compact)
             return success_response(data={"status": "compacted", "count": count})
 
         except Exception as e:

@@ -8,6 +8,7 @@ The JSON files are written to data/experiments_json/ for human readability.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime
@@ -72,15 +73,21 @@ class ExperimentsRouter:
         """Create a new ML experiment."""
         exp_id = f"{req.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         db = _get_db()
-        col = db.collection("experiments")
-        col.insert_one(
-            {
-                "experiment_id": exp_id,
-                "name": req.name,
-                "config": req.config or {},
-                "status": "created",
-            }
-        )
+
+        def _store() -> None:
+            col = db.collection("experiments")
+            col.insert_one(
+                {
+                    "experiment_id": exp_id,
+                    "name": req.name,
+                    "config": req.config or {},
+                    "status": "created",
+                }
+            )
+
+        # The journal append takes a cross-process lock and fsyncs; blocking
+        # work stays off the event loop (MogDB core is sync by design).
+        await asyncio.to_thread(_store)
         safe_audit_log("experiment.create", resource=exp_id, detail=req.name)
         return success_response(data={"id": exp_id, "name": req.name, "created": True})
 
@@ -115,18 +122,24 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(experiment_id) or ".." in experiment_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         db = _get_db()
-        # Delete experiment metadata
-        exp_col = db.collection("experiments")
-        deleted = exp_col.delete_many({"experiment_id": experiment_id})
-        # Delete associated metrics
-        metrics_col = db.collection("metrics")
-        metrics_col.delete_many({"experiment_id": experiment_id})
-        # Delete associated params
-        params_col = db.collection("params")
-        params_col.delete_many({"experiment_id": experiment_id})
-        # Delete associated status
-        status_col = db.collection("status")
-        status_col.delete_many({"experiment_id": experiment_id})
+
+        def _store() -> int:
+            # Delete experiment metadata
+            exp_col = db.collection("experiments")
+            deleted: int = exp_col.delete_many({"experiment_id": experiment_id})
+            # Delete associated metrics
+            metrics_col = db.collection("metrics")
+            metrics_col.delete_many({"experiment_id": experiment_id})
+            # Delete associated params
+            params_col = db.collection("params")
+            params_col.delete_many({"experiment_id": experiment_id})
+            # Delete associated status
+            status_col = db.collection("status")
+            status_col.delete_many({"experiment_id": experiment_id})
+            return deleted
+
+        # Each delete journals + fsyncs under the store lock — off the loop.
+        deleted = await asyncio.to_thread(_store)
         if not deleted:
             raise_error("Experiment not found", "E_NOT_FOUND", status_code=404)
         safe_audit_log("experiment.delete", resource=experiment_id)
@@ -180,20 +193,24 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or ".." in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         db = _get_db()
-        status_col = db.collection("status")
-        existing = status_col.find_one({"experiment_id": e_id})
         status_data = {
             "experiment_id": e_id,
             "status": "completed",
             "completed_at": utc_now_iso(),
         }
-        if existing:
-            status_col.update_one(
-                {"experiment_id": e_id},
-                {"$set": {"status": "completed", "completed_at": status_data["completed_at"]}},
-            )
-        else:
-            status_col.insert_one(status_data)
+
+        def _store() -> None:
+            status_col = db.collection("status")
+            existing = status_col.find_one({"experiment_id": e_id})
+            if existing:
+                status_col.update_one(
+                    {"experiment_id": e_id},
+                    {"$set": {"status": "completed", "completed_at": status_data["completed_at"]}},
+                )
+            else:
+                status_col.insert_one(status_data)
+
+        await asyncio.to_thread(_store)
         safe_audit_log("experiment.complete", resource=e_id)
         return success_response(data={"id": e_id, "status": "completed"})
 
@@ -254,16 +271,20 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or ".." in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         db = _get_db()
-        col = db.collection("metrics")
-        col.insert_one(
-            {
-                "experiment_id": e_id,
-                "metric": metric_name,
-                "value": value,
-                "step": step,
-                "timestamp": utc_now_iso(),
-            }
-        )
+
+        def _store() -> None:
+            col = db.collection("metrics")
+            col.insert_one(
+                {
+                    "experiment_id": e_id,
+                    "metric": metric_name,
+                    "value": value,
+                    "step": step,
+                    "timestamp": utc_now_iso(),
+                }
+            )
+
+        await asyncio.to_thread(_store)
         safe_audit_log(
             "experiment.log_metric", resource=e_id, detail=f"metric={metric_name} value={value}"
         )
@@ -284,15 +305,19 @@ class ExperimentsRouter:
         if not self._VALID_EXP_ID.match(e_id) or ".." in e_id:
             raise_error("Invalid experiment ID", "E_BAD_REQUEST", status_code=400)
         db = _get_db()
-        col = db.collection("params")
-        col.insert_one(
-            {
-                "experiment_id": e_id,
-                "param": param_name,
-                "value": value,
-                "timestamp": utc_now_iso(),
-            }
-        )
+
+        def _store() -> None:
+            col = db.collection("params")
+            col.insert_one(
+                {
+                    "experiment_id": e_id,
+                    "param": param_name,
+                    "value": value,
+                    "timestamp": utc_now_iso(),
+                }
+            )
+
+        await asyncio.to_thread(_store)
         safe_audit_log("experiment.log_param", resource=e_id, detail=f"param={param_name}")
         return success_response(
             data={"status": "logged", "experiment_id": e_id, "param": param_name}
