@@ -33,6 +33,24 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-09 — `fix/benchmark-history-reporter-backport`
+**pushed (card b22e878a, Group E)**: origin/main's `benchmark_results
+history` was still pre-fix — startup rendered `mean=?/p95=?`, the
+no-`--kind` default hard-coded `["stability", "latency"]` (9 of 12 runs
+hidden), list-shaped metrics raised `AttributeError: 'list' object has no
+attribute 'get'`. The fix has existed since `582cb210a` (Oct 2) on stale,
+never-pushed `fix/benchmark-history-reporter`, and was swept verbatim into
+`81616a6f7` (~40 branches) yet never reached origin/main — backported
+script + tests onto `ec589d389` (RED 4 failed/17 passed → GREEN 21 passed;
+real-data: all 6 kinds list, the resurrected list-shaped latency file
+renders `list(5) non-comparable samples`, startup rows show
+`health=`/`ready=` + `[past 180s timeout]`). Also recorded the
+ROADMAP-16 training baseline (`record --kind training`: gate 2.92 → 0.00,
+`gate_converged=true`, 120 steps; tiny/small/medium informational) into
+`data/benchmark_results/training/` — branch store AND SHARED's.
+Groups A–D of b22e878a remain unclaimed; storage-row field rendering
+awaits the `35f2ad61` lane.
+
 **Last update**: 2026-10-08 ~12:10 — `e8fd60d4` **closed (site-doctor design +
 inventory reconciled to the landed MOLE)**. The card's 2026-10-01 inventory
 was stale: the doctor rebrand → **Mole** (`752b27ab`) and most of the
