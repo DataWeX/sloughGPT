@@ -7,6 +7,7 @@ runtime enable/disable toggle.
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from controllers.models import ModelsController
 
 
@@ -257,3 +258,114 @@ def test_server_config_parses_memory_limit_env():
     with patch.dict(os.environ, {"SLO_PROCESS_GUARD_MEMORY_LIMIT_MB": "15000"}):
         cfg = ServerConfig.from_env()
     assert cfg.process_guard_memory_limit_mb == 15000.0
+
+
+# ── Why the guard gave up (surfaced in the user-facing load error) ────────
+# _build_process_guard returns None for four different reasons; only the
+# caller knows that None is fatal on the lazy path, so the reason has to
+# travel with it — otherwise the banner says "could not be started" and the
+# operator is left scrolling logs (2026-10-08 Qwen load incident).
+
+
+def test_build_process_guard_records_disabled_reason(tmp_path):
+    ctrl = _controller(tmp_path)
+    with patch("config.get_process_guard_enabled", return_value=False):
+        assert ctrl._build_process_guard("Fake/Model") is None
+    assert ctrl._guard_failure == "ProcessGuard is disabled"
+
+
+def test_build_process_guard_records_missing_slnc_reason(tmp_path):
+    ctrl = _controller(tmp_path)
+    with (
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("domain.infrastructure.model_resolver.get_model_dir", return_value=tmp_path),
+        patch("os.path.exists", return_value=False),
+    ):
+        assert ctrl._build_process_guard("Fake/Model") is None
+    assert ctrl._guard_failure is not None
+    assert "no compiled model" in ctrl._guard_failure
+    assert str(tmp_path) in ctrl._guard_failure
+
+
+def test_build_process_guard_records_start_failure_reason(tmp_path):
+    """A child that dies during start must reach the caller verbatim — that
+    string is what the model-load banner shows."""
+    ctrl = _controller(tmp_path)
+    cfg = MagicMock()
+    cfg.quantize_slonet = False
+    cfg.quant_bits = 8
+    cfg.quant_mode = "symmetric"
+    cfg.quant_clip = 0.999
+    cfg.process_guard_memory_limit_mb = 0.0
+    cause = "child exited after 1.2s: Model load failed: boom"
+    with (
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("config.ServerConfig.from_env", return_value=cfg),
+        patch("domain.infrastructure.model_resolver.get_model_dir", return_value=tmp_path),
+        patch("os.path.exists", return_value=True),
+        patch(
+            "domain.infrastructure.process_guard.ProcessGuard",
+            side_effect=RuntimeError(cause),
+        ),
+    ):
+        assert ctrl._build_process_guard("Fake/Model") is None
+    assert ctrl._guard_failure == cause
+
+
+def test_build_process_guard_clears_reason_after_success(tmp_path):
+    ctrl = _controller(tmp_path)
+    ctrl._guard_failure = "previous failure"
+    cfg = MagicMock()
+    cfg.quantize_slonet = False
+    cfg.quant_bits = 8
+    cfg.quant_mode = "symmetric"
+    cfg.quant_clip = 0.999
+    cfg.process_guard_memory_limit_mb = 0.0
+    fake_guard = _FakeGuard(alive=True)
+    with (
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("config.ServerConfig.from_env", return_value=cfg),
+        patch("domain.infrastructure.process_guard.ProcessGuard", return_value=fake_guard),
+        patch(
+            "domain.infrastructure.model_resolver.get_model_dir",
+            return_value=Path("/tmp/models--Fake--Model"),
+        ),
+        patch("os.path.exists", return_value=True),
+    ):
+        guard = ctrl._build_process_guard("Fake/Model")
+    assert guard is fake_guard
+    assert ctrl._guard_failure is None
+
+
+def test_lazy_load_error_carries_the_guard_reason(tmp_path):
+    """End-to-end: the RuntimeError behind the banner must name the cause.
+
+    Reaches the real lazy branch of ``_load_hf_model`` (a compiled .slnc is
+    present, guard enabled) and fails the guard at construction, so the only
+    difference from production is the injected failure itself.
+    """
+    ctrl = ModelsController(repo_root=Path(tmp_path))
+    model_dir = Path(tmp_path) / "models--Fake--Model"
+    model_dir.mkdir(parents=True)
+    (model_dir / "model.slnc").write_bytes(b"x")
+
+    cfg = MagicMock()
+    cfg.lazy_guard_autoload = True
+    cfg.quantize_slonet = False
+    cfg.quant_bits = 8
+    cfg.quant_mode = "symmetric"
+    cfg.quant_clip = 0.999
+    cfg.process_guard_memory_limit_mb = 0.0
+    cause = "child exited after 1.2s: Model load failed: boom"
+    with (
+        patch("config.ServerConfig.from_env", return_value=cfg),
+        patch("config.get_process_guard_enabled", return_value=True),
+        patch("domain.infrastructure.model_resolver.get_model_dir", return_value=model_dir),
+        patch("domain.infrastructure.process_guard.ProcessGuard", side_effect=RuntimeError(cause)),
+        pytest.raises(RuntimeError) as excinfo,
+    ):
+        ctrl._load_hf_model("Fake/Model", "cpu")
+
+    message = str(excinfo.value)
+    assert "ProcessGuard could not be started" in message
+    assert cause in message

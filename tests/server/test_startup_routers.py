@@ -19,6 +19,7 @@ registered state instead of degrading to the 5 pre-registered routes.
 """
 
 import asyncio
+import logging
 import os
 import sys
 import types
@@ -456,6 +457,22 @@ class TestModelLoadedGuard:
             ),
         ):
             assert _build_guard_for_model(cfg, "gpt2") is None
+
+    def test_build_guard_without_model_id_returns_none(self, caplog):
+        """No model id means nothing is loaded, so there is nothing to guard.
+
+        Regression: with ``server_state.model_type`` still None after a failed
+        autoload, ``get_model_dir(None)`` raised ``AttributeError: 'NoneType'
+        object has no attribute 'replace'`` and startup logged it as
+        ``ProcessGuard creation failed`` — blaming the guard for an unloaded
+        model. The skip must be reported as a skip.
+        """
+        cfg = ServerConfig()
+        with caplog.at_level(logging.INFO):
+            with patch("config.get_process_guard_enabled", return_value=True):
+                assert _build_guard_for_model(cfg, None) is None
+        assert "ProcessGuard creation failed" not in caplog.text
+        assert "no model id" in caplog.text
 
 
 # ── _init_lifecycle ───────────────────────────────────────────────────────────
