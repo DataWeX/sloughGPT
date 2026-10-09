@@ -281,7 +281,8 @@ class CompanionRouter:
     @endpoint("companion.list_presets")
     async def list_presets(self) -> dict:
         """Return the list of available companion presets."""
-        _seed_default_presets()
+        # Seeding inserts the defaults on a fresh install — off the loop.
+        await asyncio.to_thread(_seed_default_presets)
         presets = _load_presets()
         return success_response(data={"presets": presets})
 
