@@ -45,11 +45,13 @@ class MogDB:
         path: str,
         compact_on_close: bool = True,
         sync_dir: str | Path | None = None,
+        fsync: bool = True,
     ):
         self._root = Path(path)
         self._root.mkdir(parents=True, exist_ok=True)
         self._compact_on_close = compact_on_close
         self._sync_dir = Path(sync_dir) if sync_dir else None
+        self._fsync = fsync
         if self._sync_dir:
             self._sync_dir.mkdir(parents=True, exist_ok=True)
         self._collections: dict[str, Collection] = {}
@@ -94,6 +96,7 @@ class MogDB:
                         self._root,
                         max_size_bytes=max_size_bytes,
                         max_count=max_count,
+                        fsync=self._fsync,
                     )
                     from .json_sync import SyncableCollection
 
@@ -107,6 +110,7 @@ class MogDB:
                         self._root,
                         max_size_bytes=max_size_bytes,
                         max_count=max_count,
+                        fsync=self._fsync,
                     )
                 return self._collections[name]
 

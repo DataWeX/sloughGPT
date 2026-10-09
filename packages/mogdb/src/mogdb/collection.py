@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from . import durability
 from .document import Document
 from .index import Index, SortedIndex
 from .query import _get_field, match_document
@@ -44,6 +45,8 @@ class Collection:
         db_path: Path,
         max_size_bytes: int | None = None,
         max_count: int | None = None,
+        *,
+        fsync: bool = True,
     ):
         self.name = name
         self._db_path = db_path
@@ -51,6 +54,18 @@ class Collection:
         self._lock = threading.Lock()
         self._journal_path = db_path / f"{name}.journal.jsonl"
         self._compacted_path = db_path / f"{name}.mogdb"
+        # Stable cross-process lock file (never replaced/unlinked — see
+        # durability.locked). Guards appends, load-time quarantine rewrites,
+        # compact and drop against each other across processes.
+        self._lock_path = db_path / f"{name}.lock"
+        self._fsync = fsync
+        # Journal sequence tracking: ``_seq`` = last seq journaled/seen,
+        # ``_watermark`` = seq baked into the snapshot (None = none/legacy).
+        # Entries with seq <= watermark are already in the snapshot and are
+        # skipped on replay — exactly-once across a compact crash window.
+        self._seq = 0
+        self._watermark: int | None = None
+        self.open_report = {"replayed": 0, "quarantined": 0}
         self._dirty: bool = False
         self._indexes: dict[str, Index] = {}
         self._sorted_indexes: dict[str, SortedIndex] = {}
@@ -67,90 +82,157 @@ class Collection:
     # ------------------------------------------------------------------
 
     def _load(self) -> None:
-        """Load documents from the most recent snapshot or journal.
+        """Load documents from the snapshot and/or journal.
 
-        Compacted snapshots are plain documents written one per line. Journal
-        files are an operation log and are replayed in order so that
+        Compacted snapshots are plain documents written one per line with an
+        optional first-line meta record ``{"_mogdb_meta": {"seq": N}}``
+        marking the last journal sequence baked into the snapshot. The
+        journal is an operation log replayed in order so that
         ``update``/``delete`` entries apply to previously inserted documents
         instead of overwriting them with the raw op payload.
+
+        Replay rules (crash-consistent):
+
+        * journal entries with ``seq > watermark`` are applied; entries with
+          ``seq <= watermark`` are already in the snapshot and are skipped —
+          a compact that crashed between the snapshot rename and the journal
+          removal can never double-apply its ops;
+        * a snapshot written before seq tracking existed (no meta record)
+          has an unknowable relationship to seq-less journal entries, so
+          those keep the legacy behavior (skipped), while seq-bearing
+          entries — which necessarily postdate it — are still applied.
+
+        Corrupt lines (torn tail, NUL poisoning, non-JSON) are quarantined
+        to ``<name>.corrupt-<ts>`` and counted in ``open_report`` — never
+        silently dropped.
         """
-        data_path = self._compacted_path if self._compacted_path.exists() else self._journal_path
-        if not data_path.exists():
+        if not self._compacted_path.exists() and not self._journal_path.exists():
+            self.open_report = {"replayed": 0, "quarantined": 0}
             return
 
-        is_journal = data_path.name.endswith(".journal.jsonl")
-        count = 0
-        with open(data_path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    entry = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not is_journal:
+        replayed = 0
+        quarantined = 0
+        with durability.locked(self._lock_path):
+            # Re-check under the lock: files may have appeared/vanished since
+            # the fast path above.
+            has_snapshot = self._compacted_path.exists()
+            legacy_snapshot = False
+            if has_snapshot:
+                snap_lines, q = durability.read_records_locked(
+                    self._compacted_path,
+                    corrupt_stem=self.name,
+                    sidecar_dir=self._db_path,
+                )
+                quarantined += q
+                for i, raw in enumerate(snap_lines):
+                    entry = json.loads(raw)
+                    if i == 0 and isinstance(entry.get("_mogdb_meta"), dict):
+                        seq = entry["_mogdb_meta"].get("seq")
+                        self._watermark = seq if isinstance(seq, int) else None
+                        legacy_snapshot = self._watermark is None
+                        continue
                     doc = Document(entry)
                     self._docs[doc.id] = doc
-                    count += 1
-                    continue
+                    replayed += 1
+                if self._watermark is not None:
+                    self._seq = max(self._seq, self._watermark)
+                else:
+                    legacy_snapshot = True
 
-                op = entry.get("op")
-                data = entry.get("data")
-                if not isinstance(data, dict):
-                    continue
-                if op == "insert":
-                    doc = Document(data)
-                    self._docs[doc.id] = doc
-                    count += 1
-                elif op == "update":
-                    doc = self._docs.get(data.get("_id"))
-                    if doc is None:
+            if self._journal_path.exists():
+                j_lines, q = durability.read_records_locked(
+                    self._journal_path,
+                    corrupt_stem=self.name,
+                    sidecar_dir=self._db_path,
+                )
+                quarantined += q
+                for raw in j_lines:
+                    entry = json.loads(raw)
+                    seq = entry.get("seq")
+                    has_seq = isinstance(seq, int)
+                    if has_seq:
+                        self._seq = max(self._seq, seq)
+                    if legacy_snapshot and not has_seq:
+                        # Pre-upgrade entry with an unknowable relationship
+                        # to the meta-less snapshot (legacy skip).
                         continue
-                    self._apply_update(doc, data.get("update") or {})
-                    doc["_updated"] = time.time()
-                    count += 1
-                elif op == "update_many":
-                    update = data.get("update") or {}
-                    query = data.get("query") or {}
-                    for doc in self._docs.values():
-                        if match_document(doc, query):
-                            self._apply_update(doc, update)
-                            doc["_updated"] = time.time()
-                            count += 1
-                elif op == "delete":
-                    self._docs.pop(data.get("_id"), None)
-                elif op == "delete_many":
-                    query = data.get("query") or {}
-                    for doc_id in [d.id for d in self._docs.values() if match_document(d, query)]:
-                        self._docs.pop(doc_id, None)
-        if count:
-            logger.debug("loaded %d docs from %s", count, data_path.name)
+                    if self._watermark is not None and not (
+                        has_seq and seq > self._watermark
+                    ):
+                        # Already baked into the snapshot.
+                        continue
+                    op = entry.get("op")
+                    data = entry.get("data")
+                    if not isinstance(data, dict):
+                        continue
+                    if op == "insert":
+                        doc = Document(data)
+                        self._docs[doc.id] = doc
+                        replayed += 1
+                    elif op == "update":
+                        doc = self._docs.get(data.get("_id"))
+                        if doc is None:
+                            continue
+                        self._apply_update(doc, data.get("update") or {})
+                        doc["_updated"] = time.time()
+                        replayed += 1
+                    elif op == "update_many":
+                        update = data.get("update") or {}
+                        query = data.get("query") or {}
+                        for doc in self._docs.values():
+                            if match_document(doc, query):
+                                self._apply_update(doc, update)
+                                doc["_updated"] = time.time()
+                                replayed += 1
+                    elif op == "delete":
+                        self._docs.pop(data.get("_id"), None)
+                    elif op == "delete_many":
+                        query = data.get("query") or {}
+                        for doc_id in [d.id for d in self._docs.values() if match_document(d, query)]:
+                            self._docs.pop(doc_id, None)
+
+        self.open_report = {"replayed": replayed, "quarantined": quarantined}
+        if replayed or quarantined:
+            logger.debug(
+                "loaded %d records for %s (%d quarantined)",
+                replayed,
+                self.name,
+                quarantined,
+            )
 
     def _journal(self, op: str, data: dict[str, Any]) -> None:
-        """Append an operation to the journal."""
-        self._journal_path.parent.mkdir(parents=True, exist_ok=True)
-        entry = {"op": op, "data": data}
-        with open(self._journal_path, "a") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
+        """Append an operation to the journal (locked + fsynced)."""
+        self._seq += 1
+        entry = {"op": op, "seq": self._seq, "data": data}
+        line = (json.dumps(entry, default=str) + "\n").encode("utf-8")
+        durability.append_record(
+            self._journal_path, line, lock_path=self._lock_path, fsync=self._fsync
+        )
         self._dirty = True
 
     def compact(self) -> int:
-        """Rewrite the journal as a compacted snapshot.
+        """Rewrite the journal as a compacted snapshot (crash-consistent).
 
         Drops all tombstones (deleted docs) and history, keeping only the
-        current state. The journal file is replaced by the compacted file.
+        current state. The snapshot's first line carries the seq watermark;
+        it is written to ``.mogdb.tmp``, fsynced, and atomically renamed
+        into place *before* the journal is removed. A crash in between leaves
+        journal entries with ``seq <= watermark``, which replay skips — never
+        double-applies — and a crash before the rename leaves the journal
+        fully authoritative.
         """
         with self._lock:
-            entries = [dict(d) for d in self._docs.values()]
-            self._compacted_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._compacted_path, "w") as f:
-                for entry in entries:
-                    f.write(json.dumps(entry, default=str) + "\n")
-            # Remove old journal
-            if self._journal_path.exists():
-                self._journal_path.unlink()
-            self._dirty = False
+            with durability.locked(self._lock_path):
+                entries = [dict(d) for d in self._docs.values()]
+                lines = [json.dumps({"_mogdb_meta": {"seq": self._seq, "v": 1}}, default=str)]
+                lines.extend(json.dumps(entry, default=str) for entry in entries)
+                payload = ("\n".join(lines) + "\n").encode("utf-8")
+                durability.atomic_write(self._compacted_path, payload, fsync=self._fsync)
+                # Journal is redundant now (watermark on the published
+                # snapshot covers every entry it holds); remove it.
+                if self._journal_path.exists():
+                    self._journal_path.unlink()
+                self._dirty = False
         logger.info("compacted %s: %d docs", self.name, len(entries))
         return len(entries)
 
@@ -583,9 +665,14 @@ class Collection:
             for idx in self._sorted_indexes.values():
                 idx.clear()
             self._dirty = False
-            for p in [self._journal_path, self._compacted_path]:
-                if p.exists():
-                    p.unlink()
+            with durability.locked(self._lock_path):
+                for p in [self._journal_path, self._compacted_path]:
+                    if p.exists():
+                        p.unlink()
+                # The .lock file itself is intentionally kept: unlinking a
+                # file other processes may be flock'ing would split the lock
+                # (writers on the old inode vs. a fresh one). It is ignored
+                # by discovery and reused by a re-created collection.
 
     # ------------------------------------------------------------------
     # atomic find-and-modify
