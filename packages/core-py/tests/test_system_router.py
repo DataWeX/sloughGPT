@@ -95,9 +95,7 @@ class TestLifecycle:
         # `from domain.infrastructure import get_lifecycle_manager`, and the
         # facade binds the name eagerly, so patching _internal.lifecycle
         # never reaches it (the real manager's "init" phase leaked through).
-        with patch(
-            "domain.infrastructure.get_lifecycle_manager", return_value=mock_mgr
-        ):
+        with patch("domain.infrastructure.get_lifecycle_manager", return_value=mock_mgr):
             client = TestClient(_app(sr))
             resp = client.get("/system/lifecycle")
         assert resp.status_code == 200
@@ -236,9 +234,7 @@ class TestTailOutput:
         # import get_server_buffer`, and the facade binds it eagerly — the
         # _internal-level patch never installed this fake (real empty
         # buffer leaked through, lines == []).
-        with patch(
-            "domain.infrastructure.get_server_buffer", return_value=mock_buf
-        ):
+        with patch("domain.infrastructure.get_server_buffer", return_value=mock_buf):
             client = TestClient(_app(sr))
             resp = client.get("/system/output")
         assert resp.status_code == 200
