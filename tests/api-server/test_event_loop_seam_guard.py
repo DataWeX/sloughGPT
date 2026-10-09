@@ -59,8 +59,6 @@ COLLECTION_WRITES = frozenset(
         "update_many",
         "delete_one",
         "delete_many",
-        "replace_one",
-        "bulk_write",
         "find_one_and_update",
         "find_one_and_replace",
         "find_one_and_delete",
@@ -68,6 +66,46 @@ COLLECTION_WRITES = frozenset(
         "drop",
     }
 )
+
+# Collection methods that are pure reads: they never append to the journal, so
+# running one inline on the loop costs memory, not a disk stall.
+COLLECTION_READS = frozenset(
+    {"aggregate", "count", "find", "find_by_ids", "find_one"}
+)
+
+# Index maintenance mutates process memory only — no ``append_record``/
+# ``atomic_write`` in any of them — so it is not an event-loop stall. Listed
+# separately (rather than lumped in with reads) so that a future version which
+# starts persisting an index fails ``test_write_set_tracks_the_mogdb_api`` and
+# forces reclassification.
+COLLECTION_IN_MEMORY = frozenset(
+    {
+        "create_index",
+        "create_sorted_index",
+        "create_ttl_index",
+        "drop_index",
+    }
+)
+
+# MogDB itself writes to disk through these, and the receiver is a Database
+# rather than a Collection: ``compact_all`` compacts every collection,
+# ``sync_all`` flushes every synced JSON store, and ``drop_collection`` deletes
+# the journal and the compacted file. A scan keyed only to ``COLLECTION_WRITES``
+# would never see the call site, because it names ``sync_all`` rather than
+# ``sync``.
+DATABASE_WRITES = frozenset({"compact_all", "drop_collection", "sync_all"})
+
+# A real write that the scan deliberately does *not* flag. ``MogDB.close()``
+# syncs and possibly compacts, so calling it inline would stall the loop — but
+# the bare name collides with ``socket.close()``, ``WebSocket.close()``,
+# ``loop.close()`` and every other closer in the process, and this guard keys
+# on the attribute name alone, so honouring it would bury the genuine
+# violations under false positives (it fired on four such calls when tried).
+# Listed here so the API-drift test still counts it as classified, and so the
+# hole is named rather than invisible.
+AMBIGUOUS_WRITES = frozenset({"close"})
+
+DATABASE_READS = frozenset({"collection", "list_collections"})
 
 # Domain wrappers whose bodies call one of the above (MobileTrainingStore):
 # these never name a Collection method at the call site, so a scan keyed only
@@ -80,7 +118,7 @@ WRAPPER_WRITES = frozenset(
     }
 )
 
-WRITE_METHODS = COLLECTION_WRITES | WRAPPER_WRITES
+WRITE_METHODS = COLLECTION_WRITES | DATABASE_WRITES | WRAPPER_WRITES
 
 # How a handler hands the blocking work to a worker thread.
 OFFLOAD_MARKERS = ("to_thread", "run_in_executor")
@@ -199,6 +237,58 @@ def test_scan_roots_exist() -> None:
     """The guard is worthless if its roots silently stop matching."""
     for root in SCAN_ROOTS:
         assert root.is_dir(), f"scan root missing: {root}"
+
+
+def test_write_set_tracks_the_mogdb_api() -> None:
+    """The hand-maintained write list must not drift from mogdb's real API.
+
+    ``COLLECTION_WRITES`` is a literal, so a mutating method added to ``Collection``
+    would fall outside the scan *silently* — and a guard that reports zero
+    violations because it is blind looks exactly like one that found none.
+    Classify every public method explicitly, then assert the sets tile the real
+    API in both directions: unclassified names mean the list is stale and the
+    new method needs a decision; names the guard claims but mogdb no longer
+    defines were guessed rather than derived and are quietly covering for a real
+    method that was never listed.
+    """
+    import inspect
+
+    from mogdb.collection import Collection
+    from mogdb.database import MogDB as Database
+
+    for label, cls, writes, non_writes in (
+        (
+            "Collection",
+            Collection,
+            COLLECTION_WRITES,
+            COLLECTION_READS | COLLECTION_IN_MEMORY,
+        ),
+        ("Database", Database, DATABASE_WRITES, DATABASE_READS | AMBIGUOUS_WRITES),
+    ):
+        public = {
+            name
+            for name, member in inspect.getmembers(cls, inspect.isfunction)
+            if not name.startswith("_")
+        }
+        unclassified = sorted(public - (writes | non_writes))
+        assert not unclassified, (
+            f"mogdb {label} defines methods the seam guard does not classify: "
+            f"{unclassified}. For each, decide whether it journals to disk "
+            f"(add it to {label.upper()}_WRITES so inline use is flagged) or is "
+            f"a read/in-memory op, and add it to the matching read set."
+        )
+        phantom = sorted((writes | non_writes) - public)
+        assert not phantom, (
+            f"mogdb {label} no longer defines {phantom}; the guard guards "
+            f"method names that do not exist, which is how a real method goes "
+            f"unnoticed when the API changes shape."
+        )
+    # The ambiguity is deliberate and must stay honoured: an ambiguous name
+    # listed in WRITE_METHODS turns the guard into a false-positive machine.
+    assert not (AMBIGUOUS_WRITES & WRITE_METHODS), (
+        f"ambiguous write names are in WRITE_METHODS: "
+        f"{sorted(AMBIGUOUS_WRITES & WRITE_METHODS)}"
+    )
 
 
 def test_scan_finds_the_wrappers_it_claims_to() -> None:
