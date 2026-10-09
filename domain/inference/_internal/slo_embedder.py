@@ -35,6 +35,8 @@ from pathlib import Path
 
 import numpy as np
 
+from domain.infrastructure._internal.atomic_write import atomic_writer
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -66,14 +68,13 @@ QUALITY_NN_K = 3  # nearest-neighbour count for n-gram agreement diagnostic
 
 from contextlib import contextmanager
 
-from domain.infrastructure._internal.atomic_write import atomic_writer
 from domain.shared import find_repo_root, utc_now_iso
 
 
 @contextmanager
 def _no_accel():
     """Context manager to temporarily disable Metal/GPU accelerator."""
-    import domains.training.slonet as _slonet
+    import domain.training._internal.slonet as _slonet
 
     prev = getattr(_slonet, "_ACCELERATOR", None)
     try:
@@ -1142,7 +1143,6 @@ def _save_checkpoint(
     net._parameters_cache = encoder.parameters()
 
     # Manual save: just dump all parameter arrays
-
     quality = None
     embed_mean = None
     if texts:
@@ -1198,7 +1198,6 @@ def _save_checkpoint(
             for dim in arr.shape:
                 f.write(struct.pack("<I", dim))
             f.write(arr.tobytes())
-
 
     # Save BPE tokenizer alongside the checkpoint
     if bpe is not None:
@@ -1407,7 +1406,7 @@ class SloTextEmbedder:
         Returns:
             list of floats (L2-normalized)
         """
-        import domains.training.slonet as _slonet
+        import domain.training._internal.slonet as _slonet
 
         _prev_accel = getattr(_slonet, "_ACCELERATOR", None)
         try:

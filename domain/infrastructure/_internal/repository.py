@@ -230,7 +230,7 @@ class FileRepository[T]:
         try:
             data = self._resolve_serializer().serialize(obj)
             path.parent.mkdir(parents=True, exist_ok=True)
-            with atomic_writer(path, binary=False) as f:
+            with atomic_writer(path, binary=False, encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
             self._cache_set(key, obj)
             return True

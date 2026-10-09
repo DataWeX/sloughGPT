@@ -151,13 +151,14 @@ class StorageDevice:
         return True
 
     def rename(self, src: str, dst: str) -> bool:
-        """Rename file."""
+        """Rename file.
+
+        This is the rename operation itself, exposed as the shell's filesystem
+        API — the caller asked for a rename of an existing file, not for a new
+        file to be written, so the atomic_write primitive does not apply.
+        """
         src_path = os.path.join(self._base_path, src)
         dst_path = os.path.join(self._base_path, dst)
-        # Reviewed exception (card 3d0a2a56): the storage API's move operation
-        # relocates an existing file — it does not write one, so atomic_writer
-        # does not apply. os.replace is the portable overwrite-atomic move
-        # (identical to rename(2) on POSIX — no behaviour change).
         os.replace(src_path, dst_path)
         return True
 

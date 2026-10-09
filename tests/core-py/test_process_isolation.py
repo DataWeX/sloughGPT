@@ -147,6 +147,23 @@ def _silent_alive_worker_main(
     time.sleep(2.0)
 
 
+def _error_worker_main(
+    req_q: mp.Queue,
+    resp_q: mp.Queue,
+    hb_q: mp.Queue,
+    *args: Any,
+    **kwargs: Any,
+) -> None:
+    """Worker that posts a load error, then dies — the real failure sequence.
+
+    Mirrors ``_slo_worker_main``'s load-failure path: the cause goes on
+    ``resp_q`` and the death notice on ``hb_q``, so the parent has both if it
+    looks for them.
+    """
+    resp_q.put_nowait(("error", None, "Model load failed: no such model"))
+    hb_q.put_nowait(("dead", os.getpid()))
+
+
 # ── Fake process / queue objects for parent-side error paths ─────────────
 
 
@@ -612,6 +629,107 @@ class TestModelWorkerProcess:
             result = worker.generate("hello")
             assert result["text"] == "worker says hi"
         assert not worker.alive
+
+
+# ── Tests: startup-failure diagnostics ───────────────────────────────────
+# A failed start must name the event (child died / no ready signal), the real
+# elapsed time, and the child's own cause — not a configured timeout nobody
+# waited for. Regression for the 2026-10-08 model-load incident, where the
+# child died at 25s but the guard reported "failed to start within 300.0s" and
+# dropped the worker's "Model load failed: ..." payload on the floor.
+
+
+class TestStartupFailureDiagnostics:
+    WORKER_KWARGS = {
+        "model_cls_path": "fake_model.FakeTestModel",
+        "model_kwargs": {"reply": "never reached"},
+        "worker_id": "doomed-worker",
+        "generate_timeout": 5.0,
+        "startup_timeout": 60.0,
+        "extra_sys_paths": _extra_paths,
+    }
+
+    def test_child_death_names_cause_and_elapsed_not_timeout(self, monkeypatch):
+        import domain.infrastructure._internal.model_worker as mw_mod
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
+
+        monkeypatch.setattr(mw_mod, "_hf_worker_main", _error_worker_main)
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        started = time.time()
+        with pytest.raises(RuntimeError) as excinfo:
+            worker.start()
+        elapsed = time.time() - started
+
+        message = str(excinfo.value)
+        assert "failed to start" in message  # anchor existing callers/tests keep
+        assert "child exited" in message or "child reported dead" in message
+        assert "Model load failed: no such model" in message  # the child's cause
+        assert "within" not in message  # never claim a timeout we did not hit
+        assert "exitcode=" in message  # reaped, so the status is real
+        assert elapsed < 30  # 60s startup_timeout was not the limit reached
+        assert not worker.alive  # and no orphan child left holding memory
+
+    def test_genuine_timeout_reports_configured_limit(self, monkeypatch):
+        import domain.infrastructure._internal.model_worker as mw_mod
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
+
+        monkeypatch.setattr(mw_mod, "_hf_worker_main", _silent_alive_worker_main)
+        kwargs = dict(self.WORKER_KWARGS)
+        kwargs["startup_timeout"] = 1.0  # child sleeps 2.0s, so this is a real timeout
+        worker = ModelWorkerProcess(**kwargs)
+        started = time.time()
+        with pytest.raises(RuntimeError) as excinfo:
+            worker.start()
+        elapsed = time.time() - started
+
+        message = str(excinfo.value)
+        assert "failed to start" in message
+        assert "no ready signal" in message
+        assert "startup_timeout=1.0s" in message
+        assert "exitcode=" not in message  # nothing to report: it was still alive
+        assert elapsed < 10
+        assert not worker.alive
+
+    def test_startup_failure_is_logged_at_error(self, monkeypatch, caplog):
+        import domain.infrastructure._internal.model_worker as mw_mod
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
+
+        monkeypatch.setattr(mw_mod, "_hf_worker_main", _error_worker_main)
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        with caplog.at_level("ERROR", logger="slo.infrastructure.model_worker"):
+            with pytest.raises(RuntimeError):
+                worker.start()
+        assert any("Model load failed: no such model" in r.message for r in caplog.records)
+
+    def test_drain_startup_error_reads_cause(self):
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
+
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        worker._resp_q = _ScriptedQueue([("error", None, "Model load failed: boom")])
+        assert worker._drain_startup_error() == "Model load failed: boom"
+
+    def test_drain_startup_error_accepts_legacy_two_tuple(self):
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
+
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        worker._resp_q = _ScriptedQueue([("error", "legacy failure")])
+        assert worker._drain_startup_error() == "legacy failure"
+
+    def test_drain_startup_error_gives_up_when_silent(self, monkeypatch):
+        import domain.infrastructure._internal.model_worker as mw_mod
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
+
+        monkeypatch.setattr(mw_mod, "_STARTUP_ERROR_DRAIN_S", 0.05)
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        worker._resp_q = _ScriptedQueue([])
+        assert worker._drain_startup_error() is None
+
+    def test_drain_startup_error_without_queue(self):
+        from domain.infrastructure._internal.model_worker import ModelWorkerProcess
+
+        worker = ModelWorkerProcess(**self.WORKER_KWARGS)
+        assert worker._resp_q is None
+        assert worker._drain_startup_error() is None
 
 
 # ── Tests: ProcessGuard ────────────────────────────────────────────────

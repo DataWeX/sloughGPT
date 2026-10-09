@@ -34,6 +34,10 @@ class ModelsController:
         self._hf_model: Any | None = None
         self._tokenizer: Any | None = None
         self._process_guard: Any | None = None
+        # Why the last _build_process_guard attempt gave up — carried into the
+        # lazy-load error so the user-facing banner names a cause, not just
+        # "ProcessGuard could not be started".
+        self._guard_failure: str | None = None
         self._inference_count: int = 0
         self._total_tokens_generated: int = 0
         self._last_inference_time: float | None = None
@@ -178,7 +182,8 @@ class ModelsController:
                 process_guard = self._build_process_guard(model_id)
                 if process_guard is None:
                     raise RuntimeError(
-                        f"Lazy load requested for {model_id} but ProcessGuard could not be started"
+                        f"Lazy load requested for {model_id} but ProcessGuard "
+                        f"could not be started: {self._guard_failure or 'unknown reason'}"
                     )
                 from domain.inference._internal.slonet_provider import SloNetChatProvider
 
@@ -311,6 +316,7 @@ class ModelsController:
         from config import get_process_guard_enabled
 
         if not get_process_guard_enabled():
+            self._guard_failure = "ProcessGuard is disabled"
             return None
 
         try:
@@ -330,6 +336,7 @@ class ModelsController:
                 logger.info(
                     "ProcessGuard skipped: no .slnc file at %s", slnc_path, extra={"tag": "MODEL"}
                 )
+                self._guard_failure = f"no compiled model at {slnc_path}"
                 return None
 
             guard = ProcessGuard(
@@ -351,10 +358,12 @@ class ModelsController:
             guard.start()
             self._process_guard = guard
             attach_process_guard_to_provider(guard)
+            self._guard_failure = None
             logger.info("ProcessGuard started for %s", model_id, extra={"tag": "MODEL"})
             return guard
         except Exception as e:
             logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "MODEL"})
+            self._guard_failure = str(e) or type(e).__name__
             return None
 
     def _load_gguf_model(self, model_path: str, device: str) -> dict[str, Any]:
@@ -745,6 +754,7 @@ class ModelsController:
         from config import get_process_guard_enabled
 
         if not get_process_guard_enabled():
+            self._guard_failure = "ProcessGuard is disabled"
             return None
         try:
             from config import ServerConfig
@@ -773,10 +783,12 @@ class ModelsController:
             )
             guard.start()
             self._process_guard = guard
+            self._guard_failure = None
             logger.info("ProcessGuard started for fine-tuned %s", model_id, extra={"tag": "MODEL"})
             return guard
         except Exception as e:
             logger.warning("ProcessGuard creation failed: %s", e, extra={"tag": "MODEL"})
+            self._guard_failure = str(e) or type(e).__name__
             return None
 
     def unload_model(self) -> dict[str, Any]:

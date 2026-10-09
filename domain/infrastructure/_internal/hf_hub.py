@@ -564,14 +564,12 @@ def download_hf_model(
             continue
 
         # Normalize HuggingFace's *.incomplete marker into downcraft's
-        # *.sgpart so the generic downloader resumes it via Range.
+        # *.sgpart so the generic downloader resumes it via Range. This
+        # renames two EXISTING files — no bytes are written here, so the
+        # atomic_write temp-then-replace primitive does not apply.
         incomplete = dest.with_suffix(dest.suffix + ".incomplete")
         sgpart = dest.with_suffix(dest.suffix + ".sgpart")
         if incomplete.is_file() and not sgpart.exists():
-            # Reviewed exception (card 3d0a2a56): this MOVES the downloader's
-            # *.incomplete marker into place — no content is written here, so
-            # atomic_writer (a handle-based writer) does not apply; os.replace
-            # already is the atomic overwrite-move.
             os.replace(str(incomplete), str(sgpart))
 
         chunk_cb = _make_hf_chunk_cb(
@@ -792,9 +790,9 @@ def _ensure_sgpart(info: ResumeInfo) -> Path:
         else:
             info.partial_path.unlink(missing_ok=True)
             return sgpart
-    # Reviewed exception (card 3d0a2a56): relocation of an existing partial
-    # file after the size arbitration above — a move, not a content write;
-    # atomic_writer does not apply, os.replace is the atomic overwrite-move.
+    # Reconciliation of two EXISTING partials: the larger one wins, the
+    # smaller is dropped. That is a choice between files, not a
+    # write-then-replace, so the atomic_write primitive does not apply.
     os.replace(str(info.partial_path), str(sgpart))
     return sgpart
 
@@ -985,9 +983,9 @@ def resume_download(
 
     if info.complete:
         _ensure_sgpart(info)
-        # Reviewed exception (card 3d0a2a56): promoting the finished .sgpart
-        # download to its final name — a move of an existing file, not a write;
-        # atomic_writer does not apply, os.replace is the atomic overwrite-move.
+        # Promotion of an already-finished download: every byte was written to
+        # the .sgpart by the downloader, so there is nothing left to write and
+        # the atomic_write temp-then-replace primitive does not apply.
         os.replace(
             str(info.final_path.with_suffix(info.final_path.suffix + ".sgpart")),
             str(info.final_path),

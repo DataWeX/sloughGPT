@@ -22,7 +22,7 @@ Invariants:
 - the checksum is verified BEFORE callers may touch the store — a corrupt or
   truncated card can never destroy memory
 - card names are restricted to ``[A-Za-z0-9._-]`` (no separators, no ``..``)
-- writes are atomic (tmp file + ``os.replace``)
+- writes are atomic (``atomic_write``: temp beside the card, then ``os.replace``)
 
 Every failure raises a :class:`MemoryCardError` subclass with a user-facing
 message; callers map subclasses to ``error_code``s via ``MemoryCardError``.

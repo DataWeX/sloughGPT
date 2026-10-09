@@ -15,7 +15,15 @@ def get_model_dir(model_id: str) -> Path:
 
     Searches the standard HF cache first, then the project-local
     cache (models/hf-cache/hub/) mirroring MorphTokenizer.from_pretrained.
+
+    Raises:
+        ValueError: ``model_id`` is None or empty. A missing id is a caller
+            bug (``server_state.model_type`` before anything is loaded, for
+            example), and naming it beats the ``'NoneType' object has no
+            attribute 'replace'`` the cache-id computation would raise.
     """
+    if not model_id:
+        raise ValueError(f"get_model_dir: model_id is required (got {model_id!r})")
     cache_id = model_id.replace("/", "--")
     hf_home = os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))
     candidates = [

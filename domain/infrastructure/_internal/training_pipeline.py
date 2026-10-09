@@ -15,7 +15,7 @@ Storage: MogDB (``data/training_pipeline.db``) with three collections —
 
 Feedback ratings use the feedback-domain vocabulary ``"thumbs_up"`` /
 ``"thumbs_down"`` / ``"neutral"`` (None = unrated), matching
-``domains/feedback``.
+``domain/feedback``.
 """
 
 from __future__ import annotations
@@ -564,7 +564,7 @@ class TrainingDataPipeline:
             if format == "jsonl":
                 filename = f"training_v{version}.jsonl"
                 filepath = self.exports_dir / filename
-                with atomic_writer(filepath, binary=False) as f:
+                with atomic_writer(filepath, binary=False, encoding="utf-8") as f:
                     for pair in pairs:
                         f.write(
                             json.dumps(
@@ -586,7 +586,7 @@ class TrainingDataPipeline:
             elif format == "json":
                 filename = f"training_v{version}.json"
                 filepath = self.exports_dir / filename
-                with atomic_writer(filepath, binary=False) as f:
+                with atomic_writer(filepath, binary=False, encoding="utf-8") as f:
                     json.dump(
                         [
                             {

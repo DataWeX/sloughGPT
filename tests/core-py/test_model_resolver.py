@@ -16,6 +16,18 @@ from domain.infrastructure._internal.model_resolver import (
 
 
 class TestGetModelDir:
+    def test_missing_model_id_raises_actionable_error(self):
+        """A missing id must name the problem.
+
+        ``server_state.model_type`` is None when no model is loaded; without
+        this check the cache-id line raised ``'NoneType' object has no
+        attribute 'replace'``, which callers reported as their own failure.
+        """
+        with pytest.raises(ValueError, match="model_id is required"):
+            get_model_dir(None)
+        with pytest.raises(ValueError, match="model_id is required"):
+            get_model_dir("")
+
     def test_returns_first_candidate_when_none_exist(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HF_HOME", str(tmp_path / "hf"))
         monkeypatch.setattr(

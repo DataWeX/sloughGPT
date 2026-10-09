@@ -105,8 +105,11 @@ class GenerateResult:
         return NotImplemented
 
 
-# Lazy GPU acceleration — import on demand, never at module load
-_ACCELERATOR = None
+# Lazy GPU acceleration — import on demand, never at module load.
+# Annotated so external modules (slo_embedder, multimodal engine) can be
+# type-checked against it — an unannotated `None` stays a partial type that
+# reads as `None` to importers.
+_ACCELERATOR: str | None = None
 
 # Lazy Numba import
 _NUMBA_AVAILABLE = None
@@ -4923,7 +4926,7 @@ class SloAdamW(SloAdam):
 # =============================================================================
 
 SOU_MAGIC = b"SOUL"
-SOU_VERSION = 1  # shared with domains.inference.slo_format
+SOU_VERSION = 1  # shared with domain.inference._internal.slo_format
 
 
 def _sanitize(obj):
@@ -4960,12 +4963,14 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
     path = soul_path(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-    # Write .meta.json first (small, fast — serves as sidecar for list endpoint)
-    with open(soul_meta_path(path), "w") as f:
+    # Write .meta.json first (small, fast — serves as sidecar for list endpoint).
+    # Through the shared primitive too: a crash mid-write must not leave a
+    # truncated sidecar beside a valid .soul, which is exactly what save_soul
+    # guarantees for the same file.
+    with atomic_writer(soul_meta_path(path), binary=False, encoding="utf-8") as f:
         json.dump(_sanitize(metadata), f, indent=2)
 
-    # Atomic write: temp file then rename
-
+    # Atomic write: temp beside the target, then replace (shared primitive).
     with atomic_writer(path, binary=True) as f:
         params: list[tuple[str, np.ndarray]] = []
         if include_weights:
@@ -5253,12 +5258,10 @@ def save_checkpoint_npz(
     np_state = _state_dict_to_numpy(state_dict)
     arrays = {k: np.asarray(v) for k, v in np_state.items()}
     arrays["_meta_json"] = np.array(json.dumps(meta or {}, default=str))
-    # Atomic write: save to a temp file in the same directory, then swap in —
+    # Atomic write: temp beside the target, then replace (shared primitive) —
     # a crash mid-write never leaves a truncated .npz as the newest checkpoint.
-    # numpy writes the archive itself, so it gets the atomic handle: savez
-    # accepts a file object as its target, and the rename + failure cleanup
-    # are atomic_writer's job.
-    with atomic_writer(str(p)) as f:
+    # The handle (not a filename) also stops numpy appending its own ".npz".
+    with atomic_writer(p, binary=True) as f:
         np.savez_compressed(f, **arrays)
     return str(p)
 
