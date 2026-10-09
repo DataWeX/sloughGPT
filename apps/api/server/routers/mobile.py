@@ -14,6 +14,7 @@ import logging
 import subprocess
 import time as _time
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
@@ -142,6 +143,19 @@ class FromSessionsRequest(BaseModel):
     min_length: int = Field(default=5, ge=1)
     model: str | None = None
     session_ids: list[str] | None = None
+
+
+def _training_python(repo_root: Path) -> Path:
+    """Interpreter the training subprocess runs under — the one owner of that path.
+
+    ``.venv`` is the *only* environment precondition either training endpoint
+    has, and it is gitignored, so it is absent on a fresh clone. Both call sites
+    used to inline ``repo_root / ".venv" / "bin" / "python3"``, which left an
+    SSE-flow test that already mocked ``subprocess.Popen`` still hitting a real
+    ``Path.exists()`` — that test passed only where a local ``.venv`` happened
+    to exist, and failed with ``E_ENV_MISSING`` where it did not.
+    """
+    return repo_root / ".venv" / "bin" / "python3"
 
 
 class MobileRouter:
@@ -1152,7 +1166,7 @@ class MobileRouter:
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
         await asyncio.to_thread(output_dir.mkdir, parents=True, exist_ok=True)
 
-        venv_python = repo_root / ".venv" / "bin" / "python3"
+        venv_python = _training_python(repo_root)
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not await asyncio.to_thread(venv_python.exists):
@@ -1691,7 +1705,7 @@ class MobileRouter:
         output_dir = repo_root / "models" / "auto-training" / checkpoint_name
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        venv_python = repo_root / ".venv" / "bin" / "python3"
+        venv_python = _training_python(repo_root)
         train_script = repo_root / "scripts" / "hf_train.py"
 
         if not venv_python.exists():

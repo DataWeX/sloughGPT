@@ -1,5 +1,6 @@
 """Tests for mobile training data CRUD endpoints."""
 
+import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -257,7 +258,7 @@ class TestTrainFromSessions:
             ) as mock_l,
             patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
             patch("domain.training._internal.mobile_training_store.get_training_store"),
-            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
+            patch("apps.api.server.routers.mobile.subprocess.Popen", return_value=mock_proc),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
@@ -293,7 +294,16 @@ class TestTrainFromSessions:
             ),
             patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
             patch("domain.training._internal.mobile_training_store.get_training_store"),
-            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
+            patch("apps.api.server.routers.mobile.subprocess.Popen", return_value=mock_proc),
+            # This test asserts the COMPLETE event, i.e. it reaches the
+            # subprocess. The venv check runs before Popen and is a real
+            # filesystem probe of a *gitignored* path, so without this the test
+            # passed only on machines that happened to have a local .venv and
+            # failed with E_ENV_MISSING everywhere else.
+            patch(
+                "apps.api.server.routers.mobile._training_python",
+                return_value=Path(sys.executable),
+            ),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions", json={"limit": 10})
@@ -315,7 +325,7 @@ class TestTrainFromSessions:
             ),
             patch("domain.training._internal.pair_extractor.write_training_text") as mock_w,
             patch("domain.training._internal.mobile_training_store.get_training_store"),
-            patch("routers.mobile.subprocess.Popen", return_value=mock_proc),
+            patch("apps.api.server.routers.mobile.subprocess.Popen", return_value=mock_proc),
         ):
             mock_w.return_value = Path("/tmp/test.txt")
             resp = client.post("/mobile/train/from-sessions")
