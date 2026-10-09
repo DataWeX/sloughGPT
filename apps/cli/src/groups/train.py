@@ -136,13 +136,16 @@ def register(cli):
         args = _ns(checkpoint=checkpoint, data=data, benchmark=benchmark)
         cmd_eval(args)
 
-    @train.command("monitor", help="Monitor training jobs (delegates to dashboard)")
+    @train.command("monitor", help="Monitor training jobs (live dashboard via logs)")
     @click.option("--watch", is_flag=True, help="Continuous watch (ignored — always live)")
     @click.option("--interval", default=2, type=int, help="Refresh interval (s)")
-    @click.pass_context
     def train_monitor(ctx, watch, interval):
-        from commands.monitor import monitor as _monitor_cmd
-        ctx.invoke(_monitor_cmd, interval=float(interval), host=ctx.obj["host"], port=ctx.obj["port"], output_json=False, no_clear=False)
+        from commands.logs import run_dashboard
+
+        run_dashboard(
+            ctx.obj["host"], ctx.obj["port"], float(interval),
+            output_json=False, no_clear=False,
+        )
 
     @train.command("rlhf", help="Run RLHF demo")
     @click.option("--steps", default=20, type=int, help="PPO steps")

@@ -329,6 +329,27 @@ def _progress_bar(progress: float, width: int = 20) -> str:
     return _c("\u2588" * filled, _GREEN) + _c("\u2591" * (width - filled), _GREY)
 
 
+def _load_color(value: float) -> str:
+    """Color-grade a load percentage: cool=green, warm=yellow, hot=red."""
+    return _GREEN if value < 70 else _YELLOW if value < 90 else _RED
+
+
+def _status_color(status: str) -> str:
+    """Status word color — mirrors the _status_icon palette."""
+    colors = {
+        "running": _GREEN,
+        "complete": _GREEN,
+        "completed": _GREEN,
+        "queued": _YELLOW,
+        "starting": _CYAN,
+        "error": _RED,
+        "exited": _GREY,
+        "idle": _GREY,
+        "stopped": _GREY,
+    }
+    return colors.get(status, _YELLOW)
+
+
 def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False) -> None:
     data = snapshot.get("data", {})
     health = data.get("health", {})
@@ -342,7 +363,6 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
     cpu = health.get("cpu_percent", 0)
     mem = health.get("memory_percent", 0)
     mem_mb = health.get("memory_used_mb", 0)
-    health.get("requests_per_minute", 0)
     tps = health.get("tokens_per_sec", 0)
     reqs = health.get("request_count", 0)
     errs = health.get("error_count", 0)
@@ -361,9 +381,19 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
 
     loaded = health.get("model_loaded", False)
     status_str = _c("online", _GREEN) if loaded else _c("no model", _YELLOW)
-    _line(
-        f"  {_c('SERVER', _BOLD)} {status_str}  {_c(model_str, _CYAN)}  up {_format_uptime(uptime)}"
+    server_line = (
+        f"  {_c('SERVER', _BOLD)} {status_str}  {_c(model_str, _CYAN)}"
+        f"  up {_c(_format_uptime(uptime), _GREY)}"
     )
+    # Health score folds into the SERVER line — de-clutter (card 8182563a)
+    score = health_score.get("score", 0) if health_score else 0
+    if score > 0:
+        score_color = _GREEN if score >= 80 else _YELLOW if score >= 50 else _RED
+        server_line += f"  {_c('health', _BOLD)} {_c(f'{score}/100', score_color)}"
+        hs_status = health_score.get("status", "")
+        if hs_status:
+            server_line += f" {_c(hs_status, _DIM)}"
+    _line(server_line)
 
     # MODEL line — device, params, quantization
     if loaded:
@@ -383,11 +413,20 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
         if mode:
             model_parts.append(mode)
         if model_parts:
-            _line(f"  {_c('MODEL', _BOLD)}   {'  '.join(model_parts)}")
+            styled = [
+                _c(p, _CYAN) if i == 0 else _c(p, _GREY)
+                for i, p in enumerate(model_parts)
+            ]
+            _line(f"  {_c('MODEL', _BOLD)}   {'  '.join(styled)}")
 
     spark_rpm = _sparkline(rpm_history) if rpm_history else ""
     spark_mem = _sparkline(mem_history) if mem_history else ""
-    sys_line = f"  {_c('SYS', _BOLD)}   cpu {cpu:.0f}%  mem {mem:.0f}% ({mem_mb}MB)  reqs {reqs}  err {errs}"
+    err_str = _c(f"err {errs}", _RED) if errs else _c("err 0", _GREY)
+    sys_line = (
+        f"  {_c('SYS', _BOLD)}   cpu {_c(f'{cpu:.0f}%', _load_color(cpu))}"
+        f"  mem {_c(f'{mem:.0f}%', _load_color(mem))} ({mem_mb}MB)"
+        f"  reqs {reqs}  {err_str}"
+    )
     if spark_rpm:
         sys_line += f"  {_c(spark_rpm, _GREY)}"
     if spark_mem:
@@ -396,28 +435,17 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
 
     gen_parts = []
     if tps > 0:
-        gen_parts.append(f"{tps:.1f} tok/s")
+        gen_parts.append(f"{_c(f'{tps:.1f}', _CYAN)} tok/s")
     if lat > 0:
-        gen_parts.append(f"{lat:.0f}ms avg")
+        gen_parts.append(f"{_c(f'{lat:.0f}ms', _GREY)} avg")
     if gen_parts:
         _line(f"  {_c('GEN', _BOLD)}   {'  '.join(gen_parts)}")
 
-    # Health score
-    if health_score:
-        score = health_score.get("score", 0)
-        status = health_score.get("status", "")
-        if score > 0:
-            score_color = _GREEN if score >= 80 else _YELLOW if score >= 50 else _RED
-            _line(f"  {_c('HEALTH', _BOLD)}  {_c(f'{score}/100', score_color)}  {_c(status, _DIM)}")
-
-    if not compact:
+    if not compact and (processes or events or errors):
         _line()
-        _line(f"  {_c('PROCESSES', _BOLD)}")
-        _line(f"  {'─' * 60}")
-
-        if not processes:
-            _line(f"  {_c('  (none active)', _DIM)}")
-        else:
+        if processes:
+            _line(f"  {_c('PROCESSES', _BOLD)}")
+            _line(f"  {'─' * 60}")
             for proc_id, proc in processes.items():
                 status = proc.get("status", "unknown")
                 label = proc.get("label", proc_id)
@@ -430,19 +458,25 @@ def _render_dashboard(snapshot: dict, clear: bool = True, compact: bool = False)
                 if progress > 0 and status == "running":
                     bar = _progress_bar(progress)
                     pct = f"{progress:.0f}%".rjust(4)
-                    detail_str = f"{detail}  {bar} {pct}" if detail else f"{bar} {pct}"
+                    body = f"{detail}  {bar} {pct}" if detail else f"{bar} {pct}"
+                    _line(f"  {icon} {name} {_c(body, _DIM)}")
+                elif status == "running" and detail:
+                    _line(f"  {icon} {name} {_c(detail, _DIM)}")
+                elif detail:
+                    _line(
+                        f"  {icon} {name} {_c(status, _status_color(status))}"
+                        f" {_c(detail, _DIM)}"
+                    )
                 else:
-                    detail_str = detail
-
-                _line(f"  {icon} {name} {_c(detail_str, _DIM)}")
-
-        _line()
-        _line(f"  {_c('EVENTS', _BOLD)}")
-        _line(f"  {'─' * 60}")
+                    # no detail: the status word fills the line — punchy, no blanks
+                    _line(f"  {icon} {name} {_c(status, _status_color(status))}")
 
         if not events:
-            _line(f"  {_c('  (no events yet)', _DIM)}")
+            pass  # empty — section omitted entirely (de-clutter, card 8182563a)
         else:
+            _line()
+            _line(f"  {_c('EVENTS', _BOLD)}")
+            _line(f"  {'─' * 60}")
             for ev in events[:8]:
                 ts_str = _c(_format_ts(ev.get("ts", 0)), _GREY)
                 cat = ev.get("category", "")
@@ -702,6 +736,35 @@ def _tail_follow(log_path: Path, filters: dict, output_json: bool, use_color: bo
             click.echo("\nStopped following.", err=True)
 
 
+def run_dashboard(
+    host: str,
+    port: int,
+    interval: float,
+    output_json: bool = False,
+    no_clear: bool = False,
+    compact: bool = False,
+) -> None:
+    """Run the live dashboard until interrupted — the single dashboard path.
+
+    Shared by ``logs --dashboard``, the hidden ``monitor`` migration alias,
+    and ``train monitor`` (card 8182563a: one command, one code path — the
+    old ``commands/monitor.py`` copy is deleted).
+    """
+    clear = not no_clear
+    if _TTY and not output_json:
+        log.hide_cursor()
+    try:
+        _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
+    except (urllib.error.URLError, OSError, ValueError):
+        try:
+            _poll_fallback_dashboard(host, port, interval, output_json, clear, compact)
+        except KeyboardInterrupt:
+            pass
+    finally:
+        if _TTY and not output_json:
+            log.show_cursor()
+
+
 # ── CLI entry point ───────────────────────────────────────────────────
 
 
@@ -752,19 +815,10 @@ def logs(
     use_color = sys.stdout.isatty() and not output_json
 
     if dashboard:
-        clear = not no_clear
-        if _TTY and not output_json:
-            log.hide_cursor()
-        try:
-            _consume_sse_dashboard(host, port, interval, output_json, clear, compact)
-        except (urllib.error.URLError, OSError, ValueError):
-            try:
-                _poll_fallback_dashboard(host, port, interval, output_json, clear, compact)
-            except KeyboardInterrupt:
-                pass
-        finally:
-            if _TTY and not output_json:
-                log.show_cursor()
+        run_dashboard(
+            host, port, interval,
+            output_json=output_json, no_clear=no_clear, compact=compact,
+        )
         return
 
     # Resolve log file
@@ -797,3 +851,29 @@ def logs(
         _tail_follow(log_path, filters, output_json, use_color)
     else:
         _read_logs(log_path, tail, filters, output_json, use_color)
+
+
+# ── monitor migration alias ───────────────────────────────────────────────
+# Card 8182563a: "no separate monitor command - integrate into logs".
+# All dashboard logic lives above (run_dashboard); this hidden alias keeps
+# old muscle memory working without appearing in any help listing.
+
+
+@click.command(
+    hidden=True,
+    help="Old dashboard command — merged into `logs --dashboard`; forwards with the same flags.",
+)
+@click.option(
+    "--interval", "-i", default=2.0, type=float, help="Refresh interval in seconds",
+    show_default=True,
+)
+@click.option("--host", default="localhost", help="API hostname", show_default=True)
+@click.option("--port", default=8000, type=int, help="API port", show_default=True)
+@click.option(
+    "--json", "output_json", is_flag=True, help="Output raw JSON lines instead of dashboard"
+)
+@click.option("--no-clear", is_flag=True, help="Append mode — don't clear screen between refreshes")
+def monitor(interval: float, host: str, port: int, output_json: bool, no_clear: bool) -> None:
+    """Hidden migration alias — the dashboard now lives in `logs --dashboard`."""
+    click.echo("`monitor` has merged into `logs --dashboard` — forwarding…", err=True)
+    run_dashboard(host, port, interval, output_json=output_json, no_clear=no_clear)

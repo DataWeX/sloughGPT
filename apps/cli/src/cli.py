@@ -279,7 +279,7 @@ Version: {format_version_display()}
 
 
 from commands.logs import logs as _logs_cmd
-from commands.monitor import monitor as _monitor_cmd
+from commands.logs import monitor as _monitor_cmd
 
 
 # Wrap Click commands so our framework can dispatch to them
@@ -290,9 +290,12 @@ class _ClickCommandWrapper:
         self.click_cmd = click_cmd
         self.name = click_cmd.name
         self.help = click_cmd.help or ""
+        # Propagate click's hidden flag so migration aliases (e.g. `monitor`,
+        # merged into `logs --dashboard` — card 8182563a) dispatch but never
+        # appear in help listings.
+        self.hidden = getattr(click_cmd, "hidden", False)
         self.options = []
         self.arguments = []
-        self.hidden = False
         # Extract params from Click command for display
         for param in click_cmd.params:
             if hasattr(param, "opts"):

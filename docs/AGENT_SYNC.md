@@ -410,7 +410,81 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `79882584d`)
+## Landed on main (origin/main = `215a6eb6b`)
+
+- **2026-10-09 · logs unification — monitor folded into logs** (card `8182563a`, fix
+  `6bb3a97ea`, gates 439 CLI passed + 17 new): `commands/monitor.py` deleted — its
+  dashboard was a stale duplicate of `logs`' (byte-identical PROCESSES loop, missing
+  MODEL/sparklines/errors/compact). New **`run_dashboard()` in `commands/logs.py` is
+  the single dashboard path**, called by `logs --dashboard`, a **hidden `monitor`
+  migration alias** (same flags, stderr merge notice, absent from help listings —
+  `_ClickCommandWrapper` now propagates `click.hidden`), and `train monitor`
+  (repointed off the deleted module). UX rules applied: `_load_color` graded
+  cpu/mem thresholds, err red-when-nonzero, GEN/MODEL colored, non-running processes
+  print a colored status word (`_status_color`), empty sections omitted, health
+  score folded into SERVER. **Gotchas:** (1) `logs.py` source contains literal
+  `\u2588`/`\u2026` *escape text* — edit anchors must dodge those lines (Edit-tool
+  JSON-decodes `\uXXXX` into the char and silently mismatches); (2) root `./cli.py`
+  shadows `apps/cli/src/cli.py` on `PYTHONPATH` — tests must
+  `sys.path.insert(0, src)` like `test_logs_syslog.py`; (3) asserting "`monitor` not
+  in help" by substring is a false positive — `logs`' help text contains "monitor".
+
+- **2026-10-09 · header screenshot tests** (card `ec2ae5c1`, fix
+  `731aaa6de`, gate 2 passed/65.7s on the live :5173 stack): the 2026-08-30
+  "screenshot our headers across pages" ask had a capture script
+  (`apps/web/scripts/screenshot_headers.py`, manual, `:3010`, no
+  assertions) but nothing ran it as a test. New
+  `tests/test_header_screenshots.py` **importlib-loads the script (reuse,
+  no copy)**: 8-page nav slice + 3 viewports + one basic interaction
+  (click `a[href="/chat"]` → assert `location.pathname` → post-click
+  shot), asserting PNG magic/size/width/**≥30 unique colors** (blank-shell
+  detector). Slow-marked + `timeout(300)`, skips without a live stack
+  (`SLO_WEB_URL`/`:5173`, same contract as `test_user_journeys`).
+  **Gotcha:** avion's source path (`packages/avion/src`) must be on
+  `sys.path` *before* `pytest.importorskip("avion")` or the module
+  skips itself; the script's hardcoded `:3010` is the Cypress/Next e2e
+  port — the live stack is vite `:5173` (retarget via module global).
+
+- **2026-10-09 · trait-weights born-red tests synced** (card
+  `20260924_031_sync-session-feedback-batch`, fix `94615612c`, gate 1124
+  passed/0 failed vs baseline 1120/4): all 4 reds broken at birth in
+  `bbd7214df` ("staging local changes", Aug 30, never verified) with impl
+  stable since — synced tests to committed contracts, zero runtime change:
+  the Sep-6 `_isolate_trait_config` fixture mocked persistence away
+  (`find_one -> None`) → **stateful in-memory fake** (clean per test,
+  round-trips observable); the negation test contradicted the passing twin
+  `test_negation_flips_traits` + docstring (**committed contract = negation
+  FLIPS the rating delta**) → test synced, runtime untouched — product
+  follow-up flagged (flip semantics debatable, would touch
+  `domain/feedback/_internal/workflow.py`); exploratory-mode inputs synced
+  to the committed sibling (default curiosity makes Creative win 0.735 vs
+  0.705); consolidate-below asserted a mathematically impossible
+  `below → True` under `>= threshold` → boundary contract (at/below).
+  **Pattern: "wip: staging local changes before stash merge" commits are
+  unverified by definition — treat tests born there as suspect.** Also
+  screened `d2803a3c` (2 competing pytest.ini + 55 dup basenames): its
+  whole fix is in flight on the active `dcb2a5eaf` test-root-consolidation
+  branch stack (826-file move, branches committed today) — adjudication
+  recorded on the card, work deliberately NOT duplicated.
+
+- **2026-10-09 · packaging egg_info hard-fail fixed** (card `56cf354c`,
+  fix `b53487b3b`, gate 18 passed + wheel build): `a29f5d5b8` retargeted include
+  patterns `domains*`→`domain*` but left `package_dir`/`where` on the old layout —
+  after the dual-tree deletion, discovery found `domain` at the repo root and
+  `{"" = "packages/core-py"}` mapped it to the nonexistent dir → the documented
+  `pip install -e ".[dev]"` could not build. **Three configs had drifted** (setup.py
+  still on the core root + deleted `apps.cli.sloughgpt`; pyproject 3 find roots
+  under 1 map; installed editable finder maps deleted `domains` tree with no
+  `domain` entry). Fix: pyproject = single source root (`package-dir {"" = "."}`,
+  `where = ["."]`, exclude `*.tests*` so `apps.cli.tests` can't leak), `setup.py`
+  = thin `setup()` shim; `tests/test_packaging_config.py` pins 4 invariants incl.
+  the literal egg_info trap. `pip wheel --no-deps` proves it: 4.09 MB wheel,
+  domain=618 files, console script intact. **Not done (needs approval):** actually
+  reinstalling the editable package — the live env's finder still maps the deleted
+  `domains` tree (runtime unaffected: PYTHONPATH covers `domain`). Part B of the
+  card (pytest.ini pythonpath / mixed-root conftest collision) verified
+  **fixed-elsewhere** on main; the surviving TraitWeights contract-drift cluster
+  (4F in `domain.context._internal.managers`) handed to card `20260924_031`.
 
 - **2026-10-09 · "Never-run areas" reds closed** (card `c59d5be7`,
   dup `ffdb5151` marked; fix `9d7c77f79`, gate 133 passed/4 skipped/0 failed):
