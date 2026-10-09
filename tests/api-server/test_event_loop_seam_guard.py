@@ -43,9 +43,11 @@ import ast
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+# Whole server tree, not just the routers: ``training/`` (16 files with async
+# handlers) and ``infrastructure/`` (lifespan, middleware, startup hooks) run on
+# the same loop and would otherwise be outside the guard for no good reason.
 SCAN_ROOTS = (
-    REPO / "apps" / "api" / "server" / "routers",
-    REPO / "apps" / "api" / "server" / "controllers",
+    REPO / "apps" / "api" / "server",
 )
 
 # Collection methods that journal (and therefore fsync under the store lock).
