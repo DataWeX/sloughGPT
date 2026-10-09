@@ -18,6 +18,7 @@ import logging
 import re
 import struct
 import zlib
+from collections import Counter, deque
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -10266,6 +10267,190 @@ class PITDevice:
                     self._scheduler.tick(self._cpu)
 
 
+# ── BIOS service tier ────────────────────────────────────────────────────────
+
+
+class X86BiosServices:
+    """Minimal BIOS service tier (kanban card 508245c0).
+
+    Corpus-evidence scoped: every service has a call site in
+    scripts/compat/corpus/*.asm — INT 10h video (bweeper, nasm_tetris,
+    bootmine), INT 16h keyboard, INT 1Ah clock. Vectors register in
+    X86VirtualSystem.__init__ next to INT 0x80, so the compat harness's
+    interrupt-spy counts them as handled with no harness change.
+
+    Video writes land in the flat VGA text buffer at 0xB8000 (mode 3,
+    80x25) — the window the harness snapshots for vga_bytes_changed.
+
+    Deliberate deviations from real BIOS:
+    - INT 16h AH=00 with an empty queue returns AX=0 instead of blocking
+      (no blocking-read scheduler tier yet; corpus treats 0 as "no key").
+      Tests/harness input arrives through feed_key().
+    - INT 13h is NOT registered — zero corpus call sites; the disk tier
+      gets its own card.
+    - Unknown AH services are counted in `unknown` and ignored: the
+      vector stays registered (so the harness spy no longer flags it)
+      and the counter is the remaining diagnostic.
+    - Teletype wraps to row 0 past the last line instead of scrolling.
+    """
+
+    VGA_TEXT = 0xB8000
+    COLS = 80
+    ROWS = 25
+    DEFAULT_ATTR = 0x07
+
+    def __init__(self, cpu, pit):
+        self._cpu = cpu
+        self._pit = pit
+        self.keys: deque = deque()  # (ascii, scan) software queue
+        self.unknown: Counter = Counter()  # vector -> count of unknown AH
+        self.mode = 3
+        self.cursor_row = 0
+        self.cursor_col = 0
+        self.cursor_type = (6, 7)  # (start line, end line)
+
+    # ── queue API (tests / harness input) ───────────────────────────────
+
+    def feed_key(self, ascii_code: int, scan: int = 0) -> None:
+        self.keys.append((ascii_code & 0xFF, scan & 0xFF))
+
+    # ── INT 10h video ───────────────────────────────────────────────────
+
+    def int10(self, _cpu):
+        ah = (self._cpu._regs[0] >> 8) & 0xFF
+        fn = getattr(self, f"_int10_{ah:02x}", None)
+        if fn is None:
+            self.unknown[0x10] += 1
+            return
+        fn()
+
+    def _int10_00(self):
+        # Set video mode: reset cursor, clear the text buffer (mode 3).
+        self.mode = self._cpu._regs[0] & 0xFF
+        self.cursor_row = self.cursor_col = 0
+        blank = b"\x20\x07" * (self.COLS * self.ROWS)
+        for i, byte in enumerate(blank):
+            self._cpu._write8(self.VGA_TEXT + i, byte)
+
+    def _int10_01(self):
+        # Set cursor type: CH = start line, CL = end line.
+        cx = self._cpu._regs[1] & 0xFFFF
+        self.cursor_type = ((cx >> 8) & 0xFF, cx & 0xFF)
+
+    def _int10_02(self):
+        # Set cursor position: DH = row, DL = col (BX page ignored).
+        dx = self._cpu._regs[2] & 0xFFFF
+        self.cursor_row = (dx >> 8) & 0xFF
+        self.cursor_col = dx & 0xFF
+
+    def _int10_03(self):
+        # Get cursor: CH/CL = type, DH/DL = position.
+        self._cpu._regs[1] = (self._cpu._regs[1] & 0xFFFF0000) | (
+            (self.cursor_type[0] << 8) | self.cursor_type[1]
+        )
+        self._cpu._regs[2] = (self._cpu._regs[2] & 0xFFFF0000) | (
+            ((self.cursor_row & 0xFF) << 8) | (self.cursor_col & 0xFF)
+        )
+
+    def _int10_09(self):
+        # Write char+attr at cursor, CX times; cursor does NOT advance.
+        # BL (EBX low byte) carries the attribute.
+        self._write_cells(
+            count=self._cpu._regs[1] & 0xFFFF, advance=False, attr=self._cpu._regs[3] & 0xFF
+        )
+
+    def _int10_0a(self):
+        # Write char at cursor, CX times; attribute untouched.
+        self._write_cells(count=self._cpu._regs[1] & 0xFFFF, advance=False, attr=None)
+
+    def _int10_0e(self):
+        # Teletype: write char with default attr, advance with wrap.
+        self._write_cells(count=1, advance=True, attr=self.DEFAULT_ATTR)
+
+    def _int10_0f(self):
+        # Get current video mode: AL = mode, AH = columns, BH = page.
+        self._cpu._regs[0] = (80 << 8) | (self.mode & 0xFF)
+
+    def _write_cells(self, count: int, advance: bool, attr) -> None:
+        al = self._cpu._regs[0] & 0xFF
+        # Cells are written consecutively (AH=09 fills CX cells starting
+        # at the cursor); the STORED cursor only moves for teletype.
+        row, col = self.cursor_row, self.cursor_col
+        for _ in range(max(1, count)):
+            r = min(row, self.ROWS - 1)
+            c = min(col, self.COLS - 1)
+            addr = self.VGA_TEXT + (r * self.COLS + c) * 2
+            self._cpu._write8(addr, al)
+            if attr is not None:
+                self._cpu._write8(addr + 1, attr & 0xFF)
+            col += 1
+            if col >= self.COLS:
+                col = 0
+                row += 1
+        if advance:
+            self.cursor_row = row % self.ROWS
+            self.cursor_col = col
+
+    # ── INT 16h keyboard ────────────────────────────────────────────────
+
+    def int16(self, _cpu):
+        ah = (self._cpu._regs[0] >> 8) & 0xFF
+        if ah == 0x00:
+            # Read key (blocking on real HW): empty queue -> AX=0 here.
+            if self.keys:
+                ascii_code, scan = self.keys.popleft()
+                self._cpu._regs[0] = (scan << 8) | ascii_code
+            else:
+                self._cpu._regs[0] = 0
+        elif ah == 0x01:
+            # Peek: ZF=1 when empty (AX untouched); else ZF=0 with the
+            # next key reported without consuming it.
+            if self.keys:
+                ascii_code, scan = self.keys[0]
+                self._cpu._regs[0] = (scan << 8) | ascii_code
+                self._patch_stacked_flags(FLAG_ZF, False)
+            else:
+                self._patch_stacked_flags(FLAG_ZF, True)
+        elif ah == 0x02:
+            # Shift flags: the software queue has none.
+            self._cpu._regs[0] = self._cpu._regs[0] & 0xFFFFFF00
+        else:
+            self.unknown[0x16] += 1
+
+    # ── INT 1Ah clock ───────────────────────────────────────────────────
+
+    def int1a(self, _cpu):
+        ah = (self._cpu._regs[0] >> 8) & 0xFF
+        if ah == 0x00:
+            # Read tick count: CX = high word, DX = low word (BIOS order).
+            ticks = self._pit._tick_count & 0xFFFFFFFF
+            self._cpu._regs[1] = (self._cpu._regs[1] & 0xFFFF0000) | ((ticks >> 16) & 0xFFFF)
+            self._cpu._regs[2] = (self._cpu._regs[2] & 0xFFFF0000) | (ticks & 0xFFFF)
+            self._patch_stacked_flags(FLAG_CF, False)
+        elif ah == 0x01:
+            # Set tick count from CX:DX.
+            self._pit._tick_count = ((self._cpu._regs[1] & 0xFFFF) << 16) | (
+                self._cpu._regs[2] & 0xFFFF
+            )
+            self._patch_stacked_flags(FLAG_CF, False)
+        else:
+            self.unknown[0x1A] += 1
+
+    # ── helpers ─────────────────────────────────────────────────────────
+
+    def _patch_stacked_flags(self, mask: int, on: bool) -> None:
+        """Set/clear mask in the stacked EFLAGS at [esp+8].
+
+        _raise_interrupt's simulated IRET restores EFLAGS from the stack
+        after the handler runs, so in-handler flag writes alone would be
+        clobbered — the stacked copy is the one that lands.
+        """
+        esp = self._cpu._regs[4] & 0xFFFFFFFF
+        stacked = self._cpu._read32(esp + 8)
+        stacked = (stacked | mask) if on else (stacked & ~mask)
+        self._cpu._write32(esp + 8, stacked & 0xFFFFFFFF)
+
+
 # ── X86 Virtual System (OS-integrated) ──────────────────────────────────────
 
 
@@ -10354,6 +10539,14 @@ class X86VirtualSystem:
 
         # Register INT 0x80 handler (wrapper needed: _raise_interrupt passes cpu arg)
         self._cpu.register_handler(0x80, lambda _cpu: self._syscall.handle())
+
+        # BIOS service tier (card 508245c0): INT 10h video, 16h keyboard,
+        # 1Ah clock — corpus-evidence scoped; INT 21h (DOS) and INT 13h
+        # (disk, zero corpus call sites) stay silent-unregistered tiers.
+        self._bios = X86BiosServices(self._cpu, self._pit)
+        self._cpu.register_handler(0x10, self._bios.int10)
+        self._cpu.register_handler(0x16, self._bios.int16)
+        self._cpu.register_handler(0x1A, self._bios.int1a)
 
         # Keyboard interrupt handler
         def _keyboard_handler():

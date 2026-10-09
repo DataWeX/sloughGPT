@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-09T10:34:56+00:00",
+  "generated": "2026-10-09T18:04:23+00:00",
   "manifest_version": 1,
   "steps_budget": 300000,
   "rows": [
@@ -9,9 +9,9 @@
       "source": "hello_x86",
       "verdict": "ok",
       "reason": "",
-      "asm_ms": 1.743,
+      "asm_ms": 7.603,
       "asm_bytes": 52,
-      "wall_ms": 0.3812549985013902,
+      "wall_ms": 0.32364300022891257,
       "steps": 8,
       "exit_code": 0,
       "syscalls": {
@@ -33,9 +33,9 @@
       "source": "test_syscalls",
       "verdict": "budget",
       "reason": "step budget 300000 reached (interactive/loop program)",
-      "asm_ms": 144.488,
+      "asm_ms": 68.841,
       "asm_bytes": 1824,
-      "wall_ms": 17425.670122000156,
+      "wall_ms": 8526.315634999719,
       "steps": 300000,
       "exit_code": null,
       "syscalls": {
@@ -62,9 +62,9 @@
       "source": "cave_game",
       "verdict": "budget",
       "reason": "step budget 300000 reached (interactive/loop program)",
-      "asm_ms": 517.432,
+      "asm_ms": 169.312,
       "asm_bytes": 3095,
-      "wall_ms": 10385.524967998208,
+      "wall_ms": 3838.480604000324,
       "steps": 300000,
       "exit_code": null,
       "syscalls": {},
@@ -85,7 +85,7 @@
       "source": "asteroids_main.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: BITS 64 not supported \u2014 x86-64 has no VM implementation (intake gate: scripts/compat/manifest.json planned rows) @ line 1",
-      "asm_ms": 0.288,
+      "asm_ms": 0.248,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -106,7 +106,7 @@
       "source": "bootmine.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: unsupported preprocessor directive '%assign' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 7",
-      "asm_ms": 0.133,
+      "asm_ms": 0.093,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -127,19 +127,16 @@
       "source": "bweeper.asm",
       "verdict": "budget",
       "reason": "step budget 300000 reached (interactive/loop program)",
-      "asm_ms": 40.673,
+      "asm_ms": 22.528,
       "asm_bytes": 611,
-      "wall_ms": 16397.721012002876,
+      "wall_ms": 6415.990081000018,
       "steps": 300000,
       "exit_code": null,
       "syscalls": {},
       "denials": 0,
       "port_io": {},
-      "unhandled_irqs": {
-        "INT 0x10": 51,
-        "INT 0x16": 17
-      },
-      "vga_bytes_changed": 0,
+      "unhandled_irqs": {},
+      "vga_bytes_changed": 4000,
       "stdout_lines": 0,
       "stdout_head": "",
       "asm_error_line": null,
@@ -151,7 +148,7 @@
       "source": "nasm_tetris.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: segment directive not supported \u2014 flat memory model only (segmented intake is a planned tier) @ line 17",
-      "asm_ms": 1.661,
+      "asm_ms": 1.649,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -172,7 +169,7 @@
       "source": "snake_main.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: unsupported preprocessor directive '%include' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 1",
-      "asm_ms": 0.078,
+      "asm_ms": 0.074,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -224,10 +221,7 @@
       "UNLINK",
       "YIELD"
     ],
-    "unhandled_interrupts": {
-      "INT 0x10": 51,
-      "INT 0x16": 17
-    },
+    "unhandled_interrupts": {},
     "devices": [
       {
         "contract": "8250 UART serial",
@@ -248,10 +242,8 @@
       {
         "contract": "8259-style PIC dispatch",
         "status": "wired",
-        "observed": true,
-        "via": [
-          "interrupt-spy"
-        ]
+        "observed": false,
+        "via": []
       },
       {
         "contract": "VGA text buffer @0xB8000",
@@ -264,10 +256,8 @@
       {
         "contract": "PS/2 keyboard",
         "status": "wired",
-        "observed": true,
-        "via": [
-          "interrupt-spy"
-        ]
+        "observed": false,
+        "via": []
       },
       {
         "contract": "PS/2 mouse",

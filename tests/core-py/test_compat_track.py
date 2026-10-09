@@ -167,3 +167,18 @@ def test_probe_bweeper_runs_to_budget():
     row = ct.run_program(src, "bweeper", ct.load_manifest(), budget=20000)
     assert row.verdict in ("budget", "ok"), f"{row.verdict}: {row.reason}"
     assert row.steps > 100
+
+
+def test_probe_bweeper_bios_vectors_handled():
+    """Card 508245c0: bweeper's BIOS calls must hit registered handlers.
+
+    bweeper calls int 10h (video mode/cursor) during setup and int 16h
+    (keyboard read) in its main loop; with the BIOS tier registered the
+    interrupt-spy's unhandled count must exclude those vectors.
+    (int 1Ah clock is reached later than this budget, so it is not
+    asserted here — it is covered by the unit tier.)
+    """
+    src = (ct.CORPUS_DIR / "bweeper.asm").read_text()
+    row = ct.run_program(src, "bweeper", ct.load_manifest(), budget=20000)
+    unhandled = set(row.unhandled_irqs)
+    assert {0x10, 0x16}.isdisjoint(unhandled), f"BIOS vectors unhandled: {unhandled}"
