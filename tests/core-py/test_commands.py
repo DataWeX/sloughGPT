@@ -257,12 +257,16 @@ class TestShellCommands:
 
     def test_train_auto(self, monkeypatch):
         calls = []
-        monkeypatch.setattr(commands, "_api_post", lambda p, d=None: calls.append(d) or {})
+        monkeypatch.setattr(commands, "_api_post", lambda p, d=None: calls.append((p, d)) or {})
         ShellCommands.train_auto(
             soul_name="s", teacher="gpt2", epochs=10, source_text="t", dataset_id="d"
         )
-        assert calls[0]["teacher_model"] == "gpt2"
-        assert calls[0]["epochs"] == 10
+        path, payload = calls[0]
+        assert path == "/training/start"
+        assert payload["name"] == "s"
+        assert payload["model"] == "gpt2"
+        assert payload["epochs"] == 10
+        assert payload["source_text"] == "t"
 
     def test_train_distill(self, monkeypatch):
         calls = []

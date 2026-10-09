@@ -8,6 +8,7 @@ import sys
 import types
 
 import pytest
+import requests as _real_requests
 
 from domain.shell._internal import commands as mod
 from domain.shell._internal.commands import ShellCommands
@@ -26,6 +27,11 @@ class _FakeResponse:
 class _FakeRequests(types.ModuleType):
     def __init__(self):
         super().__init__("requests")
+        # commands.py's helpers do `except requests.ConnectionError:` — a bare
+        # ModuleType has no such attribute, so evaluating that except clause
+        # against this fake raised AttributeError and masked the real path.
+        self.ConnectionError = _real_requests.ConnectionError
+        self.Timeout = _real_requests.Timeout
         self._get_resp = _FakeResponse()
         self._post_resp = _FakeResponse()
         self._delete_resp = _FakeResponse()
@@ -280,9 +286,18 @@ class TestShellCommands:
         _stub_api(monkeypatch, get_res=[])
         assert ShellCommands.knowledge_stats() == {"total_items": 0}
 
+    def test_checkpoints_envelope(self, monkeypatch):
+        """The live /training/checkpoints body is a success envelope."""
+        _stub_api(monkeypatch, get_res={"status": "success", "data": [{"name": "c"}]})
+        assert ShellCommands.checkpoints() == [{"name": "c"}]
+
     def test_checkpoints_dict(self, monkeypatch):
         _stub_api(monkeypatch, get_res={"checkpoints": [{"name": "c"}]})
         assert ShellCommands.checkpoints() == [{"name": "c"}]
+
+    def test_checkpoints_error_body(self, monkeypatch):
+        _stub_api(monkeypatch, get_res={"error": "HTTP 404", "status_code": 404})
+        assert ShellCommands.checkpoints() == []
 
     def test_checkpoints_fallback(self, monkeypatch):
         _stub_api(monkeypatch, get_res=[])
@@ -291,12 +306,12 @@ class TestShellCommands:
     def test_load_checkpoint(self, monkeypatch):
         calls = _stub_api(monkeypatch, post_res={"ok": True})
         ShellCommands.load_checkpoint("c1")
-        assert calls["post"][0][0] == "/auto-train/checkpoints/c1/load"
+        assert calls["post"][0][0] == "/training/checkpoints/c1/load"
 
     def test_delete_checkpoint(self, monkeypatch):
         calls = _stub_api(monkeypatch, delete_res={"ok": True})
         ShellCommands.delete_checkpoint("c1")
-        assert calls["delete"][0] == "/auto-train/checkpoints/c1"
+        assert calls["delete"][0] == "/training/checkpoints/c1"
 
     def test_finetuned_models_dict(self, monkeypatch):
         _stub_api(monkeypatch, get_res={"models": [{"name": "m"}]})
@@ -330,9 +345,30 @@ class TestShellCommands:
         calls = _stub_api(monkeypatch, post_res={})
         ShellCommands.train_auto("soul", "gpt2", 10, "text", "d1")
         path, data = calls["post"][0]
-        assert path == "/auto-train/start"
-        assert data["soul_name"] == "soul"
+        assert path == "/training/start"
+        assert data["name"] == "soul"
+        assert data["model"] == "gpt2"
         assert data["epochs"] == 10
+        # Exactly one corpus source: source_text wins over dataset_id.
+        assert data["source_text"] == "text"
+        assert "dataset" not in data
+
+    def test_train_auto_dataset_only(self, monkeypatch):
+        calls = _stub_api(monkeypatch, post_res={})
+        ShellCommands.train_auto("soul", "gpt2", 3, "", "d1")
+        path, data = calls["post"][0]
+        assert path == "/training/start"
+        assert data["dataset"] == "d1"
+        assert "source_text" not in data
+
+    def test_train_auto_no_corpus_source(self, monkeypatch):
+        """No source_text / dataset_id -> send neither; the server answers 422."""
+        calls = _stub_api(monkeypatch, post_res={})
+        ShellCommands.train_auto("soul", "gpt2", 3)
+        path, data = calls["post"][0]
+        assert path == "/training/start"
+        assert "source_text" not in data
+        assert "dataset" not in data
 
     def test_train_distill(self, monkeypatch):
         calls = _stub_api(monkeypatch, post_res={})

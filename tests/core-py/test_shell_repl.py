@@ -157,6 +157,16 @@ class TestFetchFunctions:
             result = _fetch_checkpoint_names()
             assert result == []
 
+    def test_fetch_checkpoint_names_hits_training_route(self):
+        """/auto-train/* was retired (d63f5cb0c); tab-complete must use /training/*."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        # Live shape: the success envelope, not the legacy {"checkpoints": ...} body.
+        mock_resp.json.return_value = {"status": "success", "data": [{"name": "cp1"}]}
+        with patch("requests.get", return_value=mock_resp) as get:
+            assert _fetch_checkpoint_names() == ["cp1"]
+        assert get.call_args[0][0].endswith("/training/checkpoints")
+
 
 # ── _COMMAND_CACHE_FETCHERS ─────────────────────────────────────────────────
 

@@ -404,7 +404,7 @@ Routes are split across focused sub-modules:
 
 ### Finetuned Model Routes (`router.py`)
 
-> **Note:** The legacy `/auto-train/*` endpoints (in `routers/auto_train.py`) are deprecated. They are a parallel implementation, not shims — new clients should use `/training/*` instead. The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes now use `training/sse_stream.py` and `training/turbo_endpoints.py` which delegate to `domains.training.service` (core layer).
+> **Note:** The legacy `/auto-train/*` endpoints (`routers/auto_train.py`) were **removed** by `d63f5cb0c` ("refactor: split training service into focused modules"), not deprecated in place. `/training/*` is the only live projection: the shell (`domain/shell/_internal/commands.py`, `repl.py`), the CLI (`sloughgpt train auto`), the Python SDK (`sloughgpt_sdk`), and the mobile client all call `/training/*` (card e205b15c). The `/training/stop`, `/training/turbo-start`, and `/training/stream` routes use `training/sse_stream.py` and `training/turbo_endpoints.py`, which delegate to `domain.training._internal.service` (core layer).
 
 ## Self-Train Router (`/self-train`)
 

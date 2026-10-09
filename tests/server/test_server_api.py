@@ -10,7 +10,7 @@ from unittest.mock import patch
 import pytest
 
 try:
-    from apps.api.server.tests.test_support import get_test_client
+    from test_support import get_test_client
 
     client = get_test_client()
 except Exception:
@@ -181,20 +181,10 @@ class TestStatsEndpoints:
         assert "total_items" in payload
 
 
-class TestAutoTrainEndpoints:
+class TestTrainingCheckpoints:
     @pytest.mark.slow
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "PRODUCTION BUG: the /auto-train/* router was deleted by d63f5cb0c "
-            "('split training service into focused modules') while production "
-            "shell still calls it (domain/shell/_internal/commands.py:217, "
-            "repl.py:200). Card e205b15c. RED when the route returns — then "
-            "delete this marker."
-        ),
-    )
     def test_list_checkpoints(self):
-        response = client.get("/auto-train/checkpoints")
+        response = client.get("/training/checkpoints")
         assert response.status_code == 200
         data = response.json()
         payload = data.get("data", data)

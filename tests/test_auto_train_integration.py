@@ -1,4 +1,3 @@
-import json
 from unittest.mock import patch
 
 import httpx
@@ -28,70 +27,39 @@ class TestAutoTrainIntegration:
         return "http://localhost:8000"
 
     @pytest.mark.anyio
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "PRODUCTION BUG: the /auto-train/* router was deleted by d63f5cb0c "
-            "('split training service into focused modules'); production shell "
-            "still calls it (domain/shell/_internal/commands.py:217, repl.py:200). "
-            "Tracked alongside tests/test_e2e_smoke.py::TestAutoTrain. "
-            "strict=True: RED when the route returns."
-        ),
-    )
-    async def test_start_then_stream_sequence(self, api_base_url):
-        """Full flow: start -> stream several steps -> stop."""
-        async with httpx.AsyncClient(timeout=300.0) as client:
-            start_resp = await client.post(
-                f"{api_base_url}/auto-train/start",
-                json={
-                    "teacher_model": "gpt2",
-                    "temperature": 0.8,
-                    "epochs": 2,
-                    "soul_name": "assistant",
-                },
-            )
-            assert start_resp.status_code == 200, f"Start failed: {start_resp.text}"
+    async def test_legacy_auto_train_routes_retired(self, api_base_url):
+        """/auto-train/* is gone on purpose; /training/* is the live projection.
 
-            events = []
-            async with client.stream("GET", f"{api_base_url}/auto-train/stream") as resp:
-                async for line in resp.aiter_lines():
-                    if line.startswith("data:"):
-                        data = json.loads(line[5:])
-                        events.append(data)
-                        if data.get("status") in ("complete", "error"):
-                            break
-                        if len(events) >= 10:
-                            break
+        Card e205b15c: the router was deleted by d63f5cb0c and the in-tree
+        callers (shell commands/repl, CLI, SDK) were migrated to /training/*.
+        This pins that decision — if the legacy paths ever answer 200 again,
+        delete this assertion and the migration note in docs/routers.md.
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            legacy = await client.get(f"{api_base_url}/auto-train/checkpoints")
+            assert legacy.status_code == 404
 
-            stop_resp = await client.post(f"{api_base_url}/auto-train/stop")
-            assert stop_resp.status_code == 200
+            listed = await client.get(f"{api_base_url}/training/checkpoints")
+            assert listed.status_code == 200, listed.text
+            assert isinstance(listed.json()["data"], list)
+
+            status = await client.get(f"{api_base_url}/training/status")
+            assert status.status_code == 200, status.text
 
     @pytest.mark.anyio
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "PRODUCTION BUG: /auto-train/stream 404s — router deleted by "
-            "d63f5cb0c. Zero events is the 404, not a stream that stayed quiet. "
-            "strict=True: RED when the route returns."
-        ),
-    )
-    async def test_stream_fails_without_start(self, api_base_url):
-        """Stream should fail gracefully if start wasn't called."""
+    async def test_start_validates_and_stop_is_a_noop(self, api_base_url):
+        """start -> stream -> stop seam: routes answer without starting a job."""
         async with httpx.AsyncClient(timeout=30.0) as client:
-            events = []
-            async with client.stream("GET", f"{api_base_url}/auto-train/stream") as resp:
-                async for line in resp.aiter_lines():
-                    if line.startswith("data:"):
-                        data = json.loads(line[5:])
-                        events.append(data)
-                        if data.get("status") in ("complete", "error"):
-                            break
-                        if len(events) >= 5:
-                            break
+            # The route exists and rejects an empty body before any job starts.
+            start_resp = await client.post(f"{api_base_url}/training/start", json={})
+            assert start_resp.status_code == 422, start_resp.text
 
-            assert len(events) > 0
-            # Router auto-starts, so first event may be working, not error
-            assert True  # Stream initiated
+            # Idle stream answers (graceful envelope), it does not 404.
+            async with client.stream("GET", f"{api_base_url}/training/stream") as resp:
+                assert resp.status_code == 200
+
+            stop_resp = await client.post(f"{api_base_url}/training/stop")
+            assert stop_resp.status_code == 200, stop_resp.text
 
 
 @pytest.mark.skipif(

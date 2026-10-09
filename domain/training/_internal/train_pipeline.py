@@ -2,10 +2,10 @@
 """
 SloughGPT Training Pipeline (SloNet-native)
 
-Trains :class:`domains.models.SloughGPTModel` on pure NumPy via SloNet. There is
+Trains :class:`domain.models.SloughGPTModel` on pure NumPy via SloNet. There is
 no external framework dependency anywhere in the training path: the optimizer is
 ``SloAdamW`` (decoupled weight decay), scheduling is
-``domains.training.lr_schedulers``, and checkpoints are ``.soul``
+``domain.training._internal.lr_schedulers``, and checkpoints are ``.soul``
 (self-contained weights + vocab + training state) with a ``.npz`` fallback.
 
 Features:
@@ -39,9 +39,11 @@ import numpy as np
 if TYPE_CHECKING:
     from domain.training._internal.tracking import ExperimentTracker
 
+from domain.training._internal.checkpoint_files import list_owned, stem_for
+
 try:
     from domain.models import SloughGPTModel
-except (ImportError, ModuleNotFoundError):  # pragma: no cover (domains.models always importable)
+except (ImportError, ModuleNotFoundError):  # pragma: no cover (domain.models always importable)
     SloughGPTModel = None  # type: ignore[assignment,misc]
 from domain.training._internal.checkpoint_utils import extract_state_dict, normalize_raw_checkpoint
 from domain.training._internal.lora import LoRAConfig, apply_lora_to_model
@@ -605,6 +607,76 @@ def _parse_training_state_metadata(metadata: dict) -> dict:
     return result
 
 
+def _sidecars_of(checkpoint: Path) -> tuple[Path, ...]:
+    """Every sidecar that may accompany ``checkpoint``, in all live spellings.
+
+    Evicting a checkpoint without its sidecars strands files nothing will ever
+    read again — and the disk budget sums only ``*.soul``, so a leftover
+    ``.meta.json`` (the one carrying ``metadata.training_state``) is invisible
+    to the very budget that should have paid for it.
+
+    Three spellings exist in the tree:
+
+    - ``<file>.soul.meta.json`` — canonical; what ``soul_meta_path`` derives
+      and ``save_soul`` writes.
+    - ``<stem>.meta.json``      — written from the bare name before
+      canonicalisation; ``read_sidecar`` still probes it.
+    - ``<stem>.points.json``    — the token-tree ``PointLibrary``.
+
+    Args:
+        checkpoint: The ``.soul`` being evicted. Retention only ever passes a
+            canonical ``.soul`` (``list_owned`` filters to that suffix), which
+            is what makes the append form equal ``soul_meta_path``.
+
+    Returns:
+        Deduplicated sidecar paths, in that order, whether or not they exist.
+    """
+    from domain.inference import soul_meta_path  # lazy: not a module-level dep
+
+    try:
+        canonical = Path(soul_meta_path(str(checkpoint)))
+    except ValueError:
+        # The grammar owner refuses to name a sidecar for a foreign format
+        # (``.slo``) — correct for a writer, wrong for cleanup: an eviction
+        # must not abort halfway and strand the file it was deleting. The
+        # structural append is the spelling such a sidecar would have.
+        canonical = checkpoint.parent / (checkpoint.name + ".meta.json")
+
+    stem = checkpoint.stem  # "run_1790.soul" -> "run_1790"
+    spellings = (
+        canonical,
+        checkpoint.parent / f"{stem}.meta.json",
+        checkpoint.parent / f"{stem}.points.json",
+    )
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in spellings:
+        key = str(path)
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return tuple(unique)
+
+
+def _unlink_sidecars(checkpoint: Path) -> None:
+    """Remove the sidecars of a checkpoint that was just unlinked.
+
+    Both eviction paths call this — the retention window and the disk budget —
+    so the two cannot disagree about what a deleted checkpoint leaves behind.
+
+    Args:
+        checkpoint: Path of the ``.soul`` already removed from disk.
+
+    Returns:
+        None.
+    """
+    for sidecar in _sidecars_of(checkpoint):
+        try:
+            sidecar.unlink()
+        except OSError:
+            pass
+
+
 # =============================================================================
 # Checkpoint Manager
 # =============================================================================
@@ -674,9 +746,10 @@ class CheckpointManager:
     def _candidates_newest_first(self, stem_prefix: str | None = None) -> list[Path]:
         """Checkpoint files under ``checkpoint_dir``, newest modification first.
 
-        In-progress temp artifacts (``*.tmp`` / ``*.tmp.npz``) written during an
-        atomic save are excluded, so an orphaned temp (from a crash between the
-        write and the rename) never surfaces as a resume candidate.
+        Thin delegation to :func:`domain.training._internal.checkpoint_files.list_owned`
+        — the scan and the prune must run the same glob, or read and delete
+        disagree about which files exist. That function documents both rules
+        (in-progress temp artifacts excluded; ``stem_prefix`` ownership).
 
         Args:
             stem_prefix: When given, only files whose stem equals ``stem_prefix``
@@ -685,23 +758,10 @@ class CheckpointManager:
                 so a resume that does not know which job it belongs to must not
                 adopt another job's weights.
         """
-        candidates = [
-            p
-            for p in list(self.checkpoint_dir.glob("*.soul"))
-            + list(self.checkpoint_dir.glob("*.npz"))
-            if not (p.name.endswith(".tmp") or p.name.endswith(".tmp.npz"))
-        ]
-        if stem_prefix:
-            candidates = [
-                p
-                for p in candidates
-                if p.stem == stem_prefix or p.stem.startswith(f"{stem_prefix}_")
-            ]
-        return sorted(
-            candidates,
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        )
+        try:
+            return list_owned(self.checkpoint_dir, stem_prefix)
+        except OSError:
+            return []
 
     def latest_path(self) -> str | None:
         """Return the path of the most recently modified checkpoint, if any.
@@ -798,6 +858,44 @@ class CheckpointManager:
 # Steps between explicit cyclic-GC collections during training.
 _GC_COLLECT_EVERY_STEPS = 50
 
+# Pending-garbage trigger: reclaim during a parked run when tracked-object
+# growth since the last collection crosses this many objects. Measured
+# per-step cyclic garbage on the API training config is ~2,400 objects
+# (~769MB — the growth that OOM-killed jobs at step 8-12, before the first
+# 50-step collection could run), so the default makes heavy runs collect
+# every step while micro-runs fall through to the step cadence.
+# ``sum(gc.get_count())`` is the meter: O(1), exact for pending garbage —
+# acyclic churn nets zero, cyclic garbage only drops on gc.collect()
+# (verified: 200k acyclic allocs => delta 0; 10k cycles => delta 20k).
+# Env ``SLO_TRAIN_GC_OBJS`` overrides; ``<= 0`` disables (cadence only).
+# RSS was rejected as the signal: glibc/pymalloc keep freed pages mapped,
+# so a successful collection does not lower VmRSS and the trigger stalls.
+_GC_GARBAGE_TRIGGER_OBJS = 2_000
+_GC_RUN_STATE: dict[str, int] = {"baseline": -1}
+
+
+def _garbage_trigger_objs() -> int:
+    """Configured pending-garbage trigger in tracked objects (``<=0`` off)."""
+    raw = os.environ.get("SLO_TRAIN_GC_OBJS")
+    if raw is None:
+        return _GC_GARBAGE_TRIGGER_OBJS
+    try:
+        return int(raw)
+    except ValueError:
+        return _GC_GARBAGE_TRIGGER_OBJS
+
+
+def _should_collect(pending: int, baseline: int, trigger: int) -> bool:
+    """True when tracked-object growth since ``baseline`` crosses ``trigger``.
+
+    Pure decision helper: the caller samples ``pending = sum(gc.get_count())``
+    and refreshes the baseline after every collection. ``baseline < 0`` means
+    "not established yet" and never triggers — a run's first step anchors it.
+    """
+    if trigger <= 0 or baseline < 0:
+        return False
+    return (pending - baseline) >= trigger
+
 
 def _gc_parked(fn):
     """Park the cyclic GC for a whole training run.
@@ -815,6 +913,7 @@ def _gc_parked(fn):
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
+        _GC_RUN_STATE["baseline"] = -1  # fresh run: anchor after step 1
         was_enabled = gc.isenabled()
         if was_enabled:
             gc.disable()
@@ -829,12 +928,24 @@ def _gc_parked(fn):
 
 
 def _gc_parked_step(fn):
-    """Reclaim cyclic garbage periodically during a parked training run.
+    """Reclaim cyclic garbage during a parked training run.
 
-    No GC state changes here (the surrounding ``_gc_parked`` run owns
-    that); just an explicit collection every ``_GC_COLLECT_EVERY_STEPS``
-    steps so cyclic garbage stays bounded on long runs. Also safe
-    standalone: a bare ``gc.collect()`` never hurts.
+    Two triggers, no GC state changes here (the surrounding ``_gc_parked``
+    run owns that; a bare ``gc.collect()`` is safe standalone either way):
+
+    1. Pending-garbage growth — ``sum(gc.get_count())`` crossing
+       ``_GC_GARBAGE_TRIGGER_OBJS`` since the last collection. This is what
+       keeps memory bounded: one step can emit ~769MB of cyclic graph
+       garbage (measured, API config), so waiting for the 50-step cadence
+       means OOM before the first collection ever runs (jobs died at step
+       8-12). ``SLO_TRAIN_GC_OBJS <= 0`` disables this trigger.
+    2. The ``_GC_COLLECT_EVERY_STEPS`` cadence — unchanged fallback that
+       bounds slow-but-steady garbage and pays nothing on micro-steps.
+
+    The baseline (pending count after the last collection) refreshes on
+    every collection and is re-anchored on a run's first step, so the meter
+    never counts pre-run garbage twice. Also safe standalone: without a
+    surrounding ``_gc_parked`` the baseline simply persists across calls.
     """
     import gc
 
@@ -846,8 +957,16 @@ def _gc_parked_step(fn):
             return fn(*args, **kwargs)
         finally:
             _counter[0] += 1
-            if _counter[0] % _GC_COLLECT_EVERY_STEPS == 0:
+            cadence = _counter[0] % _GC_COLLECT_EVERY_STEPS == 0
+            trigger = _garbage_trigger_objs()
+            baseline = _GC_RUN_STATE["baseline"]
+            pending = sum(gc.get_count())
+            # First observation of a run: reclaim the first step's graph plus
+            # one-time JIT residue up front, then anchor the baseline there.
+            establish = trigger > 0 and baseline < 0
+            if cadence or establish or _should_collect(pending, baseline, trigger):
                 gc.collect()
+                _GC_RUN_STATE["baseline"] = sum(gc.get_count())
 
     return wrapper
 
@@ -856,7 +975,7 @@ class SloughGPTTrainer:
     """
     Unified trainer for SloughGPTModel (pure NumPy / SloNet).
 
-    Satisfies :class:`domains.training.trainer_protocol.TrainerProtocol` structurally (``train()``).
+    Satisfies :class:`domain.training._internal.trainer_protocol.TrainerProtocol` structurally (``train()``).
 
     Features:
     - Gradient accumulation
@@ -1535,7 +1654,7 @@ class SloughGPTTrainer:
             resume_path: Optional checkpoint path (.soul or .npz). Accepts full
                 ``CheckpointManager`` bundles (model + optimizer + scheduler + step/epoch) and
                 **weights-only** bundles (``model_state_dict`` or flat tensors) as normalized
-                by :func:`domains.training.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
+                by :func:`domain.training._internal.checkpoint_utils.normalize_raw_checkpoint`. Optimizer
                 and scheduler load are best-effort.
             resume_checkpoint: Optional pre-loaded checkpoint bundle to restore
                 from, bypassing all disk I/O. Takes precedence over
@@ -2033,13 +2152,13 @@ class SloughGPTTrainer:
         timestamp = int(time.time())
         soul_name = getattr(self, "soul_name", "assistant")
 
-        # Extract dataset name from path for checkpoint name
+        # One stem for write AND prune. Derived from the dataset path's parent
+        # (e.g. ".../datasets/python_flask/corpus.jsonl" -> "python_flask") and
+        # sanitised, so the file this run writes is the file the retention scan
+        # claims — a raw parent name containing a space used to produce a file
+        # no sanitising reader could ever own.
         data_path = getattr(self, "data_path", "")
-        if data_path:
-            # e.g. "/Users/mac/sloughGPT/datasets/python_flask/corpus.jsonl" -> "python_flask"
-            ds_name = Path(data_path).parent.name
-        else:  # pragma: no cover (trainer always has data_path)
-            ds_name = soul_name
+        ds_name = stem_for(data_path, soul_name)
 
         checkpoint_path = checkpoint_dir / f"{ds_name}_{timestamp}"
 
@@ -2048,7 +2167,7 @@ class SloughGPTTrainer:
         training_duration = round(time.time() - start_t, 1) if start_t else None
 
         # Enforce MAX_CHECKPOINT_DISK_MB: prune oldest checkpoints if total size exceeds limit
-        self._enforce_disk_limit(checkpoint_dir)
+        self._enforce_disk_limit(checkpoint_dir, ds_name)
 
         # Save in .soul format with vocab; periodic checkpoints keep optimizer
         # state (accurate resume), final artifact strips momentum buffers.
@@ -2065,46 +2184,114 @@ class SloughGPTTrainer:
         from domain.inference import soul_path
 
         self._last_checkpoint_path = soul_path(str(checkpoint_path))
-        self._prune_stale_checkpoints(keep_final=is_final)
+        self._prune_stale_checkpoints(keep_final=is_final, stem=ds_name)
 
-    def _enforce_disk_limit(self, checkpoint_dir: Path) -> None:
-        """Delete oldest checkpoints if total disk usage exceeds MAX_CHECKPOINT_DISK_MB."""
-        from .state import MAX_CHECKPOINT_DISK_MB
+    def _own_stem(self) -> str:
+        """Stem this run's checkpoints are written under.
 
-        try:
-            files = sorted(
-                checkpoint_dir.glob("*.soul"),
-                key=lambda p: p.stat().st_mtime,
-            )
-        except OSError:
-            return
-        total_bytes = sum(f.stat().st_size for f in files)
-        limit_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
-        while total_bytes > limit_bytes and len(files) > 1:
-            oldest = files.pop(0)
-            total_bytes -= oldest.stat().st_size
-            try:
-                oldest.unlink()
-                logger.info(
-                    "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
-                )
-            except OSError:
-                pass
+        Delegates to :func:`checkpoint_files.stem_for` — the same function
+        ``save_checkpoint`` uses to name the file, so the pruner's ownership
+        test and the writer's filename cannot disagree.
+        """
+        return stem_for(
+            getattr(self, "data_path", ""),
+            getattr(self, "soul_name", "assistant"),
+        )
 
-    def _prune_stale_checkpoints(self, keep_final: bool = False) -> None:
-        """Delete stale ``.soul`` checkpoints so the directory never accumulates files.
+    def _enforce_disk_limit(self, checkpoint_dir: Path, stem: str | None = None) -> None:
+        """Delete this run's oldest checkpoints once its own bytes exceed the budget.
 
-        During training only the ``max_checkpoints`` newest files are kept, so a
-        crashed run can still be resumed (``--resume-latest`` scans by mtime). On
-        the final save all older checkpoints are removed, leaving a single model
-        file.
+        Scoped to ``stem`` on purpose. ``checkpoint_dir`` is shared between
+        jobs (``models/auto-training`` is every job's default), and the old
+        directory-wide sweep unlinked whoever happened to be oldest — another
+        job's weights, recorded as a resume path by a run that then found them
+        gone. Paying a byte budget with someone else's checkpoint is not a
+        trade this function is allowed to make, so when this run's own files
+        cannot cover the budget the overrun is logged instead.
 
         Args:
-            keep_final: If True, keep only the newest checkpoint (the just-written
-                final one); otherwise keep the ``max_checkpoints`` newest files.
+            checkpoint_dir: Directory holding the checkpoints.
+            stem: Ownership stem; defaults to this run's.
 
         Side effects:
-            - unlinks stale ``.soul`` files under ``config.checkpoint_dir``
+            - unlinks this run's oldest ``*.soul`` files while over budget,
+              always keeping the newest one (the only resume left), and each
+              evicted file's sidecars
+            - logs a warning when the directory is still over budget after
+              every other job's files have been left alone
+
+        Returns:
+            None.
+        """
+        from .state import MAX_CHECKPOINT_DISK_MB
+
+        if stem is None:
+            stem = self._own_stem()
+        try:
+            # list_owned is newest-first; pop from the front to evict oldest.
+            own_oldest_first = list(reversed(list_owned(checkpoint_dir, stem, suffixes=(".soul",))))
+            total_bytes = sum(f.stat().st_size for f in own_oldest_first)
+        except OSError:
+            return
+
+        limit_bytes = MAX_CHECKPOINT_DISK_MB * 1024 * 1024
+        while total_bytes > limit_bytes and len(own_oldest_first) > 1:
+            oldest = own_oldest_first.pop(0)
+            try:
+                total_bytes -= oldest.stat().st_size
+            except OSError:
+                break
+            try:
+                oldest.unlink()
+            except OSError:
+                continue
+            # The budget sums only ``*.soul``, so the sidecar has to go with it
+            # — otherwise a ``.meta.json`` carrying ``metadata.training_state``
+            # stays behind, invisible to the budget that evicted its checkpoint,
+            # and the directory never actually frees the space.
+            _unlink_sidecars(oldest)
+            logger.info(
+                "Pruned checkpoint %s (disk limit %dMB)", oldest.name, MAX_CHECKPOINT_DISK_MB
+            )
+
+        if total_bytes <= limit_bytes:
+            return
+        try:
+            dir_bytes = sum(p.stat().st_size for p in checkpoint_dir.glob("*.soul"))
+        except OSError:
+            return
+        if dir_bytes > limit_bytes:
+            logger.warning(
+                "Checkpoint dir %s is %dMB over the %dMB budget; every remaining "
+                "file belongs to another job, so none were pruned.",
+                checkpoint_dir,
+                (dir_bytes - limit_bytes) // (1024 * 1024),
+                MAX_CHECKPOINT_DISK_MB,
+                extra={"tag": "TRAIN"},
+            )
+
+    def _prune_stale_checkpoints(self, keep_final: bool = False, stem: str | None = None) -> None:
+        """Delete this run's stale ``.soul`` checkpoints so it never accumulates files.
+
+        During training only the ``max_checkpoints`` newest files **of this
+        run** are kept, so a crashed run can still be resumed
+        (``--resume-latest`` scans by mtime). On the final save all older
+        checkpoints **of this run** are removed, leaving a single model file.
+
+        Both quantifiers are load-bearing. ``checkpoint_dir`` is shared between
+        jobs, and the directory-wide glob this replaces deleted other jobs'
+        checkpoints wholesale — the final save kept exactly one file for the
+        whole directory, so finishing a run silently destroyed every other job's
+        resume. Retention is a per-job budget expressed in a shared directory.
+
+        Args:
+            keep_final: If True, keep only this run's newest checkpoint (the
+                just-written final one); otherwise keep the ``max_checkpoints``
+                newest files it owns.
+            stem: Ownership stem; defaults to this run's.
+
+        Side effects:
+            - unlinks this run's stale ``.soul`` files under ``config.checkpoint_dir``
             - rewires ``_best_model_path`` so it never points at a deleted file
               (on final saves it points at the final checkpoint; otherwise it is
               reset to None when the best checkpoint was pruned by the window)
@@ -2115,12 +2302,10 @@ class SloughGPTTrainer:
         checkpoint_dir = Path(self.config.checkpoint_dir)
         if not checkpoint_dir.is_dir():
             return
+        if stem is None:
+            stem = self._own_stem()
         try:
-            files = sorted(
-                checkpoint_dir.glob("*.soul"),
-                key=lambda p: (p.stat().st_mtime, p.name),
-                reverse=True,
-            )
+            files = list_owned(checkpoint_dir, stem, suffixes=(".soul",))
         except OSError:
             return
 
@@ -2131,22 +2316,10 @@ class SloughGPTTrainer:
                 stale.unlink()
             except OSError:
                 pass
-            meta = Path(str(stale) + ".meta.json")
-            try:
-                if meta.exists():
-                    meta.unlink()
-            except OSError:
-                pass
-            # Sidecars use the stem name (<name>.points.json, <name>.meta.json),
-            # not the full .soul name — remove them so pruned checkpoints
-            # leave no orphaned artifacts behind.
-            for suffix in (".points.json", ".meta.json"):
-                sidecar = stale.parent / (stale.stem + suffix)
-                try:
-                    if sidecar.exists():
-                        sidecar.unlink()
-                except OSError:
-                    pass
+            else:
+                # All three sidecar spellings, so a pruned checkpoint leaves
+                # no orphaned artifact behind.
+                _unlink_sidecars(stale)
 
         if keep_final and self._last_checkpoint_path:
             # The just-written final checkpoint is the newest file (kept above);

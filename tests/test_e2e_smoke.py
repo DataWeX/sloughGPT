@@ -197,20 +197,9 @@ class TestTokenizer:
         assert resp.status_code in {200, 503}
 
 
-class TestAutoTrain:
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "PRODUCTION BUG: the /auto-train/* router was deleted by d63f5cb0c "
-            "('split training service into focused modules'). Production still "
-            "calls it (domain/shell/_internal/commands.py, repl.py), and "
-            "tests/server/test_server_api.py + test_endpoint_registry.py fail on "
-            "it too. strict=True: this goes RED the moment the route is restored, "
-            "which is the signal to delete this marker."
-        ),
-    )
+class TestTrainingCheckpoints:
     def test_list_checkpoints(self, client):
-        resp = client.get("/auto-train/checkpoints")
+        resp = client.get("/training/checkpoints")
         assert resp.status_code == 200
         # Envelope first, then the payload's own key — the old read fell back
         # to the envelope dict, which is not a list.

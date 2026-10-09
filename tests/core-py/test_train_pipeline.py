@@ -8,6 +8,7 @@ import sys
 import threading
 import time
 import warnings
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -24,6 +25,8 @@ from domain.training._internal.train_pipeline import (
     _load_soul_checkpoint,
     _make_json_safe,
     _parse_training_state_metadata,
+    _sidecars_of,
+    _unlink_sidecars,
     prepare_data,
 )
 
@@ -288,7 +291,7 @@ class TestLoadSoulCheckpoint:
         return p
 
     def test_full_training_state(self, monkeypatch, tmp_path):
-        from domains.inference import slo_format
+        from domain.inference._internal import slo_format
 
         profile = self._make_profile(
             metadata={
@@ -311,7 +314,7 @@ class TestLoadSoulCheckpoint:
         assert result["scheduler_state_dict"] == {"last_lr": 0.0001}
 
     def test_no_metadata(self, monkeypatch, tmp_path):
-        from domains.inference import slo_format
+        from domain.inference._internal import slo_format
 
         profile = self._make_profile()
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))
@@ -322,7 +325,7 @@ class TestLoadSoulCheckpoint:
         assert "scheduler_state_dict" not in result
 
     def test_training_state_not_dict(self, monkeypatch, tmp_path):
-        from domains.inference import slo_format
+        from domain.inference._internal import slo_format
 
         profile = self._make_profile(metadata={"training_state": "nope"})
         monkeypatch.setattr(slo_format, "load_soul", lambda p: (profile, {"w": 1}))
@@ -1500,6 +1503,225 @@ class TestSaveCheckpoint:
         t.config.checkpoint_dir = str(tmp_path / "nope")
         t._prune_stale_checkpoints()
         assert not (tmp_path / "nope").exists()
+
+    # ── Shared checkpoint dir: retention is a PER-JOB budget ───────────────
+    #
+    # ``models/auto-training`` is every job's default ``checkpoint_dir``. Both
+    # helpers below used to glob it directory-wide, so a finishing run deleted
+    # other jobs' checkpoints — and those jobs' recorded resume path then
+    # pointed at a file that no longer existed.
+
+    def _corpus(self, tmp_path, job: str) -> str:
+        """A corpus under a directory named ``job``, so ``stem_for`` yields ``job``."""
+        directory = tmp_path / job
+        directory.mkdir(parents=True, exist_ok=True)
+        corpus = directory / "corpus.txt"
+        corpus.write_text(DATA_TEXT, encoding="utf-8")
+        return str(corpus)
+
+    def _shared_trainer(self, tmp_path, job: str, **overrides):
+        """A trainer for ``job`` writing into the one directory it shares with others."""
+        cfg = tiny_config(tmp_path, checkpoint_dir=str(tmp_path / "shared"), **overrides)
+        return make_trainer(self._corpus(tmp_path, job), cfg)
+
+    def test_final_save_does_not_delete_another_jobs_checkpoint(self, tmp_path, monkeypatch):
+        a = self._shared_trainer(tmp_path, "jobA")
+        b = self._shared_trainer(tmp_path, "jobB")
+        shared = tmp_path / "shared"
+
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        a.save_checkpoint({"eval_loss": 1.0})
+        a_survivors = sorted(p.name for p in shared.glob("jobA_*.soul"))
+        assert a_survivors, "job A should have written a checkpoint"
+
+        b.save_checkpoint({"eval_loss": 2.0})
+        b.save_checkpoint({"eval_loss": 3.0})
+        b.save_checkpoint({"eval_loss": 0.1}, is_final=True)
+
+        # The old keep_final kept exactly one file for the WHOLE directory.
+        assert sorted(p.name for p in shared.glob("jobA_*.soul")) == a_survivors
+        # keep_final now means "this run's newest", not "the directory's newest".
+        assert len(list(shared.glob("jobB_*.soul"))) == 1
+
+    def test_rolling_window_only_prunes_the_running_jobs_files(self, tmp_path, monkeypatch):
+        a = self._shared_trainer(tmp_path, "jobA")
+        b = self._shared_trainer(tmp_path, "jobB", max_checkpoints=2)
+        shared = tmp_path / "shared"
+
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        a.save_checkpoint({"eval_loss": 1.0})
+        before = sorted(p.name for p in shared.glob("jobA_*.soul"))
+
+        for i in range(5):
+            b.save_checkpoint({"eval_loss": float(i)})
+
+        assert sorted(p.name for p in shared.glob("jobA_*.soul")) == before
+        assert len(list(shared.glob("jobB_*.soul"))) == 2
+
+    def test_disk_limit_never_prunes_another_jobs_checkpoint(self, tmp_path, monkeypatch):
+        from domain.training._internal import state as tp_state
+
+        a = self._shared_trainer(tmp_path, "jobA")
+        b = self._shared_trainer(tmp_path, "jobB")
+        shared = tmp_path / "shared"
+
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        a.save_checkpoint({"eval_loss": 1.0})
+        b.save_checkpoint({"eval_loss": 2.0})
+        b.save_checkpoint({"eval_loss": 3.0})
+        a_file = sorted(shared.glob("jobA_*.soul"))[0]
+        assert a_file.exists()
+
+        # A 0-byte budget: job B's own older files may be evicted, job A's may not.
+        # Directory-wide (the old behaviour) the oldest file in the dir is A's,
+        # so this is exactly the case that used to destroy another job's resume.
+        monkeypatch.setattr(tp_state, "MAX_CHECKPOINT_DISK_MB", 0)
+        b.save_checkpoint({"eval_loss": 4.0})
+
+        assert a_file.exists(), "the disk budget must not be paid with another job's weights"
+        assert list(shared.glob("jobB_*.soul")), "job B's own retention must still work"
+
+    def test_save_checkpoint_writes_a_file_the_reader_can_own(self, tmp_path):
+        from domain.training._internal.checkpoint_files import is_owned, stem_for
+
+        corpus = self._corpus(tmp_path, "my dataset")
+        t = make_trainer(corpus, tiny_config(tmp_path))
+        t.save_checkpoint({"eval_loss": 1.0})
+
+        path = t._last_checkpoint_path
+        assert path is not None
+        # The writer sanitises now: a raw parent.name put a space in the
+        # filename, which the sanitising reader could never match.
+        assert " " not in os.path.basename(path)
+        assert is_owned(path, stem_for(corpus, t.soul_name))
+
+        # ...and the resume scan finds it under exactly that stem.
+        found, bundle = CheckpointManager(os.path.dirname(path)).load_latest_with_path(
+            stem_prefix=stem_for(corpus, t.soul_name)
+        )
+        assert found == path
+        assert bundle is not None
+
+    # ── Sidecars travel with the checkpoint they describe ──────────────────
+    #
+    # The disk budget sums only ``*.soul`` (a sidecar can itself be tens of MB
+    # via ``metadata.training_state``), so one left behind by an eviction is
+    # invisible to the budget that evicted its checkpoint — the directory stays
+    # over budget while freeing no space.
+
+    @staticmethod
+    def _write_all_sidecars(soul: Path) -> tuple[Path, ...]:
+        """Create every sidecar spelling that can accompany ``soul``."""
+        created = (
+            soul.parent / (soul.name + ".meta.json"),  # canonical (soul_meta_path)
+            soul.parent / (soul.stem + ".meta.json"),  # bare-name legacy spelling
+            soul.parent / (soul.stem + ".points.json"),  # token-tree PointLibrary
+        )
+        for path in created:
+            path.write_text("{}", encoding="utf-8")
+        return created
+
+    def _two_checkpoints(self, tmp_path, monkeypatch, **cfg_overrides):
+        t = make_trainer(self._corpus(tmp_path, "jobA"), tiny_config(tmp_path, **cfg_overrides))
+        self._monotonic_time(monkeypatch, 1_700_000_000)
+        t.save_checkpoint({"eval_loss": 1.0})
+        t.save_checkpoint({"eval_loss": 2.0})
+        souls = sorted(
+            Path(t.config.checkpoint_dir).glob("*.soul"), key=lambda p: p.stat().st_mtime
+        )
+        assert len(souls) == 2, "expected one checkpoint per save"
+        return t, souls[0], souls[1]
+
+    def test_disk_limit_eviction_takes_the_sidecars_with_it(self, tmp_path, monkeypatch):
+        from domain.training._internal import state as tp_state
+
+        t, oldest, newest = self._two_checkpoints(tmp_path, monkeypatch)
+        stale_sidecars = self._write_all_sidecars(oldest)
+        kept_sidecars = self._write_all_sidecars(newest)
+
+        # A 0-byte budget: this run may pay it with its own oldest file only.
+        monkeypatch.setattr(tp_state, "MAX_CHECKPOINT_DISK_MB", 0)
+        t._enforce_disk_limit(Path(t.config.checkpoint_dir), "jobA")
+
+        assert not oldest.exists(), "the budget must still evict under pressure"
+        assert not any(p.exists() for p in stale_sidecars), (
+            "an orphaned sidecar is invisible to a budget that sums only *.soul"
+        )
+        assert newest.exists()
+        assert all(p.exists() for p in kept_sidecars), "the survivor keeps its sidecars"
+
+    def test_prune_eviction_takes_the_sidecars_with_it(self, tmp_path, monkeypatch):
+        t, oldest, newest = self._two_checkpoints(tmp_path, monkeypatch)
+        stale_sidecars = self._write_all_sidecars(oldest)
+        kept_sidecars = self._write_all_sidecars(newest)
+
+        # Narrow the window after the saves so this call is what evicts.
+        t.config.max_checkpoints = 1
+        t._prune_stale_checkpoints(keep_final=False, stem="jobA")
+
+        assert not oldest.exists()
+        assert not any(p.exists() for p in stale_sidecars)
+        assert newest.exists()
+        assert all(p.exists() for p in kept_sidecars)
+
+
+class TestSidecarCleanup:
+    """`_sidecars_of` / `_unlink_sidecars` — the three spellings in the tree."""
+
+    def test_names_every_live_spelling(self):
+        assert {p.name for p in _sidecars_of(Path("/x/run_1790.soul"))} == {
+            "run_1790.soul.meta.json",
+            "run_1790.meta.json",
+            "run_1790.points.json",
+        }
+
+    @pytest.mark.parametrize("name", ["run_1790.soul", "run_1790.soul.soul", "run_1790.slo"])
+    def test_never_returns_duplicates(self, name):
+        # Canonical and bare-stem spellings coincide for a legacy
+        # double-appended name; a dedup failure makes the removal loop hit the
+        # same path twice (harmless) while a *missing* spelling leaves an
+        # orphan behind (not harmless).
+        paths = _sidecars_of(Path("/x") / name)
+        assert len(paths) == len({str(p) for p in paths})
+
+    def test_foreign_format_falls_back_instead_of_raising(self):
+        # soul_path() refuses to name a sidecar for a .slo ("foreign format;
+        # refusing to guess") — right for a writer, wrong for cleanup: an
+        # eviction must not abort halfway and strand the file it was deleting.
+        assert {p.name for p in _sidecars_of(Path("/x/run_1790.slo"))} == {
+            "run_1790.slo.meta.json",
+            "run_1790.meta.json",
+            "run_1790.points.json",
+        }
+
+    def test_sidecars_sit_beside_their_checkpoint(self):
+        # A sidecar derived without its directory would be cleaned up relative
+        # to the process cwd instead — silently deleting nothing.
+        soul = Path("/x/run_1790.soul")
+        assert {p.parent for p in _sidecars_of(soul)} == {Path("/x")}
+
+    def test_unlink_removes_every_spelling(self, tmp_path):
+        soul = tmp_path / "run_1790.soul"
+        soul.write_text("x", encoding="utf-8")
+        created = tuple(
+            tmp_path / name
+            for name in (
+                "run_1790.soul.meta.json",
+                "run_1790.meta.json",
+                "run_1790.points.json",
+            )
+        )
+        for path in created:
+            path.write_text("{}", encoding="utf-8")
+
+        _unlink_sidecars(soul)
+
+        assert not any(p.exists() for p in created)
+
+    def test_unlink_tolerates_sidecars_that_never_existed(self, tmp_path):
+        # The checkpoint itself may have failed to write its sidecar, or
+        # another process already took it — cleanup must not raise either way.
+        _unlink_sidecars(tmp_path / "run_1790.soul")
 
 
 class TestFeedLiveRefresh:

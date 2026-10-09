@@ -221,29 +221,13 @@ class TestEndpointRegistry:
             data = _data(r)
             assert isinstance(data, dict)
 
-    # ── auto-train (no model loaded) ────────────────────────────────
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "PRODUCTION BUG: the /auto-train/* router was deleted by d63f5cb0c "
-            "('split training service into focused modules') while production "
-            "shell still calls it (domain/shell/_internal/commands.py:217, "
-            "repl.py:200). Card e205b15c. RED when the route returns."
-        ),
-    )
-    def test_auto_train_status(self):
-        r = client.get("/auto-train/status")
+    # ── training status + checkpoints (ex-/auto-train) ─────────────────
+    def test_training_status(self):
+        r = client.get("/training/status")
         assert r.status_code == 200
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "PRODUCTION BUG: /auto-train/* router deleted by d63f5cb0c; "
-            "production shell still calls it. Card e205b15c. RED when it returns."
-        ),
-    )
-    def test_auto_train_checkpoints(self):
-        r = client.get("/auto-train/checkpoints")
+    def test_training_checkpoints(self):
+        r = client.get("/training/checkpoints")
         assert r.status_code == 200
         data = _data(r)
         assert isinstance(data, list)

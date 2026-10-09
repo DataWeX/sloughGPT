@@ -195,12 +195,11 @@ def _fetch_checkpoint_names() -> list[str]:
     import requests
 
     try:
-        from .commands import get_api_base
+        from .commands import get_api_base, unwrap_checkpoints
 
-        r = requests.get(f"{get_api_base()}/auto-train/checkpoints", timeout=3)
+        r = requests.get(f"{get_api_base()}/training/checkpoints", timeout=3)
         if r.status_code == 200:
-            data = r.json()
-            cps = data if isinstance(data, list) else data.get("checkpoints", [])
+            cps = unwrap_checkpoints(r.json())
             return sorted({c.get("name", "") for c in cps if isinstance(c, dict)})
     except Exception as e:
         logger.debug("checkpoint names fetch failed: %s", e)

@@ -652,7 +652,7 @@ class SloughGPTClient:
     def list_auto_train_checkpoints(self) -> list[dict[str, Any]]:
         """List auto-training checkpoints."""
         response = self._request("GET", "/training/checkpoints")
-        data = response.json()
+        data = _unwrap_response(response.json())
         return data.get("checkpoints", data) if isinstance(data, dict) else data
 
     def delete_auto_train_checkpoint(self, name: str) -> dict[str, Any]:
@@ -1502,7 +1502,7 @@ class AsyncSloughGPTClient:
         return await self._request("GET", "/tokenizer/stats")
 
     async def list_auto_train_checkpoints(self) -> list[dict[str, Any]]:
-        data = await self._request("GET", "/training/checkpoints")
+        data = _unwrap_response(await self._request("GET", "/training/checkpoints"))
         return data.get("checkpoints", data) if isinstance(data, dict) else data
 
     async def get_security_keys(self) -> list[dict[str, Any]]:

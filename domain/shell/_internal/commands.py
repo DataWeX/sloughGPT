@@ -83,6 +83,25 @@ def _api_delete(path: str) -> dict[str, Any]:
         return {"error": str(e), "error_type": type(e).__name__}
 
 
+def unwrap_checkpoints(result: Any) -> list[dict[str, Any]]:
+    """Normalize a checkpoint listing into a list.
+
+    ``GET /training/checkpoints`` answers inside the standard success envelope
+    ``{"status": "success", "data": [...]}``. Older deployments and the retired
+    ``/auto-train/checkpoints`` route returned a bare list or
+    ``{"checkpoints": [...]}``; accept all three so a stale proxy or a cached
+    body still renders. Error payloads (``{"error": ...}``) become ``[]``.
+    """
+    if isinstance(result, list):
+        return result
+    if isinstance(result, dict):
+        for key in ("data", "checkpoints"):
+            value = result.get(key)
+            if isinstance(value, list):
+                return value
+    return []
+
+
 class ShellCommands:
     """All commands are thin wrappers delegating to real domains."""
 
@@ -214,20 +233,17 @@ class ShellCommands:
     @staticmethod
     def checkpoints() -> list[dict[str, Any]]:
         """List saved checkpoints."""
-        result = _api_get("/auto-train/checkpoints")
-        if isinstance(result, dict):
-            return result.get("checkpoints", [])
-        return []
+        return unwrap_checkpoints(_api_get("/training/checkpoints"))
 
     @staticmethod
     def load_checkpoint(name: str) -> dict[str, Any]:
         """Load a checkpoint."""
-        return _api_post(f"/auto-train/checkpoints/{name}/load")
+        return _api_post(f"/training/checkpoints/{name}/load")
 
     @staticmethod
     def delete_checkpoint(name: str) -> dict[str, Any]:
         """Delete a checkpoint."""
-        return _api_delete(f"/auto-train/checkpoints/{name}")
+        return _api_delete(f"/training/checkpoints/{name}")
 
     @staticmethod
     def finetuned_models() -> list[dict[str, Any]]:
@@ -262,17 +278,24 @@ class ShellCommands:
         source_text: str = "",
         dataset_id: str = "",
     ) -> dict[str, Any]:
-        """Start auto-train (SloNet student learning)."""
-        return _api_post(
-            "/auto-train/start",
-            {
-                "soul_name": soul_name,
-                "teacher_model": teacher,
-                "epochs": epochs,
-                "source_text": source_text,
-                "dataset_id": dataset_id,
-            },
-        )
+        """Start auto-train (SloNet student learning).
+
+        Projects onto ``POST /training/start`` — the same route the CLI's
+        ``train auto start`` already uses. ``TrainingRequest`` requires exactly
+        one corpus source, so the caller must supply ``source_text`` or
+        ``dataset_id``; otherwise the server answers 422 with the list of
+        accepted sources.
+        """
+        payload: dict[str, Any] = {
+            "name": soul_name or "auto-train",
+            "model": teacher,
+            "epochs": epochs,
+        }
+        if source_text:
+            payload["source_text"] = source_text
+        elif dataset_id:
+            payload["dataset"] = dataset_id
+        return _api_post("/training/start", payload)
 
     @staticmethod
     def train_distill(
