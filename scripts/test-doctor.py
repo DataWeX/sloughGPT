@@ -1110,6 +1110,106 @@ def cmd_path_drift(verbose: bool = False) -> int:
     return 1
 
 
+def _ci_drift() -> int:
+    """Flag CI steps referencing paths that do not exist, and orphaned workflows.
+
+    Handles a subtlety that a naive resolver gets wrong: `cd packages/core-py`
+    lives INSIDE a run: block, so the --ignore=../../tests/... paths under it
+    resolve from that directory, not from the repo root. Resolving them from
+    the root reports 9 existing files as missing.
+    """
+    try:
+        import yaml
+    except ImportError:
+        _p(f"  {_dim('pyyaml not installed -- skipping')}\n\n")
+        return 0
+
+    wfdir = Path(".github/workflows")
+    if not wfdir.is_dir():
+        _p(f"  {_dim('no .github/workflows -- skipping')}\n\n")
+        return 0
+    wfs = sorted(wfdir.glob("*.yml")) + sorted(wfdir.glob("*.yaml"))
+
+    docs: dict[str, dict] = {}
+    for wf in wfs:
+        try:
+            docs[wf.name] = yaml.safe_load(wf.read_text(encoding="utf-8")) or {}
+        except Exception as exc:  # noqa: BLE001 -- report, don't abort the scan
+            docs[wf.name] = {}
+            _p(f"  {_rd}UNPARSEABLE {wf.name}: {exc}{_r}\n")
+
+    problems: list[str] = []
+
+    # orphaned: declares workflow_call and nothing else calls it
+    for name, doc in docs.items():
+        trig = doc.get("on") or doc.get(True) or {}
+        keys = set(trig) if isinstance(trig, dict) else set()
+        if keys == {"workflow_call"}:
+            callers = sum(
+                1
+                for other, d in docs.items()
+                if other != name and name in (wfdir / other).read_text(encoding="utf-8")
+            )
+            if callers == 0:
+                problems.append(f"{name}: orphaned -- workflow_call only, nothing invokes it")
+
+    checked = 0
+    for name, doc in docs.items():
+        for jname, job in (doc.get("jobs") or {}).items():
+            if not isinstance(job, dict):
+                continue
+            jcwd = job.get("working-directory") or "."
+            for step in job.get("steps") or []:
+                if not isinstance(step, dict):
+                    continue
+                scwd = step.get("working-directory") or jcwd
+                if scwd != "." and not Path(scwd).is_dir():
+                    problems.append(f"{name}::{jname}: working-directory `{scwd}` missing")
+
+                with_ = step.get("with") or {}
+                cdp = with_.get("cache-dependency-path")
+                if cdp:
+                    for line in str(cdp).splitlines():
+                        line = line.strip()
+                        if not line or "${{" in line:
+                            continue  # matrix expression, not a literal
+                        checked += 1
+                        if not Path(line).exists():
+                            problems.append(
+                                f"{name}::{jname}: cache-dependency-path `{line}` missing"
+                            )
+
+                run = step.get("run")
+                if not isinstance(run, str):
+                    continue
+                cur = scwd
+                for line in run.splitlines():
+                    m = re.match(r"^\s*cd\s+([^\s;&|]+)", line)
+                    if m and not m.group(1).startswith("$"):
+                        cand = os.path.normpath(os.path.join(cur, m.group(1)))
+                        if Path(cand).is_dir():
+                            cur = cand
+                        continue
+                    for ign in re.findall(r"--ignore=([^\s\\]+)", line):
+                        checked += 1
+                        if not Path(os.path.normpath(os.path.join(cur, ign))).exists():
+                            problems.append(
+                                f"{name}::{jname}: --ignore `{ign}` (from `{cur}`) missing"
+                            )
+
+    _p(f"  {_dim(f'{len(wfs)} workflow(s), {checked} path reference(s) checked')}\n")
+    if not problems:
+        _p(f"  {_green('clean')}\n\n")
+        return 0
+
+    _p(f"\n  {_rd}{len(problems)} problem(s):{_r}\n")
+    for p in sorted(set(problems)):
+        _p(f"    {_y}{p}{_r}\n")
+    _p(f"\n  {_dim('A --ignore pointing at a nonexistent file is harmless to pytest but')}\n")
+    _p(f"  {_dim('misleading: it reads as a deliberate exclusion of a real test.')}\n\n")
+    return 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         prog="test-doctor",
@@ -1122,6 +1222,7 @@ def main() -> int:
               test-doctor --fix-hint <test>::test_fn   suggest fix
               test-doctor --mock-drift                 dead @patch targets
               test-doctor --path-drift                 broken test path arithmetic
+              test-doctor --ci-drift                   CI steps pointing nowhere
         """),
     )
     ap.add_argument("target", nargs="?")
@@ -1129,6 +1230,11 @@ def main() -> int:
     ap.add_argument("--flake", "-f", action="store_true")
     ap.add_argument("--fix-hint", metavar="TEST")
     ap.add_argument("--mock-drift", action="store_true", help="dead @patch targets")
+    ap.add_argument(
+        "--ci-drift",
+        action="store_true",
+        help="CI steps referencing paths that do not exist",
+    )
     ap.add_argument(
         "--path-drift",
         action="store_true",
@@ -1147,6 +1253,8 @@ def main() -> int:
 
     if args.mock_drift:
         return cmd_mock_drift(verbose=args.verbose)
+    if args.ci_drift:
+        return _ci_drift()
     if args.path_drift:
         return cmd_path_drift(verbose=args.verbose)
     if args.fix_hint:
