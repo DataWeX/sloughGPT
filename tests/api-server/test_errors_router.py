@@ -189,3 +189,28 @@ class TestOpenCodeLog:
         data = body.get("data", body)
         assert "entries" in data
         assert isinstance(data["entries"], list)
+
+
+class TestStorePooled:
+    """The error store must be reused, not rebuilt per request.
+
+    A fresh ``MogDB`` per call re-replays the whole journal under the store
+    lock — measured **444 ms** per construction on a copy of the live error
+    store (4745 journal lines resolving to 2 live records) versus 0.1 ms from
+    the cached instance — so every ingest and every ``/trends`` read paid the
+    replay again. ``infrastructure.db_pool`` was written to stop exactly this
+    pattern; these pin errors.py to it.
+    """
+
+    def test_get_error_db_returns_the_same_instance(self):
+        from routers import errors
+
+        first = errors._get_error_db()
+        second = errors._get_error_db()
+        assert first is second, "_get_error_db() rebuilds the store per call"
+
+    def test_get_error_db_is_the_shared_db_pool_entry(self):
+        from infrastructure.db_pool import get_db
+        from routers import errors
+
+        assert errors._get_error_db() is get_db("errors_mogdb")
