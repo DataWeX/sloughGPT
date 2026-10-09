@@ -42,6 +42,44 @@ MAX_RETRIES = 3
 RETRY_DELAY = 2
 
 
+# ── Readiness helpers ─────────────────────────────────────────────────
+
+
+def _web_is_ready() -> bool:
+    """Check if the web app answers without an HTTP client error."""
+    try:
+        req = urllib.request.Request(BASE)
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return 200 <= resp.status < 400
+    except Exception:
+        return False
+
+
+def _api_is_ready() -> bool:
+    """Check if the API is responding to health checks."""
+    try:
+        req = urllib.request.Request(f"{API}/health")
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+# These journeys drive a real browser against a live stack, so skip the whole
+# module when one isn't running instead of failing every test — that keeps the
+# default offline suite green. The module docstring already lists "Web server
+# at localhost:3000" as a Requirement; this turns that requirement into a skip
+# instead of 58 × net::ERR_CONNECTION_REFUSED. Start a stack first to enable:
+#   scripts/dev-stack.sh   (web + api)  or  ./sloughgpt serve --web
+pytestmark = pytest.mark.skipif(
+    not (_web_is_ready() and _api_is_ready()),
+    reason=(
+        "browser journeys need a live stack (web :3000 + api :8000 — "
+        "scripts/dev-stack.sh or sloughgpt serve --web)"
+    ),
+)
+
+
 # ── Helpers ────────────────────────────────────────────────────────
 
 

@@ -58,7 +58,7 @@ def _app(kr: KnowledgeRouter):
 
 
 class TestListKnowledge:
-    @patch("domain.learner.knowledge.get_knowledge_memory")
+    @patch("domain.knowledge.get_knowledge_memory")
     def test_list(self, mock_get):
         mock_get.return_value = _mock_km()
         kr = KnowledgeRouter()
@@ -69,7 +69,7 @@ class TestListKnowledge:
         assert isinstance(data, list)
         assert len(data) == 1
 
-    @patch("domain.learner.knowledge.get_knowledge_memory")
+    @patch("domain.knowledge.get_knowledge_memory")
     def test_list_with_topic(self, mock_get):
         mock_get.return_value = _mock_km()
         kr = KnowledgeRouter()
@@ -79,7 +79,7 @@ class TestListKnowledge:
 
 
 class TestCreateKnowledge:
-    @patch("domain.learner.knowledge.get_knowledge_memory")
+    @patch("domain.knowledge.get_knowledge_memory")
     def test_create(self, mock_get):
         mock_get.return_value = _mock_km()
         kr = KnowledgeRouter()
@@ -90,7 +90,7 @@ class TestCreateKnowledge:
 
 
 class TestSearchKnowledge:
-    @patch("domain.learner.knowledge.get_knowledge_memory")
+    @patch("domain.knowledge.get_knowledge_memory")
     def test_search(self, mock_get):
         mock_get.return_value = _mock_km()
         kr = KnowledgeRouter()
@@ -101,7 +101,7 @@ class TestSearchKnowledge:
 
 
 class TestBatchDelete:
-    @patch("domain.learner.knowledge.get_knowledge_memory")
+    @patch("domain.knowledge.get_knowledge_memory")
     def test_batch_delete(self, mock_get):
         mock_get.return_value = _mock_km()
         kr = KnowledgeRouter()
@@ -112,7 +112,7 @@ class TestBatchDelete:
 
 
 class TestDeleteKnowledge:
-    @patch("domain.learner.knowledge.get_knowledge_memory")
+    @patch("domain.knowledge.get_knowledge_memory")
     def test_delete(self, mock_get):
         mock_get.return_value = _mock_km()
         kr = KnowledgeRouter()
@@ -120,7 +120,7 @@ class TestDeleteKnowledge:
         resp = client.delete("/knowledge/f1")
         assert resp.status_code == 200
 
-    @patch("domain.learner.knowledge.get_knowledge_memory")
+    @patch("domain.knowledge.get_knowledge_memory")
     def test_delete_not_found(self, mock_get):
         km = _mock_km()
         km.delete_by_id.return_value = False

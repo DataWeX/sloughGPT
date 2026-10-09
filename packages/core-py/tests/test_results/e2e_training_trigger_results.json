@@ -21,7 +21,7 @@
   },
   {
     "test": "e2e_datasets_import_dialog",
-    "passed": false,
+    "passed": true,
     "detail": ""
   },
   {
@@ -42,16 +42,16 @@
   {
     "test": "e2e_api_health_reachable",
     "passed": true,
-    "detail": "body=S\nConnecting\nConnecting\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatase"
+    "detail": "body=S\nReady\n100%\nModel loaded successfully\nShow timing\nReady\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nC"
   },
   {
     "test": "e2e_training_job_detail",
     "passed": true,
-    "detail": "len=306"
+    "detail": "len=316"
   },
   {
     "test": "e2e_monitoring_metrics",
     "passed": true,
-    "detail": "body_snippet=S\nConnecting\nConnecting\nSkip to main content\nS\nSystem Health\nAuto\nExport\nRefresh\nNo model\ncalm\n9+"
+    "detail": "body_snippet=S\nReady\n100%\nModel loaded successfully\nShow timing\nReady\nSkip to main content\nS\nSlo\nCONSOLE\n\nCORE\n\nChat\nTeach me\nTraining Runs\nDatasets\nKnowledge\n\nAI\n\nPersonalities\nAgents\nModel Souls\nL2\ncalm\n\nSYSTEM\n"
   }
 ]

@@ -46,6 +46,58 @@ except RuntimeError:
 
 pytestmark = pytest.mark.filterwarnings("ignore::RuntimeWarning")
 
+
+def _native_lib_is_available() -> bool:
+    """Can bindings actually load libtransformer_forward?
+
+    Mirrors bindings._find_lib() candidate resolution *and* its
+    ``except OSError: continue`` fallthrough: existence is not enough. This
+    checkout ships a git-tracked Mach-O ``libtransformer_forward.dylib``, so on
+    Linux the file exists but ``ctypes.CDLL`` fails with ``invalid ELF header``
+    — _find_lib() then reports "not found", which is a lie that hides the real
+    cause. Checked here without touching B's module-level cache, so
+    TestBindings still sees a cold cache.
+
+    The classes below all reach the library through B.load_lib(), so none of
+    them can run while it fails to load.
+    """
+    import ctypes
+    import os
+    from pathlib import Path
+
+    here = Path(B.__file__).resolve().parent
+    candidates = [
+        here / "libtransformer_forward.dylib",
+        here / "libtransformer_forward.so",
+    ]
+    env_path = os.environ.get("MAN_TRANSFORMER_LIB", "")
+    if env_path:
+        candidates.append(Path(env_path))
+
+    for candidate in candidates:
+        if candidate.exists():
+            try:
+                ctypes.CDLL(str(candidate))
+            except OSError:
+                continue  # same swallow as bindings._find_lib()
+            return True
+    return False
+
+
+# Applies only to the classes that touch the compiled library. TestWeightMapper
+# and TestSamplingAndFormatting are pure-Python and must keep running, so this
+# is deliberately not a module-level pytestmark.
+_NEEDS_NATIVE_LIB = pytest.mark.skipif(
+    not _native_lib_is_available(),
+    reason=(
+        "libtransformer_forward cannot be loaded on this platform: the "
+        "git-tracked artifact is a Mach-O (macOS) dylib, so ctypes.CDLL fails "
+        "with 'invalid ELF header' on Linux and bindings._find_lib() reports "
+        "'not found' while hiding that cause — no Linux .so is shipped and the "
+        "build hint in bindings.py is -dynamiclib/-framework Accelerate only"
+    ),
+)
+
 L = 2
 D = 16
 NH = 4
@@ -183,6 +235,7 @@ class _FakeTokenizer:
         return self._stop
 
 
+@_NEEDS_NATIVE_LIB
 class TestBindings:
     def test_load_lib_returns_c_library(self):
         lib = B.load_lib()
@@ -439,6 +492,7 @@ class TestSamplingAndFormatting:
         assert format_chat(msgs, "unknown-model", "") == "User: hi\nAssistant:"
 
 
+@_NEEDS_NATIVE_LIB
 class TestNativeEngine:
     def test_load_and_generate_greedy(self):
         engine = _loaded_engine()
@@ -589,6 +643,7 @@ class TestNativeEngine:
 
 
 class TestTokenizerWiring:
+    @_NEEDS_NATIVE_LIB
     def test_set_tokenizer_routes_encode_decode(self):
         engine = _loaded_engine()
         fake = _FakeTokenizer()
@@ -596,6 +651,7 @@ class TestTokenizerWiring:
         assert engine._tokenize_simple("hi") == [ord("h"), ord("i")]
         assert engine._detokenize_simple([72, 105]) == "Hi"
 
+    @_NEEDS_NATIVE_LIB
     def test_set_tokenizer_none_restores_fallback(self):
         from domain.inference._internal.tokenizer import get_tokenizer
 
@@ -604,6 +660,7 @@ class TestTokenizerWiring:
         engine.set_tokenizer(None)
         assert engine._tokenize_simple("hi") == get_tokenizer().encode("hi")
 
+    @_NEEDS_NATIVE_LIB
     def test_load_from_slnc_with_tokenizer_sets_stop_ids(self):
         engine = NativeEngine()
         engine.load_from_slnc(
@@ -612,6 +669,7 @@ class TestTokenizerWiring:
         assert engine._tokenizer is not None
         assert engine._stop_ids() == {2}
 
+    @_NEEDS_NATIVE_LIB
     def test_generate_stops_at_tokenizer_stop_id(self, monkeypatch):
         engine = NativeEngine()
         engine.load_from_slnc(
@@ -632,18 +690,21 @@ class TestTokenizerWiring:
             == ""
         )
 
+    @_NEEDS_NATIVE_LIB
     def test_build_prompt_prefers_apply_chat_template(self):
         engine = _loaded_engine()
         engine.set_tokenizer(_FakeTokenizer())
         prompt = engine._build_prompt([{"role": "user", "content": "hi"}], system="sys")
         assert prompt == "CHAT:system=sys|user=hi:ASST"
 
+    @_NEEDS_NATIVE_LIB
     def test_build_prompt_falls_back_to_format_chat(self):
         engine = _loaded_engine()
         assert engine._build_prompt(
             [{"role": "user", "content": "hi"}], system="sys"
         ) == format_chat([{"role": "user", "content": "hi"}], "qwen2", "sys")
 
+    @_NEEDS_NATIVE_LIB
     def test_sample_masks_beyond_tokenizer_vocab(self):
         engine = _loaded_engine()
         engine.set_tokenizer(_FakeTokenizer(vocab_size=4))
@@ -666,6 +727,7 @@ class TestTokenizerWiring:
         assert engine._tokenize_simple("Hello world") == [9707, 1879]
         assert engine._stop_ids() == {int(i) for i in real.chat_stop_ids()}
 
+    @_NEEDS_NATIVE_LIB
     def test_from_slnc_file_roundtrip(self, tmp_path):
         slnc_path = str(tmp_path / "tiny.slnc")
         _build_slnc(slnc_path, _weights(), _config())
@@ -736,6 +798,7 @@ class TestNativeProviderWiring:
         mod._providers.clear()
         mod._processors.clear()
 
+    @_NEEDS_NATIVE_LIB
     def test_setup_providers_native_slnc_path(self, tmp_path):
         from domain.models._internal.provider import get_provider, setup_providers
 
@@ -758,6 +821,7 @@ class TestNativeProviderWiring:
         assert get_provider("native-c") is None
 
 
+@_NEEDS_NATIVE_LIB
 class TestNativeTransformerProvider:
     def test_provider_identity_and_capabilities(self):
         engine = _loaded_engine()
@@ -828,6 +892,7 @@ class TestNativeTransformerProvider:
 
 
 class TestCTransformProvider:
+    @_NEEDS_NATIVE_LIB
     def test_from_slnc_real_file(self, tmp_path):
         slnc_path = str(tmp_path / "tiny.slnc")
         _build_slnc(slnc_path, _weights(), _config())
@@ -859,6 +924,7 @@ class TestCTransformProvider:
             atol=0,
         )
 
+    @_NEEDS_NATIVE_LIB
     def test_tokenize_detokenize_uses_real_tokenizer(self):
         from domain.inference._internal.tokenizer import get_tokenizer
 
@@ -869,6 +935,7 @@ class TestCTransformProvider:
         assert ids == get_tokenizer().encode("hi")
         assert provider.detokenize(ids) == get_tokenizer().decode(ids)
 
+    @_NEEDS_NATIVE_LIB
     def test_init_tolerates_missing_tokenizer(self, monkeypatch):
         import domain.inference._internal.tokenizer as T
 
@@ -879,6 +946,7 @@ class TestCTransformProvider:
         assert provider._tokenizer is None
         assert provider.metadata()["has_tokenizer"] is False
 
+    @_NEEDS_NATIVE_LIB
     def test_tokenize_detokenize_fallback(self):
         engine = _loaded_engine()
         provider = CTransformProvider(engine)
@@ -887,6 +955,7 @@ class TestCTransformProvider:
         assert isinstance(ids, list) and all(isinstance(t, int) for t in ids)
         assert isinstance(provider.detokenize(ids), str)
 
+    @_NEEDS_NATIVE_LIB
     def test_metadata_from_config(self):
         engine = _loaded_engine()
         provider = CTransformProvider(engine, model_id="c-tiny")

@@ -1,0 +1,107 @@
+[
+  {
+    "test": "agent_navigates_training",
+    "passed": true,
+    "detail": "status=200, len=393"
+  },
+  {
+    "test": "agent_navigates_datasets",
+    "passed": true,
+    "detail": "status=200, len=336"
+  },
+  {
+    "test": "agent_clicks_import",
+    "passed": true,
+    "detail": "found=True"
+  },
+  {
+    "test": "agent_detects_dialog",
+    "passed": true,
+    "detail": "exists=True"
+  },
+  {
+    "test": "agent_devtools_console",
+    "passed": true,
+    "detail": "console=14"
+  },
+  {
+    "test": "agent_devtools_network",
+    "passed": true,
+    "detail": "requests=280"
+  },
+  {
+    "test": "agent_devtools_no_critical",
+    "passed": true,
+    "detail": "critical=0"
+  },
+  {
+    "test": "agent_screenshot",
+    "passed": true,
+    "detail": "path=/tmp/pytest-of-mana/pytest-26/test_agent_screenshot0/training_screenshot.png"
+  },
+  {
+    "test": "agent_step_recording",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "agent_full_log",
+    "passed": true,
+    "detail": "entries=14"
+  },
+  {
+    "test": "follower_navigate",
+    "passed": true,
+    "detail": "step=1, success=True"
+  },
+  {
+    "test": "follower_click",
+    "passed": true,
+    "detail": "step=2"
+  },
+  {
+    "test": "follower_multi_step",
+    "passed": true,
+    "detail": "steps=3"
+  },
+  {
+    "test": "follower_report_json",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "follower_devtools_summary",
+    "passed": true,
+    "detail": "summary=Steps: 1 | Console: 14 (0 err, 0 warn) | Network: 281 (0 failed, 0ms avg) | Errors: 0 | Duration: 4."
+  },
+  {
+    "test": "follower_screenshot",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "follower_clear",
+    "passed": true,
+    "detail": "steps=0"
+  },
+  {
+    "test": "cross_training_elements",
+    "passed": true,
+    "detail": "checks={'has_train_keyword': True, 'has_page_content': True, 'has_navigation': True}"
+  },
+  {
+    "test": "cross_datasets_import",
+    "passed": true,
+    "detail": ""
+  },
+  {
+    "test": "cross_full_flow",
+    "passed": false,
+    "detail": ""
+  },
+  {
+    "test": "cross_api_requests",
+    "passed": true,
+    "detail": "api_reqs=16"
+  }
+]
