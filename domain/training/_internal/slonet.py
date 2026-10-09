@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.infrastructure._internal.atomic_write import atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.shared import (  # noqa: F401 — find_repo_root kept for compatibility
     find_repo_root,
@@ -4922,7 +4923,7 @@ class SloAdamW(SloAdam):
 # =============================================================================
 
 SOU_MAGIC = b"SOUL"
-SOU_VERSION = 1  # shared with domains.inference.slo_format
+SOU_VERSION = 1  # shared with domain.inference._internal.slo_format
 
 
 def _sanitize(obj):
@@ -4959,46 +4960,35 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
     path = soul_path(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
 
-    # Write .meta.json first (small, fast — serves as sidecar for list endpoint)
-    with open(soul_meta_path(path), "w") as f:
+    # Write .meta.json first (small, fast — serves as sidecar for list endpoint).
+    # Through the shared primitive too: a crash mid-write must not leave a
+    # truncated sidecar beside a valid .soul, which is exactly what save_soul
+    # guarantees for the same file.
+    with atomic_writer(soul_meta_path(path), binary=False, encoding="utf-8") as f:
         json.dump(_sanitize(metadata), f, indent=2)
 
-    # Atomic write: temp file then rename
-    import tempfile
+    # Atomic write: temp beside the target, then replace (shared primitive).
+    with atomic_writer(path, binary=True) as f:
+        params: list[tuple[str, np.ndarray]] = []
+        if include_weights:
+            if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
+                state_items = list(net.state_dict().items())
+            else:
+                state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
+            params = [
+                (k, np.asarray(v, dtype=np.float32))
+                for k, v in state_items
+                if not isinstance(v, (dict, list, tuple, str, bytes, bool))
+            ]
+        # Envelope owned by slo_format — single writer for the v3 layout.
+        from domain.inference._internal.slo_format import _write_soul_v3
 
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(path) or ".",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(tmp_fd, "wb") as f:
-            params: list[tuple[str, np.ndarray]] = []
-            if include_weights:
-                if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
-                    state_items = list(net.state_dict().items())
-                else:
-                    state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
-                params = [
-                    (k, np.asarray(v, dtype=np.float32))
-                    for k, v in state_items
-                    if not isinstance(v, (dict, list, tuple, str, bytes, bool))
-                ]
-            # Envelope owned by slo_format — single writer for the v3 layout.
-            from domain.inference._internal.slo_format import _write_soul_v3
-
-            _write_soul_v3(
-                f,
-                json_bytes,
-                params,
-                include_weights=include_weights,
-            )
-        os.rename(tmp_path, path)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+        _write_soul_v3(
+            f,
+            json_bytes,
+            params,
+            include_weights=include_weights,
+        )
     return path
 
 
@@ -5265,18 +5255,11 @@ def save_checkpoint_npz(
     np_state = _state_dict_to_numpy(state_dict)
     arrays = {k: np.asarray(v) for k, v in np_state.items()}
     arrays["_meta_json"] = np.array(json.dumps(meta or {}, default=str))
-    # Atomic write: save to a temp file in the same directory, then rename so a
-    # crash mid-write never leaves a truncated .npz as the newest checkpoint.
-    tmp_path = str(p.with_name(p.stem + ".tmp.npz"))
-    try:
-        np.savez_compressed(tmp_path, **arrays)
-        os.replace(tmp_path, str(p))
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    # Atomic write: temp beside the target, then replace (shared primitive) —
+    # a crash mid-write never leaves a truncated .npz as the newest checkpoint.
+    # The handle (not a filename) also stops numpy appending its own ".npz".
+    with atomic_writer(p, binary=True) as f:
+        np.savez_compressed(f, **arrays)
     return str(p)
 
 
