@@ -16,7 +16,6 @@ import re
 import threading
 import uuid
 from datetime import UTC, datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -62,15 +61,23 @@ _INGEST_RESERVED_KEYS = frozenset(
         "asctime",
     }
 )
-_REPO_ROOT = Path(__file__).resolve().parents[4]
-_ERROR_DB_PATH = os.path.join(_REPO_ROOT, "data", "errors_mogdb")
-_ERROR_SYNC_PATH = os.path.join(_REPO_ROOT, "data", "errors_json")
-
-
 def _get_error_db():
-    from mogdb import MogDB
+    """Process-wide singleton for the error store (see ``infrastructure.db_pool``).
 
-    return MogDB(_ERROR_DB_PATH, sync_dir=_ERROR_SYNC_PATH)
+    Building a fresh ``MogDB`` per call re-replays the whole journal under the
+    store lock — measured **360 ms** per construction on a copy of the live
+    error store (4745 journal lines resolving to just 2 live records) versus
+    ~0 ms once the instance is cached. ``db_pool`` exists precisely to kill
+    this per-request pattern, but this router never adopted it, so every
+    ingest and every ``/trends`` read paid the replay again.
+
+    ``get_db("errors_mogdb")`` resolves to the same files as the old hardcoded
+    pair (``<repo>/data/errors_mogdb`` + ``.../errors_json``) and additionally
+    honours ``SLO_DATA_DIR``, so test suites stop writing into live ``data/``.
+    """
+    from infrastructure.db_pool import get_db
+
+    return get_db("errors_mogdb")
 
 
 # ── Pydantic models ──────────────────────────────────────────────────────
