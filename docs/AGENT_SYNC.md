@@ -4,6 +4,19 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**Last update**: 2026-10-09 — card `ff9ef505` → review: **generic embedding
+provider config restored on main** — `api_key`/`base_url` + the
+`openai_api_key` alias sync on `EmbeddingConfig`, `OpenAIEmbedder`
+`base_url` wiring, and `tests/test_embedding_config.py` (8 tests).
+Root cause: the feature landed on lanes as `bab6c42ed` (card `90839119`)
+but main never received it, and `81616a6f7`'s sweep removed the same
+fields from main — **41 local branches carry the tests but not the
+fields (6 red each, incl. the root full-suite checkout)**.
+Cherry-picked `bab6c42ed` onto main. Green: embedding 8, config 34,
+consumer surface (vector_store/infrastructure/rag) 61+1 skip,
+vector_router 37, ruff clean. Red branches heal at their next merge
+from main.
+
 **Last update**: 2026-10-07 — card `d994d4f8` → done: `GET
 /knowledge/rag/documents` now pages (**default 200, `?limit`/`?offset`,
 `?all=1` escape hatch**; envelope gains `total`/`limit`/`offset`;
