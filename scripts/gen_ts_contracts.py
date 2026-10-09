@@ -14,8 +14,10 @@ Every output is **byte-identical and self-contained**: the emitted file declares
 its own ``ContractDescriptor``/``JsonSchema`` rather than importing them, so the
 same bytes land in any TypeScript tree without a relative-import dependency.
 That is what makes one descriptor serve several frontends — the web app, the
-SDK, and (once it joins the workspace) the mobile app each get a copy that needs
-nothing else from the repo.
+SDK, and the mobile app each get a copy that needs nothing else from the repo.
+Mobile in particular is *not* an npm workspace member and carries its own
+toolchain, yet it consumes the same bytes: the artifact imports nothing, so it
+typechecks under ``apps/mobile/tsconfig.json`` with no resolution change.
 
 Unlike the AST gates in ``check_contract.py`` this needs the app's
 dependencies:
@@ -45,6 +47,10 @@ ROUTERS_DIR = ROOT / "apps" / "api" / "server" / "routers"
 OUTPUTS: tuple[Path, ...] = (
     ROOT / "apps" / "web" / "lib" / "protocol" / "contracts.gen.ts",
     ROOT / "packages" / "sdk-ts" / "typescript-sdk" / "src" / "contracts.gen.ts",
+    # Mobile is not an npm workspace member and runs its own toolchain, but it
+    # does not need to be: the artifact imports nothing, so it typechecks under
+    # apps/mobile/tsconfig.json (include: src/**) with no resolution change.
+    ROOT / "apps" / "mobile" / "src" / "services" / "contracts.gen.ts",
 )
 
 sys.path.insert(0, str(ROOT / "apps" / "api" / "server"))

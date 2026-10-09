@@ -48,7 +48,7 @@ everywhere else:
 | SSE frame kind      | health / system / training stream (push — no request path) | ⚠️ hand-declared per stream                                                          |
 | CLI subcommand      | `cli.py` shell                                             | ❌ not projected                                                                     |
 | Agent tool-call     | `tools=[...]` model calls                                  | ✅ `ToolRegistry` reads `ToolSpec` directly                                          |
-| TS client helper    | `http-client.ts` (the only API surface allowed)            | ✅ `gen_ts_contracts.py` → one self-contained artifact per frontend (`lib/protocol/contracts.gen.ts`, SDK `src/contracts.gen.ts`); rest still hand-written |
+| TS client helper    | `http-client.ts` (the only API surface allowed)            | ✅ `gen_ts_contracts.py` → one self-contained artifact per frontend (`lib/protocol/contracts.gen.ts`, SDK `src/contracts.gen.ts`, mobile `src/services/contracts.gen.ts`); rest still hand-written |
 
 **3. Registration — microkernel, not a switchyard.** Each module self-registers
 at boot (import side-effect or a `@tool(descriptor)` decorator — the WordPress

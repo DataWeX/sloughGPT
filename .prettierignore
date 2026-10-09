@@ -9,3 +9,4 @@
 # in gen_ts_contracts.OUTPUTS.
 apps/web/lib/protocol/contracts.gen.ts
 packages/sdk-ts/typescript-sdk/src/contracts.gen.ts
+apps/mobile/src/services/contracts.gen.ts
