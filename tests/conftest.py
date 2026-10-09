@@ -24,36 +24,10 @@ _s_root = str(_REPO_ROOT)
 if _s_root not in sys.path:
     sys.path.append(_s_root)
 
-
-@pytest.fixture(autouse=True)
-def _isolated_pooled_stores(tmp_path, monkeypatch):
-    """Keep pooled MogDB stores out of the live ``<repo>/data`` tree.
-
-    ``db_pool.get_db()`` resolves the real repo data dir, so any suite that
-    POSTs fixtures (``test-*``/``dup-*``/``del-*`` presets, uploaded files)
-    persisted them into production stores and every run left junk behind — the
-    companion store alone held 204 fixture records against 4 real presets.
-
-    ``SLO_DATA_DIR`` (same shape as the existing ``SLO_CACHE_DIR``) points every
-    pooled store at a per-test tmp dir instead.  Lived here rather than in a
-    per-suite conftest because the pollution came from suites in *both*
-    ``tests/api-server/`` and ``tests/server/``.
-
-    The pool is a process-wide singleton keyed by ``(db_path, sync_path)``, so
-    it is cleared before and after: entries created here must not leak into
-    other tests, and pre-existing entries must not leak in here.  The import is
-    guarded — non-server suites must not fail if the server package is absent.
-    """
-    try:
-        import infrastructure.db_pool as db_pool
-    except Exception:
-        yield
-        return
-
-    monkeypatch.setenv("SLO_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setattr(db_pool, "_POOL", {})
-    yield
-    monkeypatch.setattr(db_pool, "_POOL", {})
+# Pooled-store isolation (SLO_DATA_DIR) lives in the ROOT conftest.py, not
+# here: db_pool is shared infrastructure reached from tests/, packages/*/tests
+# and apps/api/server/tests, and a fixture scoped to this file leaves the
+# other two writing through to live data/.
 
 
 def build_test_app(*routers):
