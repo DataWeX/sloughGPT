@@ -16,7 +16,7 @@ if _server_dir not in sys.path:
 import state as server_state
 from fastapi.testclient import TestClient
 
-from conftest import build_test_app
+from tests.conftest import build_test_app
 
 
 @pytest.fixture(autouse=True)
