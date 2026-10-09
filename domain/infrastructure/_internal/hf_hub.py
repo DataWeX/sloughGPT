@@ -568,6 +568,10 @@ def download_hf_model(
         incomplete = dest.with_suffix(dest.suffix + ".incomplete")
         sgpart = dest.with_suffix(dest.suffix + ".sgpart")
         if incomplete.is_file() and not sgpart.exists():
+            # Reviewed exception (card 3d0a2a56): this MOVES the downloader's
+            # *.incomplete marker into place — no content is written here, so
+            # atomic_writer (a handle-based writer) does not apply; os.replace
+            # already is the atomic overwrite-move.
             os.replace(str(incomplete), str(sgpart))
 
         chunk_cb = _make_hf_chunk_cb(
@@ -788,6 +792,9 @@ def _ensure_sgpart(info: ResumeInfo) -> Path:
         else:
             info.partial_path.unlink(missing_ok=True)
             return sgpart
+    # Reviewed exception (card 3d0a2a56): relocation of an existing partial
+    # file after the size arbitration above — a move, not a content write;
+    # atomic_writer does not apply, os.replace is the atomic overwrite-move.
     os.replace(str(info.partial_path), str(sgpart))
     return sgpart
 
@@ -978,6 +985,9 @@ def resume_download(
 
     if info.complete:
         _ensure_sgpart(info)
+        # Reviewed exception (card 3d0a2a56): promoting the finished .sgpart
+        # download to its final name — a move of an existing file, not a write;
+        # atomic_writer does not apply, os.replace is the atomic overwrite-move.
         os.replace(
             str(info.final_path.with_suffix(info.final_path.suffix + ".sgpart")),
             str(info.final_path),
