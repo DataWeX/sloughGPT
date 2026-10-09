@@ -765,7 +765,8 @@ class TestX86Assembler:
 
         asm = X86Assembler()
         code = asm.assemble("jmp 0x100")
-        assert code[0] == 0xE9  # JMP near
+        assert code[0] == 0x66  # operand-size prefix (16-bit jmp on VM CPU)
+        assert code[1] == 0xE9  # JMP near
 
     def test_add_reg_imm(self):
         from domain.shell._internal.vm import X86Assembler
@@ -780,10 +781,13 @@ class TestX86Assembler:
         asm = X86Assembler()
         code = asm.assemble("start:\n  nop\n  jmp start")
         assert code[0] == 0x90  # NOP
-        assert code[1] == 0xE9  # JMP near (always near in 16-bit for pass consistency)
-        # Offset should be -4 (back to start, relative to end of 3-byte instruction)
-        offset = int.from_bytes(code[2:4], "little", signed=True)
-        assert offset == -4
+        assert code[1] == 0x66  # operand-size prefix (16-bit jmp, always near
+        # in 16-bit for pass consistency)
+        assert code[2] == 0xE9  # JMP near
+        # Offset should be -5 (back to start, relative to end of the
+        # 4-byte 66 E9 rel16 instruction starting at byte 1)
+        offset = int.from_bytes(code[3:5], "little", signed=True)
+        assert offset == -5
 
     def test_bits_directive(self):
         from domain.shell._internal.vm import X86Assembler

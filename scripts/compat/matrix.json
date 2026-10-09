@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-09T06:26:34+00:00",
+  "generated": "2026-10-09T10:34:56+00:00",
   "manifest_version": 1,
   "steps_budget": 300000,
   "rows": [
@@ -9,9 +9,9 @@
       "source": "hello_x86",
       "verdict": "ok",
       "reason": "",
-      "asm_ms": 1.155,
+      "asm_ms": 1.743,
       "asm_bytes": 52,
-      "wall_ms": 0.18187199930252973,
+      "wall_ms": 0.3812549985013902,
       "steps": 8,
       "exit_code": 0,
       "syscalls": {
@@ -33,9 +33,9 @@
       "source": "test_syscalls",
       "verdict": "budget",
       "reason": "step budget 300000 reached (interactive/loop program)",
-      "asm_ms": 22.42,
+      "asm_ms": 144.488,
       "asm_bytes": 1824,
-      "wall_ms": 3320.7097180002165,
+      "wall_ms": 17425.670122000156,
       "steps": 300000,
       "exit_code": null,
       "syscalls": {
@@ -62,9 +62,9 @@
       "source": "cave_game",
       "verdict": "budget",
       "reason": "step budget 300000 reached (interactive/loop program)",
-      "asm_ms": 62.485,
+      "asm_ms": 517.432,
       "asm_bytes": 3095,
-      "wall_ms": 2147.6391430005606,
+      "wall_ms": 10385.524967998208,
       "steps": 300000,
       "exit_code": null,
       "syscalls": {},
@@ -85,7 +85,7 @@
       "source": "asteroids_main.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: BITS 64 not supported \u2014 x86-64 has no VM implementation (intake gate: scripts/compat/manifest.json planned rows) @ line 1",
-      "asm_ms": 0.226,
+      "asm_ms": 0.288,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -106,7 +106,7 @@
       "source": "bootmine.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: unsupported preprocessor directive '%assign' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 7",
-      "asm_ms": 0.053,
+      "asm_ms": 0.133,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -123,19 +123,22 @@
     },
     {
       "name": "bweeper",
-      "tier": "tier2",
+      "tier": "tier1",
       "source": "bweeper.asm",
-      "verdict": "fault",
-      "reason": "MemFault: read8 out of bounds at 0x660821EA",
-      "asm_ms": 10.939,
-      "asm_bytes": 562,
-      "wall_ms": 0.06195599962666165,
-      "steps": 0,
+      "verdict": "budget",
+      "reason": "step budget 300000 reached (interactive/loop program)",
+      "asm_ms": 40.673,
+      "asm_bytes": 611,
+      "wall_ms": 16397.721012002876,
+      "steps": 300000,
       "exit_code": null,
       "syscalls": {},
       "denials": 0,
       "port_io": {},
-      "unhandled_irqs": {},
+      "unhandled_irqs": {
+        "INT 0x10": 51,
+        "INT 0x16": 17
+      },
       "vga_bytes_changed": 0,
       "stdout_lines": 0,
       "stdout_head": "",
@@ -148,7 +151,7 @@
       "source": "nasm_tetris.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: segment directive not supported \u2014 flat memory model only (segmented intake is a planned tier) @ line 17",
-      "asm_ms": 0.739,
+      "asm_ms": 1.661,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -169,7 +172,7 @@
       "source": "snake_main.asm",
       "verdict": "asm_gap",
       "reason": "ValueError: unsupported preprocessor directive '%include' \u2014 macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 1",
-      "asm_ms": 0.052,
+      "asm_ms": 0.078,
       "asm_bytes": 0,
       "wall_ms": 0.0,
       "steps": 0,
@@ -221,7 +224,10 @@
       "UNLINK",
       "YIELD"
     ],
-    "unhandled_interrupts": {},
+    "unhandled_interrupts": {
+      "INT 0x10": 51,
+      "INT 0x16": 17
+    },
     "devices": [
       {
         "contract": "8250 UART serial",
@@ -242,8 +248,10 @@
       {
         "contract": "8259-style PIC dispatch",
         "status": "wired",
-        "observed": false,
-        "via": []
+        "observed": true,
+        "via": [
+          "interrupt-spy"
+        ]
       },
       {
         "contract": "VGA text buffer @0xB8000",
@@ -256,8 +264,10 @@
       {
         "contract": "PS/2 keyboard",
         "status": "wired",
-        "observed": false,
-        "via": []
+        "observed": true,
+        "via": [
+          "interrupt-spy"
+        ]
       },
       {
         "contract": "PS/2 mouse",
@@ -345,8 +355,8 @@
       },
       {
         "entry": "bweeper",
-        "verdict": "fault",
-        "reason": "MemFault: read8 out of bounds at 0x660821EA"
+        "verdict": "budget",
+        "reason": "no input injection; program loops until the step budget"
       },
       {
         "entry": "nasm_tetris",

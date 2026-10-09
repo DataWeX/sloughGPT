@@ -23,26 +23,26 @@ Run: `python scripts/compat_track.py` (per-entry step budget 300,000)
 | entry | tier | verdict | steps | wall ms | syscalls (hits) | unhandled ints | VGA bytes | reason / evidence |
 |-------|------|---------|------:|--------:|-----------------|----------------|----------:|-------------------|
 | hello_x86 | control | ok | 8 | 0 | EXIT:1, WRITE:1 | - | 0 | Hello from x86 VM! |
-| test_syscalls | control | budget | 300,000 | 3,321 | READ:1, WRITE:17, OPEN:1, CLOSE:1, FORK:1, WAIT:1 (+1) | - | 0 | step budget 300000 reached (interactive/loop program) |
-| cave_game | control | budget | 300,000 | 2,148 | -; out 0x3F8:74 | - | 4,000 | step budget 300000 reached (interactive/loop program) |
+| test_syscalls | control | budget | 300,000 | 17,426 | READ:1, WRITE:17, OPEN:1, CLOSE:1, FORK:1, WAIT:1 (+1) | - | 0 | step budget 300000 reached (interactive/loop program) |
+| cave_game | control | budget | 300,000 | 10,386 | -; out 0x3F8:74 | - | 4,000 | step budget 300000 reached (interactive/loop program) |
 | asteroids_main | tier2 | asm_gap | 0 | 0 | - | - | 0 | ValueError: BITS 64 not supported — x86-64 has no VM implementation (intake gate: scripts/compat/manifest.json |
 | bootmine | tier2 | asm_gap | 0 | 0 | - | - | 0 | ValueError: unsupported preprocessor directive '%assign' — macro/include intake is a planned tier (scripts/com |
-| bweeper | tier2 | fault | 0 | 0 | - | - | 0 | MemFault: read8 out of bounds at 0x660821EA |
+| bweeper | tier1 | budget | 300,000 | 16,398 | - | INT 0x10:51, INT 0x16:17 | 0 | step budget 300000 reached (interactive/loop program) |
 | nasm_tetris | tier2 | asm_gap | 0 | 0 | - | - | 0 | ValueError: segment directive not supported — flat memory model only (segmented intake is a planned tier) @ li |
 | snake_main | tier2 | asm_gap | 0 | 0 | - | - | 0 | ValueError: unsupported preprocessor directive '%include' — macro/include intake is a planned tier (scripts/co |
 
 ## Coverage summary
 
 - **syscalls observed**: 8/31 — never observed: BRK, DISK_READ, DISK_WRITE, EXEC, FREE, GETROLE, GETTIMEOFDAY, KILL, MALLOC, MOUSE_READ, NET_RECV, NET_SEND, READDIR, RTC_GETTIME, SBRK, SERIAL_READ, SERIAL_WRITE, TRAIN_GET_RESULT, TRAIN_START, TRAIN_STATUS, UNAME, UNLINK, YIELD
-- **unhandled interrupts invoked**: none
+- **unhandled interrupts invoked**: INT 0x10 (x51), INT 0x16 (x17)
 
 | device contract | status | observed | via |
 |------------------|--------|----------|-----|
 | 8250 UART serial | wired | yes | port:0x3F8 |
 | 8254 PIT system timer | wired | no | always-on |
-| 8259-style PIC dispatch | wired | no | - |
+| 8259-style PIC dispatch | wired | yes | interrupt-spy |
 | VGA text buffer @0xB8000 | wired | yes | memory-diff |
-| PS/2 keyboard | wired | no | - |
+| PS/2 keyboard | wired | yes | interrupt-spy |
 | PS/2 mouse | wired | no | - |
 | CMOS/RTC | wired | no | - |
 | ATA-like block storage | wired | yes | syscall:OPEN |
@@ -59,6 +59,6 @@ Run: `python scripts/compat_track.py` (per-entry step budget 300,000)
 
 - **asteroids_main** [asm_gap]: ValueError: BITS 64 not supported — x86-64 has no VM implementation (intake gate: scripts/compat/manifest.json planned rows) @ line 1
 - **bootmine** [asm_gap]: ValueError: unsupported preprocessor directive '%assign' — macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 7
-- **bweeper** [fault]: MemFault: read8 out of bounds at 0x660821EA
+- **bweeper** [budget]: no input injection; program loops until the step budget
 - **nasm_tetris** [asm_gap]: ValueError: segment directive not supported — flat memory model only (segmented intake is a planned tier) @ line 17
 - **snake_main** [asm_gap]: ValueError: unsupported preprocessor directive '%include' — macro/include intake is a planned tier (scripts/compat/manifest.json) @ line 1

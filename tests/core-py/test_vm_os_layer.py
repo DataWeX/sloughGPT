@@ -7088,7 +7088,9 @@ class TestAssemblerPfx:
     def test_pfx_ax_16bit(self):
         asm = X86Assembler()
         asm._bits = 16
-        assert asm._pfx("ax") is False
+        # Unified convention (card d475eae9): 0x66 marks 16-bit ops in
+        # BOTH modes, so r16 always carries the prefix.
+        assert asm._pfx("ax") is True
 
     def test_pfx_ax_32bit(self):
         asm = X86Assembler()
@@ -7098,7 +7100,8 @@ class TestAssemblerPfx:
     def test_pfx_eax_16bit(self):
         asm = X86Assembler()
         asm._bits = 16
-        assert asm._pfx("eax") is True
+        # r32 is main-path (unprefixed) in both modes.
+        assert asm._pfx("eax") is False
 
     def test_pfx_eax_32bit(self):
         asm = X86Assembler()
@@ -8896,15 +8899,15 @@ class TestAssembleEstimateDataSizeComprehensive:
 
     def test_lodsw(self):
         asm = X86Assembler()
-        assert asm._estimate_insn_size("lodsw") == 1
+        assert asm._estimate_insn_size("lodsw") == 2
 
     def test_stosw(self):
         asm = X86Assembler()
-        assert asm._estimate_insn_size("stosw") == 1
+        assert asm._estimate_insn_size("stosw") == 2
 
     def test_movsw(self):
         asm = X86Assembler()
-        assert asm._estimate_insn_size("movsw") == 1
+        assert asm._estimate_insn_size("movsw") == 2
 
     def test_cmpsb(self):
         asm = X86Assembler()

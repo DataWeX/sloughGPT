@@ -153,3 +153,17 @@ def test_render_md_emits_matrix_and_gap_sections():
     assert "| entry | tier | verdict |" in md
     assert "## Named gaps" in md
     assert "## Coverage summary" in md
+
+
+def test_probe_bweeper_runs_to_budget():
+    """Card d475eae9: bweeper must leave the fault verdict.
+
+    It assembles (562 B) and its org is honored, but pre-unification BITS 16
+    decode faulted at step 4 (`b8 03 00 cd 10` read as mov eax, imm32).
+    After VM-targeted 16-bit emission the interactive main loop should run
+    to the step budget instead: verdict `budget` (or `ok` if it halts).
+    """
+    src = (ct.CORPUS_DIR / "bweeper.asm").read_text()
+    row = ct.run_program(src, "bweeper", ct.load_manifest(), budget=20000)
+    assert row.verdict in ("budget", "ok"), f"{row.verdict}: {row.reason}"
+    assert row.steps > 100

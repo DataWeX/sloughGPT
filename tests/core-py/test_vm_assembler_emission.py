@@ -57,14 +57,14 @@ def test_operand_size_prefix_16bit_regs_in_32bit_mode():
     assert _hex("pop ax", 32) == "6658"
 
 
-def test_no_prefix_for_16bit_regs_in_16bit_mode():
-    assert _hex("lodsw") == "ad"
-    assert _hex("stosw") == "ab"
-    assert _hex("movsw") == "a5"
-    assert _hex("push ax") == "50"
-    assert _hex("pop ax") == "58"
-    assert _hex("push cx") == "51"
-    assert _hex("pop cx") == "59"
+def test_16bit_mode_uses_vm_operand_convention():
+    assert _hex("lodsw") == "66ad"
+    assert _hex("stosw") == "66ab"
+    assert _hex("movsw") == "66a5"
+    assert _hex("push ax") == "6650"
+    assert _hex("pop ax") == "6658"
+    assert _hex("push cx") == "6651"
+    assert _hex("pop cx") == "6659"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -92,18 +92,18 @@ def test_string_ops_byte():
 
 
 def test_string_ops_word_16bit():
-    assert _hex("lodsw") == "ad"
-    assert _hex("stosw") == "ab"
-    assert _hex("movsw") == "a5"
+    assert _hex("lodsw") == "66ad"
+    assert _hex("stosw") == "66ab"
+    assert _hex("movsw") == "66a5"
 
 
 def test_rep_prefixes():
     assert _hex("rep movsb") == "f3a4"
-    assert _hex("rep movsw") == "f3a5"
+    assert _hex("rep movsw") == "f366a5"
     assert _hex("rep stosb") == "f3aa"
-    assert _hex("rep stosw") == "f3ab"
+    assert _hex("rep stosw") == "f366ab"
     assert _hex("rep lodsb") == "f3ac"
-    assert _hex("rep lodsw") == "f3ad"
+    assert _hex("rep lodsw") == "f366ad"
     assert _hex("rep cmpsb") == "f3a6"
     assert _hex("rep scasb") == "f3ae"
     assert _hex("rep movsw", 32) == "f366a5"
@@ -120,10 +120,10 @@ def test_rep_unknown_target_emits_only_prefix():
 
 
 def test_push_registers():
-    assert _hex("push eax") == "6650"
-    assert _hex("push ebx") == "6653"
-    assert _hex("push ax") == "50"
-    assert _hex("push cx") == "51"
+    assert _hex("push eax") == "50"
+    assert _hex("push ebx") == "53"
+    assert _hex("push ax") == "6650"
+    assert _hex("push cx") == "6651"
     assert _hex("push eax", 32) == "50"
     assert _hex("push ebx", 32) == "53"
 
@@ -151,8 +151,8 @@ def test_push_no_operands_emits_nothing():
 
 
 def test_pop_registers_and_segments():
-    assert _hex("pop eax") == "6658"
-    assert _hex("pop ax") == "58"
+    assert _hex("pop eax") == "58"
+    assert _hex("pop ax") == "6658"
     assert _hex("pop eax", 32) == "58"
     assert _hex("pop ds") == "1f"
     assert _hex("pop es") == "07"
@@ -240,8 +240,8 @@ def test_loop_overflow_falls_back_to_jmp():
 
 
 def test_jmp_near_16bit():
-    assert _hex("jmp 0x100") == "e9fd00"
-    assert _hex("jmp 0") == "e9fdff"
+    assert _hex("jmp 0x100") == "66e9fc00"
+    assert _hex("jmp 0") == "66e9fcff"
 
 
 def test_jmp_32bit_short_and_near():
@@ -255,12 +255,12 @@ def test_far_jump():
 
 
 def test_call():
-    assert _hex("call 0x100") == "e8fd00"
+    assert _hex("call 0x100") == "66e8fc00"
     assert _hex("call 0x100", 32) == "e8fb000000"
 
 
 def test_forward_label_resolution():
-    assert _hex("jmp done\nnop\nnop\nnop\nnop\ndone:\n hlt") == "e9040090909090f4"
+    assert _hex("jmp done\nnop\nnop\nnop\nnop\ndone:\n hlt") == "66e9040090909090f4"
     assert _hex("jz done\nnop\nnop\nnop\nnop\ndone:\n hlt") == "740490909090f4"
     assert _hex("lgdt [gdt]\ngdt: dw 0") == "670f0115080000000000"
     assert _hex("lidt [idt]\nidt: dw 0") == "670f011d080000000000"
@@ -274,18 +274,18 @@ def test_forward_label_resolution():
 def test_mov_reg_imm():
     assert _hex("mov al, 0x7F") == "b07f"
     assert _hex("mov ch, 5") == "b505"
-    assert _hex("mov ax, 0x1234") == "b83412"
-    assert _hex("mov cx, 0x1234") == "b93412"
-    assert _hex("mov edx, 0x12345678") == "66ba78563412"
-    assert _hex("mov eax, 0x12345678") == "66b878563412"
+    assert _hex("mov ax, 0x1234") == "66b83412"
+    assert _hex("mov cx, 0x1234") == "66b93412"
+    assert _hex("mov edx, 0x12345678") == "ba78563412"
+    assert _hex("mov eax, 0x12345678") == "b878563412"
     assert _hex("mov eax, 0x12345678", 32) == "b878563412"
 
 
 def test_mov_reg_reg():
     assert _hex("mov al, bl") == "88d8"
     assert _hex("mov dl, cl") == "88ca"
-    assert _hex("mov ax, bx") == "89d8"
-    assert _hex("mov eax, ebx") == "6689d8"
+    assert _hex("mov ax, bx") == "6689d8"
+    assert _hex("mov eax, ebx") == "89d8"
     assert _hex("mov eax, ebx", 32) == "89d8"
 
 
@@ -378,8 +378,8 @@ def test_mov_scaled_index_sib():
 
 def test_alu_reg_reg():
     assert _hex("add al, bl") == "00d8"
-    assert _hex("or ax, bx") == "09d8"
-    assert _hex("sub cx, dx") == "29d1"
+    assert _hex("or ax, bx") == "6609d8"
+    assert _hex("sub cx, dx") == "6629d1"
     assert _hex("xor cl, dl") == "30d1"
     assert _hex("cmp ah, bh") == "38fc"
     assert _hex("and eax, ebx", 32) == "21d8"
@@ -392,22 +392,22 @@ def test_alu_reg_imm():
     # AX/EAX when the immediate exceeds imm8 range (05/0D/.../3D iw/id)
     assert _hex("add al, 5") == "0405"
     assert _hex("add al, 200") == "04c8"
-    assert _hex("add ax, 0x1234") == "053412"
+    assert _hex("add ax, 0x1234") == "66053412"
     assert _hex("add ax, 0x1234", 32) == "66053412"
-    assert _hex("add eax, 5") == "6683c005"
+    assert _hex("add eax, 5") == "83c005"
     assert _hex("add eax, 5", 32) == "83c005"
-    assert _hex("add eax, 0x1234") == "66053412"
-    assert _hex("add eax, 0x12345678") == "660578563412"
-    assert _hex("or eax, 5") == "6683c805"
-    assert _hex("and eax, 5") == "6683e005"
-    assert _hex("sub eax, 5") == "6683e805"
-    assert _hex("xor eax, 5") == "6683f005"
-    assert _hex("cmp eax, 5") == "6683f805"
-    assert _hex("sub eax, 0x12345678") == "662d78563412"
-    assert _hex("sub ax, 5") == "83e805"
+    assert _hex("add eax, 0x1234") == "0534120000"
+    assert _hex("add eax, 0x12345678") == "0578563412"
+    assert _hex("or eax, 5") == "83c805"
+    assert _hex("and eax, 5") == "83e005"
+    assert _hex("sub eax, 5") == "83e805"
+    assert _hex("xor eax, 5") == "83f005"
+    assert _hex("cmp eax, 5") == "83f805"
+    assert _hex("sub eax, 0x12345678") == "2d78563412"
+    assert _hex("sub ax, 5") == "6683e805"
     assert _hex("sub al, 5") == "2c05"
     assert _hex("add bl, 5") == "80c305"
-    assert _hex("add bx, 5") == "83c305"
+    assert _hex("add bx, 5") == "6683c305"
 
 
 def test_alu_reg8_large_imm_truncates():
@@ -418,12 +418,12 @@ def test_alu_reg8_large_imm_truncates():
 
 
 def test_test_forms():
-    assert _hex("test eax, ebx") == "6685d8"
-    assert _hex("test ax, bx") == "85d8"
+    assert _hex("test eax, ebx") == "85d8"
+    assert _hex("test ax, bx") == "6685d8"
     assert _hex("test al, bl") == "84d8"
     # accumulator-immediate short forms: TEST AL/EAX/AX, imm — A8/A9
-    assert _hex("test eax, 0x12345678") == "66a978563412"
-    assert _hex("test ax, 0x1234") == "a93412"
+    assert _hex("test eax, 0x12345678") == "a978563412"
+    assert _hex("test ax, 0x1234") == "66a93412"
     assert _hex("test ax, 0x1234", 32) == "66a93412"
     assert _hex("test al, 5") == "a805"
     assert _hex("test bl, 0x7F") == "f6c37f"
@@ -460,13 +460,13 @@ def test_alu_memory_forms():
 
 def test_adc_sbb_emitted():
     # adc (2) and sbb (3) are in the ALU dispatch tuple and use 81/83 /digit.
-    assert _hex("adc eax, 5") == "6683d005"
-    assert _hex("sbb eax, 5") == "6683d805"
+    assert _hex("adc eax, 5") == "83d005"
+    assert _hex("sbb eax, 5") == "83d805"
     assert _hex("adc eax, 5", 32) == "83d005"
     assert _hex("sbb eax, ebx", 32) == "19d8"
-    assert _hex("adc eax, 0x1234") == "66153412"
-    assert _hex("adc eax, 0x12345678") == "661578563412"
-    assert _hex("sbb ax, bx") == "19d8"
+    assert _hex("adc eax, 0x1234") == "1534120000"
+    assert _hex("adc eax, 0x12345678") == "1578563412"
+    assert _hex("sbb ax, bx") == "6619d8"
     assert _hex("adc al, bl") == "10d8"
     assert _hex("adc al, 5") == "1405"
     assert _hex("sbb bl, 3") == "80db03"
@@ -478,10 +478,10 @@ def test_adc_sbb_emitted():
 
 
 def test_inc_dec_registers():
-    assert _hex("inc eax") == "6640"
-    assert _hex("dec eax") == "6648"
-    assert _hex("inc ax") == "40"
-    assert _hex("dec ax") == "48"
+    assert _hex("inc eax") == "40"
+    assert _hex("dec eax") == "48"
+    assert _hex("inc ax") == "6640"
+    assert _hex("dec ax") == "6648"
     assert _hex("inc eax", 32) == "40"
     assert _hex("dec ebx", 32) == "4b"
     assert _hex("inc bl") == "fec3"
@@ -491,18 +491,18 @@ def test_inc_dec_registers():
 
 def test_inc_dec_memory_uses_proper_modrm():
     # [mem] form encodes the real base register via _mem_operand.
-    assert _hex("inc word [bx]") == "ff0500000000"  # 16-bit base reg unsupported -> disp32
+    assert _hex("inc word [bx]") == "66ff03"  # flat [ebx] + word-size prefix
     assert _hex("dec byte [eax]") == "fe08"
-    assert _hex("inc dword [ebx+4]") == "66ff4304"
+    assert _hex("inc dword [ebx+4]") == "ff4304"
 
 
 def test_unary_ops():
-    assert _hex("not eax") == "66f7d0"
-    assert _hex("neg ax") == "f7d8"
-    assert _hex("mul bx") == "f7e3"
-    assert _hex("imul ax") == "f7e8"
-    assert _hex("div cx") == "f7f1"
-    assert _hex("idiv dx") == "f7fa"
+    assert _hex("not eax") == "f7d0"
+    assert _hex("neg ax") == "66f7d8"
+    assert _hex("mul bx") == "66f7e3"
+    assert _hex("imul ax") == "66f7e8"
+    assert _hex("div cx") == "66f7f1"
+    assert _hex("idiv dx") == "66f7fa"
     assert _hex("not bl") == "f6d3"
     assert _hex("neg dl") == "f6da"
 
@@ -518,27 +518,27 @@ def test_unary_memory_emitted():
 
 
 def test_shift_imm_and_cl():
-    assert _hex("shl eax, 1") == "66c1e001"
+    assert _hex("shl eax, 1") == "c1e001"
     assert _hex("shl eax, 5", 32) == "c1e005"
-    assert _hex("shr eax, cl") == "66d3e8"
-    assert _hex("sal ax, 1") == "c1e001"
+    assert _hex("shr eax, cl") == "d3e8"
+    assert _hex("sal ax, 1") == "66c1e001"
     assert _hex("sar al, 1") == "c0f801"
-    assert _hex("rol eax, 1") == "66c1c001"
-    assert _hex("ror eax, cl") == "66d3c8"
-    assert _hex("rcl eax, 1") == "66c1d001"
-    assert _hex("rcr ax, cl") == "d3d8"
-    assert _hex("shl eax, 0x1234") == "66c1e034"
-    assert _hex("shl bx, cl") == "d3e3"
+    assert _hex("rol eax, 1") == "c1c001"
+    assert _hex("ror eax, cl") == "d3c8"
+    assert _hex("rcl eax, 1") == "c1d001"
+    assert _hex("rcr ax, cl") == "66d3d8"
+    assert _hex("shl eax, 0x1234") == "c1e034"
+    assert _hex("shl bx, cl") == "66d3e3"
     assert _hex("shl al, 1") == "c0e001"
     assert _hex("shr cl, cl") == "d2e9"
 
 
 def test_shift_memory_forms():
-    assert _hex("shl word [ebx], 1") == "c12301"
+    assert _hex("shl word [ebx], 1") == "66c12301"
     assert _hex("shr byte [ebx], cl") == "d22b"
-    assert _hex("rol dword [ebx+4], 3") == "66c1430403"
-    assert _hex("shl dword [ebx], cl") == "66d323"
-    assert _hex("rcr word [0x100], 2") == "c11d0001000002"
+    assert _hex("rol dword [ebx+4], 3") == "c1430403"
+    assert _hex("shl dword [ebx], cl") == "d323"
+    assert _hex("rcr word [0x100], 2") == "66c11d0001000002"
     assert _hex("sal byte [ebx], 1") == "c02301"
     assert _hex("shl byte [ebx], cl") == "d223"
 
@@ -560,7 +560,7 @@ def test_xchg_reg32_only():
 
 
 def test_xchg_word_and_byte():
-    assert _hex("xchg ax, bx") == "87c3"
+    assert _hex("xchg ax, bx") == "6687c3"
     assert _hex("xchg ax, bx", 32) == "6687c3"
     assert _hex("xchg al, bl") == "86c3"
 
@@ -633,7 +633,7 @@ def test_bits_org_equ_directives():
     assert asm._org == 0x1000
     assert asm.assemble("[ORG 0x7C00]\nnop") == b"\x90"
     assert asm._org == 0x7C00
-    assert asm.assemble("X equ 0x42\nmov ax, X") == b"\xb8\x42\x00"
+    assert asm.assemble("X equ 0x42\nmov ax, X") == b"\x66\xb8\x42\x00"
 
 
 def test_section_directive_is_ignored():
@@ -643,14 +643,14 @@ def test_section_directive_is_ignored():
 
 
 def test_dollar_and_expressions_resolve_to_zero():
-    assert _hex("jmp $\nnop") == "e9fdff90"
-    assert _hex("mov ax, 2+3*4") == "b80000"
-    assert _hex("mov ax, a+2\na equ 4") == "b80000"
+    assert _hex("jmp $\nnop") == "66e9fcff90"
+    assert _hex("mov ax, 2+3*4") == "66b80000"
+    assert _hex("mov ax, a+2\na equ 4") == "66b80000"
 
 
 def test_imm_parsing_forms():
-    assert _hex("mov ax, 0x1234") == "b83412"
-    assert _hex("mov ax, 1234h") == "b83412"
+    assert _hex("mov ax, 0x1234") == "66b83412"
+    assert _hex("mov ax, 1234h") == "66b83412"
     assert _hex("mov al, 0b1010") == "b00a"
     assert _hex("mov al, 0o17") == "b00f"
     assert _hex("mov al, 0b1100") == "b00c"
@@ -865,7 +865,7 @@ def test_estimate_insn_size_simple_ops():
     assert asm._estimate_insn_size("cld") == 1
     assert asm._estimate_insn_size("std") == 1
     assert asm._estimate_insn_size("lodsb") == 1
-    assert asm._estimate_insn_size("stosw") == 1
+    assert asm._estimate_insn_size("stosw") == 2  # 66 + stosw
     assert asm._estimate_insn_size("movsb") == 1
 
 
@@ -893,24 +893,24 @@ def test_estimate_insn_size_int():
 def test_estimate_insn_size_push_pop():
     asm = X86Assembler()
     assert asm._estimate_insn_size("push eax") == 1
-    assert asm._estimate_insn_size("push ax") == 1
+    assert asm._estimate_insn_size("push ax") == 2  # 66 + push ax
     assert asm._estimate_insn_size("push 42") == 3
     assert asm._estimate_insn_size("pop ebx") == 1
 
 
 def test_estimate_insn_size_jmp():
     asm = X86Assembler()
-    # Default _bits=16 -> jmp returns 3 (rel16 worst case)
-    assert asm._estimate_insn_size("jmp eax") == 3
-    assert asm._estimate_insn_size("jmp label") == 3  # 16-bit mode
+    # Default _bits=16 -> jmp returns 4 (66 + rel16 worst case)
+    assert asm._estimate_insn_size("jmp eax") == 4
+    assert asm._estimate_insn_size("jmp label") == 4  # 16-bit mode
     # far jump: seg:off without brackets
     assert asm._estimate_insn_size("jmp 0x1000:0x2000") == 5
 
 
 def test_estimate_insn_size_call():
     asm = X86Assembler()
-    # Default _bits=16 -> call returns 3 (rel16)
-    assert asm._estimate_insn_size("call eax") == 3  # 16-bit mode
+    # Default _bits=16 -> call returns 4 (66 + rel16)
+    assert asm._estimate_insn_size("call eax") == 4  # 16-bit mode
     asm._bits = 32
     assert asm._estimate_insn_size("call label") == 5  # 32-bit mode
     asm._bits = 16
@@ -1086,28 +1086,28 @@ def test_alu_reg8_mem():
 
 def test_alu_reg16_imm():
     # ADD r16, imm16 — 81 C0+digit iw (general form, non-accumulator, 16-bit mode)
-    assert _hex("add bx, 0x1234") == "81c33412"
+    assert _hex("add bx, 0x1234") == "6681c33412"
     # ADD AX, imm16 — 05 iw (accumulator short form, imm > 127)
-    assert _hex("add ax, 0x1234") == "053412"
+    assert _hex("add ax, 0x1234") == "66053412"
     # SUB r16, imm8 — 83 E8 ib (sign-extended)
-    assert _hex("sub cx, 5") == "83e905"
+    assert _hex("sub cx, 5") == "6683e905"
     # OR r16, imm16 — 81 C9 iw
-    assert _hex("or dx, 0x1234") == "81ca3412"
+    assert _hex("or dx, 0x1234") == "6681ca3412"
     # AND r16, imm16 — 81 E4 iw
-    assert _hex("and sp, 0x1234") == "81e43412"
+    assert _hex("and sp, 0x1234") == "6681e43412"
     # XOR r16, imm16 — 81 F1 iw
-    assert _hex("xor si, 0x1234") == "81f63412"
+    assert _hex("xor si, 0x1234") == "6681f63412"
     # CMP r16, imm16 — 81 F9 iw
-    assert _hex("cmp di, 0x1234") == "81ff3412"
+    assert _hex("cmp di, 0x1234") == "6681ff3412"
     # TEST AX, imm16 — A9 iw (accumulator short form)
-    assert _hex("test ax, 0x1234") == "a93412"
+    assert _hex("test ax, 0x1234") == "66a93412"
     # TEST r16, imm16 — F7 C0+digit iw (general form)
-    assert _hex("test bx, 0x1234") == "f7c33412"
+    assert _hex("test bx, 0x1234") == "66f7c33412"
     # Immediate within imm8 range uses 83 sign-extended form
-    assert _hex("add bx, 5") == "83c305"
-    assert _hex("sub ax, 0x7F") == "83e87f"
+    assert _hex("add bx, 5") == "6683c305"
+    assert _hex("sub ax, 0x7F") == "6683e87f"
     # TEST AX with small immediate still uses A9 iw (TEST doesn't have imm8 form)
-    assert _hex("test ax, 5") == "a90500"
+    assert _hex("test ax, 5") == "66a90500"
 
 
 # ── MOV memory operand emission coverage ─────────────────────────────────────
@@ -1261,9 +1261,9 @@ class TestAssemblerMovCRDR:
 def test_16bit_forward_call_jmp_with_org():
     """Card A: pass-1 placeholder (target=0) must not crash rel16 emission."""
     src = "[BITS 16]\nstart:\n call far_fn\n nop\n nop\nfar_fn:\n nop"
-    assert X86Assembler().assemble(src, org=0x100000).hex() == "e80200909090"
+    assert X86Assembler().assemble(src, org=0x100000).hex() == "66e80200909090"
     src = "[BITS 16]\nstart:\n jmp far_fn\n nop\n nop\nfar_fn:\n nop"
-    assert X86Assembler().assemble(src, org=0x100000).hex() == "e90200909090"
+    assert X86Assembler().assemble(src, org=0x100000).hex() == "66e90200909090"
 
 
 def test_16bit_real_rel16_overflow_raises_after_convergence():
@@ -1276,8 +1276,8 @@ def test_16bit_real_rel16_overflow_raises_after_convergence():
 
 def test_alu_r16_unsigned_imm16_masks():
     """81 /digit iw encodes imm16 unsigned (0x8000), not signed to_bytes."""
-    assert _hex("add bx, 0x8000") == "81c30080"
-    assert _hex("sub cx, 0x8000") == "81e90080"
+    assert _hex("add bx, 0x8000") == "6681c30080"
+    assert _hex("sub cx, 0x8000") == "6681e90080"
 
 
 def test_bits64_named_gate():
@@ -1313,27 +1313,27 @@ def test_bare_bits_org_supported_cpu_tolerated():
     # bare `bits 32` switches mode (32-bit mov encoding)
     assert X86Assembler().assemble("bits 32\nmov eax, 1").hex() == "b801000000"
     # bare `org` applies (jmp back to org base encodes rel -3)
-    assert X86Assembler().assemble("org 0x7c00\njmp 0x7c00").hex() == "e9fdff"
+    assert X86Assembler().assemble("org 0x7c00\njmp 0x7c00").hex() == "66e9fcff"
     # cpu / global / bare section aliases: explicitly tolerated, emit nothing
     assert X86Assembler().assemble("cpu 686\nglobal main\n.data\nnop").hex() == "90"
 
 
 def test_equ_hex_literal_arithmetic():
     """Card C: hex-leading expression RHS must evaluate (was ValueError)."""
-    assert X86Assembler().assemble("A equ 0x8000 + 4\nmov bx, A").hex() == "bb0480"
+    assert X86Assembler().assemble("A equ 0x8000 + 4\nmov bx, A").hex() == "66bb0480"
 
 
 def test_equ_symbol_arithmetic_bweeper_pattern():
     src = "TOP equ 3\nLEFT equ 2\nOFF equ 0x8000 + ((TOP * 80) + LEFT) * 2\nmov bx, OFF"
     # 0x8000 + (3*80 + 2)*2 = 32768 + 484 = 33252 = 0x81E4
-    assert X86Assembler().assemble(src).hex() == "bbe481"
+    assert X86Assembler().assemble(src).hex() == "66bbe481"
 
 
 def test_colonless_data_label():
     """TASM/MASM-style `NAME db ...` defines a label and emits the data
     (bweeper: `coltab      db 0x80, 0x79` — was silently dropped as a NOP)."""
     src = "coltab db 0x80, 0x79\nmov bx, coltab"
-    assert X86Assembler().assemble(src).hex() == "8079bb0000"
+    assert X86Assembler().assemble(src).hex() == "807966bb0000"
 
 
 def test_dq_emits_8_bytes_le():
@@ -1343,4 +1343,101 @@ def test_dq_emits_8_bytes_le():
 def test_cmpsw_scasw_encodings():
     # BITS 32: word ops take the 0x66 prefix (66 A7 / 66 AF); BITS 16: bare A7/AF.
     assert X86Assembler().assemble("[BITS 32]\ncmpsw\nscasw").hex() == "66a766af"
-    assert X86Assembler().assemble("[BITS 16]\ncmpsw\nscasw").hex() == "a7af"
+    assert X86Assembler().assemble("[BITS 16]\ncmpsw\nscasw").hex() == "66a766af"
+
+
+# ── VM-targeted BITS 16 emission (card d475eae9) ─────────────────────────────
+# Convention: 0x66 marks "16-bit operand ON THE VM CPU" regardless of BITS
+# mode; plain bytes decode as the CPU default (32-bit operand/address).
+# BITS 32 emission is byte-identical (its existing pins prove it); BITS 16
+# r16 ops gain the prefix _exec_16bit already executes. This matches the
+# runtime-correct convention _emit_mov's mem forms already use (vm.py:4814).
+
+
+class TestBits16VMEmission:
+    def test_r16_ops_carry_operand_size_prefix(self):
+        assert X86Assembler().assemble("mov ax, 5").hex() == "66b80500"
+        assert X86Assembler().assemble("add ax, bx").hex() == "6601d8"
+        assert X86Assembler().assemble("push ax").hex() == "6650"
+        assert X86Assembler().assemble("pop ax").hex() == "6658"
+        assert X86Assembler().assemble("inc ax").hex() == "6640"
+        assert X86Assembler().assemble("stosw").hex() == "66ab"
+        assert X86Assembler().assemble("movsw").hex() == "66a5"
+
+    def test_r32_ops_stay_unprefixed_in_bits16(self):
+        # The CPU default operand size is 32: a 32-bit op needs no prefix in
+        # EITHER mode. Before unification bits16 inverted this (66 b8 read by
+        # _exec_16bit as imm16 — silently wrong for `mov eax, imm32`).
+        assert X86Assembler().assemble("mov eax, 1").hex() == "b801000000"
+        assert X86Assembler().assemble("add eax, ebx").hex() == "01d8"
+        assert X86Assembler().assemble("push eax").hex() == "50"
+        assert X86Assembler().assemble("inc eax").hex() == "40"
+
+    def test_bits32_word_ops_byte_identical(self):
+        # Guard: unification must not disturb the long-standing BITS 32 pins.
+        assert X86Assembler().assemble("[BITS 32]\nmov ax, 1").hex() == "66b80100"
+        assert X86Assembler().assemble("[BITS 32]\nadd ax, bx").hex() == "6601d8"
+        assert X86Assembler().assemble("[BITS 32]\nstosw").hex() == "66ab"
+        assert X86Assembler().assemble("[BITS 32]\nmov eax, 1").hex() == "b801000000"
+
+    def test_near_call_jmp_prefixed_rel16(self):
+        # bits16 near control transfer: 66 + rel16 (the main path would read
+        # a bare e8/e9 as rel32 and desync the stream).
+        assert X86Assembler().assemble("call target\nnop\ntarget:\nhlt").hex() == "66e8010090f4"
+        assert X86Assembler().assemble("jmp target\nnop\ntarget:\nhlt").hex() == "66e9010090f4"
+        # forward far enough for a real rel16: 0x100 - 4 = 0xFC
+        assert X86Assembler().assemble("jmp 0x100").hex() == "66e9fc00"
+
+    def test_16bit_base_regs_map_flat(self):
+        # 16-bit base registers are flat aliases (si->esi ...): before this
+        # card they were not in _REG32 and silently resolved to [0x00000000].
+        assert X86Assembler().assemble("mov al, [si]").hex() == "8a06"
+        assert X86Assembler().assemble("mov al, [di]").hex() == "8a07"
+        assert X86Assembler().assemble("mov al, [bx]").hex() == "8a03"
+        # [bp]: ebp is rm 5 = disp32 trap at mod 00 -> force mod 01 disp8=0
+        assert X86Assembler().assemble("mov al, [bp]").hex() == "8a4500"
+        assert X86Assembler().assemble("mov al, [si+2]").hex() == "8a4602"
+        # displacement must survive (was: [bx+0x50e] -> [0x00000000])
+        assert X86Assembler().assemble("mov al, [bx+0x50e]").hex() == "8a830e050000"
+        # two 16-bit bases -> SIB (base=ebx, index=esi, scale 1)
+        assert X86Assembler().assemble("mov al, [bx+si]").hex() == "8a0433"
+        assert X86Assembler().assemble("mov [di], ax").hex() == "668907"
+        assert X86Assembler().assemble("test al, [di]").hex() == "8407"
+
+    def test_segment_override_emits_faithful_prefix(self):
+        # `es:[di]` used to assemble to ZERO bytes (operand starting with a
+        # segment name matched no dispatch branch): silent instruction drop.
+        assert X86Assembler().assemble("mov es:[di], ax").hex() == "26668907"
+        assert X86Assembler().assemble("[BITS 32]\nmov es:[eax], al").hex() == "268800"
+
+    def test_bits16_program_runs_on_cpu_to_halt(self):
+        # End-to-end decode: imm16 ops + prefixed call/ret must produce 42.
+        src = "call f\nhlt\nf:\nmov ax, 40\nadd ax, 2\nret"
+        cpu = X86CPU()
+        cpu.load(X86Assembler().assemble(src), org=0)
+        cpu.run(max_steps=50)
+        assert cpu._regs[0] & 0xFFFF == 42
+
+    def test_bits16_jmp_rel16_runs_on_cpu(self):
+        src = "jmp f\nnop\nf:\nmov ax, 7\nhlt"
+        cpu = X86CPU()
+        cpu.load(X86Assembler().assemble(src), org=0)
+        cpu.run(max_steps=50)
+        assert cpu._regs[0] & 0xFFFF == 7
+
+    def test_flat_16bit_base_addressing_runs_on_cpu(self):
+        # The address must actually be [esi], not [0] (probe: AL was 0x77
+        # from address 0 instead of 0xAB from 0x500).
+        cpu = X86CPU()
+        cpu.load(X86Assembler().assemble("mov esi, 0x500\nmov al, [si]\nhlt"), org=0)
+        cpu._mem[0x500] = 0xAB
+        cpu.run(max_steps=10)
+        assert cpu._regs[0] & 0xFF == 0xAB
+
+    def test_segment_prefixed_store_runs_on_cpu(self):
+        cpu = X86CPU()
+        cpu.load(
+            X86Assembler().assemble("mov edi, 0x600\nmov ax, 0x1234\nmov es:[di], ax\nhlt"), org=0
+        )
+        cpu.run(max_steps=20)
+        assert bytes(cpu._mem[0x600:0x602]) == b"\x34\x12"
