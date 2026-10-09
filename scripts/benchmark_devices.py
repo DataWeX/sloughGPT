@@ -148,13 +148,17 @@ def save_baseline(data: dict) -> None:
 
 
 def main() -> None:
+    from domain.shared import utc_now_iso
+
     args = set(sys.argv[1:])
     update = "--update" in args
     ci_mode = "--ci" in args
 
     print("[BENCH] Measuring /dev dispatch overhead (offline, injected AI fns)...")
     result = run()
-    result["timestamp"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    # UTC with a Z suffix — a naive local strftime here reads as UTC to every
+    # downstream consumer (timestamp guard: test_no_naive_iso_strftime_writers).
+    result["timestamp"] = utc_now_iso()
     result["python"] = sys.version.split()[0]
     result["loadavg"] = _loadavg()
 
