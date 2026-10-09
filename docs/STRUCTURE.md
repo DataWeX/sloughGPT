@@ -28,7 +28,11 @@ See `docs/REPO_STRUCTURE_MIGRATION.md` for the full move map.
 
 Contributor and security policies: **[CONTRIBUTING.md](../CONTRIBUTING.md)** and **[SECURITY.md](../SECURITY.md)** at the repo root (symlinks to `docs/policies/`).
 
-CI: **`.github/workflows/reusable-ci-core.yml`** (Python ruff smoke + core pytest), **`ci_cd.yml`** (Python SDK **`sdk-test-py`**, TypeScript SDK **`test-sdk-ts`**, Next.js **`test-web`**, **`standards-schemas`**, Docker images, benchmarks). Local parity commands are in **CONTRIBUTING.md**.
+CI (`.github/workflows/`): **`ci_cd.yml`** is the main pipeline — ruff/mypy **`lint`**, Python **`test-core-py`**, **`test-server`**, **`test-root`**, Next.js **`test-strui`** + **`test-web`**, Python SDK **`test-sdk-py`**, TypeScript SDK **`test-sdk-ts`**, then `build` → `deploy` and `benchmark`. **`ci.yml`** runs on the same PRs and covers typecheck, frontend lib/build/E2E, Python checks and doc-code parity. **`packages.yml`** is path-gated to `packages/**` and matrices over the six packages that own their own suites (aml, app-planner, bawl, chargectl, downcraft, infra-lib — 1,041 tests). **`mobile.yml`** and **`gateway.yml`** are path-gated to their own apps; **`release.yml`** fires on `v*` tags.
+
+`.github/workflows/reusable-ci-core.yml` is currently **orphaned** — it declares `workflow_call` but no workflow invokes it, so its `quantization-gate` never runs. `cloudflare-pages.yml` triggers only on a single session branch and so never deploys from `main`. Both need a decision (wire up or delete) rather than being listed as live.
+
+Local parity commands are in **CONTRIBUTING.md**.
 
 ### Infrastructure docs
 

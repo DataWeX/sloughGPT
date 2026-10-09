@@ -1,0 +1,101 @@
+name: Packages CI
+
+# Six packages carry 1,041 tests that no other workflow ran (verified green
+# 2026-10-09: aml 46, app-planner 195, bawl 97, chargectl 142, downcraft 452,
+# infra-lib 109). ci_cd.yml covers core-py / api / web / strui / sdk, and
+# mobile.yml + gateway.yml path-gate their own apps -- these packages fell
+# through every one of those seams because nothing referenced their paths.
+#
+# Path-gated so an unrelated push does not pay for six extra runners.
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "packages/aml/**"
+      - "packages/app-planner/**"
+      - "packages/bawl/**"
+      - "packages/chargectl/**"
+      - "packages/downcraft/**"
+      - "packages/infra-lib/**"
+      - ".github/workflows/packages.yml"
+  pull_request:
+    paths:
+      - "packages/aml/**"
+      - "packages/app-planner/**"
+      - "packages/bawl/**"
+      - "packages/chargectl/**"
+      - "packages/downcraft/**"
+      - "packages/infra-lib/**"
+      - ".github/workflows/packages.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: sloughgpt-packages-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+
+jobs:
+  test-packages:
+    name: test-${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      # One package failing must not mask the state of the other five.
+      fail-fast: false
+      matrix:
+        include:
+          - name: aml
+            path: packages/aml
+            pythonpath: packages/aml
+            deps: ""
+          - name: app-planner
+            path: packages/app-planner
+            pythonpath: packages/app-planner/src
+            deps: ""
+          - name: bawl
+            path: packages/bawl
+            pythonpath: packages/bawl/src
+            deps: ""
+          - name: chargectl
+            path: packages/chargectl
+            pythonpath: packages/chargectl/src
+            deps: ""
+          - name: downcraft
+            path: packages/downcraft
+            pythonpath: packages/downcraft
+            # lz4 and playwright are lazy-imported optional extras in
+            # downcraft (compress / browser); only requests + zstandard are
+            # hard dependencies, and lz4 is small enough to install so the
+            # compression paths actually get exercised instead of skipped.
+            deps: "requests zstandard lz4"
+          - name: infra-lib
+            path: packages/infra-lib
+            pythonpath: packages/infra-lib
+            deps: ""
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: ${{ matrix.path }}/pyproject.toml
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pytest pytest-asyncio
+          if [ -n "${{ matrix.deps }}" ]; then
+            python -m pip install ${{ matrix.deps }}
+          fi
+
+      # Deliberately no `pip install -e` and no core-py on the path: all six
+      # suites were verified self-contained under a bare PYTHONPATH, so the
+      # job tests the package as it actually stands rather than through a
+      # packaging step that could paper over a missing export.
+      - name: Run ${{ matrix.name }} tests
+        env:
+          PYTHONPATH: ${{ github.workspace }}/${{ matrix.pythonpath }}
+        run: >
+          python -m pytest "${{ matrix.path }}/tests"
+          -q --tb=short -p no:cacheprovider
