@@ -208,6 +208,23 @@ class TestBufferPool:
 # =============================================================================
 
 
+@pytest.fixture
+def cpu_only(monkeypatch):
+    """Force the GPU availability probes off so detection tests are hermetic.
+
+    This file documents a cupy-less environment, but cupy landed in the shared
+    conda env (2026-10-08) on a box with a real NVIDIA GPU — host state must
+    not leak into backend-selection expectations. Tests that patch the probes
+    themselves stack on top of these defaults (monkeypatch is LIFO).
+    """
+    monkeypatch.setattr(slib._CUDABackend, "is_available", lambda self: False)
+    monkeypatch.setattr(slib._OpenCLBackend, "is_available", lambda self: False)
+    slib.reset_accelerator()
+    yield
+    slib.reset_accelerator()
+
+
+@pytest.mark.usefixtures("cpu_only")
 class TestBackendSelection:
     def test_default_detection_returns_cpu(self):
         acc = slib.get_accelerator()
@@ -1060,7 +1077,10 @@ class TestGpuBackends:
         backend = slib._MetalBackend()
         assert backend.sync() is None
 
-    def test_cuda_not_available(self):
+    def test_cuda_not_available(self, monkeypatch):
+        # Hermetic: remove cupy from the import path entirely so the probe's
+        # False branch is exercised regardless of what the host has installed.
+        monkeypatch.setitem(sys.modules, "cupy", None)
         assert slib._CUDABackend().is_available() is False
 
     def test_cuda_fallback_matmul(self):
@@ -1679,7 +1699,7 @@ class TestModuleFunctions:
         arr = np.arange(6, dtype=np.float64)
         assert np.array_equal(slib.from_gpu(slib.to_gpu(arr)), arr)
 
-    def test_gelu_module(self):
+    def test_gelu_module(self, cpu_only):
         x = np.linspace(-2, 2, 9).astype(np.float32)
         assert np.allclose(slib.gelu(x), _ref_gelu(x), atol=1e-5)
 
@@ -1693,7 +1713,7 @@ class TestModuleFunctions:
 
 
 class TestBenchmarkAccelerators:
-    def test_benchmark_cpu_ok(self):
+    def test_benchmark_cpu_ok(self, cpu_only):
         results = slib.benchmark_accelerators()
         assert set(results) == {"cpu", "metal", "cuda", "opencl"}
         assert results["cpu"]["status"] == "ok"
