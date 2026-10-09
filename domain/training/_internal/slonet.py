@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from domain.inference._internal.forward_pass import ForwardPassResult
+from domain.infrastructure._internal.atomic_write import atomic_writer
 from domain.infrastructure._internal.kv_cache.native import NativeKVState
 from domain.shared import (  # noqa: F401 — find_repo_root kept for compatibility
     find_repo_root,
@@ -4964,41 +4965,28 @@ def export_to_sou(net: SloNet, path: str, include_weights=True, metadata: dict =
         json.dump(_sanitize(metadata), f, indent=2)
 
     # Atomic write: temp file then rename
-    import tempfile
 
-    tmp_fd, tmp_path = tempfile.mkstemp(
-        dir=os.path.dirname(path) or ".",
-        suffix=".tmp",
-    )
-    try:
-        with os.fdopen(tmp_fd, "wb") as f:
-            params: list[tuple[str, np.ndarray]] = []
-            if include_weights:
-                if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
-                    state_items = list(net.state_dict().items())
-                else:
-                    state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
-                params = [
-                    (k, np.asarray(v, dtype=np.float32))
-                    for k, v in state_items
-                    if not isinstance(v, (dict, list, tuple, str, bytes, bool))
-                ]
-            # Envelope owned by slo_format — single writer for the v3 layout.
-            from domain.inference._internal.slo_format import _write_soul_v3
+    with atomic_writer(path, binary=True) as f:
+        params: list[tuple[str, np.ndarray]] = []
+        if include_weights:
+            if hasattr(net, "state_dict") and isinstance(net, SloTransformer):
+                state_items = list(net.state_dict().items())
+            else:
+                state_items = [(f"p{i}", p.data) for i, p in enumerate(net.parameters())]
+            params = [
+                (k, np.asarray(v, dtype=np.float32))
+                for k, v in state_items
+                if not isinstance(v, (dict, list, tuple, str, bytes, bool))
+            ]
+        # Envelope owned by slo_format — single writer for the v3 layout.
+        from domain.inference._internal.slo_format import _write_soul_v3
 
-            _write_soul_v3(
-                f,
-                json_bytes,
-                params,
-                include_weights=include_weights,
-            )
-        os.rename(tmp_path, path)
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+        _write_soul_v3(
+            f,
+            json_bytes,
+            params,
+            include_weights=include_weights,
+        )
     return path
 
 
@@ -5265,18 +5253,13 @@ def save_checkpoint_npz(
     np_state = _state_dict_to_numpy(state_dict)
     arrays = {k: np.asarray(v) for k, v in np_state.items()}
     arrays["_meta_json"] = np.array(json.dumps(meta or {}, default=str))
-    # Atomic write: save to a temp file in the same directory, then rename so a
-    # crash mid-write never leaves a truncated .npz as the newest checkpoint.
-    tmp_path = str(p.with_name(p.stem + ".tmp.npz"))
-    try:
-        np.savez_compressed(tmp_path, **arrays)
-        os.replace(tmp_path, str(p))
-    except Exception:
-        try:
-            os.unlink(tmp_path)
-        except OSError:
-            pass
-        raise
+    # Atomic write: save to a temp file in the same directory, then swap in —
+    # a crash mid-write never leaves a truncated .npz as the newest checkpoint.
+    # numpy writes the archive itself, so it gets the atomic handle: savez
+    # accepts a file object as its target, and the rename + failure cleanup
+    # are atomic_writer's job.
+    with atomic_writer(str(p)) as f:
+        np.savez_compressed(f, **arrays)
     return str(p)
 
 
