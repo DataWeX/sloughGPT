@@ -3403,8 +3403,6 @@ Examples:
             self._print(rendered)
         self._chat_history.append({"role": "assistant", "content": full})
 
-    # ── LLM-powered NL interpreter ──────────────────────────────────
-
     def _cmd_render(self, args: str = "") -> None:
         """Path tracer + neural scene analysis. Subcommands:
         render                       — show scene info
@@ -3711,6 +3709,8 @@ Examples:
                     )
             except Exception as e:
                 self._print(f"  {_C_RED}Error:{_C_RESET} {e}")
+
+    # ── LLM-powered NL interpreter ──────────────────────────────────
 
     def _cmd_ai(self, args: str = "") -> None:
         """AI agent — single-shot natural language to command, or interactive agent loop.
