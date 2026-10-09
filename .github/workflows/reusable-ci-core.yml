@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: apps/api/server/requirements.txt
-      - run: pip install ruff mypy
+      - run: pip install ruff==0.16.8 mypy  # pinned: unpinned ruff drifted from local and red-gated format (kanban c3254c33)
       - name: Ruff lint
         run: ruff check packages/core-py/ apps/api/server/ --exclude '__pycache__'
       - name: Ruff format check
