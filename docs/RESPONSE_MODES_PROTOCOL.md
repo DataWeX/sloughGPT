@@ -305,7 +305,9 @@ Rules that fall out:
 
 Projection machinery is **implemented**: `create_router(spec, route, handler)`
 (`infrastructure/contract.py`) emits the HTTP half, and `scripts/gen_ts_contracts.py`
-emits the typed TS half into `apps/web/lib/protocol/contracts.gen.ts` with a
+emits the typed TS half once per frontend consumer — `apps/web/lib/protocol/contracts.gen.ts`,
+`packages/sdk-ts/typescript-sdk/src/contracts.gen.ts` and
+`apps/mobile/src/services/contracts.gen.ts`, byte-identical and import-free — with a
 freshness gate — the `ts-rs` pattern, where a contract change that isn't
 regenerated fails the build rather than the user. What is still hand-built
 (AGENTS _Endpoint & Transport Rule_) are the push transports: SSE frame kinds
