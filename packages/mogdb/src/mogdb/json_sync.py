@@ -97,8 +97,17 @@ class SyncableCollection:
                 with open(self._json_path) as f:
                     data = json.load(f)
             if isinstance(data, list) and data:
-                self._col.insert_many(data)
-                logger.debug("bootstrapped %d docs from %s", len(data), self._json_path.name)
+                # Mirror the loader's filter: _mogdb_meta is snapshot framing,
+                # not data.  insert_many() ran on the raw array before, so a
+                # meta line reaching the mirror was minted an _id, became a real
+                # document, and was written straight back out by
+                # _sync_to_json() — self-perpetuating pollution that only
+                # surfaced once the collection was rebuilt from the mirror.
+                docs = [d for d in data if isinstance(d, dict) and "_mogdb_meta" not in d]
+                if not docs:
+                    return
+                self._col.insert_many(docs)
+                logger.debug("bootstrapped %d docs from %s", len(docs), self._json_path.name)
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("failed to bootstrap from %s: %s", self._json_path.name, e)
 

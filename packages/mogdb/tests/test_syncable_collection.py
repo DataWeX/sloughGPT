@@ -331,6 +331,41 @@ class TestBootstrap:
         assert sc.count() == 0
         sc.close()
 
+    def test_bootstrap_skips_mogdb_meta_entries(self, tmp_path):
+        # A mirror that carries a compacted-snapshot meta line must not have it
+        # inserted as a document: _load() skips _mogdb_meta, but the bootstrap
+        # path called insert_many() on the raw array, and Document() then minted
+        # it an _id.  That meta doc became real data, was written straight back
+        # out by _sync_to_json(), and so self-perpetuated in the mirror.
+        json_path = tmp_path / "meta.json"
+        json_path.write_text(
+            json.dumps(
+                [
+                    {"_mogdb_meta": {"seq": 7, "v": 1}, "_id": "leaked", "_created": 1.0},
+                    {"_id": "real", "v": 1},
+                ]
+            )
+        )
+
+        db = MogDB(str(tmp_path / "mogdb_meta"))
+        col = db.collection("metad")
+        sc = SyncableCollection(col, json_path)
+        assert sc.count() == 1
+        assert col.find_one({"_id": "real"}) is not None
+        assert col.find_one({"_id": "leaked"}) is None
+        sc.close()
+
+    def test_bootstrap_skips_non_dict_entries(self, tmp_path):
+        # Malformed rows must not abort the whole bootstrap.
+        json_path = tmp_path / "ragged.json"
+        json_path.write_text(json.dumps([{"_id": "ok", "v": 1}, "junk", None, 42]))
+
+        db = MogDB(str(tmp_path / "mogdb_ragged"))
+        col = db.collection("ragged")
+        sc = SyncableCollection(col, json_path)
+        assert sc.count() == 1
+        sc.close()
+
 
 # ── Sync modes ───────────────────────────────────────────────────────────────
 
