@@ -31,7 +31,7 @@ class TopUpRequest(BaseModel):
 
 
 class UpgradeRequest(BaseModel):
-    tier: str = Field(..., pattern=r"^(free|basic|pro|enterprise)$", description="Target tier")
+    tier: str = Field(..., pattern=r"^(free|pro|enterprise)$", description="Target tier")
 
 
 class CheckRequest(BaseModel):

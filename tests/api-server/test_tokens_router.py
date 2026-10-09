@@ -131,8 +131,13 @@ class TestUpgrade:
         assert resp.json()["data"]["tier"] == "pro"
 
     def test_upgrade_invalid_tier(self, client):
+        # 'basic' is not a Tier (free|pro|enterprise) — card 9e99c328: the
+        # UpgradeRequest pattern used to advertise it, so pydantic accepted
+        # 'basic' and only the router's post-validation check rejected it
+        # (400). The pattern must not admit what Tier cannot serve: rejection
+        # now happens at validation (422), same as any other unknown tier.
         resp = client.post("/tokens/upgrade", json={"tier": "basic"})
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
 
 # ── Check ────────────────────────────────────────────────────────────────────
