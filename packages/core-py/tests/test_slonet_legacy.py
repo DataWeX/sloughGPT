@@ -2346,6 +2346,13 @@ class TestGetAcceleratorOldBackendFailure:
         import domain.training._internal.gpu.accelerator as _old_acc_mod
 
         monkeypatch.setattr(slonet, "_ACCELERATOR", None)
+        # Both legs of the fallback chain must fail: slolib first (as the host
+        # now has cupy, the real probe would return a CUDA backend and mask
+        # the legacy path), then the legacy training accelerator.
+        monkeypatch.setattr(
+            "domain.slolib._internal.gpu.get_accelerator",
+            lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
         monkeypatch.setattr(
             _old_acc_mod,
             "get_accelerator",
