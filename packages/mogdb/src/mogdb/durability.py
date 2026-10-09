@@ -92,14 +92,21 @@ def atomic_write(path: Path, data: bytes, *, fsync: bool = True) -> None:
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
     try:
-        _write_all(fd, data)
-        if fsync:
-            os.fsync(fd)
-    finally:
-        os.close(fd)
-    os.replace(tmp, path)
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+        try:
+            _write_all(fd, data)
+            if fsync:
+                os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+        raise
     if fsync:
         dir_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:

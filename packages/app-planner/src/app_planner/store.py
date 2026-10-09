@@ -20,8 +20,7 @@ Usage::
 from __future__ import annotations
 
 import json
-import os
-import tempfile
+import logging
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -29,7 +28,10 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .atomic import atomic_write_text
 from .slot_chain import apply_board
+
+logger = logging.getLogger("app_planner.store")
 
 # ── Data Models ──────────────────────────────────────────────────────────
 
@@ -163,18 +165,8 @@ class PlannerStore:
         )
 
     def _atomic_write(self, text: str) -> None:
-        """Write the board atomically (temp file + rename) to avoid torn writes."""
-        fd, tmp = tempfile.mkstemp(dir=self._board_dir, prefix=".board-", suffix=".tmp")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(text)
-            os.replace(tmp, self._board_file)
-        except BaseException:
-            try:
-                os.remove(tmp)
-            except OSError:
-                pass
-            raise
+        """Write the board durably and atomically (tmp -> fsync -> replace)."""
+        atomic_write_text(self._board_file, text)
         apply_board(self._board_file)  # one line: re-derive slot chain on every board write
 
     @staticmethod
@@ -433,6 +425,7 @@ class PlannerStore:
         if not self._notes_file.exists():
             return []
         notes: list[Note] = []
+        skipped = 0
         for raw in self._notes_file.read_text().splitlines():
             raw = raw.strip()
             if not raw:
@@ -440,12 +433,20 @@ class PlannerStore:
             try:
                 notes.append(Note.from_dict(json.loads(raw)))
             except json.JSONDecodeError:
-                continue
+                # A torn/corrupt line is kept on disk (evidence) but must
+                # never be dropped silently — report it every read.
+                skipped += 1
+        if skipped:
+            logger.warning(
+                "notes journal %s: %d corrupt line(s) skipped on read",
+                self._notes_file,
+                skipped,
+            )
         return notes
 
     def _write_notes(self, notes: list[Note]) -> None:
         lines = [json.dumps(n.to_dict(), ensure_ascii=False) for n in notes]
-        self._notes_file.write_text("\n".join(lines) + "\n" if lines else "")
+        atomic_write_text(self._notes_file, "\n".join(lines) + "\n" if lines else "")
 
     def list_notes(
         self,

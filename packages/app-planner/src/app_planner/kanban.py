@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config
+from .atomic import atomic_write_text
 
 logger = logging.getLogger("app_planner.kanban")
 
@@ -174,7 +175,7 @@ class _JSONBackend:
             return Board()
 
     def save(self, board: Board) -> None:
-        self._path.write_text(json.dumps(board.to_dict(), indent=2, default=str))
+        atomic_write_text(self._path, json.dumps(board.to_dict(), indent=2, default=str))
 
 
 class KanbanStore:
