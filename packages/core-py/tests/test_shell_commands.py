@@ -8,6 +8,7 @@ import sys
 import types
 
 import pytest
+import requests as _real_requests
 
 from domain.shell._internal import commands as mod
 from domain.shell._internal.commands import ShellCommands
@@ -26,6 +27,11 @@ class _FakeResponse:
 class _FakeRequests(types.ModuleType):
     def __init__(self):
         super().__init__("requests")
+        # commands.py names these in `except` clauses (L37/58/78/131/410).
+        # A stub without them raises AttributeError while the interpreter is
+        # evaluating the clause, masking the exception actually under test.
+        self.ConnectionError = _real_requests.ConnectionError
+        self.Timeout = _real_requests.Timeout
         self._get_resp = _FakeResponse()
         self._post_resp = _FakeResponse()
         self._delete_resp = _FakeResponse()
