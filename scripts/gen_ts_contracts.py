@@ -53,6 +53,14 @@ OUTPUTS: tuple[Path, ...] = (
     ROOT / "apps" / "mobile" / "src" / "services" / "contracts.gen.ts",
 )
 
+# Self-bootstrap both roots, so the bare invocations in the usage block above
+# work without the caller exporting PYTHONPATH: `routers`/`infrastructure` live
+# under apps/api/server, but everything those modules import (`domain`,
+# `packages/*`) is rooted at the repo root. Inserting only the server dir left
+# `python scripts/gen_ts_contracts.py --check` failing with ModuleNotFoundError:
+# No module named 'domain' — a footgun the documented bare `--check` line walks
+# straight into.
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "apps" / "api" / "server"))
 
 # Self-contained by design — no `import type ... from './types'`. Portability is
