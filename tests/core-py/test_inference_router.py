@@ -26,7 +26,7 @@ from routers.inference import (
     _search_sessions_sync,
 )  # noqa: E402
 
-from conftest import build_test_app
+from tests.conftest import build_test_app
 
 
 def _app(ir: InferenceRouter):
