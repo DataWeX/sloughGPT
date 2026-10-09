@@ -755,6 +755,12 @@ def soul_read_candidates(path: str) -> list[str]:
     magic check, parse, finder globs — would catch it, because both files are
     valid SOUL containers.
     """
+    # Contract is -> list[str]: callers ", ".join() the result to build log
+    # and error messages, so a pathlib.Path argument must not leak through.
+    # It did — "as given first" returned *path* verbatim, and `path != canonical`
+    # is unconditionally true for a Path (Path never equals str), which turned
+    # every missing-checkpoint FileNotFoundError into a TypeError and a 500.
+    path = os.fspath(path)
     directory, basename = os.path.split(path)
 
     if basename.endswith(_SLO_SUFFIX):

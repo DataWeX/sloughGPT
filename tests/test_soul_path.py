@@ -75,6 +75,28 @@ class TestSoulReadCandidates:
         # not a spelling of .soul to be normalized away.
         assert soul_read_candidates("m/x.sou") == ["m/x.sou", "m/x.soul"]
 
+    def test_path_like_input_still_returns_strs(self):
+        # The signature is -> list[str] and callers build log messages with
+        # ", ".join(candidates). Two leaks existed: the "as given first" rules
+        # returned *path* verbatim, and `path != canonical` is ALWAYS true for
+        # a pathlib.Path (Path never compares equal to str), so the canonical
+        # .soul branch handed back the Path itself.
+        for probe in ("m/x.soul", "m/x.slo", "m/x.sou"):
+            out = soul_read_candidates(Path(probe))
+            assert all(isinstance(c, str) for c in out), (probe, out)
+        assert soul_read_candidates(Path("m/x.soul")) == ["m/x.soul", "m/x.soul.soul"]
+
+
+class TestLoadSoulMissingCheckpoint:
+    def test_missing_path_like_checkpoint_is_file_not_found(self, tmp_path):
+        # Regression: POST /souls/chat for an absent checkpoint must answer
+        # 404. The FileNotFoundError *message* joined the candidate list, so a
+        # Path input made message construction blow up with TypeError and the
+        # router returned 500 instead.
+        missing = tmp_path / "no-such-checkpoint-for-test.soul"
+        with pytest.raises(FileNotFoundError):
+            load_soul(missing)
+
 
 class TestSaveLoadRoundtrip:
     def test_save_canonicalizes_and_pairs_meta(self, tmp_path):
