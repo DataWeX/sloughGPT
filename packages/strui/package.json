@@ -44,13 +44,15 @@
     "zustand": "^4.3.0"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@eslint/js": "^9.39.5",
     "@sloughgpt/eslint-config": "file:../eslint-config",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "eslint": "^9.0.0",
+    "eslint": "^9.39.5",
     "jsdom": "^29.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -8,6 +8,12 @@ describe('cn', () => {
   })
 
   it('handles conditional classes', () => {
-    expect(cn('base', false && 'hidden', true && 'block')).toBe('base block')
+    // The idiom under test is the JSX conditional form (`cond && 'class'`).
+    // eslint 9's no-constant-binary-expression — new in v9's eslint:recommended,
+    // this package used to lint under v8 — rejects a *literal* left operand,
+    // so bind the conditions; cn() receives identical booleans either way.
+    const shouldHide = false
+    const shouldShow = true
+    expect(cn('base', shouldHide && 'hidden', shouldShow && 'block')).toBe('base block')
   })
 })
