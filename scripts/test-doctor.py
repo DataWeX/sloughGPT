@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib
 import json
 import os
@@ -943,6 +944,186 @@ def cmd_mock_drift(verbose: bool = False) -> int:
 # ═══════════════════════════════════════════════════════════════════════
 
 
+def _pd_resolve(fname: str, node: ast.AST) -> str | None:
+    """Statically resolve a __file__-anchored path expression, else None.
+
+    Three forms are resolvable without executing anything:
+        os.path.join(os.path.dirname(__file__), "..", "a")
+        Path(__file__).resolve().parents[N] / "a" / "b"
+        Path(__file__).resolve().parent.parent / "a"
+
+    Anything else (dirname(<module>.__file__), a computed segment, an
+    os.environ-driven root) returns None and is skipped rather than guessed.
+    """
+    # os.path.join(os.path.dirname(__file__), "a", "..", ...)
+    if (
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "join"
+        and node.args
+        and isinstance(node.args[0], ast.Call)
+        and isinstance(node.args[0].func, ast.Attribute)
+        and node.args[0].func.attr == "dirname"
+    ):
+        da = node.args[0].args
+        if not (
+            da
+            and isinstance(da[0], ast.Name)
+            and da[0].id == "__file__"
+        ):
+            # dirname(<some_module>.__file__) -- base is unknown statically
+            return None
+        parts = [
+            e.value
+            for e in node.args[1:]
+            if isinstance(e, ast.Constant) and isinstance(e.value, str)
+        ]
+        if len(parts) != len(node.args) - 1:
+            return None
+        return os.path.normpath(os.path.join(os.path.dirname(fname), *parts))
+
+    # Path(__file__).resolve().parents[N] / "a" / "b"   |   ... / "a"
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Div):
+        segs: list[str] = []
+        cur: ast.AST = node
+        while isinstance(cur, ast.BinOp) and isinstance(cur.op, ast.Div):
+            if isinstance(cur.right, ast.Constant) and isinstance(cur.right.value, str):
+                segs.append(cur.right.value)
+            else:
+                return None
+            cur = cur.left
+        segs.reverse()
+
+        idx: int | None = None
+        if (
+            isinstance(cur, ast.Subscript)
+            and isinstance(cur.value, ast.Attribute)
+            and cur.value.attr == "parents"
+            and isinstance(cur.slice, ast.Constant)
+            and isinstance(cur.slice.value, int)
+        ):
+            idx = cur.slice.value
+        elif isinstance(cur, ast.Attribute) and cur.attr == "parent":
+            idx = 0  # .parent is parents[0] relative to the file itself
+
+        if idx is None or not _pd_is_file_anchor(cur):
+            return None
+        start = Path(fname).resolve()
+        base = start.parent if idx == 0 else start.parents[idx]
+        return os.path.normpath(str(base.joinpath(*segs)))
+
+    return None
+
+
+def _pd_is_file_anchor(node: ast.AST) -> bool:
+    """True if the spine under a parent/parents access is Path(__file__).resolve()."""
+    # .parents[N] is a Subscript: the Path(__file__) spine is on its .value
+    if isinstance(node, ast.Subscript):
+        node = node.value
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "Path":
+        return bool(
+            node.args
+            and isinstance(node.args[0], ast.Name)
+            and node.args[0].id == "__file__"
+        )
+    return False
+
+
+def _pd_uses_file(node: ast.AST) -> bool:
+    """True if the expression references __file__ at all."""
+    return any(
+        isinstance(n, ast.Name) and n.id == "__file__" for n in ast.walk(node)
+    )
+
+
+def _pd_sites() -> tuple[list[tuple[str, int, str]], int]:
+    """Collect (file, lineno, resolved) for resolvable sites; plus a skip count.
+
+    Two shapes carry a repo-anchored path:
+      * an argument to a sys.path insert/append call
+      * a bare assignment whose target names a dir/path
+    A bare `x = Path(__file__).resolve().parents[1] / "a" / "b"` has no call
+    wrapper, so scanning calls alone misses it -- that is how
+    tests/test_training_pipeline.py slipped through the first draft.
+    """
+    hits: list[tuple[str, int, str]] = []
+    skipped = 0
+    for path in sorted(Path("tests").rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (SyntaxError, UnicodeDecodeError):
+            continue
+        fname = str(path)
+
+        candidates: list[ast.AST] = []
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in ("insert", "append")
+            ):
+                candidates.extend(node.args)
+            elif isinstance(node, ast.Assign):
+                if any(
+                    isinstance(t, ast.Name) and ("dir" in t.id or "path" in t.id)
+                    for t in node.targets
+                ):
+                    # unwrap str(...) so `path = str(Path(...) / "a")` resolves
+                    v = node.value
+                    if (
+                        isinstance(v, ast.Call)
+                        and isinstance(v.func, ast.Name)
+                        and v.func.id == "str"
+                        and len(v.args) == 1
+                    ):
+                        v = v.args[0]
+                    candidates.append(v)
+
+        for cand in candidates:
+            resolved = _pd_resolve(fname, cand)
+            if resolved is not None:
+                hits.append((fname, cand.lineno, resolved))
+            elif _pd_uses_file(cand):
+                # references __file__ but is not statically resolvable
+                skipped += 1
+    return hits, skipped
+
+
+def cmd_path_drift(verbose: bool = False) -> int:
+    _p(f"\n  {_b}{_c}Path drift{_r}\n")
+    _p(f"  {_dim('__file__-anchored sys.path entries that resolve nowhere')}\n")
+
+    hits, skipped = _pd_sites()
+    bad = [(f, ln, p) for f, ln, p in hits if not os.path.exists(p)]
+    good = len(hits) - len(bad)
+
+    _p(f"  {_dim(f'{good} site(s) resolve to an existing path')}\n")
+    if skipped:
+        _p(
+            f"  {_dim(f'{skipped} expression(s) skipped (not __file__-anchored)')}\n"
+        )
+
+    if not bad:
+        _p(f"  {_green('clean')}\n\n")
+        return 0
+
+    _p(f"\n  {_rd}{len(bad)} site(s) point at a path that does not exist:{_r}\n")
+    for f, ln, p in bad:
+        _p(f"    {_y}{f}:{ln}{_r}\n")
+        _p(f"      -> {_dim(p)}\n")
+    _p(
+        f"\n  {_dim('These stay latent while tests/conftest.py independently inserts')}\n"
+    )
+    _p(f"  {_dim('the right directory, so imports resolve and the suite stays green.')}\n")
+    _p(
+        f"  {_dim('They break the moment that conftest changes. Caused by dcb2a5eaf')}\n"
+    )
+    _p(f"  {_dim('(four test roots -> one) when path depth changed under the files.')}\n\n")
+    return 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         prog="test-doctor",
@@ -954,6 +1135,7 @@ def main() -> int:
               test-doctor tests/test_foo.py            diagnose file
               test-doctor --fix-hint <test>::test_fn   suggest fix
               test-doctor --mock-drift                 dead @patch targets
+              test-doctor --path-drift                 broken test path arithmetic
         """),
     )
     ap.add_argument("target", nargs="?")
@@ -961,6 +1143,11 @@ def main() -> int:
     ap.add_argument("--flake", "-f", action="store_true")
     ap.add_argument("--fix-hint", metavar="TEST")
     ap.add_argument("--mock-drift", action="store_true", help="dead @patch targets")
+    ap.add_argument(
+        "--path-drift",
+        action="store_true",
+        help="__file__-anchored sys.path entries that resolve nowhere",
+    )
     ap.add_argument("--no-color", action="store_true")
     ap.add_argument("--quiet", "-q", action="store_true", help="minimal output")
     ap.add_argument("--summary", "-s", action="store_true", help="summary only")
@@ -974,6 +1161,8 @@ def main() -> int:
 
     if args.mock_drift:
         return cmd_mock_drift(verbose=args.verbose)
+    if args.path_drift:
+        return cmd_path_drift(verbose=args.verbose)
     if args.fix_hint:
         return cmd_fix_hint(args.fix_hint)
     if args.flake:
