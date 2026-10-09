@@ -1468,8 +1468,18 @@ def _build_guard_for_model(cfg, model_type: str):
         model_type: Model id (used for the .slnc path and worker naming)
 
     Returns:
-        A started ProcessGuard, or None when disabled / no .slnc / failure.
+        A started ProcessGuard, or None when nothing is loaded yet, the guard
+        is disabled, there is no .slnc, or construction fails.
     """
+    if not model_type:
+        # No id means no model was loaded, so there is nothing to guard.
+        # Without this the call reaches get_model_dir(None) and startup
+        # reports a guard failure for what is really an unloaded model.
+        logger.info(
+            "ProcessGuard skipped: no model id (no model loaded) — nothing to guard",
+            extra={"tag": "START"},
+        )
+        return None
     try:
         from config import get_process_guard_enabled
 
