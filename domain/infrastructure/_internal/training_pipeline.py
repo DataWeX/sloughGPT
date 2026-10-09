@@ -15,7 +15,7 @@ Storage: MogDB (``data/training_pipeline.db``) with three collections —
 
 Feedback ratings use the feedback-domain vocabulary ``"thumbs_up"`` /
 ``"thumbs_down"`` / ``"neutral"`` (None = unrated), matching
-``domains/feedback``.
+``domain/feedback``.
 """
 
 from __future__ import annotations
@@ -23,7 +23,6 @@ from __future__ import annotations
 import dataclasses
 import json
 import logging
-import os
 import shutil
 import threading
 from dataclasses import dataclass, field
@@ -33,6 +32,7 @@ from typing import Any
 
 from mogdb import MogDB
 
+from domain.infrastructure._internal.atomic_write import atomic_writer
 from domain.shared import utc_now_iso
 
 logger = logging.getLogger("slo.infrastructure.training_pipeline")
@@ -564,24 +564,18 @@ class TrainingDataPipeline:
             if format == "jsonl":
                 filename = f"training_v{version}.jsonl"
                 filepath = self.exports_dir / filename
-                tmp_path = self.exports_dir / f".{filename}.tmp"
-                try:
-                    with open(tmp_path, "w") as f:
-                        for pair in pairs:
-                            f.write(
-                                json.dumps(
-                                    {
-                                        "prompt": pair.prompt,
-                                        "response": pair.response,
-                                        "quality": pair.quality_score,
-                                    }
-                                )
-                                + "\n"
+                with atomic_writer(filepath, binary=False, encoding="utf-8") as f:
+                    for pair in pairs:
+                        f.write(
+                            json.dumps(
+                                {
+                                    "prompt": pair.prompt,
+                                    "response": pair.response,
+                                    "quality": pair.quality_score,
+                                }
                             )
-                    os.replace(tmp_path, filepath)
-                finally:
-                    if tmp_path.exists():
-                        tmp_path.unlink()
+                            + "\n"
+                        )
 
                 # "latest" copy for consumers that expect a stable path
                 latest_link = self.exports_dir / "latest.jsonl"
@@ -592,25 +586,19 @@ class TrainingDataPipeline:
             elif format == "json":
                 filename = f"training_v{version}.json"
                 filepath = self.exports_dir / filename
-                tmp_path = self.exports_dir / f".{filename}.tmp"
-                try:
-                    with open(tmp_path, "w") as f:
-                        json.dump(
-                            [
-                                {
-                                    "prompt": p.prompt,
-                                    "response": p.response,
-                                    "quality": p.quality_score,
-                                }
-                                for p in pairs
-                            ],
-                            f,
-                            indent=2,
-                        )
-                    os.replace(tmp_path, filepath)
-                finally:
-                    if tmp_path.exists():
-                        tmp_path.unlink()
+                with atomic_writer(filepath, binary=False, encoding="utf-8") as f:
+                    json.dump(
+                        [
+                            {
+                                "prompt": p.prompt,
+                                "response": p.response,
+                                "quality": p.quality_score,
+                            }
+                            for p in pairs
+                        ],
+                        f,
+                        indent=2,
+                    )
 
             else:
                 raise ValueError(f"Unknown format: {format}")
