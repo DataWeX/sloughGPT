@@ -30,10 +30,10 @@ and `/operations/cancel-all` have **zero** route hits anywhere under
 
 | What                       | Docs claim                      | Code says                                                         | Verdict |
 | -------------------------- | ------------------------------- | ----------------------------------------------------------------- | ------- |
-| HTTP routes                | 412 (`API.md`)                  | **619** literal + 1 dynamic                                       | stale   |
-| Router count               | 43 (`API.md`) / 58 (`PROD_ENG`) | **57** files, all mounted except `api_keys` (unmounted by design) | stale   |
-| `routers.md` endpoint rows | 398 rows / 42 sections          | **120** rows match no code route                                  | drift   |
-| Frontend pages             | 85+ (`PROD_ENG`)                | **109** `page.tsx`                                                | stale   |
+| HTTP routes                | 607 (`API.md`)                  | **607** literal + 1 dynamic                                       | ok     |
+| Router count               | 58 (`API.md`) / 58 (`PROD_ENG`) | **58** router files, all mounted except `api_keys` (unmounted by design) | ok |
+| `routers.md` endpoint rows | 394 rows / 43 sections          | **129** rows match no code route; **339** code routes undocumented | drift   |
+| Frontend pages             | 110 (`PROD_ENG`)                | **110** `page.tsx`                                                | ok     |
 
 ### Machine contract (`parity-claims`)
 
@@ -59,37 +59,44 @@ measured code disagrees with any value, the script exits 1.
 # b22e878a) lowers them as it lands, and any climb shows up as an alarm.
 # Check independently of the route-doc truth-up (G1) with:
 #   scripts/check_docs_api_parity.py --architecture-only
+#
+# 2026-10-09 (card b22e878a): controllers_internal_* lowered 4/30/13 -> 0/0/0
+# and combined_internal_* 4/30 -> 0/0 because all 30 controller _internal
+# import sites moved onto domain.<pkg> facades (lazy facade binding keeps
+# _internal test patches visible at call time). Verify the facade still
+# re-exports every swapped name before lowering again.
 routers_internal_files=0
 routers_internal_stmts=0
 routers_internal_in_scope_files=0
 controllers_files=5
 controllers_lines=2844
 controllers_defs=93
-controllers_internal_files=4
-controllers_internal_stmts=30
-controllers_internal_modules=13
-combined_internal_files=4
-combined_internal_stmts=30
+controllers_internal_files=0
+controllers_internal_stmts=0
+controllers_internal_modules=0
+combined_internal_files=0
+combined_internal_stmts=0
 -->
 
 ## Gaps → cards
 
 ### G1 — API docs truth-up (card `34b396b7`)
 
-- **120 dead rows** in `docs/routers.md` claim endpoints code no longer has.
+- **129 dead rows** in `docs/routers.md` claim endpoints code no longer has.
   Samples: `GET /session/list`, `POST /session/create`, `GET|DELETE
 /session/{session_id}`, `/session/{session_id}/suggestions`,
   `POST /context/store-fact`, `POST /operations/{op_id}/cancel`,
   `POST /operations/cancel-all`, `GET /models/huggingface`,
   `GET /models/download/status`, `POST /models/download/cancel|retry`.
-- **16 mounted routers have no section at all**: `chat`, `cloud_training`,
-  `consciousness`, `dashboard`, `mobile`, `model_stack`, `openwebui`, `phoneme`,
+- **17 mounted routers have no section at all**: `chat`, `cloud_training`,
+  `consciousness`, `dashboard`, `mobile`, `model_stack`, `mole`, `openwebui`, `phoneme`,
   `plugins`, `profiles`, `settings`, `tenants`, `tokens`, `tools`, `users`,
   `workspaces`.
 - **339 code routes have no endpoint row** (top: settings 41, consciousness 35,
-  kb 34, mobile 33, workspaces 29, models 25, inference 19).
-- Stale counts to re-pin: `API.md` "412 routes across 43 routers";
-  `PRODUCT_ENGINEERING.md` "85+ frontend pages" (109) and "58 routers" (57).
+  kb 34, mobile 33, workspaces 29, models 25, inference 18).
+- Stale counts to re-pin: ~~`API.md` "412 routes across 43 routers"~~ (re-pinned
+  to 607/58, parity ok); ~~`PRODUCT_ENGINEERING.md` "58 routers"~~ (= 58, ok);
+  ~~"85+ frontend pages"~~ (tru-ed to 110 on 2026-10-09).
 
 Full lists come from `check_docs_api_parity.py --json`; the fix can regenerate
 rows from that output instead of hand-editing.

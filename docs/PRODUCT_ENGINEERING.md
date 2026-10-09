@@ -108,7 +108,7 @@ only through the same stable interfaces:
 | #   | Feature              | Status           | Domain module          | Notes                                                              |
 | --- | -------------------- | ---------------- | ---------------------- | ------------------------------------------------------------------ |
 | 15  | **Consciousness**    | Wired           | `consciousness`        | Level-gated post-gen wiring (SloEngine hook + router `_run_post_gen_tasks`); narrative via reasoning_chain + `CONSCIOUSNESS` SSE; 27 sub-pages still need flow review |
-| 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works, but router bypasses domain        |
+| 16  | **Voice**            | Partial          | `voice`                | TTS works, phoneme encode works; router imports the `domain.voice` facade |
 | 17  | **Phoneme Learning** | Over-built       | `voice` (phoneme)      | 47 components, 12 tabs — needs flow restructure                    |
 | 18  | **Tokenizer**        | Over-built       | `training` (tokenizer) | 9 tabs, 12 sub-cards — needs consolidation                         |
 | 19  | **Companion**        | Built            | `companion`            | AI companion with personality                                      |
@@ -270,7 +270,7 @@ tests green.
 
 ## Route Map (what exists vs what should exist)
 
-### Current: 85+ frontend pages, 58 routers
+### Current: 110 frontend pages, 58 routers
 
 ### Target: ~20 frontend pages, ~15 routers
 
@@ -318,7 +318,7 @@ tests green.
 1. **Write this doc** ✅ (you're reading it)
 2. **Quick cleanup** ✅ — dead routers removed (metrics, collections, feeds, session_store); nav consolidated: `/benchmark` headless, training sub-pages integrated, 8 tool pages removed → chat `ModeBar` (`/chat?mode=<mode>`), `/tools` grid removed
 3. **Feature engines** ✅ — VoiceEngine, KnowledgeEngine, TrainingEngine (ToolsEngine pattern) + `get_*_engine` facade exports, routers wired
-4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across 22 router files; facade lazy exports added for heavy symbols; tests patch facade paths)
+4. **Wire routers** ✅ — routers import public `domain.<pkg>` facades only (0 `_internal` imports across all 58 router files — enforced by `tests/test_layer_conformance.py`, shell/vm/world_render/api_keys excluded as agreed zones; facade lazy exports added for heavy symbols; tests may patch facade or `_internal` paths — lazy binding keeps both visible)
 5. **UI flows** — restructure phoneme, knowledge, training pages to follow UX_FLOWS.md
 6. **Consciousness** ✅ — wire cognitive engine to inference pipeline (SloEngine post-gen hook + router single process, level-gated via `ConsciousnessConfig.level`; narrative surfaced through `reasoning_chain` and `CONSCIOUSNESS complete` SSE)
 7. **Test** — verify all user journeys pass
