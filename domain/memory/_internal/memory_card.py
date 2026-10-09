@@ -22,7 +22,7 @@ Invariants:
 - the checksum is verified BEFORE callers may touch the store — a corrupt or
   truncated card can never destroy memory
 - card names are restricted to ``[A-Za-z0-9._-]`` (no separators, no ``..``)
-- writes are atomic (tmp file + ``os.replace``)
+- writes are atomic (``atomic_write``: temp beside the card, then ``os.replace``)
 
 Every failure raises a :class:`MemoryCardError` subclass with a user-facing
 message; callers map subclasses to ``error_code``s via ``MemoryCardError``.
@@ -39,6 +39,8 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
+
+from domain.infrastructure._internal.atomic_write import atomic_write
 
 logger = logging.getLogger(__name__)
 
@@ -189,9 +191,7 @@ def save_card(
     }
     try:
         directory.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_suffix(".card.json.tmp")
-        tmp.write_text(json.dumps(card, ensure_ascii=False, indent=None))
-        os.replace(tmp, path)
+        atomic_write(path, json.dumps(card, ensure_ascii=False, indent=None))
     except MemoryCardError:
         raise
     except Exception as e:
