@@ -410,7 +410,24 @@ git push -u origin feat/<name>   # push your own branch when done
   (`python -m app_planner …` + `sync`), and keep `docs/INDEX.md` current for
   new docs.
 
-## Landed on main (origin/main = `bf0be96b9`)
+## Landed on main (origin/main = `79882584d`)
+
+- **2026-10-09 · "Never-run areas" reds closed** (card `c59d5be7`,
+  dup `ffdb5151` marked; fix `9d7c77f79`, gate 133 passed/4 skipped/0 failed):
+  chat_loop_e2e 6E+2F→0 (facade `_internal` namespace patch target; **the serving
+  `/chat/stream` is `inference.chat_stream` via manifest first-match** — it binds
+  `get_provider` top-level at `inference.py:45`, so the `_internal` provider patch
+  never installed → zero tokens; `reset_chat_manager()` around the fixture because
+  the singleton caches its provider at startup), endpoint_registry 3F→0
+  (`/auto-train/*` moved to `/settings/training/auto-train/*` + `/training/checkpoints`;
+  **bare `/metrics` is not on origin/main** — another lane's untracked
+  `routers/metrics.py`, allowlisted already → skip-on-404 guard), test_integration
+  5F→0 (envelope unwrap; empty prompt = contract 422 `E_VAL_REQUEST` since
+  `6e9cebb54`), auto_train_integration 2F + server_api 1F → skip-on-404 (flow
+  removed by `c02788ca4`; successor `/training` router committed but absent from
+  `routers/_manifest.py`). **Why they survived every gate: all 97 tests are
+  slow-marked → deselected by default** — slow-marker audit belongs to
+  `d2803a3c`/`ca647de2`.
 
 - **2026-10-09 · Run5 test-vs-impl drift triage closed** (card `56b49cf1`,
   ~300 baseline reds → 0, 6 commits): `853691a4e` gpu_linalg 40→0 (IMPL fix —
