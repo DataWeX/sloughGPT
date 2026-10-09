@@ -33,6 +33,20 @@ the poisoned stat stands. Final state after heal: fsck exit 0, 0 zero-byte
 objects, 5130/5130 tracked files match the index. **Do NOT rewrite refs to
 "fix" corruption — forward-only recovery.**
 
+**Last update**: 2026-10-09 — `fix/packaging-domain-package-dir` **pushed
+(card 56cf354c)**: origin/main `setup.py egg_info` hard-failed — `package
+directory 'packages/core-py/domain' does not exist` (discovery at `.` vs
+`package_dir "" = packages/core-py`, so the documented `pip install -e
+".[dev]"` could not complete). Fix = explicit `"domain" = "domain"` mapping
+in setup.py + pyproject, root `domain*` discovery, dropped stale
+`apps.cli.sloughgpt` (no such dir; entry point is `apps.cli.src.cli:main`);
+new `tests/test_packaging_egg_info.py` pins exit 0 + top_level = domain+apps,
+never tests (RED→GREEN). Card part B already fixed on main by `ba131bb25`
+(audit collection); truth-ups appended to cards `4a1e62fa` + `d2803a3c`.
+Coordination: the db-pool branch carries its own packaging fix — setup.py/
+pyproject deliberately NOT synced to shared (would clobber their tree); only
+the new test file synced.
+
 **Last update**: 2026-10-08 ~12:10 — `e8fd60d4` **closed (site-doctor design +
 inventory reconciled to the landed MOLE)**. The card's 2026-10-01 inventory
 was stale: the doctor rebrand → **Mole** (`752b27ab`) and most of the

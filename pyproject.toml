@@ -82,7 +82,7 @@ Documentation = "https://github.com/iamtowbee/sloughGPT#readme"
 Repository = "https://github.com/iamtowbee/sloughGPT"
 
 [tool.setuptools]
-package-dir = {"" = "packages/core-py", "apps" = "apps"}
+package-dir = {"" = "packages/core-py", "apps" = "apps", "domain" = "domain"}
 include-package-data = true
 
 [tool.setuptools.package-data]
