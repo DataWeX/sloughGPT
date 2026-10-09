@@ -154,7 +154,11 @@ class StorageDevice:
         """Rename file."""
         src_path = os.path.join(self._base_path, src)
         dst_path = os.path.join(self._base_path, dst)
-        os.rename(src_path, dst_path)
+        # Reviewed exception (card 3d0a2a56): the storage API's move operation
+        # relocates an existing file — it does not write one, so atomic_writer
+        # does not apply. os.replace is the portable overwrite-atomic move
+        # (identical to rename(2) on POSIX — no behaviour change).
+        os.replace(src_path, dst_path)
         return True
 
     def exists(self, path: str) -> bool:
