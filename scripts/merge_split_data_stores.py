@@ -21,7 +21,11 @@ Safety properties:
   *rewriting* them — a mutation we do not want during triage.
 * Output is written as a compacted ``.mogdb`` snapshot (the format ``compact()``
   produces), with a seq watermark far above anything observed so a leftover
-  journal can never shadow it.
+  journal can never shadow it.  ``*_json`` sync mirrors are written as the bare
+  JSON array their loader bootstraps from — never as a ``.mogdb``.
+* Each side is replayed as a **stack**: snapshot first (baseline), then the
+  journal's ops on top, exactly as MogDB's loader does.  The derived
+  ``*_json`` mirror is used only when neither store file exists.
 
 Usage::
 
@@ -65,18 +69,51 @@ def find_root() -> Path:
     raise SystemExit("repo root not found")
 
 
-def replay(path: Path) -> tuple[dict[str, dict], int, int]:
-    """Replay a journal or compacted snapshot into ``{_id: doc}``.
+def replay(
+    path: Path,
+    docs: dict[str, dict] | None = None,
+    max_seq: int = 0,
+    lines: int = 0,
+) -> tuple[dict[str, dict], int, int]:
+    """Replay a journal, snapshot, or JSON-sync mirror into ``{_id: doc}``.
+
+    Handles all three on-disk shapes: append-only JSONL journals, compacted
+    ``.mogdb`` snapshots (meta line + bare docs), and the ``*_json`` sync
+    mirrors, which are a single pretty-printed JSON *array* — line-wise
+    ``json.loads`` yields nothing for those, so the mirror half must be parsed
+    whole-document or it is silently dropped.
+
+    ``docs``/``max_seq``/``lines`` may be supplied to **layer** sources: replay
+    the snapshot first to get the baseline, then replay the journal into the
+    same dict so its ops land on top.  Reading only the journal — as this
+    function's original single-source caller did — throws the snapshot away and
+    reports the journal's handful of lines as the whole store.
 
     Returns ``(docs, max_seq, source_lines)``.  Never mutates *path*.
     """
-    docs: dict[str, dict] = {}
-    max_seq = 0
-    lines = 0
+    if docs is None:
+        docs = {}
     if not path.exists():
         return docs, max_seq, lines
 
-    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+    text = path.read_text(encoding="utf-8", errors="replace")
+
+    # JSON-sync mirror: one pretty-printed array of bare docs.
+    if path.suffix == ".json":
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            data = None
+        if isinstance(data, list):
+            for entry in data:
+                if not isinstance(entry, dict) or "_mogdb_meta" in entry:
+                    continue
+                doc_id = str(entry.get("_id", ""))
+                if doc_id:
+                    docs[doc_id] = entry
+            return docs, max_seq, lines + len(data)
+
+    for raw in text.splitlines():
         line = raw.strip()
         if not line:
             continue
@@ -137,6 +174,37 @@ def replay(path: Path) -> tuple[dict[str, dict], int, int]:
     return docs, max_seq, lines
 
 
+def load_side(store_dir: Path, coll: str) -> tuple[dict[str, dict], int, int]:
+    """Replay one side's sources in MogDB's own order: snapshot, then journal.
+
+    The ``*_json`` mirror is consulted only when neither store file exists —
+    it is a *derived* bootstrap source (``_bootstrap_from_json`` runs solely
+    when the collection is empty), so preferring it would re-inject content the
+    snapshot has already superseded.
+
+    Picking a single "first file that exists" was the bug: once a journal
+    appeared beside the snapshot, only the journal's few ops were replayed and
+    the snapshot baseline vanished from the report (208 docs reported as 16).
+    """
+    docs: dict[str, dict] = {}
+    max_seq = 0
+    lines = 0
+
+    snapshot = store_dir / f"{coll}.mogdb"
+    journal = store_dir / f"{coll}.journal.jsonl"
+    mirror = store_dir / f"{coll}.json"
+
+    if snapshot.exists() or journal.exists():
+        if snapshot.exists():
+            docs, max_seq, lines = replay(snapshot, docs, max_seq, lines)
+        if journal.exists():
+            docs, max_seq, lines = replay(journal, docs, max_seq, lines)
+    elif mirror.exists():
+        docs, max_seq, lines = replay(mirror, docs, max_seq, lines)
+
+    return docs, max_seq, lines
+
+
 def merge_docs(outside: dict[str, dict], inside: dict[str, dict]) -> tuple[dict[str, dict], dict]:
     """Union by ``_id``; later ``_updated`` wins, ties prefer the outside half."""
     merged: dict[str, dict] = {}
@@ -175,6 +243,20 @@ def snapshot_payload(docs: dict[str, dict]) -> bytes:
     return ("\n".join(lines) + "\n").encode("utf-8")
 
 
+def mirror_payload(docs: dict[str, dict]) -> bytes:
+    """Serialise in the shape ``MogDB._sync_to_json`` writes: a bare array.
+
+    The ``*_json`` directories are sync mirrors, not stores — dropping a
+    ``.mogdb`` snapshot in there would be an orphan the loader never reads.
+    """
+    return (json.dumps(list(docs.values()), indent=2, default=str) + "\n").encode("utf-8")
+
+
+def is_mirror(store: str) -> bool:
+    """True for a ``*_json`` sync-mirror directory (vs. a ``*_mogdb`` store)."""
+    return store.endswith("_json")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -202,17 +284,11 @@ def main() -> int:
         out_dir = outside_root / store
         in_dir = inside_root / store
 
-        # JSON-sync mirrors carry one file per collection; MogDB stores carry a
-        # journal and/or a compacted snapshot.  Merge whichever exists per side.
-        candidates = [f"{coll}.journal.jsonl", f"{coll}.mogdb", f"{coll}.json"]
-        out_src = next((out_dir / c for c in candidates if (out_dir / c).exists()), None)
-        in_src = next((in_dir / c for c in candidates if (in_dir / c).exists()), None)
-
-        if out_src is None and in_src is None:
+        if not out_dir.is_dir() and not in_dir.is_dir():
             continue
 
-        outside_docs, out_seq, out_lines = replay(out_src) if out_src else ({}, 0, 0)
-        inside_docs, in_seq, in_lines = replay(in_src) if in_src else ({}, 0, 0)
+        outside_docs, out_seq, out_lines = load_side(out_dir, coll)
+        inside_docs, in_seq, in_lines = load_side(in_dir, coll)
 
         if not outside_docs and not inside_docs:
             continue
@@ -259,22 +335,28 @@ def main() -> int:
     print(f"backups -> {backup}")
     print()
 
-    # ---- write merged snapshots into the in-repo half ----
+    # ---- write merged state into the in-repo half ----
     written = 0
     for store, coll, out_dir, in_dir, merged, stats, _ in plan:
         in_dir.mkdir(parents=True, exist_ok=True)
-        snapshot = in_dir / f"{coll}.mogdb"
-        tmp = in_dir / f"{coll}.mogdb.tmp"
-        tmp.write_bytes(snapshot_payload(merged))
-        tmp.replace(snapshot)  # atomic — never a half-written snapshot
+        mirror = is_mirror(store)
+        # Each store kind keeps its own format: a *.mogdb store takes a
+        # compacted snapshot, a *_json sync mirror takes the bare array its
+        # loader bootstraps from.
+        out_file = in_dir / (f"{coll}.json" if mirror else f"{coll}.mogdb")
+        payload = mirror_payload(merged) if mirror else snapshot_payload(merged)
+        tmp = in_dir / (f"{coll}.json.tmp" if mirror else f"{coll}.mogdb.tmp")
+        tmp.write_bytes(payload)
+        tmp.replace(out_file)  # atomic — never a half-written file
 
         # The journal is now fully shadowed by the snapshot's watermark; removing
         # it is exactly what compact() does.  Keep it in the backup only.
-        journal = in_dir / f"{coll}.journal.jsonl"
-        if journal.exists():
-            journal.unlink()
+        if not mirror:
+            journal = in_dir / f"{coll}.journal.jsonl"
+            if journal.exists():
+                journal.unlink()
         written += 1
-        print(f"wrote {snapshot.relative_to(root)} ({len(merged)} docs)")
+        print(f"wrote {out_file.relative_to(root)} ({len(merged)} docs)")
 
     print()
     print(f"merged {written} collection(s).")
