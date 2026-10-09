@@ -11,3 +11,5 @@ Application services (auth, billing, mobile) live outside this package in
 `services/`. Nothing under `domain/` may import `services.*` — that inverts the
 dependency direction.
 """
+
+from __future__ import annotations

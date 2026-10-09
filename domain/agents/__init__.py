@@ -7,6 +7,8 @@ Public API:
     get_agent, get_runner, get_agent_system, get_tool_registry
 """
 
+from __future__ import annotations
+
 from domain.agents._internal.agents import (
     Agent,
     AgentConfig,

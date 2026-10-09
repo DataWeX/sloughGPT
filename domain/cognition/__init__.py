@@ -15,6 +15,8 @@ Public API:
     get_consciousness, reset_consciousness
 """
 
+from __future__ import annotations
+
 from domain.cognition._internal.base import (
     CognitiveDomain,
     CognitiveException,

@@ -12,6 +12,8 @@ register it in ``_register_default_stores``; the contract suite in
 ``tests/api-server/`` validates it against every other.
 """
 
+from __future__ import annotations
+
 from domain.search.protocol import Capability, Searchable
 from domain.search.registry import SearchRegistry, get_registry
 from domain.search.service import DEFAULT_LIMIT_PER_STORE, DEFAULT_TIMEOUT_S, SearchService

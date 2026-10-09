@@ -7,6 +7,8 @@ Public API:
     AppError, ErrorCode
 """
 
+from __future__ import annotations
+
 from domain.infrastructure._internal.config import (
     AppConfig,
     ConfigManager,
