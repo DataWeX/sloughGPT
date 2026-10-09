@@ -20,6 +20,11 @@ from .query import _get_field, match_document
 
 logger = logging.getLogger("slo.mogdb")
 
+# Stores whose ``open_report`` has already been logged at INFO this process —
+# see ``Collection._log_open_report``. Keyed by journal path so a clean load
+# still leaves positive evidence in boot logs without repeating per request.
+_OPEN_REPORT_LOGGED: set[str] = set()
+
 ASCENDING = 1
 DESCENDING = -1
 
@@ -108,6 +113,7 @@ class Collection:
         """
         if not self._compacted_path.exists() and not self._journal_path.exists():
             self.open_report = {"replayed": 0, "quarantined": 0}
+            self._log_open_report(0, 0)
             return
 
         replayed = 0
@@ -190,13 +196,34 @@ class Collection:
                             self._docs.pop(doc_id, None)
 
         self.open_report = {"replayed": replayed, "quarantined": quarantined}
-        if replayed or quarantined:
+        self._log_open_report(replayed, quarantined)
+
+    def _log_open_report(self, replayed: int, quarantined: int) -> None:
+        """Emit ``open_report`` once per collection per process, at INFO.
+
+        A quarantine fires a WARNING only when corruption exists, so before
+        this line a clean load was indistinguishable from a load that never
+        ran — ``quarantined=0`` was unobservable in boot logs. One line per
+        store (not per load) keeps fresh-instance-per-call callers from
+        repeating it; any change in corruption state still warns every time
+        via ``durability.read_records_locked``.
+        """
+        key = str(self._journal_path)
+        if key in _OPEN_REPORT_LOGGED:
             logger.debug(
                 "loaded %d records for %s (%d quarantined)",
                 replayed,
                 self.name,
                 quarantined,
             )
+            return
+        _OPEN_REPORT_LOGGED.add(key)
+        logger.info(
+            "mogdb open %s: replayed=%d quarantined=%d",
+            self.name,
+            replayed,
+            quarantined,
+        )
 
     def _journal(self, op: str, data: dict[str, Any]) -> None:
         """Append an operation to the journal (locked + fsynced)."""
