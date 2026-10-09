@@ -185,14 +185,28 @@ const DEFAULT_TIMEOUT_MS = 30_000
 // fighting over the GIL — the frontend then times out *because* of the load it
 // just created.
 //
-//   * never-delivered (connection refused / `Failed to fetch`) → safe for ANY
-//     method: the body never reached the server. This is the uvicorn `--reload`
-//     window and must keep working for POST too.
+//   * never-delivered (connection refused / transport-level fetch failure) →
+//     safe for ANY method: the body never reached the server. This is the
+//     uvicorn `--reload` window and must keep working for POST too.
 //   * idempotent method (GET/HEAD/OPTIONS) → safe: re-running is harmless.
 //   * anything else (timeout, ambiguous network error, 408/502/503/504) →
 //     unsafe, unless the caller explicitly opts in with `retryOnTimeout` /
 //     `retryOnStatus`.
 const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+// fetch() failure wording is per-engine: Chrome/Edge "Failed to fetch",
+// Firefox "NetworkError when attempting to fetch resource.", Safari
+// "Load failed". Matching only the Chrome string lands Firefox's
+// connection-refused in kind=unknown — the user then sees the raw engine
+// string instead of the startup-aware message, and a POST fired during the
+// uvicorn `--reload` window is not retried even though its body never
+// reached the server (observed 2026-10-09: /training/checkpoints +
+// /training/jobs retries logged kind=unknown during server startup).
+const NETWORK_FAILURE_MESSAGES = new Set([
+  'Failed to fetch',
+  'NetworkError when attempting to fetch resource.',
+  'Load failed',
+])
 
 function _isIdempotent(method: string): boolean {
   return IDEMPOTENT_METHODS.has(method.toUpperCase())
@@ -802,7 +816,9 @@ async function request<T>(
       const cause =
         e instanceof Error ? (e as Error & { cause?: { code?: string } }).cause : undefined
       const isTimeout = name === 'AbortError' || message_?.includes('aborted')
-      const isConnRefused = message_ === 'Failed to fetch' || cause?.code === 'ECONNREFUSED'
+      const isConnRefused =
+        (message_ !== undefined && NETWORK_FAILURE_MESSAGES.has(message_)) ||
+        cause?.code === 'ECONNREFUSED'
       const message = isTimeout
         ? `Request timed out after ${timeoutMs / 1000}s`
         : isConnRefused

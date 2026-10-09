@@ -201,6 +201,24 @@ describe('apiGet', () => {
     expect(mockFetch).toHaveBeenCalledTimes(3)
   })
 
+  it('classifies the Firefox network error as connection refused, not unknown', async () => {
+    mockFetch.mockRejectedValue(new TypeError('NetworkError when attempting to fetch resource.'))
+    const err = await apiGet('/down-ff').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).message).toBe('Connection unavailable — server may be starting up')
+    expect(mockFetch.mock.calls.filter((c) => String(c[0]).includes('/down-ff'))).toHaveLength(3)
+  })
+
+  it('classifies the Safari network error as connection refused, not unknown', async () => {
+    mockFetch.mockRejectedValue(new TypeError('Load failed'))
+    const err = await apiGet('/down-safari').catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect((err as ApiError).message).toBe('Connection unavailable — server may be starting up')
+    expect(mockFetch.mock.calls.filter((c) => String(c[0]).includes('/down-safari'))).toHaveLength(
+      3,
+    )
+  })
+
   it('does not retry or relabel when the caller-provided signal is aborted', async () => {
     const controller = new AbortController()
     mockFetch.mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError'))
@@ -304,6 +322,12 @@ describe('retry safety for non-idempotent methods', () => {
       cause: { code: 'ECONNREFUSED' },
     })
     mockFetch.mockRejectedValue(refused)
+    await expect(apiPost('/chat', { messages: [] })).rejects.toThrow(ApiError)
+    expect(attemptsOn('/chat')).toBe(3)
+  })
+
+  it('still retries a POST when Firefox reports the transport failure by its own wording', async () => {
+    mockFetch.mockRejectedValue(new TypeError('NetworkError when attempting to fetch resource.'))
     await expect(apiPost('/chat', { messages: [] })).rejects.toThrow(ApiError)
     expect(attemptsOn('/chat')).toBe(3)
   })
