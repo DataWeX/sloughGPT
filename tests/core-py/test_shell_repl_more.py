@@ -17491,8 +17491,15 @@ class TestNoteStatusSummary:
 
 
 # ── _interpret_natural ────────────────────────────────────────────
+# The keyword fallback behind these classes was removed in afd09c6e5
+# ("Remove _interpret_natural keyword fallback (unnecessary)"). Nothing in
+# production defines it any more, so every test here fails on the same
+# AttributeError rather than on behaviour. Kept skipped rather than deleted
+# for the same reason the two skips inside TestAi are: the removal is
+# reversible, and live natural-language coverage is TestAi/_cmd_ai now.
 
 
+@pytest.mark.skip(reason="_interpret_natural removed")
 class TestInterpretNatural:
     def test_processes_keyword(self, repl):
         _run_with_io(repl, [], lambda: repl._interpret_natural("show me running processes"))
@@ -23953,6 +23960,9 @@ class TestCmdWhoDeeperV3:
         assert isinstance(out, str)
 
 
+# Part of the removed _interpret_natural keyword fallback (afd09c6e5) — see
+# the note above TestInterpretNatural. Live coverage is TestAi/_cmd_ai.
+@pytest.mark.skip(reason="_interpret_natural removed")
 class TestInterpretNaturalDeeper:
     def test_interpret_processes(self, repl):
         repl._interpret_natural("show me running processes")
@@ -26176,6 +26186,9 @@ class TestCmdVmpermsDeeperV2:
         assert repl._last_exit_code == 0
 
 
+# Part of the removed _interpret_natural keyword fallback (afd09c6e5) — see
+# the note above TestInterpretNatural. Live coverage is TestAi/_cmd_ai.
+@pytest.mark.skip(reason="_interpret_natural removed")
 class TestInterpretNaturalDeeperV2:
     def test_health_keyword(self, repl):
         with patch(
