@@ -1246,6 +1246,22 @@ describe('SloughGPTClient', () => {
       expect(mockFetch.mock.calls[0][0]).toContain('/tenants');
     });
 
+    it('listTenants unwraps the success envelope the API actually sends', async () => {
+      // Every backend list handler returns success_response(data={...}), so a
+      // bare-array mock never exercised the real shape — the legacy body read
+      // `response.tenants` off the envelope, got undefined, and returned the
+      // whole envelope to the caller.
+      mockFetch.mockResolvedValue(
+        createMockResponse({ status: 'success', data: { tenants: [{ id: 't1' }] } })
+      );
+
+      const client = new SloughGPTClient();
+      const result = await client.listTenants();
+
+      expect(result).toEqual([{ id: 't1' }]);
+      expect(mockFetch.mock.calls[0][0]).toContain('/tenants');
+    });
+
     it('getTenant calls GET /tenants/{tenantId}', async () => {
       const mockData = { id: 't1', name: 'acme' };
       mockFetch.mockResolvedValue(createMockResponse(mockData));

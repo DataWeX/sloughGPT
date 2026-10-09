@@ -249,6 +249,27 @@ export class SloughGPTClient {
     return data;
   }
 
+  /**
+   * Fetch a collection endpoint and normalize it to an array.
+   *
+   * Every list endpoint answers one of two shapes: a bare JSON array, or the
+   * shared `{status:'success', data:{...}}` envelope with the rows under a
+   * key. Hand-rolling that per method is how the SDK ended up returning the
+   * whole envelope to callers (`response.keys || response` never fires when
+   * `keys` lives inside `data`), and `pluginsList` dereferenced `.plugins`
+   * unconditionally — a TypeError the moment the server answered with an
+   * array. unwrap() first, then array-or-key, then an empty list rather than
+   * undefined so `Promise<...[]>` stays honest.
+   */
+  private async fetchList(key: string, endpoint: string): Promise<Record<string, unknown>[]> {
+    const data = this.unwrap(await this.request<unknown>('GET', endpoint));
+    if (Array.isArray(data)) {
+      return data as Record<string, unknown>[];
+    }
+    const obj = (data ?? {}) as Record<string, unknown>;
+    return (obj[key] as Record<string, unknown>[]) ?? [];
+  }
+
   // ============ Health & Info ============
 
   async health(): Promise<HealthStatus> {
@@ -1172,11 +1193,6 @@ export class SloughGPTClient {
 
   // ============ Security ============
 
-  async getSecurityKeys(): Promise<any[]> {
-    const response = await this.request('GET', '/security/keys');
-    return Array.isArray(response) ? response : response.keys || response;
-  }
-
   async createSecurityKey(name: string, scopes?: string[], expiresInDays?: number): Promise<any> {
     const body: any = { name };
     if (scopes) body.scopes = scopes;
@@ -1202,9 +1218,8 @@ export class SloughGPTClient {
 
   // ============ Tenants ============
 
-  async listTenants(): Promise<any[]> {
-    const response = await this.request('GET', '/tenants');
-    return Array.isArray(response) ? response : response.tenants || response;
+  async listTenants(): Promise<Record<string, unknown>[]> {
+    return this.fetchList('tenants', '/tenants');
   }
 
   async getTenant(tenantId: string): Promise<any> {
@@ -1229,9 +1244,8 @@ export class SloughGPTClient {
 
   // ============ Profiles ============
 
-  async listProfiles(): Promise<any[]> {
-    const response = await this.request('GET', '/profiles');
-    return Array.isArray(response) ? response : response.profiles || response;
+  async listProfiles(): Promise<Record<string, unknown>[]> {
+    return this.fetchList('profiles', '/profiles');
   }
 
   async getProfile(profileId: string): Promise<any> {
@@ -1252,9 +1266,8 @@ export class SloughGPTClient {
 
   // ============ Workspaces ============
 
-  async listWorkspaces(): Promise<any[]> {
-    const response = await this.request('GET', '/workspaces');
-    return Array.isArray(response) ? response : response.workspaces || response;
+  async listWorkspaces(): Promise<Record<string, unknown>[]> {
+    return this.fetchList('workspaces', '/workspaces');
   }
 
   async getWorkspace(workspaceId: string): Promise<any> {
@@ -1269,14 +1282,12 @@ export class SloughGPTClient {
     return this.request('POST', `/workspaces/${workspaceId}/members`, { user_id: userId, role });
   }
 
-  async openwebuiDatasets(): Promise<any[]> {
-    const response = await this.request('GET', '/openwebui/datasets');
-    return response.datasets;
+  async openwebuiDatasets(): Promise<Record<string, unknown>[]> {
+    return this.fetchList('datasets', '/openwebui/datasets');
   }
 
-  async openwebuiCheckpoints(): Promise<any[]> {
-    const response = await this.request('GET', '/openwebui/checkpoints');
-    return response.checkpoints;
+  async openwebuiCheckpoints(): Promise<Record<string, unknown>[]> {
+    return this.fetchList('checkpoints', '/openwebui/checkpoints');
   }
 
   async openwebuiStartTraining(datasetId: string, method: string = 'finetune'): Promise<any> {
@@ -1293,9 +1304,8 @@ export class SloughGPTClient {
 
   // ============ Cloud Training ============
 
-  async cloudTrainingJobs(limit: number = 10): Promise<any[]> {
-    const response = await this.request('GET', `/cloud-training/jobs?limit=${limit}`);
-    return response.jobs;
+  async cloudTrainingJobs(limit: number = 10): Promise<Record<string, unknown>[]> {
+    return this.fetchList('jobs', `/cloud-training/jobs?limit=${limit}`);
   }
 
   async cloudTrainingSubmit(provider: string = 'local', datasetId: string = ''): Promise<any> {
@@ -1312,9 +1322,8 @@ export class SloughGPTClient {
 
   // ============ Plugins ============
 
-  async pluginsList(): Promise<any[]> {
-    const response = await this.request('GET', '/plugins');
-    return response.plugins;
+  async pluginsList(): Promise<Record<string, unknown>[]> {
+    return this.fetchList('plugins', '/plugins');
   }
 
   async pluginsEnable(pluginName: string): Promise<any> {
