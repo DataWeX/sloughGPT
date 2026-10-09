@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Production-Grade Embedding Models
 
@@ -18,6 +16,8 @@ Usage:
     embedder = Embedder(provider="openai", api_key="sk-...")
     vectors = embedder.embed("Hello world")
 """
+
+from __future__ import annotations
 
 import hashlib
 import logging

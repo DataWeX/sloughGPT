@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Prometheus-compatible metrics collector.
 
@@ -13,6 +11,8 @@ Usage::
     collector.record_request("/chat", 200, 1.5)
     print(collector.render())
 """
+
+from __future__ import annotations
 
 import threading
 import time

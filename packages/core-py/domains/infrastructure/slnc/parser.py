@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 .slnc parser — memory-mapped loader for .slnc files.
 
@@ -14,6 +12,8 @@ Usage:
     block0 = parser.get_block(0)
     all_weights = parser.get_weights_dict()  # still zero-copy
 """
+
+from __future__ import annotations
 
 import json
 import logging

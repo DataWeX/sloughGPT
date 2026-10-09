@@ -1,5 +1,3 @@
-from infrastructure.exception_handlers import register_app_error_handler
-
 """
 Tests for config router — GET/PUT/PATCH generation config.
 """
@@ -9,6 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from infrastructure.exception_handlers import register_app_error_handler
 from routers.config import router as config_router
 
 app = FastAPI()

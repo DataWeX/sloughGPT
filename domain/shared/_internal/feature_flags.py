@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Feature flags for sloughGPT.
 
@@ -20,6 +18,8 @@ Env overrides:
     SLO_FF_NATIVE_C_INFERENCE=1   → enable
     SLO_FF_NATIVE_C_INFERENCE=0   → disable
 """
+
+from __future__ import annotations
 
 import json
 import logging

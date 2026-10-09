@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Generic API Provider for External AI Services
 
@@ -27,6 +25,8 @@ Usage:
     async for token in provider.chat_stream([{"role": "user", "content": "Hello"}]):
         print(token, end="", flush=True)
 """
+
+from __future__ import annotations
 
 import json
 import logging

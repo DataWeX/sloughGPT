@@ -1,9 +1,10 @@
-from infrastructure.exception_handlers import register_app_error_handler
-
 """
 Tests for models router — list, current, hf, cache-usage, export-formats.
 
 Only registers the models router to avoid pulling in heavy dependencies.
+
+NOTE: keep this module docstring first — it was previously preceded by the
+``register_app_error_handler`` import, which made ``__doc__`` silently ``None``.
 """
 
 import json
@@ -14,6 +15,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from infrastructure.exception_handlers import register_app_error_handler
 from routers.models import ModelsRouter
 from routers.models import _instance as _models_instance
 from routers.models import router as models_router

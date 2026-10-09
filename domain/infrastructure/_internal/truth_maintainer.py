@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Truth maintainer — self-retrain on misclassified texts post-epoch.
 
@@ -12,6 +10,9 @@ Usage:
     maintainer = TruthMaintainer()
     maintainer.run_maintenance(encoder, texts, meaning_tags, optimizer)
 """
+
+from __future__ import annotations
+
 import threading
 
 import numpy as np

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Memory pressure monitor — proactive memory management for model serving.
 
@@ -21,6 +19,8 @@ Usage::
     monitor.check()  # call before inference
     allowed = monitor.allow_load()  # call before model loading
 """
+
+from __future__ import annotations
 
 import gc
 import logging

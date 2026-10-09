@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 SloNet Model Loader — model loading via .slnc format.
 
@@ -16,6 +14,8 @@ Usage:
     if result.success:
         print(f"Loaded {result.model_type} with {result.provider}")
 """
+
+from __future__ import annotations
 
 import logging
 import threading

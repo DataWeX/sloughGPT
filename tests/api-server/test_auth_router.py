@@ -1,5 +1,3 @@
-from infrastructure.exception_handlers import register_app_error_handler
-
 """
 Tests for auth router — login, register, me, token, verify, refresh.
 
@@ -11,6 +9,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from infrastructure.exception_handlers import register_app_error_handler
 from routers.auth import AuthRouter, _get_auth_deps, reset_auth_router, set_auth_router
 
 

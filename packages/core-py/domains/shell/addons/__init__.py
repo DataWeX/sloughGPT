@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Shell Kernel Addons.
 
@@ -12,6 +10,8 @@ Usage:
     kernel.install_addon(filesystem)
     kernel.install_addon(shell_ui)
 """
+
+from __future__ import annotations
 
 from . import (
     filesystem,  # noqa: F401

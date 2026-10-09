@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Generic NumPy transformer inference engine.
 
@@ -25,6 +23,8 @@ Usage:
     async for token in engine.generate_stream("Hello", max_new_tokens=50):
         print(token, end="", flush=True)
 """
+
+from __future__ import annotations
 
 import asyncio
 import logging

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 .slnc compiler — converts safetensors to memory-mapped format.
 
@@ -18,6 +16,8 @@ Usage:
     compiler.compile("gpt2", output="models/gpt2.slnc")
     compiler.compile_from_dict(config, weights, output="custom.slnc")
 """
+
+from __future__ import annotations
 
 import json
 import logging

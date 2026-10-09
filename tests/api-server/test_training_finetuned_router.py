@@ -1,5 +1,3 @@
-from infrastructure.exception_handlers import register_app_error_handler
-
 """
 Tests for the /training/finetuned-models endpoints (list, load, delete).
 
@@ -14,6 +12,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from infrastructure.exception_handlers import register_app_error_handler
 from training import router as training_router
 
 app = FastAPI()

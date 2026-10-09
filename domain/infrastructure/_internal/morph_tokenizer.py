@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Morphologically-aware tokenizer — pure Python, no external dependencies.
 
@@ -17,6 +15,8 @@ Usage:
     root = tok.stem("running")  # "run"
     forms = tok.generate_forms("run")  # ["runs", "running", "ran", "runner"]
 """
+
+from __future__ import annotations
 
 import json
 import logging

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Model Conversion Tracker — provides real-time status for model download + SLNC conversion.
 
@@ -18,6 +16,8 @@ Usage:
     tracker.update("gpt2", stage="converting", progress=0.5)
     tracker.finish("gpt2")
 """
+
+from __future__ import annotations
 
 import logging
 import threading

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Neural Kernel — re-export shim.
 
@@ -8,6 +6,8 @@ Canonical source is addons.neural. This module exists for backward compatibility
 Migration:
     from domain.shell._internal.addons.neural import NeuralProcess, NeuralKVCache, ...
 """
+
+from __future__ import annotations
 
 from .addons.neural import (  # noqa: F401
     BatchProcessor,

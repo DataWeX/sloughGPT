@@ -1,5 +1,3 @@
-from infrastructure.exception_handlers import register_app_error_handler
-
 """
 Tests for the POST /training/recovery/recover/{job_id} endpoint.
 
@@ -18,6 +16,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from infrastructure.exception_handlers import register_app_error_handler
 
 router_mod = importlib.import_module("training.router")
 
