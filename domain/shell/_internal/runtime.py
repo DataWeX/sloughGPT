@@ -380,6 +380,16 @@ class DaitRuntime:
         from .device_system import reset_device_system
 
         self._boot_complete = False
+        # `_init` stays None until boot() runs (see __init__), and shutdown is
+        # reachable before that — the same state status_summary and _cmd_svc
+        # already guard for. Return before touching anything else: boot() is
+        # also what creates the devices and boots the kernel, so an unbooted
+        # runtime has nothing to tear down. Those two calls are module-level
+        # singleton operations, and running them here would leak a teardown of
+        # state this runtime never created to every later caller in the
+        # process. There is no init log to return either, hence "".
+        if self._init is None:
+            return ""
         shutdown_log = self._init.shutdown()
         self.kernel.shutdown()
         reset_device_system()
