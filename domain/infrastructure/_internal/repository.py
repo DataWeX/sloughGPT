@@ -18,13 +18,14 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, TypeVar, runtime_checkable
+
+from domain.infrastructure._internal.atomic_write import atomic_writer
 
 logger = logging.getLogger("slo.repository")
 
@@ -229,10 +230,8 @@ class FileRepository[T]:
         try:
             data = self._resolve_serializer().serialize(obj)
             path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = path.with_suffix(path.suffix + ".tmp")
-            with open(tmp, "w") as f:
+            with atomic_writer(path, binary=False, encoding="utf-8") as f:
                 json.dump(data, f, indent=2, default=str)
-            os.replace(tmp, path)
             self._cache_set(key, obj)
             return True
         except Exception:
