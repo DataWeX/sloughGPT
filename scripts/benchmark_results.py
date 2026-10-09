@@ -312,9 +312,27 @@ def do_record(args) -> int:
     return 0
 
 
+def _metric_entries(record: dict) -> list[dict]:
+    """Normalize a record's metrics into a list of dicts (never crashes).
+
+    ``benchmark_slonet_training --results`` merges per-config results into a
+    LIST; metric kinds store a single dict. The renderer must handle both —
+    an un-normalized list used to kill history with
+    ``'list' object has no attribute 'get'``.
+    """
+    ms = record.get("metrics", {})
+    if isinstance(ms, dict):
+        return [ms]
+    if isinstance(ms, list):
+        return [m for m in ms if isinstance(m, dict)]
+    return []
+
+
 def do_history(args) -> int:
-    """List stored runs."""
-    for kind in [args.kind] if args.kind else ["stability", "latency"]:
+    """List stored runs (all kinds unless --kind narrows it)."""
+    for kind in (
+        [args.kind] if args.kind else ["stability", "latency", "startup", "execution", "training"]
+    ):
         runs = collect_records(kind)
         print(f"── {kind}: {len(runs)} runs ──")
         for p in runs:
@@ -327,23 +345,30 @@ def do_history(args) -> int:
                     f"  {stamp}  {model:<24} overall={sc.get('overall', '?'):<4} "
                     f"passed={'✓' if r.get('passed') else '✗'}  {p.name}"
                 )
-            elif kind == "training":
-                ms = r.get("metrics", {})
-                if isinstance(ms, dict):
-                    ms = [ms]
-                for c in ms:
-                    conf = c.get("config") if isinstance(c, dict) else "?"
-                    gate = c.get("gate_converged") if isinstance(c, dict) else None
-                    final = c.get("final_loss") if isinstance(c, dict) else None
+                continue
+            for c in _metric_entries(r) or [{}]:
+                if kind == "training":
+                    conf = str(c.get("config", "?"))[:10]
+                    gate = c.get("gate_converged")
+                    final = c.get("final_loss")
                     print(
                         f"  {stamp}  {conf:<10} gate={'✓' if gate else '✗'} final={final}  {p.name}"
                     )
-            else:
-                m = r.get("metrics", {})
-                print(
-                    f"  {stamp}  {model:<24} mean={m.get('mean_ms', '?'):<7} "
-                    f"p95={m.get('p95_ms', '?'):<7}  {p.name}"
-                )
+                elif kind == "startup":
+                    print(
+                        f"  {stamp}  {model:<24} health={str(c.get('time_to_health_s', '?')):<7} "
+                        f"ready={str(c.get('time_to_ready_s', '?')):<7}  {p.name}"
+                    )
+                elif kind == "execution":
+                    print(
+                        f"  {stamp}  {model:<24} dispatch_us={str(c.get('dispatch_us', '?')):<9} "
+                        f"threads={str(c.get('peak_threads', '?')):<7}  {p.name}"
+                    )
+                else:  # latency and unknown kinds
+                    print(
+                        f"  {stamp}  {model:<24} mean={str(c.get('mean_ms', '?')):<7} "
+                        f"p95={str(c.get('p95_ms', '?')):<7}  {p.name}"
+                    )
     return 0
 
 

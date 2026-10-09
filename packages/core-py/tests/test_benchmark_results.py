@@ -224,3 +224,98 @@ def test_compare_detects_regression_and_exit_code(tmp_results, capsys):
 
     assert br.do_compare(Args()) == 1
     assert "REGRESSION" in capsys.readouterr().out
+
+
+# ── history rendering: kind-aware + shape-tolerant (card b22e878a GROUP E) ──
+
+
+def _hist_args(kind):
+    class Args:
+        pass
+
+    a = Args()
+    a.kind = kind
+    return a
+
+
+def test_history_latency_list_metrics_does_not_crash(tmp_results, capsys):
+    """A latency record whose metrics is a LIST must render, not raise.
+
+    benchmark_slonet_training --results writes merged per-config lists; if
+    such a file is recorded under a metric kind, the renderer used to die
+    with ``'list' object has no attribute 'get'``.
+    """
+    write_result(
+        tmp_results,
+        "latency",
+        "m",
+        metrics=[{"mean_ms": 120.0, "p95_ms": 200.0}, {"mean_ms": 90.0, "p95_ms": 150.0}],
+    )
+    assert br.do_history(_hist_args("latency")) == 0
+    out = capsys.readouterr().out
+    assert "120.0" in out and "90.0" in out
+
+
+def test_history_startup_renders_real_metrics(tmp_results, capsys):
+    """Startup history shows health/ready, not the latency fallback mean=?/p95=?."""
+    write_result(
+        tmp_results,
+        "startup",
+        "served",
+        metrics={"time_to_health_s": 1.25, "time_to_ready_s": 3.5, "preload_warnings": 0},
+    )
+    assert br.do_history(_hist_args("startup")) == 0
+    out = capsys.readouterr().out
+    assert "1.25" in out
+    assert "3.5" in out
+    assert "mean=?" not in out
+
+
+def test_history_execution_renders_dispatch(tmp_results, capsys):
+    write_result(tmp_results, "execution", "m", metrics={"dispatch_us": 42.0, "peak_threads": 7})
+    assert br.do_history(_hist_args("execution")) == 0
+    out = capsys.readouterr().out
+    assert "42.0" in out and "7" in out
+
+
+def test_history_default_iterates_all_kinds(tmp_results, capsys):
+    """Default history (no --kind) covers every known kind, not just stability+latency."""
+    write_result(tmp_results, "stability", "m", score={"overall": 100})
+    write_result(tmp_results, "latency", "m", metrics={"mean_ms": 1.0, "p95_ms": 2.0})
+    write_result(tmp_results, "startup", "m", metrics={"time_to_health_s": 1.0})
+    write_result(tmp_results, "execution", "m", metrics={"dispatch_us": 1.0})
+    write_result(
+        tmp_results,
+        "training",
+        "m",
+        metrics=[{"config": "gate", "gate_converged": True, "final_loss": 0.5}],
+    )
+    assert br.do_history(_hist_args(None)) == 0
+    out = capsys.readouterr().out
+    for kind in ("stability", "latency", "startup", "execution", "training"):
+        assert f"── {kind}: 1 runs ──" in out
+
+
+def test_history_training_dict_metrics_renders(tmp_results, capsys):
+    """Training record with a single dict (not list) metrics renders one line."""
+    write_result(
+        tmp_results,
+        "training",
+        "m",
+        metrics={"config": "tiny", "gate_converged": False, "final_loss": 1.2},
+    )
+    assert br.do_history(_hist_args("training")) == 0
+    out = capsys.readouterr().out
+    assert "tiny" in out and "final=1.2" in out
+
+
+def test_history_training_dict_config_does_not_crash(tmp_results, capsys):
+    """A dict-valued config field must not break the fixed-width format."""
+    write_result(
+        tmp_results,
+        "training",
+        "m",
+        metrics=[{"config": {"lr": 0.01}, "gate_converged": True, "final_loss": 0.9}],
+    )
+    assert br.do_history(_hist_args("training")) == 0
+    assert "final=0.9" in capsys.readouterr().out
