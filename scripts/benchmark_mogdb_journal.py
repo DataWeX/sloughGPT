@@ -139,8 +139,23 @@ def main() -> int:
         print(f"  {c['compact_seconds']}s for {c['docs']} docs")
 
     if args.json:
+        # Flat metrics on purpose: benchmark_results' history/_scalars only
+        # renders top-level numbers, and `record --kind storage --json-file`
+        # ingests this file directly (see the usage block above).
+        i, r, c = results["insert"], results["reopen"], results["compact"]
+        flat = {k: v for k, v in results.items() if not isinstance(v, dict)}
+        flat.update(
+            fsync=1 if results["fsync_effective"] == "on" else 0,
+            records=args.records,
+            insert_rec_per_s=i["rec_per_s"],
+            insert_us_per_op=i["us_per_op"],
+            insert_seconds_best=i["seconds_best"],
+            reopen_s=r["reopen_seconds"],
+            reopen_loaded=r["loaded"],
+            compact_s=c["compact_seconds"],
+        )
         args.json.parent.mkdir(parents=True, exist_ok=True)
-        args.json.write_text(json.dumps(results, indent=2) + "\n")
+        args.json.write_text(json.dumps(flat, indent=2) + "\n")
         print(f"wrote {args.json}")
     return 0
 
