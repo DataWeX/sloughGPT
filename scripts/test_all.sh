@@ -41,6 +41,16 @@ cd "$REPO_ROOT"
 python3 -m pytest tests/api-server/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
 
 echo ""
+echo "=== CLI tests ==="
+# Pre-existing gap: apps/cli/tests (now tests/cli/) had no scope in this script
+# and no CI job at dcb2a5eaf^ either. tests/cli/ is explicitly --ignore'd by the
+# root scope above to keep the scopes disjoint, so without this block the 24 CLI
+# files never run anywhere despite the script claiming "all tests".
+# Verified green 2026-10-09: 425 passed, 1 skipped, 0 failed, 27.9s.
+cd "$REPO_ROOT"
+python3 -m pytest tests/cli/ -q --tb=short -p no:cacheprovider || FAILURES=$((FAILURES + 1))
+
+echo ""
 echo "=== Frontend tests ==="
 cd "$REPO_ROOT/apps/web"
 npx vitest run --reporter=verbose 2>&1 | tail -5 || FAILURES=$((FAILURES + 1))
