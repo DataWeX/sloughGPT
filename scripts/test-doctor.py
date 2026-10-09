@@ -1167,6 +1167,15 @@ def _ci_drift() -> int:
                     problems.append(f"{name}::{jname}: working-directory `{scwd}` missing")
 
                 with_ = step.get("with") or {}
+                # docker build-push-action and friends take repo paths in
+                # `with:`; a typo'd Dockerfile path fails the build, not the
+                # YAML, so nothing else catches it.
+                for pk in ("file", "context"):
+                    pv = with_.get(pk)
+                    if isinstance(pv, str) and pv and "${{" not in pv:
+                        checked += 1
+                        if not Path(pv).exists():
+                            problems.append(f"{name}::{jname}: docker {pk}=`{pv}` missing")
                 cdp = with_.get("cache-dependency-path")
                 if cdp:
                     for line in str(cdp).splitlines():
