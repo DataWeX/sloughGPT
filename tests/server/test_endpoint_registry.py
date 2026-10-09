@@ -162,17 +162,6 @@ class TestEndpointRegistry:
         assert r.status_code == 200
 
     # ── metrics ─────────────────────────────────────────────────────
-    @pytest.mark.xfail(
-        strict=True,
-        reason=(
-            "PRODUCTION BUG: root /metrics was deleted by 5717e1f5f "
-            "('delete dead routers') but apps/cli/src/commands/dev.py:1334 still "
-            "calls it, auth_middleware.py:32 still allowlists it and "
-            "docs/DEPLOYMENT.md:175 still documents it. Live routes are only "
-            "/system/metrics and /benchmark/metrics. RED when root /metrics "
-            "returns — then delete this marker."
-        ),
-    )
     def test_metrics_root(self):
         r = client.get("/metrics")
         assert r.status_code == 200
