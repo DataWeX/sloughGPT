@@ -251,8 +251,29 @@ method — the symbol the router actually looks up — never router-module
 symbols: renaming a router import breaks `mock.patch("training.router.x")`
 fixtures with `AttributeError` at setup (see `test_training_recovery_router.py`).
 
-**Checklist:** `grep -c _internal <router>` = 0 → registered → ruff → router's
-tests green.
+**9. Controllers proxy; they never reach `_internal`.** The seam is
+router → controller → engine → domain. `apps/api/server/controllers/*`
+carry a router's import rule: public `domain.<feature>` facades only
+(`from domain.training import get_training_executor`), never
+`domain.*._internal.*` — orchestration shared between routers lives in a
+controller, but its imports are governed exactly like a router's. Both
+layers are checked by an AST import scan in
+`tests/test_layer_conformance.py` (routers allow `shell`/`vm`/
+`world_render`/`api_keys` as agreed zones; controllers allow none).
+
+**Facade binding rule.** Names the API layer reads must resolve LAZILY
+from a facade (`_LAZY_IMPORTS` + `__getattr__`), never eagerly at facade
+import: eager binding freezes the pre-patch object and silently defeats
+tests that patch `domain.<feature>._internal.<module>..<name>`, while a
+lazy lookup re-reads the attribute at call time so BOTH patch styles
+(`domain.training.get_state` and
+`domain.training._internal.service.get_state`) keep working. When a name
+has more than one historical read point (e.g. `get_state`, re-exported by
+`_internal.service` from `_internal.state`), map the facade to the module
+the tests actually patch.
+
+**Checklist:** conformance green (`pytest tests/test_layer_conformance.py`)
+→ registered → ruff → router's tests green.
 
 ---
 
