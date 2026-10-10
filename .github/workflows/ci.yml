@@ -21,9 +21,13 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          # Root lock, not the per-package ones: apps/web, packages/strui and
+          # packages/sdk-ts are npm workspaces (root package.json lists them),
+          # so `npm ci` inside any of them resolves npm prefix to the repo
+          # root and installs from the root package-lock.json. A per-package
+          # path hashed a lock npm ignores — a constant, so the cache would be
+          # written once and never invalidate.
+          cache-dependency-path: package-lock.json
       # --ignore-scripts on every npm ci here: npm resolves an install run in
       # a workspace member to the workspace ROOT, whose "prepare": "husky"
       # is not on PATH in CI -> `sh -c husky` exit 127, all frontend jobs red
@@ -52,9 +56,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci --ignore-scripts
         working-directory: apps/web
       - run: npm run test:lib
@@ -69,9 +71,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci --ignore-scripts
         working-directory: apps/web
       - run: npm ci --ignore-scripts --omit=peer
@@ -111,9 +111,7 @@ jobs:
         with:
           node-version: "20"
           cache: "npm"
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci --ignore-scripts
         working-directory: apps/web
       # --ignore-scripts skipped cypress's binary download (postinstall) —

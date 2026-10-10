@@ -24,7 +24,9 @@ jobs:
         with:
           node-version: 20
           cache: "npm"
-          cache-dependency-path: "apps/web/package-lock.json"
+          # Root lock: apps/web is an npm workspace, so `npm ci` there installs
+          # from the root package-lock.json, not its own.
+          cache-dependency-path: "package-lock.json"
       - run: npm ci
         working-directory: apps/web
       - run: npm run build

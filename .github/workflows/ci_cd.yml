@@ -144,7 +144,13 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: packages/strui/package-lock.json
+          # Root lock, deliberately not packages/strui's own: these are npm
+          # workspaces (root package.json lists them), so `npm ci` in a
+          # workspace dir resolves npm prefix to the repo root and installs
+          # from the root package-lock.json. Keying the cache on the
+          # per-package file hashed a lock npm ignores, so the key never
+          # changed and the cache was written once and never invalidated.
+          cache-dependency-path: package-lock.json
       - name: Install + lint + typecheck + test
         working-directory: packages/strui
         run: |
@@ -163,9 +169,9 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: |
-            apps/web/package-lock.json
-            packages/strui/package-lock.json
+          # Root lock (both apps/web and packages/strui are npm workspaces —
+          # see the note in test-strui above).
+          cache-dependency-path: package-lock.json
 
       - run: npm ci
         working-directory: apps/web
@@ -220,7 +226,8 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: packages/sdk-ts/typescript-sdk/package-lock.json
+          # Root lock — npm workspaces, as noted in test-strui above.
+          cache-dependency-path: package-lock.json
       - name: Install + lint + typecheck + build + test
         working-directory: packages/sdk-ts/typescript-sdk
         run: |
