@@ -358,21 +358,10 @@ async def export_feedback_pairs(request: ExportTextRequest):
     from controllers.feedback import get_feedback_controller
 
     ctrl = get_feedback_controller()
-    pairs = []
-    feedback_file = ctrl.feedback_dir / "feedback.jsonl"
-    if feedback_file.exists():
-        with open(feedback_file) as f:
-            for line in f:
-                try:
-                    fb = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if fb.get("user_message") and fb.get("assistant_response"):
-                    if fb.get("quality", 0) < request.min_quality:
-                        continue
-                    pairs.append(fb)
-                    if len(pairs) >= request.target_count:
-                        break
+    # Read the medium FeedbackController actually writes (MogDB) — the legacy
+    # data/feedback.jsonl stream stopped when storage migrated, so this
+    # endpoint used to return 0 pairs forever (card 47378782).
+    pairs = ctrl.exportable_pairs(request.min_quality, request.target_count)
     output_file = ctrl.feedback_dir / f"export_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
     with open(output_file, "w") as f:
         json.dump(pairs, f, indent=2)

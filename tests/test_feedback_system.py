@@ -186,6 +186,60 @@ def test_export_training(client):
     assert "file" in data
 
 
+def test_export_training_reads_mogdb(client, tmp_path):
+    """Export must read MogDB feedback_records — the dead JSONL path made pairs_count 0 forever (card 47378782)."""
+    from controllers.feedback import (
+        FeedbackController,
+        get_feedback_controller,
+        set_feedback_controller,
+    )
+
+    app, test_client = client
+    original = get_feedback_controller()
+    ctrl = FeedbackController(_REPO_ROOT, db_path=str(tmp_path / "feedback_mogdb"))
+    set_feedback_controller(ctrl)
+    try:
+        ctrl.feedback_collection.insert_one(
+            {
+                "message_id": "m1",
+                "rating": "thumbs_up",
+                "user_message": "hello",
+                "assistant_response": "hi there",
+                "timestamp": "2026-10-10T00:00:00Z",
+            }
+        )
+        ctrl.feedback_collection.insert_one(
+            {
+                "message_id": "m2",
+                "rating": "thumbs_down",
+                "user_message": "be bad",
+                "assistant_response": "worse",
+                "timestamp": "2026-10-10T00:00:01Z",
+            }
+        )
+
+        # Default min_quality=0: both sides present -> both pairs export.
+        r = test_client.post("/training/export-text", json={"target_count": 10})
+        assert r.status_code == 200
+        assert r.json()["pairs_count"] == 2
+
+        # min_quality=0.6: only thumbs_up (quality 1.0) clears it;
+        # thumbs_down maps to 0.0 via QUALITY_BY_RATING.
+        r = test_client.post(
+            "/training/export-text",
+            json={"target_count": 10, "min_quality": 0.6},
+        )
+        assert r.status_code == 200
+        assert r.json()["pairs_count"] == 1
+
+        # target_count caps the export (insertion order, legacy append order).
+        r = test_client.post("/training/export-text", json={"target_count": 1})
+        assert r.status_code == 200
+        assert r.json()["pairs_count"] == 1
+    finally:
+        set_feedback_controller(original)
+
+
 def test_export_training_invalid(client):
     """Test that invalid export params don't crash."""
     app, test_client = client

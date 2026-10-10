@@ -61,11 +61,11 @@ class FeedbackController:
 
     def __init__(self, repo_root: Path, db_path: str | None = None):
         self.repo_root = repo_root
-        # Directory holding the legacy feedback.jsonl stream. Records now live in
-        # MogDB (see class docstring), but the training/export consumers
-        # (training/feeds.py "data/feedback.jsonl",
-        # domain/training/_internal/experience_adapter.py) and
-        # training/jobs_api.py export_feedback_pairs() still address this path.
+        # Directory for legacy artifacts (export_*.json outputs). The feedback
+        # stream itself lives in MogDB (see class docstring); only
+        # training/feeds.py and domain/training/_internal/experience_adapter.py
+        # still read the dead feedback.jsonl path (exportable_pairs() above
+        # is the migrated reader, card 47378782).
         self.feedback_dir = repo_root / "data"
         if db_path is None:
             db_path = str(repo_root / "data" / "feedback_mogdb")
@@ -88,6 +88,54 @@ class FeedbackController:
     def conversations_collection(self):
         """Expose the conversations collection for testing."""
         return self._conversations
+
+    QUALITY_BY_RATING: dict[str, float] = {
+        "thumbs_up": 1.0,
+        "neutral": 0.5,
+        "thumbs_down": 0.0,
+    }
+
+    def exportable_pairs(self, min_quality: float, target_count: int) -> list[dict[str, Any]]:
+        """Training-export pairs from the MogDB feedback records.
+
+        This is the medium ``record_feedback()`` actually writes — the
+        legacy ``feedback.jsonl`` stream stopped being written when
+        storage migrated to MogDB, so exporters must read the collection.
+
+        Contract (mirrors the old JSONL reader): both conversation sides
+        present, rating-derived quality >= *min_quality*, at most
+        *target_count* pairs, insertion order (== legacy append order).
+        Each pair carries ``user_message``, ``assistant_response``,
+        ``quality`` (derived from ``rating`` via :attr:`QUALITY_BY_RATING`;
+        unknown rating -> 0.0, like the old ``fb.get("quality", 0)``),
+        ``rating`` and ``timestamp``.
+
+        Args:
+            min_quality: Inclusive quality threshold (0.0-1.0).
+            target_count: Maximum pairs to return.
+
+        Returns:
+            Export-ready conversation pair dicts.
+        """
+        pairs: list[dict[str, Any]] = []
+        for rec in self._feedback.find():
+            if not (rec.get("user_message") and rec.get("assistant_response")):
+                continue
+            quality = self.QUALITY_BY_RATING.get(rec.get("rating"), 0.0)
+            if quality < min_quality:
+                continue
+            pairs.append(
+                {
+                    "user_message": rec["user_message"],
+                    "assistant_response": rec["assistant_response"],
+                    "quality": quality,
+                    "rating": rec.get("rating"),
+                    "timestamp": rec.get("timestamp"),
+                }
+            )
+            if len(pairs) >= target_count:
+                break
+        return pairs
 
     def _get_workflow(self):
         """Lazy-load feedback workflow and wire the current model."""
