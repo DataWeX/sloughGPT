@@ -106,11 +106,16 @@ describe('useTrainingJob', () => {
     act(() => {
       result.current.setShowDelete(true)
     })
-    await act(async () => {
-      await result.current.handleDelete()
+    // Fire and observe via waitFor instead of `await act(async () => ...)`:
+    // React 19.3's async act deadlocks flushing the handler's post-promise
+    // `finally { setShowDelete(false) }` state update (act integration bug,
+    // not product behavior — the handler provably completes). Same pattern
+    // as the passing resume tests, minus the act wrapper.
+    void result.current.handleDelete()
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/training')
     })
     expect(mockDelete).toHaveBeenCalledWith('job-1')
-    expect(mockPush).toHaveBeenCalledWith('/training')
     expect(result.current.showDelete).toBe(false)
     expect(mockAddToast).toHaveBeenCalledWith('Job deleted', 'info')
   })
