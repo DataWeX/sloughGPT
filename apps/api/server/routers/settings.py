@@ -6,6 +6,7 @@ Replaces the in-memory config controller with a persistent backend.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, Query
@@ -694,20 +695,16 @@ class SettingsRouter:
         auth_user: dict = Depends(require_auth_if_enabled),
     ) -> dict:
         """Delete a specific training run by ID."""
-        import json
-
         from domain.training import TrainingOutcomeTracker
 
         tracker = TrainingOutcomeTracker()
-        outcomes = tracker.load_outcomes()
-        filtered = [o for o in outcomes if o.run_id != run_id]
-        if len(filtered) == len(outcomes):
+        # The tracker owns this rewrite and publishes it atomically (temp file
+        # + rename), so a crash mid-delete can no longer truncate the whole
+        # history. The router used to hand-roll a non-atomic "open(path, 'w')"
+        # copy of that logic. Off-loop: bulk_delete fsyncs the new file.
+        deleted = await asyncio.to_thread(tracker.bulk_delete, [run_id])
+        if deleted == 0:
             return success_response(data={"error": f"Run '{run_id}' not found", "deleted": False})
-        # Rewrite history without the deleted run
-        tracker.history_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(tracker.history_path, "w") as f:
-            for o in filtered:
-                f.write(json.dumps(o.to_dict()) + "\n")
         safe_audit_log("settings.delete_run", resource="training", detail=run_id)
         return success_response(data={"deleted": True, "run_id": run_id})
 
