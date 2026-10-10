@@ -2,7 +2,7 @@
 
 Public API:
     TestFramework, TestResult, TestSuite, BenchmarkRunner, test_decorator
-    find_available_port, find_repo_root, find_server_python
+    find_available_port, find_repo_root, find_server_python, data_root
     utc_now_iso, to_iso, parse_iso, normalize_iso, is_valid_iso, get_timestamp,
     repair_iso — read-path repair for broken "+00:00Z" values
     normalize_local_iso — read-path repair treating naive input as server-local
@@ -17,7 +17,7 @@ from domain.shared._internal.ids import generate_id
 from domain.shared._internal.jsonio import load_json, save_json
 from domain.shared._internal.net import find_available_port
 from domain.shared._internal.ops import clamp, merge_dicts, validate_config
-from domain.shared._internal.paths import find_repo_root, find_server_python
+from domain.shared._internal.paths import data_root, find_repo_root, find_server_python
 from domain.shared._internal.test_framework import (
     BenchmarkRunner,
     TestFramework,
@@ -47,6 +47,7 @@ __all__ = [
     "TestSuite",
     "Timer",
     "clamp",
+    "data_root",
     "find_available_port",
     "find_repo_root",
     "find_server_python",

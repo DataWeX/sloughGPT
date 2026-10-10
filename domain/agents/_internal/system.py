@@ -6,15 +6,20 @@ from __future__ import annotations
 
 import builtins
 import logging
-import os
 from typing import Any
 
 from domain.agents._internal.agents import Agent, AgentConfig, ToolCapability, get_agent
 from domain.infrastructure._internal.repository import FileRepository, JsonSerializer
+from domain.shared import data_root
 
 logger = logging.getLogger("slo.agents")
 
-AGENTS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "data", "agents")
+# Resolved through data_root() rather than __file__ arithmetic: the latter
+# pinned this to <repo>/data unconditionally, so every pytest run wrote its
+# auto-*/create-*/upd-* fixtures straight into the live tree (916 of the 1033
+# files under data/agents/ matched test id patterns). data_root() honours
+# SLO_DATA_DIR, which the root conftest redirects for the duration of a test.
+AGENTS_DIR = str(data_root() / "agents")
 
 _agent_repo = FileRepository[dict](
     directory=AGENTS_DIR,
