@@ -124,11 +124,19 @@ warn_return_any = true
 warn_unused_configs = true
 ignore_missing_imports = true
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_functions = ["test_*"]
-asyncio_mode = "auto"
+# No [tool.pytest.ini_options] in this file: pytest.ini at the repo root is
+# the single source of truth for test config. A block that used to live here
+# was never read — pytest.ini outranks pyproject.toml when both sit in the
+# same directory — yet pytest still printed
+#   configfile: pytest.ini (WARNING: ignoring pytest config in pyproject.toml!)
+# on every single run. It was a third declaration of the same keys, and a
+# stale one at that: it carried 4 of pytest.ini's ~15 keys, so anyone editing
+# it would have silently changed nothing. Removing it kills the warning and
+# leaves one place to edit.
+#
+# packages/aml/pyproject.toml keeps its own [tool.pytest.ini_options] block —
+# that one IS selected, because a run rooted under packages/aml resolves
+# rootdir there rather than at the repo root. Do not "tidy" that one.
 
 [tool.coverage.run]
 # `services` and `testing` live at repo root like `domain`; without them the
