@@ -3,23 +3,44 @@
 from io import BytesIO
 
 import pytest
-from routers.files import FilesRouter, _get_db
+import routers.files as files_mod
+from routers.files import FilesRouter
 from test_support import get_test_client
 
 client = get_test_client()
-_router = FilesRouter()
-_upload_dir = _router.UPLOADS_DIR
+
+
+def _app_files_router() -> FilesRouter:
+    """The live FilesRouter whose routes the app serves.
+
+    ``routers.files`` builds it at import (``router = FilesRouter().router``)
+    and keeps only the APIRouter, so the instance is reached through its
+    routes' bound endpoints.
+    """
+    for route in getattr(files_mod.router, "routes", []):
+        instance = getattr(getattr(route, "endpoint", None), "__self__", None)
+        if isinstance(instance, FilesRouter):
+            return instance
+    raise AssertionError("app-side FilesRouter instance not found — isolation would be silent")
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_uploads():
-    """Clear file metadata (MogDB) and uploaded files between tests."""
+def _isolated_uploads(tmp_path, monkeypatch):
+    """Point every FilesRouter at a per-test tmp uploads dir (card c130b2aa).
+
+    The old fixture captured the router's real ``<repo>/data/uploads`` path at
+    module import — before any isolation applies — and unlinked its contents on
+    teardown, so any run of this suite wiped live top-level upload files, while
+    the tests themselves wrote bytes into the real dir through the app-side
+    instance. Both halves go to ``tmp_path`` now: the metadata store was
+    already isolated by the root conftest's ``SLO_DATA_DIR``, and teardown
+    touches nothing (tmp cleanup is pytest's). This mirrors the instance-patch
+    isolation tests/server and tests/core-py already use.
+    """
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(_app_files_router(), "UPLOADS_DIR", upload_dir)
     yield
-    db = _get_db()
-    db.collection("files").delete_many({})
-    for f in _upload_dir.iterdir():
-        if f.is_file():
-            f.unlink(missing_ok=True)
 
 
 class TestListFiles:
