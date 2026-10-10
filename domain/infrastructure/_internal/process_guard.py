@@ -37,7 +37,12 @@ import time
 from collections.abc import Callable, Generator
 from typing import Any
 
-from .constants import DEFAULT_GENERATE_TIMEOUT, DEFAULT_STALL_TIMEOUT, DEFAULT_STARTUP_TIMEOUT
+from .constants import (
+    DEFAULT_GENERATE_TIMEOUT,
+    DEFAULT_PROGRESS_STALL_TIMEOUT,
+    DEFAULT_STALL_TIMEOUT,
+    DEFAULT_STARTUP_TIMEOUT,
+)
 from .model_config import ExecutionMode, ModelConfig
 
 logger = logging.getLogger("slo.infrastructure.process_guard")
@@ -102,9 +107,7 @@ class _ThreadWorker:
 
     def start(self) -> None:
         self._started_at = time.time()
-        self._thread = threading.Thread(
-            target=self._run, daemon=True, name=f"tw-{self.worker_id}"
-        )
+        self._thread = threading.Thread(target=self._run, daemon=True, name=f"tw-{self.worker_id}")
         self._thread.start()
 
         # Wait for ready signal
@@ -119,7 +122,9 @@ class _ThreadWorker:
                     raise RuntimeError(f"ThreadWorker[{self.worker_id}]: model load failed")
             except queue.Empty:
                 if self._thread and not self._thread.is_alive():
-                    raise RuntimeError(f"ThreadWorker[{self.worker_id}]: thread died during startup")
+                    raise RuntimeError(
+                        f"ThreadWorker[{self.worker_id}]: thread died during startup"
+                    )
                 continue
         raise RuntimeError(
             f"ThreadWorker[{self.worker_id}]: failed to start within {self._startup_timeout}s"
@@ -382,6 +387,7 @@ class ProcessGuard:
         worker_id: str = "guard",
         generate_timeout: float = DEFAULT_GENERATE_TIMEOUT,
         stall_timeout: float = DEFAULT_STALL_TIMEOUT,
+        progress_stall_timeout: float = DEFAULT_PROGRESS_STALL_TIMEOUT,
         max_restarts: int = 3,
         restart_delay: float = 1.0,
         health_check_interval: float = 1.0,
@@ -417,6 +423,21 @@ class ProcessGuard:
         self.worker_id = worker_id
         self.generate_timeout = generate_timeout
         self.stall_timeout = stall_timeout
+        self.progress_stall_timeout = progress_stall_timeout
+        # Progress heartbeat (card d3a4a079). `alive` only proves the thread
+        # object exists; a livelocked worker raises nothing, so the exception-
+        # based detection in _recover_from_stall never fires and health() calls
+        # it healthy — the 2026-10-05 outage, alive=true for a 90-minute wedge.
+        # Records the last moment the worker produced OBSERVABLE work.
+        self._progress_lock = threading.Lock()
+        self._last_progress = time.monotonic()
+        # Streams currently mid-generation. A livelock is only meaningful while
+        # work is IN FLIGHT: an idle-but-healthy worker stops making progress
+        # simply because there is nothing to do, and must never be called
+        # stalled. Verified false positive before this gate existed — a guard
+        # with zero traffic reported stalled after the threshold.
+        self._active_streams = 0
+        self._mark_progress()
         self.max_restarts = max_restarts
         self.restart_delay = restart_delay
         self.health_check_interval = health_check_interval
@@ -482,24 +503,73 @@ class ProcessGuard:
                 raise
         with self._requests_served_lock:
             self._requests_served += 1
+        self._mark_progress()
         return result
 
     def generate_stream(self, prompt: str, **kwargs: Any) -> Generator[str, None, dict]:
         if not self.alive:
             raise RuntimeError(f"Guard worker [{self.worker_id}] is not alive")
         with self._semaphore:
-            gen = self._worker.generate_stream(prompt, **kwargs)
+            with self._progress_lock:
+                self._active_streams += 1
             try:
-                token = next(gen)
-                while True:
-                    yield token
+                gen = self._worker.generate_stream(prompt, **kwargs)
+                try:
                     token = next(gen)
-            except StopIteration as e:
-                return e.value if hasattr(e, "value") else {}
-            except Exception as e:
-                if self._is_stall(e):
-                    self._recover_from_stall()
-                raise
+                    self._mark_progress()
+                    while True:
+                        yield token
+                        token = next(gen)
+                        self._mark_progress()
+                except StopIteration as e:
+                    return e.value if hasattr(e, "value") else {}
+                except Exception as e:
+                    if self._is_stall(e):
+                        self._recover_from_stall()
+                    raise
+            finally:
+                # Runs on completion AND on generator close()/GC, so an
+                # abandoned stream cannot leave the counter wedged and make
+                # every later request look stalled.
+                with self._progress_lock:
+                    self._active_streams -= 1
+
+    def _mark_progress(self) -> None:
+        """Record that the worker produced observable work.
+
+        Called on request completion and per streamed token — the only two
+        signals that prove the worker is advancing rather than merely existing.
+        """
+        with self._progress_lock:
+            self._last_progress = time.monotonic()
+
+    @property
+    def progress_age_s(self) -> float:
+        """Seconds since the worker last produced observable work."""
+        with self._progress_lock:
+            return time.monotonic() - self._last_progress
+
+    @property
+    def stalled(self) -> bool:
+        """True when a stream is in flight but the worker has gone silent too long.
+
+        The livelock predicate (card d3a4a079). `alive` cannot express this: a
+        thread spinning forever without raising is alive, and never trips
+        _recover_from_stall's exception path.
+
+        Gated on an ACTIVE STREAM. An idle worker stops progressing because
+        there is nothing to do, so without this gate a healthy guard with zero
+        traffic reports stalled once the threshold elapses — a confirmed false
+        positive on the first cut of this card. Non-streaming requests need no
+        separate signal: they are bounded by generate_timeout.
+
+        Reporting-only by design — nothing restarts off it yet. A legitimately
+        slow prefill must not be killed on a threshold with no soak time;
+        recovery can adopt the predicate once it has evidence.
+        """
+        if not self.alive or self._active_streams <= 0:
+            return False
+        return self.progress_age_s > self.progress_stall_timeout
 
     def _recover_from_stall(self) -> None:
         """Restart a wedged worker (stalled queue writes / no messages)."""
@@ -525,8 +595,17 @@ class ProcessGuard:
         return "stall" in msg or "timeout" in msg
 
     def health(self) -> dict:
+        alive = self.alive
+        age = self.progress_age_s
         return {
-            "alive": self.alive,
+            "alive": alive,
+            # Progress heartbeat (card d3a4a079): separates "alive and working"
+            # from "alive and livelocked". health() feeds controllers/models.py
+            # and slonet_server.py, so this reaches the UI/gateway and turns an
+            # indefinite spinner into a real reason.
+            "last_progress_age_s": round(age, 3),
+            "progress_stall_timeout_s": self.progress_stall_timeout,
+            "stalled": self.stalled,
             "worker_id": self.worker_id,
             "mode": self._mode.value,
             "model_id": self._config.model_id,
