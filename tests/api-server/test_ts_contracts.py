@@ -120,8 +120,8 @@ def test_registry_rows_carry_frontend_descriptor_fields():
     `satisfies Record<string, ContractDescriptor>` at typecheck.
     """
     # Importing the pilot registers its own contract as a projection side effect.
-    from routers.contracts import router  # noqa: F401  (import registers)
     from infrastructure.contract import get_contracts
+    from routers.contracts import router  # noqa: F401  (import registers)
 
     rows = get_contracts()
     assert rows, "no projected contracts registered — create_router did not run"
