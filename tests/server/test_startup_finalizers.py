@@ -63,6 +63,39 @@ def test_optimization_suggestions_does_not_deadlock(tmp_path, monkeypatch) -> No
     assert isinstance(results[0], list)
 
 
+def test_get_alerts_does_not_slice_the_deque(tmp_path, monkeypatch) -> None:
+    """get_alerts() must not raise on its deque window.
+
+    ``_records`` is a ``collections.deque`` and deque rejects slice indexing:
+    ``self._records[-5:]`` raises ``TypeError: sequence index must be integer,
+    not 'slice'``. ``get_alerts`` guards with ``if len(self._records) < 3``,
+    so the crash stayed hidden until three startups had been recorded — then
+    GET /health/startup-history answered 500 ``E_UNHANDLED`` at
+    infrastructure/startup_history.py:435. Every other accessor is safe
+    (``get_records`` goes through ``list()`` first, ``self._records[-1]`` is an
+    integer index).
+    """
+    monkeypatch.setenv("SLO_STARTUP_HISTORY_PATH", str(tmp_path / "no_legacy.json"))
+    history = StartupHistory(db_path=tmp_path / "history_mogdb")
+    # Past the `len < 3` guard, so the window the fix materialises is reached.
+    _seed_records(history, count=5)
+
+    alerts = history.get_alerts()
+    assert isinstance(alerts, list)
+
+    # The whole payload the async handler assembles must come back, not 500.
+    payload = {
+        "records": history.get_records(limit=10),
+        "stats": history.get_stats(),
+        "stage_stats": history.get_stage_stats(),
+        "slow_startups": history.get_slow_startups(threshold_seconds=60.0),
+        "alerts": history.get_alerts(),
+        "suggestions": history.get_optimization_suggestions(),
+    }
+    assert len(payload["records"]) == 5
+    assert isinstance(payload["alerts"], list)
+
+
 def test_history_record_is_committed_and_persisted(tmp_path, monkeypatch) -> None:
     """d1f544fb: a finished startup must land in records and in the store."""
     monkeypatch.setenv("SLO_STARTUP_HISTORY_PATH", str(tmp_path / "no_legacy.json"))

@@ -430,9 +430,15 @@ class StartupHistory:
             avg = sum(durations) / n
             p95 = sorted_durations[int(n * 0.95)] if n > 1 else sorted_durations[0]
 
+            # `_records` is a deque, and deque rejects slice indexing:
+            # `d[-5:]` raises `TypeError: sequence index must be integer, not
+            # 'slice'` — that is what 500'd GET /health/startup-history in
+            # get_alerts. Materialise the window once for both checks below.
+            recent = list(self._records)[-5:]
+
             # Check for slow startups
             slow_threshold = p95 * 1.5
-            for r in self._records[-5:]:  # Check last 5
+            for r in recent:
                 if r.total_duration > slow_threshold:
                     alerts.append(
                         {
@@ -445,7 +451,7 @@ class StartupHistory:
                     )
 
             # Check for failed startups
-            for r in self._records[-5:]:
+            for r in recent:
                 if not r.success:
                     alerts.append(
                         {
