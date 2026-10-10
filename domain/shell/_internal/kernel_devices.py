@@ -148,10 +148,23 @@ class DeviceTable:
             return True
 
     def unregister(self, name: str) -> bool:
-        """Unregister device."""
+        """Unregister device. Returns False if the name is not registered.
+
+        Open fds bound to the device are freed with it: a dangling fd must
+        never dispatch ioctls into a device the table no longer manages (the
+        pre-baseboard implementation closed the device here for the same
+        reason). Aliases share one driver instance, so fds stay open while
+        any surviving name still maps to it.
+        """
         with self._lock:
-            self._devices.pop(name, None)
+            dev = self._devices.pop(name, None)
+            if dev is None:
+                return False
             self._device_types.pop(name, None)
+            if not any(d is dev for d in self._devices.values()):
+                for fd in range(self._max_fds):
+                    if self._fd_device[fd] is dev:
+                        self._free_fd(fd)
             return True
 
     def get(self, name: str) -> DeviceDriver | None:
@@ -236,9 +249,16 @@ class DeviceManager:
         self._devices: dict[str, DeviceDriver] = {}
 
     def register(self, device: DeviceDriver, device_type: int = 0) -> bool:
-        """Register device — compatible with old interface."""
+        """Register device — compatible with old interface.
+
+        The table decides: mirror into ``_devices`` only on success, or a
+        rejected duplicate would clobber the entry ``get()`` reports while the
+        table keeps serving the original driver.
+        """
+        if not self.table.register(device, device_type):
+            return False
         self._devices[device.name] = device
-        return self.table.register(device, device_type)
+        return True
 
     def unregister(self, name: str) -> bool:
         """Unregister device."""
