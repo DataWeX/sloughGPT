@@ -35,6 +35,19 @@ Runs launched with `/goal` (or the phrases "one shot", "no check-ins", "just bui
 4. **SOP gates run without re-asking.** Steps 3 and 10–13 (workflow, test, benchmark, merge-when-green, summary) execute automatically; the step-4 go-ahead is satisfied by launching with `/goal`.
 5. **Report like an engineering manager:** lead with the verdict and what shipped, then the major/specific decisions, **ASSUMPTIONS**, and test + benchmark numbers. Omit working noise (musings, raw shell transcripts) unless it is relevant or an interesting engineering read — those go collapsed or in an appendix.
 
+### Coordination (multi-session)
+
+Every session runs beside others on one repo, one shared index, one board.
+Coordination is mechanical, not conversational — the board and the commits
+carry it, because chat does not survive a restart and promises don't hold
+under parallelism.
+
+1. **The queue is the board; Gene runs it.** A session told to "continue building" does not pick work inline: it takes unowned `todo` cards in priority order and hands the batch to **Gene** (`.opencode/agents/gene.md`) with a brief, then reviews results. One small card may be worked directly. Gene decomposes, routes to specialists, and verifies the gates itself.
+2. **One card = one branch = one session.** Before touching a file, run `git status`: foreign uncommitted hunks are off-limits, and an area showing another session's edits belongs to that session — pick a different card instead of colliding.
+3. **Never stage what you will not commit in the same command.** Parallel sessions commit the shared index and sweep your staged files into their commit (this has happened repeatedly). Stage and commit in one step, pathspec-limited: `git commit -m "…" -- <paths>`.
+4. **Port, don't rebuild.** Before implementing a fix, search the other branches — `git log --all --grep='<topic>'`, `git log --all -S '<symbol>'` — and the card history. Settled fixes land on one branch and strand on the rest (`65ca94433` `_interpret_natural` skips existed on six branches and not the one that needed it; `740ea0b26` the shutdown guard; the device-table contract a third time). Cherry-pick, and quote the source sha in the commit.
+5. **`done` needs evidence, and the note moves first.** A card may move to `done` only with the landed sha and gate results quoted in the commit/card. Update the backing note's status **before** moving the card, then run `app-planner sync` — note status wins and will revert a card moved on its own.
+
 ### Core Rules
 
 - **ALWAYS check if something already exists before building it.** Before creating new files, modules, or features, search the codebase for existing implementations. Use `grep`, `glob`, and `find` to check for existing code, patterns, or similar functionality. Duplicate work wastes time and creates confusion. **This has cost us hours of wasted effort — never skip this step.**
