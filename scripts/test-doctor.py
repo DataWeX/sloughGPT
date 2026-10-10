@@ -11,6 +11,7 @@ Usage:
     python scripts/test-doctor.py --flake                     # flaky detector
     python scripts/test-doctor.py --fix-hint <test>           # suggest fix
     python scripts/test-doctor.py --mock-drift                # dead @patch targets
+    python scripts/test-doctor.py --dead-seam <file>          # patch that never runs
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import textwrap
 import time
 from collections import defaultdict
@@ -535,6 +537,13 @@ _MOCK_DRIFT_PATH_ROOTS = (
     (),
 )
 _MD_PATCH_RE = re.compile(r'patch\(\s*["\']([A-Za-z0-9_.]+)["\']')
+# `monkeypatch.setattr("pkg.mod.attr", ...)`.  STRING FORM ONLY: the object form
+# (`monkeypatch.setattr(obj, "attr", value)`) names no dotted path, so there is
+# nothing to resolve back to a definition site -- 1064 such sites in tests/ are
+# out of scope by construction, not by omission.  Without this the two forms
+# answered differently: patch("...") was scanned, setattr was invisible.
+_MD_SETPATTR_RE = re.compile(r'monkeypatch\.setattr\(\s*["\']([A-Za-z0-9_.]+)["\']')
+_MD_TARGET_RES = (_MD_PATCH_RE, _MD_SETPATTR_RE)
 _MD_FROM_IMPORT_RE = re.compile(r"^\s*from\s+([A-Za-z0-9_.]+)\s+import\s+(.+)$")
 _MD_ANY_IMPORT_RE = re.compile(
     r"^[ \t]*(?:from[ \t]+([A-Za-z0-9_.]+)[\t ]+import|import[ \t]+([A-Za-z0-9_.]+))",
@@ -599,7 +608,10 @@ def _md_resolve(module: str, importer: Path) -> str:
 
 
 def _md_targets() -> dict[str, set[Path]]:
-    """patch target -> the test files that patch it (definition-site only)."""
+    """patch target -> the test files that patch it (definition-site only).
+
+    Covers both spellings: ``patch("...")`` and ``monkeypatch.setattr("...")``.
+    """
     out: dict[str, set[Path]] = {}
     for d in _MOCK_DRIFT_TEST_DIRS:
         root = REPO_ROOT / d
@@ -610,10 +622,11 @@ def _md_targets() -> dict[str, set[Path]]:
                 txt = f.read_text(errors="ignore")
             except OSError:
                 continue
-            for m in _MD_PATCH_RE.finditer(txt):
-                t = m.group(1)
-                if "._internal." in t:
-                    out.setdefault(t, set()).add(f)
+            for rx in _MD_TARGET_RES:
+                for m in rx.finditer(txt):
+                    t = m.group(1)
+                    if "._internal." in t:
+                        out.setdefault(t, set()).add(f)
     return out
 
 
@@ -939,6 +952,190 @@ def cmd_mock_drift(verbose: bool = False) -> int:
     return 1 if (confirmed or unresolvable) else 0
 
 
+# ── Dead-seam probe: boom-vs-baseline ───────────────────────────────────
+#
+# --mock-drift is STATIC: it asks "does patching this target move the attribute
+# the code reads?"  A target that answers yes is counted as ok and never looked
+# at again.  That answer is about *binding*, not about *execution* — and the
+# difference is a whole class of vacuous tests: the fixture patches the exact
+# module production reads, every static condition holds, and yet nothing ever
+# routes through the symbol (e.g. ProcessGuard's default flipped SUBPROCESS ->
+# THREAD in an unrelated commit, leaving a perfect patch aimed at a branch no
+# one takes).  The test passes; the assertion proves nothing.
+#
+# The runtime probe closes it: run the test twice — once normally, once with
+# the symbol booby-trapped — and compare.  If the boom never fires, the symbol
+# was never executed.
+
+
+def _md_boom_verdict(baseline_rc: int, boom_rc: int, state: str) -> str:
+    """Classify one boom-vs-baseline pair.
+
+    ``dead``          baseline passed AND the boom run passed — production never
+                      executed the symbol, so patching it is a no-op and any
+                      assertion about it is vacuous.
+    ``live``          baseline passed AND the boom run FAILED — the boom fired,
+                      the symbol really is on the executed path.
+    ``inconclusive``  the baseline was already red (nothing to compare), the
+                      symbol could not be armed (``not-probeable`` /``unresolved``), or the boom run died outside the test body
+                      (pytest rc 4/5: usage error / no tests / interrupted),
+                      which says nothing about the symbol either way.
+    """
+    if baseline_rc != 0 or state != "armed":
+        return "inconclusive"
+    if boom_rc == 0:
+        return "dead"
+    if boom_rc == 1:  # tests failed == the boom was reached
+        return "live"
+    return "inconclusive"
+
+
+def _md_static_status(target: str, readers: dict[str, dict[str, set[str]]]) -> str:
+    """What the static half already knows about `target`.
+
+    ``lands``  some production reader still picks the patch up — the drift
+               detector counts this OK, which is exactly the blind spot the
+               runtime probe closes: the binding moves, but is it ever executed?
+    ``frozen`` every reader binds eagerly so the patch never lands — already
+               reported by ``--mock-drift`` as confirmed.
+    ``n/a``    no production reader found at all.
+    """
+    mod, attr = target.rsplit(".", 1)
+    saw_reader = False
+    for reader_mod in readers.get(attr, {}):
+        if reader_mod == mod or "._internal." in reader_mod:
+            continue
+        reached = _md_reaches(target, reader_mod, attr)
+        if reached is None:
+            continue
+        saw_reader = True
+        if reached:
+            return "lands"
+    return "frozen" if saw_reader else "n/a"
+
+
+def _boom_run(test: str, target: str, timeout: int = 600) -> tuple[int, str]:
+    """Run `test` with `target` armed.  Returns (pytest rc, marker state).
+
+    The marker travels through a FILE, not stdout: pytest captures output from
+    collection onward, and a swallowed marker would read as "not armed" — i.e.
+    would turn every live seam into an inconclusive one.
+    """
+    env = os.environ.copy()
+    scripts_dir = str(REPO_ROOT / "scripts")
+    env["PYTHONPATH"] = (
+        scripts_dir + os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else scripts_dir
+    )
+    env["SLO_DEAD_SEAM_TARGET"] = target
+    with tempfile.NamedTemporaryFile(
+        "w", suffix=".dead-seam", prefix="slo-dead-seam-", delete=False
+    ) as fh:
+        marker_path = fh.name
+    env["SLO_DEAD_SEAM_MARKER"] = marker_path
+
+    cmd = [
+        sys.executable,
+        "-m",
+        "pytest",
+        test,
+        "-p",
+        "dead_seam_plugin",
+        "--tb=no",
+        "-q",
+        "--no-header",
+    ]
+    try:
+        p = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, cwd=str(REPO_ROOT), env=env
+        )
+        rc = p.returncode
+    except subprocess.TimeoutExpired:
+        rc = 1
+
+    state = "unresolved"
+    try:
+        txt = Path(marker_path).read_text()
+        m = re.search(r"state=(\S+)", txt)
+        if m:
+            state = m.group(1)
+        Path(marker_path).unlink()
+    except OSError:
+        pass
+    return rc, state
+
+
+def cmd_dead_seam(test: str, verbose: bool = False) -> int:
+    """Boom-vs-baseline probe over one test file's patch targets."""
+    _p(f"\n  {_b}{_c}Dead seam{_r}")
+    _p("  " + _dim("boom-vs-baseline: does this test's patch ever execute?"))
+    _md_setup_path()
+
+    candidate = Path(test)
+    test_path = candidate if candidate.is_absolute() else REPO_ROOT / candidate
+    if not test_path.exists():
+        _line(_no, _red(f"no such test: {test}"))
+        return 2
+
+    resolved = test_path.resolve()
+    targets = sorted(
+        t for t, files in _md_targets().items() if any(f.resolve() == resolved for f in files)
+    )
+    if not targets:
+        _line(_ok, _green(f"no patch targets in {_rel(test_path)}"))
+        return 0
+
+    readers = _md_readers()
+
+    base_rc, _base_out, _base_err = _run([test])
+    if base_rc != 0:
+        _line(_no, _red(f"baseline already failing (rc={base_rc}) — probe inconclusive"))
+        _p(f"  {_dim('a red baseline cannot show whether the patch runs; fix it first')}")
+        return 0
+
+    dead: list[str] = []
+    live = inconclusive = 0
+
+    for t in targets:
+        boom_rc, state = _boom_run(test, t)
+        verdict = _md_boom_verdict(base_rc, boom_rc, state)
+        if verdict == "dead":
+            dead.append(t)
+            _line(_no, _red(t))
+            _p(
+                f"      {_dim('runtime: never executed')}"
+                f"  (baseline rc={base_rc}, boom rc={boom_rc})"
+            )
+            static = _md_static_status(t, readers)
+            if static == "lands":
+                note = "binding moves, so --mock-drift counts this one OK"
+            elif static == "frozen":
+                note = "patch never lands — --mock-drift already reports it"
+            else:
+                note = "no production reader found"
+            _p(f"      static : {_b}{static}{_r}  {_dim('(' + note + ')')}")
+            _p(
+                f"      {_gn}fix{_r}: the test never reaches "
+                f"{_b}{t.rsplit('.', 1)[1]}{_r} — the mock is vacuous"
+            )
+        elif verdict == "live":
+            live += 1
+            if verbose:
+                _line(_ok, _green(f"{t}  (executed)"))
+        else:
+            inconclusive += 1
+            _line(
+                _no,
+                f"{_y}{t}{_r}  {_dim(f'inconclusive (state={state}, boom rc={boom_rc})')}",
+            )
+
+    _p()
+    if dead:
+        _line(_no, _red(f"{len(dead)} dead seam(s) — {live} live, {inconclusive} inconclusive"))
+        return 1
+    _line(_ok, _green(f"no dead seam ({live} live, {inconclusive} inconclusive)"))
+    return 0
+
+
 # ═══════════════════════════════════════════════════════════════════════
 # CLI
 # ═══════════════════════════════════════════════════════════════════════
@@ -1230,6 +1427,7 @@ def main() -> int:
               test-doctor tests/test_foo.py            diagnose file
               test-doctor --fix-hint <test>::test_fn   suggest fix
               test-doctor --mock-drift                 dead @patch targets
+              test-doctor --dead-seam tests/test_x.py  does the patch ever run?
               test-doctor --path-drift                 broken test path arithmetic
               test-doctor --ci-drift                   CI steps pointing nowhere
         """),
@@ -1239,6 +1437,11 @@ def main() -> int:
     ap.add_argument("--flake", "-f", action="store_true")
     ap.add_argument("--fix-hint", metavar="TEST")
     ap.add_argument("--mock-drift", action="store_true", help="dead @patch targets")
+    ap.add_argument(
+        "--dead-seam",
+        action="store_true",
+        help="boom-vs-baseline: is a patch target ever executed? (needs <file>)",
+    )
     ap.add_argument(
         "--ci-drift",
         action="store_true",
@@ -1262,6 +1465,10 @@ def main() -> int:
 
     if args.mock_drift:
         return cmd_mock_drift(verbose=args.verbose)
+    if args.dead_seam:
+        if not args.target:
+            ap.error("--dead-seam needs a test file: test-doctor --dead-seam tests/test_x.py")
+        return cmd_dead_seam(args.target, verbose=args.verbose)
     if args.ci_drift:
         return _ci_drift()
     if args.path_drift:
