@@ -765,7 +765,8 @@ class TestX86Assembler:
 
         asm = X86Assembler()
         code = asm.assemble("jmp 0x100")
-        assert code[0] == 0xE9  # JMP near
+        assert code[0] == 0x66  # operand-size prefix (16-bit jmp on VM CPU)
+        assert code[1] == 0xE9  # JMP near
 
     def test_add_reg_imm(self):
         from domain.shell._internal.vm import X86Assembler
@@ -780,10 +781,13 @@ class TestX86Assembler:
         asm = X86Assembler()
         code = asm.assemble("start:\n  nop\n  jmp start")
         assert code[0] == 0x90  # NOP
-        assert code[1] == 0xE9  # JMP near (always near in 16-bit for pass consistency)
-        # Offset should be -4 (back to start, relative to end of 3-byte instruction)
-        offset = int.from_bytes(code[2:4], "little", signed=True)
-        assert offset == -4
+        assert code[1] == 0x66  # operand-size prefix (16-bit jmp, always near
+        # in 16-bit for pass consistency)
+        assert code[2] == 0xE9  # JMP near
+        # Offset should be -5 (back to start, relative to end of the
+        # 4-byte 66 E9 rel16 instruction starting at byte 1)
+        offset = int.from_bytes(code[3:5], "little", signed=True)
+        assert offset == -5
 
     def test_bits_directive(self):
         from domain.shell._internal.vm import X86Assembler
@@ -1941,13 +1945,27 @@ class TestSysReadWriteEdge:
         h, cpu, s, pcb, m = _make_handler(fs=FlatFS(BlockDevice()))
         name = b"/out.txt\x00"
         cpu._mem[0xE0000 : 0xE0000 + len(name)] = name
+        # mode 1 is append and needs an existing file; mode 2 creates
+        # (81616a6f7 tightened the mode contract, this test assumed write-create)
         cpu._regs[0] = h.SYS_OPEN
         cpu._regs[3] = 0xE0000
-        cpu._regs[1] = 1  # O_WRONLY
+        cpu._regs[1] = 2  # create+truncate
+        h.handle()
+        created = cpu._regs[0]
+        assert created >= 3
+        cpu._regs[0] = h.SYS_OPEN
+        cpu._regs[1] = 1  # append
         h.handle()
         fd = cpu._regs[0]
         assert fd >= 3
         assert fd in h._fd_table
+        # append to a missing file fails instead of creating it
+        missing = b"/nope.txt\x00"
+        cpu._mem[0xE1000 : 0xE1000 + len(missing)] = missing
+        cpu._regs[3] = 0xE1000
+        cpu._regs[1] = 1
+        h.handle()
+        assert cpu._regs[0] == 0xFFFFFFFF
 
     def test_open_nonexistent_readonly(self):
         h, cpu, s, pcb, m = _make_handler(fs=FlatFS(BlockDevice()))
@@ -3017,7 +3035,9 @@ class TestCPUExecution:
 
     def test_cpuid(self):
         _, vs = run_asm("[BITS 32]\nMOV EAX, 0\nCPUID\nHLT")
-        assert vs._cpu._regs[0] == 0
+        # Real CPUID leaf 0 returns the max supported leaf in EAX (the old
+        # == 0 assertion pinned the NOP-placeholder era of the assembler).
+        assert vs._cpu._regs[0] == 1
 
     def test_lea(self):
         _, vs = run_asm("[BITS 32]\nMOV EBX, 10\nLEA EAX, [EBX+0x20]\nHLT")

@@ -17,7 +17,9 @@ from __future__ import annotations
 import logging
 import re
 import struct
+import sys
 import zlib
+from collections import Counter, deque
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -3769,6 +3771,31 @@ _OPCODE_TABLE = {
 
 # ── x86 Assembler ────────────────────────────────────────────────────────────
 
+# Segment-override prefixes: the VM is flat (segments are no-ops), so the
+# assembler emits the faithful byte for `es:[..]`-style operands and the CPU
+# skips these bytes wherever they appear in the prefix position.
+_SEG_PREFIX_BYTES = {
+    "es": 0x26,
+    "cs": 0x2E,
+    "ss": 0x36,
+    "ds": 0x3E,
+    "fs": 0x64,
+    "gs": 0x65,
+}
+_SEGMENT_PREFIXES = frozenset(_SEG_PREFIX_BYTES.values())
+# Prefix byte -> _segregs index (dict order matches ES, CS, SS, DS, FS, GS).
+_SEG_PREFIX_IDX = {byte: idx for idx, byte in enumerate(_SEG_PREFIX_BYTES.values())}
+_SEG_CS, _SEG_SS = 1, 2  # these overrides stay flat (code + stack protection)
+# A segment qualifier only counts directly before a bracketed memory operand
+# (far-jump targets like `0x08:0x1234` must keep their `:` intact).
+_SEG_OVERRIDE_RE = re.compile(r"\b(cs|ds|es|fs|gs|ss)\s*:\s*(?=\[)", re.IGNORECASE)
+
+# 16-bit base registers map flat onto their 32-bit partners (no segmentation):
+# [si] == [esi], [bx+si] == [ebx+esi]. Without this mapping they were not in
+# _REG32 and silently resolved to [disp32=0] (kanban card d475eae9).
+_REG16_ALIASES = {"si": "esi", "di": "edi", "bx": "ebx", "bp": "ebp"}
+_REG16_ALIASES_RE = re.compile(r"\b(si|di|bx|bp)\b", re.IGNORECASE)
+
 
 class X86Assembler:
     """x86-32 real mode assembler — compiles assembly to machine code bytes.
@@ -3798,6 +3825,13 @@ class X86Assembler:
 
     _REG8 = {"al": 0, "cl": 1, "dl": 2, "bl": 3, "ah": 4, "ch": 5, "dh": 6, "bh": 7}
     _REG16 = {"ax": 0, "cx": 1, "dx": 2, "bx": 3, "sp": 4, "bp": 5, "si": 6, "di": 7}
+
+    # In-house tensor dialect pseudo-ops (tests/core-py/test_vm.py
+    # TestAssemblerCoverage): declared as assembly-level stubs so the dialect
+    # still round-trips; every other unknown mnemonic hits the intake gate.
+    _TENSOR_PSEUDO_OPS = frozenset(
+        {"load_shape", "add_t", "mul_t", "matmul", "sum", "mean", "relu", "softmax"}
+    )
     _REG32 = {"eax": 0, "ecx": 1, "edx": 2, "ebx": 3, "esp": 4, "ebp": 5, "esi": 6, "edi": 7}
     _SEG_REGS = {"es": 0, "cs": 1, "ss": 2, "ds": 3, "fs": 4, "gs": 5}
     _CTRL_REGS = {"cr0": 0, "cr1": 1, "cr2": 2, "cr3": 3, "cr4": 4, "cr5": 5, "cr6": 6, "cr7": 7}
@@ -3850,12 +3884,18 @@ class X86Assembler:
         self._output = bytearray()
 
     def _pfx(self, reg):
-        """Return True if register needs 0x66 operand-size prefix in current bits mode."""
-        if reg in self._REG16:
-            return self._bits == 32
-        if reg in self._REG32:
-            return self._bits == 16
-        return False
+        """Return True if this register operand needs the 0x66 prefix.
+
+        The VM CPU decodes with a 32-bit default operand size, so 0x66
+        always means "16-bit operand" — in BOTH bits modes (the real-hardware
+        reading, where 66 inverts the current mode, made BITS 16 emission
+        disagree with the decoder: `mov ax, 5` lost its 16-bit width while
+        `mov eax, 1` gained a prefix the CPU read as imm16 — card d475eae9).
+        BITS 32 output is unchanged: r16 was prefixed there before and still
+        is; r32 never was. This matches the runtime-correct convention the
+        mem-form MOV emitters already use.
+        """
+        return reg in self._REG16
         self._reloc = []  # (offset, label, type)
 
     def _pfx_size(self, size):
@@ -3865,14 +3905,12 @@ class X86Assembler:
             size: One of "byte", "word", "dword", or None (register-implied).
 
         Returns:
-            True when the named operand size differs from the current BITS mode
-            (word in 32-bit mode, dword in 16-bit mode).
+            True for "word": 16-bit ops carry 0x66 on the VM CPU in both BITS
+            modes (see _pfx). "dword" is the decoder default and never
+            prefixes — in BITS 16 it used to (real-hw inversion), which sent
+            `mov dword [x], imm` down the 16-bit executor (card d475eae9).
         """
-        if size == "word":
-            return self._bits == 32
-        if size == "dword":
-            return self._bits == 16
-        return False
+        return size == "word"
 
     def assemble(self, source: str, org: int = 0) -> bytearray:
         """Assemble x86 source to machine code bytes.
@@ -3891,6 +3929,11 @@ class X86Assembler:
         self._labels = {}
         self._output = bytearray()
         self._reloc = []
+        # rel16 range violations seen in the current pass: early passes use
+        # placeholder (0) targets for forward labels, so an out-of-range
+        # displacement may just mean "not converged yet". Cleared each pass;
+        # whatever the final (converged) pass records is raised below.
+        self._range_errors: list[str] = []
 
         lines = source.split("\n")
 
@@ -3900,6 +3943,7 @@ class X86Assembler:
             self._bits = 16
             self._org = org
             self._pass = max(iteration, 1)
+            self._range_errors = []
 
             for line in lines:
                 clean = line.split(";")[0].strip()
@@ -3907,6 +3951,8 @@ class X86Assembler:
                     continue
                 if clean.startswith("["):
                     self._handle_directive(clean)
+                    continue
+                if self._handle_bare_directive(clean):
                     continue
                 if (
                     ":" in clean
@@ -3925,6 +3971,24 @@ class X86Assembler:
                         clean = rest.strip()
                         if not clean:
                             continue
+                # Colon-less data label (TASM/MASM style): `NAME db ...`.
+                # bweeper (compat corpus) uses it; historically the whole line
+                # hit the NOP placeholder and the DATA was silently lost.
+                parts_line = clean.split(None, 1)
+                if len(parts_line) == 2 and parts_line[1].split(None, 1)[0].lower() in (
+                    "db",
+                    "dw",
+                    "dd",
+                    "dq",
+                    "dt",
+                    "times",
+                    "resb",
+                    "resw",
+                    "resd",
+                    "resq",
+                ):
+                    self._labels[parts_line[0]] = self._org + len(self._output)
+                    clean = parts_line[1]
                 if " equ " in clean.lower():
                     parts_eq = clean.split(None, 2)
                     if len(parts_eq) >= 3:
@@ -3934,7 +3998,12 @@ class X86Assembler:
                     continue
                 elif clean.startswith("times"):
                     self._emit_times(clean)
-                elif clean.startswith("db ") or clean.startswith("dw ") or clean.startswith("dd "):
+                elif (
+                    clean.startswith("db ")
+                    or clean.startswith("dw ")
+                    or clean.startswith("dd ")
+                    or clean.startswith("dq ")
+                ):
                     self._emit_data(clean)
                 else:
                     self._emit_instruction(clean)
@@ -3943,14 +4012,68 @@ class X86Assembler:
                 break
             prev_labels = dict(self._labels)
 
+        if self._range_errors:
+            # Labels converged (or passes exhausted) with a genuine overflow
+            # still recorded — a real rel16 constraint, not a placeholder.
+            raise ValueError(self._range_errors[0])
         return bytes(self._output)
 
     def _handle_directive(self, line):
         line = line.strip("[]").strip()
         if line.upper().startswith("BITS"):
-            self._bits = int(line.split()[1])
+            parts = line.split(None, 1)
+            self._set_bits(parts[1] if len(parts) > 1 else "")
         elif line.upper().startswith("ORG"):
-            self._org = self._parse_imm(line.split(None, 1)[1])
+            self._org = self._parse_label(line.split(None, 1)[1])
+
+    def _set_bits(self, text):
+        try:
+            bits = int(str(text).strip().split()[0])
+        except (ValueError, IndexError) as exc:
+            raise ValueError(f"invalid BITS value: {text!r} (expected 16 or 32)") from exc
+        if bits not in (16, 32):
+            raise ValueError(
+                f"BITS {bits} not supported — x86-64 has no VM implementation "
+                "(intake gate: scripts/compat/manifest.json planned rows)"
+            )
+        self._bits = bits
+
+    def _handle_bare_directive(self, clean: str) -> bool:
+        """Bracket-less NASM/TASM directives: handle, explicitly tolerate, or
+        raise a named intake gate. True when the line is fully consumed.
+
+        The compat matrix (scripts/compat_track.py) keys each third-party row's
+        reason off these messages, so every refusal must name the construct.
+        """
+        if clean.startswith("%"):
+            head = clean.split(None, 1)[0]
+            raise ValueError(
+                f"unsupported preprocessor directive {head!r} — macro/include "
+                "intake is a planned tier (scripts/compat/manifest.json)"
+            )
+        parts = clean.split(None, 1)
+        head = parts[0].lower()
+        rest = parts[1].strip() if len(parts) > 1 else ""
+        if head == "bits":
+            self._set_bits(rest)
+            return True
+        if head == "org":
+            if not rest:
+                raise ValueError("org requires an address expression")
+            self._org = self._parse_label(rest)
+            return True
+        if head == "cpu":
+            return True  # ISA-floor declaration; no codegen effect
+        if head in ("section", "global", "extern"):
+            return True  # flat binary model: sections flattened, symbols free
+        if head in (".data", ".text", ".bss", ".code", ".idata"):
+            return True  # bare section aliases (legacy dialect tolerance)
+        if head == "segment":
+            raise ValueError(
+                "segment directive not supported — flat memory model only "
+                "(segmented intake is a planned tier)"
+            )
+        return False
 
     def _estimate_times_size(self, line):
         parts = line.split(None, 2)
@@ -3978,6 +4101,8 @@ class X86Assembler:
             return 2 * len(line[2:].strip().split(","))
         if line.startswith("dd"):
             return 4 * len(line[2:].strip().split(","))
+        if line.startswith("dq"):
+            return 8 * len(line[2:].strip().split(","))
         return 1
 
     def _estimate_insn_size(self, line):
@@ -3995,17 +4120,24 @@ class X86Assembler:
             "cld",
             "std",
             "lodsb",
-            "lodsw",
             "stosb",
-            "stosw",
             "movsb",
-            "movsw",
             "cmpsb",
             "scasb",
         ):
             return 1
-        if op == "rep":
-            return 2  # rep prefix + string instruction
+        if op in (
+            "lodsw",
+            "stosw",
+            "movsw",
+            "cmpsw",
+            "scasw",
+        ):
+            return 2  # 66 + word string op (unified 16-bit convention)
+        if op in ("rep", "repe", "repz", "repne", "repnz"):
+            inner = parts[1].strip() if len(parts) > 1 else ""
+            # string-override prefix + string instruction (+ 66 for word ops)
+            return 3 if inner in ("lodsw", "stosw", "movsw", "cmpsw", "scasw") else 2
         if op in ("retf",):
             return 1
         if op in self._CC:
@@ -4013,23 +4145,27 @@ class X86Assembler:
         if op == "int":
             return 2
         if op == "push":
-            # push reg = 1, push imm = 3
+            # push r16 = 2 (66 + op), push r32 = 1, push imm = 3
             operand = parts[1].strip() if len(parts) > 1 else ""
-            if operand in self._REG16 or operand in self._REG32:
+            if operand in self._REG16:
+                return 2
+            if operand in self._REG32:
                 return 1
             return 3
         if op == "pop":
-            return 1
+            # pop r16 = 2 (66 + op), pop r32/other = 1
+            operand = parts[1].strip() if len(parts) > 1 else ""
+            return 2 if operand in self._REG16 else 1
         if op == "jmp":
             # Far jump: jmp seg:off → EA off16 seg16 = 5 bytes
             if len(parts) > 1 and ":" in parts[1] and not parts[1].strip().startswith("["):
                 return 5
             if self._bits == 16:
-                return 3  # jmp rel16 (worst case in 16-bit mode)
+                return 4  # 66 + jmp rel16 (worst case in 16-bit mode)
             return 2  # jmp rel8 (short jump, always 2 bytes)
         if op == "call":
             if self._bits == 16:
-                return 3  # call rel16 in 16-bit mode
+                return 4  # 66 + call rel16 in 16-bit mode
             return 5
         if op in ("in", "out"):
             return 2
@@ -4132,6 +4268,11 @@ class X86Assembler:
             for item in inner.split(","):
                 val = self._parse_imm(item.strip())
                 self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+        elif line.startswith("dq"):
+            inner = line[2:].strip()
+            for item in inner.split(","):
+                val = self._parse_imm(item.strip())
+                self._output.extend((val & 0xFFFFFFFFFFFFFFFF).to_bytes(8, "little"))
 
     def _parse_db_items(self, inner):
         items = []
@@ -4153,6 +4294,14 @@ class X86Assembler:
         return items
 
     def _emit_instruction(self, line):
+        # Segment-override qualifier (`es:[..]` etc): emit the faithful prefix
+        # byte and strip the qualifier. Before this, an operand starting with
+        # a segment name matched no dispatch branch and the WHOLE instruction
+        # silently emitted zero bytes (card d475eae9).
+        seg = _SEG_OVERRIDE_RE.search(line)
+        if seg:
+            self._output.append(_SEG_PREFIX_BYTES[seg.group(1).lower()])
+            line = line[: seg.start()] + line[seg.end() :]
         parts = line.split(None, 1)
         op = parts[0].lower()
         operands = self._split_ops(parts[1].strip()) if len(parts) > 1 else []
@@ -4234,11 +4383,19 @@ class X86Assembler:
             self._output.append(0xA5)
         elif op == "cmpsb":
             self._output.append(0xA6)
+        elif op == "cmpsw":
+            if self._pfx("ax"):
+                self._output.append(0x66)
+            self._output.append(0xA7)
         elif op == "scasb":
             self._output.append(0xAE)
-        elif op == "rep":
-            # rep prefix + string instruction
-            self._output.append(0xF3)
+        elif op == "scasw":
+            if self._pfx("ax"):
+                self._output.append(0x66)
+            self._output.append(0xAF)
+        elif op in ("rep", "repe", "repz", "repne", "repnz"):
+            # rep/repe/repz -> F3, repne/repnz -> F2; shared string-op table
+            self._output.append(0xF2 if op in ("repne", "repnz") else 0xF3)
             inner = operands[0].lower() if operands else ""
             if inner == "movsb":
                 self._output.append(0xA4)
@@ -4260,8 +4417,21 @@ class X86Assembler:
                 self._output.append(0xAD)
             elif inner == "cmpsb":
                 self._output.append(0xA6)
+            elif inner == "cmpsw":
+                if self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xA7)
+            elif inner == "movsd":
+                # dword string move: default-size A5 in BITS 32, 66 A5 in BITS 16
+                if not self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xA5)
             elif inner == "scasb":
                 self._output.append(0xAE)
+            elif inner == "scasw":
+                if self._pfx("ax"):
+                    self._output.append(0x66)
+                self._output.append(0xAF)
             else:
                 # Unknown rep target — just emit prefix
                 pass
@@ -4271,9 +4441,96 @@ class X86Assembler:
             self._emit_lidt(operands)
         elif op == "ltr":
             self._emit_ltr(operands)
-        else:
-            # Unknown instruction — emit NOP placeholder
+        elif op == "stc":
+            self._output.append(0xF9)
+        elif op == "clc":
+            self._output.append(0xF8)
+        elif op == "cmc":
+            self._output.append(0xF5)
+        elif op == "sahf":
+            self._output.append(0x9E)
+        elif op == "lahf":
+            self._output.append(0x9F)
+        elif op == "cpuid":
+            self._output.extend((0x0F, 0xA2))
+        elif op == "xlatb":
+            self._output.append(0xD7)
+        elif op == "movzx":
+            self._emit_movzx(operands)
+        elif op == "bt":
+            self._emit_bt(operands)
+        elif op == "xadd":
+            self._emit_xadd(operands)
+        elif op in self._TENSOR_PSEUDO_OPS:
+            # In-house tensor dialect (declared): assembly-level 1-byte stub,
+            # byte-identical to the historical unknown-op placeholder.
             self._output.append(0x90)
+        else:
+            # Intake gate: an unencodable line must fail loudly with its
+            # mnemonic named — silently becoming a NOP hid whole missing
+            # features from the compat matrix (card: silent directive drop).
+            raise ValueError(
+                f"unknown instruction or directive: {op!r} — not implemented in X86Assembler"
+            )
+
+    def _emit_movzx(self, ops):
+        """MOVZX r32, r8|r/m8 (0F B6) and r16|r/m16 (0F B7) sources."""
+        if len(ops) < 2:
+            raise ValueError("movzx requires dst, src operands")
+        dst = ops[0].lower().strip()
+        src = ops[1].lower().strip()
+        if dst not in self._REG32:
+            raise ValueError(f"movzx destination must be a 32-bit register, got {dst!r}")
+        if src in self._REG8:
+            self._output.extend((0x0F, 0xB6))
+            self._output.append(0xC0 | (self._REG32[dst] << 3) | self._REG8[src])
+            return
+        if src in self._REG16:
+            self._output.extend((0x0F, 0xB7))
+            self._output.append(0xC0 | (self._REG32[dst] << 3) | self._REG16[src])
+            return
+        if "[" in src:
+            if src.startswith("byte "):
+                op2, mem = 0xB6, src[5:].strip()
+            elif src.startswith("word "):
+                op2, mem = 0xB7, src[5:].strip()
+            else:
+                raise ValueError(
+                    f"movzx memory source needs an explicit byte/word size hint, got {src!r}"
+                )
+            self._output.extend((0x0F, op2))
+            self._emit_modrm_mem(dst, mem)
+            return
+        raise ValueError(f"unsupported movzx source operand: {src!r}")
+
+    def _emit_bt(self, ops):
+        """BT r/m32, r32 (0F A3) and BT r/m32, imm8 (0F BA /4)."""
+        if len(ops) < 2:
+            raise ValueError("bt requires dst, bit-index operands")
+        dst = ops[0].lower().strip()
+        src = ops[1].lower().strip()
+        if dst not in self._REG32:
+            raise ValueError(f"bt destination must be a 32-bit register, got {dst!r}")
+        rm = self._REG32[dst]
+        if src in self._REG32:
+            self._output.extend((0x0F, 0xA3))
+            self._output.append(0xC0 | (self._REG32[src] << 3) | rm)
+            return
+        bit = self._parse_imm(src)
+        self._output.extend((0x0F, 0xBA))
+        self._output.append(0xC0 | (4 << 3) | rm)
+        self._output.append(bit & 0xFF)
+
+    def _emit_xadd(self, ops):
+        """XADD r32, r32 (0F C1) — Intel operand order dst, src."""
+        if len(ops) < 2:
+            raise ValueError("xadd requires dst, src operands")
+        dst = ops[0].lower().strip()
+        src = ops[1].lower().strip()
+        if dst not in self._REG32 or src not in self._REG32:
+            raise ValueError(f"xadd supports 32-bit register operands only, got {dst!r}, {src!r}")
+        self._output.extend((0x0F, 0xC1))
+        self._output.append(0xC0 | (self._REG32[src] << 3) | self._REG32[dst])
 
     def _emit_push(self, ops):
         if not ops:
@@ -4429,11 +4686,13 @@ class X86Assembler:
             return
         target = self._parse_label(target_str)
         if self._bits == 16:
-            # Always use near jump (3 bytes) in 16-bit mode to keep
-            # code sizes stable across assembly passes.
+            # Near jump in 16-bit mode: 66 E9 + rel16 (4 bytes — the VM
+            # convention: a bare E9 would be read as rel32 and desync).
+            # Keep code sizes stable across assembly passes.
+            self._output.append(0x66)
             offset = target - (self._org + len(self._output) + 3)
             self._output.append(0xE9)
-            self._output.extend(offset.to_bytes(2, "little", signed=True))
+            self._rel16(offset, "jmp")
         else:
             offset = target - (self._org + len(self._output) + 2)
             if -128 <= offset <= 127:
@@ -4444,15 +4703,35 @@ class X86Assembler:
                 self._output.append(0xE9)
                 self._output.extend((offset & 0xFFFFFFFF).to_bytes(4, "little"))
 
+    def _rel16(self, offset: int, what: str) -> None:
+        """Append a signed 16-bit displacement, deferring real overflows.
+
+        Pass-1 forward labels are placeholders (0), which with a non-zero org
+        produces offsets far outside rel16 — that must not abort the whole
+        assembly (the next pass re-emits with resolved labels). Record the
+        violation and emit a same-size placeholder instead; assemble() raises
+        whatever the converged pass still records, which is a genuine
+        >32 KiB displacement.
+        """
+        try:
+            self._output.extend(offset.to_bytes(2, "little", signed=True))
+        except OverflowError:
+            self._range_errors.append(
+                f"16-bit {what} displacement {offset} out of range (rel16 limit)"
+            )
+            self._output.extend(b"\x00\x00")
+
     def _emit_call(self, ops):
         if not ops:
             return
         target = self._parse_label(ops[0])
         if self._bits == 16:
-            # call rel16: E8 + 2-byte offset = 3 bytes
+            # call 66 E8 + rel16 = 4 bytes (VM convention: the main path
+            # would read a bare E8 as rel32 — card d475eae9).
+            self._output.append(0x66)
             offset = target - (self._org + len(self._output) + 3)
             self._output.append(0xE8)
-            self._output.extend(offset.to_bytes(2, "little", signed=True))
+            self._rel16(offset, "call")
         else:
             # call rel32: E8 + 4-byte offset = 5 bytes
             offset = target - (self._org + len(self._output) + 5)
@@ -4683,8 +4962,15 @@ class X86Assembler:
         through ``_parse_label`` (0 when undefined).
         """
         inner = inner.strip().lower()
+        # Flat-alias 16-bit base registers before any resolution (card
+        # d475eae9): without this they fell through to the direct-address
+        # path and silently became [disp32=0] — [bx+0x50e] -> [0x00000000].
+        inner = _REG16_ALIASES_RE.sub(lambda m: _REG16_ALIASES[m.group(1).lower()], inner)
         if inner in self._REG32:
-            # [reg]
+            # [reg] — ebp/rm 5 at mod 00 decodes as disp32 and would eat the
+            # next instruction's bytes: force mod 01 with disp8=0 instead.
+            if self._REG32[inner] == 5:
+                return 0x40, 0x05, b"\x00"
             return 0x00, self._REG32[inner], b""
         if "+" in inner:
             parts = inner.split("+")
@@ -4742,11 +5028,13 @@ class X86Assembler:
                         )
                         return mod_bits, 0x04, sib.to_bytes(1, "little") + disp
                     if addr == 0:
-                        return (
-                            0x00,
-                            0x04,
-                            (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little"),
-                        )
+                        sib = (scale_enc << 6 | index_enc << 3 | base_enc).to_bytes(1, "little")
+                        if base_enc == 5:
+                            # SIB base ebp at mod 00 = "no base, disp32 slot"
+                            # (decodes as [disp32] + 4 stray bytes). Force
+                            # mod 01 disp8=0 — this is [bp+si] with no offset.
+                            return 0x40, 0x04, sib + b"\x00"
+                        return 0x00, 0x04, sib
                     if -128 <= addr <= 127:
                         return (
                             0x40,
@@ -4772,6 +5060,10 @@ class X86Assembler:
                 # [reg + imm/label]
                 disp = self._parse_imm(other) if other else 0
                 if disp == 0:
+                    # ebp with no displacement: mod 00 rm 5 = disp32 slot
+                    # (decodes as [disp32], consuming the next 4 bytes).
+                    if self._REG32[base] == 5:
+                        return 0x40, 0x05, b"\x00"
                     return 0x00, self._REG32[base], b""
                 if -128 <= disp <= 127:
                     return 0x40, self._REG32[base], bytes([disp & 0xFF])
@@ -4785,6 +5077,8 @@ class X86Assembler:
                     if extra:
                         disp += self._parse_imm(extra)
                 if disp == 0:
+                    if self._REG32[other] == 5:
+                        return 0x40, 0x05, b"\x00"
                     return 0x00, self._REG32[other], b""
                 if -128 <= disp <= 127:
                     return 0x40, self._REG32[other], bytes([disp & 0xFF])
@@ -4918,14 +5212,14 @@ class X86Assembler:
             val = self._parse_imm(src)
             if op == "test":
                 if self._REG32[dst] == 0:
-                    # TEST EAX, imm32 — A9 iw/id (accumulator short form)
+                    # TEST EAX, imm32 — A9 id (accumulator short form)
                     if self._pfx(dst):
                         self._output.append(0x66)
                     self._output.append(0xA9)
-                    if self._bits == 16 and val <= 0xFFFF:
-                        self._output.extend(struct.pack("<H", val & 0xFFFF))
-                    else:
-                        self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+                    # r32 is never prefixed (see _pfx): the main path always
+                    # reads imm32, so the old bits16 imm16 shortening here
+                    # would desync the stream (card d475eae9).
+                    self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
                 else:
                     # TEST r/m32, imm32 — F7 /0 id
                     if self._pfx(dst):
@@ -4935,17 +5229,15 @@ class X86Assembler:
                     self._output.append(modrm)
                     self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
             elif self._REG32[dst] == 0 and not (-128 <= val <= 127):
-                # ALU EAX, imm32 — 05/0D/15/1D/25/2D/35/3D iw/id (accumulator
+                # ALU EAX, imm32 — 05/0D/15/1D/25/2D/35/3D id (accumulator
                 # short form). Immediate exceeds imm8 range, so the short
-                # form beats 81 /digit id.  In 16-bit mode (0x66 prefix), the
-                # immediate is 2 bytes; otherwise 4 bytes.
+                # form beats 81 /digit id. r32 is never prefixed (see _pfx),
+                # so the immediate is always 4 bytes — the old bits16 imm16
+                # shortening would desync the main path (card d475eae9).
                 if self._pfx(dst):
                     self._output.append(0x66)
                 self._output.append(0x05 + alu_op[op] * 8)
-                if self._bits == 16 and val <= 0xFFFF:
-                    self._output.extend(struct.pack("<H", val & 0xFFFF))
-                else:
-                    self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
+                self._output.extend((val & 0xFFFFFFFF).to_bytes(4, "little"))
             elif op == "sub" and -128 <= val <= 127:
                 if self._pfx(dst):
                     self._output.append(0x66)
@@ -5005,7 +5297,9 @@ class X86Assembler:
                 self._output.append(0x81)
                 modrm = 0xC0 | (alu_op[op] << 3) | self._REG16[dst]
                 self._output.append(modrm)
-                self._output.extend(val.to_bytes(2, "little", signed=True))
+                # imm16 is unsigned two's-complement: 0x8000 and negative
+                # values both fit 16 bits — signed to_bytes raised there.
+                self._output.extend(struct.pack("<H", val & 0xFFFF))
         elif dst in self._REG8:
             val = self._parse_imm(src)
             if op == "test":
@@ -5531,13 +5825,13 @@ class X86Assembler:
             elif inner.startswith("\\x"):
                 return int(inner[2:], 16)
             return ord(inner[0]) if inner else 0
-        if text.startswith("0x") or text.startswith("0X"):
+        if re.fullmatch(r"0[xX][0-9a-fA-F]+", text):
             return int(text, 16)
-        if text.startswith("0b") or text.startswith("0B"):
+        if re.fullmatch(r"0[bB][01]+", text):
             return int(text, 2)
-        if text.endswith("h") or text.endswith("H"):
+        if re.fullmatch(r"[0-9a-fA-F]+[hH]", text):
             return int(text[:-1], 16)
-        if re.match(r"^[01]+[bB]$", text):
+        if re.fullmatch(r"[01]+[bB]", text):
             return int(text[:-1], 2)
         try:
             return int(text, 0)
@@ -5557,6 +5851,13 @@ class X86Assembler:
         expr = text
         for name, addr in self._labels.items():
             expr = re.sub(r"(?<!\w)" + re.escape(name) + r"(?!\w)", str(addr), expr)
+        # Hex/binary/suffixed literals inside expressions must fold too —
+        # `0x8000 + FOO * 2` used to die at startswith("0x") -> int(text, 16).
+        expr = re.sub(r"0[xX]([0-9a-fA-F]+)", lambda m: str(int(m.group(1), 16)), expr)
+        expr = re.sub(r"0[bB]([01]+)", lambda m: str(int(m.group(1), 2)), expr)
+        expr = re.sub(
+            r"([0-9a-fA-F]+)[hH](?![0-9a-fA-F])", lambda m: str(int(m.group(1), 16)), expr
+        )
         if re.match(r"^[\d\s\+\-\*\/\(\)]+$", expr):
             try:
                 return int(eval(expr))
@@ -5837,6 +6138,7 @@ class X86CPU:
         self._eip = 0
         self._eflags = 0x0002  # Bit 1 always set per x86 spec
         self._segregs = [0] * 6  # ES, CS, SS, DS, FS, GS
+        self._seg_base = 0  # active segment-override base (seg << 4), card f705b5ce
         self._cr = [0] * 8  # CR0..CR7 (control registers)
         self._dr = [0] * 8  # DR0..DR7 (debug registers)
         self._running = False
@@ -5961,6 +6263,19 @@ class X86CPU:
 
     def _set_seg(self, idx: int, val: int):
         self._segregs[idx] = val & 0xFFFF
+
+    def _apply_seg_prefix(self, prefix_byte: int) -> None:
+        """Resolve a segment-override prefix to a real-mode paragraph base.
+
+        ES/DS/FS/GS apply (reg << 4) to the instruction's next decoded
+        memory operand; CS/SS overrides stay flat — the code and stack
+        models are flat by construction (the protected-mode boot path
+        stores non-zero values into every segment register, so applying
+        those bases would shift prefixed accesses). Reset to 0 at every
+        _exec_one boundary so the base never leaks across instructions.
+        """
+        idx = _SEG_PREFIX_IDX[prefix_byte]
+        self._seg_base = 0 if idx in (_SEG_CS, _SEG_SS) else self._segregs[idx] << 4
 
     def _reg_index(self, name: str) -> int:
         """Resolve register name to index. Supports 32/16/8-bit names."""
@@ -6248,6 +6563,14 @@ class X86CPU:
             disp = self._fetch_dword()
             addr = (addr + disp) & 0xFFFFFFFF
 
+        # Real-mode segment-override base (card f705b5ce): resolved here —
+        # the single data-address choke point — because _fetch_byte shares
+        # _read8 with data accesses and the prefix is consumed BEFORE the
+        # opcode/modrm fetches; a global _read8 application would poison
+        # the fetch stream.
+        if self._seg_base:
+            addr = (addr + self._seg_base) & 0xFFFFFFFF
+
         return reg, False, addr
 
     def _resolve_rm(self, modrm_reg, rm_is_reg, rm_val, width):
@@ -6367,11 +6690,20 @@ class X86CPU:
 
     def _exec_one(self):
         """Fetch and execute one instruction."""
+        self._seg_base = 0  # segment base never leaks across instructions
         opcode = self._fetch_byte()
+
+        # ── segment-override prefixes (resolve to real-mode bases) ──
+        while opcode in _SEGMENT_PREFIXES:
+            self._apply_seg_prefix(opcode)
+            opcode = self._fetch_byte()
 
         # ── 0x66 operand-size prefix (use 16-bit operands in 32-bit mode) ──
         if opcode == 0x66:
             opcode = self._fetch_byte()
+            while opcode in _SEGMENT_PREFIXES:
+                self._apply_seg_prefix(opcode)
+                opcode = self._fetch_byte()
             self._exec_16bit(opcode)
             return
 
@@ -6665,6 +6997,52 @@ class X86CPU:
                 if v & 0x8000:
                     v |= 0xFFFF0000
                 self._set32(reg_f, v)
+                return
+            # ── CPUID (0F A2) — leaf 0: max leaf + vendor "sloughGPTVM!" ──
+            if opcode2 == 0xA2:
+                leaf = self._get32(0)
+                if leaf == 0:
+                    self._set32(0, 1)
+                    self._set32(3, int.from_bytes(b"slou", "little"))
+                    self._set32(2, int.from_bytes(b"ghGP", "little"))
+                    self._set32(1, int.from_bytes(b"TVM!", "little"))
+                else:
+                    self._set32(0, 0x663 if leaf == 1 else 0)
+                    self._set32(3, 0)
+                    self._set32(2, 0)
+                    self._set32(1, 0)
+                return
+            # ── BT r/m32, r32 (0F A3) ──
+            if opcode2 == 0xA3:
+                reg_f, rm_is_reg, rm_val = self._decode_modrm()
+                src = self._get32(reg_f)
+                dst = self._read_rm_reg(rm_val, 32) if rm_is_reg else self._read_rm_mem(rm_val, 32)
+                self._set_flag(FLAG_CF, bool((dst >> (src & 31)) & 1))
+                return
+            # ── BT r/m32, imm8 (0F BA /4) ──
+            if opcode2 == 0xBA:
+                reg_f, rm_is_reg, rm_val = self._decode_modrm()
+                imm = self._fetch_byte()
+                if reg_f == 4:  # BT r/m32, imm8
+                    dst = (
+                        self._read_rm_reg(rm_val, 32)
+                        if rm_is_reg
+                        else self._read_rm_mem(rm_val, 32)
+                    )
+                    self._set_flag(FLAG_CF, bool((dst >> (imm & 31)) & 1))
+                    return
+                raise InsFault(f"unsupported 0F BA /{reg_f} form")
+            # ── XADD r/m32, r32 (0F C1) ──
+            if opcode2 == 0xC1:
+                reg_f, rm_is_reg, rm_val = self._decode_modrm()
+                src = self._get32(reg_f)
+                dst = self._read_rm_reg(rm_val, 32) if rm_is_reg else self._read_rm_mem(rm_val, 32)
+                total = (dst + src) & 0xFFFFFFFF
+                if rm_is_reg:
+                    self._set32(rm_val, total)
+                else:
+                    self._write32(rm_val, total)
+                self._set32(reg_f, dst)
                 return
             # ── IMUL r32, r/m32 (0F AF) ──
             if opcode2 == 0xAF:
@@ -7158,6 +7536,23 @@ class X86CPU:
             self._set8h(0, self._eflags & 0xFF)
             return
 
+        # ── STC (F9) / CLC (F8) / CMC (F5) ──
+        if opcode == 0xF9:
+            self._set_flag(FLAG_CF, True)
+            return
+        if opcode == 0xF8:
+            self._set_flag(FLAG_CF, False)
+            return
+        if opcode == 0xF5:
+            self._set_flag(FLAG_CF, not self._flag(FLAG_CF))
+            return
+
+        # ── XLATB (D7) — AL = [EBX + AL] (flat model) ──
+        if opcode == 0xD7:
+            addr = (self._get32(3) + self._get8l(0)) & 0xFFFFFFFF
+            self._set8l(0, self._read8(addr))
+            return
+
         # ── CDQ (99) — sign extend EAX into EDX:EAX ──
         if opcode == 0x99:
             if self._get32(0) & 0x80000000:
@@ -7589,6 +7984,32 @@ class X86CPU:
 
     def _exec_16bit(self, opcode: int):
         """Execute an instruction with 16-bit operand size (after 0x66 prefix)."""
+        while opcode in _SEGMENT_PREFIXES:
+            self._apply_seg_prefix(opcode)
+            opcode = self._fetch_byte()
+        # ── near call / near jmp rel16 / ret (card d475eae9) ──
+        # BITS 16 emission prefixes these (66 E8/E9); the main path would read
+        # a bare E8/E9 as rel32 and desync. The stack stays flat: a full EIP is
+        # pushed/popped, only the branch displacement is 16-bit — so 66 E8 and
+        # the plain C3 ret round-trip exactly.
+        if opcode == 0xE8:
+            offset = self._fetch_word()
+            if offset & 0x8000:
+                offset -= 0x10000
+            target = (self._eip + offset) & 0xFFFFFFFF
+            self._push32(self._eip)
+            self._eip = target
+            return
+        if opcode == 0xE9:
+            offset = self._fetch_word()
+            if offset & 0x8000:
+                offset -= 0x10000
+            self._eip = (self._eip + offset) & 0xFFFFFFFF
+            return
+        if opcode == 0xC3:
+            # Defensive: 66 C3 pops the same full EIP that 66 E8 pushed.
+            self._eip = self._pop32()
+            return
         if opcode == 0xA1:
             addr = self._fetch_dword()
             self._set16(0, self._read16(addr))
@@ -9365,9 +9786,15 @@ class X86SyscallHandler:
             return -1
         data = bytes(self._cpu._read8(buf_addr + i) for i in range(count))
         if fd == 1 or fd == 2:
-            # stdout/stderr — write to console
+            # stdout/stderr — write to console. This used to be
+            # logger.debug(text, end="", flush=True) — print-style kwargs the
+            # logging API rejects — so it silently produced nothing at the
+            # default level and raised TypeError the moment DEBUG was enabled
+            # for "slo.vm". Program output has to reach the stream it names.
             text = data.decode("ascii", errors="replace")
-            logger.debug(text, end="", flush=True)
+            stream = sys.stderr if fd == 2 else sys.stdout
+            stream.write(text)
+            stream.flush()
             return count
         elif self._fs and fd in self._fd_table:
             entry = self._fd_table[fd]
@@ -9876,6 +10303,190 @@ class PITDevice:
                     self._scheduler.tick(self._cpu)
 
 
+# ── BIOS service tier ────────────────────────────────────────────────────────
+
+
+class X86BiosServices:
+    """Minimal BIOS service tier (kanban card 508245c0).
+
+    Corpus-evidence scoped: every service has a call site in
+    scripts/compat/corpus/*.asm — INT 10h video (bweeper, nasm_tetris,
+    bootmine), INT 16h keyboard, INT 1Ah clock. Vectors register in
+    X86VirtualSystem.__init__ next to INT 0x80, so the compat harness's
+    interrupt-spy counts them as handled with no harness change.
+
+    Video writes land in the flat VGA text buffer at 0xB8000 (mode 3,
+    80x25) — the window the harness snapshots for vga_bytes_changed.
+
+    Deliberate deviations from real BIOS:
+    - INT 16h AH=00 with an empty queue returns AX=0 instead of blocking
+      (no blocking-read scheduler tier yet; corpus treats 0 as "no key").
+      Tests/harness input arrives through feed_key().
+    - INT 13h is NOT registered — zero corpus call sites; the disk tier
+      gets its own card.
+    - Unknown AH services are counted in `unknown` and ignored: the
+      vector stays registered (so the harness spy no longer flags it)
+      and the counter is the remaining diagnostic.
+    - Teletype wraps to row 0 past the last line instead of scrolling.
+    """
+
+    VGA_TEXT = 0xB8000
+    COLS = 80
+    ROWS = 25
+    DEFAULT_ATTR = 0x07
+
+    def __init__(self, cpu, pit):
+        self._cpu = cpu
+        self._pit = pit
+        self.keys: deque = deque()  # (ascii, scan) software queue
+        self.unknown: Counter = Counter()  # vector -> count of unknown AH
+        self.mode = 3
+        self.cursor_row = 0
+        self.cursor_col = 0
+        self.cursor_type = (6, 7)  # (start line, end line)
+
+    # ── queue API (tests / harness input) ───────────────────────────────
+
+    def feed_key(self, ascii_code: int, scan: int = 0) -> None:
+        self.keys.append((ascii_code & 0xFF, scan & 0xFF))
+
+    # ── INT 10h video ───────────────────────────────────────────────────
+
+    def int10(self, _cpu):
+        ah = (self._cpu._regs[0] >> 8) & 0xFF
+        fn = getattr(self, f"_int10_{ah:02x}", None)
+        if fn is None:
+            self.unknown[0x10] += 1
+            return
+        fn()
+
+    def _int10_00(self):
+        # Set video mode: reset cursor, clear the text buffer (mode 3).
+        self.mode = self._cpu._regs[0] & 0xFF
+        self.cursor_row = self.cursor_col = 0
+        blank = b"\x20\x07" * (self.COLS * self.ROWS)
+        for i, byte in enumerate(blank):
+            self._cpu._write8(self.VGA_TEXT + i, byte)
+
+    def _int10_01(self):
+        # Set cursor type: CH = start line, CL = end line.
+        cx = self._cpu._regs[1] & 0xFFFF
+        self.cursor_type = ((cx >> 8) & 0xFF, cx & 0xFF)
+
+    def _int10_02(self):
+        # Set cursor position: DH = row, DL = col (BX page ignored).
+        dx = self._cpu._regs[2] & 0xFFFF
+        self.cursor_row = (dx >> 8) & 0xFF
+        self.cursor_col = dx & 0xFF
+
+    def _int10_03(self):
+        # Get cursor: CH/CL = type, DH/DL = position.
+        self._cpu._regs[1] = (self._cpu._regs[1] & 0xFFFF0000) | (
+            (self.cursor_type[0] << 8) | self.cursor_type[1]
+        )
+        self._cpu._regs[2] = (self._cpu._regs[2] & 0xFFFF0000) | (
+            ((self.cursor_row & 0xFF) << 8) | (self.cursor_col & 0xFF)
+        )
+
+    def _int10_09(self):
+        # Write char+attr at cursor, CX times; cursor does NOT advance.
+        # BL (EBX low byte) carries the attribute.
+        self._write_cells(
+            count=self._cpu._regs[1] & 0xFFFF, advance=False, attr=self._cpu._regs[3] & 0xFF
+        )
+
+    def _int10_0a(self):
+        # Write char at cursor, CX times; attribute untouched.
+        self._write_cells(count=self._cpu._regs[1] & 0xFFFF, advance=False, attr=None)
+
+    def _int10_0e(self):
+        # Teletype: write char with default attr, advance with wrap.
+        self._write_cells(count=1, advance=True, attr=self.DEFAULT_ATTR)
+
+    def _int10_0f(self):
+        # Get current video mode: AL = mode, AH = columns, BH = page.
+        self._cpu._regs[0] = (80 << 8) | (self.mode & 0xFF)
+
+    def _write_cells(self, count: int, advance: bool, attr) -> None:
+        al = self._cpu._regs[0] & 0xFF
+        # Cells are written consecutively (AH=09 fills CX cells starting
+        # at the cursor); the STORED cursor only moves for teletype.
+        row, col = self.cursor_row, self.cursor_col
+        for _ in range(max(1, count)):
+            r = min(row, self.ROWS - 1)
+            c = min(col, self.COLS - 1)
+            addr = self.VGA_TEXT + (r * self.COLS + c) * 2
+            self._cpu._write8(addr, al)
+            if attr is not None:
+                self._cpu._write8(addr + 1, attr & 0xFF)
+            col += 1
+            if col >= self.COLS:
+                col = 0
+                row += 1
+        if advance:
+            self.cursor_row = row % self.ROWS
+            self.cursor_col = col
+
+    # ── INT 16h keyboard ────────────────────────────────────────────────
+
+    def int16(self, _cpu):
+        ah = (self._cpu._regs[0] >> 8) & 0xFF
+        if ah == 0x00:
+            # Read key (blocking on real HW): empty queue -> AX=0 here.
+            if self.keys:
+                ascii_code, scan = self.keys.popleft()
+                self._cpu._regs[0] = (scan << 8) | ascii_code
+            else:
+                self._cpu._regs[0] = 0
+        elif ah == 0x01:
+            # Peek: ZF=1 when empty (AX untouched); else ZF=0 with the
+            # next key reported without consuming it.
+            if self.keys:
+                ascii_code, scan = self.keys[0]
+                self._cpu._regs[0] = (scan << 8) | ascii_code
+                self._patch_stacked_flags(FLAG_ZF, False)
+            else:
+                self._patch_stacked_flags(FLAG_ZF, True)
+        elif ah == 0x02:
+            # Shift flags: the software queue has none.
+            self._cpu._regs[0] = self._cpu._regs[0] & 0xFFFFFF00
+        else:
+            self.unknown[0x16] += 1
+
+    # ── INT 1Ah clock ───────────────────────────────────────────────────
+
+    def int1a(self, _cpu):
+        ah = (self._cpu._regs[0] >> 8) & 0xFF
+        if ah == 0x00:
+            # Read tick count: CX = high word, DX = low word (BIOS order).
+            ticks = self._pit._tick_count & 0xFFFFFFFF
+            self._cpu._regs[1] = (self._cpu._regs[1] & 0xFFFF0000) | ((ticks >> 16) & 0xFFFF)
+            self._cpu._regs[2] = (self._cpu._regs[2] & 0xFFFF0000) | (ticks & 0xFFFF)
+            self._patch_stacked_flags(FLAG_CF, False)
+        elif ah == 0x01:
+            # Set tick count from CX:DX.
+            self._pit._tick_count = ((self._cpu._regs[1] & 0xFFFF) << 16) | (
+                self._cpu._regs[2] & 0xFFFF
+            )
+            self._patch_stacked_flags(FLAG_CF, False)
+        else:
+            self.unknown[0x1A] += 1
+
+    # ── helpers ─────────────────────────────────────────────────────────
+
+    def _patch_stacked_flags(self, mask: int, on: bool) -> None:
+        """Set/clear mask in the stacked EFLAGS at [esp+8].
+
+        _raise_interrupt's simulated IRET restores EFLAGS from the stack
+        after the handler runs, so in-handler flag writes alone would be
+        clobbered — the stacked copy is the one that lands.
+        """
+        esp = self._cpu._regs[4] & 0xFFFFFFFF
+        stacked = self._cpu._read32(esp + 8)
+        stacked = (stacked | mask) if on else (stacked & ~mask)
+        self._cpu._write32(esp + 8, stacked & 0xFFFFFFFF)
+
+
 # ── X86 Virtual System (OS-integrated) ──────────────────────────────────────
 
 
@@ -9965,6 +10576,14 @@ class X86VirtualSystem:
         # Register INT 0x80 handler (wrapper needed: _raise_interrupt passes cpu arg)
         self._cpu.register_handler(0x80, lambda _cpu: self._syscall.handle())
 
+        # BIOS service tier (card 508245c0): INT 10h video, 16h keyboard,
+        # 1Ah clock — corpus-evidence scoped; INT 21h (DOS) and INT 13h
+        # (disk, zero corpus call sites) stay silent-unregistered tiers.
+        self._bios = X86BiosServices(self._cpu, self._pit)
+        self._cpu.register_handler(0x10, self._bios.int10)
+        self._cpu.register_handler(0x16, self._bios.int16)
+        self._cpu.register_handler(0x1A, self._bios.int1a)
+
         # Keyboard interrupt handler
         def _keyboard_handler():
             pass  # Default handler already built into X86CPU
@@ -10036,9 +10655,15 @@ class X86VirtualSystem:
 
         Returns the new PID, or None on failure.
         """
-        code = X86Assembler().assemble(source, org=org)
+        asm = X86Assembler()
+        code = asm.assemble(source, org=org)
         code_size = len(code)
-        base = org
+        # The source's [ORG] / bare `org` overrides the spawn default (the
+        # docstring contract): labels resolve against the assembler's final
+        # org, so load + entry must use that same address — otherwise every
+        # absolute reference points at unpopulated memory (third-party
+        # boot-sector sources such as bweeper's `org 0x7c00` faulted here).
+        base = asm._org
 
         # Load code at the org address
         self._cpu._mem[base : base + code_size] = code

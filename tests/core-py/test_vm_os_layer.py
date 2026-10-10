@@ -1625,7 +1625,7 @@ int 0x80
 ; If exec failed, print FAIL
 mov eax, 3
 mov ebx, 1
-push 0x000A46  ; "F\n\0"
+push 0x000A46  ; "F\\n\\0"
 mov ecx, esp
 mov edx, 2
 int 0x80
@@ -5426,12 +5426,21 @@ class TestSysOpenReadWrite:
         sys._syscall._sys_close(fd)
 
     def test_open_write_mode(self):
+        # mode 1 is append, not create: 81616a6f7 tightened the contract to
+        # 0=read, 1=append, 2=create+truncate, and this test kept the older
+        # "write creates the file" assumption. Create first, then append.
         sys = X86VirtualSystem()
         name_addr = 0x10000
         sys._syscall._write_string(name_addr, "write_test.txt")
+        created = sys._syscall._sys_open(name_addr, 2)
+        assert created >= 0
+        sys._syscall._sys_close(created)
         fd = sys._syscall._sys_open(name_addr, 1)
         assert fd >= 0
         sys._syscall._sys_close(fd)
+        # append to a missing file fails instead of silently creating it
+        sys._syscall._write_string(name_addr, "never_created.txt")
+        assert sys._syscall._sys_open(name_addr, 1) == -1
 
 
 class TestSysClose:
@@ -7088,7 +7097,9 @@ class TestAssemblerPfx:
     def test_pfx_ax_16bit(self):
         asm = X86Assembler()
         asm._bits = 16
-        assert asm._pfx("ax") is False
+        # Unified convention (card d475eae9): 0x66 marks 16-bit ops in
+        # BOTH modes, so r16 always carries the prefix.
+        assert asm._pfx("ax") is True
 
     def test_pfx_ax_32bit(self):
         asm = X86Assembler()
@@ -7098,7 +7109,8 @@ class TestAssemblerPfx:
     def test_pfx_eax_16bit(self):
         asm = X86Assembler()
         asm._bits = 16
-        assert asm._pfx("eax") is True
+        # r32 is main-path (unprefixed) in both modes.
+        assert asm._pfx("eax") is False
 
     def test_pfx_eax_32bit(self):
         asm = X86Assembler()
@@ -8896,15 +8908,15 @@ class TestAssembleEstimateDataSizeComprehensive:
 
     def test_lodsw(self):
         asm = X86Assembler()
-        assert asm._estimate_insn_size("lodsw") == 1
+        assert asm._estimate_insn_size("lodsw") == 2
 
     def test_stosw(self):
         asm = X86Assembler()
-        assert asm._estimate_insn_size("stosw") == 1
+        assert asm._estimate_insn_size("stosw") == 2
 
     def test_movsw(self):
         asm = X86Assembler()
-        assert asm._estimate_insn_size("movsw") == 1
+        assert asm._estimate_insn_size("movsw") == 2
 
     def test_cmpsb(self):
         asm = X86Assembler()

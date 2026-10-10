@@ -176,10 +176,16 @@ class TestSyscallHandlerOpenClose:
         vs._syscall._write_string(0x20000, "e.txt")
         assert vs._syscall._sys_open(0x20000, 0) == 3
 
-    def test_open_mode1_does_not_require_file(self):
+    def test_open_mode1_requires_existing_file(self):
+        # mode 1 is append since 81616a6f7 (0=read, 1=append, 2=create+truncate):
+        # it opens an existing file and fails on a missing one instead of
+        # silently creating it — the old contract let mode 1 create.
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
+        vs.filesystem.write("w.txt", b"data")
         vs._syscall._write_string(0x20000, "w.txt")
         assert vs._syscall._sys_open(0x20000, 1) == 3
+        vs._syscall._write_string(0x20000, "missing.txt")
+        assert vs._syscall._sys_open(0x20000, 1) == -1
 
     def test_open_mode2_creates_file(self):
         vs = X86VirtualSystem(memory_size=4 * 1024 * 1024)
