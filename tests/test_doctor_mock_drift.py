@@ -299,3 +299,288 @@ def test_suspects_absent_when_reader_not_reachable(tool, monkeypatch, capsys):
     assert "Suspects" not in out
     assert "latent" in out
     assert rc == 0
+
+
+# ── The second spelling: monkeypatch.setattr ─────────────────────────────
+
+
+def _write_targets_root(tmp_path, body: str):
+    root = tmp_path / "tests"
+    root.mkdir()
+    f = root / "test_scan.py"
+    f.write_text(body)
+    return f
+
+
+def test_targets_pick_up_string_form_setattr(tool, monkeypatch, tmp_path):
+    """`monkeypatch.setattr("pkg.mod.attr", v)` names a definition site exactly
+    as `patch("pkg.mod.attr")` does, so it must be scanned too.  Before this the
+    two spellings answered differently and 37 real targets were invisible."""
+    tgt = "domain.learner._internal.knowledge_augmenter.get_knowledge_memory"
+    f = _write_targets_root(
+        tmp_path,
+        f'def t(monkeypatch):\n    monkeypatch.setattr("{tgt}", 1)\n',
+    )
+    monkeypatch.setattr(tool, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(tool, "_MOCK_DRIFT_TEST_DIRS", ("tests",))
+    targets = tool._md_targets()
+    assert tgt in targets, "string-form setattr target was not collected"
+    assert f in targets[tgt]
+
+
+def test_targets_ignore_object_form_setattr(tool, monkeypatch, tmp_path):
+    """The object form (`setattr(obj, "_save", v)`) names no dotted path, so
+    there is nothing to resolve to a definition site.  It must contribute zero
+    targets rather than a guessed one."""
+    f = _write_targets_root(
+        tmp_path,
+        "def t(monkeypatch, svc):\n    monkeypatch.setattr(svc, '_save', 1)\n",
+    )
+    monkeypatch.setattr(tool, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(tool, "_MOCK_DRIFT_TEST_DIRS", ("tests",))
+    assert tool._md_targets() == {}, f"object form leaked a target: {f}"
+
+
+def test_targets_require_internal_definition_site(tool, monkeypatch, tmp_path):
+    """The `._internal.` filter applies to both spellings — a setattr on a
+    public package symbol is not a definition site."""
+    _write_targets_root(tmp_path, 'def t(mp):\n    mp.setattr("domain.public.thing", 1)\n')
+    monkeypatch.setattr(tool, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(tool, "_MOCK_DRIFT_TEST_DIRS", ("tests",))
+    assert tool._md_targets() == {}
+
+
+def test_real_repo_attrset_drift_is_now_visible(tool):
+    """Regression: this exact drift existed while setattr was unscanned — the
+    test patches domain.learner...knowledge_augmenter.get_knowledge_memory while
+    production reads it from domain.knowledge / domain.memory."""
+    tgt = "domain.learner._internal.knowledge_augmenter.get_knowledge_memory"
+    targets = tool._md_targets()
+    assert tgt in targets, "setattr-scan regression: drift is invisible again"
+    assert any(p.name == "test_knowledge_augmenter.py" for p in targets[tgt])
+
+
+# ── Boom-vs-baseline verdict ─────────────────────────────────────────────
+
+
+def test_boom_verdict_dead_when_boom_never_fires(tool):
+    """baseline pass + boom pass => production never executed the symbol, so
+    the patch is a no-op and any assertion about it is vacuous."""
+    assert tool._md_boom_verdict(0, 0, "armed") == "dead"
+
+
+def test_boom_verdict_live_when_boom_fires(tool):
+    """baseline pass + boom FAIL => the symbol really is on the executed path."""
+    assert tool._md_boom_verdict(0, 1, "armed") == "live"
+
+
+def test_boom_verdict_inconclusive_when_baseline_already_red(tool):
+    """A baseline that already fails says nothing about the symbol."""
+    assert tool._md_boom_verdict(1, 0, "armed") == "inconclusive"
+    assert tool._md_boom_verdict(2, 1, "armed") == "inconclusive"
+
+
+def test_boom_verdict_never_reads_unarmed_as_dead(tool):
+    """The probe's dangerous failure mode is the opposite of the detector's:
+    reporting a LIVE seam as dead would tell someone to delete a working mock.
+    A symbol that could not be armed must be inconclusive, never dead."""
+    for state in ("not-probeable", "unresolved", ""):
+        assert tool._md_boom_verdict(0, 0, state) == "inconclusive", state
+
+
+def test_boom_verdict_inconclusive_on_pytest_usage_errors(tool):
+    """rc 4/5 (usage error / no tests collected) means the run never reached
+    the symbol at all — a pass-by-accident, not evidence of deadness."""
+    assert tool._md_boom_verdict(0, 4, "armed") == "inconclusive"
+    assert tool._md_boom_verdict(0, 5, "armed") == "inconclusive"
+
+
+# ── Static status: what --mock-drift already believed ────────────────────
+
+
+def test_static_status_lands_for_lazy_reexport(tool):
+    assert (
+        tool._md_static_status(
+            "domain.training._internal.executor.get_training_executor",
+            {"get_training_executor": {"domain.training": set()}},
+        )
+        == "lands"
+    )
+
+
+def test_static_status_frozen_for_eager_reexport(tool):
+    assert (
+        tool._md_static_status(
+            "domain.feedback._internal.model_health.get_health_monitor",
+            {"get_health_monitor": {"domain.feedback": set()}},
+        )
+        == "frozen"
+    )
+
+
+def test_static_status_na_without_readers(tool):
+    assert tool._md_static_status("domain.x._internal.y.thing", {}) == "n/a"
+
+
+# ── The boom plugin ──────────────────────────────────────────────────────
+
+
+def _load_plugin():
+    path = _REPO / "scripts" / "dead_seam_plugin.py"
+    spec = importlib.util.spec_from_file_location("dead_seam_plugin", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_plugin_arms_callable_and_boom_raises(tool, monkeypatch, tmp_path):
+    """The boom half must actually fire: armed means the symbol is replaced by
+    something that raises when production reaches it."""
+    import domain.feedback._internal.model_health as mh
+
+    plugin = _load_plugin()
+    marker = tmp_path / "marker.txt"
+    monkeypatch.setenv("SLO_DEAD_SEAM_MARKER", str(marker))
+    monkeypatch.setenv(
+        "SLO_DEAD_SEAM_TARGET",
+        "domain.feedback._internal.model_health.get_health_monitor",
+    )
+    # register the original so this module-scoped mutation cannot leak
+    monkeypatch.setattr(mh, "get_health_monitor", mh.get_health_monitor)
+
+    plugin.pytest_configure(None)
+
+    assert "state=armed" in marker.read_text()
+    with pytest.raises(plugin.DeadSeamHit):
+        mh.get_health_monitor()
+
+
+def test_plugin_declares_non_callable_unprobeable(tool, monkeypatch, tmp_path):
+    """A constant cannot be booby-trapped by swapping in a function — a read
+    would return it silently and look 'dead'. The plugin must say so, so the
+    verdict lands on inconclusive instead of a false dead."""
+    import domain.agents._internal.system as sysmod
+
+    assert not callable(sysmod.AGENTS_DIR), "expected a non-callable constant"
+
+    plugin = _load_plugin()
+    marker = tmp_path / "marker.txt"
+    monkeypatch.setenv("SLO_DEAD_SEAM_MARKER", str(marker))
+    monkeypatch.setenv("SLO_DEAD_SEAM_TARGET", "domain.agents._internal.system.AGENTS_DIR")
+    monkeypatch.setattr(sysmod, "AGENTS_DIR", sysmod.AGENTS_DIR)
+
+    plugin.pytest_configure(None)
+
+    txt = marker.read_text()
+    assert "state=not-probeable" in txt
+    # verdict must not be dead
+    assert tool._md_boom_verdict(0, 0, "not-probeable") == "inconclusive"
+
+
+def test_plugin_writes_unresolved_for_missing_symbol(tool, monkeypatch, tmp_path):
+    plugin = _load_plugin()
+    marker = tmp_path / "marker.txt"
+    monkeypatch.setenv("SLO_DEAD_SEAM_MARKER", str(marker))
+    monkeypatch.setenv("SLO_DEAD_SEAM_TARGET", "domain.no.such.module.nothing_here")
+
+    plugin.pytest_configure(None)
+
+    assert "state=unresolved" in marker.read_text()
+    assert tool._md_boom_verdict(0, 0, "unresolved") == "inconclusive"
+
+
+def test_plugin_is_a_noop_without_armed_env(tool, monkeypatch, tmp_path):
+    """Bare `pytest -p dead_seam_plugin` must change nothing."""
+    plugin = _load_plugin()
+    marker = tmp_path / "marker.txt"
+    monkeypatch.delenv("SLO_DEAD_SEAM_TARGET", raising=False)
+    monkeypatch.setenv("SLO_DEAD_SEAM_MARKER", str(marker))
+
+    plugin.pytest_configure(None)
+
+    assert not marker.exists()
+
+
+# ── cmd_dead_seam contract ───────────────────────────────────────────────
+
+
+def test_dead_seam_missing_file_is_usage_error(tool, capsys):
+    rc = tool.cmd_dead_seam("tests/definitely_absent_zzz.py")
+    out = capsys.readouterr().out
+    assert rc == 2
+    assert "no such test" in out
+
+
+def test_dead_seam_no_targets_is_clean(tool, monkeypatch, capsys):
+    monkeypatch.setattr(tool, "_md_targets", lambda: {})
+    rc = tool.cmd_dead_seam("tests/test_knowledge_augmenter.py")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "no patch targets" in out
+
+
+def test_dead_seam_reports_dead_and_blocks(tool, monkeypatch, capsys):
+    """A dead seam is the whole point of the probe, so it must set the exit
+    code — a green run on a vacuous test is the failure being hunted."""
+    tgt = "domain.x._internal.y.thing"
+    tf = _REPO / "tests/test_knowledge_augmenter.py"
+    monkeypatch.setattr(tool, "_md_targets", lambda: {tgt: {tf}})
+    monkeypatch.setattr(tool, "_md_readers", lambda: {})
+    monkeypatch.setattr(tool, "_run", lambda args, **kw: (0, "", ""))
+    monkeypatch.setattr(tool, "_boom_run", lambda test, target, timeout=600: (0, "armed"))
+
+    rc = tool.cmd_dead_seam("tests/test_knowledge_augmenter.py")
+    out = capsys.readouterr().out
+    assert rc == 1, "a dead seam must fail the run"
+    assert "dead seam" in out
+    assert tgt in out
+    assert "never executed" in out
+
+
+def test_dead_seam_live_seam_is_green(tool, monkeypatch, capsys):
+    tgt = "domain.x._internal.y.thing"
+    tf = _REPO / "tests/test_knowledge_augmenter.py"
+    monkeypatch.setattr(tool, "_md_targets", lambda: {tgt: {tf}})
+    monkeypatch.setattr(tool, "_md_readers", lambda: {})
+    monkeypatch.setattr(tool, "_run", lambda args, **kw: (0, "", ""))
+    monkeypatch.setattr(tool, "_boom_run", lambda test, target, timeout=600: (1, "armed"))
+
+    rc = tool.cmd_dead_seam("tests/test_knowledge_augmenter.py")
+    out = capsys.readouterr().out
+    assert rc == 0, "a live seam must not fail the run"
+    assert "no dead seam" in out
+
+
+def test_dead_seam_unarmed_run_is_never_dead(tool, monkeypatch, capsys):
+    """Marker lost/unwritten => inconclusive, not dead (never false-alarm)."""
+    tgt = "domain.x._internal.y.thing"
+    tf = _REPO / "tests/test_knowledge_augmenter.py"
+    monkeypatch.setattr(tool, "_md_targets", lambda: {tgt: {tf}})
+    monkeypatch.setattr(tool, "_md_readers", lambda: {})
+    monkeypatch.setattr(tool, "_run", lambda args, **kw: (0, "", ""))
+    monkeypatch.setattr(tool, "_boom_run", lambda test, target, timeout=600: (0, "unresolved"))
+
+    rc = tool.cmd_dead_seam("tests/test_knowledge_augmenter.py")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "no dead seam" in out
+    assert "inconclusive" in out
+
+
+def test_dead_seam_skips_when_baseline_red(tool, monkeypatch, capsys):
+    tf = _REPO / "tests/test_knowledge_augmenter.py"
+    monkeypatch.setattr(tool, "_md_targets", lambda: {"domain.x._internal.y.thing": {tf}})
+    monkeypatch.setattr(tool, "_run", lambda args, **kw: (1, "", ""))
+    boomed = []
+    monkeypatch.setattr(
+        tool,
+        "_boom_run",
+        lambda test, target, timeout=600: boomed.append(target) or (0, "armed"),
+    )
+
+    rc = tool.cmd_dead_seam("tests/test_knowledge_augmenter.py")
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "baseline already failing" in out
+    assert boomed == [], "must not burn a second run on a red baseline"
