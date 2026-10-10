@@ -88,9 +88,15 @@ def main():
         },
     ]
 
+    base_data_path = data_path
+
     results = []
     for cfg in configs:
         name = cfg.pop("name")
+        # The gate below swaps in its deterministic corpus for ONE iteration;
+        # re-pin the real corpus every pass so the leak that made tiny/small/
+        # medium train on 2201 gate chars (card e1321edd) cannot recur.
+        data_path = base_data_path
         print(f"\n{'=' * 60}")
         print(f"  Config: {name}  ({cfg['n_embed']}d / {cfg['n_layer']}L / {cfg['n_head']}H)")
         print(f"{'=' * 60}")
@@ -150,9 +156,23 @@ def main():
         tracemalloc.stop()
 
         n_params = sum(p.numel() for p in trainer.model.parameters())
-        final_loss = result.get("train_loss") or result.get("best_eval_loss")
+        loss_values = [
+            p["loss"] for p in progress_log if p["loss"] is not None and np.isfinite(p["loss"])
+        ]
+        # Final loss: prefer train_loss, then best_eval_loss, then the last
+        # finite progress value. Non-finite/None results (diverged run or
+        # missing keys) must not poison the report with inf — fall through to
+        # the next real number, else report None (card e1321edd).
+        candidates = [
+            result.get("train_loss"),
+            result.get("best_eval_loss"),
+            loss_values[-1] if loss_values else None,
+        ]
+        final_loss = next(
+            (v for v in candidates if v is not None and np.isfinite(v)),
+            None,
+        )
         steps = result.get("total_steps", 0)
-        loss_values = [p["loss"] for p in progress_log if p["loss"] is not None]
 
         # Convergence: loss reduction ratio
         if len(loss_values) >= 2:
@@ -160,8 +180,10 @@ def main():
         else:
             convergence = 0.0
 
-        # Perplexity from final loss
-        perplexity = np.exp(final_loss) if final_loss and final_loss < 10 else float("inf")
+        # Perplexity from final loss (None-safe: unreported → inf)
+        perplexity = (
+            np.exp(final_loss) if final_loss is not None and final_loss < 10 else float("inf")
+        )
 
         # Goal 16 gate: literal near-zero (<0.01) for the gate config's
         # deterministic corpus; strong convergence ratio (<10% of initial)
@@ -189,7 +211,7 @@ def main():
             "elapsed_s": round(elapsed, 2),
             "steps_per_sec": round(steps / max(elapsed, 0.001), 2),
             "initial_loss": round(loss_values[0], 4) if loss_values else None,
-            "final_loss": round(final_loss, 4) if final_loss else None,
+            "final_loss": round(final_loss, 4) if final_loss is not None else None,
             "convergence_ratio": round(convergence, 2),
             "gate_converged": converged,
             "perplexity": round(perplexity, 2) if perplexity < 1e6 else "inf",
@@ -210,8 +232,9 @@ def main():
 
         if name == "gate":
             verdict = "PASS" if converged else "FAIL"
+            final_str = f"{final_loss:.2e}" if final_loss is not None else "n/a"
             print(
-                f"  [GATE goal-16] {verdict}  final={final_loss:.2e} < 0.01 near-zero, "
+                f"  [GATE goal-16] {verdict}  final={final_str} < 0.01 near-zero, "
                 f"< 10% of initial={initial_loss:.4f} in {steps} steps"
             )
 
@@ -222,9 +245,10 @@ def main():
     )
     print(f"  {'-' * 8} {'-' * 8} {'-' * 7} {'-' * 7} {'-' * 8} {'-' * 8} {'-' * 7}")
     for r in results:
+        final_cell = r["final_loss"] if r["final_loss"] is not None else float("nan")
         print(
             f"  {r['config']:<8} {r['params_readable']:>8} {r['elapsed_s']:>6.1f}s "
-            f"{r['steps_per_sec']:>7.2f} {r['final_loss'] or 0:>8.4f} "
+            f"{r['steps_per_sec']:>7.2f} {final_cell:>8.4f} "
             f"{r['perplexity']:>8} {r['peak_memory_mb']:>6.1f}M"
         )
     print(f"{'=' * 72}")
