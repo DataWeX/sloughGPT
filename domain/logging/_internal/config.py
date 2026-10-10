@@ -532,6 +532,15 @@ class LogFormatter(logging.Formatter):
         if record.exception:
             entry["exception"] = record.exception
 
+        # ``error_code`` is part of the documented Logger API (base.py accepts it
+        # on every level method and carries it on LogRecord) but the JSON
+        # formatter never read it, so the value was accepted and then silently
+        # dropped.  Serialized additively as "code": the key appears only when a
+        # code was actually supplied, leaving existing records byte-identical.
+        error_code = getattr(record, "error_code", None)
+        if error_code:
+            entry["code"] = error_code
+
         non_request_ctx = {k: v for k, v in ctx.items() if k != "request_id"}
         if non_request_ctx:
             entry["ctx"] = non_request_ctx
