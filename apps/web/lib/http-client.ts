@@ -1311,6 +1311,17 @@ interface AuthFetchOptions extends RequestInit {
   noAuth?: boolean
 }
 
+/**
+ * `fetch()` carrying this app's auth and correlation-id headers, returning the
+ * raw `Response` for callers that need the status, headers or a stream.
+ *
+ * The URL goes through the same resolution as every other export, so a
+ * relative path is prefixed with PUBLIC_API_URL. Without that, browser code
+ * passing `authFetch('/datasets/x/export')` resolved the path against the WEB
+ * origin, where Vite's SPA fallback answers `200 text/html`: downloads handed
+ * the user index.html and `res.ok` was true, so the developer quick-actions
+ * (`/system/restart`, `/cache/clear`, …) reported success while doing nothing.
+ */
 export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<Response> {
   const corrId = _corrId()
   const headers: Record<string, string> = {}
@@ -1328,8 +1339,9 @@ export async function authFetch(url: string, opts?: AuthFetchOptions): Promise<R
     }
   }
   headers['X-Correlation-ID'] = corrId
-  _trackCorrId(corrId, url)
-  return fetch(url, { ...opts, headers })
+  const fullUrl = _resolveUrl(url)
+  _trackCorrId(corrId, fullUrl)
+  return fetch(fullUrl, { ...opts, headers })
 }
 
 interface StreamSSEOptions {

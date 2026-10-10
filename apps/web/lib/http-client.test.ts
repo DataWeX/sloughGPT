@@ -35,6 +35,7 @@ import {
   httpClient,
   createHttpClient,
   streamSSE,
+  authFetch,
   type RequestConfig,
   type ResponseEnvelope,
   type SSEEvent,
@@ -450,6 +451,26 @@ describe('URL resolution (scoped same-origin routes)', () => {
     mockFetch.mockResolvedValue(mockOk())
     await apiGet('/api/plannerx')
     expect(mockFetch.mock.calls[0][0]).toBe('http://127.0.0.1:9/api/plannerx')
+  })
+
+  it('authFetch prefixes relative paths, or the browser resolves them against the web origin', async () => {
+    // Unresolved, Vite's SPA fallback answers these with `200 text/html`, so
+    // a download returned index.html and quick-actions reported success.
+    mockFetch.mockResolvedValue(mockOk())
+    await authFetch('/datasets/ds-1/export')
+    expect(mockFetch.mock.calls[0][0]).toBe('http://127.0.0.1:9/datasets/ds-1/export')
+  })
+
+  it('authFetch keeps absolute URLs untouched', async () => {
+    mockFetch.mockResolvedValue(mockOk())
+    await authFetch('http://example.test/thing')
+    expect(mockFetch.mock.calls[0][0]).toBe('http://example.test/thing')
+  })
+
+  it('authFetch keeps /api/planner/* same-origin', async () => {
+    mockFetch.mockResolvedValue(mockOk())
+    await authFetch('/api/planner/tasks')
+    expect(mockFetch.mock.calls[0][0]).toBe('/api/planner/tasks')
   })
 })
 

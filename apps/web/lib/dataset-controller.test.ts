@@ -165,8 +165,10 @@ describe('datasetController.export', () => {
 
     const result = await datasetController.export('ds1', 'jsonl')
 
+    // Resolved against PUBLIC_API_URL — the browser would otherwise send this
+    // to the web origin, where Vite's SPA fallback answers 200 index.html.
     expect(fetchMock).toHaveBeenCalledWith(
-      '/datasets/ds1/export',
+      'http://127.0.0.1:9/datasets/ds1/export',
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
@@ -184,7 +186,7 @@ describe('datasetController.export', () => {
     await datasetController.export('ds1')
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/datasets/ds1/export',
+      'http://127.0.0.1:9/datasets/ds1/export',
       expect.objectContaining({ body: JSON.stringify({ format: 'jsonl' }) }),
     )
     vi.unstubAllGlobals()
