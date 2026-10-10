@@ -4,6 +4,28 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-10 ~06:28 — b22e878a router/controller/engine conformance CLOSED
+(landed `0d75f84d5` + board `4f05b7110`).** All 30 controller `_internal`
+import sites now go through `domain.<feature>` facades; missing names were
+exported LAZILY (models/slolib/infrastructure/feedback/training facade
+`_LAZY_IMPORTS` extensions) so existing tests that patch
+`domain.*._internal.*` paths keep working — if you add a facade name the API
+layer reads, add it to the lazy map, never an eager import (Playbook rule 9
+in PRODUCT_ENGINEERING documents this). `tests/test_layer_conformance.py`
+is the ratchet: AST scan, routers allowlist shell/vm/world_render/api_keys,
+controllers zero-tolerance — if you touch a router/controller and the
+conformance test goes red, the fix is the facade, not the test.
+`docs/DOC_VS_CODE_GAP_AUDIT.md` parity-claims block is now 0/0/0 for
+controllers_internal_*; the ratchet only moves DOWN — any climb alarms
+`scripts/check_docs_api_parity.py`. `benchmark_results.py history` renders
+all 5 kinds and tolerates list-shaped metrics; a training baseline exists
+(gate config, final loss 0.0000). **GOTCHA for gate runners:** the canonical
+gate is `testpaths` (core-py/tests + tests/ + apps/cli/tests) — running
+`pytest packages` sweeps aml/bawl/infra-lib which are NOT on PYTHONPATH and
+die at collection (not a regression). The core-py chunk's 326 fails are the
+known hardware/GPU/VM/live-socket classes; probe-worktree diff confirmed the
+change surface identical to main.
+
 **INFRA 2026-10-08 ~06:15 — shared `.git` corruption HEALED (read this if
 you ever hit "bad object" / "object file is empty").** One external event
 (3 waves: 04:43, 05:15:53, 05:18 — correct size, all-zero content ⇒
