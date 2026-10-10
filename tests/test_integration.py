@@ -178,25 +178,18 @@ class TestDatasetEndpoints:
 class TestMetricsEndpoints:
     """Integration tests for metrics and monitoring endpoints."""
 
-    _REASON = (
-        "PRODUCTION BUG: root /metrics was deleted by 5717e1f5f "
-        "('delete dead routers'), but production still calls it "
-        "(apps/cli/src/commands/dev.py:1334), it is still allowlisted in "
-        "infrastructure/auth_middleware.py:32, and docs/DEPLOYMENT.md:175 "
-        "documents `curl localhost:8000/metrics`. The live routes are only "
-        "/system/metrics and /benchmark/metrics. strict=True: goes RED when "
-        "root /metrics is restored — the signal to delete this marker."
-    )
-
-    @pytest.mark.xfail(strict=True, reason=_REASON)
     def test_metrics_json(self):
         """Test metrics endpoint in JSON format."""
         response = requests.get(f"{BASE_URL}/metrics", timeout=TIMEOUT)
         assert response.status_code == 200
-        data = response.json()
-        assert "uptime" in data or "requests_total" in data or "metrics" in data
+        # Contract: success envelope — {"status": "success", "data": {...}}.
+        # The old assertion probed flat keys ('uptime', 'requests_total') that
+        # appear in neither the envelope nor its payload, so it could never
+        # pass; assert the real payload keys instead.
+        data = response.json()["data"]
+        assert "uptime_seconds" in data
+        assert "inferences_total" in data
 
-    @pytest.mark.xfail(strict=True, reason=_REASON)
     def test_metrics_prometheus(self):
         """Test metrics endpoint in Prometheus format."""
         response = requests.get(f"{BASE_URL}/metrics/prometheus", timeout=TIMEOUT)
