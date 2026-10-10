@@ -35,7 +35,7 @@ import re
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .atomic import append_lines, atomic_write_text
+from .atomic import append_lines_checked, atomic_write_text
 
 RETIRED_FIELDS = ("chain_hash", "chain_prev", "chain_index")
 SLOT_FIELDS = ("slot_position", "note_hashes", "notes_hash", "slot_prev", "slot_hash")
@@ -106,6 +106,7 @@ def write_board(path: str | Path, raws: list[str], objs: dict[int, dict], dirty:
         else:
             out.append(raw)
     atomic_write_text(path, "\n".join(out) + "\n")
+
 
 # ── Inputs ───────────────────────────────────────────────────────────────
 
@@ -224,22 +225,38 @@ def apply_board(board_path: str | Path, notes_home: str | Path | None = None) ->
         return zeros
     meta = objs[meta_idx]
     hist = journal_path(board_path)
-    _, tips = load_journal(hist)
+    # Captured BEFORE the journal is read, not after — see append_lines_checked:
+    # a stat taken post-read can agree with an already-stale read and so hide
+    # the very contention it is meant to detect.
+    expected_size = hist.stat().st_size if hist.exists() else 0
     dev = dev_note_hashes(notes_home)
     positions = canonical_positions(cards, meta["columns"])
 
-    dirty: set[int] = set()
-    created = reused = 0
-    new_nodes: list[dict] = []
+    # Tail-independent work, hoisted out of the decision so a rebase redoes only
+    # the half that depends on the journal.
+    plan: list[tuple[int, dict, int, str, list[str], str]] = []
     for idx, card in cards:
         pos = positions[id(card)]
         slot_key = f"{card.get('column', '')}:{pos}"
         inputs, nh = note_hash_inputs(card, dev)
-        last = tips.get(slot_key)
-        if last and last["card_id"] == card.get("id") and last["notes_hash"] == nh:
-            node = last  # current state already journaled — idempotent
-            reused += 1
-        else:
+        plan.append((idx, card, pos, slot_key, inputs, nh))
+
+    def derive(tips: dict[str, dict]) -> tuple[list[dict], dict[str, dict], int, int]:
+        """Decide this board's nodes against *tips* → (nodes, tips, created, reused).
+
+        Reads *tips* and returns an updated copy rather than mutating the
+        caller's, so it is safe to run twice: once against the snapshot the
+        board was read with, and again against a freshly re-read tail if the
+        journal moved before we could append.
+        """
+        tips = dict(tips)
+        nodes: list[dict] = []
+        created = reused = 0
+        for _idx, card, _pos, slot_key, _inputs, nh in plan:
+            last = tips.get(slot_key)
+            if last and last["card_id"] == card.get("id") and last["notes_hash"] == nh:
+                reused += 1  # current state already journaled — idempotent
+                continue
             prev = last["slot_hash"] if last else ""
             node = {
                 "slot_key": slot_key,
@@ -249,9 +266,38 @@ def apply_board(board_path: str | Path, notes_home: str | Path | None = None) ->
                 "slot_hash": node_hash(prev, slot_key, nh),
                 "ts": now(),
             }
-            new_nodes.append(node)
+            nodes.append(node)
             tips[slot_key] = node
             created += 1
+        return nodes, tips, created, reused
+
+    _, snapshot = load_journal(hist)
+    nodes, tips, created, reused = derive(snapshot)
+
+    def rebase() -> list[str]:
+        """Re-derive against the live tail. Invoked with the journal locked."""
+        nonlocal nodes, tips, created, reused
+        _, fresh = load_journal(hist)
+        nodes, tips, created, reused = derive(fresh)
+        return [json.dumps(node, ensure_ascii=False) + "\n" for node in nodes]
+
+    if nodes:
+        # The read→derive→append trio is one critical section here: without the
+        # size re-check under the lock, two sessions could both derive a parent
+        # from the same tail and append it, forking the chain.
+        append_lines_checked(
+            hist,
+            [json.dumps(node, ensure_ascii=False) + "\n" for node in nodes],
+            expected_size,
+            rebase,
+        )
+
+    # Card fields and tray roots are written from the *final* tips — after the
+    # append, so they carry whatever rebase() settled on rather than the
+    # snapshot's answer.
+    dirty: set[int] = set()
+    for idx, card, pos, slot_key, inputs, nh in plan:
+        node = tips[slot_key]
         values = {
             "slot_position": pos,
             "note_hashes": inputs,
@@ -272,16 +318,11 @@ def apply_board(board_path: str | Path, notes_home: str | Path | None = None) ->
     if meta.get("tray_roots") != roots:
         meta["tray_roots"] = roots
         dirty.add(meta_idx)
-    hist_name = journal_path(board_path).name
+    hist_name = hist.name
     if meta.get("slot_history") != hist_name:
         meta["slot_history"] = hist_name
         dirty.add(meta_idx)
 
-    if new_nodes:
-        append_lines(
-            hist,
-            [json.dumps(node, ensure_ascii=False) + "\n" for node in new_nodes],
-        )
     if dirty:
         write_board(board_path, raws, objs, dirty)
     return {

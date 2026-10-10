@@ -17,9 +17,10 @@ from __future__ import annotations
 import fcntl
 import os
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
 
-__all__ = ["append_lines", "atomic_write_text", "fsync_dir"]
+__all__ = ["append_lines", "append_lines_checked", "atomic_write_text", "fsync_dir"]
 
 
 def fsync_dir(dir_path: Path | str) -> None:
@@ -29,6 +30,58 @@ def fsync_dir(dir_path: Path | str) -> None:
         os.fsync(dfd)
     finally:
         os.close(dfd)
+
+
+def append_lines_checked(
+    path: Path | str,
+    lines: list[str],
+    expected_size: int,
+    rebase: Callable[[], list[str]],
+) -> None:
+    """Append *lines* under one exclusive ``flock``, revalidating the tail they
+    were derived from.
+
+    A chain journal derives each record's parent from the current tail, so
+    read → derive → append must be a *single* critical section. ``append_lines``
+    only serializes bytes: two writers can both read tail ``T``, both derive the
+    same parent, and both append it — forking the chain into two records that
+    each claim the same parent. ``flock`` never sees that, because by the time
+    it is taken the decision has already been made.
+
+    So the caller passes the size the journal had when it read ``T``
+    (``expected_size``) plus the payload derived from that read (``lines``),
+    and the size check and the write share one lock:
+
+    * **size unchanged** — nothing was appended since ``T``, so ``T`` is still
+      the tail and ``lines`` stand. The uncontended path writes them directly.
+    * **size moved** — another process appended while this one was deriving, so
+      ``rebase()`` runs **with the lock held** to rebuild the payload from a
+      fresh read of the tail before any byte is written.
+
+    ``expected_size`` must be captured **before** the journal is read. Taking it
+    after would let one record land between the read and the stat, making the
+    stat agree with the (already stale) read and masking the contention this
+    exists to catch. Capturing first can only over-report contention, which
+    costs one redundant re-read — never a fork.
+
+    Like ``append_lines``, the data file is safe to flock directly: it is never
+    atomically rewritten, so its inode (the lock target) is stable.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        if os.fstat(fd).st_size != expected_size:
+            lines = rebase()
+        payload = "".join(lines).encode("utf-8")
+        view = memoryview(payload)
+        while view:
+            view = view[os.write(fd, view) :]
+        if payload:
+            os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def atomic_write_text(path: Path | str, text: str) -> None:
