@@ -82,7 +82,9 @@ class TestAddFactsBatch:
 
     def test_add_facts_persists_store_once(self, km, monkeypatch):
         saves = []
-        monkeypatch.setattr(km, "_save_entries", lambda: saves.append(1))
+        # _write_entries_json is the actual store rewrite; the regression this
+        # guards is a full rewrite per fact instead of one per batch.
+        monkeypatch.setattr(km, "_write_entries_json", lambda: saves.append(1))
         facts = [
             KnowledgeFact(content=f"persist fact {i} long enough", topic="t", source="test")
             for i in range(5)

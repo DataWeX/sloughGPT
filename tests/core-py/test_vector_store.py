@@ -1,9 +1,7 @@
 """Tests for InMemoryVectorStore, MogDBVectorStore — core vector CRUD + similarity search."""
 
 import os
-import sys
 import tempfile
-import types
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -523,24 +521,40 @@ class TestSimpleEmbed:
         assert 0.0 <= sim_ac <= 1.0, f"similarity out of range: {sim_ac}"
 
     def test_empty_text(self):
+        # Canonical-embedder contract: empty input yields the ZERO vector, not
+        # a unit vector (overload of simple_embed's normalization; asserted
+        # across every entry point in test_canonical_embedder.py).
         vec = simple_embed("")
         assert len(vec) == 384
-        norm = np.linalg.norm(vec)
-        assert abs(norm - 1.0) < 1e-6
+        assert np.linalg.norm(vec) == 0.0
+
+
+def _fresh_embedder():
+    """Install a clean TextEmbedder singleton and return it.
+
+    The quality-gate state moved off the vector_store module globals
+    (``vs._slo_embedder`` / ``vs._slo_embedder_rejected``) onto the
+    process-wide ``TextEmbedder`` singleton when the embedder was
+    consolidated into ``text_embedder`` (commit 70f3cda65).
+    """
+    from domain.inference._internal import text_embedder as te
+
+    embedder = te.TextEmbedder()
+    te._text_embedder = embedder
+    return embedder
 
 
 class TestSimpleEmbedQualityGate:
     """simple_embed adopts only quality-gate-accepted SloNet embedders."""
 
     @pytest.fixture(autouse=True)
-    def reset_slo_state(self):
-        vs._slo_embedder = None
-        vs._slo_embedder_rejected = False
-        yield
-        vs._slo_embedder = None
-        vs._slo_embedder_rejected = False
+    def embedder(self):
+        inst = _fresh_embedder()
+        yield inst
+        inst._slo = None
+        inst._slo_rejected = False
 
-    def test_rejected_embedder_falls_back_to_ngram(self):
+    def test_rejected_embedder_falls_back_to_ngram(self, embedder):
         fake = MagicMock()
         fake.acceptable.return_value = False
         fake.quality = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": 0.98}
@@ -548,10 +562,10 @@ class TestSimpleEmbedQualityGate:
             vec = simple_embed("hello world")
         expected = vs._ngram_embed("hello world", 384).tolist()
         assert np.allclose(vec, expected, atol=1e-6), "rejected embedder must not be used"
-        assert vs._slo_embedder is None
-        assert vs._slo_embedder_rejected is True
+        assert embedder._slo is None
+        assert embedder._slo_rejected is True
 
-    def test_accepted_embedder_is_adopted(self):
+    def test_accepted_embedder_is_adopted(self, embedder):
         fake = MagicMock()
         fake.acceptable.return_value = True
         fake.embed.return_value = [1.0, 0.0, 0.0, 0.0]
@@ -559,7 +573,7 @@ class TestSimpleEmbedQualityGate:
             vec = simple_embed("hello world")
         assert vec[:4] == [1.0, 0.0, 0.0, 0.0], "accepted embedder output must be returned"
         assert all(v == 0.0 for v in vec[4:])
-        assert vs._slo_embedder is fake
+        assert embedder._slo is fake
 
 
 class TestSimpleEmbedRealDeployment:
@@ -567,14 +581,13 @@ class TestSimpleEmbedRealDeployment:
     passes the gate, and its vectors drive simple_embed instead of n-gram."""
 
     @pytest.fixture(autouse=True)
-    def reset_slo_state(self):
-        vs._slo_embedder = None
-        vs._slo_embedder_rejected = False
-        yield
-        vs._slo_embedder = None
-        vs._slo_embedder_rejected = False
+    def embedder(self):
+        inst = _fresh_embedder()
+        yield inst
+        inst._slo = None
+        inst._slo_rejected = False
 
-    def test_real_trained_embedder_is_adopted_and_used(self):
+    def test_real_trained_embedder_is_adopted_and_used(self, embedder):
         from domain.inference._internal.slo_embedder import train_embedder
 
         rng_state = np.random.get_state()
@@ -596,8 +609,7 @@ class TestSimpleEmbedRealDeployment:
                 real = SloTextEmbedder.load(path)
                 assert real is not None and real.acceptable(), "trained model must pass the gate"
                 with patch.object(SloTextEmbedder, "load", return_value=real):
-                    with patch.object(vs, "_load_embed_model", return_value=None):
-                        vec = simple_embed("neural network training")
+                    vec = simple_embed("neural network training")
                 expected = real.embed("neural network training")
                 assert len(expected) == 64
                 assert len(vec) == 384, "simple_embed must pad to the store dimension"
@@ -609,8 +621,8 @@ class TestSimpleEmbedRealDeployment:
                 assert not np.allclose(vec[:64], ngram[:64], atol=1e-3), (
                     "must differ from n-gram fallback"
                 )
-                assert vs._slo_embedder is real
-                assert vs._slo_embedder_rejected is False
+                assert embedder._slo is real
+                assert embedder._slo_rejected is False
         finally:
             np.random.set_state(rng_state)
 
@@ -688,113 +700,6 @@ def test_mogdb_count_sync_without_connection():
 
 
 # =========================================================================
-# _load_embed_model tests
-# =========================================================================
-
-
-class TestLoadEmbedModel:
-    def test_returns_cached_model(self, monkeypatch):
-        sentinel = object()
-        monkeypatch.setattr(vs, "_embed_model", sentinel)
-        monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", False)
-        assert vs._load_embed_model() is sentinel
-
-    def test_low_memory_skips_load(self, monkeypatch):
-        class FakeVM:
-            available = 100 * 1024 * 1024
-
-        class FakePSUtil:
-            @staticmethod
-            def virtual_memory():
-                return FakeVM()
-
-        monkeypatch.setitem(sys.modules, "psutil", FakePSUtil)
-        monkeypatch.setattr(vs, "_embed_model", None)
-        monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", False)
-        assert vs._load_embed_model() is None
-        assert vs._EMBED_LOAD_FAILED is True
-
-    def test_st_load_success(self, monkeypatch):
-        st = types.ModuleType("sentence_transformers")
-
-        class FakeSentenceTransformer:
-            def __init__(self, name, device=None):
-                self.name = name
-                self.device = device
-
-        st.SentenceTransformer = FakeSentenceTransformer
-        monkeypatch.setitem(sys.modules, "sentence_transformers", st)
-        monkeypatch.setattr(vs, "_embed_model", None)
-        monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", False)
-        model = vs._load_embed_model()
-        assert model is not None
-        assert vs._embed_model is model
-        assert model.device == "cpu"
-
-    def test_st_load_failure(self, monkeypatch):
-        st = types.ModuleType("sentence_transformers")
-
-        class FailingSentenceTransformer:
-            def __init__(self, name, device=None):
-                raise RuntimeError("download failed")
-
-        st.SentenceTransformer = FailingSentenceTransformer
-        monkeypatch.setitem(sys.modules, "sentence_transformers", st)
-        monkeypatch.setattr(vs, "_embed_model", None)
-        monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", False)
-        assert vs._load_embed_model() is None
-        assert vs._EMBED_LOAD_FAILED is True
-
-
-# =========================================================================
-# simple_embed sentence-transformers path tests
-# =========================================================================
-
-
-class FakeEncode:
-    def __init__(self, out):
-        self._out = np.asarray(out, dtype=np.float64)
-
-    def encode(self, text, **kwargs):
-        return self._out
-
-
-class TestSimpleEmbedSentenceTransformers:
-    @pytest.fixture
-    def st_env(self, monkeypatch):
-        monkeypatch.setattr(vs, "_embed_model", None)
-        monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", False)
-        monkeypatch.setattr(vs, "_slo_embedder", None)
-        monkeypatch.setattr(vs, "_slo_embedder_rejected", True)
-
-    def test_encode_equal_dim(self, st_env, monkeypatch):
-        monkeypatch.setattr(vs, "_embed_model", FakeEncode([1.0, 0.0, 0.0]))
-        assert simple_embed("hello", dimension=3) == [1.0, 0.0, 0.0]
-
-    def test_encode_shorter_padded(self, st_env, monkeypatch):
-        monkeypatch.setattr(vs, "_embed_model", FakeEncode([3.0, 4.0]))
-        vec = simple_embed("hello", dimension=3)
-        assert len(vec) == 3
-        assert np.allclose(vec, [0.6, 0.8, 0.0], atol=1e-9)
-
-    def test_encode_longer_truncated(self, st_env, monkeypatch):
-        monkeypatch.setattr(vs, "_embed_model", FakeEncode([3.0, 0.0, 0.0, 4.0]))
-        vec = simple_embed("hello", dimension=3)
-        assert len(vec) == 3
-        assert np.allclose(vec, [1.0, 0.0, 0.0], atol=1e-9)
-
-    def test_encode_raises_falls_to_ngram(self, st_env, monkeypatch):
-        class RaisingEncode:
-            def encode(self, text, **kwargs):
-                raise RuntimeError("encode failed")
-
-        monkeypatch.setattr(vs, "_embed_model", RaisingEncode())
-        vec = simple_embed("hello world", dimension=32)
-        assert len(vec) == 32
-        assert abs(np.linalg.norm(vec) - 1.0) < 1e-6
-
-
-# =========================================================================
 # simple_embed SloNet path tests
 # =========================================================================
 
@@ -825,13 +730,10 @@ def _trained_candidate(general):
 
 class TestSimpleEmbedSloNet:
     @pytest.fixture
-    def slonet_env(self, monkeypatch):
-        monkeypatch.setattr(vs, "_embed_model", None)
-        monkeypatch.setattr(vs, "_EMBED_LOAD_FAILED", True)
-        monkeypatch.setattr(vs, "_slo_embedder", None)
-        monkeypatch.setattr(vs, "_slo_embedder_rejected", False)
+    def embedder(self):
+        return _fresh_embedder()
 
-    def test_untrained_candidate_skipped(self, slonet_env, monkeypatch):
+    def test_untrained_candidate_skipped(self, embedder, monkeypatch):
         class UntrainedCandidate:
             quality = {"probes": 24, "degenerate_fraction": 0.0, "mean_cosine": 0.98}
 
@@ -844,48 +746,48 @@ class TestSimpleEmbedSloNet:
         monkeypatch.setattr(SloTextEmbedder, "load", lambda: UntrainedCandidate())
         vec = simple_embed("hello world", dimension=32)
         assert len(vec) == 32
-        assert vs._slo_embedder_rejected is True
-        assert vs._slo_embedder is None
+        assert embedder._slo_rejected is True
+        assert embedder._slo is None
 
-    def test_trained_candidate_loaded(self, slonet_env, monkeypatch):
+    def test_trained_candidate_loaded(self, embedder, monkeypatch):
         candidate = _trained_candidate(general=[1.0, 0.0, 0.0])
         monkeypatch.setattr(SloTextEmbedder, "load", lambda: candidate)
         assert simple_embed("hello", dimension=3) == [1.0, 0.0, 0.0]
-        assert vs._slo_embedder is candidate
+        assert embedder._slo is candidate
 
-    def test_embed_equal_dim(self, slonet_env, monkeypatch):
-        monkeypatch.setattr(vs, "_slo_embedder", _trained_candidate(general=[1.0, 0.0, 0.0]))
+    def test_embed_equal_dim(self, embedder, monkeypatch):
+        embedder._slo = _trained_candidate(general=[1.0, 0.0, 0.0])
         assert simple_embed("hello", dimension=3) == [1.0, 0.0, 0.0]
 
-    def test_embed_shorter_padded(self, slonet_env, monkeypatch):
-        monkeypatch.setattr(vs, "_slo_embedder", _trained_candidate(general=[3.0, 4.0]))
+    def test_embed_shorter_padded(self, embedder, monkeypatch):
+        embedder._slo = _trained_candidate(general=[3.0, 4.0])
         vec = simple_embed("hello", dimension=3)
         assert len(vec) == 3
         assert np.allclose(vec, [0.6, 0.8, 0.0], atol=1e-9)
 
-    def test_embed_longer_truncated(self, slonet_env, monkeypatch):
-        monkeypatch.setattr(vs, "_slo_embedder", _trained_candidate(general=[3.0, 0.0, 0.0, 4.0]))
+    def test_embed_longer_truncated(self, embedder, monkeypatch):
+        embedder._slo = _trained_candidate(general=[3.0, 0.0, 0.0, 4.0])
         vec = simple_embed("hello", dimension=3)
         assert len(vec) == 3
         assert np.allclose(vec, [1.0, 0.0, 0.0], atol=1e-9)
 
-    def test_embed_raises_ngram(self, slonet_env, monkeypatch):
+    def test_embed_raises_ngram(self, embedder, monkeypatch):
         class RaisingEmbedder:
             def embed(self, text):
                 raise RuntimeError("boom")
 
-        monkeypatch.setattr(vs, "_slo_embedder", RaisingEmbedder())
+        embedder._slo = RaisingEmbedder()
         vec = simple_embed("hello world", dimension=32)
         assert len(vec) == 32
         assert abs(np.linalg.norm(vec) - 1.0) < 1e-6
 
-    def test_load_returns_none(self, slonet_env, monkeypatch):
+    def test_load_returns_none(self, embedder, monkeypatch):
         monkeypatch.setattr(SloTextEmbedder, "load", lambda: None)
         vec = simple_embed("hello world", dimension=32)
         assert len(vec) == 32
-        assert vs._slo_embedder is None
+        assert embedder._slo is None
 
-    def test_load_raises(self, slonet_env, monkeypatch):
+    def test_load_raises(self, embedder, monkeypatch):
         def boom():
             raise RuntimeError("load failed")
 

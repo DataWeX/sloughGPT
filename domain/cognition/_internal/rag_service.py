@@ -202,9 +202,10 @@ class RAGService:
             metadata: Optional metadata dict (source, topic, etc.).
             chunk_size: Max tokens per chunk.
             overlap: Overlap between adjacent chunks.
-            rebuild_index: Set False for bulk loads, then call
-                ``self.rag.retriever.build_index()`` once at the end
-                (per-document rebuilds are O(n^2)).
+            rebuild_index: Retained for API compatibility. Indexing is now
+                incremental (O(chunk) per chunk), so no per-document rebuild
+                happens; bulk loaders may still pass False and call
+                ``self.rag.retriever.build_index()`` once at the end.
 
         Returns:
             List of chunk IDs created.

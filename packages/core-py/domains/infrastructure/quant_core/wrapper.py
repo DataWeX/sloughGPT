@@ -219,14 +219,19 @@ def _load_lib():
         HAS_AVX512 = False
 
     # Expose per-call kernel selection (smart per-shape dispatch).
-    _LIB.matmul_int8_select_kernel = getattr(_LIB, "matmul_int8_select_kernel", None)
-    _LIB.matmul_int8_kernel = getattr(_LIB, "matmul_int8_kernel", None)
-    if _LIB.matmul_int8_select_kernel is not None:
-        _LIB.matmul_int8_select_kernel.argtypes = [ctypes.c_int]
-        _LIB.matmul_int8_select_kernel.restype = None
-    if _LIB.matmul_int8_kernel is not None:
-        _LIB.matmul_int8_kernel.argtypes = []
-        _LIB.matmul_int8_kernel.restype = ctypes.c_int
+    # Guard on ``has_int8``: when the build/load failed ``_LIB`` is still
+    # ``None``, and dereferencing it here raises at *import* time — turning
+    # an ordinary numpy-fallback situation (missing .c source, no gcc) into
+    # a collection error for every importer of this module.
+    if has_int8 and _LIB is not None:
+        _LIB.matmul_int8_select_kernel = getattr(_LIB, "matmul_int8_select_kernel", None)
+        _LIB.matmul_int8_kernel = getattr(_LIB, "matmul_int8_kernel", None)
+        if _LIB.matmul_int8_select_kernel is not None:
+            _LIB.matmul_int8_select_kernel.argtypes = [ctypes.c_int]
+            _LIB.matmul_int8_select_kernel.restype = None
+        if _LIB.matmul_int8_kernel is not None:
+            _LIB.matmul_int8_kernel.argtypes = []
+            _LIB.matmul_int8_kernel.restype = ctypes.c_int
 
     # Load int4 library (separate dylib)
     has_int4 = False
