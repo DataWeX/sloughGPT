@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os as _os
 import sys as _sys
 from pathlib import Path
 
-__all__ = ["find_repo_root", "find_server_python"]
+__all__ = ["data_root", "find_repo_root", "find_server_python"]
 
 
 def find_repo_root(start: Path | str = "") -> Path:
@@ -21,6 +22,26 @@ def find_repo_root(start: Path | str = "") -> Path:
         if (parent / "pyproject.toml").exists() and (parent / "apps").is_dir():
             return parent
     return here.parents[min(4, len(here.parents) - 1)]
+
+
+def data_root() -> Path:
+    """Canonical data directory — ``<repo>/data`` unless redirected.
+
+    ``SLO_DATA_DIR`` (same shape as the existing ``SLO_CACHE_DIR``) points the
+    whole data tree at a throw-away location.  Tests set it so their fixtures
+    land in a tmp dir instead of accumulating in the live ``data/`` tree, which
+    measured 1033 files under ``data/agents/`` of which 916 matched pytest id
+    patterns (``auto-*``/``create-*``/``dup-*``/``upd-*``/``tools-*``).
+
+    Reads the environment on every call and is never cached: the root conftest
+    redirects it, so a value captured at import time would miss the override.
+
+    Domain-side twin of ``infrastructure.db_pool._data_root()`` — identical
+    semantics, but resolved through :func:`find_repo_root` so ``domain`` never
+    imports the api server package.
+    """
+    override = _os.environ.get("SLO_DATA_DIR", "").strip()
+    return Path(override) if override else find_repo_root() / "data"
 
 
 def find_server_python(repo_root: Path | str = "") -> str:

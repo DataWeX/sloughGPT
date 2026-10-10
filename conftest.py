@@ -16,6 +16,19 @@ if "SLO_TRAINING_JOBS_DB" not in os.environ:
     os.environ["SLO_TRAINING_JOBS_DB"] = os.path.join(_job_store_dir, "training_jobs.db")
     atexit.register(shutil.rmtree, _job_store_dir, True)
 
+# And the same reason applies to the data tree itself. Import-time data paths
+# (AGENTS_DIR in domain/agents/_internal/system.py) are computed when a test
+# module is *imported*, which is collection time — before any fixture can
+# monkeypatch an env var, so pointing SLO_DATA_DIR at a per-test tmp_path
+# arrives too late and the write lands in the live data/ tree. This sets a
+# session-wide fallback that the autouse fixture below still overrides per
+# test; all it guarantees is that nothing imported during collection ever
+# resolves to <repo>/data.
+if "SLO_DATA_DIR" not in os.environ:
+    _data_dir = tempfile.mkdtemp(prefix="slo-data-")
+    os.environ["SLO_DATA_DIR"] = _data_dir
+    atexit.register(shutil.rmtree, _data_dir, True)
+
 # Add core-py and server paths for module resolution.
 for _p in ("packages/core-py", "apps/api/server", "packages/downcraft"):
     _full = os.path.join(repo_root, _p)
