@@ -442,6 +442,10 @@ class TestCUDAFallbackAccelerator:
     def setup_method(self):
         self.cuda = acc._CUDAAccelerator()
 
+    # These two assert the cupy-absent fallback branch; with cupy importable the
+    # backend legitimately engages it (see c009a2206), so the precondition that
+    # makes them meaningful is absent — same guard their two siblings carry.
+    @pytest.mark.skipif(_CUPY_AVAILABLE, reason="cupy installed; env detection bypassed")
     def test_is_available_false_without_cupy(self):
         assert self.cuda._cp is None
         assert self.cuda.is_available() is False
@@ -462,6 +466,7 @@ class TestCUDAFallbackAccelerator:
         monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
         assert acc._CUDAAccelerator()._available is False
 
+    @pytest.mark.skipif(_CUPY_AVAILABLE, reason="cupy installed; env detection bypassed")
     def test_device_transfer_fallback(self):
         arr = np.random.rand(3, 3)
         gpu = self.cuda.to_device(arr)
