@@ -394,6 +394,9 @@ class TestAddFactsBatch:
                 content="Persist clear test", topic="test", source="test", timestamp=time.time()
             )
         )
+        # Single-entry writes are write-behind now (see the module-level
+        # deferred-JSON block), so force the mirror before asserting on it.
+        km.flush_json()
         assert K.ENTRIES_PATH.exists()
         assert km.clear_all() == 1
         assert K.ENTRIES_PATH.exists()

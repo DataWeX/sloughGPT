@@ -17,6 +17,7 @@ Storage backed by VectorStore (InMemory/ChromaDB/Pinecone) instead of JSON files
 
 from __future__ import annotations
 
+import atexit
 import hashlib
 import json
 import logging
@@ -24,6 +25,7 @@ import math
 import re
 import threading
 import time
+import weakref
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -53,6 +55,47 @@ _KNOWLEDGE_DB_PATH = str(_REPO_ROOT / "data" / "knowledge_mogdb")
 
 DEFAULT_FEED_POLL_INTERVAL = 3600  # 1 hour
 MAX_ARTICLE_TOKENS = 2048
+
+# ---------------------------------------------------------------------------
+# Deferred JSON mirror
+#
+# MogDB (fsynced) is the primary store and is still written synchronously on
+# every mutation — durability is unchanged. The JSON files are only a
+# fallback, read when MogDB comes back empty, yet rewriting a growing JSON
+# file on *every single add* is O(n²): profiling 250 facts showed
+# _write_entries_json consuming 23.8s of 25.7s (93%) of the write path.
+#
+# So single-entry mutations mark the mirror dirty and defer the rewrite to a
+# flush point: every _JSON_FLUSH_EVERY mutations, on interpreter shutdown, and
+# before any load. The batch path (_persist_entries) and the full-sync repair
+# path (_save_entries) still write immediately — they rewrite once per batch,
+# which is already O(1) per batch, and tests pin that count.
+#
+# A clean shutdown therefore loses nothing; only a hard crash inside the
+# window can leave the fallback stale by at most _JSON_FLUSH_EVERY facts, and
+# even then the fsynced MogDB copy is authoritative.
+# ---------------------------------------------------------------------------
+_JSON_FLUSH_EVERY = 64
+_json_flushable: weakref.WeakSet = weakref.WeakSet()
+_json_flush_atexit_registered = False
+
+
+def flush_pending_json_mirrors() -> None:
+    """Flush every store with a dirty JSON mirror. Safe to call repeatedly."""
+    for store in list(_json_flushable):
+        try:
+            store.flush_json()
+        except Exception as e:  # pragma: no cover - interpreter shutdown path
+            logger.warning("Failed to flush knowledge JSON mirror: %s", e)
+
+
+def _register_json_mirror(store: Any) -> None:
+    """Enlist a store for shutdown-time flushing (atexit registered once)."""
+    global _json_flush_atexit_registered
+    _json_flushable.add(store)
+    if not _json_flush_atexit_registered:
+        atexit.register(flush_pending_json_mirrors)
+        _json_flush_atexit_registered = True
 
 
 # ---------------------------------------------------------------------------
@@ -549,6 +592,15 @@ class KnowledgeMemory:
     content hash, and importance scoring (stored as metadata).
     """
 
+    # Deferred JSON mirror state — see the module-level block above. Declared
+    # on the class (not only in ``__init__``) because callers such as the test
+    # harness build instances via ``KnowledgeMemory.__new__`` and assign fields
+    # by hand, bypassing ``__init__`` entirely.
+    _entries_dirty: bool = False
+    _entries_mutations: int = 0
+    _visited_dirty: bool = False
+    _visited_mutations: int = 0
+
     @staticmethod
     def _run_async(coro) -> Any:
         """Run a coroutine to completion (safe from any thread).
@@ -611,7 +663,15 @@ class KnowledgeMemory:
                 logger.warning("Vector store connect failed: %s", e)
         self._embed_fn = None
         self._fact_counter = 0
+        # Deferred JSON mirror state — see the module-level block above.
+        self._entries_dirty = False
+        self._entries_mutations = 0
+        self._visited_dirty = False
+        self._visited_mutations = 0
         if load_persisted:
+            # Any store still holding pending mirror writes must land before we
+            # read, or the fallback load would miss them.
+            flush_pending_json_mirrors()
             self._load_entries()
             self._migrate_from_json_topics()
 
@@ -676,6 +736,9 @@ class KnowledgeMemory:
         """Rewrite the legacy visited JSON mirror (MogDB is the primary store)."""
         try:
             VISITED_PATH.write_text(json.dumps(list(self._visited), indent=2))
+            # Clear only on success so a failed write stays dirty and retries.
+            self._visited_dirty = False
+            self._visited_mutations = 0
         except Exception as e:
             logger.warning("Failed to save visited to JSON: %s", e)
 
@@ -684,10 +747,46 @@ class KnowledgeMemory:
         try:
             entries = getattr(self._vector_store, "_entries", None) or {}
             if not entries and not ENTRIES_PATH.exists():
+                self._entries_dirty = False
+                self._entries_mutations = 0
                 return
             ENTRIES_PATH.write_text(json.dumps([self._entry_doc(e) for e in entries.values()]))
+            self._entries_dirty = False
+            self._entries_mutations = 0
         except Exception as e:
             logger.warning("Failed to save entries to JSON: %s", e, extra={"tag": "INF"})
+
+    # ---- deferred mirror ---------------------------------------------------
+
+    def flush_json(self) -> None:
+        """Write any pending JSON mirror changes now.
+
+        Called on interpreter shutdown, before a load, and after
+        ``_JSON_FLUSH_EVERY`` single-entry mutations. Idempotent: with nothing
+        pending it does no I/O at all.
+        """
+        if self._visited_dirty:
+            self._write_visited_json()
+        if self._entries_dirty:
+            self._write_entries_json()
+
+    def _mark_entries_dirty(self) -> None:
+        """Record an entry mutation and flush once the staleness bound is hit."""
+        if not self._entries_dirty:
+            self._entries_dirty = True
+            _register_json_mirror(self)
+        self._entries_mutations += 1
+        if self._entries_mutations >= _JSON_FLUSH_EVERY:
+            self._write_entries_json()
+
+    def _mark_visited_dirty(self) -> None:
+        """Record a visited-hash mutation and flush at the staleness bound."""
+        if not self._visited_dirty:
+            self._visited_dirty = True
+            _register_json_mirror(self)
+        self._visited_mutations += 1
+        if self._visited_mutations >= _JSON_FLUSH_EVERY:
+            self._write_visited_json()
 
     # ------------------------------------------------------------------
     # Targeted persistence
@@ -707,7 +806,8 @@ class KnowledgeMemory:
                 col.insert_one(self._entry_doc(entry))
             except Exception as e:
                 logger.warning("Failed to persist entry %s: %s", entry.id, e, extra={"tag": "INF"})
-        self._write_entries_json()
+        # Single-entry path: defer the JSON rewrite (O(corpus) per call).
+        self._mark_entries_dirty()
 
     def _persist_entries(self, entries) -> None:
         """Mirror a batch of upserted entries, leaving every other doc intact."""
@@ -730,7 +830,8 @@ class KnowledgeMemory:
                 logger.warning(
                     "Failed to remove persisted entry %s: %s", entry_id, e, extra={"tag": "INF"}
                 )
-        self._write_entries_json()
+        # Single-entry path: defer the JSON rewrite (O(corpus) per call).
+        self._mark_entries_dirty()
 
     def _persist_visited_hash(self, content_hash: str) -> None:
         """Mirror one newly seen hash to MogDB, then refresh the JSON fallback."""
@@ -747,7 +848,8 @@ class KnowledgeMemory:
                     col.insert_one({"_id": h, "hash": h})
             except Exception as e:
                 logger.warning("Failed to persist visited hashes: %s", e)
-        self._write_visited_json()
+        # Defer the mirror rewrite; the visited file grows the same way.
+        self._mark_visited_dirty()
 
     def _unpersist_visited_hash(self, content_hash: str) -> None:
         """Drop one hash from the MogDB mirror, then refresh the JSON fallback."""
@@ -757,7 +859,8 @@ class KnowledgeMemory:
                 col.delete_one({"hash": content_hash})
             except Exception as e:
                 logger.warning("Failed to remove visited hash: %s", e)
-        self._write_visited_json()
+        # Single-entry path: defer the mirror rewrite.
+        self._mark_visited_dirty()
 
     def _save_visited(self):
         """Persist every visited hash — full sync, used as the repair path.
