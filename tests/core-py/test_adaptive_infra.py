@@ -147,6 +147,67 @@ class TestTrainingOutcomeTracker:
 # ── Adaptive Config Engine ───────────────────────────────────────────────────
 
 
+    def test_a_failed_publish_leaves_history_intact(self, tmp_path):
+        """A crash between write and rename must not lose committed runs.
+
+        The old mutators opened the history with mode ``"w"``, which truncates
+        *before* writing, so a crash (or a full disk) part-way through a
+        rewrite destroyed every run's tags and notes at once. Publishing via
+        ``atomic_write`` means the previous file survives any failure up to the
+        rename — verify that by making the rename itself fail.
+        """
+        history = tmp_path / "h.jsonl"
+        tracker = TrainingOutcomeTracker(history)
+        for i in range(3):
+            tracker.record(TrainingOutcome(run_id=f"run_{i}", timestamp=float(i)))
+        before = history.read_bytes()
+
+        with patch("mogdb.durability.os.replace", side_effect=OSError("simulated crash")):
+            with pytest.raises(OSError):
+                tracker.add_tag("run_1", "tag")
+
+        assert history.read_bytes() == before, "a failed rewrite truncated the history"
+        assert [o.run_id for o in tracker.load_outcomes()] == ["run_0", "run_1", "run_2"]
+        assert not history.with_name(history.name + ".tmp").exists(), "temp file leaked"
+
+    def test_history_is_never_truncated_in_place(self):
+        """No writer may open the history with a truncating mode.
+
+        ``open(path, "w")`` destroys the file's contents before the first byte
+        of the replacement is written, so a crash in that window loses every
+        committed record. Asserting this structurally covers all mutators —
+        present and future — rather than trusting each new call site to
+        remember to go through ``_save_history``.
+        """
+        import ast
+        import pathlib
+
+        from domain.training._internal import outcome_tracker
+
+        tree = ast.parse(pathlib.Path(outcome_tracker.__file__).read_text(encoding="utf-8"))
+        truncating: list[int] = []
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = fn.id if isinstance(fn, ast.Name) else getattr(fn, "attr", "")
+            if name != "open":
+                continue
+            modes: list[object] = []
+            if len(node.args) > 1 and isinstance(node.args[1], ast.Constant):
+                modes.append(node.args[1].value)
+            for kw in node.keywords:
+                if kw.arg == "mode" and isinstance(kw.value, ast.Constant):
+                    modes.append(kw.value.value)
+            if any(isinstance(m, str) and ("w" in m or "+" in m) for m in modes):
+                truncating.append(node.lineno)
+        assert not truncating, (
+            f"outcome_tracker.py opens the history for writing at line(s) "
+            f"{truncating}; truncating writes lose the whole history if the "
+            f"process dies mid-rewrite — use self._save_history(outcomes)"
+        )
+
+
 class TestAdaptiveConfigEngine:
     def _make_tracker(self, tmp_path, n=5):
         tracker = TrainingOutcomeTracker(tmp_path / "h.jsonl")

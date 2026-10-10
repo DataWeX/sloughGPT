@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -77,6 +78,40 @@ class TrainingOutcomeTracker:
         self.history_path = history_path or DEFAULT_HISTORY_PATH
         self.history_path.parent.mkdir(parents=True, exist_ok=True)
 
+    def _save_history(self, outcomes: list[TrainingOutcome]) -> None:
+        """Publish the whole history atomically.
+
+        Every mutator used to open the history with ``"w"``, which *truncates*
+        the file and only then rewrites it record by record. A crash, a
+        SIGKILL, or a full disk between those two steps destroyed every run's
+        tags, notes and bookmarks at once — the opposite of the invariant this
+        store owes its callers, where a crash may lose the un-fsynced tail but
+        never a committed record. Writing a temp file and renaming it means a
+        crash before the rename leaves the previous history fully intact, and
+        the leftover ``.tmp`` is simply overwritten by the next attempt.
+        """
+        from mogdb.durability import atomic_write
+
+        payload = "".join(json.dumps(o.to_dict()) + "\n" for o in outcomes)
+        atomic_write(self.history_path, payload.encode("utf-8"))
+
+    def _append_outcome(self, outcome: TrainingOutcome) -> None:
+        """Append one record and fsync so an acknowledged write is durable.
+
+        Appending never truncated, so the history was already safe from the
+        destroy-everything failure above — but without an fsync the last
+        record could still vanish on power loss after ``record()`` returned.
+        """
+        data = (json.dumps(outcome.to_dict()) + "\n").encode("utf-8")
+        fd = os.open(self.history_path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        try:
+            view = memoryview(data)
+            while view:
+                view = view[os.write(fd, view) :]
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+
     def record(self, outcome: TrainingOutcome) -> None:
         """Append a training outcome to history."""
         if not outcome.run_id:
@@ -87,8 +122,7 @@ class TrainingOutcomeTracker:
         # Compute quality score
         outcome.quality_score = self._compute_quality(outcome)
 
-        with open(self.history_path, "a") as f:
-            f.write(json.dumps(outcome.to_dict()) + "\n")
+        self._append_outcome(outcome)
 
         logger.info(
             "Recorded training outcome: run=%s quality=%.3f loss=%.4f",
@@ -141,10 +175,7 @@ class TrainingOutcomeTracker:
             if hasattr(target, key):
                 setattr(target, key, value)
         # Rewrite history
-        self.history_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.history_path, "w") as f:
-            for o in outcomes:
-                f.write(json.dumps(o.to_dict()) + "\n")
+        self._save_history(outcomes)
         return target
 
     def add_tag(self, run_id: str, tag: str) -> TrainingOutcome | None:
@@ -155,10 +186,7 @@ class TrainingOutcomeTracker:
             return None
         if tag not in target.tags:
             target.tags.append(tag)
-            self.history_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_path, "w") as f:
-                for o in outcomes:
-                    f.write(json.dumps(o.to_dict()) + "\n")
+            self._save_history(outcomes)
         return target
 
     def remove_tag(self, run_id: str, tag: str) -> TrainingOutcome | None:
@@ -169,10 +197,7 @@ class TrainingOutcomeTracker:
             return None
         if tag in target.tags:
             target.tags.remove(tag)
-            self.history_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_path, "w") as f:
-                for o in outcomes:
-                    f.write(json.dumps(o.to_dict()) + "\n")
+            self._save_history(outcomes)
         return target
 
     def set_notes(self, run_id: str, notes: str) -> TrainingOutcome | None:
@@ -197,10 +222,7 @@ class TrainingOutcomeTracker:
         if not target:
             return None
         target.bookmarked = not target.bookmarked
-        self.history_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.history_path, "w") as f:
-            for o in outcomes:
-                f.write(json.dumps(o.to_dict()) + "\n")
+        self._save_history(outcomes)
         return target
 
     def get_bookmarked(self) -> list[TrainingOutcome]:
@@ -220,8 +242,7 @@ class TrainingOutcomeTracker:
         new_run.bookmarked = False  # Don't copy bookmark
         new_run.quality_score = 0.0  # Reset quality score
         # Append to history
-        with open(self.history_path, "a") as f:
-            f.write(json.dumps(new_run.to_dict()) + "\n")
+        self._append_outcome(new_run)
         return new_run
 
     def bulk_delete(self, run_ids: list[str]) -> int:
@@ -231,10 +252,7 @@ class TrainingOutcomeTracker:
         filtered = [o for o in outcomes if o.run_id not in ids_set]
         deleted_count = len(outcomes) - len(filtered)
         if deleted_count > 0:
-            self.history_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_path, "w") as f:
-                for o in filtered:
-                    f.write(json.dumps(o.to_dict()) + "\n")
+            self._save_history(filtered)
         return deleted_count
 
     def bulk_add_tag(self, run_ids: list[str], tag: str) -> int:
@@ -247,10 +265,7 @@ class TrainingOutcomeTracker:
                 o.tags.append(tag)
                 updated_count += 1
         if updated_count > 0:
-            self.history_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_path, "w") as f:
-                for o in outcomes:
-                    f.write(json.dumps(o.to_dict()) + "\n")
+            self._save_history(outcomes)
         return updated_count
 
     def bulk_bookmark(self, run_ids: list[str], bookmarked: bool = True) -> int:
@@ -263,10 +278,7 @@ class TrainingOutcomeTracker:
                 o.bookmarked = bookmarked
                 updated_count += 1
         if updated_count > 0:
-            self.history_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_path, "w") as f:
-                for o in outcomes:
-                    f.write(json.dumps(o.to_dict()) + "\n")
+            self._save_history(outcomes)
         return updated_count
 
     def get_stats(self) -> dict[str, Any]:
