@@ -954,11 +954,12 @@ def _matmul(a, b):
         try:
             result = acc.matmul(a_data, b_data)
         except Exception as exc:
-            import logging
-
-            logging.getLogger("slo.training").warning(
-                "GPU matmul failed, falling back to CPU: %s", exc
-            )
+            # debug, matching every other accelerator fallback in this module.
+            # This path runs per matmul: at warning it flooded journald and,
+            # for handlers that retain records (pytest caplog, memory/queue
+            # handlers), pinned this exception -> its traceback frames -> the
+            # matmul's arrays so they could not be collected.
+            logger.debug("GPU matmul failed, falling back to CPU: %s", exc)
             result = np.matmul(a_data, b_data)
     else:
         result = np.matmul(a_data, b_data)

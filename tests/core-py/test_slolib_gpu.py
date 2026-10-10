@@ -1130,6 +1130,40 @@ class TestGpuBackends:
         assert np.allclose(backend.matmul([[1, 2]], [[3], [4]]), [[11]])
 
 
+def test_cuda_matmul_uploads_plain_numpy_to_device():
+    """Card 17584ac9: plain numpy must be uploaded before ``cupy.matmul``.
+
+    The old guard was ``not hasattr(arr, "device")`` — meant to detect arrays
+    already resident on the device. NumPy 2.0 added ``ndarray.device``
+    (reporting ``'cpu'``), so that predicate became True for plain numpy, the
+    upload was skipped, and every matmul raised::
+
+        TypeError: expected cupy._core.core._ndarray_base, got numpy.ndarray
+
+    ``slonet._matmul`` caught that, logged it at warning on every step and fell
+    back to CPU — the GPU never engaged.
+
+    This must use *real* cupy: ``TestCudaWithFakeCupy`` cannot catch the bug
+    because the fake's ``matmul`` accepts numpy, which is why the suite stayed
+    green while the production path was dead.
+    """
+    cp = pytest.importorskip("cupy")
+    try:
+        cp.zeros(1)
+    except Exception:
+        pytest.skip("no usable CUDA device")
+
+    backend = slib._CUDABackend()
+    if not backend.is_available():
+        pytest.skip("cuda backend unavailable")
+
+    a = np.random.randn(64, 64).astype(np.float32)
+    b = np.random.randn(64, 64).astype(np.float32)
+    # Deliberately unguarded: if the upload is skipped this raises TypeError.
+    out = backend.matmul(a, b)
+    assert np.allclose(out, a @ b, atol=1e-3)
+
+
 class TestCudaWithFakeCupy:
     """Exercise the cupy-present dispatch arms with a numpy-backed cupy proxy."""
 
@@ -1336,7 +1370,13 @@ class TestCudaWithFakeCupy:
         b = np.random.randn(4, 5).astype(np.float32)
         assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-5)
         backend._fp16_mode = True
-        assert np.allclose(backend.matmul(a, b), a @ b, atol=1e-4)
+        # Pin the fp16 contract: inputs are cast to fp16 before the product.
+        # The old `atol=1e-4` measured against the fp32 reference only ever
+        # passed because the NumPy 2.0 residency bug skipped that cast and
+        # left matmul computing in fp32 (card 17584ac9). Independently found
+        # and pinned identically by e429005f8 (card 11ad9f7f).
+        ref = (a.astype(np.float16) @ b.astype(np.float16)).astype(np.float32)
+        assert np.allclose(backend.matmul(a, b), ref, atol=1e-6)
 
     def test_cuda_scaled_dot_causal_with_fake_cupy(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "cupy", self._fake_cupy())

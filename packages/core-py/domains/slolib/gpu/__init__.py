@@ -984,16 +984,19 @@ class _CUDABackend(_Accelerator):
         return np.asarray(arr)
 
     def matmul(self, a: Any, b: Any) -> np.ndarray:
+        # Upload unconditionally, exactly like scaled_dot_attention/layer_norm/
+        # gelu above. This deliberately does NOT guard on hasattr(arr, "device"):
+        # NumPy 2.0 added ndarray.device (reporting 'cpu'), so that predicate was
+        # also True for plain numpy arrays — it skipped the upload and handed
+        # numpy straight to cupy.matmul:
+        #   TypeError: expected cupy._core.core._ndarray_base, got numpy.ndarray
+        # Every training matmul then raised, was caught, logged a warning and
+        # fell back to CPU, so the GPU never engaged (card 17584ac9).
         if self._cp and not self._fp16_mode:
-            return self._cp.asnumpy(
-                self._cp.matmul(
-                    self._cp.asarray(a) if not hasattr(a, "device") else a,
-                    self._cp.asarray(b) if not hasattr(b, "device") else b,
-                )
-            )
+            return self._cp.asnumpy(self._cp.matmul(self._cp.asarray(a), self._cp.asarray(b)))
         if self._cp:
-            a_arr = self._cp.asarray(a, dtype=self._dtype()) if not hasattr(a, "device") else a
-            b_arr = self._cp.asarray(b, dtype=self._dtype()) if not hasattr(b, "device") else b
+            a_arr = self._cp.asarray(a, dtype=self._dtype())
+            b_arr = self._cp.asarray(b, dtype=self._dtype())
             return self._cp.asnumpy(self._cp.matmul(a_arr, b_arr)).astype(np.float32)
         return np.matmul(np.asarray(a), np.asarray(b))
 
