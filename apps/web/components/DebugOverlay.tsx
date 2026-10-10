@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { formatLocaleTime, toDateSeconds } from '@/lib/time-format'
 import { useErrorStore } from '@/lib/error-store'
+import { apiGet, ApiError } from '@/lib/http-client'
 import { useLiveStatus } from '@/hooks/useLiveStatus'
 import { useErrorStream } from '@/hooks/useErrorStream'
 import { ErrorDiagnosticsPanel } from '@/components/ErrorDiagnosticsPanel'
@@ -107,17 +108,20 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
     }
     const refresh = async () => {
       try {
-        const r = await fetch('/health/debug', { signal: AbortSignal.timeout(3000) })
-        if (r.ok) {
-          const d = await r.json()
-          setGpuBackend(d.gpu_backend || null)
-          setRecentReqs(d.recent_requests || [])
-          setDebugApiStatus('ok')
-        } else {
-          setDebugApiStatus('error')
-        }
-      } catch {
-        setDebugApiStatus('unreachable')
+        const d = await apiGet<BackendDebug>('/health/debug', undefined, {
+          silent: true,
+          timeout: 3000,
+        })
+        setGpuBackend(d?.gpu_backend || null)
+        setRecentReqs(d?.recent_requests || [])
+        setDebugApiStatus('ok')
+      } catch (e) {
+        // Raw fetch resolved /health/debug against the web origin, Vite
+        // answered 200 index.html, `r.ok` passed and `.json()` threw — so
+        // this reported `unreachable` even against a healthy server.
+        // http-client reports a non-2xx and a dead connection alike as
+        // ApiError; status 0 means no response ever arrived.
+        setDebugApiStatus(e instanceof ApiError && e.status > 0 ? 'error' : 'unreachable')
       }
     }
     refresh()
@@ -453,9 +457,16 @@ export function DebugOverlay({ open, onOpenChange }: DebugOverlayProps) {
               className="h-5 px-1.5 text-[9px] text-muted-foreground/60 hover:text-foreground"
               onClick={async () => {
                 try {
-                  const r = await fetch('/health', { signal: AbortSignal.timeout(3000) })
-                  const d = await r.json()
-                  const status = d?.data?.model_loaded ? 'Model loaded' : 'No model'
+                  const d = await apiGet<{
+                    model_loaded?: boolean
+                    sidecar?: { model_loaded?: boolean }
+                  }>('/health', undefined, { silent: true, timeout: 3000 })
+                  // The raw fetch hit the web origin and got index.html back,
+                  // so `.json()` always threw and this always said "unreachable".
+                  // PUBLIC_API_URL may be the gateway (its own /health nests the
+                  // model state under `sidecar`) or FastAPI (envelope) — accept both.
+                  const loaded = d?.model_loaded ?? d?.sidecar?.model_loaded
+                  const status = loaded ? 'Model loaded' : 'No model'
                   window.dispatchEvent(
                     new CustomEvent('show-toast', { detail: { message: status, type: 'info' } }),
                   )

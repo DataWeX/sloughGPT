@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
+import { apiGet } from '@/lib/http-client'
 
 interface StartupRecord {
   timestamp: number
@@ -22,9 +23,14 @@ export function StartupHistoryChart({ className }: StartupHistoryChartProps) {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const res = await fetch('/health/startup-history')
-        const json = await res.json()
-        setRecords(json.data?.records ?? [])
+        const data = await apiGet<{ records?: StartupRecord[] }>(
+          '/health/startup-history',
+          undefined,
+          // This is a passive background read with its own empty state — it
+          // must not raise a global error banner of its own.
+          { silent: true },
+        )
+        setRecords(data?.records ?? [])
       } catch {
         // ignore
       } finally {

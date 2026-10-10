@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { formatLocaleTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { apiGet, apiPost, httpClient } from '@/lib/http-client'
 import { consciousnessController } from '@/lib/consciousness-controller'
 import {
   Badge,
@@ -135,10 +135,11 @@ export default function ConsciousnessDebugPage() {
       } else if (endpoint === '/consciousness/train/status') {
         data = await consciousnessController.getTrainingStatus()
       } else {
-        const res = await fetch(endpoint)
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const json = await res.json()
-        data = json.data ?? json
+        // Relative app API path. Raw fetch resolved it against the web origin
+        // and Vite's SPA fallback answered 200 index.html, so `res.ok` passed
+        // and `.json()` threw. http-client resolves it against PUBLIC_API_URL
+        // and raises on a non-2xx itself.
+        data = await apiGet(endpoint, undefined, { silent: true })
       }
       setStateData((prev) => ({ ...prev, [key]: data }))
       setConnected(true)
@@ -223,28 +224,29 @@ export default function ConsciousnessDebugPage() {
         const parts = input.split(' ')
         const method = parts[0]
         const path = parts.slice(1).join(' ')
-        const res = await fetch(`${PUBLIC_API_URL}${path}`, {
+        const json = await httpClient.request(
           method,
-          headers: { 'Content-Type': 'application/json' },
-          ...(method !== 'GET' && parts.length > 2 ? { body: parts.slice(2).join(' ') } : {}),
-        })
-        const json = await res.json()
-        output.push(JSON.stringify(json.data ?? json, null, 2))
+          path,
+          method !== 'GET' && parts.length > 2 ? parts.slice(2).join(' ') : undefined,
+          // The console hands over a pre-stringified body: pass it through
+          // verbatim (request() JSON.stringify()s anything else) and set the
+          // content type that `raw` skips.
+          { silent: true, raw: true, headers: { 'Content-Type': 'application/json' } },
+        )
+        output.push(JSON.stringify(json, null, 2))
         setConnected(true)
       } else if (input.startsWith('fetch ') || input.startsWith('http')) {
+        // Deliberately NOT http-client: the URL is hand-typed and may name
+        // any host, so routing it through the client would forward this
+        // app's Authorization header to a third party.
         const url = input.startsWith('fetch ') ? input.slice(6) : input
         const res = await fetch(url)
         const json = await res.json()
         output.push(JSON.stringify(json, null, 2))
         setConnected(true)
       } else {
-        const res = await fetch(`${PUBLIC_API_URL}/consciousness/process`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: input }),
-        })
-        const json = await res.json()
-        output.push(JSON.stringify(json.data ?? json, null, 2))
+        const json = await apiPost('/consciousness/process', { text: input }, { silent: true })
+        output.push(JSON.stringify(json, null, 2))
         setConnected(true)
       }
     } catch (e) {
@@ -261,9 +263,8 @@ export default function ConsciousnessDebugPage() {
     setConsoleLoading(true)
     const output: string[] = [`> GET ${endpoint}`]
     try {
-      const res = await fetch(`${PUBLIC_API_URL}${endpoint}`)
-      const json = await res.json()
-      output.push(JSON.stringify(json.data ?? json, null, 2))
+      const json = await apiGet(endpoint, undefined, { silent: true })
+      output.push(JSON.stringify(json, null, 2))
       setConnected(true)
     } catch (e) {
       output.push(`Error: ${extractErrorMessage(e)}`)
@@ -276,8 +277,8 @@ export default function ConsciousnessDebugPage() {
 
   const handleReset = useCallback(async () => {
     try {
-      const res = await fetch(`${PUBLIC_API_URL}/consciousness/reset`, { method: 'POST' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      // http-client raises on a non-2xx, replacing the manual `res.ok` check.
+      await apiPost('/consciousness/reset', undefined, { silent: true })
       addToast(t('consciousness_debug.toast_reset'), 'success')
       fetchAllStates()
     } catch (e) {

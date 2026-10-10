@@ -51,21 +51,22 @@ const mockDebugData = {
     { rss_mb: 512, virtual_mb: 1024, system_percent: 25, ts: 1000 },
     { rss_mb: 520, virtual_mb: 1024, system_percent: 26, ts: 2000 },
   ],
-  rate_violations: [
-    { path: '/chat/stream', count: 3, limit: 10, ts: 1000 },
-  ],
-  path_latencies: [
-    { path: '/chat/stream', avg_ms: 250, count: 75, p95_ms: 400 },
-  ],
+  rate_violations: [{ path: '/chat/stream', count: 3, limit: 10, ts: 1000 }],
+  path_latencies: [{ path: '/chat/stream', avg_ms: 250, count: 75, p95_ms: 400 }],
   recent_errors: [
-    { path: '/chat/stream', method: 'POST', status: 500, message: 'timeout', error_type: 'TimeoutError', ts: 1000 },
+    {
+      path: '/chat/stream',
+      method: 'POST',
+      status: 500,
+      message: 'timeout',
+      error_type: 'TimeoutError',
+      ts: 1000,
+    },
   ],
   model_metrics: [
     { model: 'gpt2', count: 75, total_tokens: 45000, tokens_per_sec: 12.5, avg_tokens: 600 },
   ],
-  model_events: [
-    { type: 'load', model: 'gpt2', detail: 'loaded', ts: 1000 },
-  ],
+  model_events: [{ type: 'load', model: 'gpt2', detail: 'loaded', ts: 1000 }],
   diagnoses: [],
   num_parameters: null,
   quantization: null,
@@ -80,9 +81,7 @@ const mockDebugData = {
 
 const mockFetchDebugData = {
   gpu_backend: null,
-  recent_requests: [
-    { path: '/chat/stream', method: 'POST', status: 200, elapsed_ms: 250 },
-  ],
+  recent_requests: [{ path: '/chat/stream', method: 'POST', status: 200, elapsed_ms: 250 }],
 }
 
 import { DebugOverlay } from './DebugOverlay'
@@ -93,6 +92,10 @@ describe('DebugOverlay', () => {
     mockFetch.mockReset()
     mockFetch.mockResolvedValue({
       ok: true,
+      status: 200,
+      // http-client reads the body with `res.text()` and JSON.parses it, so
+      // the stub has to model that half of a real Response as well.
+      text: () => Promise.resolve(JSON.stringify(mockFetchDebugData)),
       json: () => Promise.resolve(mockFetchDebugData),
     })
     mockUseErrorStore.mockImplementation((sel: (s: unknown) => unknown) => {
@@ -197,7 +200,14 @@ describe('DebugOverlay', () => {
   it('shows last frontend error', async () => {
     const errState = {
       errors: [
-        { id: '1', title: 'Network Error', message: 'Failed to fetch', severity: 'error', timestamp: 1000, requestId: 'req-123' },
+        {
+          id: '1',
+          title: 'Network Error',
+          message: 'Failed to fetch',
+          severity: 'error',
+          timestamp: 1000,
+          requestId: 'req-123',
+        },
       ],
     }
     mockUseErrorStore.mockImplementation((sel: (s: unknown) => unknown) => sel(errState))
