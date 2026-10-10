@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label, Checkbox } from '@sloughgpt/strui'
+import { Card, CardContent, CardHeader, CardTitle, Button, ToggleGroup, ToggleGroupItem, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Input, Label, Checkbox, FoldSection } from '@sloughgpt/strui'
 import { TrainingPresets } from '@/components/training/TrainingPresets'
 import { trainingJobsController, type TrainingRecommendationResponse } from '@/lib/training-controller'
 import type { StepProps } from './DataStep'
@@ -132,6 +132,9 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
               </div>
             )}
 
+            {/* Expert controls: default-closed fold (Phase 3 sign-off 2026-10-09) */}
+            <FoldSection heading="Show advanced options">
+            <div className="space-y-3">
             {/* Tokenizer selection */}
             {form.method !== 'finetune' && (
               <div className="flex flex-col gap-1.5">
@@ -178,11 +181,6 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                   className="h-7 text-[11px] font-mono" />
               </div>
             </div>
-            {hpErrors.length > 0 && (
-              <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
-                {hpErrors.map(e => <div key={e}>{e}</div>)}
-              </div>
-            )}
             {form.method === 'finetune' && (
               <div className="space-y-1.5">
                 <label className="flex items-center gap-2 text-[11px]">
@@ -226,6 +224,15 @@ export function ConfigureStep({ form, datasets, checkpoints, onNext, onBack }: S
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+            )}
+
+            </div>
+            </FoldSection>
+            {/* HP validation stays visible even when the fold is collapsed — it gates Next */}
+            {hpErrors.length > 0 && (
+              <div id="configure-hp-errors" className="text-[11px] text-destructive space-y-0.5">
+                {hpErrors.map(e => <div key={e}>{e}</div>)}
               </div>
             )}
 
