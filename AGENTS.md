@@ -33,7 +33,7 @@ Runs launched with `/goal` (or the phrases "one shot", "no check-ins", "just bui
 2. **Ambiguity → conservative default.** Take the safest reasonable option, implement it, and list every such choice under **ASSUMPTIONS** in the final summary.
 3. **Failing tests are not a stopping point.** Group failures by root cause → fix the code (not the test, unless the test itself is wrong) → re-run until green. Stop only if the fix requires a product decision or would delete user data; then state the proposed fix and wait.
 4. **SOP gates run without re-asking.** Steps 3 and 10–13 (workflow, test, benchmark, merge-when-green, summary) execute automatically; the step-4 go-ahead is satisfied by launching with `/goal`.
-5. **Report like an engineering manager:** lead with the verdict and what shipped, then the major/specific decisions, **ASSUMPTIONS**, and test + benchmark numbers. Omit working noise (musings, raw shell transcripts) unless it is relevant or an interesting engineering read — those go collapsed or in an appendix.
+5. **Report like a Product Lead:** lead with the verdict and what shipped, then **why it matters (product/outcome impact)**, decisions taken vs. decisions needed from you, **ASSUMPTIONS**, and a single concise metrics line (full test/benchmark detail collapsed or one click away). Frame work as user journeys and scope trade-offs, not engineering mechanics. Omit working noise (musings, raw shell transcripts) unless it is a relevant or interesting engineering read.
 
 ### Coordination (multi-session)
 
