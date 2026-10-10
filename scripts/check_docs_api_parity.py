@@ -42,7 +42,17 @@ ROUTERS_MD = REPO / "docs" / "routers.md"
 API_MD = REPO / "docs" / "API.md"
 # the contract block lives with the evidence pack
 CLAIMS_MD = REPO / "docs" / "DOC_VS_CODE_GAP_AUDIT.md"
-TEST_DIRS = (REPO / "tests" / "server", REPO / "apps" / "api" / "server" / "tests")
+# Fuzzy-matched against router stems by collect_tests(). The second entry was
+# `apps/api/server/tests`, which does not exist — and because collect_tests
+# filters on `d.exists()`, half the suite went invisible and 22 tested routers
+# were reported untested (23 findings vs the true 1). The module docstring
+# always said `tests/api-server`; the constant was never updated to match.
+#
+# Do NOT add `tests/core-py` here: it looks like it clears the last finding, but
+# tests/core-py/test_metrics.py imports domain.infrastructure._internal.metrics
+# (the Prometheus collector), not the metrics ROUTER — its filename would erase
+# the one genuine coverage gap.
+TEST_DIRS = (REPO / "tests" / "server", REPO / "tests" / "api-server")
 
 # Routers in a concurrent-refactor zone owned by another session — excluded from
 # the handler `_internal` assertions until that work lands.
@@ -692,6 +702,15 @@ def main() -> int:
 
     if not ROUTERS_DIR.exists() or not ROUTERS_MD.exists():
         print(f"setup error: missing {ROUTERS_DIR} or {ROUTERS_MD}", file=sys.stderr)
+        return 2
+
+    # A TEST_DIRS entry that has been moved or renamed used to be skipped
+    # silently by collect_tests' `d.exists()` filter, which is how 22 tested
+    # routers came back as untested. Fail loudly instead of quietly searching
+    # fewer files.
+    missing_dirs = [str(d) for d in TEST_DIRS if not d.exists()]
+    if missing_dirs:
+        print(f"setup error: TEST_DIRS entry missing: {missing_dirs}", file=sys.stderr)
         return 2
 
     findings = Findings()
