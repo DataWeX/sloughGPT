@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import signal
 import sys
 import time
 from pathlib import Path
@@ -20310,9 +20311,24 @@ class TestCmdLogsExplainV2:
         assert repl._last_exit_code == 0
 
     def test_logs_follow(self, repl):
+        # Follow mode is a while-True loop (repl.py _cmd_logs): bound it with
+        # SIGALRM exactly like TestCmdLogsLevels::test_logs_follow — enter the
+        # loop, then interrupt out. Without the alarm this test blocks forever
+        # (card 5311698a: killed chunk C3 of the full-suite run).
         repl._log_buffer.clear()
-        _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
-        assert repl._last_exit_code == 0
+
+        def alarm_handler(signum, frame):
+            raise KeyboardInterrupt()
+
+        old_handler = signal.signal(signal.SIGALRM, alarm_handler)
+        signal.alarm(1)
+        try:
+            _run_with_io(repl, [], lambda: repl._cmd_logs("-f"))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            signal.alarm(0)
+            signal.signal(signal.SIGALRM, old_handler)
 
 
 # ── _cmd_train deeper ──────────────────────────────────────────
