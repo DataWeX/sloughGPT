@@ -376,3 +376,137 @@ class TestProcessGuardMemoryMb:
         mock_worker._process = None
         guard._worker = mock_worker
         assert guard._memory_mb() is None
+
+
+class TestProcessGuardProgressHeartbeat:
+    """Progress heartbeat (card d3a4a079): make a livelocked worker visible.
+
+    `alive` only proves the thread object exists. A worker that spins forever
+    without raising never reaches _recover_from_stall's exception path, so
+    health() called it healthy for the whole 90-minute 2026-10-05 wedge.
+    """
+
+    @staticmethod
+    def _fake_live_worker(guard: ProcessGuard) -> None:
+        """Stand in a live worker without spawning one (alive reads _worker)."""
+        guard._worker = MagicMock(alive=True)
+
+    @staticmethod
+    def _open_stream(guard: ProcessGuard) -> None:
+        """Put the guard into the in-flight-stream state the predicate needs."""
+        guard._active_streams = 1
+
+    def test_health_exposes_progress_fields(self):
+        guard = ProcessGuard(worker_id="pg")
+        health = guard.health()
+        assert "last_progress_age_s" in health
+        assert "progress_stall_timeout_s" in health
+        assert "stalled" in health
+
+    def test_fresh_guard_is_not_stalled(self):
+        guard = ProcessGuard()
+        self._fake_live_worker(guard)
+        assert guard.health()["stalled"] is False
+
+    def test_livelock_reports_stalled_while_alive_stays_true(self):
+        """The whole point: alive=True and stalled=True at the same moment."""
+        guard = ProcessGuard(progress_stall_timeout=0.05)
+        self._fake_live_worker(guard)
+        self._open_stream(guard)  # work must be in flight for silence to mean
+        guard._last_progress -= 10.0  # silence far past the threshold
+        health = guard.health()
+        assert health["alive"] is True
+        assert health["stalled"] is True
+        # >= not >: age is rounded to 3dp, so a fast test lands on exactly 10.0.
+        assert health["last_progress_age_s"] >= 10.0
+
+    def test_alive_alone_no_longer_implies_healthy(self):
+        """Regression pin for the outage: the two signals stay independent."""
+        guard = ProcessGuard(progress_stall_timeout=0.05)
+        self._fake_live_worker(guard)
+        self._open_stream(guard)
+        guard._last_progress -= 10.0
+        assert guard.health()["alive"] is True
+        assert guard.health()["stalled"] is True
+
+    def test_idle_worker_is_never_stalled(self):
+        """Regression pin for a defect in the first cut of this card.
+
+        Without the active-stream gate, a healthy worker with ZERO traffic
+        accumulated progress_age and reported stalled once the threshold
+        elapsed — a false positive proven against a guard that had served no
+        requests at all. Silence only means livelock while work is in flight.
+        """
+        guard = ProcessGuard(progress_stall_timeout=0.05)
+        self._fake_live_worker(guard)
+        guard._last_progress -= 10_000.0  # hours of pure idleness, no requests
+        assert guard.health()["alive"] is True
+        assert guard.health()["stalled"] is False
+
+    def test_mark_progress_clears_the_stall(self):
+        guard = ProcessGuard(progress_stall_timeout=0.05)
+        self._fake_live_worker(guard)
+        self._open_stream(guard)
+        guard._last_progress -= 10.0
+        assert guard.stalled is True
+        guard._mark_progress()
+        assert guard.stalled is False
+        assert guard.health()["last_progress_age_s"] < 1.0
+
+    def test_dead_worker_is_not_reported_stalled(self):
+        """A dead worker is dead, not stalled — no live worker, no claim."""
+        guard = ProcessGuard(progress_stall_timeout=0.05)
+        guard._worker = None
+        guard._last_progress -= 10.0
+        assert guard.health()["alive"] is False
+        assert guard.health()["stalled"] is False
+
+    def test_threshold_is_configurable(self):
+        guard = ProcessGuard(progress_stall_timeout=7.5)
+        assert guard.health()["progress_stall_timeout_s"] == 7.5
+
+    def test_default_threshold_outlives_a_single_generate(self):
+        """Must exceed DEFAULT_GENERATE_TIMEOUT, or a merely-slow request gets
+        misreported as a livelock."""
+        from domain.infrastructure._internal.constants import (
+            DEFAULT_GENERATE_TIMEOUT,
+            DEFAULT_PROGRESS_STALL_TIMEOUT,
+        )
+
+        assert DEFAULT_PROGRESS_STALL_TIMEOUT > DEFAULT_GENERATE_TIMEOUT
+
+    def test_generate_completion_marks_progress(self):
+        """A completed request refreshes the heartbeat even with no stream."""
+        guard = ProcessGuard(progress_stall_timeout=0.05)
+        self._fake_live_worker(guard)
+        guard._worker.generate = MagicMock(return_value={"text": "ok"})
+        guard._last_progress -= 10.0
+        assert guard.health()["last_progress_age_s"] >= 10.0
+        assert guard.generate("hello") == {"text": "ok"}
+        assert guard.health()["last_progress_age_s"] < 1.0
+        assert guard.health()["requests_served"] == 1
+
+    def test_streamed_tokens_mark_progress(self):
+        guard = ProcessGuard(progress_stall_timeout=0.05)
+        self._fake_live_worker(guard)
+
+        def _three_tokens():
+            yield "a"
+            yield "b"
+            yield "c"
+
+        guard._worker.generate_stream = MagicMock(side_effect=lambda *a, **k: _three_tokens())
+        stream = guard.generate_stream("hello")
+        # Consuming one token starts the stream body: the gate is now armed.
+        assert next(stream) == "a"
+        assert guard._active_streams == 1
+        guard._last_progress -= 10.0  # in flight AND silent -> livelock
+        assert guard.stalled is True
+        # The next token proves progress and clears it.
+        assert next(stream) == "b"
+        assert guard.stalled is False
+        # Draining releases the counter, so silence afterwards is just idle.
+        assert next(stream) == "c"
+        assert list(stream) == []
+        assert guard._active_streams == 0
+        assert guard.stalled is False
