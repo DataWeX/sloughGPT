@@ -216,8 +216,6 @@ export const SIDEBAR_ICONS: Record<string, ComponentType<{ className?: string }>
   '/training/presets': IconBeaker,
   '/training/runs': IconClock,
   '/training/analytics': IconChart,
-  '/auto-train': IconSparkle,
-  '/self-train': IconBrain,
   '/datasets': IconChart,
   '/knowledge': IconBookmark,
   '/personality': IconBrain,

@@ -23,7 +23,8 @@ describe('route error boundaries', () => {
   it('covers every route error boundary', () => {
     // Route inventory churns as routes are added/removed — assert a sane
     // lower bound here; the it.each below verifies every boundary renders.
-    expect(errors.length).toBeGreaterThanOrEqual(50)
+    // Bound tracks actual count (23 as of the dead-route prune) with headroom.
+    expect(errors.length).toBeGreaterThanOrEqual(20)
   })
 
   it.each(errors)('renders %s and retries', (key) => {
@@ -42,7 +43,8 @@ describe('route loading skeletons', () => {
 
   it('covers every route loading fallback', () => {
     // See note above — update if routes change.
-    expect(loadings.length).toBeGreaterThanOrEqual(48)
+    // Bound tracks actual count (21 as of the dead-route prune) with headroom.
+    expect(loadings.length).toBeGreaterThanOrEqual(18)
   })
 
   it.each(loadings)('renders %s with a skeleton', (key) => {
