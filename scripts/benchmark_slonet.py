@@ -349,6 +349,120 @@ class SloNetBenchmark:
         )
 
     # -------------------------------------------------------------------------
+    # Test 4b: Matmul CPU/GPU Crossover
+    # -------------------------------------------------------------------------
+    def test_accelerator_matmul_crossover(self):
+        """Sweep matmul sizes to find where the accelerator beats numpy.
+
+        test_accelerator_speed above only tries (64,64) and (128,128) — both at
+        or below slonet._matmul's 16384-element dispatch gate, and it calls
+        acc.matmul directly so the gate is never exercised. It can therefore
+        only ever report "GPU slower", and never locates the point where that
+        stops being true. This sweep turns the gate from a remembered number
+        into a measured one.
+
+        Measured 2026-10-10 on a GTX 1050 (3GB) + cuPy 14.2: numpy wins below
+        ~30k elements, where the PCIe upload dominates the arithmetic, and the
+        accelerator wins 3-3.5x above it. The hardcoded 16384 gate therefore
+        sits BELOW the real crossover, so matmuls landing between 16k and ~30k
+        elements are dispatched to the GPU and come back slower than numpy
+        would have been. Raising the gate is the obvious fix, but the crossover
+        is a property of the device, not of the code, so this script is the
+        right place to learn it — hardcoding another constant tuned to one
+        card would just move the problem.
+        """
+        print("[4b] Matmul CPU/GPU Crossover")
+        print("-" * 40)
+
+        from domain.slolib import get_accelerator, reset_accelerator
+
+        reset_accelerator()
+        acc = get_accelerator()
+
+        # Gate as hard-coded in slonet._matmul (threshold=16384).
+        dispatch_gate = 16384
+
+        if acc.name == "cpu":
+            print("  CPU-only backend: no crossover to measure, skipping")
+            return
+
+        label = acc.name
+        print(f"  Accelerator: {label}")
+        print(f"  Dispatch gate in slonet._matmul: {dispatch_gate:,} elements")
+        print()
+        print(f"    {'n':>6} {'elements':>10} {'numpy':>10} {label:>10} {'acc/numpy':>10}  winner")
+        print("    " + "-" * 62)
+
+        crossover = None
+        for n in (32, 48, 64, 96, 128, 160, 192, 256, 384, 512, 768, 1024):
+            A = np.random.randn(n, n).astype(np.float32)
+            B = np.random.randn(n, n).astype(np.float32)
+            reps = 200 if n <= 128 else (50 if n <= 384 else 20)
+
+            # Best-of-3 passes, taking the minimum. A single timed pass on a
+            # shared machine absorbs scheduler noise and GPU contention; the
+            # minimum is the standard defence because those only ever add
+            # latency, never remove it. Measured on this box, consecutive
+            # single passes at n=192 swung ~30% either way, which was enough
+            # to move the reported crossover by a whole step.
+            passes = 3
+
+            def _best(fn) -> float:
+                out = float("inf")
+                for _ in range(passes):
+                    t0 = time.perf_counter()
+                    for _ in range(reps):
+                        fn()
+                    out = min(out, (time.perf_counter() - t0) / reps)
+                return out
+
+            # Warm both paths: the first GPU call pays CUDA context creation
+            # plus the one-time upload, which would otherwise land in the timing.
+            np.matmul(A, B)
+            acc.matmul(A, B)
+
+            numpy_time = _best(lambda: np.matmul(A, B))
+            acc_time = _best(lambda: acc.matmul(A, B))
+            if hasattr(acc, "sync"):
+                acc.sync()
+
+            ratio = acc_time / numpy_time
+            winner = "GPU" if ratio < 0.9 else ("even" if ratio < 1.1 else "numpy")
+            if crossover is None and winner == "GPU":
+                crossover = n * n
+
+            flag = "  <- at/below gate" if n * n <= dispatch_gate else ""
+            print(
+                f"    {n:>6} {n * n:>10,} {format_time(numpy_time):>10s} "
+                f"{format_time(acc_time):>10s} {ratio:>9.2f}x  {winner}{flag}"
+            )
+
+        print()
+        if crossover is None:
+            print("    Accelerator never beat numpy at any size tested")
+        else:
+            print(f"    Measured crossover: {crossover:,} elements")
+            if crossover > dispatch_gate:
+                print(
+                    f"    Gate ({dispatch_gate:,}) sits BELOW the crossover => matmuls "
+                    f"between {dispatch_gate:,} and {crossover:,} elements are sent to\n"
+                    "    the GPU and come back SLOWER than numpy would have been."
+                )
+            else:
+                print(f"    Gate ({dispatch_gate:,}) sits above the crossover: well placed.")
+        print()
+
+        self.results.append(
+            TestResult(
+                name="accelerator_matmul_crossover",
+                passed=True,
+                value=crossover or 0,
+                unit="elements",
+                details=f"{label} matmul crossover vs numpy; gate={dispatch_gate}",
+            )
+        )
+
+    # -------------------------------------------------------------------------
     # Test 5: LSTM Forward/Backward Speed
     # -------------------------------------------------------------------------
     def test_lstm_forward_backward_speed(self):
@@ -708,4 +822,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
