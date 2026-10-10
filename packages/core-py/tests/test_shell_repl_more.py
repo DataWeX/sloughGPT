@@ -3643,7 +3643,9 @@ class TestTabCompletion:
         result = repl._complete_args_for("checkpoints")
         assert isinstance(result, list)
 
-    @pytest.mark.skip(reason="product bug: CompletionCache fall-through discards static candidates -- with a cache live, _complete_args_for('train') returns path completions instead of subcommands because 'train' has no API fetcher; _complete_args_for_uncached has the right answer")
+    @pytest.mark.skip(
+        reason="product bug: CompletionCache fall-through discards static candidates -- with a cache live, _complete_args_for('train') returns path completions instead of subcommands because 'train' has no API fetcher; _complete_args_for_uncached has the right answer"
+    )
     def test_complete_second_word_train(self, repl):
         result = repl._complete_args_for("train")
         assert "status" in result
@@ -3798,7 +3800,9 @@ class TestRenderMoreInternals:
 
 
 class TestSourceInternals:
-    @pytest.mark.skip(reason="product bug: _cmd_set/_cmd_export are orphaned -- defined (repl.py:1656/1904) but never registered in COMMANDS, so `set VAR=x` falls through to shutil.which() and dies 'Unknown command' (exit 127); _cmd_set works when called directly")
+    @pytest.mark.skip(
+        reason="product bug: _cmd_set/_cmd_export are orphaned -- defined (repl.py:1656/1904) but never registered in COMMANDS, so `set VAR=x` falls through to shutil.which() and dies 'Unknown command' (exit 127); _cmd_set works when called directly"
+    )
     def test_source_executes_commands(self, repl, tmp_path):
         rc = tmp_path / "test_rc_exec"
         rc.write_text("echo from_source\nset SRCVAR=sourced_val\n")
@@ -3806,7 +3810,9 @@ class TestSourceInternals:
         assert repl._last_exit_code == 0
         assert repl._env.get("SRCVAR") == "sourced_val"
 
-    @pytest.mark.skip(reason="product bug: same root cause as test_source_executes_commands -- `set`/`export` never reach _cmd_set/_cmd_export because they are missing from COMMANDS, so sourcing a script cannot populate the environment")
+    @pytest.mark.skip(
+        reason="product bug: same root cause as test_source_executes_commands -- `set`/`export` never reach _cmd_set/_cmd_export because they are missing from COMMANDS, so sourcing a script cannot populate the environment"
+    )
     def test_source_with_env_vars(self, repl, tmp_path):
         rc = tmp_path / "test_rc_env"
         rc.write_text("export EXPORTED=yes\nset PERSISTED=true\n")
@@ -5075,7 +5081,9 @@ class TestCmdBoot:
 
 
 class TestCmdShutdown:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown(self, repl):
         repl._running = True
         repl._cmd_shutdown("")
@@ -6382,7 +6390,9 @@ class TestCmdBootShutdown:
         repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown(self, repl):
         repl._running = True
         repl._cmd_shutdown("")
@@ -11672,7 +11682,9 @@ class TestCmdBootShutdownV2:
         repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown(self, repl):
         repl._cmd_shutdown("")
         assert repl._last_exit_code == 0
@@ -11857,7 +11869,9 @@ class TestCmdVmrunExecutionV2:
         repl._cmd_vmrun("hello")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(reason="product bug: built-in `count` maps to FIB_X86 (repl.py:4595) and dies 'vmrun error: unknown opcode 0x62 at EIP=0x101FF0'; hello and counter run, count does not")
+    @pytest.mark.skip(
+        reason="product bug: built-in `count` maps to FIB_X86 (repl.py:4595) and dies 'vmrun error: unknown opcode 0x62 at EIP=0x101FF0'; hello and counter run, count does not"
+    )
     def test_vmrun_built_in_count(self, repl):
         repl._cmd_vmrun("count")
         assert repl._last_exit_code == 0
@@ -11899,7 +11913,9 @@ class TestCmdVmrunExecutionV2:
             repl._cmd_vmrun("--admin hello")
         assert repl._last_exit_code == 1
 
-    @pytest.mark.skip(reason="product bug: x86 emulator dies on the piped demo program with 'vmrun error: read8 out of bounds at 0x69590027' instead of executing it")
+    @pytest.mark.skip(
+        reason="product bug: x86 emulator dies on the piped demo program with 'vmrun error: read8 out of bounds at 0x69590027' instead of executing it"
+    )
     def test_vmrun_piped_input(self, repl):
         repl._piped_input = "mov eax, 3\nmov ebx, 1\nmov ecx, hello\nmov edx, 5\nint 0x80\nmov eax, 1\nxor ebx, ebx\nint 0x80\njmp $\nhello: db 'Hi', 10"
         repl._cmd_vmrun("")
@@ -13209,7 +13225,9 @@ class TestCmdBootShutdownV3:
         repl._cmd_boot("")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown(self, repl):
         repl._cmd_shutdown("")
         assert repl._last_exit_code == 0
@@ -13887,7 +13905,9 @@ class TestCmdExportStateExitHistory:
         repl._cmd_export_state("")
         assert repl._last_exit_code == 0
 
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_exit(self, repl):
         repl._running = True
         repl._cmd_exit("")
@@ -16021,13 +16041,17 @@ class TestCmdCdExtra:
 
 
 class TestCmdExitExtra:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_exit_sets_running_false(self, repl):
         repl._running = True
         repl._cmd_exit("")
         assert repl._running is False
 
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_exit_saves_state(self, repl):
         repl._running = True
         repl._cmd_exit("")
@@ -16145,13 +16169,17 @@ class TestCmdClearExtra2:
 
 
 class TestCmdShutdownExtra:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown_sets_running_false(self, repl):
         repl._running = True
         repl._cmd_shutdown("")
         assert repl._running is False
 
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown_returns_code_zero(self, repl):
         repl._cmd_shutdown("")
         assert repl._last_exit_code == 0
@@ -18393,7 +18421,9 @@ class TestCmdBootDeeper:
 
 
 class TestCmdShutdownDeeper:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown_returns_output(self, repl):
         _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
         assert repl._last_exit_code == 0
@@ -19689,7 +19719,9 @@ class TestCmdBootDeeper2:
 
 
 class TestCmdShutdownDeeper2:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown_clears_running(self, repl):
         repl._running = True
         _run_with_io(repl, [], lambda: repl._cmd_shutdown(""))
@@ -22164,7 +22196,9 @@ class TestCmdPwdDeeper2:
 
 
 class TestCmdExitDeeper3:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_exit(self, repl):
         try:
             repl._cmd_exit("")
@@ -22647,7 +22681,9 @@ class TestCmdBootDeeperV2:
 
 
 class TestCmdShutdownDeeperV2:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_shutdown(self, repl):
         repl._cmd_shutdown("")
         assert repl._last_exit_code == 0
@@ -24559,7 +24595,9 @@ class TestCmdClearDeeperV2:
 
 
 class TestCmdExitDeeper:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_exit(self, repl):
         with _CaptureOutput(repl):
             repl._cmd_exit("")
@@ -25879,7 +25917,9 @@ class TestCmdClearDeeperV3:
 
 
 class TestCmdExitDeeperV2:
-    @pytest.mark.skip(reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not")
+    @pytest.mark.skip(
+        reason="product bug: shutdown()/exit() before boot -> runtime.py:383 AttributeError (self._init is None); runtime.py:423 and _cmd_svc both guard this state, shutdown() does not"
+    )
     def test_exit(self, repl):
         repl._cmd_exit("")
         assert repl._running is False

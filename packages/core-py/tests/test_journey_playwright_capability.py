@@ -69,9 +69,7 @@ def test_poisoned_playwright_skips_with_capability_reason(tmp_path):
     target = ROOT / JOURNEY_FILES[3]  # e2e trigger: 10 tests, no live data deps
 
     env = {**os.environ, "PYTHONNOUSERSITE": "1"}
-    env["PYTHONPATH"] = os.pathsep.join(
-        [str(poison), env.get("PYTHONPATH", "")]
-    ).rstrip(os.pathsep)
+    env["PYTHONPATH"] = os.pathsep.join([str(poison), env.get("PYTHONPATH", "")]).rstrip(os.pathsep)
 
     proc = subprocess.run(
         [
@@ -93,9 +91,7 @@ def test_poisoned_playwright_skips_with_capability_reason(tmp_path):
         timeout=180,
     )
     output = proc.stdout + proc.stderr
-    summary = next(
-        (ln for ln in reversed(output.splitlines()) if ln.strip()), ""
-    )
+    summary = next((ln for ln in reversed(output.splitlines()) if ln.strip()), "")
     assert "playwright not installed" in output, (
         "poisoned playwright must produce a capability SKIP with reason, "
         f"got exit={proc.returncode}:\n{output[-2500:]}"
@@ -103,6 +99,5 @@ def test_poisoned_playwright_skips_with_capability_reason(tmp_path):
     # 0 = clean run, 5 = NO_TESTS_COLLECTED (module skipped at collection —
     # expected when the guarded file is the only target of the invocation).
     assert proc.returncode in (0, 5) and "error" not in summary.lower(), (
-        f"capability absence must never surface as an error: {summary!r}\n"
-        f"{output[-2500:]}"
+        f"capability absence must never surface as an error: {summary!r}\n{output[-2500:]}"
     )

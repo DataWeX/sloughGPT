@@ -101,6 +101,23 @@ def _wait_for_api(timeout: int = 60) -> bool:
     return False
 
 
+def _web_is_ready() -> bool:
+    try:
+        with urllib.request.urlopen(BASE, timeout=5) as resp:
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def _wait_for_web(timeout: int = 60) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _web_is_ready():
+            return True
+        time.sleep(1)
+    return False
+
+
 def retry_on_failure(max_retries: int = MAX_RETRIES, delay: float = RETRY_DELAY):
     """Decorator: retry a test function on AssertionError or OSError."""
     import functools
@@ -147,6 +164,14 @@ def ensure_servers_ready():
     if not _wait_for_api(timeout=timeout):
         pytest.skip(
             f"API at {API} not ready — journey tests need a live stack "
+            "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
+        )
+    # API alone is not enough: every test below drives the web UI at BASE,
+    # and a partial stack (API up, frontend down) yields mass goto failures
+    # instead of a clean skip.
+    if not _wait_for_web(timeout=timeout):
+        pytest.skip(
+            f"Web UI at {BASE} not ready — journey tests need the full stack "
             "(start it with: FORCE_COLOR=1 ./sloughgpt serve --web)"
         )
     time.sleep(3)
