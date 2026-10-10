@@ -16,6 +16,15 @@ module.exports = {
   ignorePatterns: ['node_modules/', 'dist/', '.next/', '*.d.ts'],
   overrides: [
     {
+      // CommonJS config files (next.config.js, tailwind.config.js, …)
+      // legitimately use require(); the TS ruleset would flag them otherwise.
+      files: ['**/*.js', '**/*.cjs', '**/*.mjs'],
+      rules: {
+        '@typescript-eslint/no-require-imports': 'off',
+        '@typescript-eslint/no-var-requires': 'off',
+      },
+    },
+    {
       // Vitest test files legitimately carry `/// <reference types="vitest" />`
       // for global describe/it typings; removing it would break `tsc`.
       files: ['**/*.test.ts', '**/*.test.tsx', '**/*.spec.ts', '**/*.spec.tsx'],
