@@ -286,28 +286,24 @@ class TestDeviceDriver:
             def __init__(self):
                 super().__init__("test_dev", DeviceType.CUSTOM)
 
-            def read(self, offset=0, size=-1):
-                return "hello"
-
-            def write(self, data):
-                return True
+            def ioctl(self, command, *args):
+                return SyscallResult.ok("hello")
 
         mgr = DeviceManager()
         dev = TestDev()
         assert mgr.register(dev)
         assert dev.state == DeviceState.CLOSED
 
-        handle = mgr.open("test_dev")
-        assert handle is not None
-        assert handle.fd > 0
-        assert dev.state == DeviceState.OPEN
+        # Baseboard contract (96b0d69d1): open() hands back an int fd —
+        # open/close state lives in the table's fd bitmap, not the driver.
+        fd = mgr.open("test_dev")
+        assert isinstance(fd, int)
+        assert fd >= 0
+        assert mgr.stats()["open_fds"] == 1
 
-        data = mgr.read(handle.fd)
-        assert data == "hello"
-
-        assert mgr.write(handle.fd, "world")
-        assert mgr.close(handle.fd)
-        assert dev.state == DeviceState.CLOSED
+        assert mgr.ioctl(fd, "PING").value == "hello"
+        assert mgr.close(fd)
+        assert mgr.stats()["open_fds"] == 0
 
     def test_unregister(self):
         class TestDev(DeviceDriver):
