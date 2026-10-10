@@ -65,6 +65,10 @@ class BM25Indexer:
         self.doc_freq: dict[str, int] = Counter()
         self.num_docs: int = 0
         self.inverted_index: dict[str, list[tuple[int, int]]] = {}
+        # Running total of doc_lengths. Kept so append() can recompute
+        # avg_doc_length in O(1) instead of summing every length on each
+        # insert (which is O(corpus) and would defeat incremental indexing).
+        self._total_doc_length: int = 0
 
     def index(self, chunks: list[TextChunk]):
         """Build BM25 index (idempotent: resets before rebuilding).
@@ -93,7 +97,8 @@ class BM25Indexer:
                     inverted_index[token] = []
                 inverted_index[token].append((doc_id, pos))
 
-        avg_doc_length = sum(doc_lengths) / max(len(doc_lengths), 1)
+        total_doc_length = sum(doc_lengths)
+        avg_doc_length = total_doc_length / max(len(doc_lengths), 1)
 
         # Structural invariants — a term can occur in at most every chunk,
         # and there is exactly one length entry per chunk. If either breaks,
@@ -118,6 +123,71 @@ class BM25Indexer:
         self.doc_freq = doc_freq
         self.avg_doc_length = avg_doc_length
         self.inverted_index = inverted_index
+        self._total_doc_length = total_doc_length
+
+    def append(self, chunks: list[TextChunk]):
+        """Incrementally add chunks to an existing index.
+
+        Same result as :meth:`index` over ``existing + chunks`` but costs
+        O(chunks) rather than O(corpus). Per-document ingestion used to call
+        ``index()`` every time, making a single insert O(corpus) and a whole
+        ingest O(corpus^2) — with the retriever living in a process-lifetime
+        singleton, insert latency grew without bound.
+
+        Publication order matters for concurrent readers: the length bookkeeping
+        is published *before* any new postings, so a concurrent ``score()`` can
+        never index a doc_id beyond ``num_docs`` (it would raise IndexError on
+        its scores array). At worst a reader momentarily misses the newest docs.
+
+        The ``index()`` path remains the repair mechanism for callers that
+        mutate the chunk list out of band.
+        """
+        if not chunks:
+            return
+
+        start_doc_id = self.num_docs
+
+        # Tokenize the batch first: pure work, nothing published yet.
+        token_lists = [self._tokenize(chunk.content) for chunk in chunks]
+        new_lengths = [len(tokens) for tokens in token_lists]
+
+        # 1. Lengths first — score() sizes its array from num_docs.
+        doc_lengths = self.doc_lengths
+        doc_lengths.extend(new_lengths)
+        num_docs = len(doc_lengths)
+        self.num_docs = num_docs
+        self._total_doc_length += sum(new_lengths)
+        self.avg_doc_length = self._total_doc_length / max(num_docs, 1)
+
+        # 2. Postings now that the array is guaranteed large enough.
+        inverted_index = self.inverted_index
+        doc_freq = self.doc_freq
+        for offset, tokens in enumerate(token_lists):
+            doc_id = start_doc_id + offset
+            for token in set(tokens):
+                doc_freq[token] += 1
+            for pos, token in enumerate(tokens):
+                inverted_index.setdefault(token, []).append((doc_id, pos))
+
+        # Same invariant as index(), but only over the terms this batch
+        # touched: an untouched term's df cannot grow, and num_docs only
+        # grows, so re-checking the whole vocabulary would be O(corpus).
+        assert len(doc_lengths) == num_docs, (
+            f"BM25 index corrupt: {len(doc_lengths)} lengths for {num_docs} chunks"
+        )
+        for token in {t for tokens in token_lists for t in tokens}:
+            assert doc_freq[token] <= num_docs, (
+                "BM25 index corrupt: term frequency exceeds chunk count"
+            )
+
+    def clear(self):
+        """Drop every index structure (full reset, e.g. on purge)."""
+        self.doc_lengths = []
+        self.avg_doc_length = 0.0
+        self.doc_freq = Counter()
+        self.num_docs = 0
+        self.inverted_index = {}
+        self._total_doc_length = 0
 
     def _tokenize(self, text: str) -> list[str]:
         """Tokenize text."""
@@ -191,12 +261,40 @@ class HybridRetriever:
         self._embedding_fn = embedding_fn or self._default_embedding
 
     def add_chunk(self, chunk: TextChunk):
-        """Add a chunk to the retriever."""
+        """Add a chunk to the retriever and index it incrementally.
+
+        Costs O(chunk) — previously the index was rebuilt from the full chunk
+        list on every insert, which is O(corpus) per document.
+        """
         self.chunks.append(chunk)
+        self.bm25.append([chunk])
+
+    def add_chunks(self, chunks: list[TextChunk]):
+        """Add several chunks with one incremental index update."""
+        if not chunks:
+            return
+        self.chunks.extend(chunks)
+        self.bm25.append(chunks)
 
     def build_index(self):
-        """Build retrieval indexes."""
+        """Rebuild retrieval indexes from scratch (idempotent).
+
+        ``add_chunk`` keeps the index current on its own, so this is only
+        needed after mutating ``self.chunks`` out of band, or as an explicit
+        repair. Bulk loaders may still call it once at the end of a load.
+        """
         self.bm25.index(self.chunks)
+
+    def clear(self):
+        """Drop every chunk, index and cached embedding.
+
+        Needed because the retriever lives behind a process-lifetime
+        singleton: without a reset, ``chunks`` only ever grew, so both memory
+        and per-insert latency grew with it for the life of the process.
+        """
+        self.chunks.clear()
+        self.embedding_cache.clear()
+        self.bm25.clear()
 
     def _get_embedding(self, text: str) -> np.ndarray:
         """Public entry point — delegates to the configured embedding function."""
@@ -624,9 +722,11 @@ class ProductionRAG:
         """
         Add a document with intelligent chunking.
 
-        Set ``rebuild_index=False`` when bulk-loading many documents, then
-        call ``retriever.build_index()`` once at the end (rebuilding per
-        document is O(n^2)).
+        Indexing is incremental: each chunk is indexed as it is created, in
+        O(chunk) rather than O(corpus). ``rebuild_index`` is retained for API
+        compatibility and no longer triggers a per-document rebuild — the bulk
+        pattern (pass False, then call ``retriever.build_index()`` once at the
+        end) still works, since ``build_index()`` is an idempotent full rebuild.
         """
         metadata = metadata or {"source": "user"}
         chunk_ids = []
@@ -654,9 +754,12 @@ class ProductionRAG:
             self.retriever.add_chunk(chunk)
             chunk_ids.append(chunk_id)
 
-        # Rebuild index (skipped for bulk loads — caller builds once)
-        if rebuild_index:
-            self.retriever.build_index()
+        # No rebuild needed: add_chunk() indexed each chunk incrementally, so
+        # the index is already current. Rebuilding here was the O(corpus) cost
+        # that made every single-document insert slower as the corpus grew.
+        # ``rebuild_index`` is retained for API compatibility; bulk loaders that
+        # pass False and call build_index() once at the end still work, since
+        # build_index() is an idempotent full rebuild.
 
         logger.debug(
             "Document ingestion complete: chunks=%d, total_tokens=%d",

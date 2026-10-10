@@ -661,70 +661,146 @@ class KnowledgeMemory:
                 logger.warning("Failed to load visited paths: %s", e)
         return []
 
-    def _save_visited(self):
-        """Persist visited hashes to MogDB (and legacy JSON for backward compat)."""
-        # Save to MogDB
-        visited_col = getattr(self, "_visited_col", None)
-        if visited_col is not None:
-            try:
-                # Clear and re-insert all hashes
-                self._visited_col.drop()
-                if self._visited:
-                    docs = [{"hash": h} for h in self._visited]
-                    self._visited_col.insert_many(docs)
-            except Exception as e:
-                logger.warning("Failed to save visited to MogDB: %s", e)
+    @staticmethod
+    def _entry_doc(entry) -> dict:
+        """Shape a VectorEntry as its persisted MogDB/JSON document."""
+        return {
+            "_id": entry.id,
+            "id": entry.id,
+            "vector": entry.vector,
+            "text": entry.text,
+            "metadata": dict(entry.metadata) if entry.metadata else {},
+        }
 
-        # Also save to legacy JSON for backward compatibility
+    def _write_visited_json(self) -> None:
+        """Rewrite the legacy visited JSON mirror (MogDB is the primary store)."""
         try:
             VISITED_PATH.write_text(json.dumps(list(self._visited), indent=2))
         except Exception as e:
             logger.warning("Failed to save visited to JSON: %s", e)
 
-    def _save_entries(self):
-        """Persist all vector entries to MogDB (and JSON fallback) for restart survival."""
+    def _write_entries_json(self) -> None:
+        """Rewrite the legacy entries JSON mirror (MogDB is the primary store)."""
         try:
-            entries = getattr(self._vector_store, "_entries", None)
-            if not entries:
-                # Clear MogDB entries
-                entries_col = getattr(self, "_entries_col", None)
-                if entries_col is not None:
-                    try:
-                        self._entries_col.drop()
-                    except Exception as e:
-                        logger.warning("Failed to clear MogDB entries: %s", e, extra={"tag": "INF"})
-                # Also write empty JSON for backward compatibility
-                try:
-                    if ENTRIES_PATH.exists():
-                        ENTRIES_PATH.write_text("[]")
-                except Exception as e:
-                    logger.warning("Failed to clear entries JSON: %s", e, extra={"tag": "INF"})
+            entries = getattr(self._vector_store, "_entries", None) or {}
+            if not entries and not ENTRIES_PATH.exists():
                 return
+            ENTRIES_PATH.write_text(json.dumps([self._entry_doc(e) for e in entries.values()]))
+        except Exception as e:
+            logger.warning("Failed to save entries to JSON: %s", e, extra={"tag": "INF"})
 
-            data = []
-            for _eid, entry in (entries or {}).items():
-                data.append(
-                    {
-                        "_id": entry.id,
-                        "id": entry.id,
-                        "vector": entry.vector,
-                        "text": entry.text,
-                        "metadata": dict(entry.metadata) if entry.metadata else {},
-                    }
+    # ------------------------------------------------------------------
+    # Targeted persistence
+    #
+    # These mirror a single operation instead of dropping and re-inserting
+    # the whole collection. The full rewrites made every add O(corpus)
+    # (250 facts -> minutes) and called ``drop()`` *before*
+    # ``insert_many()``, so a crash in that window left the store empty.
+    # ------------------------------------------------------------------
+
+    def _persist_entry(self, entry) -> None:
+        """Mirror one upserted entry to MogDB, then refresh the JSON fallback."""
+        col = getattr(self, "_entries_col", None)
+        if col is not None:
+            try:
+                # insert_one overwrites by _id, so this is a true upsert.
+                col.insert_one(self._entry_doc(entry))
+            except Exception as e:
+                logger.warning("Failed to persist entry %s: %s", entry.id, e, extra={"tag": "INF"})
+        self._write_entries_json()
+
+    def _persist_entries(self, entries) -> None:
+        """Mirror a batch of upserted entries, leaving every other doc intact."""
+        col = getattr(self, "_entries_col", None)
+        if col is not None:
+            try:
+                for entry in entries:
+                    col.insert_one(self._entry_doc(entry))
+            except Exception as e:
+                logger.warning("Failed to persist entries: %s", e, extra={"tag": "INF"})
+        self._write_entries_json()
+
+    def _unpersist_entry(self, entry_id: str) -> None:
+        """Drop one entry from the MogDB mirror, then refresh the JSON fallback."""
+        col = getattr(self, "_entries_col", None)
+        if col is not None:
+            try:
+                col.delete_one({"_id": entry_id})
+            except Exception as e:
+                logger.warning(
+                    "Failed to remove persisted entry %s: %s", entry_id, e, extra={"tag": "INF"}
                 )
+        self._write_entries_json()
 
-            # Save to MogDB
+    def _persist_visited_hash(self, content_hash: str) -> None:
+        """Mirror one newly seen hash to MogDB, then refresh the JSON fallback."""
+        self._persist_visited_hashes([content_hash])
+
+    def _persist_visited_hashes(self, content_hashes) -> None:
+        """Mirror a batch of new hashes with a single JSON rewrite."""
+        col = getattr(self, "_visited_col", None)
+        if col is not None:
+            try:
+                for h in content_hashes:
+                    # _id == hash makes this idempotent: re-adding a hash
+                    # upserts instead of duplicating the visited document.
+                    col.insert_one({"_id": h, "hash": h})
+            except Exception as e:
+                logger.warning("Failed to persist visited hashes: %s", e)
+        self._write_visited_json()
+
+    def _unpersist_visited_hash(self, content_hash: str) -> None:
+        """Drop one hash from the MogDB mirror, then refresh the JSON fallback."""
+        col = getattr(self, "_visited_col", None)
+        if col is not None:
+            try:
+                col.delete_one({"hash": content_hash})
+            except Exception as e:
+                logger.warning("Failed to remove visited hash: %s", e)
+        self._write_visited_json()
+
+    def _save_visited(self):
+        """Persist every visited hash — full sync, used as the repair path.
+
+        Crash-safe ordering: the new set is upserted first and only then are
+        stale documents pruned, so an interrupted save leaves a superset
+        rather than an empty collection.
+        """
+        visited_col = getattr(self, "_visited_col", None)
+        if visited_col is not None:
+            try:
+                self._visited_col.insert_many([{"_id": h, "hash": h} for h in self._visited])
+                keep = set(self._visited)
+                # find() returns a fresh list, so pruning mid-iteration is safe.
+                for doc in self._visited_col.find({}):
+                    if doc.get("hash") not in keep:
+                        self._visited_col.delete_one({"_id": doc["_id"]})
+            except Exception as e:
+                logger.warning("Failed to save visited to MogDB: %s", e)
+        self._write_visited_json()
+
+    def _save_entries(self):
+        """Persist every vector entry — full sync, used as the repair path.
+
+        Same crash-safe ordering as :meth:`_save_visited`: upsert the new
+        documents, then prune the stale ones.
+        """
+        try:
+            entries = getattr(self._vector_store, "_entries", None) or {}
+            data = [self._entry_doc(entry) for entry in entries.values()]
+
             entries_col = getattr(self, "_entries_col", None)
             if entries_col is not None:
                 try:
-                    self._entries_col.drop()
-                    if data:
-                        self._entries_col.insert_many(data)
+                    self._entries_col.insert_many(data)
+                    keep = set(entries)
+                    for doc in self._entries_col.find({}):
+                        if doc.get("_id") not in keep:
+                            self._entries_col.delete_one({"_id": doc["_id"]})
                 except Exception as e:
                     logger.warning("Failed to save entries to MogDB: %s", e, extra={"tag": "INF"})
 
-            # Also save to legacy JSON for backward compatibility
-            ENTRIES_PATH.write_text(json.dumps(data))
+            self._write_entries_json()
         except Exception as e:
             logger.warning("Failed to save entries: %s", e, extra={"tag": "INF"})
 
@@ -857,14 +933,14 @@ class KnowledgeMemory:
                 self._vector_store.upsert_sync([entry])
             else:
                 self._run_async(self._vector_store.upsert([entry]))
-            self._save_entries()
+            self._persist_entry(entry)
         except Exception as e:
             logger.warning("Vector store upsert failed: %s", e, extra={"tag": "INF"})
             return False
         with self._lock:
             self._visited.add(content_hash)
             self._fact_counter += 1
-        self._save_visited()
+        self._persist_visited_hash(content_hash)
         return True
 
     def add_facts(
@@ -899,12 +975,14 @@ class KnowledgeMemory:
             vectors = [self._get_embedding(f.content) for f in facts]
 
         to_upsert: list[VectorEntry] = []
+        new_hashes: list[str] = []
         with self._lock:
             for i, fact in enumerate(facts):
                 content_hash = hashlib.md5(fact.content.encode()).hexdigest()
                 if content_hash in self._visited:
                     continue
                 self._visited.add(content_hash)
+                new_hashes.append(content_hash)
                 self._fact_counter += 1
                 metadata = {
                     "topic": fact.topic,
@@ -931,10 +1009,10 @@ class KnowledgeMemory:
                 self._vector_store.upsert_sync(to_upsert)
             else:
                 self._run_async(self._vector_store.upsert(to_upsert))
-            self._save_entries()
+            self._persist_entries(to_upsert)
         except Exception as e:
             logger.warning("Vector store batch upsert failed: %s", e, extra={"tag": "INF"})
-        self._save_visited()
+        self._persist_visited_hashes(new_hashes)
         return len(to_upsert)
 
     def add_article(
@@ -1193,11 +1271,16 @@ class KnowledgeMemory:
                     removed_hash = r.metadata.get("content_hash")
                     break
             deleted = self._run_async(self._vector_store.delete([item_id]))
-            if deleted and removed_hash:
-                with self._lock:
-                    self._visited.discard(removed_hash)
-                self._save_visited()
-                self._save_entries()
+            if deleted:
+                if removed_hash:
+                    with self._lock:
+                        self._visited.discard(removed_hash)
+                    self._unpersist_visited_hash(removed_hash)
+                # Persist the removal unconditionally: gating this on
+                # removed_hash (as before) left the entry in the MogDB mirror
+                # whenever metadata lacked content_hash, resurrecting the fact
+                # on the next restart.
+                self._unpersist_entry(item_id)
             return deleted
         except Exception as e:
             logger.warning("delete_by_id failed: %s", e, extra={"tag": "INF"})
@@ -1269,8 +1352,11 @@ class KnowledgeMemory:
                 self._vector_store.upsert_sync([entry])
             else:
                 self._run_async(self._vector_store.upsert([entry]))
-            self._save_visited()
-            self._save_entries()
+            # entry.id == item_id, so _persist_entry is a same-id upsert.
+            if old_hash and old_hash != new_hash:
+                self._unpersist_visited_hash(old_hash)
+            self._persist_visited_hash(new_hash)
+            self._persist_entry(entry)
             return True
         except Exception as e:
             logger.warning("update_fact failed: %s", e, extra={"tag": "INF"})

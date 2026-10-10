@@ -564,13 +564,18 @@ class TestExternalServers:
         assert resp.status_code == 404
 
     def test_download_external_unknown_server(self):
-        """Download from unknown server returns 404."""
+        """Download from unknown server returns 404.
+
+        The payload must use ``resource_id``: the download stack is generic
+        (card 3f749b34), so ``model_id`` is rejected at *validation* time with
+        a 422 — which would mask the 404 this test is actually asserting.
+        """
         ModelsRouter._external_servers.clear()
         resp = client.post(
             "/models/external/download",
             json={
                 "server": "unknown",
-                "model_id": "model",
+                "resource_id": "model",
             },
         )
         assert resp.status_code == 404

@@ -197,7 +197,7 @@ def _detect_numa() -> int:
         for line in out.splitlines():
             if "NUMA node(s)" in line or "NUMA nodes" in line:
                 return int(line.split(":")[1].strip())
-    except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as exc:
+    except Exception as exc:  # best-effort probe: degrade, never crash
         logger.debug("lscpu NUMA detection failed: %s", exc)
     try:
         nodes = os.listdir("/sys/devices/system/node/")
@@ -221,7 +221,7 @@ def _detect_freq_macos() -> float:
             m = re.search(r"(\d+\.?\d*)\s*GHz", brand)
             if m:
                 return float(m.group(1)) * 1000
-    except (ValueError, AttributeError) as exc:
+    except Exception as exc:  # best-effort probe: degrade, never crash
         logger.debug("macOS frequency parse failed: %s", exc)
     return 0.0
 
@@ -240,7 +240,7 @@ def _detect_freq_linux() -> float:
             for line in f:
                 if line.startswith("cpu MHz"):
                     return float(line.split(":")[1].strip())
-    except (FileNotFoundError, ValueError) as exc:
+    except Exception as exc:  # best-effort probe: degrade, never crash
         logger.debug("/proc/cpuinfo frequency read failed: %s", exc)
     try:
         for i in range(os.cpu_count() or 1):
@@ -248,7 +248,7 @@ def _detect_freq_linux() -> float:
             if os.path.exists(path):
                 with open(path) as f:
                     return int(f.read().strip()) / 1000
-    except (FileNotFoundError, ValueError) as exc:
+    except Exception as exc:  # best-effort probe: degrade, never crash
         logger.debug("sysfs frequency read failed: %s", exc)
     return 0.0
 
@@ -325,14 +325,14 @@ def detect_topology() -> CpuTopology:
                 ["sysctl", "-n", "machdep.cpu.core_count"], text=True
             ).strip()
             physical = int(out)
-        except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as exc:
+        except Exception as exc:  # best-effort probe: degrade, never crash
             logger.debug("sysctl core_count failed: %s", exc)
         try:
             out = subprocess.check_output(
                 ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
             ).strip()
             model = out
-        except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+        except Exception as exc:  # best-effort probe: degrade, never crash
             logger.debug("sysctl brand_string failed: %s", exc)
 
     if physical == 0:
@@ -356,7 +356,7 @@ def detect_topology() -> CpuTopology:
                 model = subprocess.check_output(
                     ["sysctl", "-n", "machdep.cpu.brand_string"], text=True
                 ).strip()
-            except (subprocess.CalledProcessError, FileNotFoundError) as exc:
+            except Exception as exc:  # best-effort probe: degrade, never crash
                 logger.debug("sysctl brand_string fallback failed: %s", exc)
 
     return CpuTopology(
