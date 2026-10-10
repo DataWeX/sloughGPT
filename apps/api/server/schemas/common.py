@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 from domain.infrastructure.correlation import get_correlation_id
 
 _audit_logger = logging.getLogger("audit")
+logger = logging.getLogger("slo.errors")
 
 T = TypeVar("T")
 
@@ -134,17 +135,25 @@ def raise_error(
     *,
     status_code: int | None = None,
     details: dict[str, Any] | None = None,
+    user_message: str | None = None,
 ) -> None:
     """Raise an AppError that the global exception handler converts to JSON.
 
     Uses the unified ERROR_REGISTRY from domain.infrastructure._internal.errors to
     resolve the correct AppError subclass and HTTP status for each code.
 
+    Two channels, per ``AppError``'s contract: ``message`` is developer detail
+    (written to the log and the EventBus), ``user_message`` is what the client
+    sees. They are the same string unless the caller passes ``user_message``
+    explicitly — which is what callers do when ``message`` carries internal
+    detail such as a raw exception string.
+
     Args:
-        message: Human-readable error description.
+        message: Developer-facing error description (logged).
         code: Machine-readable error code (e.g. ``E_NOT_FOUND``).
         status_code: Override HTTP status (optional — derived from code if omitted).
-        details: Optional extra context.
+        details: Optional extra context (serialized only when DEBUG is enabled).
+        user_message: Client-facing text. Defaults to ``message``.
 
     Raises:
         AppError (or subclass) — never returns.
@@ -155,14 +164,32 @@ def raise_error(
         ErrorCode,
     )
 
-    # Look up in the unified registry
-    try:
-        ec = ErrorCode(code)
-        class_name, default_status, _recoverable, _user_msg = ERROR_REGISTRY[ec]
-    except (ValueError, KeyError):
-        # Unknown code — fall back to generic AppError
+    # Look up in the unified registry. Name first: legacy aliases are declared
+    # as ``E_CREATE_FAILED = "E_BAD_REQUEST"``, and callers write the member
+    # *name*, which a value-only lookup (ErrorCode(code)) would miss.
+    ec = ErrorCode.__members__.get(code)
+    if ec is None:
+        try:
+            ec = ErrorCode(code)
+        except ValueError:
+            ec = None
+
+    info = ERROR_REGISTRY.get(ec) if ec is not None else None
+    if info is None:
+        # Never degrade silently: without a registry entry this code loses its
+        # class, its recoverable flag and its real status (a 503 would arrive
+        # as a 400, a 500 as a 400) — and the old code said nothing at all.
+        # Log the offending code with its call site, then fall back.
+        logger.warning(
+            "raise_error: unregistered code %r — falling back to generic "
+            "AppError/400. Register it in ErrorCode + ERROR_REGISTRY.",
+            code,
+            stack_info=True,
+        )
         class_name = "AppError"
         default_status = status_code or 400
+    else:
+        class_name, default_status, _recoverable, _user_msg = info
 
     # Import the correct class dynamically
     import domain.infrastructure._internal.errors as _err_mod
@@ -174,7 +201,7 @@ def raise_error(
     raise exc_cls(
         message=message,
         code=code,
-        user_message=message,
+        user_message=user_message or message,
         http_status=http_status,
         details=details or {},
     )
@@ -259,13 +286,26 @@ def classify_and_raise(e: Exception, source: str = "router") -> None:
     except _AppError:
         raise
     except Exception:
+        # Developer detail stays on the developer channel: it is logged here
+        # (with traceback) and again as exc.message by the handler. The client
+        # gets a safe generic text instead of a raw exception string, which
+        # AppError's contract explicitly forbids ("never shown to users").
         _audit_logger.warning(
             "classify_and_raise fallback: source=%s error=%s",
             source,
             e,
             exc_info=True,
         )
-        raise_error(str(e), "E_DOMAIN", status_code=500)
+        raise_error(
+            str(e),
+            "E_DOMAIN",
+            status_code=500,
+            user_message="An unexpected internal error occurred.",
+            # The AppError handler serializes details only when DEBUG is on, so
+            # the raw text reaches the log/EventBus but the client only ever
+            # sees it against a debug build — one gate, at the point of output.
+            details={"detail": str(e)},
+        )
 
 
 def endpoint(source: str):

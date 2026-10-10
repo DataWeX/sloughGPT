@@ -49,7 +49,12 @@ async def get_balance(auth_user: dict | None = Depends(require_auth_if_enabled))
         return success_response(data=account.to_dict())
     except Exception as e:
         logger.error("Failed to get balance: %s", e, extra={"tag": "TOKENS"})
-        raise_error(str(e), "E_TOKENS_BALANCE", status_code=500)
+        raise_error(
+            str(e),
+            "E_TOKENS_BALANCE",
+            status_code=500,
+            user_message="Token billing data is unavailable right now.",
+        )
 
 
 @router.get("/usage/summary")
@@ -60,7 +65,12 @@ async def get_usage_summary(auth_user: dict | None = Depends(require_auth_if_ena
         return success_response(data=service.get_usage_summary(audit_user(auth_user)))
     except Exception as e:
         logger.error("Failed to get usage summary: %s", e, extra={"tag": "TOKENS"})
-        raise_error(str(e), "E_TOKENS_USAGE", status_code=500)
+        raise_error(
+            str(e),
+            "E_TOKENS_USAGE",
+            status_code=500,
+            user_message="Usage summary is unavailable right now.",
+        )
 
 
 @router.get("/usage/history")
@@ -76,7 +86,12 @@ async def get_usage_history(
         return success_response(data={"records": [r.to_dict() for r in records]})
     except Exception as e:
         logger.error("Failed to get usage history: %s", e, extra={"tag": "TOKENS"})
-        raise_error(str(e), "E_TOKENS_HISTORY", status_code=500)
+        raise_error(
+            str(e),
+            "E_TOKENS_HISTORY",
+            status_code=500,
+            user_message="Usage history is unavailable right now.",
+        )
 
 
 @router.post("/topup")
@@ -90,7 +105,12 @@ async def topup_credits(
         return success_response(data=account.to_dict(), message=f"Added {request.amount} credits")
     except Exception as e:
         logger.error("Failed to topup credits: %s", e, extra={"tag": "TOKENS"})
-        raise_error(str(e), "E_TOKENS_TOPUP", status_code=500)
+        raise_error(
+            str(e),
+            "E_TOKENS_TOPUP",
+            status_code=500,
+            user_message="Credits could not be added right now.",
+        )
 
 
 @router.post("/upgrade")
@@ -113,7 +133,12 @@ async def upgrade_tier(
         return success_response(data=account.to_dict(), message=f"Upgraded to {tier.value}")
     except Exception as e:
         logger.error("Failed to upgrade tier: %s", e, extra={"tag": "TOKENS"})
-        raise_error(str(e), "E_TOKENS_UPGRADE", status_code=500)
+        raise_error(
+            str(e),
+            "E_TOKENS_UPGRADE",
+            status_code=500,
+            user_message="The tier upgrade could not be completed.",
+        )
 
 
 @router.post("/check")
@@ -137,4 +162,9 @@ async def check_tokens(
         )
     except Exception as e:
         logger.error("Failed to check tokens: %s", e, extra={"tag": "TOKENS"})
-        raise_error(str(e), "E_TOKENS_CHECK", status_code=500)
+        raise_error(
+            str(e),
+            "E_TOKENS_CHECK",
+            status_code=500,
+            user_message="Your token balance could not be checked right now.",
+        )

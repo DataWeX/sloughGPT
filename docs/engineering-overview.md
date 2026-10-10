@@ -174,14 +174,21 @@ cross untouched. CORS is allow-any (bearer-token auth, no cookies), matching
 ### Error Handling
 
 ```
-domains/infrastructure/errors.py    — ErrorCode enum, ERROR_REGISTRY, AppError
-apps/api/server/schemas/common.py   — raise_error(), classify_and_raise()
-apps/api/server/infrastructure/     — exception_handlers.py (single emission point)
+domain/infrastructure/_internal/errors.py  — ErrorCode enum, ERROR_REGISTRY, AppError
+  (re-exported as domains/infrastructure/errors.py — backward-compat shim)
+apps/api/server/schemas/common.py          — raise_error(), classify_and_raise()
+apps/api/server/infrastructure/            — exception_handlers.py (single emission point)
 ```
 
 **Flow:** Router catches → `classify_and_raise()` classifies + raises → exception handler emits EventBus + returns JSON.
 
-**30 codes:** `E_INTERNAL`, `E_NOT_FOUND`, `E_MODEL_OOM`, `E_AUTH_MISSING`, `E_TIMEOUT`, etc.
+**71 codes** (70 unique + 1 legacy alias): `E_INTERNAL`, `E_NOT_FOUND`, `E_MODEL_OOM`, `E_AUTH_MISSING`, `E_TIMEOUT`, `E_BUSY`, `E_VALIDATION`, …
+
+**Contract — three rules, each gated by `tests/core-py/test_error_registry_drift.py`:**
+
+1. **Every code that can reach the wire is declared.** The gate scans four emit paths (`raise_error()`, `error_response()`, class-level `code = "E_…"` attributes, hand-built `{"code": …}` payloads) and fails on any code absent from `ErrorCode`. 36 codes were undeclared before the gate existed, so `raise_error()` swallowed the lookup error and downgraded each one to a generic `AppError`/400 — a 503 readiness code and a 500 upstream failure both arrived at the client as a 400, with no log line anywhere. An unregistered code now logs a warning (`slo.errors`) before falling back.
+2. **Two channels.** `message` is developer detail (logged, on the EventBus); `user_message` is what the client sees. They are the same string unless a caller passes `user_message=` — which is what callers do when the message is a raw exception string. `classify_and_raise()`'s catch-all keeps `str(e)` on the log channel and sends a fixed text to the client.
+3. **`domain/logging` is a separate codespace.** Its `E_*` values (`E_MODEL_LOAD`, `E_AUTH_EXPIRED`, `E_INF_*` …) are *log-event* codes, not HTTP codes. They merely share the `E_` prefix, so the gate deliberately excludes `domain/logging/` and `tests/`.
 
 ### EventBus
 

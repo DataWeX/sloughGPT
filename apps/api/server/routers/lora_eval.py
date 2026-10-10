@@ -143,7 +143,12 @@ class LoraEvalRouter:
             results = evaluator.get_history(limit=limit)
             return success_response(data={"results": [r.to_dict() for r in results]})
         except Exception as e:
-            raise_error(str(e), "E_INFRA_STARTUP", status_code=500)
+            raise_error(
+                str(e),
+                "E_INFRA_STARTUP",
+                status_code=500,
+                user_message="Evaluation history is unavailable right now.",
+            )
 
     @endpoint("lora_eval.aggregate")
     async def trigger_aggregation(

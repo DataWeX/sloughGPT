@@ -66,6 +66,7 @@ under parallelism.
   - `scripts/benchmark_slonet.py` — inference throughput, latency
   - `scripts/benchmark_stability.py` — generation consistency across runs
   - `scripts/benchmark_latency.py` — end-to-end request latency
+  - `scripts/benchmark_error_routing.py` — error path: registry resolver (old vs new lookup), alias, unknown-code, envelope build
   - `scripts/benchmark_results.py record/history/compare` — track results over time
   - If no benchmark exists for your change, create one in `scripts/` and document what it measures.
 - **Always mine test runs and benchmarks for insights — never report pass/fail alone.** A run is evidence about the system, not a verdict. Two obligations, both mandatory:

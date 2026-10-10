@@ -107,7 +107,67 @@ class ErrorCode(StrEnum):
     # Docstore
     E_UNKNOWN_COLLECTION = "E_UNKNOWN_COLLECTION"
 
+    # Media / multimodal processing (routers/multimodal.py, routers/phoneme.py)
+    E_ASR_FAILED = "E_ASR_FAILED"
+    E_TTS_FAILED = "E_TTS_FAILED"
+    E_BATCH_ENCODE_FAILED = "E_BATCH_ENCODE_FAILED"
+    E_DECODE_FAILED = "E_DECODE_FAILED"
+    E_DETECT_FAILED = "E_DETECT_FAILED"
+    E_ENCODE_FAILED = "E_ENCODE_FAILED"
+    E_LANGUAGES_FAILED = "E_LANGUAGES_FAILED"
+    E_SCORE_FAILED = "E_SCORE_FAILED"
+    E_SYNTHESIZE_FAILED = "E_SYNTHESIZE_FAILED"
+    E_VISUALIZE_FAILED = "E_VISUALIZE_FAILED"
+
+    # Request validation (routers: search, token_tree, workspaces, users,
+    # consciousness, training)
+    E_VALIDATION = "E_VALIDATION"
+    E_INVALID_INPUT = "E_INVALID_INPUT"
+    E_INVALID_BACKUP = "E_INVALID_BACKUP"
+    E_INVALID_FILE = "E_INVALID_FILE"
+    E_INVALID_PRESET = "E_INVALID_PRESET"
+    E_INVALID_STATUS = "E_INVALID_STATUS"
+    E_INSUFFICIENT_DATA = "E_INSUFFICIENT_DATA"
+    E_LIMIT_EXCEEDED = "E_LIMIT_EXCEEDED"
+    E_UNSUPPORTED_VERSION = "E_UNSUPPORTED_VERSION"
+    E_UNSUPPORTED_LANGUAGE = "E_UNSUPPORTED_LANGUAGE"
+    E_MISSING_TEXT = "E_MISSING_TEXT"
+    E_MISSING_TEXTS = "E_MISSING_TEXTS"
+    E_MISSING_IDS = "E_MISSING_IDS"
+    E_MISSING_PAIRS = "E_MISSING_PAIRS"
+
+    # Conflict / concurrency
+    E_BUSY = "E_BUSY"
+
+    # Training lifecycle
+    E_DELETE_FAILED = "E_DELETE_FAILED"
+
+    # Token ledger (routers/tokens.py)
+    E_TOKENS_BALANCE = "E_TOKENS_BALANCE"
+    E_TOKENS_CHECK = "E_TOKENS_CHECK"
+    E_TOKENS_HISTORY = "E_TOKENS_HISTORY"
+    E_TOKENS_TOPUP = "E_TOKENS_TOPUP"
+    E_TOKENS_UPGRADE = "E_TOKENS_UPGRADE"
+    E_TOKENS_USAGE = "E_TOKENS_USAGE"
+
+    # Response serialization (middleware, exception handler)
+    E_SERIALIZATION = "E_SERIALIZATION"
+
+    # Readiness payloads built by hand (routers/inference.py)
+    E_NO_MODEL = "E_NO_MODEL"
+    E_STARTING = "E_STARTING"
+
+    # Component layer (packages/core-py ComponentException)
+    E_COMPONENT = "E_COMPONENT"
+
     # Legacy aliases (mapped to canonical codes)
+    #
+    # NB: an Enum member whose value duplicates another member is an *alias* —
+    # ``ErrorCode.E_CREATE_FAILED is ErrorCode.E_BAD_REQUEST``. Both names are
+    # in ``__members__`` (so lookup-by-name works), but they share one member
+    # object and therefore one ERROR_REGISTRY key: the explicit alias override
+    # below overwrites the canonical entry. Keep class/status/recoverable
+    # identical between the two, or one name would classify differently.
     E_CREATE_FAILED = "E_BAD_REQUEST"
 
 
@@ -505,14 +565,101 @@ ERROR_REGISTRY[ErrorCode.E_CREATE_FAILED] = (
     "Resource creation failed.",
 )
 
+# ── Registered 2026-10-09 (card 99994ad6) ──
+# 36 codes were in active use but absent from the enum, so raise_error()
+# swallowed (ValueError, KeyError) and downgraded each one to a generic
+# AppError/400 — losing the class, the recoverable flag and the real status.
+# Each status below mirrors what the call site already passes explicitly, so
+# registering the code changes classification only, never the wire. The six
+# codes raised without an explicit status_code keep today's 400.
+#
+# Media / multimodal pipelines — upstream or internal processing failures.
+ERROR_REGISTRY[ErrorCode.E_ASR_FAILED] = ("AppError", 500, True, "Speech recognition failed.")
+ERROR_REGISTRY[ErrorCode.E_TTS_FAILED] = ("AppError", 500, True, "Speech synthesis failed.")
+ERROR_REGISTRY[ErrorCode.E_BATCH_ENCODE_FAILED] = ("AppError", 500, False, "Batch encoding failed.")
+ERROR_REGISTRY[ErrorCode.E_DECODE_FAILED] = ("AppError", 500, False, "Decoding failed.")
+ERROR_REGISTRY[ErrorCode.E_DETECT_FAILED] = ("AppError", 500, False, "Detection failed.")
+ERROR_REGISTRY[ErrorCode.E_ENCODE_FAILED] = ("AppError", 500, False, "Encoding failed.")
+ERROR_REGISTRY[ErrorCode.E_LANGUAGES_FAILED] = ("AppError", 500, False, "Languages unavailable.")
+ERROR_REGISTRY[ErrorCode.E_SCORE_FAILED] = ("AppError", 500, False, "Scoring failed.")
+ERROR_REGISTRY[ErrorCode.E_SYNTHESIZE_FAILED] = ("AppError", 500, False, "Synthesis failed.")
+ERROR_REGISTRY[ErrorCode.E_VISUALIZE_FAILED] = ("AppError", 500, False, "Visualization failed.")
+
+# Request validation — 400 today at every site; E_VALIDATION already answered 422.
+ERROR_REGISTRY[ErrorCode.E_VALIDATION] = ("ValidationError", 422, False, "Invalid request.")
+ERROR_REGISTRY[ErrorCode.E_INVALID_INPUT] = ("ValidationError", 400, False, "Invalid input.")
+ERROR_REGISTRY[ErrorCode.E_INVALID_BACKUP] = ("ValidationError", 400, False, "Invalid backup file.")
+ERROR_REGISTRY[ErrorCode.E_INVALID_FILE] = ("ValidationError", 400, False, "Invalid file.")
+ERROR_REGISTRY[ErrorCode.E_INVALID_PRESET] = ("ValidationError", 400, False, "Invalid preset.")
+ERROR_REGISTRY[ErrorCode.E_INVALID_STATUS] = ("ValidationError", 400, False, "Invalid status.")
+ERROR_REGISTRY[ErrorCode.E_INSUFFICIENT_DATA] = ("ValidationError", 400, False, "Not enough data.")
+ERROR_REGISTRY[ErrorCode.E_LIMIT_EXCEEDED] = ("ValidationError", 400, False, "Limit exceeded.")
+ERROR_REGISTRY[ErrorCode.E_UNSUPPORTED_VERSION] = (
+    "ValidationError",
+    400,
+    False,
+    "Unsupported version.",
+)
+ERROR_REGISTRY[ErrorCode.E_UNSUPPORTED_LANGUAGE] = (
+    "ValidationError",
+    400,
+    False,
+    "Unsupported language.",
+)
+ERROR_REGISTRY[ErrorCode.E_MISSING_TEXT] = ("ValidationError", 400, False, "Text is required.")
+ERROR_REGISTRY[ErrorCode.E_MISSING_TEXTS] = ("ValidationError", 400, False, "Texts are required.")
+ERROR_REGISTRY[ErrorCode.E_MISSING_IDS] = ("ValidationError", 400, False, "Ids are required.")
+ERROR_REGISTRY[ErrorCode.E_MISSING_PAIRS] = ("ValidationError", 400, False, "Pairs are required.")
+
+# Conflict — resource busy (retryable).
+ERROR_REGISTRY[ErrorCode.E_BUSY] = (
+    "ConflictError",
+    409,
+    True,
+    "The resource is busy — try again shortly.",
+)
+
+# Training lifecycle.
+ERROR_REGISTRY[ErrorCode.E_DELETE_FAILED] = ("AppError", 500, False, "Delete failed.")
+
+# Token ledger.
+ERROR_REGISTRY[ErrorCode.E_TOKENS_BALANCE] = ("AppError", 500, False, "Token balance unavailable.")
+ERROR_REGISTRY[ErrorCode.E_TOKENS_CHECK] = ("AppError", 500, False, "Token check failed.")
+ERROR_REGISTRY[ErrorCode.E_TOKENS_HISTORY] = ("AppError", 500, False, "Token history unavailable.")
+ERROR_REGISTRY[ErrorCode.E_TOKENS_TOPUP] = ("AppError", 500, False, "Top-up failed.")
+ERROR_REGISTRY[ErrorCode.E_TOKENS_UPGRADE] = ("AppError", 500, False, "Upgrade failed.")
+ERROR_REGISTRY[ErrorCode.E_TOKENS_USAGE] = ("AppError", 500, False, "Token usage unavailable.")
+
+# Response serialization — already answered 500 at both hand-built sites.
+ERROR_REGISTRY[ErrorCode.E_SERIALIZATION] = (
+    "AppError",
+    500,
+    False,
+    "The server could not build a response for this request.",
+)
+
+# Readiness payloads (never passed to raise_error — status documents reality).
+ERROR_REGISTRY[ErrorCode.E_NO_MODEL] = ("AppError", 503, True, "No model is loaded.")
+ERROR_REGISTRY[ErrorCode.E_STARTING] = ("AppError", 503, True, "The server is still starting.")
+
+# Component layer — ComponentException inherits AppError defaults.
+ERROR_REGISTRY[ErrorCode.E_COMPONENT] = ("AppError", 500, False, "A component failed.")
+
 
 def get_error_info(code: str) -> tuple[str, int, bool, str] | None:
-    """Look up error info by code string. Returns (class_name, http_status, recoverable, user_message)."""
-    try:
-        ec = ErrorCode(code)
-        return ERROR_REGISTRY.get(ec)
-    except ValueError:
-        return None
+    """Look up error info by code string. Returns (class_name, http_status, recoverable, user_message).
+
+    Accepts the member name *or* its value — legacy aliases such as
+    ``E_CREATE_FAILED = "E_BAD_REQUEST"`` are written by name at call sites,
+    and a value-only lookup would miss them.
+    """
+    ec = ErrorCode.__members__.get(code)
+    if ec is None:
+        try:
+            ec = ErrorCode(code)
+        except ValueError:
+            return None
+    return ERROR_REGISTRY.get(ec)
 
 
 # ── Integration helpers ──
