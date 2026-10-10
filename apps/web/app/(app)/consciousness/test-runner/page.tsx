@@ -2,9 +2,15 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { authFetch } from '@/lib/http-client'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
 import { extractErrorMessage } from '@/lib/error-utils'
@@ -36,7 +42,11 @@ const SUITES: TestSuite[] = [
   { id: 'integration', label: 'Integration Tests', enabled: true },
 ]
 
-async function apiCall(method: string, path: string, body?: string): Promise<{ status: number; data: any; duration: number }> {
+async function apiCall(
+  method: string,
+  path: string,
+  body?: string,
+): Promise<{ status: number; data: any; duration: number }> {
   const start = Date.now()
   try {
     const init: RequestInit = {
@@ -44,11 +54,15 @@ async function apiCall(method: string, path: string, body?: string): Promise<{ s
       headers: { 'Content-Type': 'application/json' },
     }
     if (body) init.body = body
-    const res = await fetch(`${PUBLIC_API_URL}${path}`, init)
+    const res = await authFetch(path, init)
     const duration = Date.now() - start
     const text = await res.text()
     let data: any
-    try { data = JSON.parse(text) } catch { data = text }
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = text
+    }
     return { status: res.status, data: data?.data ?? data, duration }
   } catch (e) {
     return { status: 0, data: extractErrorMessage(e), duration: Date.now() - start }
@@ -105,263 +119,318 @@ function buildTests(): Omit<TestCase, 'status' | 'duration'>[] {
   tests.push(
     { id: 'integration.reflect_cycle', name: 'Full reflect → status cycle', suite: 'integration' },
     { id: 'integration.seed_rate', name: 'Seed → reflect → feedback flow', suite: 'integration' },
-    { id: 'integration.personality_reflect', name: 'Personality preset → reflect → qualia check', suite: 'integration' },
+    {
+      id: 'integration.personality_reflect',
+      name: 'Personality preset → reflect → qualia check',
+      suite: 'integration',
+    },
   )
 
   return tests
 }
 
 export default function ConsciousnessTestRunnerPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
 
-  const [suites, setSuites] = useState<TestSuite[]>(() => SUITES.map(s => ({ ...s })))
-  const [tests, setTests] = useState<TestCase[]>(() => buildTests().map(tc => ({ ...tc, status: 'pending', duration: 0 })))
+  const [suites, setSuites] = useState<TestSuite[]>(() => SUITES.map((s) => ({ ...s })))
+  const [tests, setTests] = useState<TestCase[]>(() =>
+    buildTests().map((tc) => ({ ...tc, status: 'pending', duration: 0 })),
+  )
   const [running, setRunning] = useState(false)
   const [stopRequested, setStopRequested] = useState(false)
   const [progress, setProgress] = useState(0)
   const abortRef = useRef(false)
 
   const totalTests = tests.length
-  const passed = tests.filter(t => t.status === 'pass').length
-  const failed = tests.filter(t => t.status === 'fail').length
-  const skipped = tests.filter(t => t.status === 'skip').length
+  const passed = tests.filter((t) => t.status === 'pass').length
+  const failed = tests.filter((t) => t.status === 'fail').length
+  const skipped = tests.filter((t) => t.status === 'skip').length
   const totalDuration = tests.reduce((s, t) => s + t.duration, 0)
 
   const toggleSuite = useCallback((id: string) => {
-    setSuites(prev => prev.map(s => s.id === id ? { ...s, enabled: !s.enabled } : s))
+    setSuites((prev) => prev.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)))
   }, [])
 
-  const runTests = useCallback(async (all: boolean) => {
-    if (running) return
-    abortRef.current = false
-    setStopRequested(false)
-    setRunning(true)
-    setProgress(0)
+  const runTests = useCallback(
+    async (all: boolean) => {
+      if (running) return
+      abortRef.current = false
+      setStopRequested(false)
+      setRunning(true)
+      setProgress(0)
 
-    const enabledIds = new Set(
-      all ? SUITES.filter(s => s.enabled).map(s => s.id) : SUITES.filter(s => s.enabled).map(s => s.id)
-    )
-    const runnable = buildTests().filter(tc => enabledIds.has(tc.suite))
-    setTests(runnable.map(tc => ({ ...tc, status: 'pending', duration: 0 })))
+      const enabledIds = new Set(
+        all
+          ? SUITES.filter((s) => s.enabled).map((s) => s.id)
+          : SUITES.filter((s) => s.enabled).map((s) => s.id),
+      )
+      const runnable = buildTests().filter((tc) => enabledIds.has(tc.suite))
+      setTests(runnable.map((tc) => ({ ...tc, status: 'pending', duration: 0 })))
 
-    const results: TestCase[] = []
+      const results: TestCase[] = []
 
-    for (let i = 0; i < runnable.length; i++) {
-      if (abortRef.current) {
-        results.push({ ...runnable[i], status: 'skip', duration: 0 })
-        setTests([...results, ...runnable.slice(i + 1).map(tc => ({ ...tc, status: 'skip' as TestStatus, duration: 0 }))])
-        break
-      }
-
-      const tc = runnable[i]
-      const runningTest: TestCase = { ...tc, status: 'running', duration: 0 }
-      results.push(runningTest)
-      setTests([...results])
-
-      const start = Date.now()
-      let status: TestStatus = 'pass'
-      let error: string | undefined
-
-      try {
-        switch (tc.id) {
-          case 'core.process': {
-            const r = await apiCall('POST', '/consciousness/reflect', '{"text": "test"}')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            assert(r.data && typeof r.data === 'object', 'Response is not an object')
-            break
-          }
-          case 'core.reflect': {
-            const r = await apiCall('POST', '/consciousness/reflect', '{"text": "What is consciousness?"}')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            assert(r.data !== null && r.data !== undefined, 'No data returned')
-            break
-          }
-          case 'core.get_status': {
-            const r = await apiCall('GET', '/consciousness/status')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            assert(r.data !== null, 'Status is null')
-            break
-          }
-          case 'core.health': {
-            const r = await apiCall('GET', '/consciousness/health')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            break
-          }
-          case 'qualia.get': {
-            const r = await apiCall('GET', '/consciousness/qualia')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            assert(r.data !== null, 'Qualia is null')
-            break
-          }
-          case 'qualia.dimensions': {
-            const r = await apiCall('GET', '/consciousness/qualia')
-            const q = (r.data as any)?.qualia ?? r.data
-            assert(typeof q === 'object' && q !== null, 'Qualia not an object')
-            const keys = Object.keys(q)
-            assert(keys.length >= 5, `Expected >= 5 dimensions, got ${keys.length}`)
-            break
-          }
-          case 'qualia.values': {
-            const r = await apiCall('GET', '/consciousness/qualia')
-            const q = (r.data as any)?.qualia ?? r.data
-            for (const [k, v] of Object.entries(q as Record<string, unknown>)) {
-              assert(typeof v === 'number', `${k} is not a number`)
-              assert((v as number) >= 0 && (v as number) <= 1, `${k} out of range: ${v}`)
-            }
-            break
-          }
-          case 'qualia.reflect': {
-            await apiCall('POST', '/consciousness/reflect', '{"text": "test qualia update"}')
-            const r = await apiCall('GET', '/consciousness/qualia')
-            assert(r.status >= 200 && r.status < 300, 'Qualia fetch failed after reflect')
-            break
-          }
-          case 'self_model.get': {
-            const r = await apiCall('GET', '/consciousness/self-model')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            assert(r.data !== null, 'Self-model is null')
-            break
-          }
-          case 'self_model.beliefs': {
-            const r = await apiCall('GET', '/consciousness/self-model')
-            const sm = (r.data as any)?.beliefs ?? r.data
-            if (sm && typeof sm === 'object') {
-              const vals = Object.values(sm as Record<string, unknown>)
-              assert(vals.length > 0, 'No beliefs found')
-            }
-            break
-          }
-          case 'self_model.update': {
-            const before = await apiCall('GET', '/consciousness/self-model')
-            await apiCall('POST', '/consciousness/reflect', '{"text": "self model update test"}')
-            const after = await apiCall('GET', '/consciousness/self-model')
-            assert(after.status >= 200 && after.status < 300, 'Self-model fetch failed after reflect')
-            break
-          }
-          case 'self_model.structure': {
-            const r = await apiCall('GET', '/consciousness/self-model')
-            assert(r.data !== null && r.data !== undefined, 'Self-model data missing')
-            break
-          }
-          case 'personality.get': {
-            const r = await apiCall('GET', '/consciousness/personality')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            assert(r.data !== null, 'Personality is null')
-            break
-          }
-          case 'personality.preset': {
-            const r = await apiCall('POST', '/consciousness/personality/presets/apply', '{"preset_id": "balanced"}')
-            assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
-            break
-          }
-          case 'personality.reset': {
-            const r = await apiCall('POST', '/consciousness/personality/reset')
-            assert(r.status >= 200 || r.status === 404, `Unexpected status: ${r.status}`)
-            break
-          }
-          case 'personality.traits': {
-            const r = await apiCall('GET', '/consciousness/personality')
-            const p = (r.data as any)?.traits ?? r.data
-            if (p && typeof p === 'object') {
-              for (const [, v] of Object.entries(p as Record<string, unknown>)) {
-                assert(typeof v === 'number', `Trait value not a number`)
-              }
-            }
-            break
-          }
-          case 'api.status': {
-            const r = await apiCall('GET', '/consciousness/status')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.self_model': {
-            const r = await apiCall('GET', '/consciousness/self-model')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.reflect': {
-            const r = await apiCall('POST', '/consciousness/reflect', '{"text": "api test"}')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.health': {
-            const r = await apiCall('GET', '/consciousness/health')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.qualia': {
-            const r = await apiCall('GET', '/consciousness/qualia')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.feedback': {
-            const r = await apiCall('POST', '/consciousness/feedback', '{"episode_index": 0, "rating": 3}')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.seed': {
-            const r = await apiCall('POST', '/consciousness/seed?count=2')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.config': {
-            const r = await apiCall('PATCH', '/consciousness/config', '{"level": 2}')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'api.personality': {
-            const r = await apiCall('POST', '/consciousness/personality/presets/apply', '{"preset_id": "balanced"}')
-            assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
-            break
-          }
-          case 'integration.reflect_cycle': {
-            const r1 = await apiCall('POST', '/consciousness/reflect', '{"text": "integration cycle test"}')
-            assert(r1.status >= 200 && r1.status < 300, 'Reflect failed')
-            const r2 = await apiCall('GET', '/consciousness/status')
-            assert(r2.status >= 200 && r2.status < 300, 'Status fetch failed')
-            break
-          }
-          case 'integration.seed_rate': {
-            const r1 = await apiCall('POST', '/consciousness/seed?count=1')
-            assert(r1.status >= 200 && r1.status < 300, 'Seed failed')
-            const r2 = await apiCall('POST', '/consciousness/reflect', '{"text": "integration seed rate"}')
-            assert(r2.status >= 200 && r2.status < 300, 'Reflect failed')
-            const r3 = await apiCall('POST', '/consciousness/feedback', '{"episode_index": 0, "rating": 4}')
-            assert(r3.status >= 200 && r3.status < 300, 'Feedback failed')
-            break
-          }
-          case 'integration.personality_reflect': {
-            const r1 = await apiCall('POST', '/consciousness/personality/presets/apply', '{"preset_id": "creative"}')
-            assert(r1.status >= 200 && r1.status < 300, 'Preset apply failed')
-            const r2 = await apiCall('POST', '/consciousness/reflect', '{"text": "personality integration test"}')
-            assert(r2.status >= 200 && r2.status < 300, 'Reflect failed')
-            const r3 = await apiCall('GET', '/consciousness/qualia')
-            assert(r3.status >= 200 && r3.status < 300, 'Qualia fetch failed')
-            break
-          }
-          default:
-            status = 'skip'
-            error = 'Unknown test'
+      for (let i = 0; i < runnable.length; i++) {
+        if (abortRef.current) {
+          results.push({ ...runnable[i], status: 'skip', duration: 0 })
+          setTests([
+            ...results,
+            ...runnable
+              .slice(i + 1)
+              .map((tc) => ({ ...tc, status: 'skip' as TestStatus, duration: 0 })),
+          ])
+          break
         }
-      } catch (e) {
-        status = 'fail'
-        error = extractErrorMessage(e)
+
+        const tc = runnable[i]
+        const runningTest: TestCase = { ...tc, status: 'running', duration: 0 }
+        results.push(runningTest)
+        setTests([...results])
+
+        const start = Date.now()
+        let status: TestStatus = 'pass'
+        let error: string | undefined
+
+        try {
+          switch (tc.id) {
+            case 'core.process': {
+              const r = await apiCall('POST', '/consciousness/reflect', '{"text": "test"}')
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              assert(r.data && typeof r.data === 'object', 'Response is not an object')
+              break
+            }
+            case 'core.reflect': {
+              const r = await apiCall(
+                'POST',
+                '/consciousness/reflect',
+                '{"text": "What is consciousness?"}',
+              )
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              assert(r.data !== null && r.data !== undefined, 'No data returned')
+              break
+            }
+            case 'core.get_status': {
+              const r = await apiCall('GET', '/consciousness/status')
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              assert(r.data !== null, 'Status is null')
+              break
+            }
+            case 'core.health': {
+              const r = await apiCall('GET', '/consciousness/health')
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              break
+            }
+            case 'qualia.get': {
+              const r = await apiCall('GET', '/consciousness/qualia')
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              assert(r.data !== null, 'Qualia is null')
+              break
+            }
+            case 'qualia.dimensions': {
+              const r = await apiCall('GET', '/consciousness/qualia')
+              const q = (r.data as any)?.qualia ?? r.data
+              assert(typeof q === 'object' && q !== null, 'Qualia not an object')
+              const keys = Object.keys(q)
+              assert(keys.length >= 5, `Expected >= 5 dimensions, got ${keys.length}`)
+              break
+            }
+            case 'qualia.values': {
+              const r = await apiCall('GET', '/consciousness/qualia')
+              const q = (r.data as any)?.qualia ?? r.data
+              for (const [k, v] of Object.entries(q as Record<string, unknown>)) {
+                assert(typeof v === 'number', `${k} is not a number`)
+                assert((v as number) >= 0 && (v as number) <= 1, `${k} out of range: ${v}`)
+              }
+              break
+            }
+            case 'qualia.reflect': {
+              await apiCall('POST', '/consciousness/reflect', '{"text": "test qualia update"}')
+              const r = await apiCall('GET', '/consciousness/qualia')
+              assert(r.status >= 200 && r.status < 300, 'Qualia fetch failed after reflect')
+              break
+            }
+            case 'self_model.get': {
+              const r = await apiCall('GET', '/consciousness/self-model')
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              assert(r.data !== null, 'Self-model is null')
+              break
+            }
+            case 'self_model.beliefs': {
+              const r = await apiCall('GET', '/consciousness/self-model')
+              const sm = (r.data as any)?.beliefs ?? r.data
+              if (sm && typeof sm === 'object') {
+                const vals = Object.values(sm as Record<string, unknown>)
+                assert(vals.length > 0, 'No beliefs found')
+              }
+              break
+            }
+            case 'self_model.update': {
+              const before = await apiCall('GET', '/consciousness/self-model')
+              await apiCall('POST', '/consciousness/reflect', '{"text": "self model update test"}')
+              const after = await apiCall('GET', '/consciousness/self-model')
+              assert(
+                after.status >= 200 && after.status < 300,
+                'Self-model fetch failed after reflect',
+              )
+              break
+            }
+            case 'self_model.structure': {
+              const r = await apiCall('GET', '/consciousness/self-model')
+              assert(r.data !== null && r.data !== undefined, 'Self-model data missing')
+              break
+            }
+            case 'personality.get': {
+              const r = await apiCall('GET', '/consciousness/personality')
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              assert(r.data !== null, 'Personality is null')
+              break
+            }
+            case 'personality.preset': {
+              const r = await apiCall(
+                'POST',
+                '/consciousness/personality/presets/apply',
+                '{"preset_id": "balanced"}',
+              )
+              assert(r.status >= 200 && r.status < 300, `Expected 2xx, got ${r.status}`)
+              break
+            }
+            case 'personality.reset': {
+              const r = await apiCall('POST', '/consciousness/personality/reset')
+              assert(r.status >= 200 || r.status === 404, `Unexpected status: ${r.status}`)
+              break
+            }
+            case 'personality.traits': {
+              const r = await apiCall('GET', '/consciousness/personality')
+              const p = (r.data as any)?.traits ?? r.data
+              if (p && typeof p === 'object') {
+                for (const [, v] of Object.entries(p as Record<string, unknown>)) {
+                  assert(typeof v === 'number', `Trait value not a number`)
+                }
+              }
+              break
+            }
+            case 'api.status': {
+              const r = await apiCall('GET', '/consciousness/status')
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.self_model': {
+              const r = await apiCall('GET', '/consciousness/self-model')
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.reflect': {
+              const r = await apiCall('POST', '/consciousness/reflect', '{"text": "api test"}')
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.health': {
+              const r = await apiCall('GET', '/consciousness/health')
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.qualia': {
+              const r = await apiCall('GET', '/consciousness/qualia')
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.feedback': {
+              const r = await apiCall(
+                'POST',
+                '/consciousness/feedback',
+                '{"episode_index": 0, "rating": 3}',
+              )
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.seed': {
+              const r = await apiCall('POST', '/consciousness/seed?count=2')
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.config': {
+              const r = await apiCall('PATCH', '/consciousness/config', '{"level": 2}')
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'api.personality': {
+              const r = await apiCall(
+                'POST',
+                '/consciousness/personality/presets/apply',
+                '{"preset_id": "balanced"}',
+              )
+              assert(r.status >= 200 && r.status < 300, `Status: ${r.status}`)
+              break
+            }
+            case 'integration.reflect_cycle': {
+              const r1 = await apiCall(
+                'POST',
+                '/consciousness/reflect',
+                '{"text": "integration cycle test"}',
+              )
+              assert(r1.status >= 200 && r1.status < 300, 'Reflect failed')
+              const r2 = await apiCall('GET', '/consciousness/status')
+              assert(r2.status >= 200 && r2.status < 300, 'Status fetch failed')
+              break
+            }
+            case 'integration.seed_rate': {
+              const r1 = await apiCall('POST', '/consciousness/seed?count=1')
+              assert(r1.status >= 200 && r1.status < 300, 'Seed failed')
+              const r2 = await apiCall(
+                'POST',
+                '/consciousness/reflect',
+                '{"text": "integration seed rate"}',
+              )
+              assert(r2.status >= 200 && r2.status < 300, 'Reflect failed')
+              const r3 = await apiCall(
+                'POST',
+                '/consciousness/feedback',
+                '{"episode_index": 0, "rating": 4}',
+              )
+              assert(r3.status >= 200 && r3.status < 300, 'Feedback failed')
+              break
+            }
+            case 'integration.personality_reflect': {
+              const r1 = await apiCall(
+                'POST',
+                '/consciousness/personality/presets/apply',
+                '{"preset_id": "creative"}',
+              )
+              assert(r1.status >= 200 && r1.status < 300, 'Preset apply failed')
+              const r2 = await apiCall(
+                'POST',
+                '/consciousness/reflect',
+                '{"text": "personality integration test"}',
+              )
+              assert(r2.status >= 200 && r2.status < 300, 'Reflect failed')
+              const r3 = await apiCall('GET', '/consciousness/qualia')
+              assert(r3.status >= 200 && r3.status < 300, 'Qualia fetch failed')
+              break
+            }
+            default:
+              status = 'skip'
+              error = 'Unknown test'
+          }
+        } catch (e) {
+          status = 'fail'
+          error = extractErrorMessage(e)
+        }
+
+        const duration = Date.now() - start
+        const completed: TestCase = { ...tc, status, duration, error }
+        results[results.length - 1] = completed
+        setTests([...results])
+        setProgress(i + 1)
       }
 
-      const duration = Date.now() - start
-      const completed: TestCase = { ...tc, status, duration, error }
-      results[results.length - 1] = completed
-      setTests([...results])
-      setProgress(i + 1)
-    }
-
-    setRunning(false)
-    const final = results
-    const p = final.filter(t => t.status === 'pass').length
-    const f = final.filter(t => t.status === 'fail').length
-    addToast(`Tests complete: ${p} passed, ${f} failed`, f > 0 ? 'error' : 'success')
-  }, [running, addToast])
+      setRunning(false)
+      const final = results
+      const p = final.filter((t) => t.status === 'pass').length
+      const f = final.filter((t) => t.status === 'fail').length
+      addToast(`Tests complete: ${p} passed, ${f} failed`, f > 0 ? 'error' : 'success')
+    },
+    [running, addToast],
+  )
 
   const stopTests = useCallback(() => {
     abortRef.current = true
@@ -388,21 +457,31 @@ export default function ConsciousnessTestRunnerPage() {
 
   const statusColor = (s: TestStatus) => {
     switch (s) {
-      case 'pass': return 'bg-success/15 text-success border-success/30'
-      case 'fail': return 'bg-destructive/15 text-destructive border-destructive/30'
-      case 'skip': return 'bg-muted/30 text-muted-foreground border-border/30'
-      case 'running': return 'bg-info/15 text-info border-info/30'
-      default: return 'bg-muted/20 text-muted-foreground border-border/30'
+      case 'pass':
+        return 'bg-success/15 text-success border-success/30'
+      case 'fail':
+        return 'bg-destructive/15 text-destructive border-destructive/30'
+      case 'skip':
+        return 'bg-muted/30 text-muted-foreground border-border/30'
+      case 'running':
+        return 'bg-info/15 text-info border-info/30'
+      default:
+        return 'bg-muted/20 text-muted-foreground border-border/30'
     }
   }
 
   const statusLabel = (s: TestStatus) => {
     switch (s) {
-      case 'pass': return 'PASS'
-      case 'fail': return 'FAIL'
-      case 'skip': return 'SKIP'
-      case 'running': return 'RUN'
-      default: return '—'
+      case 'pass':
+        return 'PASS'
+      case 'fail':
+        return 'FAIL'
+      case 'skip':
+        return 'SKIP'
+      case 'running':
+        return 'RUN'
+      default:
+        return '—'
     }
   }
 
@@ -411,7 +490,6 @@ export default function ConsciousnessTestRunnerPage() {
   return (
     <PageContainer title={t('consciousness_test_runner.page_title')}>
       <div className="space-y-6 p-6">
-
         <Card>
           <CardHeader>
             <CardTitle>{t('consciousness_test_runner.suites_title')}</CardTitle>
@@ -419,7 +497,7 @@ export default function ConsciousnessTestRunnerPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {suites.map(s => (
+              {suites.map((s) => (
                 <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
                   <input
                     type="checkbox"
@@ -460,7 +538,7 @@ export default function ConsciousnessTestRunnerPage() {
           </CardContent>
         </Card>
 
-        {tests.some(t => t.status !== 'pending') && (
+        {tests.some((t) => t.status !== 'pending') && (
           <Card>
             <CardHeader>
               <CardTitle>{t('consciousness_test_runner.results_title')}</CardTitle>
@@ -468,23 +546,33 @@ export default function ConsciousnessTestRunnerPage() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                 <div>
-                  <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_total')}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {t('consciousness_test_runner.summary_total')}
+                  </div>
                   <div className="font-mono text-lg">{totalTests}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_passed')}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {t('consciousness_test_runner.summary_passed')}
+                  </div>
                   <div className="font-mono text-lg text-success">{passed}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_failed')}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {t('consciousness_test_runner.summary_failed')}
+                  </div>
                   <div className="font-mono text-lg text-destructive">{failed}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_skipped')}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {t('consciousness_test_runner.summary_skipped')}
+                  </div>
                   <div className="font-mono text-lg text-muted-foreground">{skipped}</div>
                 </div>
                 <div>
-                  <div className="text-muted-foreground text-xs">{t('consciousness_test_runner.summary_duration')}</div>
+                  <div className="text-muted-foreground text-xs">
+                    {t('consciousness_test_runner.summary_duration')}
+                  </div>
                   <div className="font-mono text-lg">{totalDuration}ms</div>
                 </div>
               </div>
@@ -492,15 +580,25 @@ export default function ConsciousnessTestRunnerPage() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-muted/30">
-                      <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_test_runner.col_status')}</th>
-                      <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_test_runner.col_suite')}</th>
-                      <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_test_runner.col_name')}</th>
-                      <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_test_runner.col_duration')}</th>
-                      <th className="px-3 py-1.5 text-left font-medium">{t('consciousness_test_runner.col_error')}</th>
+                      <th className="px-3 py-1.5 text-left font-medium">
+                        {t('consciousness_test_runner.col_status')}
+                      </th>
+                      <th className="px-3 py-1.5 text-left font-medium">
+                        {t('consciousness_test_runner.col_suite')}
+                      </th>
+                      <th className="px-3 py-1.5 text-left font-medium">
+                        {t('consciousness_test_runner.col_name')}
+                      </th>
+                      <th className="px-3 py-1.5 text-left font-medium">
+                        {t('consciousness_test_runner.col_duration')}
+                      </th>
+                      <th className="px-3 py-1.5 text-left font-medium">
+                        {t('consciousness_test_runner.col_error')}
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {tests.map(tc => (
+                    {tests.map((tc) => (
                       <tr key={tc.id} className="border-t border-border/30">
                         <td className="px-3 py-1.5">
                           <Badge className={`text-[10px] ${statusColor(tc.status)}`}>
@@ -510,7 +608,9 @@ export default function ConsciousnessTestRunnerPage() {
                         <td className="px-3 py-1.5 text-muted-foreground">{tc.suite}</td>
                         <td className="px-3 py-1.5">{tc.name}</td>
                         <td className="px-3 py-1.5 font-mono">{tc.duration}ms</td>
-                        <td className="px-3 py-1.5 text-destructive max-w-[300px] truncate">{tc.error ?? ''}</td>
+                        <td className="px-3 py-1.5 text-destructive max-w-[300px] truncate">
+                          {tc.error ?? ''}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -527,7 +627,6 @@ export default function ConsciousnessTestRunnerPage() {
             </CardContent>
           </Card>
         )}
-
       </div>
     </PageContainer>
   )

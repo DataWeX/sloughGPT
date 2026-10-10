@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { formatDateTime } from '@/lib/time-format'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { authFetch } from '@/lib/http-client'
 import {
   Badge,
   Button,
@@ -67,7 +67,7 @@ async function apiCall(
       headers: { 'Content-Type': 'application/json' },
     }
     if (body) init.body = body
-    await fetch(`${PUBLIC_API_URL}${path}`, init)
+    await authFetch(path, init)
     return { status: 200, duration: Date.now() - start }
   } catch {
     return { status: 0, duration: Date.now() - start }

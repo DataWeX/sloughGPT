@@ -2,9 +2,15 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { PageContainer } from '@/components/PageContainer'
-import { PUBLIC_API_URL } from '@/lib/config'
+import { authFetch } from '@/lib/http-client'
 import {
-  Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
   Input,
 } from '@sloughgpt/strui'
 import { useToastStore } from '@/lib/toast-store'
@@ -46,47 +52,161 @@ const ENDPOINTS: Record<Category, Endpoint[]> = {
     { method: 'GET', path: '/consciousness/status', description: 'Get consciousness status' },
     { method: 'GET', path: '/consciousness/self-model', description: 'Get self-model data' },
     { method: 'GET', path: '/consciousness/qualia', description: 'Get current qualia state' },
-    { method: 'POST', path: '/consciousness/reflect', description: 'Trigger self-reflection', requestBody: '{\n  "text": "Your reflection prompt here"\n}' },
-    { method: 'PATCH', path: '/consciousness/config', description: 'Update consciousness level', requestBody: '{\n  "level": 2\n}', params: [{ name: 'level', type: 'number', required: true, description: 'Consciousness level (0-3)' }] },
+    {
+      method: 'POST',
+      path: '/consciousness/reflect',
+      description: 'Trigger self-reflection',
+      requestBody: '{\n  "text": "Your reflection prompt here"\n}',
+    },
+    {
+      method: 'PATCH',
+      path: '/consciousness/config',
+      description: 'Update consciousness level',
+      requestBody: '{\n  "level": 2\n}',
+      params: [
+        { name: 'level', type: 'number', required: true, description: 'Consciousness level (0-3)' },
+      ],
+    },
     { method: 'GET', path: '/consciousness/health', description: 'Health check' },
   ],
   history: [
-    { method: 'GET', path: '/consciousness/history/episodes', description: 'Get episode history', params: [{ name: 'limit', type: 'number', required: false, description: 'Max episodes (default 20)' }, { name: 'offset', type: 'number', required: false, description: 'Skip count' }] },
-    { method: 'GET', path: '/consciousness/history/qualia', description: 'Get qualia history', params: [{ name: 'limit', type: 'number', required: false, description: 'Max entries (default 50)' }] },
+    {
+      method: 'GET',
+      path: '/consciousness/history/episodes',
+      description: 'Get episode history',
+      params: [
+        {
+          name: 'limit',
+          type: 'number',
+          required: false,
+          description: 'Max episodes (default 20)',
+        },
+        { name: 'offset', type: 'number', required: false, description: 'Skip count' },
+      ],
+    },
+    {
+      method: 'GET',
+      path: '/consciousness/history/qualia',
+      description: 'Get qualia history',
+      params: [
+        { name: 'limit', type: 'number', required: false, description: 'Max entries (default 50)' },
+      ],
+    },
     { method: 'GET', path: '/consciousness/history/beliefs', description: 'Get beliefs evolution' },
-    { method: 'POST', path: '/consciousness/feedback', description: 'Rate an episode', requestBody: '{\n  "episode_index": 0,\n  "rating": 5\n}', params: [{ name: 'episode_index', type: 'number', required: true, description: 'Episode index' }, { name: 'rating', type: 'number', required: true, description: 'Rating 1-5' }] },
+    {
+      method: 'POST',
+      path: '/consciousness/feedback',
+      description: 'Rate an episode',
+      requestBody: '{\n  "episode_index": 0,\n  "rating": 5\n}',
+      params: [
+        { name: 'episode_index', type: 'number', required: true, description: 'Episode index' },
+        { name: 'rating', type: 'number', required: true, description: 'Rating 1-5' },
+      ],
+    },
   ],
   training: [
     { method: 'GET', path: '/consciousness/train/status', description: 'Get training status' },
-    { method: 'POST', path: '/consciousness/train/start', description: 'Start training', requestBody: '{\n  "model_path": "./models/base"\n}' },
+    {
+      method: 'POST',
+      path: '/consciousness/train/start',
+      description: 'Start training',
+      requestBody: '{\n  "model_path": "./models/base"\n}',
+    },
     { method: 'GET', path: '/consciousness/evaluate', description: 'Evaluate system quality' },
   ],
   personality: [
     { method: 'GET', path: '/consciousness/personality', description: 'Get personality profile' },
-    { method: 'PATCH', path: '/consciousness/personality', description: 'Update personality', requestBody: '{\n  "traits": {\n    "openness": 0.8\n  }\n}' },
+    {
+      method: 'PATCH',
+      path: '/consciousness/personality',
+      description: 'Update personality',
+      requestBody: '{\n  "traits": {\n    "openness": 0.8\n  }\n}',
+    },
     { method: 'POST', path: '/consciousness/personality/reset', description: 'Reset to defaults' },
-    { method: 'GET', path: '/consciousness/personality/history', description: 'Get personality history' },
+    {
+      method: 'GET',
+      path: '/consciousness/personality/history',
+      description: 'Get personality history',
+    },
     { method: 'GET', path: '/consciousness/personality/presets', description: 'List presets' },
-    { method: 'POST', path: '/consciousness/personality/presets/apply', description: 'Apply preset', requestBody: '{\n  "preset_id": "empathetic"\n}', params: [{ name: 'preset_id', type: 'string', required: true, description: 'Preset identifier' }] },
-    { method: 'GET', path: '/consciousness/personality/conflicts', description: 'Detect conflicts' },
+    {
+      method: 'POST',
+      path: '/consciousness/personality/presets/apply',
+      description: 'Apply preset',
+      requestBody: '{\n  "preset_id": "empathetic"\n}',
+      params: [
+        { name: 'preset_id', type: 'string', required: true, description: 'Preset identifier' },
+      ],
+    },
+    {
+      method: 'GET',
+      path: '/consciousness/personality/conflicts',
+      description: 'Detect conflicts',
+    },
   ],
   personas: [
     { method: 'GET', path: '/consciousness/personas', description: 'List saved personas' },
-    { method: 'POST', path: '/consciousness/personas/save', description: 'Save a persona', requestBody: '{\n  "name": "My Persona",\n  "traits": {\n    "openness": 0.8\n  }\n}' },
-    { method: 'GET', path: '/consciousness/personas/:id', description: 'Get a persona', params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }] },
-    { method: 'POST', path: '/consciousness/personas/:id/activate', description: 'Activate a persona', params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }] },
-    { method: 'DELETE', path: '/consciousness/personas/:id', description: 'Delete a persona', params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }] },
+    {
+      method: 'POST',
+      path: '/consciousness/personas/save',
+      description: 'Save a persona',
+      requestBody: '{\n  "name": "My Persona",\n  "traits": {\n    "openness": 0.8\n  }\n}',
+    },
+    {
+      method: 'GET',
+      path: '/consciousness/personas/:id',
+      description: 'Get a persona',
+      params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }],
+    },
+    {
+      method: 'POST',
+      path: '/consciousness/personas/:id/activate',
+      description: 'Activate a persona',
+      params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }],
+    },
+    {
+      method: 'DELETE',
+      path: '/consciousness/personas/:id',
+      description: 'Delete a persona',
+      params: [{ name: 'id', type: 'string', required: true, description: 'Persona ID' }],
+    },
   ],
   data: [
-    { method: 'POST', path: '/consciousness/seed', description: 'Seed test data', params: [{ name: 'count', type: 'number', required: false, description: 'Number of episodes (default 10)' }] },
+    {
+      method: 'POST',
+      path: '/consciousness/seed',
+      description: 'Seed test data',
+      params: [
+        {
+          name: 'count',
+          type: 'number',
+          required: false,
+          description: 'Number of episodes (default 10)',
+        },
+      ],
+    },
   ],
   advanced: [
-    { method: 'POST', path: '/consciousness/process', description: 'Process input text', requestBody: '{\n  "text": "Hello world"\n}' },
-    { method: 'POST', path: '/consciousness/batch', description: 'Batch process inputs', requestBody: '{\n  "inputs": ["Hello", "World"]\n}' },
+    {
+      method: 'POST',
+      path: '/consciousness/process',
+      description: 'Process input text',
+      requestBody: '{\n  "text": "Hello world"\n}',
+    },
+    {
+      method: 'POST',
+      path: '/consciousness/batch',
+      description: 'Batch process inputs',
+      requestBody: '{\n  "inputs": ["Hello", "World"]\n}',
+    },
     { method: 'POST', path: '/consciousness/reset', description: 'Reset consciousness state' },
     { method: 'POST', path: '/consciousness/backup', description: 'Create backup snapshot' },
     { method: 'GET', path: '/consciousness/backup', description: 'List backups' },
-    { method: 'GET', path: '/consciousness/backup/download', description: 'Download backup as file' },
+    {
+      method: 'GET',
+      path: '/consciousness/backup/download',
+      description: 'Download backup as file',
+    },
   ],
 }
 
@@ -126,14 +246,21 @@ function generateId() {
 }
 
 export default function ConsciousnessApiExplorerPage() {
-  const addToast = useToastStore(state => state.addToast)
+  const addToast = useToastStore((state) => state.addToast)
   const { t } = useLocale()
 
   const [selectedIdx, setSelectedIdx] = useState(0)
   const [params, setParams] = useState<{ key: string; value: string }[]>([])
   const [body, setBody] = useState('')
-  const [headers, setHeaders] = useState<{ key: string; value: string }[]>([{ key: 'Content-Type', value: 'application/json' }])
-  const [response, setResponse] = useState<{ status: number; body: string; timeMs: number; headers: Record<string, string> } | null>(null)
+  const [headers, setHeaders] = useState<{ key: string; value: string }[]>([
+    { key: 'Content-Type', value: 'application/json' },
+  ])
+  const [response, setResponse] = useState<{
+    status: number
+    body: string
+    timeMs: number
+    headers: Record<string, string>
+  } | null>(null)
   const [loading, setLoading] = useState(false)
   const [collection, setCollection] = useState<SavedRequest[]>([])
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -150,7 +277,9 @@ export default function ConsciousnessApiExplorerPage() {
       if (saved) setCollection(JSON.parse(saved))
       const hist = localStorage.getItem('consciousness_api_history')
       if (hist) setHistory(JSON.parse(hist))
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [])
 
   const prevIdxRef = useRef(selectedIdx)
@@ -163,19 +292,23 @@ export default function ConsciousnessApiExplorerPage() {
     }
   }, [selectedIdx, endpoint.params, endpoint.requestBody])
 
-  const buildUrl = useCallback((currentParams: { key: string; value: string }[]) => {
-    let path = endpoint.path
-    endpoint.params?.forEach((p, i) => {
-      if (currentParams[i]?.value) {
-        path = path.replace(`:${p.name}`, currentParams[i].value)
-      }
-    })
-    const qs = endpoint.params
-      ?.filter((p, i) => !path.includes(`:${p.name}`) && currentParams[i]?.value)
-      .map((p, i) => `${p.name}=${encodeURIComponent(currentParams[i].value)}`)
-      .join('&')
-    return `${PUBLIC_API_URL}${path}${qs ? `?${qs}` : ''}`
-  }, [endpoint])
+  const buildUrl = useCallback(
+    (currentParams: { key: string; value: string }[]) => {
+      let path = endpoint.path
+      endpoint.params?.forEach((p, i) => {
+        if (currentParams[i]?.value) {
+          path = path.replace(`:${p.name}`, currentParams[i].value)
+        }
+      })
+      const qs = endpoint.params
+        ?.filter((p, i) => !path.includes(`:${p.name}`) && currentParams[i]?.value)
+        .map((p, i) => `${p.name}=${encodeURIComponent(currentParams[i].value)}`)
+        .join('&')
+      // Unprefixed: authFetch resolves this against PUBLIC_API_URL.
+      return `${path}${qs ? `?${qs}` : ''}`
+    },
+    [endpoint],
+  )
 
   const handleSend = useCallback(async () => {
     setLoading(true)
@@ -186,19 +319,25 @@ export default function ConsciousnessApiExplorerPage() {
         method: endpoint.method,
         headers: {} as Record<string, string>,
       }
-      headers.forEach(h => {
+      headers.forEach((h) => {
         if (h.key && h.value) (init.headers as Record<string, string>)[h.key] = h.value
       })
       if (body && endpoint.method !== 'GET') {
         init.body = body
       }
-      const res = await fetch(buildUrl(params), init)
+      const res = await authFetch(buildUrl(params), init)
       const elapsed = Date.now() - start
       const text = await res.text()
       const resHeaders: Record<string, string> = {}
-      res.headers.forEach((v, k) => { resHeaders[k] = v })
+      res.headers.forEach((v, k) => {
+        resHeaders[k] = v
+      })
       let formatted = text
-      try { formatted = JSON.stringify(JSON.parse(text), null, 2) } catch { /* raw */ }
+      try {
+        formatted = JSON.stringify(JSON.parse(text), null, 2)
+      } catch {
+        /* raw */
+      }
       setResponse({ status: res.status, body: formatted, timeMs: elapsed, headers: resHeaders })
 
       const entry: HistoryEntry = {
@@ -209,9 +348,13 @@ export default function ConsciousnessApiExplorerPage() {
         timeMs: elapsed,
         timestamp: Date.now(),
       }
-      setHistory(prev => {
+      setHistory((prev) => {
         const next = [entry, ...prev].slice(0, 20)
-        try { localStorage.setItem('consciousness_api_history', JSON.stringify(next)) } catch { /* ignore */ }
+        try {
+          localStorage.setItem('consciousness_api_history', JSON.stringify(next))
+        } catch {
+          /* ignore */
+        }
         return next
       })
     } catch (e) {
@@ -225,14 +368,20 @@ export default function ConsciousnessApiExplorerPage() {
         timeMs: elapsed,
         timestamp: Date.now(),
       }
-      setHistory(prev => {
+      setHistory((prev) => {
         const next = [entry, ...prev].slice(0, 20)
-        try { localStorage.setItem('consciousness_api_history', JSON.stringify(next)) } catch { /* ignore */ }
+        try {
+          localStorage.setItem('consciousness_api_history', JSON.stringify(next))
+        } catch {
+          /* ignore */
+        }
         return next
       })
     } finally {
       setLoading(false)
-      setTimeout(() => { responseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }) }, 50)
+      setTimeout(() => {
+        responseRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      }, 50)
     }
   }, [endpoint, params, body, headers, buildUrl])
 
@@ -251,39 +400,68 @@ export default function ConsciousnessApiExplorerPage() {
     }
     const next = [req, ...collection]
     setCollection(next)
-    try { localStorage.setItem('consciousness_api_collection', JSON.stringify(next)) } catch { /* ignore */ }
+    try {
+      localStorage.setItem('consciousness_api_collection', JSON.stringify(next))
+    } catch {
+      /* ignore */
+    }
     setSaveName('')
     setSaveTag('')
     setShowSave(false)
     addToast(t('consciousness_api_explorer.toast_saved'), 'success')
   }, [saveName, saveTag, endpoint, body, params, headers, collection, addToast, t])
 
-  const handleLoad = useCallback((req: SavedRequest) => {
-    const idx = ALL_ENDPOINTS.findIndex(e => e.method === req.method && e.path === req.path)
-    if (idx >= 0) {
-      setSelectedIdx(idx)
-      setBody(req.body)
-      setParams(req.params.length > 0 ? req.params : endpoint.params?.map(() => ({ key: '', value: '' })) ?? [])
-      setHeaders(req.headers.length > 0 ? req.headers : [{ key: 'Content-Type', value: 'application/json' }])
-    }
-  }, [endpoint])
+  const handleLoad = useCallback(
+    (req: SavedRequest) => {
+      const idx = ALL_ENDPOINTS.findIndex((e) => e.method === req.method && e.path === req.path)
+      if (idx >= 0) {
+        setSelectedIdx(idx)
+        setBody(req.body)
+        setParams(
+          req.params.length > 0
+            ? req.params
+            : (endpoint.params?.map(() => ({ key: '', value: '' })) ?? []),
+        )
+        setHeaders(
+          req.headers.length > 0
+            ? req.headers
+            : [{ key: 'Content-Type', value: 'application/json' }],
+        )
+      }
+    },
+    [endpoint],
+  )
 
-  const handleDeleteCollection = useCallback((id: string) => {
-    const next = collection.filter(r => r.id !== id)
-    setCollection(next)
-    try { localStorage.setItem('consciousness_api_collection', JSON.stringify(next)) } catch { /* ignore */ }
-  }, [collection])
+  const handleDeleteCollection = useCallback(
+    (id: string) => {
+      const next = collection.filter((r) => r.id !== id)
+      setCollection(next)
+      try {
+        localStorage.setItem('consciousness_api_collection', JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+    },
+    [collection],
+  )
 
   const handleReplay = useCallback((entry: HistoryEntry) => {
-    const idx = ALL_ENDPOINTS.findIndex(e => e.method === entry.method && e.path === entry.path)
+    const idx = ALL_ENDPOINTS.findIndex((e) => e.method === entry.method && e.path === entry.path)
     if (idx >= 0) setSelectedIdx(idx)
   }, [])
 
-  const handleDeleteHistory = useCallback((id: string) => {
-    const next = history.filter(h => h.id !== id)
-    setHistory(next)
-    try { localStorage.setItem('consciousness_api_history', JSON.stringify(next)) } catch { /* ignore */ }
-  }, [history])
+  const handleDeleteHistory = useCallback(
+    (id: string) => {
+      const next = history.filter((h) => h.id !== id)
+      setHistory(next)
+      try {
+        localStorage.setItem('consciousness_api_history', JSON.stringify(next))
+      } catch {
+        /* ignore */
+      }
+    },
+    [history],
+  )
 
   return (
     <PageContainer title={t('consciousness_api_explorer.page_title')}>
@@ -295,12 +473,12 @@ export default function ConsciousnessApiExplorerPage() {
             </CardHeader>
             <CardContent className="p-2">
               <div className="max-h-[50vh] overflow-y-auto space-y-1">
-                {CATEGORIES.map(cat => (
+                {CATEGORIES.map((cat) => (
                   <div key={cat.id}>
                     <p className="px-2 py-1 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
                       {t(cat.labelKey)}
                     </p>
-                    {ENDPOINTS[cat.id].map(ep => {
+                    {ENDPOINTS[cat.id].map((ep) => {
                       const globalIdx = ALL_ENDPOINTS.indexOf(ep)
                       return (
                         <button
@@ -313,7 +491,10 @@ export default function ConsciousnessApiExplorerPage() {
                               : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                           }`}
                         >
-                          <Badge variant="outline" className={`font-mono text-[9px] border px-1 py-0 shrink-0 ${METHOD_COLORS[ep.method]}`}>
+                          <Badge
+                            variant="outline"
+                            className={`font-mono text-[9px] border px-1 py-0 shrink-0 ${METHOD_COLORS[ep.method]}`}
+                          >
                             {ep.method}
                           </Badge>
                           <span className="truncate font-mono">{ep.path}</span>
@@ -339,27 +520,40 @@ export default function ConsciousnessApiExplorerPage() {
             <CardContent className="p-2">
               <div className="max-h-48 overflow-y-auto space-y-1">
                 {history.length === 0 && (
-                  <p className="text-[10px] text-muted-foreground text-center py-2">{t('consciousness_api_explorer.no_history')}</p>
+                  <p className="text-[10px] text-muted-foreground text-center py-2">
+                    {t('consciousness_api_explorer.no_history')}
+                  </p>
                 )}
-                {history.map(h => (
+                {history.map((h) => (
                   <div
                     key={h.id}
                     className="flex items-center gap-1.5 px-2 py-1 rounded hover:bg-muted/50 text-[10px] cursor-pointer group"
                     onClick={() => handleReplay(h)}
                   >
-                    <Badge variant="outline" className={`font-mono text-[8px] border px-1 py-0 shrink-0 ${METHOD_COLORS[h.method]}`}>
+                    <Badge
+                      variant="outline"
+                      className={`font-mono text-[8px] border px-1 py-0 shrink-0 ${METHOD_COLORS[h.method]}`}
+                    >
                       {h.method}
                     </Badge>
-                    <span className={`font-mono ${
-                      h.status >= 200 && h.status < 300 ? 'text-success' :
-                      h.status >= 400 ? 'text-destructive' : 'text-muted-foreground'
-                    }`}>
+                    <span
+                      className={`font-mono ${
+                        h.status >= 200 && h.status < 300
+                          ? 'text-success'
+                          : h.status >= 400
+                            ? 'text-destructive'
+                            : 'text-muted-foreground'
+                      }`}
+                    >
                       {h.status || 'ERR'}
                     </span>
                     <span className="text-muted-foreground">{h.timeMs}ms</span>
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteHistory(h.id) }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleDeleteHistory(h.id)
+                      }}
                       className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
                     >
                       <IconTrash className="h-2.5 w-2.5" />
@@ -376,12 +570,20 @@ export default function ConsciousnessApiExplorerPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className={`font-mono text-xs border ${METHOD_COLORS[endpoint.method]}`}>
+                  <Badge
+                    variant="outline"
+                    className={`font-mono text-xs border ${METHOD_COLORS[endpoint.method]}`}
+                  >
                     {endpoint.method}
                   </Badge>
                   <code className="text-sm font-mono">{endpoint.path}</code>
                 </div>
-                <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setShowSave(!showSave)}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => setShowSave(!showSave)}
+                >
                   <IconPlus className="h-3 w-3 mr-1" />
                   {t('consciousness_api_explorer.save')}
                 </Button>
@@ -411,7 +613,9 @@ export default function ConsciousnessApiExplorerPage() {
 
               {endpoint.params && endpoint.params.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-2">{t('consciousness_api_explorer.parameters')}</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2">
+                    {t('consciousness_api_explorer.parameters')}
+                  </h4>
                   <div className="space-y-1.5">
                     {endpoint.params.map((p, i) => (
                       <div key={p.name} className="flex items-center gap-2">
@@ -435,9 +639,13 @@ export default function ConsciousnessApiExplorerPage() {
                 </div>
               )}
 
-              {(endpoint.method === 'POST' || endpoint.method === 'PATCH' || endpoint.method === 'PUT') && (
+              {(endpoint.method === 'POST' ||
+                endpoint.method === 'PATCH' ||
+                endpoint.method === 'PUT') && (
                 <div>
-                  <h4 className="text-xs font-medium text-muted-foreground mb-2">{t('consciousness_api_explorer.body')}</h4>
+                  <h4 className="text-xs font-medium text-muted-foreground mb-2">
+                    {t('consciousness_api_explorer.body')}
+                  </h4>
                   <textarea
                     value={body}
                     onChange={(e) => setBody((e.target as HTMLTextAreaElement).value)}
@@ -448,7 +656,9 @@ export default function ConsciousnessApiExplorerPage() {
               )}
 
               <div>
-                <h4 className="text-xs font-medium text-muted-foreground mb-2">{t('consciousness_api_explorer.headers')}</h4>
+                <h4 className="text-xs font-medium text-muted-foreground mb-2">
+                  {t('consciousness_api_explorer.headers')}
+                </h4>
                 <div className="space-y-1.5">
                   {headers.map((h, i) => (
                     <div key={i} className="flex items-center gap-2">
@@ -495,7 +705,9 @@ export default function ConsciousnessApiExplorerPage() {
               </div>
 
               <Button onClick={handleSend} disabled={loading} className="w-full">
-                {loading ? t('consciousness_api_explorer.sending') : t('consciousness_api_explorer.send_request')}
+                {loading
+                  ? t('consciousness_api_explorer.sending')
+                  : t('consciousness_api_explorer.send_request')}
               </Button>
             </CardContent>
           </Card>
@@ -505,13 +717,16 @@ export default function ConsciousnessApiExplorerPage() {
               <Card>
                 <CardHeader>
                   <div className="flex items-center gap-3">
-                    <Badge variant="outline" className={`font-mono text-xs border ${
-                      response.status >= 200 && response.status < 300
-                        ? 'bg-success/15 text-success border-success/30'
-                        : response.status >= 400
-                          ? 'bg-destructive/15 text-destructive border-destructive/30'
-                          : 'bg-muted/50 text-muted-foreground border-border/40'
-                    }`}>
+                    <Badge
+                      variant="outline"
+                      className={`font-mono text-xs border ${
+                        response.status >= 200 && response.status < 300
+                          ? 'bg-success/15 text-success border-success/30'
+                          : response.status >= 400
+                            ? 'bg-destructive/15 text-destructive border-destructive/30'
+                            : 'bg-muted/50 text-muted-foreground border-border/40'
+                      }`}
+                    >
                       {response.status || 'ERR'}
                     </Badge>
                     <span className="text-xs text-muted-foreground">{response.timeMs}ms</span>
@@ -520,7 +735,9 @@ export default function ConsciousnessApiExplorerPage() {
                 <CardContent className="space-y-3">
                   {Object.keys(response.headers).length > 0 && (
                     <div>
-                      <h4 className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_api_explorer.response_headers')}</h4>
+                      <h4 className="text-xs font-medium text-muted-foreground mb-1">
+                        {t('consciousness_api_explorer.response_headers')}
+                      </h4>
                       <div className="rounded-md border border-border/40 bg-muted/20 p-2 space-y-0.5">
                         {Object.entries(response.headers).map(([k, v]) => (
                           <div key={k} className="text-[10px] font-mono">
@@ -532,7 +749,9 @@ export default function ConsciousnessApiExplorerPage() {
                     </div>
                   )}
                   <div>
-                    <h4 className="text-xs font-medium text-muted-foreground mb-1">{t('consciousness_api_explorer.response_body')}</h4>
+                    <h4 className="text-xs font-medium text-muted-foreground mb-1">
+                      {t('consciousness_api_explorer.response_body')}
+                    </h4>
                     <pre className="rounded-md border border-border/40 bg-muted/20 p-3 text-xs font-mono overflow-auto max-h-80 whitespace-pre-wrap">
                       {response.body}
                     </pre>
@@ -545,27 +764,39 @@ export default function ConsciousnessApiExplorerPage() {
           {collection.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-xs">{t('consciousness_api_explorer.collection')}</CardTitle>
+                <CardTitle className="text-xs">
+                  {t('consciousness_api_explorer.collection')}
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-2">
                 <div className="space-y-1">
-                  {collection.map(req => (
+                  {collection.map((req) => (
                     <div
                       key={req.id}
                       className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted/50 text-[11px] cursor-pointer group"
                       onClick={() => handleLoad(req)}
                     >
-                      <Badge variant="outline" className={`font-mono text-[9px] border px-1 py-0 shrink-0 ${METHOD_COLORS[req.method]}`}>
+                      <Badge
+                        variant="outline"
+                        className={`font-mono text-[9px] border px-1 py-0 shrink-0 ${METHOD_COLORS[req.method]}`}
+                      >
                         {req.method}
                       </Badge>
                       <span className="font-medium truncate">{req.name}</span>
                       {req.tag && (
-                        <Badge variant="secondary" className="text-[8px] px-1 py-0 shrink-0">{req.tag}</Badge>
+                        <Badge variant="secondary" className="text-[8px] px-1 py-0 shrink-0">
+                          {req.tag}
+                        </Badge>
                       )}
-                      <span className="text-muted-foreground truncate font-mono text-[9px]">{req.path}</span>
+                      <span className="text-muted-foreground truncate font-mono text-[9px]">
+                        {req.path}
+                      </span>
                       <button
                         type="button"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteCollection(req.id) }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteCollection(req.id)
+                        }}
                         className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-foreground"
                       >
                         <IconTrash className="h-2.5 w-2.5" />
