@@ -50,8 +50,19 @@ def _is_fixture(doc: dict) -> bool:
 
 
 def _collections(store_dir: Path) -> list[str]:
-    """Collection names present in a store dir, from ``<name>.mogdb``."""
-    return sorted(p.stem for p in store_dir.glob("*.mogdb"))
+    """Collection names present in a store dir.
+
+    A collection is discoverable from either its ``<name>.mogdb`` snapshot or
+    its ``<name>.journal.jsonl`` append-only log.
+
+    Keying on ``*.mogdb`` alone silently skipped any collection that had never
+    been compacted — a fresh or crashed store has a journal but no snapshot —
+    and the prune then reported "0 fixtures" for a collection it never opened.
+    For a data tool that is the worst failure mode: a confidently wrong "clean".
+    """
+    names = {p.stem for p in store_dir.glob("*.mogdb")}
+    names.update(p.name.removesuffix(".journal.jsonl") for p in store_dir.glob("*.journal.jsonl"))
+    return sorted(names)
 
 
 def prune_store(store_dir: Path, apply: bool) -> int:
