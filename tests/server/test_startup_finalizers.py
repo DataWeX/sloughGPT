@@ -213,3 +213,72 @@ def test_finalize_fatal_error_overrides_success() -> None:
     loader.finish_history.assert_called_once_with(success=False, error="phase_ready exploded")
     event, _ = manager.emit.await_args.args
     assert event.value == "startup.failed"
+
+
+def test_shutdown_inference_engine_does_not_starve_the_loop(monkeypatch) -> None:
+    """ff81b07a: ``proc.wait(timeout=10)`` ran inline on the event loop.
+
+    The single uvicorn worker runs one loop with no ``workers=``; a
+    slow-to-exit inference engine therefore froze *every* in-flight request
+    for up to 10s during shutdown. The wait must be threaded so the loop keeps
+    ticking, while the child is still reaped exactly as before.
+    """
+    import time
+
+    import state as server_state
+    from infrastructure.startup import StartupOrchestrator
+
+    class _SlowProc:
+        """A child that takes 400ms to exit after terminate()."""
+
+        pid = 4242
+
+        def __init__(self) -> None:
+            self.terminated = False
+            self.killed = False
+
+        def poll(self) -> None:
+            return None  # still running => shutdown path engages
+
+        def terminate(self) -> None:
+            self.terminated = True
+
+        def wait(self, timeout: float | None = None) -> int:
+            time.sleep(0.4)
+            return 0
+
+        def kill(self) -> None:
+            self.killed = True
+
+    proc = _SlowProc()
+    monkeypatch.setattr(server_state, "_inference_engine_proc", proc, raising=False)
+    orch = StartupOrchestrator.__new__(StartupOrchestrator)
+
+    during: list[float] = []
+
+    async def beat() -> None:
+        while True:
+            await asyncio.sleep(0.05)
+            during.append(time.monotonic())
+
+    async def drive() -> int:
+        beacon = asyncio.create_task(beat())
+        await asyncio.sleep(0.08)  # beacon is now cycling
+        before = len(during)
+        await orch._shutdown_inference_engine()  # blocks ~400ms
+        ticks = len(during) - before
+        beacon.cancel()
+        try:
+            await beacon
+        except asyncio.CancelledError:
+            pass
+        return ticks
+
+    ticks = asyncio.run(drive())
+
+    # Child still handled exactly as before the fix.
+    assert proc.terminated, "terminate() must be sent before waiting"
+    assert not proc.killed, "a clean exit must not escalate to kill()"
+    # Inline wait() => the beacon could not tick at all while blocked (one
+    # catch-up tick at best). Threaded => ~7 ticks land in the same 400ms.
+    assert ticks >= 3, f"event loop starved during shutdown: only {ticks} ticks in 400ms"

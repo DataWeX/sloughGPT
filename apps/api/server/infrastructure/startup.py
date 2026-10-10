@@ -1132,7 +1132,14 @@ class StartupOrchestrator:
             if proc is not None and proc.poll() is None:
                 proc.terminate()
                 try:
-                    proc.wait(timeout=10)
+                    # Blocking wait — thread it so a slow-to-exit child cannot
+                    # stall the single uvicorn event loop for up to 10s.
+                    await asyncio.to_thread(proc.wait, timeout=10)
+                except asyncio.CancelledError:
+                    # Shutdown must still reap the child even if we are
+                    # cancelled mid-wait, or the engine outlives the server.
+                    proc.kill()
+                    raise
                 except Exception:
                     proc.kill()
                 logger.info(

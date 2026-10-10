@@ -9,6 +9,7 @@ GET  /profiles/active       — get the currently active profile
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, HTTPException
@@ -93,7 +94,10 @@ class ProfilesRouter:
         try:
             import subprocess
 
-            result = subprocess.run(
+            # Blocking subprocess — thread it so a 5s nvidia-smi timeout
+            # cannot stall the single uvicorn event loop.
+            result = await asyncio.to_thread(
+                subprocess.run,
                 ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
                 capture_output=True,
                 text=True,
