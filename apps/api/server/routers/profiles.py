@@ -26,6 +26,16 @@ from domain.infrastructure.serving_profiles import (
 
 logger = logging.getLogger("slo.routers.profiles")
 
+# GPU presence is a hardware constant for the life of the process, but
+# /profiles/recommend probed it on every request. nvidia-smi costs a
+# subprocess spawn (~50-300ms) even when it answers instantly, so memoise the
+# answer. A hot-plugged GPU needs a restart to be seen, which matches how the
+# rest of the stack enumerates hardware at import.
+#
+# None means "not probed yet". Only a definitive answer is stored — see the
+# call site: a timeout must not pin False for the process lifetime.
+_GPU_PRESENT: bool | None = None
+
 
 class ApplyProfileRequest(BaseModel):
     profile_id: str = Field(..., min_length=1, max_length=50)
@@ -90,22 +100,30 @@ class ProfilesRouter:
         except ImportError:
             ram_gb = multiprocessing.cpu_count() * 4  # rough estimate
 
-        has_gpu = False
-        try:
-            import subprocess
+        global _GPU_PRESENT
 
-            # Blocking subprocess — thread it so a 5s nvidia-smi timeout
-            # cannot stall the single uvicorn event loop.
-            result = await asyncio.to_thread(
-                subprocess.run,
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            has_gpu = bool(result.stdout.strip())
-        except Exception:
-            logger.debug("GPU detection failed (nvidia-smi not available)")
+        has_gpu = _GPU_PRESENT
+        if has_gpu is None:
+            try:
+                import subprocess
+
+                # Blocking subprocess — thread it so a 5s nvidia-smi timeout
+                # cannot stall the single uvicorn event loop.
+                result = await asyncio.to_thread(
+                    subprocess.run,
+                    ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                has_gpu = bool(result.stdout.strip())
+                # Memoise only the definitive answer. A timeout is transient
+                # and must not pin "no GPU" for the life of the process, so
+                # the exception path deliberately leaves _GPU_PRESENT as None.
+                _GPU_PRESENT = has_gpu
+            except Exception:
+                logger.debug("GPU detection failed (nvidia-smi not available)")
+                has_gpu = False
 
         recommended = detect_recommended_profile(ram_gb, has_gpu)
         return success_response(

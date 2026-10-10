@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -14,6 +15,16 @@ if _server_dir not in sys.path:
     sys.path.insert(0, _server_dir)
 
 from routers.profiles import ProfilesRouter
+
+
+@pytest.fixture(autouse=True)
+def _reset_gpu_probe_cache():
+    """The GPU probe is memoised at module level; isolate it per test."""
+    import routers.profiles as profiles
+
+    profiles._GPU_PRESENT = None
+    yield
+    profiles._GPU_PRESENT = None
 
 
 def _make_profile(pid="default", label="Default"):
@@ -106,3 +117,61 @@ class TestRecommendProfile:
         assert data["recommended_profile_id"] == "balanced"
         assert "detected_ram_gb" in data
         assert "has_gpu" in data
+
+
+class TestGpuProbeCaching:
+    """GPU presence is a hardware constant; nvidia-smi is a subprocess spawn.
+
+    The endpoint used to pay that spawn on every request. These pin the
+    memoisation contract, including the case where it must NOT cache.
+    """
+
+    @patch("routers.profiles.detect_recommended_profile", return_value="balanced")
+    @patch("subprocess.run")
+    def test_probes_once_then_reuses_the_answer(self, mock_run, mock_detect):
+        mock_run.return_value = MagicMock(stdout="NVIDIA GeForce RTX\n")
+        client = TestClient(_app(ProfilesRouter()))
+
+        first = client.get("/profiles/recommend").json()["data"]
+        second = client.get("/profiles/recommend").json()["data"]
+
+        assert first["has_gpu"] is True
+        assert second["has_gpu"] is True
+        assert mock_run.call_count == 1, "the hardware probe must not repeat per request"
+
+    @patch("routers.profiles.detect_recommended_profile", return_value="balanced")
+    @patch("subprocess.run")
+    def test_warm_cache_never_spawns_a_process(self, mock_run, mock_detect):
+        import routers.profiles as profiles
+
+        profiles._GPU_PRESENT = True
+        client = TestClient(_app(ProfilesRouter()))
+
+        assert client.get("/profiles/recommend").json()["data"]["has_gpu"] is True
+        assert mock_run.call_count == 0
+
+    @patch("routers.profiles.detect_recommended_profile", return_value="balanced")
+    @patch("subprocess.run")
+    def test_no_gpu_is_cached_too(self, mock_run, mock_detect):
+        mock_run.return_value = MagicMock(stdout="")
+        client = TestClient(_app(ProfilesRouter()))
+
+        assert client.get("/profiles/recommend").json()["data"]["has_gpu"] is False
+        client.get("/profiles/recommend")
+        assert mock_run.call_count == 1
+
+    @patch("routers.profiles.detect_recommended_profile", return_value="balanced")
+    @patch("subprocess.run", side_effect=TimeoutError("nvidia-smi hung"))
+    def test_a_timeout_is_not_cached(self, mock_run, mock_detect):
+        """A transient failure must not pin False for the process lifetime."""
+        import routers.profiles as profiles
+
+        client = TestClient(_app(ProfilesRouter()))
+        assert client.get("/profiles/recommend").json()["data"]["has_gpu"] is False
+        assert profiles._GPU_PRESENT is None, "timeout must leave the cache unprimed"
+
+        # The next request is allowed to retry and get a real answer.
+        mock_run.side_effect = None
+        mock_run.return_value = MagicMock(stdout="NVIDIA GeForce RTX\n")
+        assert client.get("/profiles/recommend").json()["data"]["has_gpu"] is True
+        assert profiles._GPU_PRESENT is True
