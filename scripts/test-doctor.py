@@ -22,6 +22,7 @@ import importlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -89,10 +90,14 @@ def _green(msg: str) -> str:
 # ── Pytest ─────────────────────────────────────────────────────────────
 
 
-def _run(args: list[str], timeout: int = 120, tb: str = "short") -> tuple[int, str, str]:
+def _run(
+    args: list[str], timeout: int = 120, tb: str = "short", env: dict | None = None
+) -> tuple[int, str, str]:
     cmd = [sys.executable, "-m", "pytest"] + args + [f"--tb={tb}", "-q", "--no-header"]
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=str(REPO_ROOT))
+        p = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout, cwd=str(REPO_ROOT), env=env
+        )
         return p.returncode, p.stdout, p.stderr
     except subprocess.TimeoutExpired:
         return 1, "", f"TIMEOUT after {timeout}s"
@@ -537,13 +542,26 @@ _MOCK_DRIFT_PATH_ROOTS = (
     (),
 )
 _MD_PATCH_RE = re.compile(r'patch\(\s*["\']([A-Za-z0-9_.]+)["\']')
-# `monkeypatch.setattr("pkg.mod.attr", ...)`.  STRING FORM ONLY: the object form
-# (`monkeypatch.setattr(obj, "attr", value)`) names no dotted path, so there is
-# nothing to resolve back to a definition site -- 1064 such sites in tests/ are
-# out of scope by construction, not by omission.  Without this the two forms
-# answered differently: patch("...") was scanned, setattr was invisible.
-_MD_SETPATTR_RE = re.compile(r'monkeypatch\.setattr\(\s*["\']([A-Za-z0-9_.]+)["\']')
-_MD_TARGET_RES = (_MD_PATCH_RE, _MD_SETPATTR_RE)
+# monkeypatch.setattr is patching too (card b236257b — gap 1): both spellings
+# must reach the detector.  The string form is the same dotted grammar as
+# patch("a.b.c").  The object form (setattr(obj, "attr", v)) has no dotted path
+# in the call itself, but when the object is an import alias
+# (`import a.b as mw_mod` / `from a.b import c as x` /
+# `x = importlib.import_module("a.b")`) the path IS recoverable from the file's
+# own imports — that is the ProcessGuard fixture shape this card was filed for.
+# Aliases that do not resolve are COUNTED, not silently dropped.
+_MD_SETATTR_STR_RE = re.compile(r"""monkeypatch\.setattr\(\s*["']([A-Za-z0-9_.]+)["']""")
+_MD_SETATTR_IMLIB_RE = re.compile(
+    r"""monkeypatch\.setattr\(\s*importlib\.import_module\(\s*["']([A-Za-z0-9_.]+)["']\s*\)\s*,\s*["'](\w+)["']"""
+)
+_MD_SETATTR_OBJ_RE = re.compile(r"""monkeypatch\.setattr\(\s*([A-Za-z_]\w*)\s*,\s*["'](\w+)["']""")
+_MD_IMPORT_AS_RE = re.compile(r"^\s*import\s+([A-Za-z0-9_.]+)(?:\s+as\s+(\w+))?", re.MULTILINE)
+_MD_IMPORTLIB_ASSIGN_RE = re.compile(
+    r"""(\w+)\s*=\s*importlib\.import_module\(\s*["']([A-Za-z0-9_.]+)["']\s*\)"""
+)
+# Counted by the last _md_targets() run -- a silent zero here is the exact
+# failure mode this tool exists to prevent.
+_MD_SETATTR_UNRESOLVED = 0
 _MD_FROM_IMPORT_RE = re.compile(r"^\s*from\s+([A-Za-z0-9_.]+)\s+import\s+(.+)$")
 _MD_ANY_IMPORT_RE = re.compile(
     r"^[ \t]*(?:from[ \t]+([A-Za-z0-9_.]+)[\t ]+import|import[ \t]+([A-Za-z0-9_.]+))",
@@ -607,11 +625,68 @@ def _md_resolve(module: str, importer: Path) -> str:
     return ".".join(x for x in parts if x)
 
 
-def _md_targets() -> dict[str, set[Path]]:
-    """patch target -> the test files that patch it (definition-site only).
+def _md_setattr_targets(txt: str) -> tuple[set[str], int]:
+    """monkeypatch.setattr targets in `txt` -> (targets, unresolved count).
 
-    Covers both spellings: ``patch("...")`` and ``monkeypatch.setattr("...")``.
+    Both spellings are patching (card b236257b, gap 1).  The object form
+    resolves through the file's own imports — dotted-path alias, from-import
+    alias, importlib assignment, or inline importlib call.  Aliases that do
+    not resolve are COUNTED, not dropped.
     """
+    targets: set[str] = set()
+    for m in _MD_SETATTR_STR_RE.finditer(txt):
+        targets.add(m.group(1))
+    for m in _MD_SETATTR_IMLIB_RE.finditer(txt):
+        targets.add(f"{m.group(1)}.{m.group(2)}")
+
+    aliases: dict[str, str] = {}
+    for m in _MD_IMPORT_AS_RE.finditer(txt):
+        path, asname = m.group(1), m.group(2)
+        if asname:
+            aliases[asname] = path
+        else:
+            top = path.split(".", 1)[0]
+            aliases.setdefault(top, top)
+    for m in _MD_IMPORTLIB_ASSIGN_RE.finditer(txt):
+        aliases[m.group(1)] = m.group(2)
+    for line in txt.splitlines():
+        m = _MD_FROM_IMPORT_RE.match(line)
+        if not m:
+            continue
+        mod_raw, names = m.group(1), m.group(2)
+        if "#" in names:
+            names = names.split("#", 1)[0]
+        for part in re.split(r"[(),]", names):
+            part = part.strip()
+            if not part:
+                continue
+            if " as " in part:
+                name, _, asname = part.partition(" as ")
+                aliases[asname.strip()] = f"{mod_raw}.{name.strip()}"
+            elif part.isidentifier():
+                aliases.setdefault(part, f"{mod_raw}.{part}")
+
+    unresolved = 0
+    for m in _MD_SETATTR_OBJ_RE.finditer(txt):
+        alias, attr = m.group(1), m.group(2)
+        base = aliases.get(alias)
+        if base:
+            targets.add(f"{base}.{attr}")
+        else:
+            unresolved += 1
+    return targets, unresolved
+
+
+def _md_targets() -> dict[str, set[Path]]:
+    """patch()/monkeypatch.setattr target -> the test files that patch it.
+
+    Definition-site only: collected from the test source, then filtered to
+    internal implementation sites (``._internal.``).  Both patch() and the
+    two monkeypatch.setattr spellings (string and import-alias object form)
+    contribute.
+    """
+    global _MD_SETATTR_UNRESOLVED
+    _MD_SETATTR_UNRESOLVED = 0
     out: dict[str, set[Path]] = {}
     for d in _MOCK_DRIFT_TEST_DIRS:
         root = REPO_ROOT / d
@@ -622,11 +697,15 @@ def _md_targets() -> dict[str, set[Path]]:
                 txt = f.read_text(errors="ignore")
             except OSError:
                 continue
-            for rx in _MD_TARGET_RES:
-                for m in rx.finditer(txt):
-                    t = m.group(1)
-                    if "._internal." in t:
-                        out.setdefault(t, set()).add(f)
+            for m in _MD_PATCH_RE.finditer(txt):
+                t = m.group(1)
+                if "._internal." in t:
+                    out.setdefault(t, set()).add(f)
+            st, unresolved = _md_setattr_targets(txt)
+            _MD_SETATTR_UNRESOLVED += unresolved
+            for t in st:
+                if "._internal." in t:
+                    out.setdefault(t, set()).add(f)
     return out
 
 
@@ -824,7 +903,157 @@ def _md_reachable(start: set[str], graph: dict[str, set[str]], depth: int) -> se
     return seen
 
 
-def cmd_mock_drift(verbose: bool = False) -> int:
+# ── Boom-vs-baseline advisory probe (card b236257b, gap 2) ──────────────
+# A suspect that PASSES with the seam booby-trapped is harmless; a suspect
+# that fails THE SAME WAY with and without the boom is an unrelated failure
+# sitting beside a dead seam — that case falls through both the "dead" and
+# "live" labels.  Two subprocess runs per suspect give six honest verdicts.
+# Advisory only: the exit code stays confirmed/unresolvable, never a
+# subprocess run's luck.
+
+# Distinct from the landed 3-arg _md_boom_verdict (used by --dead-seam):
+# that one classifies on (baseline_rc, boom_rc, marker-state); this one also
+# reads the failure text to surface "unrelated" vs "inconsistent".
+_MD_BOOM_MARKER = "MOCK_DRIFT_BOOM"
+
+
+def _md_boom_plugin(target: str) -> str:
+    """Source for a throwaway pytest plugin that arms `target` to raise.
+
+    Armed at the START of the test CALL phase — after fixture setup, so it
+    overrides the test's own monkeypatch.setattr of the same seam — and
+    disarmed right after the call, before teardown restores anything.
+    """
+    return (
+        '"""Auto-generated by test-doctor --mock-drift boom probe. Do not edit."""\n'
+        "import importlib\n\n"
+        "import pytest\n\n"
+        f"_TARGET = {target!r}\n"
+        f"_MARKER = {_MD_BOOM_MARKER!r}\n"
+        "_state = None\n\n"
+        "def _explode(*args, **kwargs):\n"
+        '    raise RuntimeError(f"{_MARKER}: {_TARGET} invoked during boom run")\n\n'
+        "def _arm():\n"
+        "    global _state\n"
+        "    if _state is not None:\n"
+        "        return\n"
+        '    modpath, _, attrname = _TARGET.rpartition(".")\n'
+        "    mod = importlib.import_module(modpath)\n"
+        "    try:\n"
+        "        original = getattr(mod, attrname)\n"
+        "    except AttributeError:\n"
+        "        return\n"
+        "    setattr(mod, attrname, _explode)\n"
+        "    _state = (mod, attrname, original)\n\n"
+        "def _disarm():\n"
+        "    global _state\n"
+        "    if _state is None:\n"
+        "        return\n"
+        "    mod, attrname, original = _state\n"
+        "    setattr(mod, attrname, original)\n"
+        "    _state = None\n\n"
+        "@pytest.hookimpl(hookwrapper=True)\n"
+        "def pytest_runtest_call(item):\n"
+        "    _arm()\n"
+        "    try:\n"
+        "        yield\n"
+        "    finally:\n"
+        "        _disarm()\n"
+    )
+
+
+def _md_failed_nodes(text: str) -> set[str]:
+    return set(re.findall(r"^(?:FAILED|ERROR)\s+(\S+)", text, re.MULTILINE))
+
+
+def _md_advisory_verdict(base_rc: int, base_text: str, boom_rc: int, boom_text: str) -> str:
+    """Classify a suspect from its baseline run vs its boom run."""
+    if _MD_BOOM_MARKER in boom_text:
+        return "live"
+    if base_rc == 0:
+        if boom_rc == 0:
+            return "dead"
+        return "probe-error"
+    if boom_rc == 0:
+        return "flaky"
+    base_fail = _md_failed_nodes(base_text)
+    if base_fail and base_fail == _md_failed_nodes(boom_text):
+        return "unrelated"
+    return "inconsistent"
+
+
+def _md_boom_probe(
+    suspects: list[tuple[str, str, list[str], list[str]]],
+    *,
+    timeout: int = 150,
+    limit: int = 6,
+    extra_path: list[str] | None = None,
+) -> list[tuple[str, str, str, list[str]]]:
+    """Run each suspect's tests twice — baseline, then with the seam armed.
+
+    Returns (target, verdict, detail, files).  Bounded by `limit` pairs;
+    suspect files that do not exist are skipped WITHOUT spawning a run (a
+    missing file is a collection error, not evidence).
+    """
+    out: list[tuple[str, str, str, list[str]]] = []
+    probed = 0
+    plugin_dir: Path | None = None
+    try:
+        for target, _reader, _hits, files in suspects:
+            if probed >= limit:
+                out.append(
+                    (f"+{len(suspects) - probed} more", "skipped", f"probe limit {limit}", [])
+                )
+                break
+            existing = [
+                f
+                for f in files
+                if (Path(f).exists() if Path(f).is_absolute() else (REPO_ROOT / f).exists())
+            ]
+            if not existing:
+                out.append((target, "skipped", "test files not found", list(files)))
+                continue
+            probed += 1
+            if plugin_dir is None:
+                plugin_dir = Path(tempfile.mkdtemp(prefix="md-boom-"))
+            (plugin_dir / "mock_drift_boom_plugin.py").write_text(_md_boom_plugin(target))
+            args = [*existing, "-m", ""]
+            base_rc, base_out, base_err = _run(args, timeout=timeout, tb="line")
+            env = dict(os.environ)
+            paths = [str(plugin_dir), *(extra_path or [])]
+            if env.get("PYTHONPATH"):
+                paths.append(env["PYTHONPATH"])
+            env["PYTHONPATH"] = os.pathsep.join(paths)
+            boom_rc, boom_out, boom_err = _run(
+                [*args, "-p", "mock_drift_boom_plugin"],
+                timeout=timeout,
+                tb="line",
+                env=env,
+            )
+            base_text = base_out + base_err
+            boom_text = boom_out + boom_err
+            verdict = _md_advisory_verdict(base_rc, base_text, boom_rc, boom_text)
+            if verdict == "live":
+                marker_line = next(
+                    (ln.strip() for ln in boom_text.splitlines() if _MD_BOOM_MARKER in ln),
+                    _MD_BOOM_MARKER,
+                )
+                detail = marker_line[:160]
+            elif verdict == "unrelated":
+                same = sorted(_md_failed_nodes(base_text))
+                detail = f"same failure both runs: {same[:1]}"
+            elif verdict == "dead":
+                detail = "boom never invoked during the run"
+            else:
+                detail = f"base rc={base_rc}, boom rc={boom_rc}"
+            out.append((target, verdict, detail, list(existing)))
+    finally:
+        if plugin_dir is not None:
+            shutil.rmtree(plugin_dir, ignore_errors=True)
+    return out
+
+
+def cmd_mock_drift(verbose: bool = False, boom: bool = True) -> int:
     _p(f"\n  {_b}{_c}Mock drift{_r}\n")
     _p(f"  {_dim('patch() targets that production no longer reads')}\n")
     _md_setup_path()
@@ -925,6 +1154,13 @@ def cmd_mock_drift(verbose: bool = False) -> int:
             for f in files[:2]:
                 _p(f"      {_dim(f)}")
 
+    # Gap 2 (advisory): run each suspect's tests twice — baseline, then with
+    # the seam armed — so a vacuous-but-passing patch is not mistaken for a
+    # harmless one.  Advisory only: never touches the exit code.
+    boom_results: list[tuple[str, str, str, list[str]]] = []
+    if boom and suspects:
+        boom_results = _md_boom_probe(suspects)
+
     if suspects:
         _p()
         _p(
@@ -938,6 +1174,37 @@ def cmd_mock_drift(verbose: bool = False) -> int:
                 _p(f"      {_dim(h)}")
             for f in files[:1]:
                 _p(f"      {_dim(f)}")
+
+    if boom_results:
+        _p()
+        _p(
+            f"  {_b}{_c}Boom-vs-baseline{_r}  "
+            f"{_dim('seam armed during each suspect run — advisory, never the exit code')}"
+        )
+        counts: dict[str, int] = {}
+        for target, verdict, detail, files in boom_results:
+            counts[verdict] = counts.get(verdict, 0) + 1
+            if verdict == "live":
+                _line(_ok, f"{_gn}live{_r}  {_dim(target)}")
+                _p(f"      {_dim(detail)}")
+            elif verdict == "dead":
+                _line(_no, f"{_y}dead seam{_r}  {_dim(target)}")
+                _p(f"      {_dim('boom never invoked — nothing routes through the symbol')}")
+            elif verdict == "unrelated":
+                _line(_no, f"{_rd}unrelated failure beside dead seam{_r}  {_dim(target)}")
+                _p(f"      {_dim(detail)}")
+            elif verdict == "probe-error":
+                _line(_no, f"{_rd}probe error{_r}  {_dim(target)}")
+                _p(f"      {_dim(detail)}")
+            elif verdict == "skipped":
+                _line(_no, f"{_y}not probed{_r}  {_dim(f'{target} — {detail}')}")
+            else:
+                _line(_no, f"{_y}{verdict}{_r}  {_dim(target)}")
+                _p(f"      {_dim(detail)}")
+            if verbose:
+                for f in files[:2]:
+                    _p(f"        {_dim(f)}")
+        _p("  " + _dim("boom: " + ", ".join(f"{v} {k}" for k, v in counts.items())))
 
     if latent:
         _p(
@@ -1427,6 +1694,7 @@ def main() -> int:
               test-doctor tests/test_foo.py            diagnose file
               test-doctor --fix-hint <test>::test_fn   suggest fix
               test-doctor --mock-drift                 dead @patch targets
+              test-doctor --mock-drift --no-boom       skip the boom-vs-baseline probe
               test-doctor --dead-seam tests/test_x.py  does the patch ever run?
               test-doctor --path-drift                 broken test path arithmetic
               test-doctor --ci-drift                   CI steps pointing nowhere
@@ -1437,6 +1705,11 @@ def main() -> int:
     ap.add_argument("--flake", "-f", action="store_true")
     ap.add_argument("--fix-hint", metavar="TEST")
     ap.add_argument("--mock-drift", action="store_true", help="dead @patch targets")
+    ap.add_argument(
+        "--no-boom",
+        action="store_true",
+        help="with --mock-drift: skip the boom-vs-baseline subprocess probe",
+    )
     ap.add_argument(
         "--dead-seam",
         action="store_true",
@@ -1464,7 +1737,7 @@ def main() -> int:
         _b = _d = _r = _rd = _gn = _y = _c = _gr = ""
 
     if args.mock_drift:
-        return cmd_mock_drift(verbose=args.verbose)
+        return cmd_mock_drift(verbose=args.verbose, boom=not args.no_boom)
     if args.dead_seam:
         if not args.target:
             ap.error("--dead-seam needs a test file: test-doctor --dead-seam tests/test_x.py")

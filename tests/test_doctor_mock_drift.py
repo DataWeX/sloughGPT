@@ -127,7 +127,10 @@ def test_reaches_is_none_when_reader_has_no_such_attr(tool):
 
 
 def test_cmd_mock_drift_returns_status(tool, capsys):
-    rc = tool.cmd_mock_drift(verbose=True)
+    # boom=False: this asserts the static report contract only. The boom probe
+    # spawns real subprocess pytest runs (~2min on the live repo) and is covered
+    # by its own fast, targeted tests below.
+    rc = tool.cmd_mock_drift(verbose=True, boom=False)
     out = capsys.readouterr().out
     assert rc in (0, 1), f"unexpected exit code {rc}"
     assert "Mock drift" in out
@@ -584,3 +587,213 @@ def test_dead_seam_skips_when_baseline_red(tool, monkeypatch, capsys):
     assert rc == 0
     assert "baseline already failing" in out
     assert boomed == [], "must not burn a second run on a red baseline"
+
+
+# ── Gap 1 (card b236257b): monkeypatch.setattr, incl. import-alias object form ──
+
+# Fixture targets are interpolated at runtime, never quoted inline: the doctor
+# scans this directory for literal setattr/import forms, so an inline fictional
+# target would be collected as a real patch site and surface in the live report
+# as Unresolvable drift (fictional modules cannot import) — enough on its own to
+# force exit code 1.  None of these exist on disk.
+_FX_TARGET = "domain.x._internal.y.z"
+_FX_ALIAS_MOD = "domain.a._internal.b"
+_FX_FROM_MOD = "domain.p._internal"
+_FX_ILIB_MOD = "domain.z._internal.w"
+_FX_FIXTURES = (
+    _FX_TARGET,
+    _FX_ALIAS_MOD,
+    _FX_FROM_MOD,
+    _FX_ILIB_MOD,
+    "domain.x._internal.y.thing",
+    "domain.x._internal.y.seam",
+)
+
+
+def test_setattr_string_target_collected(tool):
+    targets, unresolved = tool._md_setattr_targets(f'monkeypatch.setattr("{_FX_TARGET}", 1)\n')
+    assert targets == {_FX_TARGET}
+    assert unresolved == 0
+
+
+def test_setattr_import_alias_resolved(tool):
+    txt = f'import {_FX_ALIAS_MOD} as mw_mod\nmonkeypatch.setattr(mw_mod, "_worker", fake)\n'
+    targets, unresolved = tool._md_setattr_targets(txt)
+    assert f"{_FX_ALIAS_MOD}._worker" in targets
+    assert unresolved == 0
+
+
+def test_setattr_from_import_alias_resolved(tool):
+    txt = f'from {_FX_FROM_MOD} import q as qq\nmonkeypatch.setattr(qq, "flag", 1)\n'
+    targets, _ = tool._md_setattr_targets(txt)
+    assert f"{_FX_FROM_MOD}.q.flag" in targets
+
+
+def test_setattr_importlib_alias_resolved(tool):
+    txt = (
+        f'mw_mod = importlib.import_module("{_FX_ILIB_MOD}")\n'
+        'monkeypatch.setattr(mw_mod, "_f", x)\n'
+    )
+    targets, _ = tool._md_setattr_targets(txt)
+    assert f"{_FX_ILIB_MOD}._f" in targets
+
+
+def test_setattr_inline_importlib_resolved(tool):
+    txt = f'monkeypatch.setattr(importlib.import_module("{_FX_ILIB_MOD}"), "_f", x)\n'
+    targets, _ = tool._md_setattr_targets(txt)
+    assert f"{_FX_ILIB_MOD}._f" in targets
+
+
+def test_setattr_unknown_alias_counted_unresolved(tool):
+    targets, unresolved = tool._md_setattr_targets('monkeypatch.setattr(some_mod, "attr", 1)\n')
+    assert targets == set()
+    assert unresolved == 1
+
+
+def test_targets_merges_setattr_scan(tool, monkeypatch, tmp_path):
+    d = tmp_path / "tests"
+    d.mkdir()
+    (d / "test_x.py").write_text(f'monkeypatch.setattr("{_FX_TARGET}", 1)\n')
+    monkeypatch.setattr(tool, "_MOCK_DRIFT_TEST_DIRS", (str(tmp_path),))
+    assert tool._md_targets() == {_FX_TARGET: {d / "test_x.py"}}
+
+
+def test_fixture_literals_do_not_scan_as_targets(tool):
+    """Regression (b236257b): fixture targets quoted literally in this file
+    were collected as real patch sites and surfaced as Unresolvable drift —
+    fictional targets alone force exit 1."""
+    targets = tool._md_targets()
+    leaked = sorted(t for t in targets if any(fx in t for fx in _FX_FIXTURES))
+    assert not leaked, f"fixture literals leaked from this file: {leaked}"
+
+
+# ── Gap 2 (card b236257b): advisory boom-vs-baseline verdicts ───────────
+
+
+def test_advisory_verdict_dead(tool):
+    assert tool._md_advisory_verdict(0, "2 passed", 0, "2 passed") == "dead"
+
+
+def test_advisory_verdict_live(tool):
+    boom = "FAILED t.py::x - RuntimeError: MOCK_DRIFT_BOOM: m.seam invoked"
+    assert tool._md_advisory_verdict(0, "1 passed", 1, boom) == "live"
+
+
+def test_advisory_verdict_unrelated(tool):
+    base = "FAILED tests/a.py::test_one - AssertionError\n1 failed"
+    boom = "FAILED tests/a.py::test_one - AssertionError\n1 failed"
+    assert tool._md_advisory_verdict(1, base, 1, boom) == "unrelated"
+
+
+def test_advisory_verdict_inconsistent_when_failures_differ(tool):
+    base = "FAILED tests/a.py::test_one - AssertionError"
+    boom = "FAILED tests/a.py::test_two - ValueError"
+    assert tool._md_advisory_verdict(1, base, 1, boom) == "inconsistent"
+
+
+def test_advisory_verdict_flaky(tool):
+    assert tool._md_advisory_verdict(1, "1 failed", 0, "1 passed") == "flaky"
+
+
+def test_advisory_verdict_probe_error(tool):
+    assert tool._md_advisory_verdict(0, "1 passed", 2, "ERROR collecting nonsense") == "probe-error"
+
+
+def test_advisory_verdict_live_even_if_baseline_failing(tool):
+    base = "FAILED tests/a.py::test_one - AssertionError"
+    boom = "FAILED tests/a.py::test_one - RuntimeError: MOCK_DRIFT_BOOM seam invoked"
+    assert tool._md_advisory_verdict(1, base, 1, boom) == "live"
+
+
+def test_boom_plugin_targets_and_phases(tool):
+    src = tool._md_boom_plugin("domain.x._internal.y.seam")
+    assert "MOCK_DRIFT_BOOM" in src
+    assert "domain.x._internal.y.seam" in src
+    # Arm must wrap the CALL phase: after fixtures (so it survives the test's
+    # own monkeypatch.setattr of the same seam) and disarmed before teardown.
+    assert "pytest_runtest_call" in src
+    assert "monkeypatch" not in src
+
+
+def test_boom_probe_end_to_end(tool, tmp_path):
+    """Real subprocess runs. The card's ProcessGuard case: the test's own
+    autouse fixture patches the same seam the boom arms — the boom must win
+    (armed at call time, after fixture setup), fire only for the test that
+    routes through the seam, and leave the dead one passing."""
+    (tmp_path / "mdrift_mod.py").write_text('def seam():\n    return "real"\n')
+    fixture = (
+        "import pytest\nimport mdrift_mod\n\n"
+        "@pytest.fixture(autouse=True)\n"
+        "def fake_seam(monkeypatch):\n"
+        '    monkeypatch.setattr("mdrift_mod.seam", lambda: "fake")\n\n'
+    )
+    (tmp_path / "test_mdrift_live.py").write_text(
+        fixture + "def test_calls_seam():\n    assert mdrift_mod.seam() in ('real', 'fake')\n"
+    )
+    (tmp_path / "test_mdrift_dead.py").write_text(
+        fixture + "def test_never_calls():\n    assert True\n"
+    )
+    suspects = [
+        ("mdrift_mod.seam", "routers.mid", [], [str(tmp_path / "test_mdrift_live.py")]),
+        ("mdrift_mod.seam", "routers.mid", [], [str(tmp_path / "test_mdrift_dead.py")]),
+    ]
+    results = tool._md_boom_probe(suspects, timeout=90, extra_path=[str(tmp_path)])
+    by_file = {Path(files[0]).name: (verdict, detail) for _t, verdict, detail, files in results}
+    assert by_file["test_mdrift_live.py"][0] == "live"
+    assert "MOCK_DRIFT_BOOM" in by_file["test_mdrift_live.py"][1]
+    assert by_file["test_mdrift_dead.py"][0] == "dead"
+
+
+def test_boom_probe_skips_missing_files_without_running(tool, monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        tool,
+        "_run",
+        lambda *a, **k: calls.append(a) or (0, "", ""),
+    )
+    results = tool._md_boom_probe(
+        [("domain.x._internal.y.thing", "routers.mid", [], ["tests/test_absent.py"])]
+    )
+    assert calls == [], "fictional files must not spawn pytest"
+    assert results and results[0][1] == "skipped"
+
+
+# ── CLI wiring for both gaps ────────────────────────────────────────────
+
+
+def _suspect_setup(tool, monkeypatch, target="domain.x._internal.y.thing"):
+    monkeypatch.setattr(tool, "_md_targets", lambda: {target: {_REPO / "tests/test_absent.py"}})
+    monkeypatch.setattr(tool, "_md_readers", lambda: {"thing": {"domain.x": {"routers.subject"}}})
+    monkeypatch.setattr(tool, "_md_reaches", lambda t, r, a: False)
+    monkeypatch.setattr(tool, "_md_unresolvable", lambda t: [])
+    monkeypatch.setattr(
+        tool,
+        "_md_import_graph",
+        lambda: {"routers.subject": {"routers.mid"}, "routers.mid": {"routers.leaf"}},
+    )
+    monkeypatch.setattr(tool, "_md_direct_imports", lambda p: {"routers.subject"})
+
+
+def test_cmd_boom_section_is_advisory(tool, monkeypatch, capsys):
+    target = "domain.x._internal.y.thing"
+    _suspect_setup(tool, monkeypatch, target)
+    monkeypatch.setattr(
+        tool,
+        "_md_boom_probe",
+        lambda suspects, **kw: [(target, "dead", "boom never invoked", ["tests/test_absent.py"])],
+    )
+    rc = tool.cmd_mock_drift()
+    out = capsys.readouterr().out
+    assert "Boom-vs-baseline" in out
+    assert "dead seam" in out
+    assert rc == 0, "boom verdicts are advisory — they must never set the exit code"
+
+
+def test_cmd_no_boom_skips_probe(tool, monkeypatch, capsys):
+    _suspect_setup(tool, monkeypatch)
+    calls = []
+    monkeypatch.setattr(tool, "_md_boom_probe", lambda *a, **k: calls.append(1) or [])
+    rc = tool.cmd_mock_drift(boom=False)
+    assert calls == []
+    assert "Boom-vs-baseline" not in capsys.readouterr().out
+    assert rc == 0
