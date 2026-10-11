@@ -66,9 +66,11 @@ class QueueConfig:
 class SubprocessConfig:
     """Configuration for subprocess execution in GuardPool.
 
-    ``start_method`` selects nothing: pugqeep forks (``os.fork()``) and does
-    not use ``multiprocessing``. The field is kept for config compatibility
-    and warns when set to anything but ``"fork"``.
+    ``start_method``: ``"fork"`` (default — ``os.fork()``; inherits this
+    process's image and any lock its threads hold) or ``"exec"`` (fresh
+    interpreter via ``pugqeep.exec_worker`` — no inherited locks, worker must
+    be picklable). Anything else warns and falls back to fork. No
+    ``multiprocessing`` either way.
     """
 
     enabled: bool = True
