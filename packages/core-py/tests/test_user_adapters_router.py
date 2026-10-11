@@ -3,8 +3,8 @@
 Covers: UserAdaptersRouter CRUD, merge, aggregate-best, quality, prune, delete.
 All domain calls are mocked; only HTTP-level behavior is tested.
 
-Note: the user_adapters router imports get_per_user_lora INSIDE each handler,
-so we must patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora'.
+Note: the router does `from domain.feedback import get_per_user_lora` inside
+each handler — patch the package attribute, not the _internal definition.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
+
+import pytest
 
 # ---------------------------------------------------------------------------
 # Path setup
@@ -25,6 +27,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, _server_dir)
+import routers.user_adapters as ua_module  # noqa: E402
 from routers.user_adapters import router  # noqa: E402
 
 # ---------------------------------------------------------------------------
@@ -40,7 +43,8 @@ def _make_store(**overrides):
         ],
         "get_stats": lambda: {"total_adapters": 2, "total_feedback": 15},
         "get_adapter": lambda uid: SimpleNamespace(feedback_count=10) if uid == "u1" else None,
-        "update_adapter": lambda uid, rating: None,
+        # Matches PerUserLoRAStore.update_adapter(user_id, feedback_signal, ...)
+        "update_adapter": lambda uid, feedback_signal, learning_rate=0.01: None,
         "reset_user_adapter": lambda uid: None,
         "merge_all": lambda: None,
         "aggregate_best_adapters": lambda **kw: {
@@ -58,16 +62,39 @@ def _make_store(**overrides):
 
 
 def _app():
+    # Without this handler the AppError that _get_store raises (503 when the
+    # per-user LoRA store is unavailable) escapes as an unhandled 500 —
+    # main.py registers the full handler set, and sibling router tests do too.
+    from infrastructure.exception_handlers import register_app_error_handler
+
     app = FastAPI()
     app.include_router(router)
+    register_app_error_handler(app)
     return app
 
 
-# ---------------------------------------------------------------------------
-# Tests — patch at 'domain.feedback._internal.per_user_lora.get_per_user_lora' (lazy import in handler)
-# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _clear_list_cache():
+    # list_adapters caches for 15s at module scope — would poison later tests.
+    ua_module._list_cache = None
+    yield
+    ua_module._list_cache = None
 
-MOCK_TARGET = "domain.feedback._internal.per_user_lora.get_per_user_lora"
+
+# ---------------------------------------------------------------------------
+# Tests — patch domain.feedback.get_per_user_lora (package attr the router binds)
+# ---------------------------------------------------------------------------
+#
+# The handler runs `from domain.feedback import get_per_user_lora` inside
+# _get_store(), so it resolves the PACKAGE attribute on every call.
+# domain/feedback/__init__.py:27 is an *eager* re-export
+#   from domain.feedback._internal.per_user_lora import get_per_user_lora
+# which binds the name once at package-import time. Patching the _internal
+# module therefore never reaches the name the router reads, and these tests
+# were silently exercising the real store (live rows such as user_id
+# 'default' instead of the fake's u1/u2).
+
+MOCK_TARGET = "domain.feedback.get_per_user_lora"
 
 
 class TestListAdapters:
@@ -112,7 +139,8 @@ class TestGetAdapter:
 class TestUpdateAdapter:
     @patch(MOCK_TARGET)
     def test_update_rating(self, mock_get):
-        mock_get.return_value = _make_store()
+        store = _make_store()
+        mock_get.return_value = store
         client = TestClient(_app())
         resp = client.post("/user-adapters/u1/update", json={"rating": "thumbs_up"})
         assert resp.status_code == 200

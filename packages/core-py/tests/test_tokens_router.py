@@ -93,12 +93,14 @@ class TestTopUp:
         assert data["balance"] >= 100
 
     def test_topup_invalid_amount(self, client):
+        # Field(..., ge=1) → pydantic RequestValidationError → 422
         response = client.post(
             "/tokens/topup", json={"amount": -10}, headers={"X-User-Id": "test-user"}
         )
         assert response.status_code == 422  # pydantic field violation (ge=1)
 
     def test_topup_exceeds_max(self, client):
+        # Field(..., le=1_000_000) → pydantic RequestValidationError → 422
         response = client.post(
             "/tokens/topup", json={"amount": 2000000}, headers={"X-User-Id": "test-user"}
         )
@@ -115,10 +117,12 @@ class TestUpgrade:
         assert data["tier"] == "pro"
 
     def test_upgrade_invalid_tier(self, client):
+        # "basic" passes the pydantic pattern but is not a Tier enum value
+        # → handler raise_error(..., status_code=400)
         response = client.post(
-            "/tokens/upgrade", json={"tier": "invalid"}, headers={"X-User-Id": "test-user"}
+            "/tokens/upgrade", json={"tier": "basic"}, headers={"X-User-Id": "test-user"}
         )
-        assert response.status_code == 422  # pydantic field violation (pattern)
+        assert response.status_code == 400
 
 
 class TestCheckTokens:

@@ -116,7 +116,7 @@ class TestLifecycle:
 class TestExecutor:
     def test_executor_not_initialized(self):
         sr = _make_system_router()
-        with patch("domain.training.executor._instance", None):
+        with patch("domain.training._internal.executor._instance", None):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor")
         assert resp.status_code == 200
@@ -135,7 +135,7 @@ class TestExecutor:
         mock_inst._max_workers = 4
         mock_inst._jobs = {"j1": {}, "j2": {}}
         mock_inst.list_jobs.return_value = [{"id": "j1"}, {"id": "j2"}]
-        with patch("domain.training.executor._instance", mock_inst):
+        with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor")
         assert resp.status_code == 200
@@ -148,7 +148,7 @@ class TestExecutor:
         sr = _make_system_router()
         mock_inst = MagicMock()
         mock_inst.status.return_value = None
-        with patch("domain.training.executor._instance", mock_inst):
+        with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/nonexistent")
         assert resp.status_code == 404
@@ -158,7 +158,7 @@ class TestExecutor:
         sr = _make_system_router()
         mock_inst = MagicMock()
         mock_inst.status.return_value = {"id": "j1", "status": "running"}
-        with patch("domain.training.executor._instance", mock_inst):
+        with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/j1")
         assert resp.status_code == 200
@@ -169,7 +169,7 @@ class TestExecutor:
         mock_inst = MagicMock()
         mock_inst.result_summary.return_value = None
         mock_inst.status.return_value = None
-        with patch("domain.training.executor._instance", mock_inst):
+        with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/j1/result")
         assert resp.status_code == 404
@@ -180,7 +180,7 @@ class TestExecutor:
         mock_inst = MagicMock()
         mock_inst.result_summary.return_value = None
         mock_inst.status.return_value = {"id": "j1", "status": "running"}
-        with patch("domain.training.executor._instance", mock_inst):
+        with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/j1/result")
         assert resp.status_code == 400
@@ -190,7 +190,7 @@ class TestExecutor:
         sr = _make_system_router()
         mock_inst = MagicMock()
         mock_inst.result_summary.return_value = {"weights": ["W_ih"], "total_bytes": 1024}
-        with patch("domain.training.executor._instance", mock_inst):
+        with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.get("/system/executor/j1/result")
         assert resp.status_code == 200
@@ -198,7 +198,7 @@ class TestExecutor:
 
     def test_purge_not_initialized(self):
         sr = _make_system_router()
-        with patch("domain.training.executor._instance", None):
+        with patch("domain.training._internal.executor._instance", None):
             client = TestClient(_app(sr))
             resp = client.post("/system/executor/purge")
         assert resp.status_code == 200
@@ -208,7 +208,7 @@ class TestExecutor:
         sr = _make_system_router()
         mock_inst = MagicMock()
         mock_inst.purge_completed.return_value = 3
-        with patch("domain.training.executor._instance", mock_inst):
+        with patch("domain.training._internal.executor._instance", mock_inst):
             client = TestClient(_app(sr))
             resp = client.post("/system/executor/purge")
         assert resp.status_code == 200
@@ -216,7 +216,7 @@ class TestExecutor:
 
     def test_cancel_not_initialized(self):
         sr = _make_system_router()
-        with patch("domain.training.executor._instance", None):
+        with patch("domain.training._internal.executor._instance", None):
             client = TestClient(_app(sr))
             resp = client.post("/system/executor/j1/cancel")
         assert resp.status_code == 200
