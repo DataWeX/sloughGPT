@@ -8,7 +8,7 @@ can be observed and tuned without the interactive shell or a UI.
 
 Public API:
 - WorldDriver: build a world, run ticks, snapshot state, audit energy.
-- main(): command-line interface (``python3 -m domains.shell.world_driver``).
+- main(): command-line interface (``python3 -m domain.shell._internal.world_driver``).
 
 The driver is pure observability: it never mutates simulation behavior and
 adds no new physics. All numbers are computed from live grid arrays, never

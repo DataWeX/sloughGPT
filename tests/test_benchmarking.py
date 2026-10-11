@@ -20,7 +20,7 @@ class TestBenchmarkResult:
 
     def test_benchmark_result_creation(self):
         """Test BenchmarkResult creation."""
-        from domains.ml_infrastructure.benchmarking import BenchmarkResult
+        from domain.ml_infrastructure.benchmarking import BenchmarkResult
 
         result = BenchmarkResult(
             model_name="test-model",
@@ -36,7 +36,7 @@ class TestBenchmarkResult:
 
     def test_benchmark_result_to_dict(self):
         """Test BenchmarkResult to_dict."""
-        from domains.ml_infrastructure.benchmarking import BenchmarkResult
+        from domain.ml_infrastructure.benchmarking import BenchmarkResult
 
         result = BenchmarkResult(
             model_name="test-model",
@@ -76,7 +76,7 @@ class TestBenchmarker:
 
     def test_benchmarker_init(self, simple_model):
         """Test Benchmarker initialization."""
-        from domains.ml_infrastructure.benchmarking import Benchmarker
+        from domain.ml_infrastructure.benchmarking import Benchmarker
 
         benchmarker = Benchmarker(simple_model, device="cpu")
 
@@ -85,7 +85,7 @@ class TestBenchmarker:
 
     def test_count_parameters(self, simple_model):
         """Test parameter counting."""
-        from domains.ml_infrastructure.benchmarking import Benchmarker
+        from domain.ml_infrastructure.benchmarking import Benchmarker
 
         benchmarker = Benchmarker(simple_model, device="cpu")
         count = benchmarker.count_parameters()
@@ -94,7 +94,7 @@ class TestBenchmarker:
 
     def test_measure_memory(self, simple_model):
         """Test memory measurement."""
-        from domains.ml_infrastructure.benchmarking import Benchmarker
+        from domain.ml_infrastructure.benchmarking import Benchmarker
 
         benchmarker = Benchmarker(simple_model, device="cpu")
         memory = benchmarker.measure_memory()
@@ -103,7 +103,7 @@ class TestBenchmarker:
 
     def test_benchmark_inference_no_tokenizer(self, simple_model):
         """Test inference benchmark without tokenizer."""
-        from domains.ml_infrastructure.benchmarking import Benchmarker
+        from domain.ml_infrastructure.benchmarking import Benchmarker
 
         benchmarker = Benchmarker(simple_model, device="cpu")
 
@@ -114,7 +114,7 @@ class TestBenchmarker:
 
     def test_benchmark_batch_no_tokenizer(self, simple_model):
         """Test batch benchmark without tokenizer."""
-        from domains.ml_infrastructure.benchmarking import Benchmarker
+        from domain.ml_infrastructure.benchmarking import Benchmarker
 
         benchmarker = Benchmarker(simple_model, device="cpu")
 
@@ -124,7 +124,7 @@ class TestBenchmarker:
 
     def test_calculate_perplexity_no_tokenizer(self, simple_model):
         """Test perplexity without tokenizer."""
-        from domains.ml_infrastructure.benchmarking import Benchmarker
+        from domain.ml_infrastructure.benchmarking import Benchmarker
 
         benchmarker = Benchmarker(simple_model, device="cpu")
 
@@ -145,7 +145,7 @@ class TestBenchmarkFunctions:
 
     def test_benchmark_model_function(self, simple_model):
         """Test benchmark_model function."""
-        from domains.ml_infrastructure.benchmarking import benchmark_model
+        from domain.ml_infrastructure.benchmarking import benchmark_model
 
         result = benchmark_model(simple_model, device="cpu")
 
@@ -154,7 +154,7 @@ class TestBenchmarkFunctions:
 
     def test_compare_models(self, simple_model):
         """Test compare_models function."""
-        from domains.ml_infrastructure.benchmarking import compare_models
+        from domain.ml_infrastructure.benchmarking import compare_models
 
         model1 = nn.Linear(50, 50)
         model1.name = "model1"
@@ -173,7 +173,7 @@ class TestBenchmarkImports:
 
     def test_import_all_exports(self):
         """Test that all exports are importable."""
-        from domains.ml_infrastructure.benchmarking import (
+        from domain.ml_infrastructure.benchmarking import (
             Benchmarker,
             BenchmarkResult,
             benchmark_model,

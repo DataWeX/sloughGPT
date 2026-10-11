@@ -143,7 +143,7 @@ def evaluate_soul_char_lm(
 
 
 def main() -> None:
-    """CLI: ``python -m domains.training.lm_eval_char`` (repo root, editable install)."""
+    """CLI: ``python -m domain.training._internal.lm_eval_char`` (repo root, editable install)."""
     import argparse
     import json as json_lib
     import sys

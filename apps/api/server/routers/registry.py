@@ -1,5 +1,5 @@
 """
-Registry Router - Proxies to the real ModelRegistry (domains.infrastructure.model_registry).
+Registry Router - Proxies to the real ModelRegistry (domain.infrastructure.model_registry).
 
 Previously used an in-memory dict that lost data on restart and was disconnected
 from the actual model serving layer. Now delegates to get_model_registry() so all

@@ -1,7 +1,7 @@
 """
 Provider implementations for ``VectorStore`` ABC.
 
-Each module implements the interface defined in ``domains.inference.vector_store.VectorStore``.
+Each module implements the interface defined in ``domain.inference._internal.vector_store.VectorStore``.
 
 Re-exports for backward compatibility::
     from domain.inference._internal.vector_stores import PineconeVectorStore

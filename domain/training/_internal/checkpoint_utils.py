@@ -128,7 +128,7 @@ def load_sloughgpt_from_checkpoint(
         RuntimeError: If ``SloughGPTModel`` cannot be imported.
     """
     if SloughGPTModel is None:
-        raise RuntimeError("SloughGPTModel is not available — ensure domains.models is importable.")
+        raise RuntimeError("SloughGPTModel is not available — ensure domain.models is importable.")
     bundle = normalize_raw_checkpoint(bundle)
     hp = resolve_sloughgpt_hyperparams(
         bundle,

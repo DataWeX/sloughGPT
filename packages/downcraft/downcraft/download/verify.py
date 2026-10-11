@@ -4,7 +4,7 @@ File integrity verification — SHA-256 checksum helpers.
 This module is deliberately HuggingFace-agnostic.  It verifies a single
 file against an expected SHA-256 checksum.  Model-level verification
 (locating snapshots, listing missing weight files) lives in the
-application layer (``domains.infrastructure.hf_hub``).
+application layer (``domain.infrastructure.hf_hub``).
 """
 
 import hashlib

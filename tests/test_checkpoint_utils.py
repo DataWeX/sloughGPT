@@ -1,4 +1,4 @@
-"""Tests for domains.training.checkpoint_utils."""
+"""Tests for domain.training._internal.checkpoint_utils."""
 
 import pytest
 

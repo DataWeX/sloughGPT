@@ -381,7 +381,7 @@ def setup_structured_logging(
         setup_structured_logging()
 
     Note: This adds a handler to the root logger. The main setup_logging()
-    in domains.logging.config should be called first to establish the base
+    in domain.logging._internal.config should be called first to establish the base
     logging pipeline. This function adds systemd-style syslog output on top.
     """
     if fmt is None:

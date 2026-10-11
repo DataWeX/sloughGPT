@@ -1424,12 +1424,12 @@ class TestCreateModelGuard:
             generate_timeout=3.0,
             max_concurrent=2,
         )
-        # create_model_guard hard-codes this path (process_guard.py:687), and
-        # hf_model_worker.py:11 uses the same one. The old expectation
-        # `domain.infrastructure._internal.…` predates the domains/ package alias.
+        # create_model_guard hard-codes this path (process_guard.py:782), and
+        # hf_model_worker.py:11 uses the same one. Retargeted from the deleted
+        # `domains.infrastructure.…` plural alias (port step 4).
         assert (
             guard._config.hf_model_cls_path
-            == "domains.infrastructure.hf_model_worker.hf_model_loader"
+            == "domain.infrastructure._internal.hf_model_worker.hf_model_loader"
         )
         assert guard._config.hf_model_kwargs == {"model_id": "my-org/model", "device": "cpu"}
         assert guard.worker_id == "guard-model"

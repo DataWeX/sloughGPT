@@ -8,7 +8,7 @@ and server's ``ETag`` still match.
 
 This package is deliberately HuggingFace-agnostic.  It downloads any URL.
 The HuggingFace-specific model download/resume/verify workflows live in
-the application layer (``domains.infrastructure.hf_hub``), composed from
+the application layer (``domain.infrastructure.hf_hub``), composed from
 the generic primitives here (``downloader``, ``state``, ``verify``).
 
 Submodules:
