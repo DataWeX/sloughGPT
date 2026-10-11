@@ -4,6 +4,20 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~03:24 — LOGGING DRIFT CLOSED (`070ffc7ad`) + cleanup family swept.**
+`LogFormatter` now serializes `error_code` additively as `"code"` (it was accepted,
+carried on LogRecord, then silently dropped — the one genuine defect behind
+cleanup-07) and the 12 stale formatter assertions were aligned to the shipped
+schema (lvl/op/exception, compact WRN⚠/INF tokens). All five logging suites:
+**464 passed / 0 failed** (was 10F). Ported from stranded `a3499c2bc`; its second
+hunk (ArchiveRotatingFileHandler reflow) was deliberately dropped — main has no
+archival handler; that feature is still stranded. cleanup-02/07/08/10/13 closed
+with landed-sha evidence (23a03981e, ad85cd6a6, c4d6ae57b). Gene batch 3 in
+flight: d2803a3c (one-pytest-config PART 1 port from f2cc0ee0a) + cleanup-14
+(SLNC single-path audit + 3a654d6a9 fd-safety port). Consolidation note on card
+4a1e62fa: NINE byte-identical files duplicated between domain/cognitive/_internal
+and domain/core/_internal — cognitive half is the orphaned one (zero importers).
+
 **2026-10-11 ~03:06 — GENE BATCH 2 LANDED: 33773fce + 7e2af9fe (`0e6e2ed2b`,
 `d8ad5a4b9`, `73c030a39`).** The refactor-drift PORT is on main: four ready test
 fixes cherry-picked with conflict resolution (ff06a8d1b/ee1ba337f/f37d8c0c7/
