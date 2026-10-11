@@ -1,12 +1,17 @@
 #!/bin/sh
-# pre-push guard — CI format parity (kanban ca7d10ff).
+# pre-push guards — CI format parity + board done-row guard (cards ca7d10ff, 6179df70).
 #
-# CI (.github/workflows/ci_cd.yml) runs:
+# GUARD 1 — format parity. CI (.github/workflows/ci_cd.yml) runs:
 #     ruff format --check packages/core-py/ apps/api/server/   (ruff==0.16.8)
 # Parallel lanes kept landing Python that violated that check, re-red-ing
 # main's lint gate until whichever lane merged next absorbed a format-only
-# fix. This hook runs the SAME verdict locally at push time so the fix
-# happens in the author's tree, before main ever goes red.
+# fix. This hook runs the SAME verdict locally at push time.
+#
+# GUARD 2 — board done-row guard. Recurring class (b17dfec2d; 5 recurrences
+# 2026-10-10): a lane commits .kanban/board.jsonl from a stale base and a
+# card whose work LANDED silently reverts done -> todo. scripts/
+# check_board_reopen.py blocks ranges that move cards out of `done` without
+# a `board-reopen: <id-prefix>` marker in a pushed commit message.
 #
 # - One toolchain, one verdict: resolves ruff through scripts/python (the
 #   shared conda-env wrapper), the same interpreter CI pins.
@@ -15,35 +20,44 @@
 # - Emergency bypass: git push --no-verify
 set -u
 
-# Only guard pushes that carry Python changes in the CI-scoped trees.
-# stdin lines: <local ref> <local sha> <remote ref> <remote sha>
+repo_root=$(git rev-parse --show-toplevel)
+py="$repo_root/scripts/python"
+if [ ! -x "$py" ]; then
+  echo "pre-push: WARNING: $py not found — skipping local guards (CI will still gate)" >&2
+  exit 0
+fi
+
 changed_py=0
+board_failed=0
+# stdin lines: <local ref> <local sha> <remote ref> <remote sha>
 while read -r local_ref local_sha remote_ref remote_sha; do
   [ "$local_sha" = "0000000000000000000000000000000000000000" ] && continue
   if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
-    base=$(git rev-list --max-parents=0 "$local_sha" | head -1)
+    # new ref: guard from the fork point, never from the root commit
+    base=$(git merge-base origin/main "$local_sha" 2>/dev/null) || continue
   else
     base=$remote_sha
   fi
+
   if git diff --name-only "$base" "$local_sha" -- \
        'packages/core-py/**/*.py' 'apps/api/server/**/*.py' 2>/dev/null | grep -q .; then
     changed_py=1
-    break
+  fi
+
+  if git diff --name-only "$base" "$local_sha" -- .kanban/board.jsonl 2>/dev/null | grep -q .; then
+    "$py" "$repo_root/scripts/check_board_reopen.py" "$base" "$local_sha" || board_failed=1
   fi
 done
+
+if [ "$board_failed" -ne 0 ]; then
+  exit 1
+fi
 
 if [ "$changed_py" -eq 0 ]; then
   exit 0
 fi
 
-repo_root=$(git rev-parse --show-toplevel)
-ruff_py="$repo_root/scripts/python"
-if [ ! -x "$ruff_py" ]; then
-  echo "pre-push: WARNING: $ruff_py not found — skipping format check (CI will still gate)" >&2
-  exit 0
-fi
-
-if ! out=$("$ruff_py" -m ruff format --check \
+if ! out=$("$py" -m ruff format --check \
         packages/core-py/ apps/api/server/ --exclude '__pycache__' 2>&1); then
   echo "pre-push: BLOCKED — Python outside the CI format pin (ruff 0.16.8):" >&2
   echo "$out" | grep -v "^$" | head -20 >&2

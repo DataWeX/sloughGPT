@@ -4,6 +4,14 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~02:17 — BOARD DONE-ROW GUARD is live (card 6179df70, `61b23b59f`).**
+The pre-push hook (extended, same bypass/fail-open contract as the format
+guard) now blocks any push whose range moves a card OUT of `done` in
+`.kanban/board.jsonl` — the stale-base-merge class that silently reverted five
+landed cards on 2026-10-10 alone. Legitimate reopen: put
+`board-reopen: <id-prefix>` in one of the pushed commits. If the block fires on
+a stale-base clobber: rebase/merge origin/main's board file, don't overwrite it.
+
 **2026-10-11 ~02:03 — GENE BATCH LANDED: ux-012b + pugqeep-06 (`3bbcdb0c4`,
 `8b9abd9d8`).** `settings-controller.ts` dropped 6 dead methods (presets,
 batch-status, bookmarks, model-card, clear-history) — do not re-add them; if
