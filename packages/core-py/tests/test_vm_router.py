@@ -24,8 +24,6 @@ def _app() -> FastAPI:
     # /vm/run and the training-job routes raise propagates out of TestClient
     # instead of becoming the 404 production returns (main.py registers the
     # full handler set).
-    from infrastructure.exception_handlers import register_app_error_handler
-
     app = FastAPI()
     app.include_router(vm_router)
     from infrastructure.exception_handlers import register_all_handlers
