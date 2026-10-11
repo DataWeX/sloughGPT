@@ -1,19 +1,22 @@
-"""The board hygiene doctor must fix only what needs no judgement.
+"""The board hygiene doctor must fix only what needs no judgement — and settle
+the rest strictly from the notes.
 
 ``.kanban/board.jsonl`` is append-only and shared by every session, and it is a
 *derived* view -- notes are the source of truth.  Three defect classes have
-accumulated in it, and only two of them are mechanical:
+accumulated in it, and each has exactly one legitimate resolver:
 
 * exact duplicates (same id, column, title, description) carry no information
   the surviving copy lacks, so they are safe to drop;
 * a list-typed ``description`` is a schema violation that breaks every
   consumer doing ``description.strip()``;
 * multi-column duplicates (one id in ``todo`` *and* ``done``) and
-  divergent-body duplicates ask which copy is *true*, which is a judgement
-  about the work.  Repairing those automatically would silently pick a winner.
+  divergent-body duplicates ask which copy is *true*.  ``settle`` answers that
+  **from the notes** (note status for columns, superset/note-body for text) and
+  must leave the id untouched and reported whenever the sources are silent or
+  disagreeing -- ambiguity is never resolved by guessing.
 
-The tests below pin that boundary -- ``repair`` may drop redundancy but must
-never drop a decision.
+The tests below pin that boundary -- ``repair`` may drop redundancy but never a
+decision; ``settle`` may drop a decision but only with a note behind it.
 """
 
 from __future__ import annotations
@@ -126,7 +129,9 @@ def test_apply_writes_a_backup_and_leaves_a_parseable_board(tmp_path: Path) -> N
     board = tmp_path / "board.jsonl"
     board.write_text("\n".join(_lines(IDENTICAL_A, IDENTICAL_A)) + "\n", encoding="utf-8")
 
-    dropped, _fixed = doctor.apply_repairs(board, doctor.classify(doctor._read_lines(board)))
+    dropped, _fixed, _settled, _unresolved = doctor.apply_repairs(
+        board, doctor.classify(doctor._read_lines(board))
+    )
 
     backup = board.with_suffix(board.suffix + ".bak-hygiene")
     assert backup.is_file(), "the original must be preserved before any repair"
@@ -170,3 +175,117 @@ def test_strict_exits_non_zero_while_any_defect_remains(tmp_path: Path) -> None:
     assert not remaining["identical"], (
         "the exact duplicates should already have been repaired by --apply"
     )
+
+
+# ── settle: decision classes resolved FROM THE NOTES ────────────────────────
+
+
+def test_settle_multi_column_keeps_note_status_column() -> None:
+    """The note's status is the source of truth: keep its row, drop the stale ones."""
+    truth = {"Split card": {"status": "done", "body": "body", "source": "journal"}}
+
+    lines, settled, unresolved = doctor.settle(_lines(MULTI_TODO, MULTI_DONE), truth)
+
+    assert not unresolved, unresolved
+    assert len(settled) == 1, settled
+    records = [json.loads(line) for line in lines[1:]]
+    assert [r["column"] for r in records] == ["done"]
+
+
+def test_settle_without_note_leaves_multi_column_alone() -> None:
+    """No source of truth, no decision: report, never drop."""
+    lines, settled, unresolved = doctor.settle(_lines(MULTI_TODO, MULTI_DONE), {})
+
+    assert not settled
+    assert len(unresolved) == 1 and "no note" in unresolved[0], unresolved
+    assert len(lines) == 3, "nothing may be dropped without a source of truth"
+
+
+def test_settle_divergent_prefers_the_superset() -> None:
+    """An annotation appended after the note snapshot must never be destroyed:
+    the copy containing the other copy wins, even with no note at all."""
+    long = _line("cccc-3333", "todo", "Divergent card", "the short one\n[COORD] claimed")
+    short = _line("cccc-3333", "todo", "Divergent card", "the short one")
+
+    lines, settled, unresolved = doctor.settle(_lines(long, short), {})
+
+    assert not unresolved, unresolved
+    assert len(settled) == 1 and "superset" in settled[0], settled
+    records = [json.loads(line) for line in lines[1:]]
+    assert records[0]["description"] == "the short one\n[COORD] claimed"
+
+
+def test_settle_divergent_falls_back_to_note_body() -> None:
+    """Neither copy contains the other: the copy matching the note's body wins."""
+    truth = {"Divergent card": {"status": "todo", "body": "the short one", "source": "journal"}}
+
+    lines, settled, unresolved = doctor.settle(_lines(DIVERGENT_1, DIVERGENT_2), truth)
+
+    assert not unresolved, unresolved
+    assert len(settled) == 1 and "note-body" in settled[0], settled
+    records = [json.loads(line) for line in lines[1:]]
+    assert records[0]["description"] == "the short one"
+
+
+def test_settle_marks_conflicting_sources_unresolved(tmp_path: Path) -> None:
+    """journal vs markdown disagree = the open canonical-store question
+    (card b3435a2f): the conflict is marked, never guessed."""
+    journal = tmp_path / "notes.journal.jsonl"
+    journal.write_text(json.dumps({"title": "Split card", "status": "todo", "body": "x"}) + "\n")
+    md_dir = tmp_path / "md"
+    md_dir.mkdir()
+    (md_dir / "note.md").write_text("---\ntitle: Split card\nstatus: done\n---\n\nbody\n")
+
+    truth = doctor.load_note_truth(journal, md_dir)
+
+    assert truth["Split card"]["status"] is None, "disagreeing sources must not resolve"
+    assert truth["Split card"]["source"].startswith("conflict:"), truth["Split card"]
+    lines, settled, unresolved = doctor.settle(_lines(MULTI_TODO, MULTI_DONE), truth)
+    assert not settled and len(unresolved) == 1, (settled, unresolved)
+    assert len(lines) == 3, "an unresolved id must keep all its rows"
+
+
+def test_load_note_truth_links_by_board_uuid_and_normalizes_titles(tmp_path: Path) -> None:
+    md_dir = tmp_path / "md"
+    md_dir.mkdir()
+    (md_dir / "note.md").write_text(
+        '---\nboard: bbbb-2222\ntitle: "Card 087 — Split card"\nstatus: done\n---\n\nbody\n'
+    )
+
+    truth = doctor.load_note_truth(None, md_dir)
+
+    assert truth["bbbb-2222"]["status"] == "done", "the board uuid link must resolve directly"
+    assert truth["Split card"]["status"] == "done", "the Card 0NN prefix must be normalized"
+    assert truth["Split card"]["body"] == "body"
+
+
+def test_strict_passes_once_settle_resolves_the_decisions(tmp_path: Path) -> None:
+    board = tmp_path / "board.jsonl"
+    board.write_text("\n".join(_lines(MULTI_TODO, MULTI_DONE)) + "\n", encoding="utf-8")
+    journal = tmp_path / "notes.journal.jsonl"
+    journal.write_text(json.dumps({"title": "Split card", "status": "done", "body": "body"}) + "\n")
+
+    import contextlib
+    import io
+
+    argv = [
+        "prog",
+        "--board",
+        str(board),
+        "--settle",
+        "--journal",
+        str(journal),
+        "--md-dir",
+        str(tmp_path / "no-such-dir"),
+        "--strict",
+    ]
+    original = sys.argv
+    try:
+        sys.argv = argv
+        with contextlib.redirect_stdout(io.StringIO()):
+            rc = doctor.main()
+    finally:
+        sys.argv = original
+
+    assert rc == 0, "--strict must pass once the notes have settled every decision"
+    assert not doctor.has_defects(doctor.classify(doctor._read_lines(board)))
