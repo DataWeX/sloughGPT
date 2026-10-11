@@ -72,6 +72,19 @@ export function levelName(lvl: number): string {
   return lvl === 0 ? 'Off' : lvl === 1 ? 'Basic' : lvl === 2 ? 'Full' : 'Deep'
 }
 
+/**
+ * Coerce an untyped API value to a finite number.
+ *
+ * The charts render `Record<string, number>` maps straight off the wire, so a
+ * contract drift (an extra string key, a nested object) used to throw
+ * `v.toFixed is not a function` and blank the entire dashboard. Unknown or
+ * non-numeric values now degrade to 0 instead of crashing the page.
+ */
+export function toNum(v: unknown): number {
+  const n = typeof v === 'number' ? v : Number(v)
+  return Number.isFinite(n) ? n : 0
+}
+
 /** Chart series point for the beliefs line chart (adds a pre-formatted time label). */
 export type BeliefsChartData = BeliefsPoint & { time: string }
 

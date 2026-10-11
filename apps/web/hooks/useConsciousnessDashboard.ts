@@ -76,10 +76,17 @@ export function useConsciousnessDashboard() {
         setEvalReport(eResult.value ?? null)
       }
       if (sResult.status === 'fulfilled') {
-        if (sResult.value.self_beliefs) setCurrentBeliefs(sResult.value.self_beliefs)
+        // /consciousness/self-model returns {identity, beliefs, doubts,
+        // episode_count} — the current belief magnitudes are under `beliefs`.
+        if (sResult.value.beliefs) setCurrentBeliefs(sResult.value.beliefs)
       }
       if (qNowResult.status === 'fulfilled') {
-        if (qNowResult.value) setCurrentQualia(qNowResult.value)
+        // /consciousness/qualia returns {current, narrative, history_count}.
+        // Only `current` is a flat name->value map; passing the envelope here
+        // previously fed the narrative STRING to the chart renderer, which
+        // threw `v.toFixed is not a function` and blanked the dashboard.
+        const current = qNowResult.value.current
+        if (current) setCurrentQualia(current)
       }
       if (statusResult.status === 'fulfilled') {
         if (statusResult.value.level !== undefined) setConsciousnessLevel(statusResult.value.level)

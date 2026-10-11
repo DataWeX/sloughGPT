@@ -35,8 +35,8 @@ import {
 
 /** Recharts tooltip surface, themed from the design tokens. */
 const TOOLTIP_STYLE = {
-  backgroundColor: 'hsl(var(--card))',
-  border: '1px solid hsl(var(--border))',
+  backgroundColor: 'rgb(var(--card))',
+  border: '1px solid rgb(var(--border))',
   borderRadius: '8px',
   fontSize: '12px',
 }
@@ -70,16 +70,16 @@ export function DashboardEvolution({
           {beliefsData.length > 1 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={beliefsData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
                   dataKey="time"
                   tick={{ fontSize: 10 }}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="rgb(var(--muted-foreground))"
                 />
                 <YAxis
                   domain={[0, 1]}
                   tick={{ fontSize: 10 }}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="rgb(var(--muted-foreground))"
                 />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
@@ -113,16 +113,16 @@ export function DashboardEvolution({
           {qualiaData.length > 1 ? (
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={qualiaData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
                   dataKey="time"
                   tick={{ fontSize: 10 }}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="rgb(var(--muted-foreground))"
                 />
                 <YAxis
                   domain={[-1, 1]}
                   tick={{ fontSize: 10 }}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="rgb(var(--muted-foreground))"
                 />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
@@ -156,13 +156,13 @@ export function DashboardEvolution({
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
               <AreaChart data={growthData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--border))" />
                 <XAxis
                   dataKey="time"
                   tick={{ fontSize: 10 }}
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="rgb(var(--muted-foreground))"
                 />
-                <YAxis tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis tick={{ fontSize: 10 }} stroke="rgb(var(--muted-foreground))" />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Area
                   type="monotone"
