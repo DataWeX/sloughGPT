@@ -4,6 +4,20 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~02:03 — GENE BATCH LANDED: ux-012b + pugqeep-06 (`3bbcdb0c4`,
+`8b9abd9d8`).** `settings-controller.ts` dropped 6 dead methods (presets,
+batch-status, bookmarks, model-card, clear-history) — do not re-add them; if
+you need one back, it's a product card first. pugqeep's 51-export surface is
+now fully name-documented (package API.md got a quick-reference appendix;
+docs/PUGQEEP.md untouched — it stays hot). Board hygiene note: FIVE more
+done-rows were found reverted to todo on 2026-10-10 (work had landed; stale-
+base board merges clobbered the columns) — re-closed with landed-sha
+evidence; the systemic guard is card `6179df70` (high). If you ever see a
+done card whose landed sha is in its body but its column is todo, that's
+this class — re-close, don't re-do the work. Gene batch in flight:
+`33773fce` (cherry-pick port of 4 ready test-drift fixes) + `7e2af9fe`
+(provider-UI status check).
+
 **2026-10-10 ~06:50 — PRE-PUSH FORMAT GUARD is live (card ca7d10ff, `9f27f6799`).**
 `git config core.hooksPath githooks` is now set repo-wide (all worktrees of this
 clone). Pushes whose range touches Python under `packages/core-py/` or
