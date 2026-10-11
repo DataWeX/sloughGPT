@@ -1,18 +1,33 @@
 # User Experience Flows
 
-Plain-English guide for building user-facing features. No backend jargon, no
-technical implementation details — only what the user sees, clicks, and feels.
+Plain-English guide for building user-facing features. Only what the user
+sees, clicks, and feels.
+
+> **Scope note (revised 2026-10-11).** The flows below describe the **casual
+> surface** — the layer a non-technical consumer would see. Per
+> `USER_PERSONA.md`, that segment is now **future and non-authoritative**:
+> the binding personas are Jon the Infra Builder and Maya the Platform Builder.
+> These flows are retained as design work for a future additive layer and
+> **must not override** the primary surfaces — in particular, model paths,
+> registry entries, executor logs, and canonical vocabulary stay exposed.
+>
+> The doc's earlier "no jargon / replace the term" rule is **withdrawn**. See
+> the revision note in `USER_PERSONA.md`: terminology is a lookup key, and
+> renaming a concept severs the user from its documentation, troubleshooting,
+> and support graph. The correct pattern is _gloss, never rename_ — the real
+> term appears, paired with a plain-language explanation.
 
 ---
 
 ## Persona
 
-This app is for **everyday people** who want AI help in daily life. They are
-not developers, not ML engineers, not power users. They want things to **just
-work** — one click, one tap, no setup, no confusing words.
+This document describes the surface for a **non-technical consumer** of AI
+help in daily life. It is **not** the current operator: see `USER_PERSONA.md`
+for the authoritative order (Jon, then Maya; this segment is advisory).
 
-**Golden rule:** If the UI needs an acronym, a model name, a parameter slider,
-or a technical term — it's wrong.
+**Golden rule:** If the UI needs a parameter slider, a multi-field form, or an
+unexplained technical term — it needs a better default and a gloss. The fix
+is never to rename the term.
 
 ---
 
@@ -395,7 +410,9 @@ their own pages (`/chat`, `/training`).
 
 ## Design Principles
 
-1. **No jargon** — If a word needs explaining, replace it.
+1. **Gloss, never rename** — If a term needs explaining, explain it beside the
+   term. Never replace the standard vocabulary with a euphemism (supersedes the
+   earlier "no jargon — replace it" rule; see the scope note above)
 2. **One click** — Every action should be one tap. No confirmation dialogs,
    no multi-step wizards.
 3. **Silent defaults** — Everything should work with default settings.
@@ -418,7 +435,7 @@ their own pages (`/chat`, `/training`).
 **What the user sees:**
 
 - A page titled "Teach me" with a simple subtitle: "Teach your agent from your data"
-- No jargon — no "LoRA", "GRPO", "KL coefficient", "gradient accumulation"
+- Technical terms appear with a plain-language gloss, not hidden — "LoRA rank (how much new style the adapter learns)", "GRPO (training method)", "KL coefficient (how closely it stays to the base model)"
 - A 3-step pipeline: Pick data → Train → See results
 
 **User flow:**
@@ -452,9 +469,9 @@ their own pages (`/chat`, `/training`).
 **What they should NOT see:**
 
 - Model names (GPT-2, Qwen, etc.) — just "Train from scratch" or "Continue training"
-- Parameter sliders for temperature, top-p, etc.
+- Parameter sliders for temperature, top-p, etc. on the _first_ pass — reachable one click deeper, with defaults preselected
 - Session IDs, job IDs, or technical identifiers
-- Jargon like "LoRA rank", "KL coefficient", "gradient accumulation"
+- Unexplained jargon — "LoRA rank", "KL coefficient", "gradient accumulation" must each carry a gloss if shown
 - 15-parameter configuration forms
 - Grid search, checkpoint comparison, or model card pages (power-user features)
 - Webhooks, recovery cards, or API logs (system features)

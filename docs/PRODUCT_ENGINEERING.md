@@ -3,7 +3,9 @@
 Source of truth for what we build, why, and how it maps to code.
 Reference this BEFORE writing any new feature, router, or page.
 
-**Primary persona:** Alex the Hobbyist (see `USER_PERSONA.md`)
+**Primary persona:** Jon the Infra Builder; secondary Maya the Platform Builder
+(see `USER_PERSONA.md`, revised 2026-10-11). Alex the Hobbyist is a **future,
+non-authoritative** segment — his constraints must not override Jon's or Maya's.
 **User flows:** See `UX_FLOWS.md`
 
 ---
@@ -330,12 +332,13 @@ catch.
 ## UI Design Rules (from USER_PERSONA.md)
 
 1. **One-click training** — Default settings work for 90% of cases
-2. **Jargon-free** — Never say "LoRA", "GRPO", "KL coefficient" in UI
-3. **Progressive disclosure** — Results first, details on click, expert settings behind toggle
-4. **Plain language** — "Training complete! Your AI now knows Shakespeare" not "loss=1.2345"
-5. **Visual, not numerical** — Loss chart with down arrow = good
-6. **Features are flows, not tools** — Don't expose 12 phoneme tools, expose a pronunciation learning flow
-7. **One app-wide banner** — journey-blocking alerts (training failed, backend down) go through the global banner system (`useBannerStore` + `<GlobalBanner />` in `AppLayout`) so they survive navigation; toasts only for transient confirmations
+2. **Standard terms, explained — never renamed** — Use the real vocabulary ("LoRA rank", "GRPO", "KL coefficient") as the primary label, each paired with a plain-language gloss: _"LoRA rank — how much new style the adapter can learn (64)"_. Euphemistic renaming ("training quality" for LoRA) is **prohibited** — it breaks searchability, documentation parity, and error triage. Supersedes the earlier "jargon-free" rule; see `USER_PERSONA.md` for the withdrawal reasoning
+3. **Progressive disclosure is additive, not substitutive** — Results first, details on click, expert settings behind toggle — but the summary layer sits _above_ the technical layer, never in place of it
+4. **Name the outcome AND the mechanism** — "Shakespeare training complete — adapter saved (12 MB), coherence +8%", not `final_loss=1.2345` alone
+5. **Visual, not numerical** — Loss chart with down arrow = good; supplements the number, does not replace it
+6. **Paths and logs are never hidden** — model destination, registry entries, executor logs, checkpoint locations stay visible or one click away. Hard constraint from the primary persona; outranks readability preferences
+7. **Features are flows, not tools** — Don't expose 12 phoneme tools, expose a pronunciation learning flow
+8. **One app-wide banner** — journey-blocking alerts (training failed, backend down) go through the global banner system (`useBannerStore` + `<GlobalBanner />` in `AppLayout`) so they survive navigation; toasts only for transient confirmations
 
 ---
 
@@ -365,7 +368,7 @@ catch.
 | `/files`      | `/files` + `/images`                                                                       | `files.py` + `images.py`                                                      | ⏳                                                                                      |
 | `/monitoring` | `/monitoring` + `/errors` + `/session`                                                     | `system.py` + `errors.py` + `session.py`                                      | ⏳                                                                                      |
 
-> **Persona rule for benchmarking (from USER_PERSONA.md):** `/benchmark` is hidden from Alex (he gets an inline training verdict) and there is no dedicated benchmark UI — `POST /benchmark/score` + `config/bench_weights.yaml` is the headless API for Maya/Jon CI gating. Do not reintroduce a benchmark page into the sidebar.
+> **Persona rule for benchmarking (from USER_PERSONA.md):** `/benchmark` stays headless — `POST /benchmark/score` + `config/bench_weights.yaml` is the API surface for Jon/Maya compute and CI gating, and there is no dedicated benchmark page. The casual surface gets an inline training verdict only, not a benchmark screen. Do not reintroduce a benchmark page into the sidebar. (Revised 2026-10-11: benchmarking is **core** for Jon/Maya, not an Alex-hidden afterthought — the API stays the primary interface either way.)
 
 ---
 
