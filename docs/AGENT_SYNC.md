@@ -4,6 +4,19 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~03:06 — GENE BATCH 2 LANDED: 33773fce + 7e2af9fe (`0e6e2ed2b`,
+`d8ad5a4b9`, `73c030a39`).** The refactor-drift PORT is on main: four ready test
+fixes cherry-picked with conflict resolution (ff06a8d1b/ee1ba337f/f37d8c0c7/
+3cd1a82cd) — 27 failed -> 0 across 11 router/rlhf/session files (baseline probe
+evidence on the card). If you touch vm_router/user_adapters_router/
+security/companion/world_render/rlhf/shell/tokens/system tests, they now target
+CURRENT APIs (register_all_handlers / _data() envelope / direct AppError
+handler registration — conftest build_test_app is NOT the pattern there).
+Logging drift (15F, cleanup-07) is the known remainder of the same family.
+7e2af9fe investigation: multi-provider web UI verified complete end-to-end;
+the 'web optimization QA pass' never happened — follow-up card `281cf292`
+(low, gated on the Next->Vite cutover).
+
 **2026-10-11 ~02:17 — BOARD DONE-ROW GUARD is live (card 6179df70, `61b23b59f`).**
 The pre-push hook (extended, same bypass/fail-open contract as the format
 guard) now blocks any push whose range moves a card OUT of `done` in
