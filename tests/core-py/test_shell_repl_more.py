@@ -6207,13 +6207,20 @@ class TestCmdGen:
 
 class TestCmdChat:
     def test_chat_no_args(self, repl):
-        repl._cmd_chat("")
+        # No args enters interactive chat, which reads through self.io. Drive
+        # it from a MemoryIO with nothing queued: the exhausted queue raises
+        # EOFError, which is the path that already leaves the mode.
+        with patch.object(repl, "_require_api", return_value=True):
+            _run_with_io(repl, [], lambda: repl._cmd_chat(""))
         assert repl._last_exit_code == 0
 
     def test_chat_reset(self, repl):
         repl._chat_session_id = "old"
         repl._chat_history = [{"role": "user", "content": "hi"}]
-        repl._cmd_chat("/reset")
+        # /reset sits behind the API gate, so stub it — otherwise the
+        # connectivity check returns before the reset ever runs.
+        with patch.object(repl, "_require_api", return_value=True):
+            repl._cmd_chat("/reset")
         assert repl._chat_session_id is None
         assert repl._chat_history == []
 
@@ -11465,13 +11472,17 @@ class TestCmdGenExtra:
 
 class TestCmdChatExtra:
     def test_chat_no_args(self, repl):
-        repl._cmd_chat("")
+        # No args enters interactive chat, which reads through self.io; a
+        # MemoryIO with nothing queued ends it on EOFError.
+        with patch.object(repl, "_require_api", return_value=True):
+            _run_with_io(repl, [], lambda: repl._cmd_chat(""))
         assert repl._last_exit_code == 0
 
     def test_chat_reset(self, repl):
         repl._chat_session_id = "old"
         repl._chat_history = [{"role": "user", "content": "hi"}]
-        repl._cmd_chat("/reset")
+        with patch.object(repl, "_require_api", return_value=True):
+            repl._cmd_chat("/reset")
         assert repl._chat_session_id is None
         assert repl._chat_history == []
 
@@ -11481,13 +11492,21 @@ class TestCmdChatExtra:
         assert repl._last_exit_code == 0
 
     def test_chat_success(self, repl):
+        # _cmd_chat streams via cmds.chat_stream. Stubbing _spinner_call (or
+        # cmds.chat) patched a collaborator this path never calls, so the
+        # stream really ran, failed, and history stopped at the user turn.
         with (
             patch.object(repl, "_require_api", return_value=True),
-            patch.object(repl, "_spinner_call", return_value={"message": "response text"}),
+            patch.object(
+                repl.cmds,
+                "chat_stream",
+                side_effect=lambda *a, **k: iter(["response text"]),
+            ),
         ):
             repl._cmd_chat("hello")
         assert repl._last_exit_code == 0
         assert len(repl._chat_history) == 2
+        assert repl._chat_history[-1]["content"] == "response text"
 
     def test_chat_error(self, repl):
         with (
@@ -12047,13 +12066,18 @@ class TestCmdGenExecution:
 
 class TestCmdChatExecution:
     def test_chat_no_args(self, repl):
-        repl._cmd_chat("")
+        # No args enters interactive chat, which reads through self.io; a
+        # MemoryIO with nothing queued ends it on EOFError.
+        with patch.object(repl, "_require_api", return_value=True):
+            _run_with_io(repl, [], lambda: repl._cmd_chat(""))
         assert repl._last_exit_code == 0
 
     def test_chat_reset(self, repl):
         repl._chat_session_id = "old"
         repl._chat_history = [{"role": "user", "content": "hi"}]
-        repl._cmd_chat("/reset")
+        # /reset sits behind the API gate, so stub it.
+        with patch.object(repl, "_require_api", return_value=True):
+            repl._cmd_chat("/reset")
         assert repl._chat_session_id is None
         assert repl._chat_history == []
         assert repl._last_exit_code == 0
@@ -12064,9 +12088,15 @@ class TestCmdChatExecution:
         assert repl._last_exit_code == 0
 
     def test_chat_new_session(self, repl):
+        # _cmd_chat streams via cmds.chat_stream — cmds.chat is not called on
+        # this path, so stubbing it left the assistant turn out of history.
         with (
             patch.object(repl, "_require_api", return_value=True),
-            patch.object(repl.cmds, "chat", return_value={"message": "hi there"}),
+            patch.object(
+                repl.cmds,
+                "chat_stream",
+                side_effect=lambda *a, **k: iter(["hi there"]),
+            ),
         ):
             repl._cmd_chat("hello")
         assert repl._chat_session_id is not None
@@ -12078,7 +12108,11 @@ class TestCmdChatExecution:
         repl._chat_history = [{"role": "user", "content": "prev"}]
         with (
             patch.object(repl, "_require_api", return_value=True),
-            patch.object(repl.cmds, "chat", return_value={"message": "response"}),
+            patch.object(
+                repl.cmds,
+                "chat_stream",
+                side_effect=lambda *a, **k: iter(["response"]),
+            ),
         ):
             repl._cmd_chat("hello")
         assert len(repl._chat_history) == 3
@@ -18381,8 +18415,12 @@ class TestCmdGenDeeper:
 
 class TestCmdChatDeeper:
     def test_chat_no_args(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_chat(""))
-        assert "Usage" in out
+        # `chat` with no args enters interactive mode (its own docstring: "chat
+        # — enter interactive mode"); _cmd_chat has never printed a usage
+        # banner, so asserting "Usage" was never satisfiable.
+        with patch.object(repl, "_require_api", return_value=True):
+            out = _run_with_io(repl, [], lambda: repl._cmd_chat(""))
+        assert "Interactive chat mode" in out
 
 
 # ── _cmd_train deeper ────────────────────────────────────────────
@@ -27269,14 +27307,24 @@ class TestCmdGenDeeperV5:
 
 class TestCmdChatDeeperV5:
     def test_no_args(self, repl):
-        with _CaptureOutput(repl) as cap:
+        # No-args chat enters interactive mode (never a "Usage" banner).
+        # _CaptureOutput swaps in a MemoryIO, whose exhausted queue raises
+        # EOFError — the path that already leaves the mode.
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            _CaptureOutput(repl) as cap,
+        ):
             repl._cmd_chat("")
-        assert "Usage" in cap.getvalue()
+        assert "Interactive chat mode" in cap.getvalue()
 
     def test_reset_session(self, repl):
         repl._chat_session_id = "old-session"
         repl._chat_history = [{"role": "user", "content": "hi"}]
-        with _CaptureOutput(repl) as cap:
+        # /reset sits behind the API gate, so stub it.
+        with (
+            patch.object(repl, "_require_api", return_value=True),
+            _CaptureOutput(repl) as cap,
+        ):
             repl._cmd_chat("/reset")
         assert "cleared" in cap.getvalue()
         assert repl._chat_session_id is None

@@ -3353,7 +3353,18 @@ Examples:
         try:
             while True:
                 try:
-                    user_input = input("  you> ")
+                    # Read through the IO abstraction, like every other prompt
+                    # in this shell (self.io.read at 457, 3968, 4183, 5249,
+                    # 5262). Calling builtin input() here was the one deviation,
+                    # and it broke the contract _CaptureOutput and _run_with_io
+                    # are built on: they swap repl.io for a MemoryIO so scripted
+                    # runs are hermetic, but builtin input() reads sys.stdin
+                    # directly and never saw that swap. In any captured or
+                    # non-tty context it raised OSError from stdin — uncaught,
+                    # since only EOFError and KeyboardInterrupt are handled.
+                    # MemoryIO raises EOFError once its queue is exhausted, which
+                    # is exactly the path already treated as "leave chat".
+                    user_input = self.io.read("  you> ")
                 except (EOFError, KeyboardInterrupt):
                     self._print("\n  [exiting chat]")
                     return
