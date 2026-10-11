@@ -689,27 +689,37 @@ class TestNPUVMDevice:
         assert dev.call("benchmark", "q", [1, 2], 5) == {"tok": 1}
 
     def test_error_paths(self):
+        # A failed NPU call surfaces as DeviceFault, never as a returned error
+        # value: all 23 ops do `if not result.success: raise DeviceFault`, and
+        # the VM turns the raise into a guest-visible DEV_CALL error (vm.py
+        # catches DeviceFault, appends "[VM] DEV_CALL error:", clears the reg).
+        # `match="boom"` keeps asserting the underlying error propagates.
         dev = NPUVMDevice(_FakeNPU(ok=False))
-        assert dev.call("load_model", "q", "s") == "boom"
-        assert dev.call("unload_model", "q") == "boom"
-        assert dev.call("tokenize", "q", "hi") == "boom"
-        assert dev.call("detokenize", "q", [1]) == "boom"
-        assert dev.call("generate", "q", "hi", 5) == "boom"
-        assert dev.call("forward", "q", [1]) == "boom"
-        assert dev.call("embed", "q", "hi", 1) == "boom"
-        assert dev.call("train_step", "q", [1], [2], 0.001) == "boom"
-        assert dev.call("checkpoint", "q", "c") == "boom"
-        assert dev.call("restore", "q", "c") == "boom"
-        assert dev.call("list_checkpoints") == "boom"
-        assert dev.call("delete_checkpoint", "c") == "boom"
-        assert dev.call("save_checkpoint", "q", "p") == "boom"
-        assert dev.call("load_checkpoint", "q", "p") == "boom"
-        assert dev.call("quantize", "q", 8) == "boom"
-        assert dev.call("dequantize", "q") == "boom"
-        assert dev.call("clear_cache", "q") == "boom"
-        assert dev.call("health") == "boom"
-        assert dev.call("batch", "q", "a|b", 5) == "boom"
-        assert dev.call("attention_maps", "q", "t", 0) == "boom"
-        assert dev.call("compare", "a", "b") == "boom"
-        assert dev.call("layers", "q", 1) == "boom"
-        assert dev.call("benchmark", "q", [1], 5) == "boom"
+        calls = [
+            ("load_model", "q", "s"),
+            ("unload_model", "q"),
+            ("tokenize", "q", "hi"),
+            ("detokenize", "q", [1]),
+            ("generate", "q", "hi", 5),
+            ("forward", "q", [1]),
+            ("embed", "q", "hi", 1),
+            ("train_step", "q", [1], [2], 0.001),
+            ("checkpoint", "q", "c"),
+            ("restore", "q", "c"),
+            ("list_checkpoints",),
+            ("delete_checkpoint", "c"),
+            ("save_checkpoint", "q", "p"),
+            ("load_checkpoint", "q", "p"),
+            ("quantize", "q", 8),
+            ("dequantize", "q"),
+            ("clear_cache", "q"),
+            ("health",),
+            ("batch", "q", "a|b", 5),
+            ("attention_maps", "q", "t", 0),
+            ("compare", "a", "b"),
+            ("layers", "q", 1),
+            ("benchmark", "q", [1], 5),
+        ]
+        for call in calls:
+            with pytest.raises(DeviceFault, match="boom"):
+                dev.call(*call)
