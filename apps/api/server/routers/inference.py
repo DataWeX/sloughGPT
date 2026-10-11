@@ -3311,16 +3311,33 @@ class InferenceRouter:
                 if provider is not None:
                     try:
                         caps = provider.capabilities
-                        result[name] = {
-                            "model_id": provider.model_id,
-                            "capabilities": {
-                                "chat": caps.chat,
-                                "streaming": caps.streaming,
-                                "embedding": caps.embedding,
-                                "vision": caps.vision,
-                            },
-                            "metadata": provider.metadata,
-                        }
+                        # A provider is a plugin, and this handler already
+                        # isolates one that misbehaves: the guard below
+                        # degrades it to {"error": ...} rather than failing
+                        # the whole listing. That isolation never reached this
+                        # value. A metadata field holding a datetime, an engine
+                        # handle, or any other non-JSON type is perfectly
+                        # well-formed here, and only fails later, in the
+                        # response encoder, outside the guard — which is why
+                        # `GET /providers` answered 500 E_SERIALIZATION while
+                        # this method raised nothing, and why the default log
+                        # level recorded no cause at all. Coercing with
+                        # `default=str` is what the SSE routers already do.
+                        result[name] = json.loads(
+                            json.dumps(
+                                {
+                                    "model_id": provider.model_id,
+                                    "capabilities": {
+                                        "chat": caps.chat,
+                                        "streaming": caps.streaming,
+                                        "embedding": caps.embedding,
+                                        "vision": caps.vision,
+                                    },
+                                    "metadata": provider.metadata,
+                                },
+                                default=str,
+                            )
+                        )
                     except Exception as exc:
                         logger.warning(
                             "Provider '%s' capability query failed: %s",
