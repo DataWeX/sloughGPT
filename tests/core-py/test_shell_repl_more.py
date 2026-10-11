@@ -120,6 +120,30 @@ def _run_with_io(repl, inputs, fn):
     return mem.get_output()
 
 
+def _fail_import(*names):
+    """Return an ``__import__`` replacement that fails only for ``names``.
+
+    Several tests ask "what if this module failed to import?". A blanket
+    ``patch("builtins.__import__", side_effect=ImportError(...))`` cannot answer
+    that, because it also breaks the error handler that reports the failure:
+    ``_cmd_protect`` catches the ImportError and calls ``_format_error``, which
+    itself does ``from domain.shell._internal.error import format_error`` — that
+    import raises too, so the handler dies before printing and the test errors
+    out on ImportError instead of asserting the message it asked for. Failing
+    only the module under test leaves the reporting path intact.
+    """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _mock(name, *args, **kwargs):
+        if name in names:
+            raise ImportError(f"{name} is not available")
+        return real_import(name, *args, **kwargs)
+
+    return _mock
+
+
 # ── _cmd_test all branches ────────────────────────────────────────
 
 
@@ -20304,7 +20328,14 @@ class TestCmdProtectDeeper2:
         assert "Usage" in out
 
     def test_protect_import_error(self, repl):
-        with patch("builtins.__import__", side_effect=ImportError("no module")):
+        # Fail only model_protector. A blanket ImportError also breaks
+        # _format_error's own `from ...error import format_error`, so the
+        # handler died before printing and this test errored out on
+        # ImportError instead of asserting "Error" in the output.
+        with patch(
+            "builtins.__import__",
+            side_effect=_fail_import("domain.infrastructure._internal.model_protector"),
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
             assert "Error" in out
 
@@ -20313,7 +20344,11 @@ class TestCmdProtectDeeper2:
         assert "Usage" in out
 
     def test_unprotect_import_error(self, repl):
-        with patch("builtins.__import__", side_effect=ImportError("no module")):
+        # Selective, for the same reason as test_protect_import_error.
+        with patch(
+            "builtins.__import__",
+            side_effect=_fail_import("domain.infrastructure._internal.model_protector"),
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_unprotect("mymodel"))
             assert "Error" in out
 
