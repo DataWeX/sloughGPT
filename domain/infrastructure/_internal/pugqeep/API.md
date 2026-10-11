@@ -637,3 +637,26 @@ LRU + TTL cache for deduplicating identical function calls.
 
 ### `ProcessMonitor`
 Background thread for stall detection and restart callbacks.
+
+### Export quick-reference (undocumented names, 2026-10-11 audit)
+
+The remaining `__all__` exports, one line each (source-verified):
+
+- `MemoryStore` (store.py) — in-memory store, no persistence; re-exported as
+  `FunctionMemoryStore`.
+- `JSONStore(path)` (store.py) — single-file JSON store with atomic writes.
+- `DirectoryStore(directory)` (store.py) — one file per point; good for large
+  clusters.
+- `MemoryStore` (cache.py) — in-memory LRU cache, `max_size_bytes` default
+  512MB; re-exported as `CacheMemoryStore`.
+- `PointDeduplicator(tolerance=1e-6)` (dedup.py) — identifies and merges
+  identical points across multiple libraries.
+- `PointLibrarySync` (dedup.py) — synchronizes PointLibraries between
+  instances (wraps `PointDeduplicator`).
+- `load_model_to_points(model_id, library=None, n_clusters=16,
+  method="cluster", storage_dir=None)` (tree.py) — loads a HuggingFace model
+  and compresses its weights into Points (returns a `Tree`).
+- `ProcessGroup(name, engine=None)` (engine.py) — batch operations on a set
+  of processes.
+- `ShutdownMode` (re-export from `producer_consumer`) — `DRAIN` (finish all
+  queued work) or `DROP` (discard remaining items) on shutdown.
