@@ -4,6 +4,22 @@
 what is in flight, and how to sync your own work. Keep it short; update it in
 the same commit that pushes your change.
 
+**2026-10-11 ~07:45 — ACCELERATOR CONTRACTS RESTORED (branch
+`fix/cpu-accelerator-elementwise`, card 56b49cf1 gpu_accelerator cluster).**
+`5a0b901b2` gutted the accelerator op family (-384 lines): add/softmax/gelu/
+silu/layernorm/rmsnorm/attention/scaled_dot_attention/dropout/embedding/
+cross_entropy/conv2d/max_pool2d on Metal/CUDA/CPU + to_gpu/from_gpu/
+reset_accelerator — 54 failing tests AND runtime AttributeErrors in slolib's
+gpu wrappers (gelu/silu/softmax). Restored verbatim from `5a0b901b2^` on top
+of the landed `853691a4e` linalg trio; CUDA cupy/env detection + fallback
+arms restored to the contract the tests pin. Second commit fixes the
+numpy-2.x device discriminator in `domain/slolib/_internal/gpu.py`
+(`hasattr(x, "device")` → `.get` duck-typing): host arrays were fed straight
+to cupy.matmul and `benchmark_slonet.py` crashed at its accelerator section
+on every cupy box. Gates: gpu files 73P/6S/0F (was 54F), slolib 179P/3F
+(3 pre-existing), adjacent suites byte-identical to clean HEAD,
+**benchmark_slonet 7/7 PASS** (first successful run on this box).
+
 **2026-10-11 ~04:14 — GENE BATCH 3 FINISHED INLINE (Gene's 4th infra death,
 ETIMEOUT) + queue sweep.** Landed: `14ccda235` one-pytest-config PART 1
 (port of stranded f2cc0ee0a — packages/core-py/pytest.ini deleted, root ini
