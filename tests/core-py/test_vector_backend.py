@@ -195,3 +195,40 @@ class TestVectorBEForward:
             tokens, max_new_tokens=50, temperature=0.0, eos_token=1
         )
         assert metrics["n_tokens"] <= 50
+
+
+class TestPoolStartMethod:
+    """Pool start method: forkserver by default, `fork` escape via env (card a0ba949b).
+
+    The bare default context = fork deadlocks workers when the parent is
+    multithreaded (OpenBLAS) — fork-into-multithreaded, run-7/run-8 signature.
+    The fork escape is asserted ctx-level only: constructing a live fork Pool
+    here would fork into the suite's leftover server threads — workers deadlock
+    at bootstrap and `VectorBE.__del__`'s join wedged run-3 (2 timeout blocks,
+    3 orphaned workers). The real-pool wiring runs via `vector_be` on the safe
+    forkserver default instead.
+    """
+
+    def test_helper_defaults_to_forkserver(self):
+        from domain.infrastructure._internal.vector_backend import _pool_start_method
+
+        assert _pool_start_method() == "forkserver"
+
+    def test_helper_fork_escape_env(self, monkeypatch):
+        from domain.infrastructure._internal.vector_backend import _pool_start_method
+
+        monkeypatch.setenv("SLO_VECTOR_START_METHOD", "fork")
+        assert _pool_start_method() == "fork"
+
+    def test_pool_context_is_forkserver(self, vector_be):
+        assert vector_be._pool._ctx.get_start_method() == "forkserver"
+
+    def test_pool_context_fork_escape(self, monkeypatch):
+        import multiprocessing as mp
+
+        from domain.infrastructure._internal.vector_backend import _pool_start_method
+
+        monkeypatch.setenv("SLO_VECTOR_START_METHOD", "fork")
+        # Ctx-level only — no live Pool (see class docstring: live fork workers
+        # deadlocked into the suite's server threads in run-3).
+        assert mp.get_context(_pool_start_method()).get_start_method() == "fork"

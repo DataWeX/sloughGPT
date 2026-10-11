@@ -58,6 +58,32 @@ def _collect(generator):
     return asyncio.run(_run())
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _no_leaked_producer_threads():
+    """Card f1816d61: wave_i must not leak _producer daemon threads.
+
+    The full core-py gate wedged at ~89% because leaked producer threads (plus
+    orphan fork children) made every later test wait out the 600s pytest
+    timeout. Producers are daemons, so they never block interpreter exit —
+    they just accumulate and hold queue/model state that stalls downstream
+    tests. This fixture is the regression gate: any test in this module that
+    abandons a stream must ensure its producer exits.
+    """
+    before = set(threading.enumerate())
+    yield
+    # Producers stop on abort but may be mid-sleep/mid-put; give them a moment.
+    deadline = time.monotonic() + 5.0
+    leaked = None
+    while time.monotonic() < deadline:
+        leaked = [
+            t for t in threading.enumerate() if t not in before and t.name.endswith("(_producer)")
+        ]
+        if not leaked:
+            break
+        time.sleep(0.05)
+    assert not leaked, f"module leaked producer thread(s): {leaked}"
+
+
 class _StreamingModel:
     """Model stub whose generate_numpy_stream behavior is injectable."""
 
@@ -141,8 +167,13 @@ class TestTotalTimeout:
 
         monkeypatch.setattr(asyncio, "wait_for", flaky_wait_for)
 
+        stop = threading.Event()
+
         def streamer():
-            while True:
+            # Cooperative stall (card f1816d61): sleeps without yielding — the
+            # stalled-model case — but checks the test's stop flag so the
+            # producer thread can exit once the consumer is done with it.
+            while not stop.is_set():
                 time.sleep(0.05)
 
         provider = _make_provider(_StreamingModel(streamer))
@@ -152,6 +183,7 @@ class TestTotalTimeout:
                 [{"role": "user", "content": "hi"}], max_tokens=10, cancel_event=cancel_event
             )
         )
+        stop.set()
         assert out[-1] == "\n\n[Generation timed out after 1s]"
         assert cancel_event.is_set()
 
@@ -208,11 +240,13 @@ class TestWaitTimeout:
         monkeypatch.setattr(queue, "Queue", RecordingQueue)
 
         started = threading.Event()
+        stop = threading.Event()
 
         def streamer():
             started.set()
             yield 1
-            while True:
+            # Cooperative stall (card f1816d61) — see TestWaitTimeout above.
+            while not stop.is_set():
                 time.sleep(0.05)
 
         provider = _make_provider(_StreamingModel(streamer))
@@ -230,6 +264,7 @@ class TestWaitTimeout:
                 await anext(it)
 
         asyncio.run(run())
+        stop.set()
 
     def test_error_between_tokens_surfaces_via_err_q(self, monkeypatch):
         captured = []
@@ -650,3 +685,49 @@ class TestChatStreamEndToEnd:
         r1, r2 = asyncio.run(run_two())
         assert len(r1) == 2
         assert len(r2) == 2
+
+
+# ── Producer lifecycle (card f1816d61) ──────────────────────────────
+
+
+class TestProducerLifecycle:
+    def test_abandoned_stream_stops_producer_thread(self):
+        """Client disconnect mid-stream must not leak the producer thread.
+
+        An endless-but-yielding model (the realistic case: a real model keeps
+        producing until max_tokens) plus a consumer that reads ONE token then
+        closes the generator. Before the fix the daemon producer thread kept
+        q.put-ing forever — the leaked _producer threads that wedged the full
+        core-py gate (card f1816d61).
+        """
+        before = set(threading.enumerate())
+
+        def streamer():
+            i = 0
+            while True:
+                yield (i % 26) + 1
+                i += 1
+
+        provider = _make_provider(_StreamingModel(streamer))
+
+        async def run():
+            agen = provider.chat_stream([{"role": "user", "content": "hi"}], max_tokens=10)
+            first = await anext(agen)
+            assert first  # got a token, then simulate the client walking away
+            await agen.aclose()
+
+        asyncio.run(run())
+
+        # The producer must notice the abandonment and exit promptly.
+        deadline = time.monotonic() + 5.0
+        leaked = None
+        while time.monotonic() < deadline:
+            leaked = [
+                t
+                for t in threading.enumerate()
+                if t not in before and t.name.endswith("(_producer)")
+            ]
+            if not leaked:
+                break
+            time.sleep(0.05)
+        assert not leaked, f"abandoned stream leaked producer thread(s): {leaked}"

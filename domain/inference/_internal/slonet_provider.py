@@ -1682,6 +1682,14 @@ class SloNetChatProvider:
         top_p = kwargs.get("top_p")
         repetition_penalty = kwargs.get("repetition_penalty", 1.0)
         cancel_event = kwargs.get("cancel_event")
+        # Card f1816d61: internal abort signal — set by the finally around the
+        # consume loop on EVERY exit (return, error, or GeneratorExit when the
+        # caller abandons the stream / client disconnect) so the producer stops
+        # feeding an unbounded queue forever. Deliberately SEPARATE from the
+        # caller's cancel_event: that one is a REQUEST made by the caller and
+        # must never be set as a side effect of a completed stream
+        # (test_cancel_event_not_set_when_fast); the producer honors both.
+        abort = threading.Event()
         kwargs.get("priority", 1)  # default MEDIUM
         session_id = kwargs.get("session_id")
 
@@ -1724,6 +1732,12 @@ class SloNetChatProvider:
         def _producer():
             try:
                 for token in _stream_generate():
+                    if abort.is_set() or (cancel_event is not None and cancel_event.is_set()):
+                        # Consumer gone (timeout, error, or disconnect) or the
+                        # caller requested cancellation — stop pulling from the
+                        # model; the finally below still puts the sentinel so
+                        # no queue reader is left waiting.
+                        break
                     q.put(token)
             except Exception as e:
                 logger.error("[chat_stream] Producer error: %s", e, exc_info=True)
@@ -1735,54 +1749,65 @@ class SloNetChatProvider:
         producer_thread.start()
 
         gen_start = time.monotonic()
-        while True:
-            # Check total generation timeout
-            elapsed = time.monotonic() - gen_start
-            if elapsed > _STREAM_TOTAL_TIMEOUT_S:
-                cancel_event.set() if cancel_event else None
-                logger.warning(
-                    "Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"}
-                )
-                yield f"\n\n[Generation timed out after {elapsed:.0f}s]"
-                return
+        try:
+            while True:
+                # Check total generation timeout
+                elapsed = time.monotonic() - gen_start
+                if elapsed > _STREAM_TOTAL_TIMEOUT_S:
+                    cancel_event.set() if cancel_event else None
+                    abort.set()
+                    logger.warning(
+                        "Streaming generation timed out after %.0fs", elapsed, extra={"tag": "INF"}
+                    )
+                    yield f"\n\n[Generation timed out after {elapsed:.0f}s]"
+                    return
 
-            try:
-                # Use to_thread with timeout to prevent indefinite blocking
-                token = await asyncio.wait_for(
-                    asyncio.to_thread(q.get),
-                    timeout=_STREAM_GET_TIMEOUT_S,
-                )
-            except TimeoutError:
-                # Check if producer thread is still alive
-                if not producer_thread.is_alive():
-                    # Thread died — drain remaining tokens
-                    while not q.empty():
-                        t = q.get_nowait()
-                        if t is sentinel:
-                            break
-                        yield t
+                try:
+                    # Use to_thread with timeout to prevent indefinite blocking
+                    token = await asyncio.wait_for(
+                        asyncio.to_thread(q.get),
+                        timeout=_STREAM_GET_TIMEOUT_S,
+                    )
+                except TimeoutError:
+                    # Check if producer thread is still alive
+                    if not producer_thread.is_alive():
+                        # Thread died — drain remaining tokens
+                        while not q.empty():
+                            t = q.get_nowait()
+                            if t is sentinel:
+                                break
+                            yield t
+                        break
+                    # Thread still alive but no token for 30s — check for errors
+                    if not err_q.empty():
+                        exc = err_q.get_nowait()
+                        yield f"\n\n[Generation error: {exc}]"
+                        return
+                    # Still generating — continue waiting
+                    continue
+
+                if token is sentinel:
+                    if not err_q.empty():
+                        exc = err_q.get_nowait()
+                        yield f"\n\n[Generation error: {exc}]"
                     break
-                # Thread still alive but no token for 30s — check for errors
+
+                # Check for producer errors (may have been raised between queue reads)
                 if not err_q.empty():
                     exc = err_q.get_nowait()
                     yield f"\n\n[Generation error: {exc}]"
                     return
-                # Still generating — continue waiting
-                continue
 
-            if token is sentinel:
-                if not err_q.empty():
-                    exc = err_q.get_nowait()
-                    yield f"\n\n[Generation error: {exc}]"
-                break
-
-            # Check for producer errors (may have been raised between queue reads)
-            if not err_q.empty():
-                exc = err_q.get_nowait()
-                yield f"\n\n[Generation error: {exc}]"
-                return
-
-            yield token
+                yield token
+        finally:
+            # Runs on EVERY exit — return, error, or GeneratorExit when the
+            # caller abandons the stream (client disconnect / aclose). Signals
+            # the producer to stop; without this every abandoned stream leaked
+            # a daemon _producer thread that fed an unbounded queue forever,
+            # accumulating across a pytest session until the core-py gate
+            # wedged (card f1816d61). Safe on timeout too: aborting a stream
+            # nobody is reading is always correct.
+            abort.set()
 
     # =========================================================================
     # NEW FEATURES
