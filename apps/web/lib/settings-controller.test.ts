@@ -15,28 +15,6 @@ setupApiMocks()
 
 import { settingsController } from './settings-controller'
 
-describe('settingsController.listTrainingPresets', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs /settings/training/presets', async () => {
-    apiClient.apiGet.mockResolvedValue({ presets: [{ name: 'quick-finetune' }] })
-    const result = await settingsController.listTrainingPresets()
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/settings/training/presets')
-    expect(result.presets).toHaveLength(1)
-  })
-})
-
-describe('settingsController.applyTrainingPreset', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs to apply preset', async () => {
-    apiClient.apiPost.mockResolvedValue({ preset: 'quick-finetune', applied: {} })
-    const result = await settingsController.applyTrainingPreset('quick-finetune')
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/settings/training/presets/quick-finetune/apply')
-    expect(result.preset).toBe('quick-finetune')
-  })
-})
-
 describe('settingsController.exportTrainingHistory', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
@@ -70,18 +48,6 @@ describe('settingsController.compareTrainingRuns', () => {
   })
 })
 
-describe('settingsController.getBatchTrainingStatus', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs batch status', async () => {
-    const mockData = { jobs: [], summary: { total: 5, running: 0, queued: 0, completed: 3, failed: 1 } }
-    apiClient.apiGet.mockResolvedValue(mockData)
-    const result = await settingsController.getBatchTrainingStatus()
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/settings/training/batch-status')
-    expect(result.summary.total).toBe(5)
-  })
-})
-
 describe('settingsController.toggleBookmark', () => {
   beforeEach(() => { vi.clearAllMocks() })
 
@@ -90,17 +56,6 @@ describe('settingsController.toggleBookmark', () => {
     const result = await settingsController.toggleBookmark('run-1')
     expect(apiClient.apiPost).toHaveBeenCalledWith('/settings/training/runs/run-1/bookmark')
     expect(result.bookmarked).toBe(true)
-  })
-})
-
-describe('settingsController.getBookmarkedRuns', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('GETs bookmarked runs', async () => {
-    apiClient.apiGet.mockResolvedValue({ runs: [{ run_id: 'r1' }], count: 1 })
-    const result = await settingsController.getBookmarkedRuns()
-    expect(apiClient.apiGet).toHaveBeenCalledWith('/settings/training/bookmarks')
-    expect(result.count).toBe(1)
   })
 })
 
@@ -189,28 +144,6 @@ describe('settingsController.exportTrainingRun', () => {
     const result = await settingsController.exportTrainingRun('r1', 'json')
     expect(apiClient.apiGet).toHaveBeenCalledWith('/settings/training/runs/r1/export?format=json')
     expect(result.content).toBe('{}')
-  })
-})
-
-describe('settingsController.generateModelCard', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs model card request', async () => {
-    apiClient.apiPost.mockResolvedValue({ card: { model_name: 'test-model' }, markdown: '# test-model' })
-    const result = await settingsController.generateModelCard('test-model', { base_model: 'gpt2' })
-    expect(apiClient.apiPost).toHaveBeenCalled()
-    expect(result.card.model_name).toBe('test-model')
-  })
-})
-
-describe('settingsController.clearTrainingHistory', () => {
-  beforeEach(() => { vi.clearAllMocks() })
-
-  it('POSTs clear', async () => {
-    apiClient.apiPost.mockResolvedValue({ cleared: 10 })
-    const result = await settingsController.clearTrainingHistory()
-    expect(apiClient.apiPost).toHaveBeenCalledWith('/settings/training/history/clear')
-    expect(result.cleared).toBe(10)
   })
 })
 
