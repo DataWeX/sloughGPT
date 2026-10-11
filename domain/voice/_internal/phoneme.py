@@ -172,10 +172,17 @@ class PhonemeEngine:
     # ── Info ──
 
     def supported_languages(self) -> PhonemeResult:
-        """List supported languages."""
+        """List supported languages.
+
+        ``encoder.supported_languages`` is a property returning ``list[str]``,
+        not a method — the three other call sites read it without parentheses
+        (`multimodal.py`, `phoneme_encoder_cli.py`, and the encoder's own
+        tests). Calling it here raised ``'list' object is not callable`` and
+        took ``GET /phoneme/languages`` down with a 500.
+        """
         try:
             encoder = self._get_encoder()
-            langs = encoder.supported_languages()
+            langs = encoder.supported_languages
             return PhonemeResult(success=True, data=langs)
         except Exception as e:
             logger.error("Supported languages failed: %s", e)
