@@ -76,6 +76,55 @@ class TestProviders:
         assert body["status"] == "success"
         assert isinstance(body["data"], dict)
 
+    def test_list_providers_survives_unserialisable_metadata(self):
+        """A plugin's odd metadata must not take the whole listing down.
+
+        This is the regression test for `GET /providers` answering
+        500 E_SERIALIZATION in production. `list_model_providers` already
+        guards each provider with a try/except, but that guard sits *inside*
+        the method: a metadata value holding a datetime or an engine handle is
+        well-formed Python, so nothing raises there. It fails later, in the
+        response encoder, outside the guard — by which point the handler has
+        returned and no per-provider degradation can happen.
+
+        The previous test here asserted only `isinstance(body["data"], dict)`
+        with an **empty** registry, so it passed on `{}` and could not have
+        caught this however many times it ran.
+
+        A provider is a plugin; one returning something unserialisable is a
+        normal state, not an exceptional one, so the listing degrades that
+        field instead of failing.
+        """
+        import datetime
+
+        from domain.models._internal.provider import _providers, register_provider
+
+        class _Caps:
+            chat = True
+            streaming = True
+            embedding = False
+            vision = False
+
+        class _OddProvider:
+            model_id = "odd-model"
+            capabilities = _Caps
+            metadata = {"loaded_at": datetime.datetime.now(), "handle": object()}
+
+        register_provider("slonet-native", _OddProvider())
+        try:
+            resp = client.get("/providers")
+            assert resp.status_code == 200, (
+                f"one plugin's metadata took the listing down: {resp.text[:200]}"
+            )
+            data = resp.json()["data"]
+            entry = data["slonet-native"]
+            assert entry["model_id"] == "odd-model"
+            # coerced to something the encoder can carry, not dropped
+            assert isinstance(entry["metadata"]["loaded_at"], str)
+            assert "handle" in entry["metadata"]
+        finally:
+            _providers.pop("slonet-native", None)
+
 
 class TestSessionCRUD:
     def test_create_session(self):
