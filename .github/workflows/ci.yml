@@ -175,7 +175,12 @@ jobs:
           python-version: "3.11"
       - name: Check feature tags
         run: |
-          PYTHONPATH=packages/core-py python3 scripts/check_feature_tags.py --validate --check-deletions
+          # The repo root must be on PYTHONPATH: check_feature_tags imports
+          # domain.shared._internal.feature_flags, and `domain` lives at the
+          # repo root. packages/core-py alone carries `domains/` (plural), a
+          # different tree, so `import domain` failed outright and this job
+          # went red at the ModuleNotFoundError rather than checking tags.
+          PYTHONPATH="$PWD:packages/core-py" python3 scripts/check_feature_tags.py --validate --check-deletions
 
   # Doc-vs-code parity. The Router Playbook used to be a prose checklist
   # ("grep -c _internal <router> = 0"), which is how the documented figures

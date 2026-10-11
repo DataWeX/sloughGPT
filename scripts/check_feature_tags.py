@@ -119,7 +119,12 @@ def list_features(root: Path) -> None:
 
 def validate_feature_flags(root: Path) -> list[str]:
     """Validate that all FEATURE tags have corresponding feature flag entries."""
-    from domain.shared.feature_flags import FeatureFlags
+    # The _internal import is deliberate, not a shortcut: FeatureFlags is not
+    # part of domain.shared's declared facade API (see domain/shared/__init__
+    # __all__), and scripts already import domain.shell._internal.* directly.
+    # The old pre-refactor path `domain.shared.feature_flags` raised
+    # ModuleNotFoundError here, which took down the whole --validate run.
+    from domain.shared._internal.feature_flags import FeatureFlags
 
     errors = []
     files = find_feature_tagged_files(root)
