@@ -60,6 +60,44 @@ def repl():
             reset_shell_state_db()
 
 
+@pytest.fixture(autouse=True)
+def _hermetic_api(monkeypatch):
+    """Card 4eefc74c: this suite must never reach a live API server.
+
+    Observed 2026-10-09: unmocked API probes from this file (kill 99999999
+    -> POST /training/jobs/99999999/stop) reached the shared live API on
+    :8000, and a sibling suite's /cancel-all?type=training killed real
+    training jobs mid-run on that same server. Point get_api_base at a
+    closed local port so every API path fails fast with ConnectionRefused
+    (already handled -> error dict) instead of reaching any server.
+
+    Patched in BOTH modules because repl.py imports the helper call-time
+    from .commands on some paths and from .config on others, while
+    commands.py binds it at import time.
+    """
+    dead_base = "http://127.0.0.1:9"
+    monkeypatch.setattr("domain.shell._internal.commands.get_api_base", lambda: dead_base)
+    monkeypatch.setattr("domain.shell._internal.config.get_api_base", lambda: dead_base)
+
+
+class TestHermeticApi:
+    """Regression guards for card 4eefc74c (tests hitting the live server)."""
+
+    def test_get_api_base_is_dead_local(self):
+        from domain.shell._internal import commands, config
+
+        assert commands.get_api_base() == "http://127.0.0.1:9"
+        assert config.get_api_base() == "http://127.0.0.1:9"
+
+    def test_kill_probe_fails_fast_offline(self):
+        """The historical live probe (kill 99999999) now returns the handled
+        ConnectionError dict without touching a network."""
+        from domain.shell._internal.commands import ShellCommands
+
+        result = ShellCommands.kill("99999999")
+        assert result.get("error_type") == "ConnectionError"
+
+
 def _run_with_io(repl, inputs, fn):
     """Run fn with repl I/O redirected to a MemoryIO pre-loaded with inputs."""
     mem = MemoryIO()
@@ -2353,8 +2391,14 @@ class TestJobCommands:
         assert out.strip() != "" or repl._last_exit_code == 0
 
     def test_kill_no_such(self, repl):
-        out = capture_cmd(repl, repl._cmd_kill, "99999")
-        assert repl._last_exit_code != 0 or "error" in out.lower() or "No such" in out
+        # Hermetic (card 4eefc74c): this previously passed ONLY because the
+        # live API answered the probe with a 404 body. Mock the kill backend
+        # so the REPL's error display is what's actually under test.
+        from domain.shell._internal.commands import ShellCommands
+
+        with patch.object(ShellCommands, "kill", return_value={"error": "No such job: 99999"}):
+            out = capture_cmd(repl, repl._cmd_kill, "99999")
+        assert repl._last_exit_code != 0 or "no such" in out.lower() or "error" in out.lower()
 
 
 # ── watch ───────────────────────────────────────────────────────────
@@ -19355,7 +19399,12 @@ class TestCmdReadDeeper3:
 
 class TestCmdKillDeeper3:
     def test_kill_invalid_signal(self, repl):
-        out = _run_with_io(repl, [], lambda: repl._cmd_kill("invalid 1"))
+        # Hermetic (card 4eefc74c): mock the kill backend — the REPL must
+        # surface the invalid-signal error without reaching any server.
+        from domain.shell._internal.commands import ShellCommands
+
+        with patch.object(ShellCommands, "kill", return_value={"error": "Invalid signal: 1"}):
+            out = _run_with_io(repl, [], lambda: repl._cmd_kill("invalid 1"))
         assert repl._last_exit_code == 1 or "invalid" in out.lower() or "error" in out.lower()
 
 
