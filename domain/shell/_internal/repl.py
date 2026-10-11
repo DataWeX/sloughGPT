@@ -2033,6 +2033,7 @@ Most common commands (help [cmd] for details, help for full list):
                 self._print(f"  Unknown command: {args}")
             return
         self._print(f"""
+Built-in commands:
 {_C_CYAN}Navigation:{_C_RESET}
   cd [dir]               Change directory (default: ~, - for previous)
   pwd                    Print working directory
@@ -2087,6 +2088,7 @@ Most common commands (help [cmd] for details, help for full list):
   unprotect <model>      Remove protection
 
 {_C_CYAN}Shell features:{_C_RESET}
+  help [cmd]              Show this help or help for a specific command
   <cmd> | <cmd>           Pipeline: output of first feeds second
   <cmd> &                 Background: run without blocking
   <cmd> && <cmd>          Chain: run next only if previous succeeded

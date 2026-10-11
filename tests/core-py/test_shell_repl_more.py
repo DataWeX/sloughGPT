@@ -1281,7 +1281,7 @@ class TestSource:
 
     def test_source_missing_file(self, repl):
         out = capture_cmd(repl, repl._cmd_source, "/no/such/script.sh")
-        assert "Error reading" in out
+        assert "File not found" in out
 
     def test_source_runs_lines(self, repl, tmp_path):
         script = tmp_path / "s.sh"
@@ -1715,7 +1715,7 @@ class TestRender:
 class TestAi:
     def test_ai_usage(self, repl):
         out = capture_cmd(repl, repl._cmd_ai, "")
-        assert "Usage: ai <natural language query>" in out
+        assert "Usage: ai [--loop|--auto] <natural language query>" in out
 
     def test_ai_api_unavailable_falls_back(self, repl):
         out = capture_cmd(repl, repl._cmd_ai, "show me running processes")
@@ -16579,7 +16579,7 @@ class TestCmdSourceExtraV4:
 
     def test_source_nonexistent(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_source("/nonexistent_source_xyz"))
-        assert "Error reading" in out
+        assert "File not found" in out
 
     def test_source_skips_comments(self, repl, tmp_path):
         f = tmp_path / "test_source_comments.sh"
@@ -16887,7 +16887,7 @@ class TestCmdCpEdgeCases:
 
     def test_cp_one_arg(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_cp("only_one"))
-        assert "missing destination" in out
+        assert "Usage: cp [-rfvpi] <src> <dst>" in out
 
 
 # ── _cmd_svc ─────────────────────────────────────────────────────────
@@ -20770,7 +20770,7 @@ class TestCmdSourceDeeper3:
 
     def test_source_nonexistent(self, repl):
         out = _run_with_io(repl, [], lambda: repl._cmd_source("/nonexistent/file.rc"))
-        assert "Error" in out or "No such file" in out.lower()
+        assert "File not found" in out
 
     def test_source_with_pipeline(self, repl, tmp_path):
         f = tmp_path / "test_source.rc"
@@ -23020,7 +23020,13 @@ class TestCmdTrainDeeperV3:
         repl.cmds.train_auto = MagicMock(return_value={"status": "started", "id": "xyz"})
         with _CaptureOutput(repl) as cap:
             repl._cmd_train("auto")
-        assert "Auto-train started" in cap.getvalue()
+        # `_cmd_train` refuses `train auto` without an explicit soul_name
+        # (repl.py:2909). The backend would accept soul_name="" — this guard is
+        # the shell's, and deliberate: a bare subcommand must not silently kick
+        # off a training job. So the contract for "no soul" is usage plus no
+        # call, not a started job.
+        assert "Usage: train auto <soul_name> [teacher] [epochs]" in cap.getvalue()
+        assert not repl.cmds.train_auto.called
 
     def test_train_default_no_datasets(self, repl):
         repl._require_api = MagicMock(return_value=True)
@@ -23653,7 +23659,7 @@ class TestCmdSourceDeeperV2:
     def test_source_file_not_found(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_source("/nonexistent/file.sh")
-        assert "Error" in cap.getvalue() or "error" in cap.getvalue()
+        assert "File not found" in cap.getvalue()
 
     def test_source_empty(self, repl):
         with _CaptureOutput(repl) as cap:
@@ -27399,7 +27405,7 @@ class TestCmdCpErrorPaths:
     def test_missing_destination(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_cp("only_one_arg")
-        assert "missing destination" in cap.getvalue()
+        assert "Usage: cp [-rfvpi] <src> <dst>" in cap.getvalue()
         assert repl._last_exit_code == 1
 
     def test_file_not_found(self, repl, tmp_path):
@@ -27437,7 +27443,7 @@ class TestCmdMvErrorPaths:
     def test_missing_destination(self, repl):
         with _CaptureOutput(repl) as cap:
             repl._cmd_mv("only_one")
-        assert "missing destination" in cap.getvalue()
+        assert "Usage: mv [-fvi] <src> <dst>" in cap.getvalue()
         assert repl._last_exit_code == 1
 
     def test_file_not_found(self, repl, tmp_path):
