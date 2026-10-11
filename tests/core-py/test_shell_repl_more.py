@@ -120,6 +120,30 @@ def _run_with_io(repl, inputs, fn):
     return mem.get_output()
 
 
+def _fail_import(*names):
+    """Return an ``__import__`` replacement that fails only for ``names``.
+
+    Several tests ask "what if this module failed to import?". A blanket
+    ``patch("builtins.__import__", side_effect=ImportError(...))`` cannot answer
+    that, because it also breaks the error handler that reports the failure:
+    ``_cmd_protect`` catches the ImportError and calls ``_format_error``, which
+    itself does ``from domain.shell._internal.error import format_error`` — that
+    import raises too, so the handler dies before printing and the test errors
+    out on ImportError instead of asserting the message it asked for. Failing
+    only the module under test leaves the reporting path intact.
+    """
+    import builtins
+
+    real_import = builtins.__import__
+
+    def _mock(name, *args, **kwargs):
+        if name in names:
+            raise ImportError(f"{name} is not available")
+        return real_import(name, *args, **kwargs)
+
+    return _mock
+
+
 # ── _cmd_test all branches ────────────────────────────────────────
 
 
@@ -9123,7 +9147,7 @@ class TestCmdConfirmConfig:
         mock_config._config_dir.mkdir(parents=True, exist_ok=True)
         defaults = mock_config._config_dir / "defaults.yaml"
         defaults.write_text("features:\n  auto_download: false\n")
-        with patch("domain.infrastructure.config.get_config", return_value=mock_config):
+        with patch("domain.infrastructure._internal.config.get_config", return_value=mock_config):
             with patch.object(Path, "cwd", return_value=Path("/tmp/test_config").parent):
                 repl._cmd_confirm("on")
         assert repl._last_exit_code == 0
@@ -9304,7 +9328,7 @@ class TestCmdEventsExtra:
             ev.data = {"key": f"val_{i}"}
             events.append(ev)
         bus.history.return_value = events
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("5")
         assert repl._last_exit_code == 0
 
@@ -9321,7 +9345,7 @@ class TestCmdEventsExtra:
         ev2.source = "monitor"
         ev2.data = {}
         bus.history.return_value = [ev1, ev2]
-        with patch("domain.infrastructure.event_bus.get_event_bus", return_value=bus):
+        with patch("domain.infrastructure._internal.event_bus.get_event_bus", return_value=bus):
             repl._cmd_events("model")
         assert repl._last_exit_code == 0
 
@@ -20317,7 +20341,14 @@ class TestCmdProtectDeeper2:
         assert "Usage" in out
 
     def test_protect_import_error(self, repl):
-        with patch("builtins.__import__", side_effect=ImportError("no module")):
+        # Fail only model_protector. A blanket ImportError also breaks
+        # _format_error's own `from ...error import format_error`, so the
+        # handler died before printing and this test errored out on
+        # ImportError instead of asserting "Error" in the output.
+        with patch(
+            "builtins.__import__",
+            side_effect=_fail_import("domain.infrastructure._internal.model_protector"),
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_protect("mymodel"))
             assert "Error" in out
 
@@ -20326,7 +20357,11 @@ class TestCmdProtectDeeper2:
         assert "Usage" in out
 
     def test_unprotect_import_error(self, repl):
-        with patch("builtins.__import__", side_effect=ImportError("no module")):
+        # Selective, for the same reason as test_protect_import_error.
+        with patch(
+            "builtins.__import__",
+            side_effect=_fail_import("domain.infrastructure._internal.model_protector"),
+        ):
             out = _run_with_io(repl, [], lambda: repl._cmd_unprotect("mymodel"))
             assert "Error" in out
 
