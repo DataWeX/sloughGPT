@@ -21,22 +21,32 @@ def sync_notes_to_board(note_store: Any, kanban_store: Any) -> tuple[int, int, i
     if isinstance(kanban_store, PlannerStore):
         return kanban_store.sync()
 
-    # Legacy path: NoteStore + KanbanStore
+    # Legacy path: NoteStore + KanbanStore. Matching is positional (see
+    # PlannerStore.sync): the Nth note with a title maps to the Nth card with
+    # that title. Keyed on position rather than card.id because KanbanStore
+    # derives ids from the title plus a seconds-resolution timestamp, so two
+    # same-title cards created in the same second share an id.
     from . import config
 
     notes = note_store.list_notes(limit=9999)
     board = kanban_store.load_board()
-    existing = {c.title: c for c in board.cards}
+    by_title: dict[str, list[Any]] = {}
+    for c in board.cards:
+        by_title.setdefault(c.title, []).append(c)
     added = 0
     updated = 0
+    cursor: dict[str, int] = {}
 
     for note in notes:
         col = config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
         title = note.title or "(untitled)"
-        card = existing.get(title)
+        pool = by_title.get(title, ())
+        idx = cursor.get(title, 0)
+        cursor[title] = idx + 1
+        card = pool[idx] if idx < len(pool) else None
 
         if card is None:
-            kanban_store.add_card(
+            card = kanban_store.add_card(
                 title=title,
                 column=col,
                 tags=list(note.tags or []),
@@ -44,6 +54,7 @@ def sync_notes_to_board(note_store: Any, kanban_store: Any) -> tuple[int, int, i
                 assignee=note.assignee or "",
                 sprint=note.sprint or "",
             )
+            by_title.setdefault(title, []).append(card)
             added += 1
             continue
 

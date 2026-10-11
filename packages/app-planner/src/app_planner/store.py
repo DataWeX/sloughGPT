@@ -528,20 +528,50 @@ class PlannerStore:
     # ── Sync ────────────────────────────────────────────────────────────
 
     def sync(self) -> tuple[int, int, int]:
-        """Reconcile notes ↔ board. Returns (added, updated, total)."""
+        """Reconcile notes ↔ board. Returns (added, updated, total).
+
+        Cards are matched to notes by title, but the match is **positional**:
+        the Nth note with a given title maps to the Nth card with that title.
+        Without that, two notes sharing a title (duplicate-title twins) both
+        resolve to the same card and each issues move_card() against it, so the
+        last one processed wins and every subsequent run reports the card as
+        moved again — sync never converged.
+
+        Positional matching also stops the first run from collapsing the twins
+        onto a single card: the second twin finds no card left at its index and
+        gets its own. The board is append-only, so card order is stable and the
+        same note claims the same card run over run — that is what makes a
+        converged board stay converged.
+
+        The index is positional rather than keyed on card.id because legacy
+        boards derive card ids from the title plus a seconds-resolution
+        timestamp (`kanban._make_id`), so two same-title cards created in the
+        same second share an id and could not be told apart.
+
+        Cards are read via a snapshot taken at the start of each run; the
+        returned Card objects must not be reused after move_card(), which
+        reloads the board and would leave their column stale.
+        """
         notes = self.list_notes(limit=9999)
         board = self.load_board()
-        existing = {c.title: c for c in board.cards}
+        by_title: dict[str, list[Card]] = {}
+        for c in board.cards:
+            by_title.setdefault(c.title, []).append(c)
+
         added = 0
         updated = 0
+        cursor: dict[str, int] = {}
 
         for note in notes:
             col = config.STATUS_TO_COLUMN.get((note.status or "").lower(), "todo")
             title = note.title or "(untitled)"
-            card = existing.get(title)
+            pool = by_title.get(title, ())
+            idx = cursor.get(title, 0)
+            cursor[title] = idx + 1
+            card = pool[idx] if idx < len(pool) else None
 
             if card is None:
-                self.add_card(
+                card = self.add_card(
                     title=title,
                     column=col,
                     tags=list(note.tags or []),
@@ -550,6 +580,7 @@ class PlannerStore:
                     sprint=note.sprint or "",
                     gh=note.gh or "",
                 )
+                by_title.setdefault(title, []).append(card)
                 added += 1
                 continue
 
