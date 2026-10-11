@@ -2394,3 +2394,72 @@ class TestSignalNotSwallowed:
                 if proc.poll() is None:
                     proc.kill()
                     proc.wait()
+
+
+def _exec_add(a, b):
+    """Module-level on purpose: exec-mode workers receive fns by pickle."""
+    return a + b
+
+
+def _exec_noisy():
+    print("exec-child-stdout")
+    return "ok"
+
+
+class TestExecStartMethod:
+    """start_method="exec" — fork+exec child (card df5affc7).
+
+    The image is replaced before the worker runs, so no lock held by the
+    parent's threads can deadlock it (the BLAS/OpenMP futex class).
+    """
+
+    def _engine(self, **sub_kwargs):
+        cfg = EngineConfig(name="t", subprocess=SubprocessConfig(start_method="exec", **sub_kwargs))
+        engine = Engine(config=cfg)
+        engine.pool("t", guarded=True)
+        return engine
+
+    def test_exec_runs_picklable_fn(self):
+        engine = self._engine()
+        p = engine.run_subprocess(_exec_add, 2, 3, name="add")
+        engine.run_background(poll_interval=0.01)
+        engine.wait(timeout=30)
+        engine.stop()
+        assert p.status == ProcessStatus.COMPLETED
+        assert p.result == 5
+
+    def test_exec_capture_output(self):
+        proc = Process(fn=_exec_noisy, name="noisy")
+        sub = SubprocessProcess(
+            proc,
+            SubprocessConfig(enabled=True, capture_output=True, start_method="exec"),
+        )
+        sub.start()
+        deadline = time.monotonic() + 30
+        while (
+            proc.status not in (ProcessStatus.COMPLETED, ProcessStatus.FAILED)
+            and time.monotonic() < deadline
+        ):
+            time.sleep(0.05)
+        assert proc.status == ProcessStatus.COMPLETED
+        assert "exec-child-stdout" in (sub.stdout or "")
+
+    def test_exec_unpicklable_fails_loudly_not_a_hang(self):
+        engine = self._engine()
+        p = engine.run_subprocess(lambda: 1, name="unpicklable")
+        engine.run_background(poll_interval=0.01)
+        engine.wait(timeout=30)
+        engine.stop()
+        # Pickle fails in the PARENT before any child exists: contained
+        # FAILED, never a wedged engine or an orphan.
+        assert p.status == ProcessStatus.FAILED
+
+    def test_exec_terminate_escalates(self):
+        proc = Process(fn=time.sleep, args=(60,), name="long")
+        sub = SubprocessProcess(proc, SubprocessConfig(enabled=True, start_method="exec"))
+        sub.start()
+        time.sleep(1.0)  # interpreter boot
+        assert sub.is_alive
+        sub.terminate()
+        time.sleep(0.5)
+        assert proc.status == ProcessStatus.CANCELLED

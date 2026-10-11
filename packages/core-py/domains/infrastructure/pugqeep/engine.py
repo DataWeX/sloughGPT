@@ -28,8 +28,10 @@ Usage:
 import io
 import logging
 import os
+import pickle
 import signal
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -792,8 +794,52 @@ def _subprocess_worker(
             pass
 
 
+class _ExecChild:
+    """Owns one fork+exec child (``start_method="exec"``).
+
+    Same contract as :class:`_ForkedChild` — ``pid``/``poll``/``join``/
+    ``signal``/``is_alive``/``exitcode`` — but reaping is delegated to
+    ``subprocess.Popen``, which owns this child's bookkeeping: an external
+    ``waitpid`` would steal its status and break its finalizers.
+    """
+
+    __slots__ = ("_popen",)
+
+    def __init__(self, popen: subprocess.Popen) -> None:
+        self._popen = popen
+
+    @property
+    def pid(self) -> int:
+        return self._popen.pid
+
+    @property
+    def is_alive(self) -> bool:
+        return self._popen.poll() is None
+
+    @property
+    def exitcode(self) -> int | None:
+        return self._popen.returncode
+
+    def poll(self) -> int | None:
+        return self._popen.poll()
+
+    def join(self, timeout: float | None = None) -> int | None:
+        """Wait for exit. ``timeout=None`` waits indefinitely."""
+        try:
+            return self._popen.wait(timeout)
+        except subprocess.TimeoutExpired:
+            return None
+
+    def signal(self, signum: int) -> None:
+        """Deliver ``signum``; a child that already exited is not an error."""
+        try:
+            self._popen.send_signal(signum)
+        except (ProcessLookupError, OSError):
+            pass
+
+
 def _child_main(
-    parent_sock: socket.socket,
+    parent_sock: socket.socket | None,
     handler: FrameHandler,
     *,
     fn: Callable[..., Any],
@@ -802,15 +848,19 @@ def _child_main(
     capture: bool,
     config,
 ) -> None:
-    """Child entry point after ``os.fork()``. Never returns — always ``os._exit``.
+    """Child entry point after ``os.fork()``/exec. Never returns — always ``os._exit``.
+
+    ``parent_sock`` is the child's inherited copy of the parent's channel end
+    (fork mode); exec-mode children receive only their own end and pass ``None``.
 
     ``os._exit`` (not ``sys.exit``) is required: the child shares the parent's
     atexit handlers and buffered streams, and running either would corrupt them.
     """
-    try:
-        parent_sock.close()
-    except OSError:
-        pass
+    if parent_sock is not None:
+        try:
+            parent_sock.close()
+        except OSError:
+            pass
 
     # The child inherits the parent's signal policy. An Engine installs a
     # SIGTERM handler in the owning process — if it survived the fork the
@@ -858,8 +908,17 @@ class SubprocessProcess:
        SIGTERM -> SIGKILL escalation.
 
     No ``multiprocessing``: the channel is a ``socket.socketpair`` wrapped in a
-    :class:`FrameHandler`, and the child handle is a :class:`_ForkedChild`.
-    Fork-only — ``SubprocessConfig.start_method`` selects nothing.
+    :class:`FrameHandler`, and the child handle is a :class:`_ForkedChild`
+    (fork) or :class:`_ExecChild` (exec).
+
+    Two start methods via ``SubprocessConfig.start_method``:
+
+    - ``"fork"`` (default) — ``os.fork()``; the child inherits this process's
+      image, so unpicklable workers work, but any lock another thread holds at
+      fork time is inherited too (the BLAS/OpenMP futex-deadlock class).
+    - ``"exec"`` — fork+exec of a fresh interpreter (:mod:`exec_worker`); the
+      image is replaced before the worker runs, so no inherited lock can
+      deadlock it. The job is pickled, so the worker must be picklable.
     """
 
     def __init__(self, proc: Process, config):
@@ -877,6 +936,36 @@ class SubprocessProcess:
         self._stdout: str | None = None
         self._stderr: str | None = None
 
+    def _spawn_exec(self, child_sock: socket.socket, capture: bool) -> subprocess.Popen:
+        """Start a fork+exec child: a fresh interpreter, the job on stdin.
+
+        ``exec`` replaces the image before the worker runs its first line of
+        Python, so no lock held by this process's threads can be inherited —
+        the BLAS/OpenMP fork-deadlock class cannot occur. The framed channel
+        arrives as a passed fd and stays PGQ-owned; the pickled job rides
+        stdin, so job bytes are never mixed into channel frames.
+        """
+        payload = pickle.dumps(
+            (self.proc.fn, self.proc.args, self.proc.kwargs, capture, self.config)
+        )
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p and os.path.isdir(p))
+        popen = subprocess.Popen(
+            [
+                sys.executable,
+                "-m",
+                "domains.infrastructure.pugqeep.exec_worker",
+                str(child_sock.fileno()),
+            ],
+            pass_fds=(child_sock.fileno(),),
+            stdin=subprocess.PIPE,
+            env=env,
+        )
+        assert popen.stdin is not None
+        popen.stdin.write(payload)
+        popen.stdin.close()
+        return popen
+
     def start(self) -> None:
         parent_sock, child_sock = socket.socketpair()
         child_handler = FrameHandler(child_sock)
@@ -884,22 +973,37 @@ class SubprocessProcess:
         capture = bool(self.config.capture_output)
 
         method = self.config.start_method or "fork"
-        if method != "fork":
+        if method not in ("fork", "exec"):
             logger.warning(
-                "start_method=%r selects nothing: pugqeep forks. Spawn and "
-                "forkserver were never reachable (worker was unpicklable) and "
-                "left with multiprocessing.",
+                "start_method=%r is not offered: pugqeep has 'fork' (default — "
+                "in-process inheritance, accepts unpicklable workers) and "
+                "'exec' (fresh interpreter — kills the BLAS/OpenMP fork-deadlock "
+                "class, worker must be picklable). Falling back to fork.",
                 method,
             )
+            method = "fork"
 
         try:
-            pid = os.fork()
+            if method == "exec":
+                popen = self._spawn_exec(child_sock, capture)
+            else:
+                pid = os.fork()
         except OSError:
             parent_sock.close()
             child_sock.close()
             raise
+        except Exception as exc:
+            # exec-mode only: an unpicklable worker fails here, in the parent,
+            # before any child exists — loud and contained, never a hang.
+            parent_sock.close()
+            child_sock.close()
+            self.proc.fail(f"exec start failed: {exc!r}")
+            return
 
-        if pid == 0:
+        if method == "exec":
+            self._child = _ExecChild(popen)
+            pid = popen.pid
+        elif pid == 0:
             # ── child: never returns into this stack ───────────────────
             _child_main(
                 parent_sock,
@@ -911,12 +1015,13 @@ class SubprocessProcess:
                 config=self.config,
             )
             os._exit(127)  # unreachable; _child_main always exits
+        else:
+            self._child = _ForkedChild(pid)
 
         # ── parent ─────────────────────────────────────────────────────
         # Dropping our copy of the child's end is what makes EOF observable:
         # keep it and the reader blocks forever after the child exits.
         child_sock.close()
-        self._child = _ForkedChild(pid)
         self.proc._pid = pid
         self.proc.running()
 
@@ -1931,6 +2036,7 @@ class Engine:
         memory_limit_mb: int = None,
         timeout: float = None,
         capture_output: bool = False,
+        start_method: str = None,
         **kwargs,
     ) -> Process:
         from .config import SubprocessConfig
@@ -1941,6 +2047,7 @@ class Engine:
             env=env,
             memory_limit_mb=memory_limit_mb,
             capture_output=capture_output,
+            start_method=start_method or "fork",
         )
         old_config = None
         if hasattr(self, "_subprocess_config"):
