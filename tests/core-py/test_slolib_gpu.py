@@ -11,6 +11,7 @@ execute even without the real libraries. The Metal backend is torch-free — it
 detects MPS via a platform check and computes in numpy.
 """
 
+import builtins
 import importlib.util
 import os
 import sys
@@ -160,6 +161,47 @@ def cpu():
     return slib._CPUBackend()
 
 
+@pytest.fixture
+def cpu_only(monkeypatch):
+    """Neutralise every hardware accelerator so selection falls back to CPU.
+
+    Several tests below assert the *relative priority* of the CPU fallback —
+    metal over opencl, openblas over plain simd, fp16 clamping to fp32. They
+    passed by construction on a CPU-only box, because with no GPU the fallback
+    was the only reachable path. On a machine that actually has a GPU the real
+    backend outranks the mocked one and the assertion flips, so the suite went
+    red on any GPU host for reasons having nothing to do with the logic under
+    test. Neutralising all three makes the precondition explicit and the
+    result hardware-independent.
+    """
+    for cls in (slib._CUDABackend, slib._MetalBackend, slib._OpenCLBackend):
+        monkeypatch.setattr(cls, "is_available", lambda self: False)
+    slib.reset_accelerator()
+    yield
+    slib.reset_accelerator()
+
+
+@pytest.fixture
+def no_proc_meminfo(monkeypatch):
+    """Block the /proc/meminfo fallback that Linux always satisfies.
+
+    `_CPUBackend.vram_gb` tries psutil, then /proc/meminfo, then a hardcoded
+    8.0. psutil and meminfo both report total RAM halved, so on a Linux host
+    they yield the same number and the 8.0 constant is unreachable unless both
+    are denied. Without this the "falls back to 8.0" assertions below were
+    unsatisfiable on Linux — which is why they read as GPU-hardware failures
+    when they were really just unblocked fallbacks.
+    """
+    real_open = builtins.open
+
+    def _deny_meminfo(file, *args, **kwargs):
+        if str(file) == "/proc/meminfo":
+            raise FileNotFoundError(file)
+        return real_open(file, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", _deny_meminfo)
+
+
 # =============================================================================
 # _BufferPool
 # =============================================================================
@@ -208,7 +250,7 @@ class TestBufferPool:
 
 
 class TestBackendSelection:
-    def test_default_detection_returns_cpu(self):
+    def test_default_detection_returns_cpu(self, cpu_only):
         acc = slib.get_accelerator()
         assert isinstance(acc, slib._CPUBackend)
 
@@ -229,20 +271,20 @@ class TestBackendSelection:
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._CUDABackend)
 
-    def test_metal_selected_on_darwin(self, monkeypatch):
+    def test_metal_selected_on_darwin(self, monkeypatch, cpu_only):
         monkeypatch.setattr(sys, "platform", "darwin")
         monkeypatch.setattr(slib._MetalBackend, "is_available", lambda self: True)
         monkeypatch.setattr(slib._MetalBackend, "vram_gb", lambda self: 32.0)
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._MetalBackend)
 
-    def test_opencl_selected_when_available(self, monkeypatch):
+    def test_opencl_selected_when_available(self, monkeypatch, cpu_only):
         monkeypatch.setattr(slib._OpenCLBackend, "is_available", lambda self: True)
         monkeypatch.setattr(slib._OpenCLBackend, "vram_gb", lambda self: 6.0)
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._OpenCLBackend)
 
-    def test_metal_exception_is_swallowed(self, monkeypatch):
+    def test_metal_exception_is_swallowed(self, monkeypatch, cpu_only):
         monkeypatch.setattr(sys, "platform", "darwin")
         monkeypatch.setattr(
             slib._MetalBackend,
@@ -261,7 +303,7 @@ class TestBackendSelection:
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._CPUBackend)
 
-    def test_opencl_exception_is_swallowed(self, monkeypatch):
+    def test_opencl_exception_is_swallowed(self, monkeypatch, cpu_only):
         monkeypatch.setattr(
             slib._OpenCLBackend,
             "is_available",
@@ -279,14 +321,14 @@ class TestBackendSelection:
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._CUDABackend)
 
-    def test_openblas_priority_beats_plain_simd(self, monkeypatch):
+    def test_openblas_priority_beats_plain_simd(self, monkeypatch, cpu_only):
         monkeypatch.setattr(slib._CPUBackend, "has_openblas", lambda self: True)
         monkeypatch.setattr(slib._CPUBackend, "openblas_threads", lambda self: 8)
         monkeypatch.setattr(slib._CPUBackend, "has_simd", lambda self: True)
         acc = slib._detect_best_backend()
         assert isinstance(acc, slib._CPUBackend)
 
-    def test_set_accelerator_precision_fp16_returns_fp32_on_cpu(self):
+    def test_set_accelerator_precision_fp16_returns_fp32_on_cpu(self, cpu_only):
         assert slib.set_accelerator_precision("fp16") == "fp32"
 
     def test_set_accelerator_precision_auto_returns_fp32(self):
@@ -427,7 +469,7 @@ class TestDeviceBasics:
         monkeypatch.setitem(sys.modules, "psutil", _FakePsutil())
         assert cpu.vram_gb() == 16.0
 
-    def test_vram_gb_psutil_installed_but_unavailable(self, cpu, monkeypatch):
+    def test_vram_gb_psutil_installed_but_unavailable(self, cpu, monkeypatch, no_proc_meminfo):
         class _Boom:
             @staticmethod
             def virtual_memory():
@@ -998,11 +1040,15 @@ class TestCPUBackend:
         cpu._openblas_threads_cache = None
         monkeypatch.delenv("OPENBLAS_NUM_THREADS", raising=False)
         monkeypatch.delenv("OMP_NUM_THREADS", raising=False)
-        monkeypatch.setitem(sys.modules, "domain.infrastructure.resource_manager", None)
+        # Must match the path the implementation actually imports. The bare
+        # `domain.infrastructure.resource_manager` shim exists as well, but
+        # openblas_threads imports the `_internal` module, so patching the shim
+        # left the real lookup intact and the intended fallback never fired.
+        monkeypatch.setitem(sys.modules, "domain.infrastructure._internal.resource_manager", None)
         n = cpu.openblas_threads()
         assert n == max(1, (os.cpu_count() or 1) - 1)
 
-    def test_vram_gb_psutil_fallback(self, cpu, monkeypatch):
+    def test_vram_gb_psutil_fallback(self, cpu, monkeypatch, no_proc_meminfo):
         monkeypatch.setitem(sys.modules, "psutil", None)
         assert cpu.vram_gb() == 8.0
 
@@ -1059,7 +1105,15 @@ class TestGpuBackends:
         backend = slib._MetalBackend()
         assert backend.sync() is None
 
-    def test_cuda_not_available(self):
+    def test_cuda_not_available(self, monkeypatch):
+        """CUDA must report unavailable when cuPy cannot be imported.
+
+        This asserted `is_available() is False` outright — a claim about the
+        host rather than about the code. It held on a CPU box and flipped on
+        any machine with working CUDA. Simulate the import failing and assert
+        the contract the backend actually owns.
+        """
+        monkeypatch.setitem(sys.modules, "cupy", None)
         assert slib._CUDABackend().is_available() is False
 
     def test_cuda_fallback_matmul(self):
@@ -1732,7 +1786,7 @@ class TestModuleFunctions:
 
 
 class TestBenchmarkAccelerators:
-    def test_benchmark_cpu_ok(self):
+    def test_benchmark_cpu_ok(self, cpu_only):
         results = slib.benchmark_accelerators()
         assert set(results) == {"cpu", "metal", "cuda", "opencl"}
         assert results["cpu"]["status"] == "ok"
