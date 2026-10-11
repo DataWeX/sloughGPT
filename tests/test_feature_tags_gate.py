@@ -79,13 +79,19 @@ def test_scan_reports_no_worktree_copies(script):
 
 
 def test_count_matches_the_protected_tracked_files(script):
-    """The reported count must equal the tracked files the guard protects."""
-    found = script.find_feature_tagged_files(REPO)
-    expected = _git_tracked_tagged()
+    """The reported set must equal the tracked files the guard protects.
+
+    Set equality, not just count: a count can stay level while the wrong file
+    is counted (e.g. the scripts/ exclusion diverging between oracle and
+    scan), and that is exactly the kind of quiet drift this file exists to
+    catch.
+    """
+    found = {str(p.relative_to(REPO)) for p, _, _ in script.find_feature_tagged_files(REPO)}
+    expected = set(_git_tracked_tagged())
     assert expected, "ground truth unexpectedly empty — is the repo checked out?"
-    assert len(found) == len(expected), (
-        f"script found {len(found)} tagged files, git tracks {len(expected)}. "
-        "A drift here means the guard is measuring the wrong thing again."
+    assert found == expected, (
+        f"scan/git drift — only in scan: {sorted(found - expected)[:3]}; "
+        f"only in git: {sorted(expected - found)[:3]}"
     )
 
 
@@ -130,6 +136,33 @@ def test_plain_directory_falls_back_and_still_skips_worktrees(script, tmp_path):
     assert names == ["real/widget.py"], (
         "fallback must skip .wt-*, __pycache__ and scripts/; got {names}"
     )
+
+
+def test_tracked_checkout_ignores_untracked_worktree_copies(script, tmp_path):
+    """On the primary (git ls-files) path, .wt-* copies must be invisible.
+
+    The original defect in miniature: a real checkout holding one tracked
+    tagged file plus an untracked duplicate under a .wt-* directory (card
+    3dfbbb90). The old rglob counted 2; the guard must report 1. The fallback
+    test above covers the non-git path only, and the repo-level no-.wt-
+    assertion is vacuous in a fresh CI clone that ships no worktrees — this
+    constructs the case everywhere.
+    """
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True, capture_output=True)
+    (tmp_path / "widget.py").write_text(TAG_DOCSTRING)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", "widget.py"],
+        check=True,
+        capture_output=True,
+    )
+    copy_dir = tmp_path / ".wt-copy"
+    copy_dir.mkdir()
+    (copy_dir / "widget.py").write_text(TAG_DOCSTRING)
+
+    found = script.find_feature_tagged_files(tmp_path)
+
+    names = sorted(str(p.relative_to(tmp_path)) for p, _, _ in found)
+    assert names == ["widget.py"], f"untracked worktree copy leaked into a git-backed scan: {names}"
 
 
 def test_tagged_file_is_recognised_at_all(script, tmp_path):
